@@ -1464,13 +1464,14 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "maquina.candidatas",
     eje: "maquina",
-    grupo: "cual",
-    etiqueta: "Máquinas candidatas",
+    grupo: "lista",
+    // El componente trae toda la UI (lista + config inline); el encabezado del
+    // eje "En qué máquina" ya dice de qué va, así que la opción no lleva label
+    // ni ayuda propios — repetirlo era decir dos veces lo mismo.
+    etiqueta: " ",
     anchoCompleto: true,
     seccion: "maquina",
     pregunta: "¿Entre qué máquinas elige el comercial?",
-    ayuda:
-      "Las máquinas candidatas del paso: el comercial (o el sistema) elige una al cotizar. Por candidata podés fijar perfil default y modos de color.",
     visible: (ctx) =>
       (ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-2"),
     resumen: (ctx) => {
@@ -2055,7 +2056,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "oficio.setup",
     seccion: "oficio",
-    eje: "trabajo",
+    eje: "tiempo",
     grupo: "prep",
     etiqueta: "Preparar la máquina",
     pregunta: "¿Preparar la máquina lleva un tiempo distinto acá?",
@@ -2084,7 +2085,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "oficio.cleanup",
     seccion: "oficio",
-    eje: "trabajo",
+    eje: "tiempo",
     grupo: "prep",
     etiqueta: "Limpieza al terminar",
     pregunta: "¿Y la limpieza al terminar?",
@@ -2220,6 +2221,16 @@ const GRUPOS_TIEMPO: GrupoEje[] = [
     columnas: "minmax(0, 360px)",
   },
   {
+    // Setup/cleanup son TIEMPO puro (minutos fijos por orden): viven acá, no
+    // en "El trabajo" —que quedó para acomodado y parámetros del oficio.
+    id: "prep",
+    titulo: "Preparación y limpieza",
+    ayuda:
+      "Minutos fijos antes y después del trabajo, si difieren del perfil de la máquina.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr) minmax(0, 260px)",
+  },
+  {
     // Último a propósito: es lo único opcional del eje. Primero se define
     // cómo se calcula el tiempo y dónde; las ayudas al comercial vienen
     // después, si el modelador las quiere.
@@ -2275,6 +2286,10 @@ const GRUPOS_ACTIVACION: GrupoEje[] = [
 
 const GRUPOS_MAQUINA: GrupoEje[] = [
   { id: "cual", estilo: "campos", columnas: "minmax(0, 1fr) minmax(0, 260px)" },
+  // La lista de candidatas (M-2) trae su propia UI a todo el ancho: va en un
+  // grupo sin `estilo` para que EjeGuiado no le cuelgue la línea vertical de
+  // "campos" (esa barra es para los campos sueltos del M-1, no para la lista).
+  { id: "lista" },
   {
     id: "ajustes",
     titulo: "Cómo se configura",
@@ -2291,15 +2306,6 @@ const GRUPOS_TRABAJO: GrupoEje[] = [
     id: "labores",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
-    encabezado: "arriba",
-  },
-  {
-    id: "prep",
-    titulo: "Preparación y limpieza",
-    ayuda:
-      "Minutos fijos antes y después del trabajo, si difieren del perfil de la máquina.",
-    estilo: "campos",
-    columnas: "minmax(0, 1fr) minmax(0, 260px)",
     encabezado: "arriba",
   },
 ];

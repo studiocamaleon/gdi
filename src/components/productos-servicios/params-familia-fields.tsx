@@ -1,8 +1,5 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { HumanSelect, type HumanSelectOption } from "@/components/ui/human-select";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import type { FamiliaListItem } from "@/lib/productos-servicios";
 import {
   DESCRIPCIONES_VALOR_PARAM,
@@ -14,14 +11,14 @@ import {
   toggleMultiEnum,
   valorBooleanoParam,
 } from "@/lib/params-familia";
+import s from "./el-trabajo.module.css";
 
 /**
- * Editor de los parámetros propios de una familia, generado desde el
- * `paramsPasoSchema` que declara el backend.
- *
- * El schema ya viajaba al front tipado (`FamiliaListItem.paramsPasoSchema`)
- * pero nadie lo renderizaba: sólo se mostraba como documentación en la ficha
- * de capacidades. Esto lo vuelve funcional.
+ * Editor de los parámetros propios de una familia (paso "El trabajo", caso
+ * "parámetros"): la tabla del diseño pasos/El trabajo.html —una fila por
+ * parámetro con su valor por defecto y el lock Fijo/Editable ("Al cotizar")—.
+ * Es genérica: sirve para sembrado, bastidor, cortes, imposición… cualquier
+ * familia que declare `paramsPasoSchema`.
  *
  * La lógica (presets, toggle, defaults) vive en `@/lib/params-familia` para
  * poder testearla; acá queda sólo el render.
@@ -29,13 +26,36 @@ import {
 
 type ParamSchema = FamiliaListItem["paramsPasoSchema"][number];
 
-function opcionesDeEnum(valores: string[]): HumanSelectOption[] {
-  return valores.map((valor) => ({
-    value: valor,
-    label: etiquetaValorParam(valor),
-    description: DESCRIPCIONES_VALOR_PARAM[valor] ?? null,
-  }));
-}
+const LOCK = (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="4" y="10" width="16" height="10" rx="2" />
+    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+  </svg>
+);
+const OPEN = (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="4" y="10" width="16" height="10" rx="2" />
+    <path d="M8 10V7a4 4 0 0 1 7.4-2" />
+  </svg>
+);
 
 export function ParamsFamiliaFields({
   familia,
@@ -54,70 +74,42 @@ export function ParamsFamiliaFields({
 
   const abiertos = camposEditablesComercial(params);
 
-  /**
-   * Deja que el comercial cambie este campo al cotizar. Lo modelado pasa a ser
-   * la sugerencia.
-   */
-  const renderToggleEditable = (param: ParamSchema) => (
-    <label className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
-      <input
-        type="checkbox"
-        checked={abiertos.includes(param.campo)}
-        onChange={(e) =>
-          onChange(toggleCampoEditable(params, param.campo, e.target.checked))
-        }
-      />
-      El comercial puede cambiarlo al cotizar
-    </label>
-  );
-
-  const renderCampo = (param: ParamSchema) => {
+  const renderControl = (param: ParamSchema) => {
     const valor = params[param.campo];
 
     if (param.tipo === "enum") {
       return (
-        <div key={param.campo} className="field">
-          <LabelConTooltip
-            label={param.etiqueta}
-            tooltip={param.descripcion}
-            required={param.requerido}
-          />
-          <HumanSelect
-            value={
-              typeof valor === "string" ? valor : String(param.default ?? "")
-            }
-            onValueChange={(v) => onChange(patchParaEnum(param.campo, v))}
-            options={opcionesDeEnum(param.valoresPermitidos ?? [])}
-            placeholder="Elegir"
-          />
-          {renderToggleEditable(param)}
-        </div>
+        <span className={`${s.ctl} ${s.sel}`}>
+          <select
+            value={typeof valor === "string" ? valor : String(param.default ?? "")}
+            onChange={(e) => onChange(patchParaEnum(param.campo, e.target.value))}
+          >
+            {(param.valoresPermitidos ?? []).map((opcion) => (
+              <option key={opcion} value={opcion}>
+                {etiquetaValorParam(opcion)}
+              </option>
+            ))}
+          </select>
+        </span>
       );
     }
 
     if (param.tipo === "number") {
       return (
-        <div key={param.campo} className="field">
-          <LabelConTooltip
-            label={param.etiqueta}
-            tooltip={param.descripcion}
-            required={param.requerido}
-          />
-          <Input
-            type="number"
-            min={0}
-            step={1}
-            value={typeof valor === "number" ? valor : ""}
+        <span className={s.ctl}>
+          <input
+            className={s.num}
+            inputMode="decimal"
+            value={typeof valor === "number" ? String(valor) : ""}
             onChange={(e) =>
               onChange({
                 [param.campo]:
                   e.target.value === "" ? null : Number(e.target.value),
               })
             }
-            placeholder="mm"
+            placeholder="—"
           />
-          {renderToggleEditable(param)}
-        </div>
+        </span>
       );
     }
 
@@ -125,72 +117,119 @@ export function ParamsFamiliaFields({
       const permitidos = param.valoresPermitidos ?? [];
       const actuales = Array.isArray(valor) ? valor.map(String) : [];
       return (
-        <div key={param.campo} className="field md:col-span-full">
-          <LabelConTooltip
-            label={param.etiqueta}
-            tooltip={param.descripcion}
-            required={param.requerido}
-          />
-          <div className="flex flex-wrap gap-2">
-            {permitidos.map((opcion) => (
-              <label
+        <span className={s.chips}>
+          {permitidos.map((opcion) => {
+            const on = actuales.includes(opcion);
+            return (
+              <button
                 key={opcion}
-                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                type="button"
+                className={s.chip}
+                aria-pressed={on}
+                onClick={() =>
+                  onChange({
+                    [param.campo]: toggleMultiEnum(permitidos, valor, opcion, !on),
+                  })
+                }
               >
-                <input
-                  type="checkbox"
-                  checked={actuales.includes(opcion)}
-                  onChange={(e) =>
-                    onChange({
-                      [param.campo]: toggleMultiEnum(
-                        permitidos,
-                        valor,
-                        opcion,
-                        e.target.checked,
-                      ),
-                    })
-                  }
-                />
-                <span>{etiquetaValorParam(opcion)}</span>
-              </label>
-            ))}
-          </div>
-          {param.requerido && actuales.length === 0 ? (
-            <span className="text-destructive text-xs">
-              Elegí al menos un lado: sin lados el paso no puede calcular nada y
-              la cotización va a cortar.
-            </span>
-          ) : null}
-          {renderToggleEditable(param)}
-        </div>
+                {etiquetaValorParam(opcion)}
+              </button>
+            );
+          })}
+        </span>
       );
     }
 
     if (param.tipo === "boolean") {
+      const on = valorBooleanoParam(valor, param.default);
       return (
-        <div key={param.campo} className="field md:col-span-full">
-          <label className="flex items-start gap-2 rounded-md border p-2 text-sm">
-            <input
-              type="checkbox"
-              checked={valorBooleanoParam(valor, param.default)}
-              onChange={(e) => onChange({ [param.campo]: e.target.checked })}
-            />
-            <span>
-              <span className="font-medium">{param.etiqueta}</span>
-              {param.descripcion ? (
-                <span className="text-muted-foreground block text-xs">
-                  {param.descripcion}
-                </span>
-              ) : null}
-            </span>
-          </label>
-          {renderToggleEditable(param)}
-        </div>
+        <button
+          type="button"
+          className={s.tog}
+          aria-pressed={on}
+          onClick={() => onChange({ [param.campo]: !on })}
+        >
+          <span className={s.tr} />
+          <span className={s.togt}>{on ? "Sí" : "No"}</span>
+        </button>
       );
     }
 
     return null;
   };
 
-  return <>{schema.map(renderCampo)}</>;
+  const renderRow = (param: ParamSchema) => {
+    const editable = abiertos.includes(param.campo);
+    const descripcion = [
+      param.descripcion,
+      DESCRIPCIONES_VALOR_PARAM[param.campo],
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const faltaObligatorio =
+      param.tipo === "multi-enum" &&
+      param.requerido &&
+      (!Array.isArray(params[param.campo]) ||
+        (params[param.campo] as unknown[]).length === 0);
+    return (
+      <div key={param.campo} className={s.prow}>
+        <span className={s.lb}>
+          <span className={s.a}>
+            {param.etiqueta}
+            {param.requerido ? <span className={s.req}>obligatorio</span> : null}
+          </span>
+          {descripcion ? <span className={s.b}>{descripcion}</span> : null}
+        </span>
+        {renderControl(param)}
+        <button
+          type="button"
+          className={s.lock}
+          aria-pressed={editable}
+          onClick={() =>
+            onChange(toggleCampoEditable(params, param.campo, !editable))
+          }
+        >
+          {editable ? OPEN : LOCK}
+          {editable ? "Editable" : "Fijo"}
+        </button>
+        {faltaObligatorio ? (
+          <span className={s.reqmsg}>
+            Elegí al menos un lado: sin lados el paso no puede calcular nada y la
+            cotización va a cortar.
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
+  return (
+    <div className={s.root}>
+      <div className={s.phead}>
+        <span className={s.k}>Parámetro</span>
+        <span className={s.k}>Valor por defecto</span>
+        <span className={`${s.k} ${s.kr}`}>Al cotizar</span>
+      </div>
+      {schema.map(renderRow)}
+      <div className={s.foot}>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v5M12 8h.01" />
+        </svg>
+        <span>
+          <b>Fijo</b> usa siempre el valor por defecto. <b>Editable</b> lo
+          muestra en el presupuesto con ese valor precargado, y el comercial
+          puede cambiarlo.
+        </span>
+      </div>
+    </div>
+  );
 }

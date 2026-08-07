@@ -1,0 +1,312 @@
+/* El trabajo — port fiel de pasos/El trabajo.html.
+ * Variables locales con prefijo `--c-` para NO chocar con los tokens de la app
+ * (un `--border: var(--border,…)` sería un ciclo y perdería el valor). */
+.root {
+  --c-surface: var(--surface-1, #fff);
+  --c-surface-2: var(--surface-2, #fafaf9);
+  --c-border: var(--border, #e5e2db);
+  --c-border-strong: var(--border-strong, #c8c4ba);
+  --c-hairline: var(--hairline, #eeebe4);
+  --c-ink: var(--fg, #14141a);
+  --c-ink-2: var(--fg-2, #2c2c33);
+  --c-muted: var(--muted-text, #6e6e76);
+  --c-muted-2: var(--muted-text-2, #92929b);
+  --c-warm: #c2410c;
+  --c-fm: var(--font-mono, ui-monospace, monospace);
+  font-size: 13.5px;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+}
+
+/* ── Tabla de parámetros ─────────────────────────────────────── */
+.phead {
+  display: grid;
+  grid-template-columns: 1fr 190px 132px;
+  gap: 12px;
+  padding: 0 0 7px;
+  align-items: end;
+}
+.k {
+  font-family: var(--c-fm);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-muted-2);
+}
+.kr {
+  text-align: center;
+}
+.prow {
+  display: grid;
+  grid-template-columns: 1fr 190px 132px;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid var(--c-hairline);
+}
+.lb {
+  min-width: 0;
+}
+.a {
+  font-size: 12.5px;
+  font-weight: 450;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-ink);
+}
+.req {
+  color: var(--c-warm);
+  font-size: 11px;
+}
+.b {
+  font-size: 11px;
+  color: var(--c-muted-2);
+  margin-top: 1px;
+  text-wrap: pretty;
+}
+
+/* controles */
+.ctl {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-surface);
+  padding: 0 9px;
+  gap: 6px;
+  min-width: 0;
+}
+.ctl:hover {
+  border-color: var(--c-border-strong);
+}
+.ctl:focus-within {
+  border-color: var(--c-ink);
+  box-shadow: 0 0 0 2px rgba(20, 20, 26, 0.09);
+}
+.ctl input,
+.ctl select {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--c-ink);
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  appearance: none;
+}
+.ctl input.num {
+  font-family: var(--c-fm);
+  text-align: right;
+}
+.ctl input.num::-webkit-outer-spin-button,
+.ctl input.num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.sel {
+  position: relative;
+  padding-right: 26px;
+  cursor: pointer;
+}
+.sel::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--c-muted);
+  border-bottom: 1.5px solid var(--c-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+/* lock Fijo / Editable */
+.lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  width: 100%;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-surface);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--c-muted);
+  cursor: pointer;
+}
+.lock:hover {
+  border-color: var(--c-border-strong);
+  color: var(--c-ink-2);
+}
+.lock[aria-pressed="true"] {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+.lock svg {
+  flex: none;
+}
+
+/* multi-enum: chips en la celda de valor */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-surface);
+  font: inherit;
+  font-size: 12px;
+  color: var(--c-ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip:hover {
+  border-color: var(--c-border-strong);
+}
+.chip[aria-pressed="true"] {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+.reqmsg {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--c-warm);
+}
+
+/* boolean: toggle compacto */
+.tog {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: var(--c-ink);
+}
+.tr {
+  width: 32px;
+  height: 19px;
+  border-radius: 19px;
+  background: #dedbd4;
+  border: 1px solid var(--c-border-strong);
+  flex: none;
+  position: relative;
+  transition: background 0.13s;
+}
+.tr::after {
+  content: "";
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(20, 20, 26, 0.2);
+  transition: transform 0.13s;
+}
+.tog[aria-pressed="true"] .tr {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+}
+.tog[aria-pressed="true"] .tr::after {
+  transform: translateX(13px);
+}
+.togt {
+  font-size: 12.5px;
+  font-weight: 450;
+}
+
+/* nota al pie */
+.foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 11px;
+  font-size: 11.5px;
+  color: var(--c-muted);
+  text-wrap: pretty;
+  max-width: 80ch;
+}
+.foot svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--c-muted-2);
+}
+.foot b {
+  font-weight: 500;
+  color: var(--c-ink-2);
+}
+
+/* ── Estado vacío ────────────────────────────────────────────── */
+.empty {
+  border: 1px dashed var(--c-border-strong);
+  border-radius: 10px;
+  background: var(--c-surface-2);
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.emptyIc {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  display: grid;
+  place-items: center;
+  color: var(--c-muted-2);
+  flex: none;
+}
+.emptyT {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-ink);
+}
+.emptyD {
+  font-size: 12px;
+  color: var(--c-muted);
+  margin-top: 2px;
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+.emptySp {
+  flex: 1;
+}
+
+@media (max-width: 860px) {
+  .phead,
+  .prow {
+    grid-template-columns: 1fr 150px 116px;
+  }
+}
+@media (max-width: 640px) {
+  .phead {
+    display: none;
+  }
+  .prow {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+}

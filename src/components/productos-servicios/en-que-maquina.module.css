@@ -1,0 +1,360 @@
+/* En qué máquina — port fiel de pasos/En qué máquina.html.
+ * La card exterior (borde + padding 14px 16px) ya la pone EjeGuiado fijo; acá
+ * vive sólo el contenido: buscador + lista de máquinas con su config inline.
+ * Las variables locales llevan prefijo `--c-` para NO chocar con los tokens de
+ * la app (un `--border: var(--border, …)` sería un ciclo y perdería el valor):
+ * toman el token de la app cuando existe y caen al hex exacto del diseño si no. */
+.sec {
+  --c-surface: var(--surface-1, #fff);
+  --c-surface-2: var(--surface-2, #fafaf9);
+  --c-border: var(--border, #e5e2db);
+  --c-border-strong: var(--border-strong, #c8c4ba);
+  --c-hairline: var(--hairline, #eeebe4);
+  --c-ink: var(--fg, #14141a);
+  --c-ink-2: var(--fg-2, #2c2c33);
+  --c-muted: var(--muted-text, #6e6e76);
+  --c-muted-2: var(--muted-text-2, #92929b);
+  --c-warn: #9a6a11;
+  --c-warn-bg: #fdf7e6;
+  --c-warn-bd: #e8d7a6;
+  --c-fm: var(--font-mono, ui-monospace, monospace);
+  font-size: 13.5px;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+}
+
+/* ── Buscador ────────────────────────────────────────────────── */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-surface);
+  padding: 0 10px;
+  margin-bottom: 8px;
+  max-width: 340px;
+}
+.search input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  width: 100%;
+  padding: 0;
+  color: var(--c-ink);
+}
+.search svg {
+  flex: none;
+  color: var(--c-muted-2);
+}
+
+/* ── Lista ───────────────────────────────────────────────────── */
+.list {
+  border: 1px solid var(--c-border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.mrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-hairline);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+.mrow:last-child {
+  border-bottom: 0;
+}
+.mrow:hover {
+  background: var(--c-surface-2);
+}
+.bx {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1.5px solid var(--c-border-strong);
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: transparent;
+  background: var(--c-surface);
+}
+.mrow.on .bx {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+.av {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-family: var(--c-fm);
+  font-size: 10px;
+  font-weight: 500;
+  flex: none;
+  letter-spacing: 0.02em;
+  /* Como en Materiales: gris al no estar elegida, negra cuando sí. Sin colores
+   * por tecnología —eso lo dice el tag— para no llenar la lista de tintes. */
+  background: #e9e6df;
+  color: var(--c-ink);
+}
+.mrow.on .av {
+  background: var(--c-ink);
+  color: #fff;
+}
+.nm {
+  min-width: 0;
+}
+.a {
+  font-size: 12.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.a .txt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp {
+  flex: 1;
+}
+.tag {
+  font-family: var(--c-fm);
+  font-size: 10.5px;
+  color: var(--c-muted);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-hairline);
+  border-radius: 5px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex: none;
+}
+.mrow.on .tag {
+  background: #fff;
+  border-color: var(--c-border);
+}
+.pref {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--c-muted);
+  cursor: pointer;
+  flex: none;
+}
+.pref:hover {
+  border-color: var(--c-border-strong);
+  color: var(--c-ink-2);
+}
+.pref svg {
+  flex: none;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: 5px;
+  background: var(--c-ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  flex: none;
+}
+
+/* ── Config inline de cada máquina elegida ───────────────────── */
+.det {
+  background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-hairline);
+  padding: 11px 12px 12px 37px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.det:last-child {
+  border-bottom: 0;
+}
+.frow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.fl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.k {
+  font-family: var(--c-fm);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-muted-2);
+}
+.ctl {
+  display: flex;
+  align-items: center;
+  height: 31px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-surface);
+  padding: 0 9px;
+  gap: 6px;
+  min-width: 0;
+}
+.ctl:hover {
+  border-color: var(--c-border-strong);
+}
+.ctl:focus-within {
+  border-color: var(--c-ink);
+  box-shadow: 0 0 0 2px rgba(20, 20, 26, 0.09);
+}
+.ctl select {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--c-ink);
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  appearance: none;
+}
+.sel {
+  position: relative;
+  padding-right: 26px;
+  cursor: pointer;
+}
+.sel::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--c-muted);
+  border-bottom: 1.5px solid var(--c-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+.modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 29px;
+  padding: 0 11px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--c-ink-2);
+  cursor: pointer;
+}
+.mchip:hover {
+  border-color: var(--c-border-strong);
+}
+.mchip[aria-pressed="true"] {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+.ink {
+  display: flex;
+  gap: 1.5px;
+  flex: none;
+}
+.ink i {
+  width: 5px;
+  height: 11px;
+  border-radius: 1px;
+  display: block;
+}
+.ink .w {
+  box-shadow: inset 0 0 0 0.5px #c8c4ba;
+}
+.mchip[aria-pressed="true"] .ink i {
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.35);
+}
+.none {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  border: 1px dashed var(--c-border-strong);
+  display: block;
+}
+.mchip[aria-pressed="true"] .none {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.warnmsg {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--c-warn);
+  background: var(--c-warn-bg);
+  border: 1px solid var(--c-warn-bd);
+  border-radius: 7px;
+  padding: 7px 10px;
+  text-wrap: pretty;
+}
+
+/* ── Nota al pie ─────────────────────────────────────────────── */
+.foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--c-muted);
+  text-wrap: pretty;
+  max-width: 78ch;
+}
+.foot svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--c-muted-2);
+}
+
+.empty {
+  font-size: 12px;
+  color: var(--c-muted);
+  padding: 2px 0;
+}
+
+@media (max-width: 760px) {
+  .mrow .tag {
+    display: none;
+  }
+}
