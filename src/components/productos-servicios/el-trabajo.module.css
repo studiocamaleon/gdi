@@ -286,9 +286,11 @@
   display: flex;
   align-items: center;
   height: 32px;
-  border: 1px solid var(--c-border);
+  /* Fallback directo al hex: el borde no depende de que el bloque esté dentro
+   * de `.root` (si no, `var(--c-border)` sin valor deja el input sin borde). */
+  border: 1px solid var(--c-border, #e5e2db);
   border-radius: 7px;
-  background: var(--c-surface);
+  background: var(--c-surface, #fff);
   padding: 0 9px;
   gap: 6px;
   min-width: 0;
