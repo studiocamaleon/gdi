@@ -1500,11 +1500,21 @@ function MaterialSearchSelect({
   placeholder,
   selectedIds = [],
   onSelect,
+  onDeselect,
+  pinnedItems,
+  renderDetail,
 }: {
   compatibilidad?: SlotCompatibilidad;
   placeholder: string;
   selectedIds?: string[];
   onSelect: (materiaPrima: MateriaPrimaBusquedaItem) => void;
+  /** Con esto, la fila seleccionada se puede DESELECCIONAR desde la lista y
+   *  su detalle se abre inline (modo unificado, como el diseño). */
+  onDeselect?: (materiaPrimaId: string) => void;
+  /** Materiales ya elegidos: se fijan arriba aunque no matcheen la búsqueda. */
+  pinnedItems?: MateriaPrimaBusquedaItem[];
+  /** Detalle inline debajo de una fila seleccionada (variantes, default…). */
+  renderDetail?: (item: MateriaPrimaBusquedaItem) => React.ReactNode;
 }) {
   const [query, setQuery] = React.useState("");
   const [items, setItems] = React.useState<MateriaPrimaBusquedaItem[]>([]);
@@ -1535,6 +1545,144 @@ function MaterialSearchSelect({
       cancelled = true;
     };
   }, [compatibilidad, query]);
+
+  // Modo unificado (diseño "Materiales que consume"): los elegidos van fijos
+  // arriba, cada fila es un check que agrega/saca, y el detalle se abre inline.
+  if (renderDetail) {
+    const pinned = pinnedItems ?? [];
+    const pinnedIds = new Set(pinned.map((it) => it.id));
+    const filas = [
+      ...pinned,
+      ...items.filter((it) => !pinnedIds.has(it.id)),
+    ];
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="ps-search" style={{ maxWidth: 340 }}>
+          <SearchIcon className="size-[15px]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={placeholder}
+          />
+        </div>
+        <div
+          style={{
+            border: "1px solid var(--hairline, #e5e2db)",
+            borderRadius: 9,
+            overflow: "hidden",
+          }}
+        >
+          {filas.length === 0 ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                fontSize: 12,
+                color: "var(--muted-text, #6e6e76)",
+              }}
+            >
+              {loading ? "Buscando…" : "Sin materias primas compatibles."}
+            </div>
+          ) : (
+            filas.map((item, i) => {
+              const selected = selectedSet.has(item.id);
+              const chip = matChipStyle(item.nombre, item.familia);
+              const meta = [
+                humanizeEnumLabel(item.familia),
+                humanizeEnumLabel(item.subfamilia),
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              const specs = materialRowSpecChips(item);
+              return (
+                <React.Fragment key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      selected
+                        ? onDeselect?.(item.id)
+                        : onSelect(item)
+                    }
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      width: "100%",
+                      padding: "9px 12px",
+                      background: selected
+                        ? "var(--surface-2, #fafaf9)"
+                        : "var(--surface, #fff)",
+                      border: 0,
+                      borderTop:
+                        i > 0
+                          ? "1px solid var(--hairline, #eeebe4)"
+                          : undefined,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 15,
+                        height: 15,
+                        borderRadius: 4,
+                        flexShrink: 0,
+                        display: "grid",
+                        placeItems: "center",
+                        border: selected
+                          ? "1.5px solid var(--fg, #14141a)"
+                          : "1.5px solid var(--hairline-strong, #c8c4ba)",
+                        background: selected
+                          ? "var(--fg, #14141a)"
+                          : "transparent",
+                        color: "#fff",
+                      }}
+                    >
+                      {selected ? (
+                        <CheckIcon className="size-2.5" strokeWidth={3.4} />
+                      ) : null}
+                    </span>
+                    <span
+                      className="ps-mat-chip"
+                      style={{ background: chip.bg }}
+                    >
+                      {chip.ini}
+                    </span>
+                    <span className="ps-mat-info" style={{ flex: 1 }}>
+                      <span className="ps-mat-nm block truncate">
+                        {item.nombre}
+                      </span>
+                      <span className="ps-mat-meta block truncate">
+                        {meta}
+                      </span>
+                    </span>
+                    <span className="hidden items-center gap-1.5 sm:flex">
+                      {specs.map((spec) => (
+                        <span key={spec} className="ps-spec-chip">
+                          {spec}
+                        </span>
+                      ))}
+                    </span>
+                  </button>
+                  {selected ? (
+                    <div
+                      style={{
+                        padding: "10px 12px 12px 37px",
+                        background: "var(--surface-2, #fafaf9)",
+                        borderTop: "1px solid var(--hairline, #eeebe4)",
+                      }}
+                    >
+                      {renderDetail(item)}
+                    </div>
+                  ) : null}
+                </React.Fragment>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -8287,359 +8435,243 @@ function CandidatosSlotDetalladoEditor({
   ) => void;
 }) {
   const selectedCandidates = slot.candidatos ?? [];
+
+  // El detalle inline de un material seleccionado: switch de "todas las
+  // variantes", el selector de variantes (chips o color×espesor) y la
+  // predeterminada. Es el `.det` del diseño, debajo de la fila de la lista.
+  const renderDetalle = (materiaPrima: MateriaPrimaBusquedaItem) => {
+    const candidate = selectedCandidates.find(
+      (c) => c.materiaPrimaId === materiaPrima.id,
+    );
+    if (!candidate) return null;
+    const variantOptions =
+      materiaPrima.variantes.map((variante) =>
+        varianteOptionFromBusqueda(materiaPrima, variante),
+      ) ?? [];
+    const enabledVariantIds = new Set(candidate.varianteIds);
+    const sinHabilitadas =
+      !candidate.todasLasVariantes && candidate.varianteIds.length === 0;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 9,
+            cursor: "pointer",
+          }}
+        >
+          <Switch
+            checked={candidate.todasLasVariantes ?? false}
+            onCheckedChange={(valor) =>
+              updateSlotCandidate(pasoId, slotIdx, candidate.materiaPrimaId, {
+                todasLasVariantes: valor,
+              })
+            }
+            style={{ marginTop: 1, flexShrink: 0 }}
+          />
+          <span>
+            <span style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}>
+              Usar todas las variantes activas
+            </span>
+            <span
+              style={{
+                display: "block",
+                fontSize: 11,
+                color: "var(--muted-text, #6e6e76)",
+                marginTop: 1,
+                maxWidth: "64ch",
+              }}
+            >
+              Las variantes nuevas de {materiaPrima.nombre} se suman solas — no
+              hace falta re-editar el paso.
+            </span>
+          </span>
+        </label>
+
+        {!candidate.todasLasVariantes && materiaPrima.variantes.length > 1 ? (
+          canUseColorThicknessSelector(materiaPrima) ? (
+            <ColorThicknessVariantSelector
+              materiaPrima={materiaPrima}
+              candidate={candidate}
+              onChange={(patch) =>
+                updateSlotCandidate(
+                  pasoId,
+                  slotIdx,
+                  candidate.materiaPrimaId,
+                  patch,
+                )
+              }
+            />
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {materiaPrima.variantes.map((variante) => {
+                const activo = enabledVariantIds.has(variante.id);
+                const option = varianteOptionFromBusqueda(
+                  materiaPrima,
+                  variante,
+                );
+                return (
+                  <button
+                    key={variante.id}
+                    type="button"
+                    onClick={() => {
+                      const next = activo
+                        ? candidate.varianteIds.filter(
+                            (id) => id !== variante.id,
+                          )
+                        : [...candidate.varianteIds, variante.id];
+                      const safe =
+                        next.length > 0
+                          ? Array.from(new Set(next))
+                          : [variante.id];
+                      const defOk =
+                        candidate.defaultVarianteId &&
+                        safe.includes(candidate.defaultVarianteId);
+                      updateSlotCandidate(
+                        pasoId,
+                        slotIdx,
+                        candidate.materiaPrimaId,
+                        {
+                          varianteIds: safe,
+                          defaultVarianteId: defOk
+                            ? candidate.defaultVarianteId
+                            : (safe[0] ?? null),
+                        },
+                      );
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      height: 27,
+                      padding: "0 10px",
+                      borderRadius: 6,
+                      fontFamily: "var(--font-mono, ui-monospace)",
+                      fontSize: 11.5,
+                      cursor: "pointer",
+                      background: activo
+                        ? "var(--fg, #14141a)"
+                        : "var(--surface, #fff)",
+                      color: activo ? "#fff" : "var(--fg-2, #2c2c33)",
+                      border: `1px solid ${activo ? "var(--fg, #14141a)" : "var(--hairline, #e5e2db)"}`,
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: "50%",
+                        background: activo
+                          ? "#7fd3a8"
+                          : "var(--hairline-strong, #c8c4ba)",
+                      }}
+                    />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          )
+        ) : null}
+
+        {sinHabilitadas ? (
+          <div
+            style={{
+              fontSize: 11.5,
+              color: "#9a6a11",
+              background: "#fdf7e6",
+              border: "1px solid #e8d7a6",
+              borderRadius: 7,
+              padding: "7px 10px",
+            }}
+          >
+            Sin variantes habilitadas, este material no se puede usar. Activá
+            al menos una.
+          </div>
+        ) : null}
+
+        {variantOptions.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 500,
+                textTransform: "uppercase",
+                letterSpacing: "0.03em",
+                color: "var(--muted-text-2, #92929b)",
+              }}
+            >
+              Variante predeterminada
+            </span>
+            <HumanSelect
+              value={candidate.defaultVarianteId ?? ""}
+              onValueChange={(v) =>
+                updateSlotCandidate(pasoId, slotIdx, candidate.materiaPrimaId, {
+                  defaultVarianteId: v || null,
+                })
+              }
+              options={variantOptions.filter(
+                (option) =>
+                  candidate.todasLasVariantes ||
+                  candidate.varianteIds.includes(option.value),
+              )}
+              placeholder="Elegir variante predeterminada"
+              contentClassName="min-w-[520px]"
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const pinned = selectedCandidates
+    .map((c) => candidateMaterials[c.materiaPrimaId])
+    .filter((m): m is MateriaPrimaBusquedaItem => Boolean(m));
+
   return (
-                                                <div className="space-y-2 rounded border bg-background p-3">
-                                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                                    <LabelConTooltip
-                                                      label="Materiales candidatos"
-                                                      tooltip="Lista de variantes entre las que podrá elegir el comercial, o entre las que el sistema resolverá automáticamente."
-                                                    />
-                                                    <span
-                                                      className={
-                                                        selectedCandidates.length >
-                                                        0
-                                                          ? "ps-count-ok"
-                                                          : "text-muted-foreground text-[11px]"
-                                                      }
-                                                    >
-                                                      {
-                                                        selectedCandidates.length
-                                                      }{" "}
-                                                      seleccionada
-                                                      {selectedCandidates.length ===
-                                                      1
-                                                        ? ""
-                                                        : "s"}
-                                                    </span>
-                                                  </div>
-                                                  <MaterialSearchSelect
-                                                    compatibilidad={
-                                                      slotDecl?.compatibilidadMaterial
-                                                    }
-                                                    placeholder="Buscar materia prima compatible..."
-                                                    selectedIds={selectedCandidates.map(
-                                                      (candidate) =>
-                                                        candidate.materiaPrimaId,
-                                                    )}
-                                                    onSelect={(materiaPrima) =>
-                                                      addSlotCandidate(
-                                                        pasoId,
-                                                        slotIdx,
-                                                        materiaPrima,
-                                                      )
-                                                    }
-                                                  />
-                                                  <div className="space-y-2">
-                                                    {selectedCandidates.map(
-                                                      (candidate) => {
-                                                        const materiaPrima =
-                                                          candidateMaterials[
-                                                            candidate
-                                                              .materiaPrimaId
-                                                          ];
-                                                        const variantOptions =
-                                                          materiaPrima?.variantes.map(
-                                                            (variante) =>
-                                                              varianteOptionFromBusqueda(
-                                                                materiaPrima,
-                                                                variante,
-                                                              ),
-                                                          ) ?? [];
-                                                        const enabledVariantIds =
-                                                          new Set(
-                                                            candidate.varianteIds,
-                                                          );
-                                                        const nombreMat =
-                                                          materiaPrima?.nombre ??
-                                                          candidate.materiaPrimaId;
-                                                        const chipMat =
-                                                          matChipStyle(
-                                                            nombreMat,
-                                                          );
-                                                        return (
-                                                          <div
-                                                            key={
-                                                              candidate.materiaPrimaId
-                                                            }
-                                                            className="ps-sel"
-                                                          >
-                                                            <div className="ps-sel-head">
-                                                              <span
-                                                                className="ps-mat-chip sm"
-                                                                style={{
-                                                                  background:
-                                                                    chipMat.bg,
-                                                                }}
-                                                              >
-                                                                {chipMat.ini}
-                                                              </span>
-                                                              <div className="min-w-0">
-                                                                <div className="ps-sel-n truncate">
-                                                                  {nombreMat}
-                                                                </div>
-                                                                <div className="ps-sel-s">
-                                                                  {
-                                                                    candidate
-                                                                      .varianteIds
-                                                                      .length
-                                                                  }{" "}
-                                                                  variante
-                                                                  {candidate
-                                                                    .varianteIds
-                                                                    .length ===
-                                                                  1
-                                                                    ? ""
-                                                                    : "s"}{" "}
-                                                                  habilitada
-                                                                  {candidate
-                                                                    .varianteIds
-                                                                    .length ===
-                                                                  1
-                                                                    ? ""
-                                                                    : "s"}
-                                                                </div>
-                                                              </div>
-                                                              <button
-                                                                type="button"
-                                                                className="ps-quitar"
-                                                                onClick={() =>
-                                                                  removeSlotCandidate(
-                                                                    pasoId,
-                                                                    slotIdx,
-                                                                    candidate.materiaPrimaId,
-                                                                  )
-                                                                }
-                                                              >
-                                                                <XIcon className="size-3" />
-                                                                Quitar
-                                                              </button>
-                                                            </div>
-                                                            <div className="ps-sel-body">
-                                                            <label className="mb-3 flex cursor-pointer select-none items-center gap-2.5">
-                                                              <Switch
-                                                                checked={
-                                                                  candidate.todasLasVariantes ??
-                                                                  false
-                                                                }
-                                                                onCheckedChange={(
-                                                                  valor,
-                                                                ) =>
-                                                                  updateSlotCandidate(
-                                                                    pasoId,
-                                                                    slotIdx,
-                                                                    candidate.materiaPrimaId,
-                                                                    {
-                                                                      todasLasVariantes:
-                                                                        valor,
-                                                                    },
-                                                                  )
-                                                                }
-                                                              />
-                                                              <span className="text-[13px] font-medium">
-                                                                Usar todas las
-                                                                variantes activas
-                                                              </span>
-                                                            </label>
-                                                            {candidate.todasLasVariantes ? (
-                                                              <p className="text-muted-foreground mb-3 text-xs">
-                                                                Usa todas las
-                                                                variantes activas
-                                                                de {nombreMat}.
-                                                                Las variantes
-                                                                nuevas se agregan
-                                                                solas — no hace
-                                                                falta re-editar el
-                                                                producto.
-                                                              </p>
-                                                            ) : materiaPrima &&
-                                                            materiaPrima
-                                                              .variantes
-                                                              .length > 1 ? (
-                                                              canUseColorThicknessSelector(
-                                                                materiaPrima,
-                                                              ) ? (
-                                                                <ColorThicknessVariantSelector
-                                                                  materiaPrima={
-                                                                    materiaPrima
-                                                                  }
-                                                                  candidate={
-                                                                    candidate
-                                                                  }
-                                                                  onChange={(
-                                                                    patch,
-                                                                  ) =>
-                                                                    updateSlotCandidate(
-                                                                      pasoId,
-                                                                      slotIdx,
-                                                                      candidate.materiaPrimaId,
-                                                                      patch,
-                                                                    )
-                                                                  }
-                                                                />
-                                                              ) : (
-                                                                <div className="mb-3 space-y-2">
-                                                                  <div className="ps-label">
-                                                                    Variantes habilitadas para cotizar
-                                                                  </div>
-                                                                  <div className="ps-vars">
-                                                                    {materiaPrima.variantes.map((variante) => {
-                                                                      const checked = enabledVariantIds.has(variante.id);
-                                                                      const esDefault =
-                                                                        checked &&
-                                                                        candidate.defaultVarianteId === variante.id;
-                                                                      const option = varianteOptionFromBusqueda(
-                                                                        materiaPrima,
-                                                                        variante,
-                                                                      );
-                                                                      const precioReferencia = variante.precioReferencia
-                                                                        ? Number(variante.precioReferencia).toLocaleString(
-                                                                            "es-AR",
-                                                                          )
-                                                                        : null;
-                                                                      return (
-                                                                        <label
-                                                                          key={variante.id}
-                                                                          className={`ps-var ${
-                                                                            esDefault ? "default" : checked ? "on" : ""
-                                                                          }`}
-                                                                        >
-                                                                          <input
-                                                                            type="checkbox"
-                                                                            checked={checked}
-                                                                            onChange={(event) => {
-                                                                              const nextIds = event.target.checked
-                                                                                ? [...candidate.varianteIds, variante.id]
-                                                                                : candidate.varianteIds.filter(
-                                                                                    (id) => id !== variante.id,
-                                                                                  );
-                                                                              const safeIds =
-                                                                                nextIds.length > 0
-                                                                                  ? Array.from(new Set(nextIds))
-                                                                                  : [variante.id];
-                                                                              const defaultStillEnabled =
-                                                                                candidate.defaultVarianteId &&
-                                                                                safeIds.includes(
-                                                                                  candidate.defaultVarianteId,
-                                                                                );
-                                                                              updateSlotCandidate(
-                                                                                pasoId,
-                                                                                slotIdx,
-                                                                                candidate.materiaPrimaId,
-                                                                                {
-                                                                                  varianteIds: safeIds,
-                                                                                  defaultVarianteId: defaultStillEnabled
-                                                                                    ? candidate.defaultVarianteId
-                                                                                    : (safeIds[0] ?? null),
-                                                                                },
-                                                                              );
-                                                                            }}
-                                                                          />
-                                                                          <span className="ps-var-top">
-                                                                            <span className="ps-vcb">
-                                                                              <CheckIcon strokeWidth={3.4} />
-                                                                            </span>
-                                                                            <span className="min-w-0 flex-1">
-                                                                              <span className="ps-vn block truncate">
-                                                                                {option.label}
-                                                                              </span>
-                                                                              {precioReferencia ? (
-                                                                                <span className="ps-vprice">
-                                                                                  Ref. ${precioReferencia}
-                                                                                </span>
-                                                                              ) : null}
-                                                                            </span>
-                                                                            {esDefault ? (
-                                                                              <span className="ps-deftag">
-                                                                                DEFAULT
-                                                                              </span>
-                                                                            ) : null}
-                                                                          </span>
-                                                                          {option.details &&
-                                                                          option.details.length > 0 ? (
-                                                                            <span className="ps-var-specs">
-                                                                              {option.details.map((detail) => (
-                                                                                <span
-                                                                                  key={`${option.value}-${detail.label}-${detail.value}`}
-                                                                                  className="ps-vspec"
-                                                                                >
-                                                                                  <span className="k">
-                                                                                    {detail.label}
-                                                                                  </span>{" "}
-                                                                                  {detail.value}
-                                                                                </span>
-                                                                              ))}
-                                                                            </span>
-                                                                          ) : (
-                                                                            <span className="ps-var-specs">
-                                                                              <span className="ps-vspec">
-                                                                                <span className="k">SKU</span>{" "}
-                                                                                {variante.sku}
-                                                                              </span>
-                                                                            </span>
-                                                                          )}
-                                                                        </label>
-                                                                      );
-                                                                    })}
-                                                                  </div>
-                                                                </div>
-                                                              )
-                                                            ) : null}
-                                                            {/* Sin variantes cargadas no hay default posible: mostrar
-                                                                el select vacío decía "Valor no disponible". El aviso de
-                                                                arriba ("sin variantes habilitadas") ya cubre el caso. */}
-                                                            {variantOptions.length >
-                                                            0 ? (
-                                                            <div className="space-y-1">
-                                                              <Label className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-                                                                Variante
-                                                                predeterminada
-                                                              </Label>
-                                                              <HumanSelect
-                                                                value={
-                                                                  candidate.defaultVarianteId ??
-                                                                  ""
-                                                                }
-                                                                onValueChange={(
-                                                                  v,
-                                                                ) =>
-                                                                  updateSlotCandidate(
-                                                                    pasoId,
-                                                                    slotIdx,
-                                                                    candidate.materiaPrimaId,
-                                                                    {
-                                                                      defaultVarianteId:
-                                                                        v ||
-                                                                        null,
-                                                                    },
-                                                                  )
-                                                                }
-                                                                options={variantOptions.filter(
-                                                                  (option) =>
-                                                                    candidate.todasLasVariantes ||
-                                                                    candidate.varianteIds.includes(
-                                                                      option.value,
-                                                                    ),
-                                                                )}
-                                                                placeholder="Elegir variante predeterminada"
-                                                                contentClassName="min-w-[520px]"
-                                                              />
-                                                            </div>
-                                                            ) : null}
-                                                            </div>
-                                                          </div>
-                                                        );
-                                                      },
-                                                    )}
-                                                  </div>
-                                                  {selectedCandidates.length ===
-                                                  0 ? (
-                                                    <p className="text-muted-foreground text-xs">
-                                                      Agregá al menos una
-                                                      materia prima candidata
-                                                      para este slot.
-                                                    </p>
-                                                  ) : null}
-                                                </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <LabelConTooltip
+          label="Materiales candidatos"
+          tooltip="Lista de variantes entre las que podrá elegir el comercial, o entre las que el sistema resolverá automáticamente."
+        />
+        <span
+          className={
+            selectedCandidates.length > 0
+              ? "ps-count-ok"
+              : "text-muted-foreground text-[11px]"
+          }
+        >
+          {selectedCandidates.length} seleccionada
+          {selectedCandidates.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <MaterialSearchSelect
+        compatibilidad={slotDecl?.compatibilidadMaterial}
+        placeholder="Buscar materia prima compatible..."
+        selectedIds={selectedCandidates.map((c) => c.materiaPrimaId)}
+        onSelect={(materiaPrima) =>
+          addSlotCandidate(pasoId, slotIdx, materiaPrima)
+        }
+        onDeselect={(id) => removeSlotCandidate(pasoId, slotIdx, id)}
+        pinnedItems={pinned}
+        renderDetail={renderDetalle}
+      />
+      {selectedCandidates.length === 0 ? (
+        <p className="text-muted-foreground text-xs">
+          Agregá al menos una materia prima candidata para este slot.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
