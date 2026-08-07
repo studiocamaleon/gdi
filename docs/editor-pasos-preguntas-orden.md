@@ -368,7 +368,7 @@ Numerados para discutirlos de a uno. Ninguno implementado.
 | # | Hallazgo | Dónde | Estado |
 |---|---|---|---|
 | H-1 | Le pregunta por **talonarios a un folleto**: la card se muestra porque la FAMILIA declara `modoTalonarioIncompleto`, no porque el producto sea de talonarios. | `oficio.talonario` | Abierto |
-| H-2 | El **acomodado queda último**, detrás de setup y limpieza. Para impresión por hoja es *la* decisión de oficio: cuántas poses entran, el aprovechamiento, cuánto papel se compra. | `oficio.acomodado` | Abierto |
+| H-2 | El **acomodado queda último**, detrás de setup y limpieza. Para impresión por hoja es *la* decisión de oficio: cuántas poses entran, el aprovechamiento, cuánto papel se compra. | `oficio.acomodado` | **CERRADO** — primero del eje "El trabajo" (`orden: 0`) |
 | H-3 | Las **caras se preguntan dos veces** y no se ve que sean parientes: una multiplica el tiempo, la otra el material. Que sean dos está bien; que estén lejos y con nombres distintos, no. | `activacion.multiplicadores` + `materiales.caras` | Abierto |
 | H-4 | **"Calculado por nesting"** como respuesta visible: era el nombre del mecanismo interno, no lo que hace. | `tiempo.cantidad_operativa` | **CERRADO** — dice "La calcula el propio paso" |
 | H-5 | El **tóner vive en "Máquina y perfil"**: es consumo, no una propiedad del fierro. | `maquina.cobertura` | Abierto |
@@ -504,6 +504,29 @@ materiales reusa los componentes que ya traían los datos reales.
 Nada de esto es maquillaje suelto: `EjeGuiado` ganó un modo `fijo`, las pills
 un `presentacion: "tarjetas"`, y los grupos de material se declaran igual que
 los de cualquier eje. Golden masters 148/148 y 7/7.
+
+## 7.quinquies "El trabajo" es un eje, y la última sección vieja muere (2026-08-07)
+
+"Ajustes del trabajo" era lo último con el estilo viejo (encabezado en
+mayúsculas, `SeccionGuiada`). Ahora es el eje **"El trabajo"**, con el mismo
+patrón que el resto: encabezado sin fondo + card. Adentro, dos sub-bloques:
+
+- *(sin título)* — el **acomodado** primero (es la decisión más cara: cuántas
+  poses entran, el aprovechamiento, cuánto papel se compra — cierra H-2 con un
+  `orden: 0` declarado), después params de familia, efectos y el talonario.
+- **Preparación y limpieza** — los minutos fijos de setup y cleanup, si difieren
+  del perfil de la máquina.
+
+Con esto `SeccionGuiada` y `opcionesDeSeccion` quedan sin uso y se borran: TODO
+el editor guiado se arma por EJES.
+
+**En qué máquina** también se limpió de paso: la etiqueta "Máquinas candidatas"
+duplicaba el encabezado que ya pone el componente ("Máquinas candidatas para
+este paso"); se sacó, como con los materiales.
+
+Queda **H-1** (el talonario aparece en un folleto porque la familia
+`impresion_por_hoja` declara el param para todos sus productos) — es su propio
+arreglo, distinto de estos reordenamientos.
 
 ## 8. El repaso, familia por familia
 

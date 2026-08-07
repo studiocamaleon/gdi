@@ -265,6 +265,9 @@ export interface OpcionPaso {
   /** Dentro del eje ocupa la fila entera: los controles anchos (el ritmo con
    *  su unidad, un segmented de tres) se parten feo en media columna. */
   anchoCompleto?: boolean;
+  /** Orden dentro de su grupo (menor primero). Sin declarar, sigue el orden
+   *  de declaración en ESQUEMA_PASO. */
+  orden?: number;
   ayuda?: string;
   visible: (ctx: ContextoOpcion) => boolean;
   resumen: (ctx: ContextoOpcion) => string;
@@ -1926,6 +1929,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "oficio.params_familia",
     seccion: "oficio",
+    eje: "trabajo",
+    grupo: "labores",
+    anchoCompleto: true,
     pregunta: "¿Con qué parámetros trabaja este paso?",
     ayuda:
       "Los parámetros propios del oficio (refuerzos del bastidor, densidad del sembrado, lados y demasía del refuerzo…). Son los números que el motor usa para calcular este paso.",
@@ -1984,6 +1990,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // aparte ("Modificación previa"), un paso fantasma que no producía nada.
     clave: "oficio.efectos",
     seccion: "oficio",
+    eje: "trabajo",
+    grupo: "labores",
+    anchoCompleto: true,
     pregunta: "¿Este paso le exige algo al trabajo?",
     ayuda:
       "Si para hacerlo la pieza tiene que venir más grande (envolver un bastidor, coser un bolsillo, dejar borde para perforar), decilo acá: el material se agranda antes de imprimir, aunque este paso vaya al final.",
@@ -2004,6 +2013,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // arma el pliego (feedback del usuario: "¿dónde se ve?").
     clave: "oficio.talonario",
     seccion: "oficio",
+    eje: "trabajo",
+    grupo: "labores",
+    anchoCompleto: true,
     pregunta: "¿Cómo se agrupan los talonarios en el pliego?",
     ayuda:
       "Agrupa talonarios de a N poses por pliego y define qué hacer con los sueltos: compartir pliego (menos papel) o poses vacías (listo para abrochar).",
@@ -2043,6 +2055,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "oficio.setup",
     seccion: "oficio",
+    eje: "trabajo",
+    grupo: "prep",
+    etiqueta: "Preparar la máquina",
     pregunta: "¿Preparar la máquina lleva un tiempo distinto acá?",
     ayuda:
       "Sobrescribe el setup del perfil de máquina sólo para este producto. Vacío = el del perfil.",
@@ -2069,6 +2084,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "oficio.cleanup",
     seccion: "oficio",
+    eje: "trabajo",
+    grupo: "prep",
+    etiqueta: "Limpieza al terminar",
     pregunta: "¿Y la limpieza al terminar?",
     ayuda:
       "Sobrescribe el cierre/post-proceso del perfil de máquina sólo para este producto. Vacío = el del perfil.",
@@ -2095,6 +2113,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "oficio.acomodado",
     seccion: "oficio",
+    eje: "trabajo",
+    grupo: "labores",
+    anchoCompleto: true,
     pregunta: "¿Cómo se acomodan y cobran las piezas en el material?",
     ayuda:
       "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y —en placa— cómo se cobra la última placa a medio usar.",
@@ -2157,6 +2178,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     origenValor: (ctx) =>
       ctx.paramsPaso.nestingConfig != null ? "config" : "default-paso",
     control: { tipo: "componente", id: "acomodado-detallado" },
+    orden: 0,
   },
 ];
 
@@ -2262,6 +2284,26 @@ const GRUPOS_MAQUINA: GrupoEje[] = [
   },
 ];
 
+/** Los sub-bloques del eje "El trabajo": el acomodado y ajustes de oficio,
+ *  y la preparación/limpieza de máquina. */
+const GRUPOS_TRABAJO: GrupoEje[] = [
+  {
+    id: "labores",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+    encabezado: "arriba",
+  },
+  {
+    id: "prep",
+    titulo: "Preparación y limpieza",
+    ayuda:
+      "Minutos fijos antes y después del trabajo, si difieren del perfil de la máquina.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr) minmax(0, 260px)",
+    encabezado: "arriba",
+  },
+];
+
 /** Los sub-bloques de la card de UN material (se repite por slot). */
 export const GRUPOS_MATERIAL: GrupoEje[] = [
   {
@@ -2303,9 +2345,9 @@ export const GRUPOS_EJE: Record<EjePaso, GrupoEje[]> = {
   identidad: GRUPOS_IDENTIDAD,
   activacion: GRUPOS_ACTIVACION,
   maquina: GRUPOS_MAQUINA,
+  trabajo: GRUPOS_TRABAJO,
   tiempo: GRUPOS_TIEMPO,
   materiales: [],
-  trabajo: [],
   cantidad: [],
 };
 

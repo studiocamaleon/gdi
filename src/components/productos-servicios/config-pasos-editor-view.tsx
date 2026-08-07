@@ -52,7 +52,6 @@ import {
   resumenPendientes,
 } from "@/lib/pendientes-paso";
 import {
-  opcionesDeSeccion,
   GRUPOS_EJE,
   opcionesDeEje,
   opcionesDeMaterial,
@@ -10326,57 +10325,6 @@ function CandidatasDetalladoEditor({
 // abiertas si su pendiente está vivo, colapsadas con resumen + "Cambiar"
 // si están resueltas. Nada desaparece: paridad visible.
 
-function SeccionGuiada({
-  titulo,
-  seccion,
-  ctx,
-  pendientesVivos,
-  onAplicar,
-  renderComponente,
-}: {
-  titulo: string;
-  seccion: Parameters<typeof opcionesDeSeccion>[0];
-  ctx: ContextoOpcion;
-  pendientesVivos: Set<string>;
-  onAplicar: (patch: PatchOpcion) => void;
-  renderComponente: (id: string) => React.ReactNode;
-}) {
-  const opciones = opcionesDeSeccion(seccion, ctx);
-  if (opciones.length === 0) return null;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 650,
-          letterSpacing: 0.4,
-          textTransform: "uppercase",
-          color: "var(--muted-text, #6e6e76)",
-        }}
-      >
-        {titulo}
-      </div>
-      {opciones.map((opcion) => (
-        <OpcionGuiadaFila
-          key={opcion.clave}
-          opcion={opcion}
-          ctx={ctx}
-          abiertaInicial={
-            (opcion.pendiente != null &&
-              pendientesVivos.has(opcion.pendiente)) ||
-            opcion.origenValor(ctx) === "sin-definir"
-          }
-          pendienteVivo={
-            opcion.pendiente != null && pendientesVivos.has(opcion.pendiente)
-          }
-          onAplicar={onAplicar}
-          renderComponente={renderComponente}
-        />
-      ))}
-    </div>
-  );
-}
-
 /**
  * Encabezado de un GRUPO de cards (sin fondo, como en el diseño): un check de
  * estado, el título con un chip de conteo, la descripción, y una acción a la
@@ -10542,10 +10490,12 @@ function EjeGuiado({
       ? `${resumenes.slice(0, 3).join(" · ")} · +${resumenes.length - 3}`
       : resumenes.join(" · ");
 
+  const porOrden = (a: OpcionPaso, b: OpcionPaso) =>
+    (a.orden ?? 999) - (b.orden ?? 999);
   const gruposConOpciones = [
     ...grupos.map((grupo) => ({
       grupo,
-      items: opciones.filter((op) => op.grupo === grupo.id),
+      items: opciones.filter((op) => op.grupo === grupo.id).sort(porOrden),
     })),
     { grupo: { id: "__resto" } as GrupoEje, items: opciones.filter((op) => !op.grupo) },
   ].filter((g) => g.items.length > 0);
@@ -12265,9 +12215,17 @@ function SeccionesEsquemaPaso({
                 })}
                 {/* Ajustes del trabajo (sub-fase D): setup/cleanup +
                     el card de Acomodado del detallado. */}
-                <SeccionGuiada
-                  titulo="Ajustes del trabajo"
-                  seccion="oficio"
+                <EjeGuiado
+                  titulo="El trabajo"
+                  subtitulo="Cómo se acomoda en el material, qué le exige el paso y sus tiempos de preparación."
+                  opciones={opcionesDeEje("trabajo", ctx)}
+                  grupos={GRUPOS_EJE.trabajo}
+                  fijo
+                  resumenPrincipal={[
+                    "oficio.acomodado",
+                    "oficio.params_familia",
+                    "oficio.efectos",
+                  ]}
                   ctx={ctx}
                   pendientesVivos={pendientesVivos}
                   onAplicar={onAplicar}
