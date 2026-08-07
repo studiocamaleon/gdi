@@ -778,8 +778,6 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     anchoCompleto: true,
     seccion: "activacion",
     pregunta: "¿Con qué regla se activa?",
-    ayuda:
-      "La condición del pedido que enciende el paso: medida, opción elegida, tecnología…",
     visible: (ctx) => ctx.cfg.modoActivacion === "CONDICIONAL",
     // La regla EN HUMANO ("Tipo de copia es mayor o igual que 2"), no el
     // opaco "Regla definida" (H17). Si usa operadores/campos que el builder

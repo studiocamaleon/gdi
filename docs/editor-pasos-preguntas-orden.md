@@ -443,10 +443,17 @@ OBLIGATORIO cuenta como activo, así que arrastra — y al hacerlo vuelve
 obligatorio de hecho a un paso opcional. El diseño lo mantiene visible y avisa
 la consecuencia, que es lo correcto. Queda como test.
 
-**Lo que NO se portó**: las filas de la condición (campo · operador · valor,
-con los conectores Y/O y el "Agregar condición" punteado). Eso es el
-`RuleBuilder`, un componente propio con su lógica de jsonLogic; rehacerlo es su
-propio trabajo, no un cambio de estilos.
+**El RuleBuilder, con la forma del diseño.** Las filas de la condición —campo ·
+operador · valor con su unidad · quitar—, el conector Y/O en la línea entre
+filas, el "Agregar condición" punteado y la caja de valor vacía teñida de
+ámbar. La lógica (parseo desde/hacia jsonLogic, campos, operadores) no se tocó:
+se reescribió sólo el render de `rule-builder.tsx`. Los campos numéricos
+ganaron una `unidad` opcional (u, m², mm) para el sufijo del valor.
+
+Del diseño quedó afuera una sola cosa, y es de motor, no de estilo: el operador
+**"está entre"** (rango con dos valores). El modelo de reglas hoy tiene =, ≠,
+>, ≥, <, ≤ y el motor evalúa jsonLogic con esos; agregar un `between` es tocar
+el evaluador, no el editor. Si hace falta, es su propio trabajo.
 
 ## 8. El repaso, familia por familia
 

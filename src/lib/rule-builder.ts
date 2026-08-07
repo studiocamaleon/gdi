@@ -14,6 +14,8 @@ export interface RuleFieldDefinition {
   valueKind: "number" | "string";
   operators: RuleOperator[];
   options?: RuleOption[];
+  /** Unidad del valor, para mostrarla junto al input ("m²", "u"). */
+  unidad?: string;
 }
 
 export interface RuleConditionUI {
@@ -47,6 +49,7 @@ export const RULE_FIELD_DEFINITIONS: RuleFieldDefinition[] = [
     kind: "number",
     valueKind: "number",
     operators: NUMBER_OPERATORS,
+    unidad: "u",
   },
   {
     key: "caras",
@@ -91,6 +94,7 @@ export const RULE_FIELD_DEFINITIONS: RuleFieldDefinition[] = [
     kind: "number",
     valueKind: "number",
     operators: NUMBER_OPERATORS,
+    unidad: "m²",
   },
   {
     key: "piezaAnchoMaxMm",
@@ -98,6 +102,7 @@ export const RULE_FIELD_DEFINITIONS: RuleFieldDefinition[] = [
     kind: "number",
     valueKind: "number",
     operators: NUMBER_OPERATORS,
+    unidad: "mm",
   },
   {
     key: "piezaAltoMaxMm",
@@ -105,6 +110,7 @@ export const RULE_FIELD_DEFINITIONS: RuleFieldDefinition[] = [
     kind: "number",
     valueKind: "number",
     operators: NUMBER_OPERATORS,
+    unidad: "mm",
   },
   {
     key: "piezaAreaTotalM2",
@@ -112,6 +118,7 @@ export const RULE_FIELD_DEFINITIONS: RuleFieldDefinition[] = [
     kind: "number",
     valueKind: "number",
     operators: NUMBER_OPERATORS,
+    unidad: "m²",
   },
 ];
 
