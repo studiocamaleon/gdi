@@ -52,8 +52,10 @@ import {
 } from "@/lib/pendientes-paso";
 import {
   opcionesDeSeccion,
+  GRUPOS_EJE_TIEMPO,
   type ContextoOpcion,
   type OpcionPaso,
+  type GrupoEje,
   type PatchOpcion,
   unidadCantidadDe,
 } from "@/lib/editor-paso/schema";
@@ -10223,21 +10225,24 @@ function SeccionGuiada({
 }
 
 /**
- * PROTOTIPO — la card de EJE (docs/editor-pasos-preguntas-orden.md §3).
+ * La card de EJE (docs/editor-pasos-preguntas-orden.md §3).
  *
  * Un eje es UNA decisión ("cuánto tarda este paso"), aunque el modelo la
- * guarde en ocho campos. Cerrada muestra el estado resuelto en una línea;
- * abierta muestra TODOS sus controles juntos, en un formulario chico, en vez
- * de ocho acordeones que hay que ir abriendo de a uno.
+ * guarde en doce campos. Cerrada muestra el estado en una línea; abierta, un
+ * formulario partido en sub-bloques con nombre — "dónde se hace", "ritmo de
+ * trabajo", "sobre qué cantidad se aplica" — en vez de una lista de preguntas
+ * que hay que abrir de a una.
  *
- * Es la densidad de la vista detallada con el idioma y el filtrado del
- * guiado: sólo aparecen los controles que aplican a esta familia y a lo que
- * ya se eligió, porque cada opción trae su propio `visible`.
+ * Adentro, cada opción se muestra con su ETIQUETA corta ("Centro productivo"):
+ * la pregunta larga ya la contesta el título del grupo. Las que no declaran
+ * grupo caen en un bloque final, así ninguna se pierde.
  */
 function EjeGuiado({
   titulo,
   subtitulo,
   seccion,
+  grupos,
+  resumenPrincipal,
   ctx,
   pendientesVivos,
   onAplicar,
@@ -10246,47 +10251,65 @@ function EjeGuiado({
   titulo: string;
   subtitulo: string;
   seccion: Parameters<typeof opcionesDeSeccion>[0];
+  grupos: GrupoEje[];
+  /** Claves cuyo resumen define el eje, en orden de prioridad: es lo que se
+   *  lee con la card cerrada. Sin esto la línea arrancaría por la primera
+   *  opción declarada, que casi nunca es la que importa. */
+  resumenPrincipal: string[];
   ctx: ContextoOpcion;
   pendientesVivos: Set<string>;
   onAplicar: (patch: PatchOpcion) => void;
   renderComponente: (id: string) => React.ReactNode;
 }) {
   const opciones = opcionesDeSeccion(seccion, ctx);
-  // Arranca abierto si algo del eje está sin resolver: el modelador no tiene
-  // que descubrir dónde está lo que falta.
-  const faltaAlgo = opciones.some(
-    (op) =>
-      op.origenValor(ctx) === "sin-definir" ||
-      (op.pendiente != null && pendientesVivos.has(op.pendiente)),
-  );
+  const sinResolver = (op: OpcionPaso) =>
+    op.origenValor(ctx) === "sin-definir" ||
+    (op.pendiente != null && pendientesVivos.has(op.pendiente));
+  const faltaAlgo = opciones.some(sinResolver);
   const [abierto, setAbierto] = React.useState(faltaAlgo);
   if (opciones.length === 0) return null;
 
-  // El estado del eje en una línea. Tres resúmenes y el resto contado: más
-  // que eso no se lee, y la card está a un click de distancia.
-  const resumenes = opciones.map((op) => op.resumen(ctx));
+  // La línea del eje: primero lo que lo define (el ritmo, no "se calcula
+  // solo"), después el resto hasta tres.
+  const porClave = new Map(opciones.map((op) => [op.clave, op]));
+  const principales = resumenPrincipal
+    .map((clave) => porClave.get(clave))
+    .filter((op): op is OpcionPaso => op != null);
+  const resto = opciones.filter((op) => !principales.includes(op));
+  const ordenadas = [...principales, ...resto];
+  const resumenes = ordenadas.map((op) => op.resumen(ctx));
   const linea =
     resumenes.length > 3
       ? `${resumenes.slice(0, 3).join(" · ")} · +${resumenes.length - 3}`
       : resumenes.join(" · ");
 
+  const gruposConOpciones = [
+    ...grupos.map((grupo) => ({
+      grupo,
+      items: opciones.filter((op) => op.grupo === grupo.id),
+    })),
+    { grupo: { id: "__resto" } as GrupoEje, items: opciones.filter((op) => !op.grupo) },
+  ].filter((g) => g.items.length > 0);
+
+  const etiquetaDe = (op: OpcionPaso) => op.etiqueta ?? op.pregunta;
+
   return (
     <div
       style={{
         border: "1px solid var(--hairline, #e6e2dc)",
-        borderRadius: 10,
+        borderRadius: 12,
         background: "var(--surface-1, #fff)",
-        padding: abierto ? "12px 14px 14px" : "10px 14px",
+        padding: abierto ? "14px 16px 16px" : "10px 14px",
         display: "flex",
         flexDirection: "column",
-        gap: abierto ? 12 : 4,
+        gap: abierto ? 16 : 4,
       }}
     >
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "baseline",
+          alignItems: "flex-start",
           gap: 10,
         }}
       >
@@ -10296,7 +10319,7 @@ function EjeGuiado({
               display: "flex",
               alignItems: "center",
               gap: 7,
-              fontSize: 14.5,
+              fontSize: 15,
               fontWeight: 650,
             }}
           >
@@ -10306,8 +10329,8 @@ function EjeGuiado({
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 14,
-                height: 14,
+                width: 16,
+                height: 16,
                 borderRadius: "50%",
                 flexShrink: 0,
                 ...(faltaAlgo
@@ -10329,7 +10352,8 @@ function EjeGuiado({
               fontSize: 12.5,
               color: "var(--muted-text, #6e6e76)",
               marginTop: 2,
-              marginLeft: 21,
+              marginLeft: 23,
+              maxWidth: 560,
             }}
           >
             {abierto ? subtitulo : linea}
@@ -10346,50 +10370,94 @@ function EjeGuiado({
       </div>
 
       {abierto ? (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 14,
-            marginLeft: 21,
-          }}
-        >
-          {opciones.map((opcion) => {
-            const origen = opcion.origenValor(ctx);
-            const sinResolver =
-              origen === "sin-definir" ||
-              (opcion.pendiente != null &&
-                pendientesVivos.has(opcion.pendiente));
-            return (
-              <div
-                key={opcion.clave}
-                style={{ display: "flex", flexDirection: "column", gap: 6 }}
-              >
-                <div style={{ fontSize: 13.5, fontWeight: 550 }}>
-                  {opcion.pregunta}
-                </div>
-                {/* La ayuda sólo donde todavía no hay respuesta: si ya está
-                    contestada, el texto explicativo es ruido que estira la
-                    card y hace perder el hilo. */}
-                {sinResolver && opcion.ayuda ? (
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "var(--muted-text, #6e6e76)",
-                    }}
-                  >
-                    {opcion.ayuda}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {gruposConOpciones.map(({ grupo, items }, idx) => (
+            <div
+              key={grupo.id}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                ...(idx > 0
+                  ? {
+                      borderTop: "1px solid var(--hairline, #eee7de)",
+                      paddingTop: 16,
+                    }
+                  : {}),
+              }}
+            >
+              {grupo.titulo ? (
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                    {grupo.titulo}
                   </div>
-                ) : null}
-                <ControlGuiado
-                  opcion={opcion}
-                  ctx={ctx}
-                  onAplicar={onAplicar}
-                  renderComponente={renderComponente}
-                />
+                  {grupo.ayuda ? (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--muted-text, #6e6e76)",
+                        marginTop: 2,
+                        maxWidth: 560,
+                      }}
+                    >
+                      {grupo.ayuda}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    grupo.estilo === "campos"
+                      ? "repeat(auto-fit, minmax(230px, 1fr))"
+                      : "1fr",
+                  gap: 12,
+                  alignItems: "start",
+                }}
+              >
+              {items.map((opcion) => (
+                <div
+                  key={opcion.clave}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 5,
+                    ...(opcion.anchoCompleto || grupo.estilo !== "campos"
+                      ? { gridColumn: "1 / -1" }
+                      : {}),
+                  }}
+                >
+                  {grupo.estilo === "bifurcacion" ? null : (
+                    <div style={{ fontSize: 12.5, fontWeight: 550 }}>
+                      {etiquetaDe(opcion)}
+                    </div>
+                  )}
+                  {/* La ayuda de la opción sólo donde el grupo no la cubre y
+                      todavía no hay respuesta: si ya está contestada, el texto
+                      estira la card y hace perder el hilo. */}
+                  {sinResolver(opcion) && opcion.ayuda ? (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--muted-text, #6e6e76)",
+                        maxWidth: 560,
+                      }}
+                    >
+                      {opcion.ayuda}
+                    </div>
+                  ) : null}
+                  <ControlGuiado
+                    opcion={opcion}
+                    ctx={ctx}
+                    onAplicar={onAplicar}
+                    renderComponente={renderComponente}
+                  />
+                </div>
+              ))}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       ) : null}
     </div>
@@ -10845,31 +10913,92 @@ function SeccionesEsquemaPaso({
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 8 }}
               >
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={!estimaComercial ? "default" : "outline"}
-                    onClick={() =>
-                      updateTiempoManualConfig(pasoActual.id, {
-                        habilitado: false,
-                      })
-                    }
-                  >
-                    No, se calcula solo
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={estimaComercial ? "default" : "outline"}
-                    onClick={() =>
-                      updateTiempoManualConfig(pasoActual.id, {
-                        habilitado: true,
-                      })
-                    }
-                  >
-                    Sí, lo estima el comercial
-                  </Button>
+                {/* La bifurcación que apaga el resto del eje se muestra
+                    como decisión —dos tarjetas con su explicación— y no como
+                    dos pills más en la lista. */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(230px, 1fr))",
+                    gap: 8,
+                  }}
+                >
+                  {[
+                    {
+                      valor: false,
+                      titulo: "Se calcula solo",
+                      detalle:
+                        "El sistema saca los minutos del ritmo y la cantidad del paso.",
+                    },
+                    {
+                      valor: true,
+                      titulo: "Lo estima el comercial",
+                      detalle:
+                        "Quien cotiza carga los minutos a mano en cada presupuesto.",
+                    },
+                  ].map((op) => {
+                    const activa = estimaComercial === op.valor;
+                    return (
+                      <button
+                        key={op.titulo}
+                        type="button"
+                        onClick={() =>
+                          updateTiempoManualConfig(pasoActual.id, {
+                            habilitado: op.valor,
+                          })
+                        }
+                        style={{
+                          textAlign: "left",
+                          borderRadius: 10,
+                          padding: "10px 12px",
+                          background: "var(--surface-1, #fff)",
+                          border: activa
+                            ? "1.5px solid var(--fg, #1c1a17)"
+                            : "1px solid var(--hairline, #e6e2dc)",
+                          cursor: "pointer",
+                          display: "flex",
+                          gap: 9,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          style={{
+                            marginTop: 2,
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            flexShrink: 0,
+                            border: activa
+                              ? "4px solid var(--fg, #1c1a17)"
+                              : "1px solid var(--hairline-strong, #c9c2b8)",
+                          }}
+                        />
+                        <span style={{ minWidth: 0 }}>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: 13.5,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {op.titulo}
+                          </span>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: 12,
+                              color: "var(--muted-text, #6e6e76)",
+                              marginTop: 2,
+                            }}
+                          >
+                            {op.detalle}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
                 {estimaComercial ? (
                   // Las clases del detallado (field, ps-*) están scopeadas
@@ -11152,13 +11281,18 @@ function SeccionesEsquemaPaso({
                 detallado congelado). */}
             {!noEjecutar && !cfg.tercerizado ? (
               <>
-                {/* PROTOTIPO del eje (docs/editor-pasos-preguntas-orden.md):
-                    una card con todos los controles del tiempo juntos, en vez
-                    de ocho acordeones. */}
                 <EjeGuiado
                   titulo="Cuánto tarda"
                   subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
                   seccion="tiempo"
+                  grupos={GRUPOS_EJE_TIEMPO}
+                  resumenPrincipal={[
+                    "tiempo.productividad",
+                    "tiempo.batch",
+                    "tiempo.tiempo_fijo",
+                    "tiempo.cantidad_operativa",
+                    "tiempo.dotacion",
+                  ]}
                   ctx={ctx}
                   pendientesVivos={pendientesVivos}
                   onAplicar={onAplicar}

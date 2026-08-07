@@ -224,18 +224,55 @@ El caso difícil —el árbol— **funciona**: al elegir "Productividad por hora
 aparece el ritmo con su unidad; si fuera por tanda aparecería el control de
 tanda. Todo dentro de la misma card, sin abrir nada.
 
-**Dos cosas que el prototipo dejó a la vista y hay que resolver antes de
-extenderlo:**
+**Los dos problemas que dejó a la vista, ya resueltos:**
 
-- **P-1 · La línea cerrada no dice lo que importa.** Hoy es "los primeros tres
-  resúmenes + contador": en el tensado queda *"No — se calcula solo ·
-  Produccion & Taller · 1 persona · +4"*, que abre con lo menos informativo y
-  esconde el ritmo, que es el dato del eje. El resumen del eje no puede salir
-  de tomar los primeros N: **hay que declarar cuál es el dato que lo define.**
-- **P-2 · El orden interno sigue siendo el de declaración, no el del árbol.**
-  En el tensado, "¿Sobre cuántas piezas trabaja?" cae entre el ritmo y su
-  magnitud, partiendo al medio una idea. Adentro de la card el orden tiene que
-  seguir la dependencia: raíz → rama → hoja.
+- **P-1 · La línea cerrada no decía lo que importa.** Tomaba los primeros tres
+  resúmenes y quedaba *"No — se calcula solo · Produccion & Taller · 1 persona
+  · +4"*: abría con lo menos informativo y escondía el ritmo. **Resuelto**: el
+  eje declara `resumenPrincipal` —las claves que lo definen, en orden— y ahora
+  se lee *"30 m de borde/h · Cantidad pedida directa · 1 persona · +4"*.
+- **P-2 · El orden interno era el de declaración, no el del árbol.** *Resuelto
+  por otro lado, mejor*: en vez de ordenar por dependencia, el eje se parte en
+  **sub-bloques con nombre** (§5.ter). "Sobre cuántas piezas trabaja" ya no se
+  cuela entre el ritmo y su magnitud porque vive en otro bloque.
+
+## 5.ter Los sub-bloques del eje (2026-08-07)
+
+Sobre una idea de Lucas: dentro del eje, las preguntas dejan de ser preguntas y
+pasan a ser **campos con etiqueta corta**, agrupados en bloques que explican
+para qué sirven. "¿En qué centro productivo se realiza este paso?" se vuelve el
+campo `Centro productivo` del bloque "Dónde se hace".
+
+El eje del tiempo quedó así:
+
+| Bloque | Ayuda | Campos |
+|---|---|---|
+| *(sin título)* | — | La bifurcación raíz, en dos tarjetas: **se calcula solo** / **lo estima el comercial** |
+| **Dónde se hace** | El centro define la tarifa por hora. Sumar personas no acorta el trabajo. | Centro productivo · Personas en simultáneo |
+| **Ritmo de trabajo** | Cómo se mide la velocidad. Es lo único que cambia los minutos. | Cómo se mide · Tipo de ritmo · Ritmo · Tanda · El ritmo cuenta · Minutos por trabajo |
+| **Sobre qué cantidad se aplica** | Qué número multiplica al ritmo cuando entra una orden. | Base de cantidad · Hereda de · Qué monta |
+
+Tres cosas que se declaran en el esquema y no en el render: `grupo` (a qué
+bloque pertenece), `etiqueta` (el nombre corto del campo) y `anchoCompleto`
+(los controles anchos no se parten en media columna).
+
+### La ayuda tiene que decir lo que hace el motor
+
+El mockup que disparó esto traía dos frases razonables y equivocadas: *"las
+personas en simultáneo dividen el tiempo total"* y *"por hora y por persona"*
+al lado del ritmo. Las dos son falsas. En
+[`calcularTiempoYCosto`](../apps/api/src/motor-universal/motor.service.ts) la
+dotación **no entra en `runMin`**: multiplica el **costo**, y sólo en pasos
+**sin máquina** (con máquina la capacidad son horas-máquina, y la máquina es
+una sola la atiendan uno o cuatro).
+
+Un texto de ayuda que explica el modelo al revés es peor que no tener ayuda: el
+modelador configura creyendo otra cosa. De paso se corrigió la ayuda de
+`tiempo.productividad`, que decía "cuánto produce **una persona** por hora".
+
+**Descartado (Lucas)**: el pie "cómo queda el cálculo" con el ejemplo en vivo.
+Calcularlo en el frontend sería duplicar el motor —el pecado que este refactor
+viene borrando— y hacerlo bien pedía un endpoint de simulación por paso.
 
 ## 6. Hallazgos abiertos
 

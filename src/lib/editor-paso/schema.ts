@@ -194,11 +194,41 @@ export type ControlOpcion =
         | "efectos-paso";
     };
 
+/**
+ * Sub-bloque del eje: un eje ("cuánto tarda") se lee mejor partido en dos o
+ * tres ideas con nombre ("dónde se hace", "ritmo de trabajo") que como una
+ * lista de campos sueltos. Ver docs/editor-pasos-preguntas-orden.md §3.
+ */
+export interface GrupoEje {
+  id: string;
+  /** Sin título = el grupo no se anuncia (la bifurcación raíz del eje). */
+  titulo?: string;
+  ayuda?: string;
+  /** `bifurcacion` = la decisión que apaga el resto del eje, en dos tarjetas
+   *  grandes. `campos` = etiqueta + control, en grilla. */
+  estilo?: "bifurcacion" | "campos";
+}
+
 export interface OpcionPaso {
   /** 'seccion.campo' — la clave del test de paridad. */
   clave: string;
   seccion: SeccionPaso;
+  /**
+   * La pregunta completa, en idioma de taller. Es lo que se muestra cuando la
+   * opción vive sola en su tarjeta.
+   */
   pregunta: string;
+  /**
+   * Etiqueta corta para cuando la opción se renderiza DENTRO de un eje, donde
+   * la pregunta larga ya la contesta el título del grupo: "¿En qué centro
+   * productivo se realiza este paso?" se vuelve "Centro productivo".
+   */
+  etiqueta?: string;
+  /** Sub-bloque del eje al que pertenece (id de un `GrupoEje`). */
+  grupo?: string;
+  /** Dentro del eje ocupa la fila entera: los controles anchos (el ritmo con
+   *  su unidad, un segmented de tres) se parten feo en media columna. */
+  anchoCompleto?: boolean;
   ayuda?: string;
   visible: (ctx: ContextoOpcion) => boolean;
   resumen: (ctx: ContextoOpcion) => string;
@@ -778,6 +808,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.comercial",
     seccion: "tiempo",
+    grupo: "raiz",
     pregunta: "¿El tiempo lo estima el comercial al cotizar?",
     ayuda:
       "Para trabajos donde el tiempo lo sabe el vendedor (diseño, minutos de láser según el RIP). El valor cargado reemplaza el cálculo; setup y limpieza de máquina se suman igual.",
@@ -798,6 +829,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.modo",
     seccion: "tiempo",
+    grupo: "ritmo",
+    etiqueta: "Cómo se mide",
     pregunta: "¿Cómo se mide el tiempo acá?",
     ayuda:
       "La base del cálculo: tiempo fijo, ritmo propio del paso, o la velocidad de la máquina.",
@@ -831,6 +864,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.centro",
     seccion: "tiempo",
+    grupo: "donde",
+    etiqueta: "Centro productivo",
     pregunta: "¿En qué centro productivo se realiza este paso?",
     ayuda:
       "El centro define la tarifa horaria del paso. Si el paso usa máquina, el centro lo pone la máquina.",
@@ -873,6 +908,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.dotacion",
     seccion: "tiempo",
+    grupo: "donde",
+    etiqueta: "Personas en simultáneo",
     pregunta: "¿Cuántas personas trabajan?",
     ayuda:
       "Multiplica sólo la mano de obra (2 personas = doble de horas-hombre); la máquina no cambia.",
@@ -897,6 +934,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.ritmo_modo",
     seccion: "tiempo",
+    anchoCompleto: true,
+    grupo: "ritmo",
+    etiqueta: "Tipo de ritmo",
     pregunta: "¿Cómo medís el ritmo?",
     ayuda:
       "Por hora (120 pliegos/h) o por tanda (2 pliegos cada 1 minuto) — lo que sea natural contar en el taller.",
@@ -930,9 +970,12 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.productividad",
     seccion: "tiempo",
+    anchoCompleto: true,
+    grupo: "ritmo",
+    etiqueta: "Ritmo",
     pregunta: "¿A qué ritmo?",
     ayuda:
-      "Cuánto produce una persona por hora en este paso. Si el paso ya declara un ritmo, se usa ese.",
+      "Cuánto produce el paso por hora. No es por persona: sumar gente no lo acelera (ver Dónde se hace). Si el paso ya declara un ritmo, se usa ese.",
     visible: (ctx) =>
       esT2(ctx) &&
       !comercialEstimaTiempo(ctx) &&
@@ -963,6 +1006,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.batch",
     seccion: "tiempo",
+    anchoCompleto: true,
+    grupo: "ritmo",
+    etiqueta: "Tanda",
     pregunta: "¿Cuánto tarda una tanda y de cuántas?",
     ayuda:
       "Ejemplo: 2 pliegos cada 1 minuto. El motor convierte la tanda a ritmo por hora.",
@@ -993,6 +1039,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.cantidad_operativa",
     seccion: "tiempo",
+    grupo: "cantidad",
+    etiqueta: "Base de cantidad",
     pregunta: "¿Sobre cuántas piezas trabaja?",
     ayuda:
       "La cantidad que este paso procesa: la del pedido, la que hereda de otro paso, o la que calcula acá (nesting/conversión).",
@@ -1032,6 +1080,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.herencia",
     seccion: "tiempo",
+    anchoCompleto: true,
+    grupo: "cantidad",
+    etiqueta: "Hereda de",
     pregunta: "¿De qué paso hereda la cantidad?",
     ayuda:
       "Este paso trabaja sobre un número que dejó un paso anterior (los pliegos impresos, los puntos de soldadura, los m² a pintar…). Señalá el paso, o la magnitud publicada que corresponda; sin origen, toma el del paso anterior que publica cantidad.",
@@ -1077,6 +1128,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.calcular_segun",
     seccion: "tiempo",
+    grupo: "ritmo",
+    etiqueta: "El ritmo cuenta",
     pregunta: "¿El ritmo cuenta piezas, m² o metros?",
     ayuda:
       "Qué magnitud cronometra la productividad: cantidad, área, metros lineales o perímetro.",
@@ -1121,6 +1174,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.piezas_montar",
     seccion: "tiempo",
+    grupo: "cantidad",
+    etiqueta: "Qué monta",
     pregunta: "¿Qué monta: piezas del pedido o pliegos impresos?",
     ayuda:
       "Define qué medidas usa el paso para acomodar sobre el material de montaje.",
@@ -1161,6 +1216,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.tiempo_fijo",
     seccion: "tiempo",
+    grupo: "ritmo",
+    etiqueta: "Minutos por trabajo",
     pregunta: "¿Cuántos minutos lleva?",
     ayuda:
       "El tiempo fijo del paso, independiente de la cantidad. Si el paso ya declara uno, se usa ese.",
@@ -1927,6 +1984,38 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     origenValor: (ctx) =>
       ctx.paramsPaso.nestingConfig != null ? "config" : "default-paso",
     control: { tipo: "componente", id: "acomodado-detallado" },
+  },
+];
+
+/**
+ * Los sub-bloques del eje "cuánto tarda", en orden de lectura.
+ *
+ * El texto de ayuda dice lo que hace el MOTOR, no lo que suena razonable: la
+ * dotación no acorta el trabajo, multiplica la mano de obra (y sólo en pasos
+ * sin máquina, donde la capacidad se mide en horas-hombre). Ver
+ * `calcularTiempoYCosto` en motor.service.ts.
+ */
+export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
+  { id: "raiz", estilo: "bifurcacion" },
+  {
+    id: "donde",
+    titulo: "Dónde se hace",
+    ayuda:
+      "El centro define la tarifa por hora. Sumar personas no acorta el trabajo: multiplica la mano de obra, y sólo en pasos sin máquina.",
+    estilo: "campos",
+  },
+  {
+    id: "ritmo",
+    titulo: "Ritmo de trabajo",
+    ayuda:
+      "Cómo se mide la velocidad del paso. Es lo único que cambia los minutos.",
+    estilo: "campos",
+  },
+  {
+    id: "cantidad",
+    titulo: "Sobre qué cantidad se aplica",
+    ayuda: "Qué número multiplica al ritmo cuando entra una orden.",
+    estilo: "campos",
   },
 ];
 
