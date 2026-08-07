@@ -527,3 +527,209 @@
     gap: 7px;
   }
 }
+
+/* ── Pliego de impresión (candidatos) ────────────────────────── */
+.pliego {
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  background: var(--c-surface);
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pliegoHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pliegoT {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+.pliegoSust {
+  font-size: 11px;
+  color: var(--c-muted-2);
+  font-family: var(--c-fm);
+}
+.fl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 640px) {
+  .grid3 {
+    grid-template-columns: 1fr;
+  }
+}
+/* sub-bloque de candidatos */
+.cand {
+  border-top: 1px solid var(--c-hairline);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.candHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.candTitle {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--c-ink);
+}
+.addcand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px dashed var(--c-border-strong);
+  border-radius: 7px;
+  background: var(--c-surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.addcand:hover {
+  background: var(--c-surface-2);
+}
+.candEmpty {
+  font-size: 11.5px;
+  color: var(--c-muted);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-hairline);
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+.candList {
+  border: 1px solid var(--c-border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.crow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-hairline);
+}
+.crow:last-child {
+  border-bottom: 0;
+}
+/* Reparto por columna sin tocar el JSX: checkbox y borrar fijos, Nombre manda,
+ * Preset medio, Ancho/Alto angostos — y todo hace wrap cuando el contenedor
+ * es chico (el panel del editor puede ser angosto). */
+.crow > *:nth-child(1) {
+  flex: 0 0 auto;
+}
+.crow > *:nth-child(2) {
+  flex: 3 1 140px;
+}
+.crow > *:nth-child(3) {
+  flex: 2 1 120px;
+}
+.crow > *:nth-child(4),
+.crow > *:nth-child(5) {
+  flex: 1 1 78px;
+}
+.crow > *:nth-child(6) {
+  flex: 0 0 auto;
+}
+.cx {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--c-ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  height: 31px;
+}
+.cx input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--c-ink);
+  cursor: pointer;
+}
+.del {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  color: var(--c-muted-2);
+  cursor: pointer;
+}
+.del:hover {
+  background: var(--c-surface-2);
+  color: #b91c1c;
+}
+.cmp {
+  border-top: 1px dashed var(--c-hairline);
+  margin: 2px 12px 10px;
+  padding-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cmpRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--c-muted);
+}
+.cmpChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 5px;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-hairline);
+  font-family: var(--c-fm);
+  font-size: 10.5px;
+  color: var(--c-ink-2);
+}
+.cmpBtn {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: var(--c-surface);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--c-ink-2);
+  cursor: pointer;
+}
+.cmpBtn:hover {
+  border-color: var(--c-border-strong);
+}
+.cmpBtnDel {
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+}

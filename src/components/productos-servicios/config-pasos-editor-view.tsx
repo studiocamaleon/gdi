@@ -6983,148 +6983,164 @@ function AcomodadoDetalladoEditor({
                                       ) : null}
                                       {familia?.codigo ===
                                         "impresion_por_hoja" && (
-                                        <div className="space-y-3 rounded-[11px] border p-4">
-                                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                                            <LabelConTooltip
-                                              label="Pliego de impresión"
-                                              tooltip="Tamaño real de hoja que entra a la impresora. Si queda vacío, el motor usa el tamaño del sustrato principal comprado."
-                                              iconSize="sm"
-                                            />
+                                        <div className={trab.pliego}>
+                                          <div className={trab.pliegoHead}>
+                                            <span className={trab.pliegoT}>
+                                              Pliego de impresión
+                                            </span>
                                             {sustratoAnchoLabel &&
-                                              sustratoAltoLabel && (
-                                                <span className="text-muted-foreground text-xs">
-                                                  Sustrato comprado:{" "}
-                                                  {sustratoAnchoLabel} ×{" "}
-                                                  {sustratoAltoLabel}
-                                                </span>
-                                              )}
+                                            sustratoAltoLabel ? (
+                                              <span className={trab.pliegoSust}>
+                                                sustrato {sustratoAnchoLabel} ×{" "}
+                                                {sustratoAltoLabel}
+                                              </span>
+                                            ) : null}
                                           </div>
-                                          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                                            <div className="space-y-1">
-                                              <LabelConTooltip
-                                                label="Tamaño"
-                                                tooltip="Elegí un formato estándar o personalizado si el pliego del producto tiene otra medida."
-                                                iconSize="sm"
-                                              />
-                                              <HumanSelect
-                                                value={pliegoImpresionPreset}
-                                                onValueChange={(v) =>
-                                                  updateNestingPliegoPreset(
-                                                    pasoId,
-                                                    v || "materia_prima",
-                                                  )
-                                                }
-                                                options={
-                                                  PLIEGO_IMPRESION_OPTIONS
-                                                }
-                                                triggerClassName="min-h-9 text-xs"
-                                              />
-                                            </div>
-                                            <div className="space-y-1">
-                                              <LabelConTooltip
-                                                label="Ancho del pliego"
-                                                tooltip="Ancho en milímetros del pliego ya cortado para imprimir."
-                                                iconSize="sm"
-                                              />
-                                              <Input
-                                                type="number"
-                                                min={1}
-                                                step={1}
-                                                disabled={
-                                                  !pliegoImpresionEsPersonalizado
-                                                }
-                                                value={String(
-                                                  pliegoImpresionConfig.anchoMm ??
-                                                    "",
-                                                )}
-                                                onChange={(e) =>
-                                                  updateNestingPliegoImpresion(
-                                                    pasoId,
-                                                    {
-                                                      anchoMm:
-                                                        e.target.value === ""
-                                                          ? null
-                                                          : Number(
-                                                              e.target.value,
-                                                            ),
-                                                    },
-                                                  )
-                                                }
-                                                placeholder="Usar sustrato"
-                                                className="h-8 text-xs"
-                                              />
-                                            </div>
-                                            <div className="space-y-1">
-                                              <LabelConTooltip
-                                                label="Alto del pliego"
-                                                tooltip="Alto/largo en milímetros del pliego ya cortado para imprimir."
-                                                iconSize="sm"
-                                              />
-                                              <Input
-                                                type="number"
-                                                min={1}
-                                                step={1}
-                                                disabled={
-                                                  !pliegoImpresionEsPersonalizado
-                                                }
-                                                value={String(
-                                                  pliegoImpresionConfig.altoMm ??
-                                                    "",
-                                                )}
-                                                onChange={(e) =>
-                                                  updateNestingPliegoImpresion(
-                                                    pasoId,
-                                                    {
-                                                      altoMm:
-                                                        e.target.value === ""
-                                                          ? null
-                                                          : Number(
-                                                              e.target.value,
-                                                            ),
-                                                    },
-                                                  )
-                                                }
-                                                placeholder="Usar sustrato"
-                                                className="h-8 text-xs"
-                                              />
-                                            </div>
-                                          </div>
-                                          {pliegoImpresionEsAutomatico && (
-                                            <div className="ps-compact space-y-2 rounded-[10px] border border-dashed p-3">
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Origen del costo"
-                                                  tooltip="Cómo se costea cada candidato al compararlos: derivado (todos salen de la materia prima del paso, costo proporcional al área) o materia prima por candidato (cada tamaño se compra ya cortado con su precio real)."
-                                                />
-                                                <HumanSelect
-                                                  value={pliegoOrigenCosto}
-                                                  onValueChange={(value) =>
+                                          <div className={trab.grid3}>
+                                            <span className={trab.fl}>
+                                              <span className={trab.k}>
+                                                Tamaño
+                                              </span>
+                                              <span
+                                                className={`${trab.ctl} ${trab.sel}`}
+                                              >
+                                                <select
+                                                  value={pliegoImpresionPreset}
+                                                  onChange={(e) =>
+                                                    updateNestingPliegoPreset(
+                                                      pasoId,
+                                                      e.target.value ||
+                                                        "materia_prima",
+                                                    )
+                                                  }
+                                                >
+                                                  {PLIEGO_IMPRESION_OPTIONS.map(
+                                                    (o) => (
+                                                      <option
+                                                        key={o.value}
+                                                        value={o.value}
+                                                      >
+                                                        {o.label}
+                                                      </option>
+                                                    ),
+                                                  )}
+                                                </select>
+                                              </span>
+                                            </span>
+                                            <span className={trab.fl}>
+                                              <span className={trab.k}>
+                                                Ancho del pliego
+                                              </span>
+                                              <span className={trab.ctl}>
+                                                <input
+                                                  className={trab.num}
+                                                  inputMode="decimal"
+                                                  disabled={
+                                                    !pliegoImpresionEsPersonalizado
+                                                  }
+                                                  placeholder="usar sustrato"
+                                                  value={String(
+                                                    pliegoImpresionConfig.anchoMm ??
+                                                      "",
+                                                  )}
+                                                  onChange={(e) =>
                                                     updateNestingPliegoImpresion(
                                                       pasoId,
                                                       {
-                                                        origenCosto:
-                                                          value ===
-                                                          "por_candidato"
-                                                            ? "por_candidato"
-                                                            : "derivado",
+                                                        anchoMm:
+                                                          e.target.value === ""
+                                                            ? null
+                                                            : Number(
+                                                                e.target.value,
+                                                              ),
                                                       },
                                                     )
                                                   }
-                                                  options={
-                                                    PLIEGO_ORIGEN_COSTO_OPTIONS
-                                                  }
-                                                  triggerClassName="min-h-8 text-xs"
                                                 />
-                                              </div>
-                                              <div className="flex items-center justify-between gap-2">
-                                                <span className="text-xs font-medium">
+                                                <span className={trab.u}>mm</span>
+                                              </span>
+                                            </span>
+                                            <span className={trab.fl}>
+                                              <span className={trab.k}>
+                                                Alto del pliego
+                                              </span>
+                                              <span className={trab.ctl}>
+                                                <input
+                                                  className={trab.num}
+                                                  inputMode="decimal"
+                                                  disabled={
+                                                    !pliegoImpresionEsPersonalizado
+                                                  }
+                                                  placeholder="usar sustrato"
+                                                  value={String(
+                                                    pliegoImpresionConfig.altoMm ??
+                                                      "",
+                                                  )}
+                                                  onChange={(e) =>
+                                                    updateNestingPliegoImpresion(
+                                                      pasoId,
+                                                      {
+                                                        altoMm:
+                                                          e.target.value === ""
+                                                            ? null
+                                                            : Number(
+                                                                e.target.value,
+                                                              ),
+                                                      },
+                                                    )
+                                                  }
+                                                />
+                                                <span className={trab.u}>mm</span>
+                                              </span>
+                                            </span>
+                                          </div>
+                                          {pliegoImpresionEsAutomatico && (
+                                            <div className={trab.cand}>
+                                              <span
+                                                className={trab.fl}
+                                                style={{ maxWidth: 320 }}
+                                              >
+                                                <span className={trab.k}>
+                                                  Origen del costo
+                                                </span>
+                                                <span
+                                                  className={`${trab.ctl} ${trab.sel}`}
+                                                >
+                                                  <select
+                                                    value={pliegoOrigenCosto}
+                                                    onChange={(e) =>
+                                                      updateNestingPliegoImpresion(
+                                                        pasoId,
+                                                        {
+                                                          origenCosto:
+                                                            e.target.value ===
+                                                            "por_candidato"
+                                                              ? "por_candidato"
+                                                              : "derivado",
+                                                        },
+                                                      )
+                                                    }
+                                                  >
+                                                    {PLIEGO_ORIGEN_COSTO_OPTIONS.map(
+                                                      (o) => (
+                                                        <option
+                                                          key={o.value}
+                                                          value={o.value}
+                                                        >
+                                                          {o.label}
+                                                        </option>
+                                                      ),
+                                                    )}
+                                                  </select>
+                                                </span>
+                                              </span>
+                                              <div className={trab.candHead}>
+                                                <span className={trab.candTitle}>
                                                   Candidatos activos
                                                 </span>
-                                                <Button
+                                                <button
                                                   type="button"
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="h-7 gap-1 px-2 text-xs"
+                                                  className={trab.addcand}
                                                   onClick={() =>
                                                     addNestingPliegoCandidato(
                                                       pasoId,
@@ -7132,17 +7148,27 @@ function AcomodadoDetalladoEditor({
                                                     )
                                                   }
                                                 >
-                                                  <PlusIcon className="h-3 w-3" />
+                                                  <svg
+                                                    width="12"
+                                                    height="12"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                  >
+                                                    <path d="M12 5v14M5 12h14" />
+                                                  </svg>
                                                   Agregar candidato
-                                                </Button>
+                                                </button>
                                               </div>
                                               {pliegoCandidatos.length === 0 ? (
-                                                <div className="rounded bg-muted/50 px-2 py-2 text-xs text-muted-foreground">
+                                                <div className={trab.candEmpty}>
                                                   Agregá al menos un tamaño para
                                                   que el motor pueda comparar.
                                                 </div>
                                               ) : (
-                                                <div className="space-y-2">
+                                                <div className={trab.candList}>
                                                   {pliegoCandidatos.map(
                                                     (candidato, index) => {
                                                       const candidatoPreset =
@@ -7169,331 +7195,371 @@ function AcomodadoDetalladoEditor({
                                                           candidatoKey
                                                         ];
                                                       return (
-                                                        <div
+                                                        <React.Fragment
                                                           key={`${candidato.id ?? index}-${index}`}
-                                                          className="space-y-2 rounded border bg-background/80 p-2"
                                                         >
-                                                        <div
-                                                          className="grid grid-cols-1 gap-2 md:grid-cols-[80px_1fr_120px_100px_100px_36px]"
-                                                        >
-                                                          <label className="flex items-center gap-2 text-xs">
-                                                            <input
-                                                              type="checkbox"
-                                                              checked={
-                                                                candidato.activo !==
-                                                                false
-                                                              }
-                                                              onChange={(e) =>
-                                                                updateNestingPliegoCandidato(
-                                                                  pasoId,
-                                                                  index,
-                                                                  {
-                                                                    activo:
-                                                                      e.target
-                                                                        .checked,
-                                                                  },
-                                                                )
-                                                              }
-                                                            />
-                                                            Activo
-                                                          </label>
-                                                          <div className="space-y-1">
-                                                            <Label className="text-[11px]">
-                                                              Nombre
-                                                            </Label>
-                                                            <Input
-                                                              value={String(
-                                                                candidato.nombre ??
-                                                                  "",
-                                                              )}
-                                                              onChange={(e) =>
-                                                                updateNestingPliegoCandidato(
-                                                                  pasoId,
-                                                                  index,
-                                                                  {
-                                                                    nombre:
-                                                                      e.target
-                                                                        .value,
-                                                                  },
-                                                                )
-                                                              }
-                                                              className="h-8 text-xs"
-                                                            />
-                                                          </div>
-                                                          <div className="space-y-1">
-                                                            <Label className="text-[11px]">
-                                                              Preset
-                                                            </Label>
-                                                            <HumanSelect
-                                                              value={
-                                                                PLIEGO_IMPRESION_PRESETS.some(
-                                                                  (preset) =>
-                                                                    preset.value ===
-                                                                    candidatoPreset,
-                                                                )
-                                                                  ? candidatoPreset
-                                                                  : "personalizado"
-                                                              }
-                                                              onValueChange={(v) => {
-                                                                const preset =
-                                                                  PLIEGO_IMPRESION_PRESETS.find(
-                                                                    (item) =>
-                                                                      item.value ===
-                                                                      v,
-                                                                  );
-                                                                if (
-                                                                  !preset ||
-                                                                  preset.value ===
-                                                                    "personalizado" ||
-                                                                  !preset.anchoMm ||
-                                                                  !preset.altoMm
-                                                                ) {
+                                                          <div
+                                                            className={trab.crow}
+                                                          >
+                                                            <label
+                                                              className={trab.cx}
+                                                            >
+                                                              <input
+                                                                type="checkbox"
+                                                                checked={
+                                                                  candidato.activo !==
+                                                                  false
+                                                                }
+                                                                onChange={(e) =>
                                                                   updateNestingPliegoCandidato(
                                                                     pasoId,
                                                                     index,
                                                                     {
-                                                                      preset:
-                                                                        "personalizado",
+                                                                      activo:
+                                                                        e.target
+                                                                          .checked,
                                                                     },
-                                                                  );
-                                                                  return;
-                                                                }
-                                                                updateNestingPliegoCandidato(
-                                                                  pasoId,
-                                                                  index,
-                                                                  {
-                                                                    preset:
-                                                                      preset.value,
-                                                                    nombre:
-                                                                      preset.label,
-                                                                    anchoMm:
-                                                                      preset.anchoMm,
-                                                                    altoMm:
-                                                                      preset.altoMm,
-                                                                  },
-                                                                );
-                                                              }}
-                                                              options={PLIEGO_IMPRESION_OPTIONS.filter(
-                                                                (option) =>
-                                                                  ![
-                                                                    "materia_prima",
-                                                                    "automatico",
-                                                                  ].includes(
-                                                                    option.value,
-                                                                  ),
-                                                              )}
-                                                              triggerClassName="min-h-8 text-xs"
-                                                            />
-                                                          </div>
-                                                          <div className="space-y-1">
-                                                            <Label className="text-[11px]">
-                                                              Ancho mm
-                                                            </Label>
-                                                            <Input
-                                                              type="number"
-                                                              min={1}
-                                                              step={1}
-                                                              value={String(
-                                                                candidato.anchoMm ??
-                                                                  "",
-                                                              )}
-                                                              onChange={(e) =>
-                                                                updateNestingPliegoCandidato(
-                                                                  pasoId,
-                                                                  index,
-                                                                  {
-                                                                    preset:
-                                                                      "personalizado",
-                                                                    anchoMm:
-                                                                      e.target
-                                                                        .value ===
-                                                                      ""
-                                                                        ? ""
-                                                                        : Number(
-                                                                            e
-                                                                              .target
-                                                                              .value,
-                                                                          ),
-                                                                  },
-                                                                )
-                                                              }
-                                                              className="h-8 text-xs"
-                                                            />
-                                                          </div>
-                                                          <div className="space-y-1">
-                                                            <Label className="text-[11px]">
-                                                              Alto mm
-                                                            </Label>
-                                                            <Input
-                                                              type="number"
-                                                              min={1}
-                                                              step={1}
-                                                              value={String(
-                                                                candidato.altoMm ??
-                                                                  "",
-                                                              )}
-                                                              onChange={(e) =>
-                                                                updateNestingPliegoCandidato(
-                                                                  pasoId,
-                                                                  index,
-                                                                  {
-                                                                    preset:
-                                                                      "personalizado",
-                                                                    altoMm:
-                                                                      e.target
-                                                                        .value ===
-                                                                      ""
-                                                                        ? ""
-                                                                        : Number(
-                                                                            e
-                                                                              .target
-                                                                              .value,
-                                                                          ),
-                                                                  },
-                                                                )
-                                                              }
-                                                              className="h-8 text-xs"
-                                                            />
-                                                          </div>
-                                                          <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="self-end text-destructive"
-                                                            onClick={() =>
-                                                              removeNestingPliegoCandidato(
-                                                                pasoId,
-                                                                index,
-                                                              )
-                                                            }
-                                                          >
-                                                            <Trash2Icon className="h-4 w-4" />
-                                                          </Button>
-                                                        </div>
-                                                        {pliegoPorCandidato && (
-                                                          <div className="space-y-2 border-t border-dashed pt-2">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                              <span className="text-muted-foreground text-[11px] font-medium">
-                                                                Materia prima
-                                                                propia
-                                                              </span>
-                                                              {candidatoMpVarianteId ? (
-                                                                <span className="ps-spec-chip">
-                                                                  {candidatoMpLookup
-                                                                    ? `${candidatoMpLookup.materia.nombre} · ${candidatoMpLookup.variante.sku}`
-                                                                    : typeof candidato.materiaPrimaSku ===
-                                                                        "string"
-                                                                      ? candidato.materiaPrimaSku
-                                                                      : "Variante seleccionada"}
-                                                                  {candidatoMpLookup
-                                                                    ?.variante
-                                                                    .precioReferencia
-                                                                    ? ` · ${formatearMoneda(Number(candidatoMpLookup.variante.precioReferencia), monedaDe(candidatoMpLookup.variante.moneda))}`
-                                                                    : ""}
-                                                                </span>
-                                                              ) : (
-                                                                <span className="text-muted-foreground text-[11px]">
-                                                                  Sin asignar:
-                                                                  compite con el
-                                                                  costo derivado
-                                                                  del material
-                                                                  del paso.
-                                                                </span>
-                                                              )}
-                                                              <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="h-6 px-2 text-[11px]"
-                                                                onClick={() =>
-                                                                  setMpPickerCandidatoAbierto(
-                                                                    mpPickerCandidatoAbierto ===
-                                                                      candidatoKey
-                                                                      ? null
-                                                                      : candidatoKey,
                                                                   )
                                                                 }
+                                                              />
+                                                              Activa
+                                                            </label>
+                                                            <span
+                                                              className={trab.fl}
+                                                            >
+                                                              <span
+                                                                className={
+                                                                  trab.k
+                                                                }
                                                               >
-                                                                {candidatoMpVarianteId
-                                                                  ? "Cambiar"
-                                                                  : "Elegir"}
-                                                              </Button>
-                                                              {candidatoMpVarianteId && (
-                                                                <Button
-                                                                  type="button"
-                                                                  size="sm"
-                                                                  variant="ghost"
-                                                                  className="text-destructive h-6 px-2 text-[11px]"
-                                                                  onClick={() => {
+                                                                Nombre
+                                                              </span>
+                                                              <span
+                                                                className={
+                                                                  trab.ctl
+                                                                }
+                                                              >
+                                                                <input
+                                                                  value={String(
+                                                                    candidato.nombre ??
+                                                                      "",
+                                                                  )}
+                                                                  onChange={(e) =>
                                                                     updateNestingPliegoCandidato(
                                                                       pasoId,
                                                                       index,
                                                                       {
-                                                                        materiaPrimaVarianteId:
-                                                                          null,
-                                                                        materiaPrimaSku:
-                                                                          null,
+                                                                        nombre:
+                                                                          e.target
+                                                                            .value,
                                                                       },
-                                                                    );
-                                                                    setMpMateriaPorCandidato(
-                                                                      (prev) => {
-                                                                        const next =
-                                                                          {
-                                                                            ...prev,
-                                                                          };
-                                                                        delete next[
-                                                                          candidatoKey
-                                                                        ];
-                                                                        return next;
+                                                                    )
+                                                                  }
+                                                                  style={{
+                                                                    border: 0,
+                                                                    outline: 0,
+                                                                    background:
+                                                                      "transparent",
+                                                                    font: "inherit",
+                                                                    fontSize:
+                                                                      "12.5px",
+                                                                    width: "100%",
+                                                                    minWidth: 0,
+                                                                    color:
+                                                                      "var(--c-ink)",
+                                                                  }}
+                                                                />
+                                                              </span>
+                                                            </span>
+                                                            <span
+                                                              className={trab.fl}
+                                                            >
+                                                              <span
+                                                                className={
+                                                                  trab.k
+                                                                }
+                                                              >
+                                                                Preset
+                                                              </span>
+                                                              <span
+                                                                className={`${trab.ctl} ${trab.sel}`}
+                                                              >
+                                                                <select
+                                                                  value={
+                                                                    PLIEGO_IMPRESION_PRESETS.some(
+                                                                      (preset) =>
+                                                                        preset.value ===
+                                                                        candidatoPreset,
+                                                                    )
+                                                                      ? candidatoPreset
+                                                                      : "personalizado"
+                                                                  }
+                                                                  onChange={(
+                                                                    e,
+                                                                  ) => {
+                                                                    const v =
+                                                                      e.target
+                                                                        .value;
+                                                                    const preset =
+                                                                      PLIEGO_IMPRESION_PRESETS.find(
+                                                                        (item) =>
+                                                                          item.value ===
+                                                                          v,
+                                                                      );
+                                                                    if (
+                                                                      !preset ||
+                                                                      preset.value ===
+                                                                        "personalizado" ||
+                                                                      !preset.anchoMm ||
+                                                                      !preset.altoMm
+                                                                    ) {
+                                                                      updateNestingPliegoCandidato(
+                                                                        pasoId,
+                                                                        index,
+                                                                        {
+                                                                          preset:
+                                                                            "personalizado",
+                                                                        },
+                                                                      );
+                                                                      return;
+                                                                    }
+                                                                    updateNestingPliegoCandidato(
+                                                                      pasoId,
+                                                                      index,
+                                                                      {
+                                                                        preset:
+                                                                          preset.value,
+                                                                        nombre:
+                                                                          preset.label,
+                                                                        anchoMm:
+                                                                          preset.anchoMm,
+                                                                        altoMm:
+                                                                          preset.altoMm,
                                                                       },
                                                                     );
                                                                   }}
                                                                 >
-                                                                  Quitar
-                                                                </Button>
-                                                              )}
-                                                            </div>
-                                                            {mpPickerCandidatoAbierto ===
-                                                              candidatoKey && (
-                                                              <div className="space-y-2">
-                                                                <MaterialSearchSelect
-                                                                  compatibilidad={
-                                                                    sustratoCompatibilidad
+                                                                  {PLIEGO_IMPRESION_OPTIONS.filter(
+                                                                    (option) =>
+                                                                      ![
+                                                                        "materia_prima",
+                                                                        "automatico",
+                                                                      ].includes(
+                                                                        option.value,
+                                                                      ),
+                                                                  ).map((o) => (
+                                                                    <option
+                                                                      key={
+                                                                        o.value
+                                                                      }
+                                                                      value={
+                                                                        o.value
+                                                                      }
+                                                                    >
+                                                                      {o.label}
+                                                                    </option>
+                                                                  ))}
+                                                                </select>
+                                                              </span>
+                                                            </span>
+                                                            <span
+                                                              className={trab.fl}
+                                                            >
+                                                              <span
+                                                                className={
+                                                                  trab.k
+                                                                }
+                                                              >
+                                                                Ancho
+                                                              </span>
+                                                              <span
+                                                                className={
+                                                                  trab.ctl
+                                                                }
+                                                              >
+                                                                <input
+                                                                  className={
+                                                                    trab.num
                                                                   }
-                                                                  placeholder="Buscar materia prima para este candidato..."
-                                                                  selectedIds={
-                                                                    candidatoMpLookup
-                                                                      ? [
-                                                                          candidatoMpLookup
-                                                                            .materia
-                                                                            .id,
-                                                                        ]
-                                                                      : []
+                                                                  inputMode="decimal"
+                                                                  value={String(
+                                                                    candidato.anchoMm ??
+                                                                      "",
+                                                                  )}
+                                                                  onChange={(e) =>
+                                                                    updateNestingPliegoCandidato(
+                                                                      pasoId,
+                                                                      index,
+                                                                      {
+                                                                        preset:
+                                                                          "personalizado",
+                                                                        anchoMm:
+                                                                          e.target
+                                                                            .value ===
+                                                                          ""
+                                                                            ? ""
+                                                                            : Number(
+                                                                                e
+                                                                                  .target
+                                                                                  .value,
+                                                                              ),
+                                                                      },
+                                                                    )
                                                                   }
-                                                                  onSelect={(
-                                                                    materiaPrima,
-                                                                  ) => {
-                                                                    if (
-                                                                      materiaPrima
-                                                                        .variantes
-                                                                        .length ===
-                                                                      1
-                                                                    ) {
-                                                                      const variante =
-                                                                        materiaPrima
-                                                                          .variantes[0];
+                                                                />
+                                                                <span
+                                                                  className={
+                                                                    trab.u
+                                                                  }
+                                                                >
+                                                                  mm
+                                                                </span>
+                                                              </span>
+                                                            </span>
+                                                            <span
+                                                              className={trab.fl}
+                                                            >
+                                                              <span
+                                                                className={
+                                                                  trab.k
+                                                                }
+                                                              >
+                                                                Alto
+                                                              </span>
+                                                              <span
+                                                                className={
+                                                                  trab.ctl
+                                                                }
+                                                              >
+                                                                <input
+                                                                  className={
+                                                                    trab.num
+                                                                  }
+                                                                  inputMode="decimal"
+                                                                  value={String(
+                                                                    candidato.altoMm ??
+                                                                      "",
+                                                                  )}
+                                                                  onChange={(e) =>
+                                                                    updateNestingPliegoCandidato(
+                                                                      pasoId,
+                                                                      index,
+                                                                      {
+                                                                        preset:
+                                                                          "personalizado",
+                                                                        altoMm:
+                                                                          e.target
+                                                                            .value ===
+                                                                          ""
+                                                                            ? ""
+                                                                            : Number(
+                                                                                e
+                                                                                  .target
+                                                                                  .value,
+                                                                              ),
+                                                                      },
+                                                                    )
+                                                                  }
+                                                                />
+                                                                <span
+                                                                  className={
+                                                                    trab.u
+                                                                  }
+                                                                >
+                                                                  mm
+                                                                </span>
+                                                              </span>
+                                                            </span>
+                                                            <button
+                                                              type="button"
+                                                              className={
+                                                                trab.del
+                                                              }
+                                                              title="Quitar candidato"
+                                                              onClick={() =>
+                                                                removeNestingPliegoCandidato(
+                                                                  pasoId,
+                                                                  index,
+                                                                )
+                                                              }
+                                                            >
+                                                              <Trash2Icon className="h-4 w-4" />
+                                                            </button>
+                                                          </div>
+                                                          {pliegoPorCandidato && (
+                                                            <div
+                                                              className={
+                                                                trab.cmp
+                                                              }
+                                                            >
+                                                              <div
+                                                                className={
+                                                                  trab.cmpRow
+                                                                }
+                                                              >
+                                                                <span>
+                                                                  Materia prima
+                                                                  propia
+                                                                </span>
+                                                                {candidatoMpVarianteId ? (
+                                                                  <span
+                                                                    className={
+                                                                      trab.cmpChip
+                                                                    }
+                                                                  >
+                                                                    {candidatoMpLookup
+                                                                      ? `${candidatoMpLookup.materia.nombre} · ${candidatoMpLookup.variante.sku}`
+                                                                      : typeof candidato.materiaPrimaSku ===
+                                                                          "string"
+                                                                        ? candidato.materiaPrimaSku
+                                                                        : "Variante seleccionada"}
+                                                                    {candidatoMpLookup
+                                                                      ?.variante
+                                                                      .precioReferencia
+                                                                      ? ` · ${formatearMoneda(Number(candidatoMpLookup.variante.precioReferencia), monedaDe(candidatoMpLookup.variante.moneda))}`
+                                                                      : ""}
+                                                                  </span>
+                                                                ) : (
+                                                                  <span>
+                                                                    Sin asignar:
+                                                                    compite con el
+                                                                    costo derivado
+                                                                    del material
+                                                                    del paso.
+                                                                  </span>
+                                                                )}
+                                                                <button
+                                                                  type="button"
+                                                                  className={
+                                                                    trab.cmpBtn
+                                                                  }
+                                                                  onClick={() =>
+                                                                    setMpPickerCandidatoAbierto(
+                                                                      mpPickerCandidatoAbierto ===
+                                                                        candidatoKey
+                                                                        ? null
+                                                                        : candidatoKey,
+                                                                    )
+                                                                  }
+                                                                >
+                                                                  {candidatoMpVarianteId
+                                                                    ? "Cambiar"
+                                                                    : "Elegir"}
+                                                                </button>
+                                                                {candidatoMpVarianteId && (
+                                                                  <button
+                                                                    type="button"
+                                                                    className={`${trab.cmpBtn} ${trab.cmpBtnDel}`}
+                                                                    onClick={() => {
                                                                       updateNestingPliegoCandidato(
                                                                         pasoId,
                                                                         index,
                                                                         {
                                                                           materiaPrimaVarianteId:
-                                                                            variante.id,
+                                                                            null,
                                                                           materiaPrimaSku:
-                                                                            variante.sku,
+                                                                            null,
                                                                         },
-                                                                      );
-                                                                      setMpPickerCandidatoAbierto(
-                                                                        null,
                                                                       );
                                                                       setMpMateriaPorCandidato(
                                                                         (
@@ -7509,32 +7575,86 @@ function AcomodadoDetalladoEditor({
                                                                           return next;
                                                                         },
                                                                       );
-                                                                      return;
+                                                                    }}
+                                                                  >
+                                                                    Quitar
+                                                                  </button>
+                                                                )}
+                                                              </div>
+                                                              {mpPickerCandidatoAbierto ===
+                                                                candidatoKey && (
+                                                                <div className="space-y-2">
+                                                                  <MaterialSearchSelect
+                                                                    compatibilidad={
+                                                                      sustratoCompatibilidad
                                                                     }
-                                                                    setMpMateriaPorCandidato(
-                                                                      (
-                                                                        prev,
-                                                                      ) => ({
-                                                                        ...prev,
-                                                                        [candidatoKey]:
-                                                                          materiaPrima,
-                                                                      }),
-                                                                    );
-                                                                  }}
-                                                                />
-                                                                {candidatoMpMateria &&
-                                                                  candidatoMpMateria
-                                                                    .variantes
-                                                                    .length >
-                                                                    1 && (
-                                                                    <div className="space-y-1">
-                                                                      <Label className="text-[11px]">
-                                                                        Variante
-                                                                        de{" "}
-                                                                        {
-                                                                          candidatoMpMateria.nombre
-                                                                        }
-                                                                      </Label>
+                                                                    placeholder="Buscar materia prima para este candidato..."
+                                                                    selectedIds={
+                                                                      candidatoMpLookup
+                                                                        ? [
+                                                                            candidatoMpLookup
+                                                                              .materia
+                                                                              .id,
+                                                                          ]
+                                                                        : []
+                                                                    }
+                                                                    onSelect={(
+                                                                      materiaPrima,
+                                                                    ) => {
+                                                                      if (
+                                                                        materiaPrima
+                                                                          .variantes
+                                                                          .length ===
+                                                                        1
+                                                                      ) {
+                                                                        const variante =
+                                                                          materiaPrima
+                                                                            .variantes[0];
+                                                                        updateNestingPliegoCandidato(
+                                                                          pasoId,
+                                                                          index,
+                                                                          {
+                                                                            materiaPrimaVarianteId:
+                                                                              variante.id,
+                                                                            materiaPrimaSku:
+                                                                              variante.sku,
+                                                                          },
+                                                                        );
+                                                                        setMpPickerCandidatoAbierto(
+                                                                          null,
+                                                                        );
+                                                                        setMpMateriaPorCandidato(
+                                                                          (
+                                                                            prev,
+                                                                          ) => {
+                                                                            const next =
+                                                                              {
+                                                                                ...prev,
+                                                                              };
+                                                                            delete next[
+                                                                              candidatoKey
+                                                                            ];
+                                                                            return next;
+                                                                          },
+                                                                        );
+                                                                        return;
+                                                                      }
+                                                                      setMpMateriaPorCandidato(
+                                                                        (
+                                                                          prev,
+                                                                        ) => ({
+                                                                          ...prev,
+                                                                          [candidatoKey]:
+                                                                            materiaPrima,
+                                                                        }),
+                                                                      );
+                                                                    }}
+                                                                  />
+                                                                  {candidatoMpMateria &&
+                                                                    candidatoMpMateria
+                                                                      .variantes
+                                                                      .length >
+                                                                      1 && (
                                                                       <HumanSelect
                                                                         value=""
                                                                         onValueChange={(
@@ -7597,13 +7717,12 @@ function AcomodadoDetalladoEditor({
                                                                         )}
                                                                         placeholder="Elegir variante"
                                                                       />
-                                                                    </div>
-                                                                  )}
-                                                              </div>
-                                                            )}
-                                                          </div>
-                                                        )}
-                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                              )}
+                                                            </div>
+                                                          )}
+                                                        </React.Fragment>
                                                       );
                                                     },
                                                   )}
@@ -7611,7 +7730,7 @@ function AcomodadoDetalladoEditor({
                                               )}
                                             </div>
                                           )}
-                                          <p className="text-muted-foreground text-xs">
+                                          <p className={trab.hint}>
                                             La imposición, el tiempo y los
                                             consumibles se calculan sobre este
                                             pliego; el sustrato principal se
