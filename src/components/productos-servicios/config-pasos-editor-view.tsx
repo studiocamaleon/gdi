@@ -7649,8 +7649,7 @@ function AcomodadoDetalladoEditor({
                                       </button>
 
                                       {mostrarPanelizado && (
-                                        <div className="ps-nest">
-                                          <div className="ps-nest-head">
+                                        <>
                                             <button
                                               type="button"
                                               className={trab.sw2}
@@ -7688,12 +7687,6 @@ function AcomodadoDetalladoEditor({
                                                 </span>
                                               </span>
                                             </button>
-                                            {panelSummary ? (
-                                              <span className="ps-badge">
-                                                {panelSummary}
-                                              </span>
-                                            ) : null}
-                                          </div>
                                           {panelizadoConfig.enabled ===
                                             true && (
                                             <div className={trab.subtog}>
@@ -8008,7 +8001,7 @@ function AcomodadoDetalladoEditor({
                                               })
                                             }
                                           />
-                                        </div>
+                                        </>
                                       )}
 
                                       </div>
