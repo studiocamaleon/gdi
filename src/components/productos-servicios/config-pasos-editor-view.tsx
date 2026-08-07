@@ -8,7 +8,6 @@ import {
   AlertCircleIcon,
   ArrowLeftIcon,
   CheckIcon,
-  CircleDollarSignIcon,
   ClockIcon,
   DropletIcon,
   Grid2X2Icon,
@@ -8336,73 +8335,126 @@ function AcomodadoDetalladoEditor({
                                         alternativas son geometría de placa y el motor las ignora,
                                         así que la card no se muestra. */}
                                     {!sustratoRolloDisponible && (
-                                      <div className="ps-card">
-                                        <div className="ps-card-head">
-                                          <span className="ps-ic">
-                                            <CircleDollarSignIcon />
+                                      <div className={trab.root}>
+                                      <div className={trab.pliego}>
+                                        <div className={trab.pliegoHead}>
+                                          <span className={trab.pliegoT}>
+                                            Costeo del sustrato
                                           </span>
-                                          <LabelConTooltip
-                                            label={
-                                              <span className="ps-tt normal-case tracking-normal">
-                                                Costeo del sustrato
-                                              </span>
-                                            }
-                                            tooltip="Define cómo se cobra el material cuando hay resultado de nesting."
-                                          />
                                         </div>
-                                        <div className="ps-card-body ps-grid2">
-                                          <HumanSelect
-                                            value={String(
-                                              nestingCosting.strategy ?? "simple",
-                                            )}
-                                            onValueChange={(v) =>
-                                              updateNestingCosting(pasoId, {
-                                                strategy: v || "simple",
-                                              })
-                                            }
-                                            options={costingStrategyOptions(
-                                              familia?.codigo ===
-                                                "impresion_por_hoja"
-                                                ? "pliego"
-                                                : "placa",
-                                            )}
-                                          />
-                                          {nestingCosting.strategy ===
-                                            "plate-segments" && (
-                                            <div className="space-y-2">
-                                              <LabelConTooltip
-                                                label="Escalones de ocupación"
-                                                tooltip="Porcentajes de placa que se cobran según ocupación: una placa al 60% cobra el primer escalón igual o superior."
-                                                ejemplo="25, 50, 75, 100"
-                                                iconSize="sm"
-                                              />
-                                              <Input
-                                                value={
-                                                  Array.isArray(
-                                                    nestingCosting.segmentSteps,
-                                                  )
-                                                    ? nestingCosting.segmentSteps.join(
-                                                        ", ",
-                                                      )
-                                                    : "25, 50, 75, 100"
-                                                }
+                                        <p
+                                          className={trab.hint}
+                                          style={{ margin: "-4px 0 0" }}
+                                        >
+                                          Cómo se cobra el material cuando hay
+                                          resultado de nesting.
+                                        </p>
+                                        <div
+                                          style={{
+                                            display: "grid",
+                                            gridTemplateColumns:
+                                              "repeat(auto-fit, minmax(220px, 1fr))",
+                                            gap: 12,
+                                            alignItems: "end",
+                                          }}
+                                        >
+                                          <span className={trab.fl}>
+                                            <span className={trab.k}>
+                                              Estrategia
+                                            </span>
+                                            <span
+                                              className={`${trab.ctl} ${trab.sel}`}
+                                            >
+                                              <select
+                                                value={String(
+                                                  nestingCosting.strategy ??
+                                                    "simple",
+                                                )}
                                                 onChange={(e) =>
                                                   updateNestingCosting(pasoId, {
-                                                    segmentSteps: e.target.value
-                                                      .split(",")
-                                                      .map((item) =>
-                                                        Number(item.trim()),
-                                                      )
-                                                      .filter((item) =>
-                                                        Number.isFinite(item),
-                                                      ),
+                                                    strategy:
+                                                      e.target.value || "simple",
                                                   })
                                                 }
-                                                className="font-sans"
-                                              />
-                                            </div>
+                                              >
+                                                {costingStrategyOptions(
+                                                  familia?.codigo ===
+                                                    "impresion_por_hoja"
+                                                    ? "pliego"
+                                                    : "placa",
+                                                ).map((o) => (
+                                                  <option
+                                                    key={o.value}
+                                                    value={o.value}
+                                                  >
+                                                    {o.label}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </span>
+                                          </span>
+                                          {nestingCosting.strategy ===
+                                            "plate-segments" && (
+                                            <span className={trab.fl}>
+                                              <span className={trab.k}>
+                                                Escalones de ocupación{" "}
+                                                <span
+                                                  style={{
+                                                    color:
+                                                      "var(--muted-text-2, #92929b)",
+                                                  }}
+                                                >
+                                                  · % de placa, ej 25, 50, 75,
+                                                  100
+                                                </span>
+                                              </span>
+                                              <span className={trab.ctl}>
+                                                <input
+                                                  value={
+                                                    Array.isArray(
+                                                      nestingCosting.segmentSteps,
+                                                    )
+                                                      ? nestingCosting.segmentSteps.join(
+                                                          ", ",
+                                                        )
+                                                      : "25, 50, 75, 100"
+                                                  }
+                                                  onChange={(e) =>
+                                                    updateNestingCosting(
+                                                      pasoId,
+                                                      {
+                                                        segmentSteps:
+                                                          e.target.value
+                                                            .split(",")
+                                                            .map((item) =>
+                                                              Number(
+                                                                item.trim(),
+                                                              ),
+                                                            )
+                                                            .filter((item) =>
+                                                              Number.isFinite(
+                                                                item,
+                                                              ),
+                                                            ),
+                                                      },
+                                                    )
+                                                  }
+                                                  style={{
+                                                    border: 0,
+                                                    outline: 0,
+                                                    background: "transparent",
+                                                    font: "inherit",
+                                                    fontSize: "12.5px",
+                                                    width: "100%",
+                                                    minWidth: 0,
+                                                    color: "var(--fg, #14141a)",
+                                                  }}
+                                                />
+                                              </span>
+                                            </span>
                                           )}
                                         </div>
+                                      </div>
                                       </div>
                                     )}
                                     </>
