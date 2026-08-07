@@ -10222,6 +10222,180 @@ function SeccionGuiada({
   );
 }
 
+/**
+ * PROTOTIPO — la card de EJE (docs/editor-pasos-preguntas-orden.md §3).
+ *
+ * Un eje es UNA decisión ("cuánto tarda este paso"), aunque el modelo la
+ * guarde en ocho campos. Cerrada muestra el estado resuelto en una línea;
+ * abierta muestra TODOS sus controles juntos, en un formulario chico, en vez
+ * de ocho acordeones que hay que ir abriendo de a uno.
+ *
+ * Es la densidad de la vista detallada con el idioma y el filtrado del
+ * guiado: sólo aparecen los controles que aplican a esta familia y a lo que
+ * ya se eligió, porque cada opción trae su propio `visible`.
+ */
+function EjeGuiado({
+  titulo,
+  subtitulo,
+  seccion,
+  ctx,
+  pendientesVivos,
+  onAplicar,
+  renderComponente,
+}: {
+  titulo: string;
+  subtitulo: string;
+  seccion: Parameters<typeof opcionesDeSeccion>[0];
+  ctx: ContextoOpcion;
+  pendientesVivos: Set<string>;
+  onAplicar: (patch: PatchOpcion) => void;
+  renderComponente: (id: string) => React.ReactNode;
+}) {
+  const opciones = opcionesDeSeccion(seccion, ctx);
+  // Arranca abierto si algo del eje está sin resolver: el modelador no tiene
+  // que descubrir dónde está lo que falta.
+  const faltaAlgo = opciones.some(
+    (op) =>
+      op.origenValor(ctx) === "sin-definir" ||
+      (op.pendiente != null && pendientesVivos.has(op.pendiente)),
+  );
+  const [abierto, setAbierto] = React.useState(faltaAlgo);
+  if (opciones.length === 0) return null;
+
+  // El estado del eje en una línea. Tres resúmenes y el resto contado: más
+  // que eso no se lee, y la card está a un click de distancia.
+  const resumenes = opciones.map((op) => op.resumen(ctx));
+  const linea =
+    resumenes.length > 3
+      ? `${resumenes.slice(0, 3).join(" · ")} · +${resumenes.length - 3}`
+      : resumenes.join(" · ");
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--hairline, #e6e2dc)",
+        borderRadius: 10,
+        background: "var(--surface-1, #fff)",
+        padding: abierto ? "12px 14px 14px" : "10px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: abierto ? 12 : 4,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 10,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              fontSize: 14.5,
+              fontWeight: 650,
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                flexShrink: 0,
+                ...(faltaAlgo
+                  ? {
+                      background: "color-mix(in srgb, #b7791f 14%, transparent)",
+                      border: "1px solid #d8b671",
+                    }
+                  : { background: "#22a06b", color: "#fff" }),
+              }}
+            >
+              {faltaAlgo ? null : (
+                <CheckIcon className="size-2.5" strokeWidth={3.2} />
+              )}
+            </span>
+            {titulo}
+          </div>
+          <div
+            style={{
+              fontSize: 12.5,
+              color: "var(--muted-text, #6e6e76)",
+              marginTop: 2,
+              marginLeft: 21,
+            }}
+          >
+            {abierto ? subtitulo : linea}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn"
+          style={{ fontSize: 12, whiteSpace: "nowrap" }}
+          onClick={() => setAbierto(!abierto)}
+        >
+          {abierto ? "Listo" : "Cambiar"}
+        </button>
+      </div>
+
+      {abierto ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+            marginLeft: 21,
+          }}
+        >
+          {opciones.map((opcion) => {
+            const origen = opcion.origenValor(ctx);
+            const sinResolver =
+              origen === "sin-definir" ||
+              (opcion.pendiente != null &&
+                pendientesVivos.has(opcion.pendiente));
+            return (
+              <div
+                key={opcion.clave}
+                style={{ display: "flex", flexDirection: "column", gap: 6 }}
+              >
+                <div style={{ fontSize: 13.5, fontWeight: 550 }}>
+                  {opcion.pregunta}
+                </div>
+                {/* La ayuda sólo donde todavía no hay respuesta: si ya está
+                    contestada, el texto explicativo es ruido que estira la
+                    card y hace perder el hilo. */}
+                {sinResolver && opcion.ayuda ? (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--muted-text, #6e6e76)",
+                    }}
+                  >
+                    {opcion.ayuda}
+                  </div>
+                ) : null}
+                <ControlGuiado
+                  opcion={opcion}
+                  ctx={ctx}
+                  onAplicar={onAplicar}
+                  renderComponente={renderComponente}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const ORIGEN_BADGE: Record<string, string | null> = {
   config: null,
   "default-paso": "del paso",
@@ -10978,8 +11152,12 @@ function SeccionesEsquemaPaso({
                 detallado congelado). */}
             {!noEjecutar && !cfg.tercerizado ? (
               <>
-                <SeccionGuiada
-                  titulo="Tiempo y costo"
+                {/* PROTOTIPO del eje (docs/editor-pasos-preguntas-orden.md):
+                    una card con todos los controles del tiempo juntos, en vez
+                    de ocho acordeones. */}
+                <EjeGuiado
+                  titulo="Cuánto tarda"
+                  subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
                   seccion="tiempo"
                   ctx={ctx}
                   pendientesVivos={pendientesVivos}

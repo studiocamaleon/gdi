@@ -206,6 +206,37 @@ La primera es del paso; las nueve siguientes se repiten **por slot**.
 | `oficio.setup` | ¿Preparar la máquina lleva un tiempo distinto acá? | si hay máquina | Hoy en Ajustes; es tiempo |
 | `oficio.cleanup` | ¿Y la limpieza al terminar? | si hay máquina | Hoy en Ajustes; es tiempo |
 
+## 5.bis El prototipo (2026-08-07)
+
+Antes de reagrupar las 40, se construyó **una** card de eje —la del tiempo— y
+se probó en dos pasos reales. Está en `EjeGuiado`
+([config-pasos-editor-view.tsx](../src/components/productos-servicios/config-pasos-editor-view.tsx)),
+sin tocar el esquema: usa las mismas opciones declaradas y las renderiza juntas.
+
+**Qué se probó y qué dio:**
+
+| Paso | Antes | Ahora |
+|---|---|---|
+| Impresión por hoja (Ricoh, el ritmo lo pone el perfil) | 3 acordeones | 1 card |
+| Tensado de lona (T-2 con ritmo propio) | 7 acordeones | 1 card |
+
+El caso difícil —el árbol— **funciona**: al elegir "Productividad por hora"
+aparece el ritmo con su unidad; si fuera por tanda aparecería el control de
+tanda. Todo dentro de la misma card, sin abrir nada.
+
+**Dos cosas que el prototipo dejó a la vista y hay que resolver antes de
+extenderlo:**
+
+- **P-1 · La línea cerrada no dice lo que importa.** Hoy es "los primeros tres
+  resúmenes + contador": en el tensado queda *"No — se calcula solo ·
+  Produccion & Taller · 1 persona · +4"*, que abre con lo menos informativo y
+  esconde el ritmo, que es el dato del eje. El resumen del eje no puede salir
+  de tomar los primeros N: **hay que declarar cuál es el dato que lo define.**
+- **P-2 · El orden interno sigue siendo el de declaración, no el del árbol.**
+  En el tensado, "¿Sobre cuántas piezas trabaja?" cae entre el ritmo y su
+  magnitud, partiendo al medio una idea. Adentro de la card el orden tiene que
+  seguir la dependencia: raíz → rama → hoja.
+
 ## 6. Hallazgos abiertos
 
 Numerados para discutirlos de a uno. Ninguno implementado.
