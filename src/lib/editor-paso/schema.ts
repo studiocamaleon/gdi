@@ -239,6 +239,13 @@ export interface GrupoEje {
    * apretaría. Los bloques `arriba` se separan con línea horizontal.
    */
   encabezado?: "lado" | "arriba";
+  /**
+   * Alineación vertical de los controles del bloque en su grilla. Default
+   * `start` (arriba). `end` sirve cuando conviven controles con etiqueta y sin
+   * etiqueta en la misma fila: alinea los controles por su base para que no
+   * queden a distinta altura.
+   */
+  alinearItems?: "start" | "end" | "center";
 }
 
 export interface OpcionPaso {
@@ -2321,6 +2328,9 @@ export const GRUPOS_MATERIAL: GrupoEje[] = [
     estilo: "campos",
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
     encabezado: "arriba",
+    // El consumo va sin etiqueta y "Doble faz" con etiqueta: alineo por la base
+    // para que el select y el segmentado queden a la misma altura.
+    alinearItems: "end",
   },
 ];
 

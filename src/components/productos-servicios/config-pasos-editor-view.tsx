@@ -10804,7 +10804,7 @@ function EjeGuiado({
                           "repeat(auto-fit, minmax(230px, 1fr))")
                         : "1fr",
                     gap: 12,
-                    alignItems: "start",
+                    alignItems: grupo.alinearItems ?? "start",
                   }}
                 >
               {items.map((opcion) => (
