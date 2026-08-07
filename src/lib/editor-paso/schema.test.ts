@@ -39,6 +39,8 @@ const CENSO: Record<string, string[]> = {
   // suprime ritmo/tanda/tiempo fijo/calcular-según (corrección usuario).
   tiempo: [
     "tiempo.comercial",
+    // Las ayudas al comercial, separadas para caer al final del eje.
+    "tiempo.comercial_ayudas",
     "tiempo.modo",
     "tiempo.centro",
     "tiempo.dotacion",

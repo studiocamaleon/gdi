@@ -32,6 +32,7 @@ import {
   type HumanSelectOption,
 } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
@@ -9243,11 +9244,15 @@ function TiempoComercialDetalladoEditor({
   cfg,
   familia,
   conSwitch = false,
+  parte,
   updateTiempoManualConfig,
 }: {
   pasoId: string;
   cfg: UpsertConfigPasoPayload;
   familia: FamiliaListItem | undefined;
+  /** El eje renderiza las dos mitades por separado; sin `parte` van juntas
+   *  (detallado congelado). */
+  parte?: "pregunta" | "ayudas";
   /** El detallado congelado no tiene la bifurcación del eje: necesita su
    *  propio interruptor para prender el tiempo del comercial. En el guiado
    *  esa decisión ya la tomaron las dos tarjetas de arriba. */
@@ -9338,17 +9343,25 @@ function TiempoComercialDetalladoEditor({
     </div>
   );
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {interruptor}
-      <div style={bloque}>
-        <div>
-          <div style={tituloStyle}>Qué se le pide al comercial</div>
-          <div style={hintStyle}>
-            Este texto aparece en el presupuesto, al lado del campo que tiene
-            que completar.
-          </div>
+  const pregunta = (
+    <div style={bloque}>
+      <div>
+        <div style={tituloStyle}>Qué se le pide al comercial</div>
+        <div style={hintStyle}>
+          Este texto aparece en el presupuesto, al lado del campo que tiene que
+          completar.
         </div>
+      </div>
+      {/* La pregunta y su unidad van en la misma fila: el input de texto solo
+          ocupaba un renglón entero sin necesitarlo. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) 168px",
+          gap: 12,
+          alignItems: "end",
+        }}
+      >
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           <label style={labelStyle}>Pregunta</label>
           <Input
@@ -9366,38 +9379,109 @@ function TiempoComercialDetalladoEditor({
             placeholder={`Ej. "Tiempo estimado de ${(cfg.nombreVisible?.trim() || familia?.nombre || "trabajo").toLowerCase()}"`}
           />
         </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-            fontSize: 12.5,
-            color: "var(--fg-2, #2c2c33)",
-          }}
-        >
-          <span>Carga el tiempo en</span>
-          <div style={{ minWidth: 130 }}>
-            <HumanSelect
-              value={tiempoManualUnidad}
-              onValueChange={(value) =>
-                updateTiempoManualConfig(pasoId, {
-                  unidadInput: value === "h" ? "h" : "min",
-                })
-              }
-              options={TIEMPO_MANUAL_UNIDAD_OPTIONS}
-              placeholder="Elegir unidad"
-            />
-          </div>
-          {/* El motor toma lo que carga el comercial como el tiempo TOTAL del
-              paso (`runMin = tiempoManualMin`): no lo multiplica por la
-              cantidad. Decirlo evita que alguien cargue "por pieza". */}
-          <span style={{ color: "var(--muted-text, #6e6e76)" }}>
-            para todo el ítem, sin multiplicar por la cantidad
-          </span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={labelStyle}>Carga el tiempo en</label>
+          {/* Nota para quien lea el código: el motor toma lo que carga el
+              comercial como el tiempo TOTAL del paso
+              (`runMin = tiempoManualMin`), sin multiplicarlo por la cantidad.
+              Ver docs/editor-pasos-preguntas-orden.md. */}
+          <HumanSelect
+            value={tiempoManualUnidad}
+            onValueChange={(value) =>
+              updateTiempoManualConfig(pasoId, {
+                unidadInput: value === "h" ? "h" : "min",
+              })
+            }
+            options={TIEMPO_MANUAL_UNIDAD_OPTIONS}
+            placeholder="Elegir unidad"
+          />
         </div>
       </div>
+      {/* Va con la pregunta, no con las ayudas: no es una pista para contestar
+          mejor, es si se puede seguir sin contestar — el motor corta la
+          cotización con `tiempo_manual_requerido`. Interruptor y no checkbox:
+          es una política que se prende o se apaga. */}
+      <label
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 10,
+          cursor: "pointer",
+        }}
+      >
+        <Switch
+          checked={tiempoManualConfig.obligatorio === true}
+          onCheckedChange={(valor) =>
+            updateTiempoManualConfig(pasoId, { obligatorio: valor || null })
+          }
+          style={{ marginTop: 2, flexShrink: 0 }}
+        />
+        <span>
+          <span style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}>
+            Obligatorio para presupuestar
+          </span>
+          <span
+            style={{
+              display: "block",
+              fontSize: 11.5,
+              color: "var(--muted-text, #6e6e76)",
+              marginTop: 2,
+            }}
+          >
+            Sin este tiempo cargado, el ítem no se puede agregar a la OT. Típico
+            en corte láser.
+          </span>
+        </span>
+      </label>
+      {tiempoManualConfig.obligatorio === true &&
+      tiempoManualDefaultMin == null ? (
+        <div style={{ fontSize: 11.5, color: "#b7791f", maxWidth: "64ch" }}>
+          Sin valor sugerido, la cotización queda bloqueada hasta que el
+          comercial cargue el tiempo. Es lo esperable en pasos tipo láser —
+          confirmá que es lo que querés.
+        </div>
+      ) : null}
+    </div>
+  );
 
+  const ayudas = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={labelStyle}>Valor sugerido</label>
+          {minutos(tiempoManualConfig.defaultMin, "defaultMin")}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={labelStyle}>Rango aceptado</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {minutos(tiempoManualConfig.minMin, "minMin", 104)}
+            <span
+              style={{ fontSize: 12.5, color: "var(--muted-text, #6e6e76)" }}
+            >
+              a
+            </span>
+            {minutos(tiempoManualConfig.maxMin, "maxMin", 104)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // El eje pide las dos mitades por separado para poder mandar las ayudas al
+  // final (son opcionales); el detallado congelado las muestra juntas.
+  if (parte === "ayudas") return ayudas;
+  if (parte === "pregunta") return pregunta;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {interruptor}
+      {pregunta}
       <div style={bloque}>
         <div>
           <div style={tituloStyle}>Ayudas y validación</div>
@@ -9406,77 +9490,7 @@ function TiempoComercialDetalladoEditor({
             con tiempos muy distintos.
           </div>
         </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 16,
-            flexWrap: "wrap",
-            alignItems: "flex-end",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={labelStyle}>Valor sugerido</label>
-            {minutos(tiempoManualConfig.defaultMin, "defaultMin")}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <label style={labelStyle}>Rango aceptado</label>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {minutos(tiempoManualConfig.minMin, "minMin", 104)}
-              <span
-                style={{
-                  fontSize: 12.5,
-                  color: "var(--muted-text, #6e6e76)",
-                }}
-              >
-                a
-              </span>
-              {minutos(tiempoManualConfig.maxMin, "maxMin", 104)}
-            </div>
-          </div>
-        </div>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={tiempoManualConfig.obligatorio === true}
-            onChange={(e) =>
-              updateTiempoManualConfig(pasoId, {
-                obligatorio: e.target.checked || null,
-              })
-            }
-            style={{ marginTop: 2 }}
-          />
-          <span>
-            <span style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}>
-              Obligatorio para presupuestar
-            </span>
-            <span
-              style={{
-                display: "block",
-                fontSize: 11.5,
-                color: "var(--muted-text, #6e6e76)",
-                marginTop: 2,
-              }}
-            >
-              Sin este tiempo cargado, el ítem no se puede agregar a la OT.
-              Típico en corte láser.
-            </span>
-          </span>
-        </label>
-        {tiempoManualConfig.obligatorio === true &&
-        tiempoManualDefaultMin == null ? (
-          <div style={{ fontSize: 11.5, color: "#b7791f", maxWidth: "64ch" }}>
-            Sin valor sugerido, la cotización queda bloqueada hasta que el
-            comercial cargue el tiempo. Es lo esperable en pasos tipo láser —
-            confirmá que es lo que querés.
-          </div>
-        ) : null}
+        {ayudas}
       </div>
     </div>
   );
@@ -11234,6 +11248,7 @@ function SeccionesEsquemaPaso({
                     pasoId={pasoActual.id}
                     cfg={cfg}
                     familia={familia}
+                    parte="pregunta"
                     updateTiempoManualConfig={updateTiempoManualConfig}
                   />
                 ) : null}
@@ -11442,6 +11457,17 @@ function SeccionesEsquemaPaso({
               <EfectosPasoFields
                 params={asRecord(cfg.paramsPasoJson)}
                 onChange={(patch) => onParams(pasoActual.id, patch)}
+              />
+            );
+          }
+          if (id === "tiempo-comercial-ayudas") {
+            return (
+              <TiempoComercialDetalladoEditor
+                pasoId={pasoActual.id}
+                cfg={cfg}
+                familia={familia}
+                parte="ayudas"
+                updateTiempoManualConfig={updateTiempoManualConfig}
               />
             );
           }

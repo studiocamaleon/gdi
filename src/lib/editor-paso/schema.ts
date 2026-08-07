@@ -194,6 +194,7 @@ export type ControlOpcion =
         | "tercerizado-panel"
         | "acomodado-detallado"
         | "params-familia"
+        | "tiempo-comercial-ayudas"
         | "efectos-paso";
     };
 
@@ -836,6 +837,43 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     origenValor: (ctx) =>
       comercialEstimaTiempo(ctx) ? "config" : "default-paso",
     control: { tipo: "componente", id: "tiempo-comercial" },
+  },
+  {
+    // Las ayudas al comercial se separan de la pregunta para poder caer al
+    // final del eje: son opcionales y no deberían competir con lo que sí hay
+    // que definir. Ver docs/editor-pasos-preguntas-orden.md.
+    clave: "tiempo.comercial_ayudas",
+    seccion: "tiempo",
+    grupo: "ayudas",
+    anchoCompleto: true,
+    etiqueta: " ",
+    pregunta: "¿Qué ayudas le damos al comercial para estimar?",
+    ayuda:
+      "Un valor sugerido y un rango aceptado evitan que dos comerciales coticen el mismo trabajo con tiempos muy distintos.",
+    visible: (ctx) => comercialEstimaTiempo(ctx),
+    resumen: (ctx) => {
+      const config = getTiempoManualConfig(ctx.cfg.paramsPasoJson);
+      const partes: string[] = [];
+      const sugerido = numOpcional(config.defaultMin);
+      if (sugerido != null) partes.push(`sugerido ${sugerido} min`);
+      const min = numOpcional(config.minMin);
+      const max = numOpcional(config.maxMin);
+      if (min != null || max != null) {
+        partes.push(`entre ${min ?? "—"} y ${max ?? "—"} min`);
+      }
+      if (config.obligatorio === true) partes.push("obligatorio");
+      return partes.length > 0 ? partes.join(" · ") : "Sin ayudas cargadas";
+    },
+    origenValor: (ctx) => {
+      const config = getTiempoManualConfig(ctx.cfg.paramsPasoJson);
+      return config.defaultMin != null ||
+        config.minMin != null ||
+        config.maxMin != null ||
+        config.obligatorio === true
+        ? "config"
+        : "default-paso";
+    },
+    control: { tipo: "componente", id: "tiempo-comercial-ayudas" },
   },
   {
     clave: "tiempo.modo",
@@ -2045,7 +2083,21 @@ export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
   {
     id: "cantidad",
     titulo: "Sobre qué cantidad se aplica",
-    ayuda: "Qué número multiplica al ritmo cuando entra una orden.",
+    ayuda: (ctx) =>
+      comercialEstimaTiempo(ctx)
+        ? "Cuántas piezas procesa el paso. Con el tiempo cargado a mano no cambia los minutos, pero sí lo que el paso consume."
+        : "Qué número multiplica al ritmo cuando entra una orden.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+  },
+  {
+    // Último a propósito: es lo único opcional del eje. Primero se define
+    // cómo se calcula el tiempo y dónde; las ayudas al comercial vienen
+    // después, si el modelador las quiere.
+    id: "ayudas",
+    titulo: "Ayudas y validación",
+    ayuda:
+      "Opcional. Sirve para que dos comerciales no coticen el mismo trabajo con tiempos muy distintos.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
   },

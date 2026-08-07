@@ -193,7 +193,8 @@ La primera es del paso; las nueve siguientes se repiten **por slot**.
 
 | Clave | Pregunta (hoy) | Cuándo aparece | Nota |
 |---|---|---|---|
-| `tiempo.comercial` | ¿El tiempo lo estima el comercial al cotizar? | siempre | Raíz del árbol: si es que sí, el resto del eje desaparece |
+| `tiempo.comercial` | ¿El tiempo lo estima el comercial al cotizar? | siempre | Raíz del árbol: si es que sí, el resto del eje desaparece. Lleva la pregunta que ve el comercial y si es obligatoria |
+| `tiempo.comercial_ayudas` | ¿Qué ayudas le damos al comercial para estimar? | si lo estima el comercial | Valor sugerido y rango aceptado. Último del eje: es opcional |
 | `tiempo.modo` | ¿Cómo se mide el tiempo acá? | si no lo estima el comercial y la familia soporta más de un modo | |
 | `tiempo.tiempo_fijo` | ¿Cuántos minutos lleva? | T-1 sin máquina ni tiempo del comercial | |
 | `tiempo.ritmo_modo` | ¿Cómo medís el ritmo? | T-2 sin tiempo del comercial | |
@@ -330,9 +331,23 @@ pide al comercial", "Ayudas y validación") colgando de la misma línea.
 tiempo en minutos **por cada** [pieza del ítem]"*. El motor no hace eso: en
 `resolverTiempoManualMin` lo que carga el comercial ES el `runMin` del paso, sin
 multiplicar por la cantidad. Un selector que no hace nada es peor que no tener
-selector, así que la oración quedó *"Carga el tiempo en minutos para todo el
-ítem, sin multiplicar por la cantidad"*. Si el "por cada pieza" se quiere de
-verdad, es una funcionalidad del motor con su propio diseño, no un control.
+selector, así que no se puso. Si el "por cada pieza" se quiere de verdad, es una
+funcionalidad del motor con su propio diseño, no un control.
+
+Tres ajustes de Lucas sobre la primera versión de esta rama:
+
+- **La pregunta y su unidad, en la misma fila.** El input de texto se comía un
+  renglón entero sin necesitarlo.
+- **"Ayudas y validación" al final del eje**, después de "dónde se hace": es lo
+  único opcional y no debería competir con lo que sí hay que definir. Para eso
+  se separó en su propia opción (`tiempo.comercial_ayudas`, grupo `ayudas`
+  declarado último) — el censo pasó de 40 a **41 preguntas**.
+- **"Obligatorio para presupuestar" se mudó junto a la pregunta.** Estaba
+  dentro de "Ayudas y validación" y se leía como una ayuda más, cuando es de
+  otra naturaleza: sugerido y rango son pistas para contestar bien; obligatorio
+  decide **si se puede seguir sin contestar** (el motor corta con
+  `tiempo_manual_requerido`). Es una propiedad de la pregunta, como el
+  asterisco de un campo requerido.
 
 ## 6. Hallazgos abiertos
 
