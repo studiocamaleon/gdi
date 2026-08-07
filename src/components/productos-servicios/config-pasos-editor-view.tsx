@@ -10557,15 +10557,25 @@ function EjeGuiado({
 
   return (
     <div
-      style={{
-        border: "1px solid var(--hairline, #e6e2dc)",
-        borderRadius: 12,
-        background: "var(--surface-1, #fff)",
-        padding: abierto ? "14px 16px 16px" : "10px 14px",
-        display: "flex",
-        flexDirection: "column",
-        gap: abierto ? 16 : 4,
-      }}
+      style={
+        fijo
+          ? {
+              // Patrón "Materiales que consume": el encabezado va SIN fondo y
+              // sólo la parte que se parametriza lleva card. Ver más abajo.
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }
+          : {
+              border: "1px solid var(--hairline, #e6e2dc)",
+              borderRadius: 12,
+              background: "var(--surface-1, #fff)",
+              padding: abierto ? "14px 16px 16px" : "10px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: abierto ? 16 : 4,
+            }
+      }
     >
       <div
         style={{
@@ -10573,6 +10583,7 @@ function EjeGuiado({
           justifyContent: "space-between",
           alignItems: "flex-start",
           gap: 10,
+          ...(fijo ? { padding: "2px 2px 0" } : {}),
         }}
       >
         <div style={{ minWidth: 0 }}>
@@ -10644,7 +10655,23 @@ function EjeGuiado({
       </div>
 
       {abierto ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+            // En modo fijo, sólo el contenido lleva card (el encabezado va
+            // suelto, como en Materiales). Sin fijo, ya vive dentro del card.
+            ...(fijo
+              ? {
+                  border: "1px solid var(--hairline, #e6e2dc)",
+                  borderRadius: 12,
+                  background: "var(--surface-1, #fff)",
+                  padding: "14px 16px",
+                }
+              : {}),
+          }}
+        >
           {gruposConOpciones.map(({ grupo, items }, idx) => (
             <div
               key={grupo.id}
