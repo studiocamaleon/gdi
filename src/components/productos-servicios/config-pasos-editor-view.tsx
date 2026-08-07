@@ -55,6 +55,9 @@ import {
   opcionesDeSeccion,
   GRUPOS_EJE,
   opcionesDeEje,
+  modosActivacionOfrecidos,
+  MODO_ACTIVACION_LABELS,
+  MODO_ACTIVACION_CONSECUENCIA,
   type EjePaso,
   type ContextoOpcion,
   type OpcionPaso,
@@ -10449,16 +10452,28 @@ function EjeGuiado({
                 display: "flex",
                 flexDirection: "column",
                 gap: 10,
-                // Los bloques que dependen de la bifurcación cuelgan de una
-                // línea, como en el diseño: se ve que son consecuencia de la
-                // decisión de arriba y no cosas sueltas.
-                ...(grupo.estilo === "campos"
+                // `arriba`: bloques a todo el ancho, separados por línea
+                // horizontal. `lado`: cuelgan de una línea vertical, que
+                // muestra que son consecuencia de la bifurcación de arriba.
+                ...(grupo.encabezado === "arriba"
                   ? {
-                      borderLeft: "2px solid var(--hairline, #eee7de)",
-                      paddingLeft: 16,
-                      paddingTop: idx > 0 ? 4 : 6,
+                      padding: "15px 0",
+                      borderBottom:
+                        idx < gruposConOpciones.length - 1
+                          ? "1px solid var(--hairline, #eee7de)"
+                          : undefined,
+                      ...(idx === 0 ? { paddingTop: 2 } : {}),
+                      ...(idx === gruposConOpciones.length - 1
+                        ? { paddingBottom: 2 }
+                        : {}),
                     }
-                  : {}),
+                  : grupo.estilo === "campos"
+                    ? {
+                        borderLeft: "2px solid var(--hairline, #eee7de)",
+                        paddingLeft: 16,
+                        paddingTop: idx > 0 ? 4 : 6,
+                      }
+                    : {}),
               }}
             >
               {/* El encabezado del bloque va al COSTADO de sus campos, no
@@ -10466,7 +10481,7 @@ function EjeGuiado({
                   controles hacía la card el doble de alta de lo necesario. */}
               <div
                 style={
-                  grupo.titulo
+                  grupo.titulo && grupo.encabezado !== "arriba"
                     ? {
                         display: "grid",
                         gridTemplateColumns: "minmax(140px, 200px) minmax(0, 1fr)",
@@ -10477,7 +10492,13 @@ function EjeGuiado({
                 }
               >
                 {grupo.titulo ? (
-                  <div>
+                  <div
+                    style={
+                      grupo.encabezado === "arriba"
+                        ? { marginBottom: 11 }
+                        : undefined
+                    }
+                  >
                     <div style={{ fontSize: 12.5, fontWeight: 600 }}>
                       {grupo.titulo}
                     </div>
@@ -10487,6 +10508,7 @@ function EjeGuiado({
                           fontSize: 11.5,
                           color: "var(--muted-text, #6e6e76)",
                           marginTop: 2,
+                          maxWidth: "70ch",
                         }}
                       >
                         {typeof grupo.ayuda === "function"
@@ -10520,7 +10542,8 @@ function EjeGuiado({
                       : {}),
                   }}
                 >
-                  {grupo.estilo === "bifurcacion" ? null : (
+                  {grupo.estilo === "bifurcacion" ||
+                  etiquetaDe(opcion).trim() === "" ? null : (
                     <label
                       style={{
                         fontSize: 11.5,
@@ -11144,22 +11167,164 @@ function SeccionesEsquemaPaso({
               />
             );
           }
-          if (id === "co-ejecucion") {
-            const requeridos = cfg.requiereRutaPasoIds ?? [];
+          if (id === "activacion-modo") {
+            const modo = cfg.modoActivacion ?? "OBLIGATORIO";
+            const ofrecidos = modosActivacionOfrecidos(ctx);
+            const normales = ofrecidos.filter((m) => m !== "NO_EJECUTAR");
+            const apaga = ofrecidos.includes("NO_EJECUTAR");
+            const botonModo = (m: string, apagado = false) => {
+              const activo = modo === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => onPatch(pasoActual.id, { modoActivacion: m })}
+                  style={{
+                    border: 0,
+                    background: activo
+                      ? apagado
+                        ? "#5c5c66"
+                        : "var(--fg, #14141a)"
+                      : "transparent",
+                    color: activo ? "#fff" : "var(--muted-text, #6e6e76)",
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {MODO_ACTIVACION_LABELS[m] ?? m}
+                </button>
+              );
+            };
             return (
               <div
-                style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
+                style={{ display: "flex", flexDirection: "column", gap: 9 }}
               >
-                {pasos
-                  .filter((p) => p.id !== pasoActual.id)
-                  .map((p) => {
+                <div
+                  style={{
+                    display: "inline-flex",
+                    background: "var(--surface-2, #f3f1ec)",
+                    border: "1px solid var(--hairline, #e5e2db)",
+                    borderRadius: 8,
+                    padding: 2.5,
+                    gap: 2,
+                    width: "fit-content",
+                    maxWidth: "100%",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {normales.map((m) => botonModo(m))}
+                  {/* "No se usa acá" no es un modo más: apaga el paso. Va
+                      separado y en gris, para que no se elija de pasada. */}
+                  {apaga ? (
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 1,
+                        background: "var(--hairline, #e5e2db)",
+                        margin: "4px 4px",
+                      }}
+                    />
+                  ) : null}
+                  {apaga ? botonModo("NO_EJECUTAR", true) : null}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    color: "var(--muted-text, #6e6e76)",
+                    maxWidth: "70ch",
+                  }}
+                >
+                  {MODO_ACTIVACION_CONSECUENCIA[modo]}
+                </div>
+              </div>
+            );
+          }
+          if (id === "co-ejecucion") {
+            const requeridos = cfg.requiereRutaPasoIds ?? [];
+            const otros = pasos.filter((p) => p.id !== pasoActual.id);
+            const corresSiempre =
+              (cfg.modoActivacion ?? "OBLIGATORIO") === "OBLIGATORIO";
+            return (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 9 }}
+              >
+                {/* El encabezado lo dibuja el control y no el grupo: el
+                    contador y el "Ninguno" van en esa misma línea. */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: 9,
+                    marginBottom: -1,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                      Enciende también estos pasos
+                    </div>
+                    {/* Un paso obligatorio arrastra igual (el motor lo trata
+                        como activo), y eso vuelve obligatorio de hecho al
+                        arrastrado. Se avisa en vez de esconder la pregunta. */}
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        marginTop: 2,
+                        maxWidth: "70ch",
+                        color: corresSiempre
+                          ? "#9a6a11"
+                          : "var(--muted-text, #6e6e76)",
+                      }}
+                    >
+                      {corresSiempre
+                        ? "Como este paso corre siempre, los que arrastre van a correr siempre también."
+                        : "Cuando este paso se activa, prende los que elijas — aunque sean opcionales."}
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--muted-text-2, #92929b)",
+                      whiteSpace: "nowrap",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {requeridos.length > 0
+                      ? `${requeridos.length} de ${otros.length}`
+                      : "ninguno"}
+                  </span>
+                  {requeridos.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onPatch(pasoActual.id, { requiereRutaPasoIds: [] })
+                      }
+                      style={{
+                        marginLeft: "auto",
+                        border: 0,
+                        background: "none",
+                        padding: 0,
+                        fontSize: 11.5,
+                        color: "var(--muted-text, #6e6e76)",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Ninguno
+                    </button>
+                  ) : null}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                  {otros.map((p) => {
                     const elegido = requeridos.includes(p.id);
                     return (
-                      <Button
+                      <button
                         key={p.id}
                         type="button"
-                        size="sm"
-                        variant={elegido ? "default" : "outline"}
+                        aria-pressed={elegido}
                         onClick={() =>
                           onPatch(pasoActual.id, {
                             requiereRutaPasoIds: elegido
@@ -11167,11 +11332,45 @@ function SeccionesEsquemaPaso({
                               : [...requeridos, p.id],
                           })
                         }
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          height: 30,
+                          padding: "0 11px",
+                          borderRadius: 7,
+                          fontSize: 12.5,
+                          cursor: "pointer",
+                          background: elegido
+                            ? "var(--fg, #14141a)"
+                            : "var(--surface, #fff)",
+                          border: `1px solid ${elegido ? "var(--fg, #14141a)" : "var(--hairline, #e5e2db)"}`,
+                          color: elegido ? "#fff" : "var(--fg-2, #2c2c33)",
+                        }}
                       >
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 13,
+                            height: 13,
+                            borderRadius: 4,
+                            flexShrink: 0,
+                            display: "grid",
+                            placeItems: "center",
+                            background: elegido ? "#fff" : "transparent",
+                            border: `1.5px solid ${elegido ? "#fff" : "var(--hairline-strong, #c8c4ba)"}`,
+                            color: "var(--fg, #14141a)",
+                          }}
+                        >
+                          {elegido ? (
+                            <CheckIcon className="size-2" strokeWidth={4} />
+                          ) : null}
+                        </span>
                         {p.nombre}
-                      </Button>
+                      </button>
                     );
                   })}
+                </div>
               </div>
             );
           }
@@ -11560,7 +11759,7 @@ function SeccionesEsquemaPaso({
             />
             <EjeGuiado
               titulo="Cuándo se ejecuta"
-              subtitulo="Si corre siempre, si es opcional o si depende de una condición."
+              subtitulo="Si corre siempre, si es opcional o si depende de una condición del pedido."
               eje="activacion"
               resumenPrincipal={["activacion.cuando", "activacion.regla"]}
               ctx={ctx}

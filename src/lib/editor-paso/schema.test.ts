@@ -9,7 +9,9 @@
 import { describe, expect, it } from "vitest";
 import {
   ESQUEMA_PASO,
+  MODO_ACTIVACION_CONSECUENCIA,
   SECCIONES_MIGRADAS,
+  modosActivacionOfrecidos,
   opcionesDeSeccion,
   type ContextoOpcion,
 } from "./schema";
@@ -212,13 +214,50 @@ describe("sección Activación", () => {
     });
     const cuando = ESQUEMA_PASO.find((op) => op.clave === "activacion.cuando")!;
     expect(cuando.resumen(ctx)).toBe("Siempre — fijado por el paso");
-    // Y las pills ofrecen sólo lo soportado + apagar por ruta.
-    const control = cuando.control;
-    if (control.tipo !== "pills") throw new Error("esperaba pills");
-    expect(control.opciones(ctx).map((o) => o.value)).toEqual([
+    // El control es propio (segmented + la consecuencia del modo elegido);
+    // lo que sigue siendo del esquema es QUÉ modos se ofrecen.
+    expect(cuando.control.tipo).toBe("componente");
+    expect(modosActivacionOfrecidos(ctx)).toEqual([
       "OBLIGATORIO",
       "NO_EJECUTAR",
     ]);
+  });
+
+  it("cada modo dice qué implica: elegir entre etiquetas sueltas es adivinar", () => {
+    for (const modo of [
+      "OBLIGATORIO",
+      "OPCIONAL",
+      "CONDICIONAL",
+      "NO_EJECUTAR",
+    ]) {
+      expect(MODO_ACTIVACION_CONSECUENCIA[modo]).toBeTruthy();
+    }
+  });
+
+  it("el arrastre se ofrece TAMBIÉN en pasos obligatorios: ahí también arrastra", () => {
+    // `resolverArrastreOpcionales` trata al obligatorio como activo, así que
+    // arrastra — y vuelve obligatorio de hecho al arrastrado. Esconder la
+    // pregunta acá (lo que se hizo primero) borraba una capacidad real.
+    const co = ESQUEMA_PASO.find(
+      (op) => op.clave === "activacion.coejecucion",
+    )!;
+    const conVecinos = { otros: [{ id: "otro", nombre: "Tensado de lona" }] };
+    expect(
+      co.visible(
+        ctxBase({ ...conVecinos, cfg: { modoActivacion: "OBLIGATORIO" } }),
+      ),
+    ).toBe(true);
+    expect(
+      co.visible(
+        ctxBase({ ...conVecinos, cfg: { modoActivacion: "OPCIONAL" } }),
+      ),
+    ).toBe(true);
+    // Salvo apagado: si el paso no corre, no arrastra a nadie.
+    expect(
+      co.visible(
+        ctxBase({ ...conVecinos, cfg: { modoActivacion: "NO_EJECUTAR" } }),
+      ),
+    ).toBe(false);
   });
 
   it("la regla sólo aparece en modo condicional, y sin regla queda sin-definir", () => {

@@ -209,6 +209,7 @@ export type ControlOpcion =
         | "tercerizado-panel"
         | "acomodado-detallado"
         | "params-familia"
+        | "activacion-modo"
         | "tiempo-comercial-ayudas"
         | "efectos-paso";
     };
@@ -229,6 +230,13 @@ export interface GrupoEje {
   /** `grid-template-columns` del bloque. Un select ancho al lado de un
    *  contador chico se lee mejor que dos columnas iguales. */
   columnas?: string;
+  /**
+   * Dónde va el encabezado del bloque. `lado` (default) ahorra alto cuando
+   * los controles son angostos; `arriba` es para bloques cuyo contenido usa
+   * todo el ancho (chips, filas de regla), donde una columna de título los
+   * apretaría. Los bloques `arriba` se separan con línea horizontal.
+   */
+  encabezado?: "lado" | "arriba";
 }
 
 export interface OpcionPaso {
@@ -270,10 +278,25 @@ export interface OpcionPaso {
 
 const MODO_ACTIVACION_LABELS: Record<string, string> = {
   OBLIGATORIO: "Siempre",
-  OPCIONAL: "Cuando el comercial lo activa",
+  OPCIONAL: "Lo activa el comercial",
   CONDICIONAL: "Según una regla",
-  NO_EJECUTAR: "Nunca en esta ruta",
+  NO_EJECUTAR: "No se usa acá",
 };
+
+/** Qué implica el modo elegido, en una frase. Va debajo del control: elegir
+ *  entre cuatro etiquetas cortas sin saber qué hace cada una es adivinar. */
+export const MODO_ACTIVACION_CONSECUENCIA: Record<string, string> = {
+  OBLIGATORIO:
+    "Corre en todas las OT que pasen por esta ruta. No hace falta que nadie lo active.",
+  OPCIONAL:
+    "Aparece apagado en el presupuesto. El comercial lo enciende cuando el trabajo lo pide.",
+  CONDICIONAL:
+    "Se enciende solo cuando el pedido cumple la condición de abajo.",
+  NO_EJECUTAR:
+    "Queda fuera de esta ruta. El paso sigue disponible en las demás rutas donde esté configurado.",
+};
+
+export { MODO_ACTIVACION_LABELS };
 
 // Los multiplicadores llegan como claves técnicas del motor (caras,
 // tipoCopia): acá se traducen a idioma de taller (feedback del usuario).
@@ -297,7 +320,7 @@ function criterioDeFabricaDelSlot(ctx: ContextoOpcion) {
     ?.criterioCapacidadDefault;
 }
 
-function modosActivacionOfrecidos(ctx: ContextoOpcion): string[] {
+export function modosActivacionOfrecidos(ctx: ContextoOpcion): string[] {
   // La familia puede FIJAR su activación (Etapa D): se ofrecen sólo los
   // soportados; NO_EJECUTAR siempre se puede (apagar el paso por ruta).
   const soportados = ctx.familia?.modosActivacionSoportados ?? [
@@ -725,6 +748,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "activacion.cuando",
     eje: "activacion",
     grupo: "raiz",
+    // El título de la card ya es la pregunta: repetirla arriba del control
+    // sería decir dos veces lo mismo.
+    etiqueta: "",
     seccion: "activacion",
     pregunta: "¿Cuándo se ejecuta?",
     ayuda:
@@ -742,19 +768,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       ctx.cfg.modoActivacion !== ctx.familia?.modoActivacionDefault
         ? "config"
         : "default-paso",
-    control: {
-      tipo: "pills",
-      opciones: (ctx) =>
-        modosActivacionOfrecidos(ctx).map((modo) => ({
-          value: modo,
-          label: MODO_ACTIVACION_LABELS[modo] ?? modo,
-        })),
-      valor: (ctx) => ctx.cfg.modoActivacion ?? "OBLIGATORIO",
-      aplicar: (_ctx, v) => ({
-        tipo: "config",
-        patch: { modoActivacion: v },
-      }),
-    },
+    control: { tipo: "componente", id: "activacion-modo" },
   },
   {
     clave: "activacion.regla",
@@ -799,13 +813,13 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Arrastra otros pasos al activarse?",
     ayuda:
       "Al activarse este paso, enciende también los que marques aunque sean opcionales (los ojales arrastran el refuerzo).",
-    // [H-7] Un paso OBLIGATORIO ya corre siempre: arrastrar no cambia nada.
-    // La pregunta sólo tiene sentido donde el paso puede estar apagado.
+    // [H-7, corregido] Se había escondido en pasos OBLIGATORIOS "porque
+    // arrastrar no cambia nada". Es falso: `resolverArrastreOpcionales` trata
+    // al obligatorio como ACTIVO, así que arrastra — y vuelve obligatorio de
+    // hecho a un opcional. Se muestra siempre; lo que faltaba era avisar la
+    // consecuencia, y eso lo dice el control.
     visible: (ctx) =>
-      ctx.otrosPasos.length > 0 &&
-      (ctx.cfg.modoActivacion === "OPCIONAL" ||
-        ctx.cfg.modoActivacion === "CONDICIONAL" ||
-        (ctx.cfg.requiereRutaPasoIds?.length ?? 0) > 0),
+      ctx.otrosPasos.length > 0 && ctx.cfg.modoActivacion !== "NO_EJECUTAR",
     resumen: (ctx) => {
       const ids = new Set(ctx.cfg.requiereRutaPasoIds ?? []);
       if (ids.size === 0) return "No arrastra otros pasos";
@@ -2190,21 +2204,28 @@ const GRUPOS_IDENTIDAD: GrupoEje[] = [
 ];
 
 const GRUPOS_ACTIVACION: GrupoEje[] = [
-  { id: "raiz", estilo: "campos", columnas: "minmax(0, 1fr)" },
+  {
+    id: "raiz",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+    encabezado: "arriba",
+  },
   {
     id: "regla",
     titulo: "La condición",
-    ayuda: "El paso corre sólo cuando esto se cumple.",
+    ayuda:
+      "El paso corre sólo cuando esto se cumple. Podés combinar medidas del ítem, opciones elegidas y tecnología.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
+    encabezado: "arriba",
   },
+  // Sin título: el control dibuja su propio encabezado, porque el contador
+  // ("2 de 7") y el "Ninguno" van en esa misma línea.
   {
     id: "arrastre",
-    titulo: "Arrastra a otros",
-    ayuda:
-      "Al encenderse, prende también estos pasos aunque sean opcionales.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
+    encabezado: "arriba",
   },
 ];
 

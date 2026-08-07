@@ -373,7 +373,7 @@ Numerados para discutirlos de a uno. Ninguno implementado.
 | H-4 | **"Calculado por nesting"** como respuesta visible: era el nombre del mecanismo interno, no lo que hace. | `tiempo.cantidad_operativa` | **CERRADO** — dice "La calcula el propio paso" |
 | H-5 | El **tóner vive en "Máquina y perfil"**: es consumo, no una propiedad del fierro. | `maquina.cobertura` | Abierto |
 | H-6 | El **nombre del paso vivía en "Activación"**, cuando es identidad. | `activacion.nombre` | **CERRADO** — abre el eje "Qué paso es" |
-| H-7 | **"¿Arrastra otros pasos?" en un paso que corre siempre**: si es obligatorio, arrastrar no cambia nada. | `activacion.coejecucion` | **CERRADO** — sólo en opcionales y condicionales |
+| H-7 | **"¿Arrastra otros pasos?" en un paso que corre siempre.** Se cerró escondiendo la pregunta en pasos obligatorios — **y estaba MAL**: `resolverArrastreOpcionales` trata al obligatorio como activo, así que arrastra, y eso vuelve obligatorio de hecho al arrastrado. Esconderla borraba una capacidad real. | `activacion.coejecucion` | **CERRADO al revés** — se muestra siempre, avisando la consecuencia |
 | H-8 | El encabezado muestra **"Perfil: Papel intermedio"** pero no hay pregunta para tocarlo (se esconde cuando hay candidatas). Se lee como un perfil clavado. | `maquina.perfil` | Abierto |
 
 ## 7. Los dos caminos
@@ -416,7 +416,37 @@ costo", entre activación y máquina, contra el orden que este mismo documento
 acordó: el ritmo sale del perfil de la máquina y la cantidad sale del acomodado,
 así que preguntarlo antes es preguntar sin los datos.
 
-De paso cerraron tres hallazgos (§6): H-4, H-6 y H-7.
+De paso cerraron tres hallazgos (§6): H-4, H-6 y H-7 — este último **primero
+mal y después bien**, ver abajo.
+
+### La card de activación, tal cual el diseño
+
+Segundo archivo de Lucas (`pasos/Cuándo se ejecuta.html`). Se tomó completo
+salvo el pie "Cómo queda", que repite lo que ya dice la línea de la card
+cerrada:
+
+- **Segmented de cuatro**, con "No se usa acá" separado por una línea y en
+  gris: apaga el paso, no es un modo más, y no debería elegirse de pasada.
+- **Debajo, qué implica el modo elegido** ("Corre en todas las OT que pasen por
+  esta ruta. No hace falta que nadie lo active."). Elegir entre cuatro
+  etiquetas cortas sin saber qué hace cada una es adivinar.
+- **El arrastre como chips** con casilla, contador ("2 de 7") y un "Ninguno"
+  para limpiar, todo en la línea del título.
+- **Bloques apilados y separados por línea horizontal**, no con el encabezado
+  al costado: acá el contenido usa todo el ancho (chips, filas de regla) y una
+  columna de título lo apretaría. Lo declara el grupo (`encabezado: "arriba"`).
+
+**Y el diseño corrigió un error mío.** Había cerrado H-7 escondiendo "¿arrastra
+otros pasos?" en los pasos obligatorios, razonando que "si corre siempre,
+arrastrar no cambia nada". Es falso: en `resolverArrastreOpcionales` un paso
+OBLIGATORIO cuenta como activo, así que arrastra — y al hacerlo vuelve
+obligatorio de hecho a un paso opcional. El diseño lo mantiene visible y avisa
+la consecuencia, que es lo correcto. Queda como test.
+
+**Lo que NO se portó**: las filas de la condición (campo · operador · valor,
+con los conectores Y/O y el "Agregar condición" punteado). Eso es el
+`RuleBuilder`, un componente propio con su lógica de jsonLogic; rehacerlo es su
+propio trabajo, no un cambio de estilos.
 
 ## 8. El repaso, familia por familia
 
