@@ -8328,89 +8328,73 @@ const persistedHardcoded =
                                                   ? slot.materialVarianteId
                                                   : "Sin seleccionar"));
   return (
-                                                <div className="space-y-2 rounded border bg-background p-3">
-                                                  <LabelConTooltip
-                                                    label="Material fijo"
-                                                    tooltip="Elegí una materia prima compatible y luego una variante concreta para dejar fija en este paso."
-                                                  />
-                                                  <MaterialSearchSelect
-                                                    compatibilidad={
-                                                      slotDecl?.compatibilidadMaterial
-                                                    }
-                                                    placeholder="Buscar materia prima compatible..."
-                                                    selectedIds={
-                                                      hardcodedMateria
-                                                        ? [hardcodedMateria.id]
-                                                        : []
-                                                    }
-                                                    onSelect={(
-                                                      materiaPrima,
-                                                    ) => {
-                                                      setCandidateMaterials(
-                                                        (prev) => ({
-                                                          ...prev,
-                                                          [materiaPrima.id]:
-                                                            materiaPrima,
-                                                        }),
-                                                      );
-                                                      setHardcodedMaterialSelections(
-                                                        (prev) => ({
-                                                          ...prev,
-                                                          [slotUiKey]:
-                                                            materiaPrima.id,
-                                                        }),
-                                                      );
-                                                      updateSlot(
-                                                        pasoId,
-                                                        slotIdx,
-                                                        {
-                                                          materialVarianteId:
-                                                            materiaPrima
-                                                              .variantes.length ===
-                                                            1
-                                                              ? (materiaPrima
-                                                                  .variantes[0]
-                                                                  ?.id ?? null)
-                                                              : null,
-                                                        },
-                                                      );
-                                                    }}
-                                                  />
-                                                  {hardcodedMateria &&
-                                                  hardcodedMateria.variantes
-                                                    .length > 1 ? (
-                                                    <HumanSelect
-                                                      value={
-                                                        slot.materialVarianteId ??
-                                                        ""
-                                                      }
-                                                      onValueChange={(v) =>
-                                                        updateSlot(
-                                                          pasoId,
-                                                          slotIdx,
-                                                          {
-                                                            materialVarianteId:
-                                                              v || null,
-                                                          },
-                                                        )
-                                                      }
-                                                      options={hardcodedMateria.variantes.map(
-                                                        (variante) =>
-                                                          varianteOptionFromBusqueda(
-                                                            hardcodedMateria,
-                                                            variante,
-                                                          ),
-                                                      )}
-                                                      placeholder="Elegir variante fija"
-                                                      triggerClassName="min-h-8 text-xs"
-                                                    />
-                                                  ) : (
-                                                    <div className="text-muted-foreground text-xs">
-                                                      Variante:{" "}
-                                                      {hardcodedVarianteLabel}
-                                                    </div>
-                                                  )}
-                                                </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <LabelConTooltip
+        label="Qué material se usa"
+        tooltip="Elegí una materia prima compatible y luego una variante concreta para dejar fija en este paso."
+      />
+      <MaterialSearchSelect
+        compatibilidad={slotDecl?.compatibilidadMaterial}
+        placeholder="Buscar materia prima compatible..."
+        selectedIds={hardcodedMateria ? [hardcodedMateria.id] : []}
+        onSelect={(materiaPrima) => {
+          setCandidateMaterials((prev) => ({
+            ...prev,
+            [materiaPrima.id]: materiaPrima,
+          }));
+          setHardcodedMaterialSelections((prev) => ({
+            ...prev,
+            [slotUiKey]: materiaPrima.id,
+          }));
+          updateSlot(pasoId, slotIdx, {
+            materialVarianteId:
+              materiaPrima.variantes.length === 1
+                ? (materiaPrima.variantes[0]?.id ?? null)
+                : null,
+          });
+        }}
+        onDeselect={() => {
+          setHardcodedMaterialSelections((prev) => {
+            const next = { ...prev };
+            delete next[slotUiKey];
+            return next;
+          });
+          updateSlot(pasoId, slotIdx, { materialVarianteId: null });
+        }}
+        pinnedItems={hardcodedMateria ? [hardcodedMateria] : []}
+        renderDetail={(item) =>
+          item.variantes.length > 1 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span
+                style={{
+                  fontSize: 11.5,
+                  color: "var(--muted-text, #6e6e76)",
+                }}
+              >
+                Variante que se usa
+              </span>
+              <HumanSelect
+                value={slot.materialVarianteId ?? ""}
+                onValueChange={(v) =>
+                  updateSlot(pasoId, slotIdx, {
+                    materialVarianteId: v || null,
+                  })
+                }
+                options={item.variantes.map((variante) =>
+                  varianteOptionFromBusqueda(item, variante),
+                )}
+                placeholder="Elegir variante fija"
+                triggerClassName="min-h-8 text-xs"
+              />
+            </div>
+          ) : (
+            <div className="text-muted-foreground text-xs">
+              Variante: {hardcodedVarianteLabel}
+            </div>
+          )
+        }
+      />
+    </div>
   );
 }
 
