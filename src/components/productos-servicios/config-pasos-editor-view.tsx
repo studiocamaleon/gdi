@@ -12094,10 +12094,29 @@ function SeccionesEsquemaPaso({
             <EjeGuiado
               titulo="Qué paso es"
               subtitulo="Cómo se llama acá y quién lo hace."
-              opciones={opcionesDeEje("identidad", ctx)}
+              opciones={opcionesDeEje("identidad", ctx).filter(
+                (o) => o.clave !== "quien.proveedor",
+              )}
               grupos={GRUPOS_EJE.identidad}
               fijo
               resumenPrincipal={["activacion.nombre", "quien.tercerizado"]}
+              ctx={ctx}
+              pendientesVivos={pendientesVivos}
+              onAplicar={onAplicar}
+              renderComponente={renderComponente}
+            />
+            {/* El proveedor: su propia card (no anidada en "Qué paso es").
+                Sólo cuando el paso es tercerizado — si no, las opciones filtradas
+                quedan vacías y el EjeGuiado no renderiza nada. */}
+            <EjeGuiado
+              titulo="El proveedor"
+              subtitulo="A quién se le compra este paso, cómo cotiza y en cuánto entrega."
+              opciones={opcionesDeEje("identidad", ctx).filter(
+                (o) => o.clave === "quien.proveedor",
+              )}
+              grupos={[{ id: "proveedor" }]}
+              fijo
+              resumenPrincipal={["quien.proveedor"]}
               ctx={ctx}
               pendientesVivos={pendientesVivos}
               onAplicar={onAplicar}

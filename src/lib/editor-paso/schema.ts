@@ -700,6 +700,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     eje: "identidad",
     grupo: "proveedor",
     anchoCompleto: true,
+    // El panel trae su propio contenido; se renderiza como su propia card
+    // "El proveedor", así que no lleva label arriba.
+    etiqueta: " ",
     seccion: "quien",
     pregunta: "¿A quién se le compra y a qué precio?",
     ayuda:
@@ -2226,13 +2229,10 @@ const GRUPOS_IDENTIDAD: GrupoEje[] = [
     columnas: "repeat(auto-fit, minmax(240px, 1fr))",
   },
   {
+    // El proveedor se renderiza como su PROPIA card (EjeGuiado aparte en el
+    // editor), no como un sub-bloque de "Qué paso es". Grupo sin estilo: el
+    // panel ocupa todo el ancho, sin barra ni título propio.
     id: "proveedor",
-    titulo: "El proveedor",
-    ayuda: "A quién se le compra, cómo cotiza y en cuánto entrega.",
-    estilo: "campos",
-    columnas: "minmax(0, 1fr)",
-    // Título arriba, a todo el ancho, sin la barra vertical del costado.
-    encabezado: "arriba",
   },
 ];
 
