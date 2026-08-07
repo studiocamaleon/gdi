@@ -3734,7 +3734,11 @@ export function ConfigPasosEditorView({
           typeof paramsPasoJson.productivityUnit === "string"
             ? paramsPasoJson.productivityUnit
             : getDefaultT2ProductivityUnit(familia);
-        const sourceOptions = getT2QuantitySourceOptions(unit, familia);
+        const sourceOptions = getT2QuantitySourceOptions(
+          unit,
+          familia,
+          paramsPasoJson,
+        );
         const rawSource =
           typeof paramsPasoJson.productivityQuantitySource === "string"
             ? paramsPasoJson.productivityQuantitySource
@@ -4458,7 +4462,11 @@ export function ConfigPasosEditorView({
                       ? "cantidad_montaje"
                       : productivityQuantitySourceRaw;
                   const productivityQuantitySourceOptions =
-                    getT2QuantitySourceOptions(productivityUnit, familia);
+                    getT2QuantitySourceOptions(
+                      productivityUnit,
+                      familia,
+                      paramsPaso,
+                    );
                   const productivityQuantitySource =
                     productivityQuantitySourceOptions.some(
                       (option) =>

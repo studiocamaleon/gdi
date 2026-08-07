@@ -1,7 +1,7 @@
 # Efectos de paso — lo que un paso le HACE al trabajo
 
-**Estado: F1 IMPLEMENTADA** (2026-08-07) — falta F2 (editor), F3 (tiempo) y F4
-(migrar rutas + podar `modificacion_pre`). Convierte lo que hoy es exclusivo de la
+**Estado: F1–F3 IMPLEMENTADAS** (2026-08-07) — falta F4 (migrar las rutas del
+Backlight y el Frontlight, y podar `modificacion_pre` del catálogo). Convierte lo que hoy es exclusivo de la
 familia `modificacion_pre` (agrandar la medida) en un **eje que cualquier
 paso puede declarar**.
 
@@ -215,7 +215,11 @@ regla de oro. La fusión lo corrige de paso.
   un paso nunca queda con dos verdades. `modificacion_pre` soltó
   `editorParamsGenerico`: sus tres params ERAN el efecto y tener las dos cards
   daba dos controles para el mismo dato.
-- **F3** — el tiempo: resolver el punto abierto §7 y darle al paso su magnitud.
+- **F3 — HECHA**: el tiempo. Fuente de cantidad nueva `perimetro_lados_efecto`
+  ("Borde que este paso trabaja"): los metros de los lados que el efecto
+  declara, medidos sobre la medida VISIBLE. Es la opción (c) del §7. El editor
+  la ofrece sólo cuando el paso tiene el efecto configurado, y el ritmo se
+  nombra "m de borde/h". Ninguna ruta la usa todavía — la elige F4.
 - **F4** — migración y poda: la ruta del Backlight pasa a 8 pasos ("Tensado
   de lona" absorbe el efecto y sus 100 mm × 4 lados); el Frontlight suelta su
   paso sin configurar; y recién ahí `modificacion_pre` sale del catálogo.

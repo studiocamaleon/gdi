@@ -5,6 +5,7 @@
  * B para que ambas vistas lean LA MISMA fuente (una opción, un catálogo).
  */
 import type { UpsertConfigPasoPayload } from "../productos-servicios-api";
+import { leerEfectoDemasia } from "../efectos-paso";
 
 export const MONTAJE_SOURCE_OPTIONS = [
   {
@@ -145,6 +146,14 @@ const T2_QUANTITY_SOURCE_OPTIONS = [
     label: "Perímetro total de piezas",
     description: "Suma el perímetro rectangular de todas las piezas.",
   },
+  {
+    // [F3 efectos] Sólo se ofrece si el paso EXIGE material extra: son los
+    // metros de los lados que ese efecto declara, sobre la medida visible.
+    value: "perimetro_lados_efecto",
+    label: "Borde que este paso trabaja",
+    description:
+      "Los metros de los lados donde el paso pide material extra, medidos sobre la medida visible (el borde terminado, no la pieza agrandada).",
+  },
 ];
 
 const T2_PRODUCTIVITY_UNIT_SUFFIX: Record<string, string> = {
@@ -185,6 +194,9 @@ export function getT2ProductivityUnitSuffix(
   if (unit === "ml_h" && quantitySource === "perimetro_piezas_m") {
     return "m perímetro/h";
   }
+  if (unit === "ml_h" && quantitySource === "perimetro_lados_efecto") {
+    return "m de borde/h";
+  }
   if (unit === "unidades_h") {
     if (quantitySource === "cantidad_montaje") return "piezas montadas/h";
     if (
@@ -206,6 +218,9 @@ export function getT2BatchUnitSuffix(
 ) {
   if (unit === "ml_h" && quantitySource === "perimetro_piezas_m") {
     return "m perímetro";
+  }
+  if (unit === "ml_h" && quantitySource === "perimetro_lados_efecto") {
+    return "m de borde";
   }
   if (unit === "unidades_h") {
     if (quantitySource === "cantidad_montaje") return "piezas a montar";
@@ -300,6 +315,8 @@ export function derivedQuantitySourceOptions(
 export function getT2QuantitySourceOptions(
   unit: string,
   familia?: FamiliaParaMagnitudes & FamiliaParaDefaults,
+  /** Params del paso: el borde trabajado sale del efecto que él declara. */
+  paramsPaso?: Record<string, unknown> | null,
 ) {
   const derivadas = unit === "unidades_h" ? derivedQuantitySourceOptions(familia) : [];
   // [Tanda C] La fuente especial la declara el ritmoDefault de la ficha.
@@ -320,10 +337,12 @@ export function getT2QuantitySourceOptions(
     );
   }
   if (unit === "ml_h") {
-    return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
-      ["metros_lineales", "perimetro_piezas_m", "cantidad"].includes(
-        option.value,
-      ),
+    const conBorde = leerEfectoDemasia(paramsPaso) !== null;
+    return T2_QUANTITY_SOURCE_OPTIONS.filter(
+      (option) =>
+        ["metros_lineales", "perimetro_piezas_m", "cantidad"].includes(
+          option.value,
+        ) || (conBorde && option.value === "perimetro_lados_efecto"),
     );
   }
   return [

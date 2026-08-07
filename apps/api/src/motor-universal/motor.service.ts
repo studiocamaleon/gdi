@@ -121,7 +121,10 @@ import {
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import { paramsEfectivos } from './params-runtime';
 import { regionalDelTenant } from '../common/regional';
-import { aplicarMutacionPre } from './modificaciones-pre';
+import {
+  aplicarMutacionPre,
+  calcularMetrosLinealesUnion,
+} from './modificaciones-pre';
 import {
   declaraEfectoDemasia,
   leerEfectoDemasia,
@@ -5722,6 +5725,32 @@ export class MotorUniversalService {
         derivacionesDelJobContext(jobContext)[paso.configPasoId];
       return (
         this.numeroPositivo(derivacion?.magnitudes[magnitud]) ??
+        this.resolverCantidad(
+          paso,
+          jobContext,
+          nestingDispatch,
+          materialResuelto,
+        )
+      );
+    }
+
+    // [F3 efectos] El paso que EXIGE material extra suele cobrarse por el
+    // borde que trabaja: el tensado corre por los 4 lados, un bolsillo sólo
+    // por dos. Se mide sobre la medida VISIBLE — la costura va por el borde
+    // terminado y no crece con la demasía (regla de oro de
+    // docs/modificaciones-fisicas-lona-diseno.md). Contra `perimetro_piezas_m`
+    // hay dos diferencias que importan: aquélla mide los CUATRO lados siempre,
+    // y los mide DESPUÉS de la pre-pasada — o sea sobre la pieza ya agrandada.
+    if (source === 'perimetro_lados_efecto') {
+      const efecto = leerEfectoDemasia(
+        this.paramsEfectivosDelPaso(paso, jobContext),
+      );
+      return (
+        (efecto
+          ? this.numeroPositivo(
+              calcularMetrosLinealesUnion(jobContext, { lados: efecto.lados }),
+            )
+          : null) ??
         this.resolverCantidad(
           paso,
           jobContext,

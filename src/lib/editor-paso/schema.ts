@@ -346,7 +346,7 @@ function fuenteRitmoEfectiva(ctx: ContextoOpcion): string {
     crudo === "cantidad"
       ? "cantidad_montaje"
       : crudo;
-  const opciones = getT2QuantitySourceOptions(unidad, ctx.familia);
+  const opciones = getT2QuantitySourceOptions(unidad, ctx.familia, ctx.paramsPaso);
   return opciones.some((o) => o.value === normalizado)
     ? normalizado
     : getDefaultT2QuantitySource(ctx.familia, unidad);
@@ -1084,7 +1084,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     resumen: (ctx) => {
       const fuente = fuenteRitmoEfectiva(ctx);
       const base =
-        getT2QuantitySourceOptions(unidadRitmoEfectiva(ctx), ctx.familia).find((o) => o.value === fuente)?.label ?? fuente;
+        getT2QuantitySourceOptions(unidadRitmoEfectiva(ctx), ctx.familia, ctx.paramsPaso).find((o) => o.value === fuente)?.label ?? fuente;
       // "Cantidad efectiva del paso" es un misterio cuando la efectiva es
       // derivada o heredada: se aclara QUÉ cuenta (H2 del relevamiento).
       const unidad = fuente === "cantidad" ? unidadCantidadEfectiva(ctx) : null;
@@ -1103,6 +1103,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         return getT2QuantitySourceOptions(
           unidadRitmoEfectiva(ctx),
           ctx.familia,
+          ctx.paramsPaso,
         ).map((o) => ({
           value: o.value,
           label:
