@@ -1,0 +1,147 @@
+/* Aviso de cupón: modal centrado que se desvanece solo. El escaneo pasa con
+   el cliente enfrente y el vendedor mirando el lector, no la esquina de la
+   pantalla — un toast chico arriba se pierde. NUNCA muestra el código. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 20, 26, 0.28);
+  animation: avisoFade 0.14s ease;
+  /* No bloquea: es informativo y se va solo. Un click igual lo cierra. */
+  cursor: pointer;
+}
+
+.overlay.saliendo {
+  animation: avisoFadeOut 0.35s ease forwards;
+}
+
+@keyframes avisoFade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes avisoFadeOut {
+  to {
+    opacity: 0;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 380px;
+  max-width: 100%;
+  padding: 30px 28px 26px;
+  border-radius: 18px;
+  background: var(--surface, #fff);
+  box-shadow: 0 24px 60px -12px rgba(20, 20, 26, 0.4);
+  text-align: center;
+  animation: avisoPop 0.22s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+@keyframes avisoPop {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+}
+
+.ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+}
+
+.ico svg {
+  width: 32px;
+  height: 32px;
+  stroke-width: 2.4;
+}
+
+.ok .ico {
+  background: rgba(21, 128, 61, 0.12);
+  color: #15803d;
+}
+
+.error .ico {
+  background: rgba(185, 28, 28, 0.1);
+  color: #b91c1c;
+}
+
+.aviso .ico {
+  background: rgba(194, 65, 12, 0.12);
+  color: #c2410c;
+}
+
+.titulo {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink, #14141a);
+}
+
+.detalle {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--muted-text, #6e6e76);
+}
+
+/* Monto del descuento: el dato que el vendedor le canta al cliente. */
+.monto {
+  margin-top: 8px;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #15803d;
+}
+
+/* Barra de vida: se ve cuánto falta para que el aviso se vaya. */
+.barra {
+  width: 100%;
+  height: 3px;
+  margin-top: 18px;
+  border-radius: 999px;
+  background: var(--hairline, #efece8);
+  overflow: hidden;
+}
+
+.barra span {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  animation: avisoBarra linear forwards;
+}
+
+.ok .barra span {
+  color: #15803d;
+}
+
+.error .barra span {
+  color: #b91c1c;
+}
+
+.aviso .barra span {
+  color: #c2410c;
+}
+
+@keyframes avisoBarra {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

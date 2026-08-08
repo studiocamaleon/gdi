@@ -66,6 +66,10 @@ import {
 } from "@/lib/presupuestos-api";
 import { validarCupon, type Cupon } from "@/lib/cupones-api";
 import { useEscaneoCodigo } from "@/lib/use-escaneo-codigo";
+import {
+  CuponAvisoModal,
+  type AvisoCupon,
+} from "@/components/comercial/cupon-aviso";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
@@ -4598,6 +4602,7 @@ function DescuentoModal({
   onClose,
   onApply,
   onApplyCupon,
+  onAviso,
 }: {
   /** null = cerrado. `scope`/`itemId` fijan el estado inicial del formulario. */
   target: DescuentoTarget | null;
@@ -4614,6 +4619,8 @@ function DescuentoModal({
   ) => void;
   /** Cupón validado por el backend, listo para materializar por línea. */
   onApplyCupon: (cupon: Cupon, alcanzadas: string[]) => void;
+  /** Los errores de cupón se muestran en el modal centrado, no en toast. */
+  onAviso: (aviso: AvisoCupon) => void;
 }) {
   const { moneda } = useConfigRegional();
   const [tipo, setTipo] = React.useState<"PORCENTAJE" | "MONTO">("PORCENTAJE");
@@ -4745,7 +4752,11 @@ function DescuentoModal({
   const handleValidarCupon = async () => {
     const codigo = codigoCupon.trim();
     if (!codigo) {
-      toast.error("Ingresá o escaneá el código del cupón.");
+      onAviso({
+        tipo: "aviso",
+        titulo: "Falta el código",
+        detalle: "Escaneá el QR del cupón o tecleá su código.",
+      });
       return;
     }
     setValidandoCupon(true);
@@ -4753,9 +4764,14 @@ function DescuentoModal({
     try {
       setCuponValidado(await validarContraCarrito(codigo));
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "No se pudo validar el cupón.",
-      );
+      onAviso({
+        tipo: "error",
+        titulo: "Cupón no válido",
+        detalle:
+          error instanceof Error
+            ? error.message
+            : "No se pudo validar el cupón.",
+      });
     } finally {
       setValidandoCupon(false);
     }
@@ -4770,9 +4786,14 @@ function DescuentoModal({
       const resultado = await validarContraCarrito(codigo.trim());
       onApplyCupon(resultado.cupon, resultado.alcanzadas);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "No se pudo validar el cupón.",
-      );
+      onAviso({
+        tipo: "error",
+        titulo: "Cupón no válido",
+        detalle:
+          error instanceof Error
+            ? error.message
+            : "No se pudo validar el cupón.",
+      });
     } finally {
       setCodigoCupon("");
       setValidandoCupon(false);
@@ -5473,6 +5494,9 @@ export function PropuestaFicha({
   const [descuentoTarget, setDescuentoTarget] =
     React.useState<DescuentoTarget | null>(null);
   const [descuentoAplicando, setDescuentoAplicando] = React.useState(false);
+  // Los avisos de cupón van en modal centrado, no en toast: el escaneo pasa
+  // con el vendedor mirando el lector y el cliente enfrente.
+  const [avisoCupon, setAvisoCupon] = React.useState<AvisoCupon | null>(null);
   const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(
     null,
   );
@@ -6867,7 +6891,12 @@ export function PropuestaFicha({
           alcanzadas.includes(item.id) && item.jobContext && item.motorCodigo,
       );
       if (objetivo.length === 0) {
-        toast.error("El cupón no alcanza a ningún producto de la orden.");
+        setAvisoCupon({
+          tipo: "error",
+          titulo: "El cupón no aplica",
+          detalle:
+            "Ningún producto de la orden entra en el alcance de este cupón.",
+        });
         return;
       }
       const pisadas = objetivo.filter(
@@ -6929,26 +6958,39 @@ export function PropuestaFicha({
             ),
           );
         }
+        // Aviso en modal centrado, sin el código del cupón (el cliente está
+        // mirando la pantalla). El monto real descontado va en grande: es lo
+        // que el vendedor le canta.
+        const descontado = [...actualizados.values()].reduce(
+          (acc, item) => acc + descuentoMontoDeItem(item),
+          0,
+        );
+        const alcance = `${actualizados.size} producto${actualizados.size === 1 ? "" : "s"}`;
         if (fallidos > 0) {
-          toast.warning(
-            `${fallidos} producto${fallidos === 1 ? "" : "s"} no se pudo recotizar con el cupón.`,
-          );
+          setAvisoCupon({
+            tipo: "aviso",
+            titulo: "El cupón se aplicó parcialmente",
+            detalle: `${fallidos} producto${fallidos === 1 ? " no se pudo recotizar" : "s no se pudieron recotizar"}. Revisá los precios antes de emitir.`,
+            monto: descontado > 0 ? `−${formatCurrency(descontado, moneda)}` : undefined,
+          });
         } else {
-          toast.success(
-            `Cupón ${cupon.codigo} aplicado a ${actualizados.size} producto${actualizados.size === 1 ? "" : "s"}. Se redime al emitir.`,
-          );
-        }
-        if (pisadas > 0) {
-          toast.warning(
-            `El cupón reemplazó el descuento manual en ${pisadas} producto${pisadas === 1 ? "" : "s"}.`,
-          );
+          setAvisoCupon({
+            tipo: "ok",
+            titulo: "Cupón aplicado",
+            detalle:
+              `Descuento en ${alcance}. Se redime al emitir la orden.` +
+              (pisadas > 0
+                ? ` Reemplazó el descuento manual en ${pisadas} producto${pisadas === 1 ? "" : "s"}.`
+                : ""),
+            monto: descontado > 0 ? `−${formatCurrency(descontado, moneda)}` : undefined,
+          });
         }
         setDescuentoTarget(null);
       } finally {
         setDescuentoAplicando(false);
       }
     },
-    [recotizarItemConDescuento],
+    [recotizarItemConDescuento, moneda],
   );
 
   /**
@@ -6962,10 +7004,14 @@ export function PropuestaFicha({
         (item) => item.jobContext && item.motorCodigo,
       );
       if (recotizables.length === 0) {
-        toast.error("Agregá productos antes de escanear un cupón.");
+        setAvisoCupon({
+          tipo: "aviso",
+          titulo: "Agregá productos primero",
+          detalle:
+            "El cupón descuenta sobre los productos de la orden, y todavía no hay ninguno.",
+        });
         return;
       }
-      const aviso = toast.loading(`Leyendo cupón ${codigo}…`);
       try {
         const resultado = await validarCupon({
           codigo,
@@ -6978,15 +7024,18 @@ export function PropuestaFicha({
             neto: netoListaDeItem(item),
           })),
         });
-        toast.dismiss(aviso);
         await aplicarCupon(resultado.cupon, resultado.alcanzadas);
       } catch (error) {
-        toast.dismiss(aviso);
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "No se pudo validar el cupón escaneado.",
-        );
+        // El motivo del backend ya viene sin el código ("está vencido", "no
+        // tiene usos disponibles"…), así que se muestra tal cual.
+        setAvisoCupon({
+          tipo: "error",
+          titulo: "Cupón no válido",
+          detalle:
+            error instanceof Error
+              ? error.message
+              : "No se pudo validar el cupón escaneado.",
+        });
       }
     },
     [clienteId, aplicarCupon],
@@ -8057,6 +8106,14 @@ export function PropuestaFicha({
         onApplyCupon={(cupon, alcanzadas) =>
           void aplicarCupon(cupon, alcanzadas)
         }
+        onAviso={setAvisoCupon}
+      />
+
+      {/* Va fuera del modal de descuento a propósito: el aviso sobrevive a
+          que ese modal se cierre al aplicar. */}
+      <CuponAvisoModal
+        aviso={avisoCupon}
+        onCerrar={() => setAvisoCupon(null)}
       />
       {panelEditor ? (
         <PanelesManualEditor
