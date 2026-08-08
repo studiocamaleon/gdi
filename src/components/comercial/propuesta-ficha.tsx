@@ -4715,21 +4715,20 @@ function DescuentoModal({
     onApply(scope, scope === "item" ? target.itemId : null, descuentoInput);
   };
 
-  const validarContraCarrito = React.useCallback(
-    (codigo: string) =>
-      validarCupon({
-        codigo,
-        clienteId: clienteId ?? undefined,
-        items: items.map((item) => ({
-          key: item.id,
-          productoId: item.motorCodigo || undefined,
-          categoriaCodigo: item.categoriaComercialCodigo || undefined,
-          subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
-          neto: netoListaDeItem(item),
-        })),
-      }),
-    [clienteId, items],
-  );
+  // Función plana a propósito: vive después del early return del modal
+  // cerrado, así que NO puede ser un hook (rompería el orden de hooks).
+  const validarContraCarrito = (codigo: string) =>
+    validarCupon({
+      codigo,
+      clienteId: clienteId ?? undefined,
+      items: items.map((item) => ({
+        key: item.id,
+        productoId: item.motorCodigo || undefined,
+        categoriaCodigo: item.categoriaComercialCodigo || undefined,
+        subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
+        neto: netoListaDeItem(item),
+      })),
+    });
 
   const handleValidarCupon = async () => {
     const codigo = codigoCupon.trim();
