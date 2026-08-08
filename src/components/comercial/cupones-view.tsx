@@ -9,17 +9,21 @@
 
 import * as React from "react";
 import {
+  Edit3Icon,
   PlusIcon,
   PowerIcon,
   QrCodeIcon,
   TicketPercentIcon,
+  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   actualizarCupon,
   crearCupon,
+  eliminarCupon,
   listarCupones,
   qrCupon,
   type Cupon,
@@ -56,7 +60,9 @@ export function CuponesView({
   const { moneda } = useConfigRegional();
   const { fechaCorta } = useFecha();
   const [cupones, setCupones] = React.useState<Cupon[]>(initial);
-  const [altaOpen, setAltaOpen] = React.useState(false);
+  // null = cerrado · "nuevo" = alta · Cupon = edición de ese cupón.
+  const [editor, setEditor] = React.useState<Cupon | "nuevo" | null>(null);
+  const [aEliminar, setAEliminar] = React.useState<Cupon | null>(null);
   const [qr, setQr] = React.useState<{
     codigo: string;
     dataUrl: string;
@@ -98,6 +104,15 @@ export function CuponesView({
     }
   };
 
+  const eliminar = async (cupon: Cupon) => {
+    // El backend rechaza borrar un cupón ya redimido (es historial) y pide
+    // desactivarlo: ese mensaje se muestra tal cual.
+    await eliminarCupon(cupon.id);
+    setCupones((current) => current.filter((c) => c.id !== cupon.id));
+    setAEliminar(null);
+    toast.success(`Cupón ${cupon.codigo} eliminado.`);
+  };
+
   return (
     <section className={s.wrap}>
       <div className={s.inner}>
@@ -113,7 +128,7 @@ export function CuponesView({
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => setAltaOpen(true)}
+            onClick={() => setEditor("nuevo")}
           >
             <PlusIcon />
             Nuevo cupón
@@ -220,19 +235,39 @@ export function CuponesView({
                   </button>
                   <span className={s.actSpacer} />
                   {puedeEditar ? (
-                    <button
-                      type="button"
-                      className={`${s.act} ${s.solo}`}
-                      onClick={() => void toggleActivo(cupon)}
-                      title={
-                        cupon.activo
-                          ? "Desactivar: deja de poder aplicarse"
-                          : "Activar"
-                      }
-                      aria-label={cupon.activo ? "Desactivar" : "Activar"}
-                    >
-                      <PowerIcon />
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className={`${s.act} ${s.solo}`}
+                        onClick={() => setEditor(cupon)}
+                        title="Editar el cupón"
+                        aria-label={`Editar ${cupon.codigo}`}
+                      >
+                        <Edit3Icon />
+                      </button>
+                      <button
+                        type="button"
+                        className={`${s.act} ${s.solo}`}
+                        onClick={() => void toggleActivo(cupon)}
+                        title={
+                          cupon.activo
+                            ? "Desactivar: deja de poder aplicarse"
+                            : "Activar"
+                        }
+                        aria-label={cupon.activo ? "Desactivar" : "Activar"}
+                      >
+                        <PowerIcon />
+                      </button>
+                      <button
+                        type="button"
+                        className={`${s.act} ${s.solo} ${s.peligro}`}
+                        onClick={() => setAEliminar(cupon)}
+                        title="Eliminar el cupón"
+                        aria-label={`Eliminar ${cupon.codigo}`}
+                      >
+                        <Trash2Icon />
+                      </button>
+                    </>
                   ) : null}
                 </div>
               </article>
@@ -241,17 +276,44 @@ export function CuponesView({
         </div>
       )}
 
-      {altaOpen ? (
-        <AltaCuponModal
-          onClose={() => setAltaOpen(false)}
-          onCreado={(cupon) => {
-            setAltaOpen(false);
-            setCupones((current) => [cupon, ...current]);
-            toast.success(`Cupón ${cupon.codigo} creado.`);
+      {editor ? (
+        <CuponModal
+          cupon={editor === "nuevo" ? null : editor}
+          onClose={() => setEditor(null)}
+          onGuardado={(cupon, esNuevo) => {
+            setEditor(null);
+            setCupones((current) =>
+              esNuevo
+                ? [cupon, ...current]
+                : current.map((c) => (c.id === cupon.id ? cupon : c)),
+            );
+            toast.success(
+              esNuevo
+                ? `Cupón ${cupon.codigo} creado.`
+                : `Cupón ${cupon.codigo} actualizado.`,
+            );
             recargar();
           }}
         />
       ) : null}
+
+      <ConfirmacionDestructiva
+        open={aEliminar != null}
+        onOpenChange={(open) => {
+          if (!open) setAEliminar(null);
+        }}
+        titulo="Eliminar cupón"
+        descripcion="El código deja de existir: si ya imprimiste QRs con él, dejan de funcionar."
+        impacto={[
+          "Un cupón que ya se usó en alguna orden NO se puede eliminar: en ese caso desactivalo y su historial queda intacto.",
+        ]}
+        nombreItem={aEliminar?.codigo}
+        requiereTipear={false}
+        accionLabel="Eliminar cupón"
+        onConfirmar={async () => {
+          if (aEliminar) await eliminar(aEliminar);
+        }}
+      />
 
       {qr ? (
         <div className={s.overlay} onClick={() => setQr(null)}>
@@ -303,27 +365,43 @@ export function CuponesView({
   );
 }
 
-function AltaCuponModal({
+/** Alta y edición comparten formulario: `cupon = null` es alta. */
+function CuponModal({
+  cupon,
   onClose,
-  onCreado,
+  onGuardado,
 }: {
+  cupon: Cupon | null;
   onClose: () => void;
-  onCreado: (cupon: Cupon) => void;
+  onGuardado: (cupon: Cupon, esNuevo: boolean) => void;
 }) {
-  const [codigo, setCodigo] = React.useState("");
-  const [descripcion, setDescripcion] = React.useState("");
-  const [tipo, setTipo] = React.useState<"PORCENTAJE" | "MONTO">("PORCENTAJE");
-  const [valor, setValor] = React.useState(10);
-  const [alcanceTipo, setAlcanceTipo] =
-    React.useState<CuponAlcanceTipo>("ORDEN");
-  const [alcanceRef, setAlcanceRef] = React.useState("");
-  const [montoMinimo, setMontoMinimo] = React.useState("");
-  const [vigenciaHasta, setVigenciaHasta] = React.useState("");
-  const [usoMax, setUsoMax] = React.useState("");
+  const editando = cupon != null;
+  const [codigo, setCodigo] = React.useState(cupon?.codigo ?? "");
+  const [descripcion, setDescripcion] = React.useState(
+    cupon?.descripcion ?? "",
+  );
+  const [tipo, setTipo] = React.useState<"PORCENTAJE" | "MONTO">(
+    cupon?.tipo ?? "PORCENTAJE",
+  );
+  const [valor, setValor] = React.useState(cupon?.valor ?? 10);
+  const [alcanceTipo, setAlcanceTipo] = React.useState<CuponAlcanceTipo>(
+    cupon?.alcanceTipo ?? "ORDEN",
+  );
+  const [alcanceRef, setAlcanceRef] = React.useState(cupon?.alcanceRef ?? "");
+  const [montoMinimo, setMontoMinimo] = React.useState(
+    cupon?.montoMinimo != null ? String(cupon.montoMinimo) : "",
+  );
+  const [vigenciaHasta, setVigenciaHasta] = React.useState(
+    // <input type="date"> quiere YYYY-MM-DD; el backend manda ISO completo.
+    cupon?.vigenciaHasta ? cupon.vigenciaHasta.slice(0, 10) : "",
+  );
+  const [usoMax, setUsoMax] = React.useState(
+    cupon?.usoMax != null ? String(cupon.usoMax) : "",
+  );
   const [guardando, setGuardando] = React.useState(false);
 
-  const crear = async () => {
-    if (!codigo.trim()) {
+  const guardar = async () => {
+    if (!editando && !codigo.trim()) {
       toast.error("Poné el código del cupón.");
       return;
     }
@@ -333,8 +411,9 @@ function AltaCuponModal({
     }
     setGuardando(true);
     try {
-      const cupon = await crearCupon({
-        codigo: codigo.trim(),
+      // Los campos vacíos se mandan como null al editar (para BORRAR el dato)
+      // y como undefined al crear (para omitirlos).
+      const comunes = {
         descripcion: descripcion.trim() || undefined,
         tipo,
         valor,
@@ -343,11 +422,16 @@ function AltaCuponModal({
         montoMinimo: montoMinimo ? Number(montoMinimo) : undefined,
         vigenciaHasta: vigenciaHasta || undefined,
         usoMax: usoMax ? Number(usoMax) : undefined,
-      });
-      onCreado(cupon);
+      };
+      const guardado = editando
+        ? await actualizarCupon(cupon.id, comunes)
+        : await crearCupon({ codigo: codigo.trim(), ...comunes });
+      onGuardado(guardado, !editando);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "No se pudo crear el cupón.",
+        error instanceof Error
+          ? error.message
+          : `No se pudo ${editando ? "actualizar" : "crear"} el cupón.`,
       );
       setGuardando(false);
     }
@@ -359,7 +443,7 @@ function AltaCuponModal({
         className={s.modal}
         role="dialog"
         aria-modal="true"
-        aria-label="Nuevo cupón"
+        aria-label={editando ? `Editar cupón ${codigo}` : "Nuevo cupón"}
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -372,7 +456,7 @@ function AltaCuponModal({
         </button>
         <h2>
           <TicketPercentIcon />
-          Nuevo cupón
+          {editando ? `Editar ${codigo}` : "Nuevo cupón"}
         </h2>
 
         <div className={s.grid2}>
@@ -382,8 +466,14 @@ function AltaCuponModal({
               type="text"
               placeholder="SORTEO2026"
               value={codigo}
+              disabled={editando}
               onChange={(e) => setCodigo(e.target.value.toUpperCase())}
             />
+            {editando ? (
+              <span className={s.hint}>
+                No se edita: puede haber QRs impresos con este código.
+              </span>
+            ) : null}
           </div>
           <div className={s.field}>
             <label>Tipo</label>
@@ -497,9 +587,13 @@ function AltaCuponModal({
             type="button"
             className="btn btn-primary"
             disabled={guardando}
-            onClick={() => void crear()}
+            onClick={() => void guardar()}
           >
-            {guardando ? "Creando…" : "Crear cupón"}
+            {guardando
+              ? "Guardando…"
+              : editando
+                ? "Guardar cambios"
+                : "Crear cupón"}
           </button>
         </div>
       </div>

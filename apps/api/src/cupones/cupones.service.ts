@@ -71,12 +71,21 @@ export class CuponesService {
 
   async actualizar(auth: CurrentAuth, id: string, dto: ActualizarCuponDto) {
     const existente = await this.exigir(auth, id);
-    if (
-      dto.valor != null &&
-      existente.tipo === 'PORCENTAJE' &&
-      dto.valor > 100
-    ) {
+    // Las validaciones miran el valor RESULTANTE (lo que manda el dto o, si
+    // no viene, lo que ya tenía): editar sólo el tipo no puede dejar un
+    // porcentaje de 5000, ni un alcance apuntando a la nada.
+    const tipo = dto.tipo ?? existente.tipo;
+    const valor = dto.valor ?? Number(existente.valor);
+    if (tipo === 'PORCENTAJE' && valor > 100) {
       throw new BadRequestException('El porcentaje no puede superar el 100%.');
+    }
+    const alcanceTipo = dto.alcanceTipo ?? existente.alcanceTipo;
+    const alcanceRef =
+      dto.alcanceRef !== undefined ? dto.alcanceRef : existente.alcanceRef;
+    if (alcanceTipo !== 'ORDEN' && !alcanceRef) {
+      throw new BadRequestException(
+        'Un cupón con alcance necesita a qué apunta (categoría, producto o cliente).',
+      );
     }
     const cupon = await this.prisma.cupon.update({
       where: { id: existente.id },
@@ -84,6 +93,18 @@ export class CuponesService {
         ...(dto.descripcion !== undefined
           ? { descripcion: dto.descripcion }
           : {}),
+        ...(dto.tipo !== undefined ? { tipo: dto.tipo } : {}),
+        ...(dto.alcanceTipo !== undefined
+          ? {
+              alcanceTipo: dto.alcanceTipo,
+              // Cambiar a ORDEN limpia la referencia: si no, quedaría
+              // apuntando a una categoría que ya no filtra nada.
+              alcanceRef:
+                dto.alcanceTipo === 'ORDEN' ? null : (alcanceRef ?? null),
+            }
+          : dto.alcanceRef !== undefined
+            ? { alcanceRef: dto.alcanceRef }
+            : {}),
         ...(dto.valor !== undefined ? { valor: dto.valor } : {}),
         ...(dto.montoMinimo !== undefined
           ? { montoMinimo: dto.montoMinimo }
@@ -140,6 +161,29 @@ export class CuponesService {
       cupon: this.proyectar(cupon),
       alcanzadas: resultado.alcanzadas,
     };
+  }
+
+  /**
+   * Borra el cupón SÓLO si nunca se usó. Un cupón redimido es historial: su
+   * `CuponRedencion` cuelga con onDelete: Cascade, así que borrarlo se
+   * llevaría puesta la auditoría de órdenes reales (y las órdenes guardan
+   * `descuentoCuponId` sin FK, así que quedarían apuntando a la nada).
+   * Mismo criterio que Clientes: con rastro no se borra, se desactiva.
+   */
+  async eliminar(auth: CurrentAuth, id: string) {
+    const cupon = await this.exigir(auth, id);
+    const redenciones = await this.prisma.cuponRedencion.count({
+      where: { tenantId: auth.tenantId, cuponId: cupon.id },
+    });
+    if (redenciones > 0) {
+      throw new BadRequestException(
+        `${cupon.codigo} no se puede eliminar porque ya se usó en ${redenciones} ` +
+          `${redenciones === 1 ? 'orden' : 'órdenes'}. Desactivalo: deja de poder ` +
+          'aplicarse y su historial queda intacto.',
+      );
+    }
+    await this.prisma.cupon.delete({ where: { id: cupon.id } });
+    return { id: cupon.id, codigo: cupon.codigo };
   }
 
   /** QR con el código PLANO: el lector 2D lo tipea como teclado. */

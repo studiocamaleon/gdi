@@ -75,11 +75,28 @@ export class CrearCuponDto {
   usoMax?: number;
 }
 
+/**
+ * El CÓDIGO no se edita: es la identidad del cupón y ya puede estar impreso
+ * en QRs circulando. Para otro código, otro cupón.
+ */
 export class ActualizarCuponDto {
   @IsOptional()
   @IsString()
   @MaxLength(300)
   descripcion?: string;
+
+  @IsOptional()
+  @IsIn(CUPON_TIPOS)
+  tipo?: (typeof CUPON_TIPOS)[number];
+
+  @IsOptional()
+  @IsIn(CUPON_ALCANCES)
+  alcanceTipo?: (typeof CUPON_ALCANCES)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  alcanceRef?: string | null;
 
   @IsOptional()
   @IsNumber()

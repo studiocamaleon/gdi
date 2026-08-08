@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -47,6 +48,16 @@ export class CuponesController {
     @Body() dto: ActualizarCuponDto,
   ) {
     return this.service.actualizar(auth, id, dto);
+  }
+
+  @Permiso('comercial.aprobar_descuento')
+  @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
+  @Delete(':id')
+  eliminar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.eliminar(auth, id);
   }
 
   /** El comercial valida el código (tecleado o escaneado) contra su carrito. */

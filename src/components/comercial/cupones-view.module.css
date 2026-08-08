@@ -204,6 +204,11 @@
   padding: 0;
 }
 
+.act.peligro:hover {
+  background: rgba(185, 28, 28, 0.09);
+  color: #b91c1c;
+}
+
 .actSpacer {
   flex: 1;
 }
@@ -322,6 +327,13 @@
 .field textarea:focus {
   outline: none;
   border-color: var(--ink);
+}
+
+/* El código en edición: se muestra pero no se toca (hay QRs impresos). */
+.field input:disabled {
+  background: var(--surface-2);
+  color: var(--muted-text);
+  cursor: not-allowed;
 }
 
 .field textarea {

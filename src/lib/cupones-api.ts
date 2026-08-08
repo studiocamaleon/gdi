@@ -43,12 +43,10 @@ export type CrearCuponPayload = {
   usoMax?: number;
 };
 
+/** El código no se edita: es la identidad y ya puede estar impreso en QRs. */
 export type ActualizarCuponPayload = Partial<
-  Pick<
-    CrearCuponPayload,
-    "descripcion" | "valor" | "montoMinimo" | "vigenciaDesde" | "vigenciaHasta" | "usoMax"
-  >
-> & { activo?: boolean };
+  Omit<CrearCuponPayload, "codigo">
+> & { activo?: boolean; alcanceRef?: string | null };
 
 export function listarCupones() {
   return apiRequest<Cupon[]>("/cupones");
@@ -65,6 +63,14 @@ export function actualizarCupon(id: string, payload: ActualizarCuponPayload) {
   return apiRequest<Cupon>(`/cupones/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+/** Sólo borra si el cupón nunca se redimió; si tiene historial, el backend
+ * responde 400 pidiendo desactivarlo. */
+export function eliminarCupon(id: string) {
+  return apiRequest<{ id: string; codigo: string }>(`/cupones/${id}`, {
+    method: "DELETE",
   });
 }
 
