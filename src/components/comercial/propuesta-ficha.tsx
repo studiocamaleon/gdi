@@ -6993,12 +6993,13 @@ export function PropuestaFicha({
   );
 
   // Escaneo global: el vendedor apunta el lector y listo. Se apaga en modo
-  // lectura, sin productos, o con cualquier modal abierto (ahí el foco vive
-  // en un input y el lector escribe donde corresponde).
+  // lectura y con cualquier modal abierto (ahí el foco vive en un input y el
+  // lector escribe donde corresponde). SIN productos sigue escuchando a
+  // propósito: escanear con la orden vacía es lo más natural del mundo y
+  // conviene explicarlo con un aviso, no quedarse mudo.
   useEscaneoCodigo({
     activo:
       !modoOrden &&
-      items.length > 0 &&
       descuentoTarget == null &&
       !addOpen &&
       !copiadoOpen &&

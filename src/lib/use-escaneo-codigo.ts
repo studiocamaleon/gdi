@@ -22,7 +22,10 @@ export function useEscaneoCodigo({
   activo,
   onCodigo,
   maxGapMs = 50,
-  minLargo = 4,
+  // 3 y no 4: un código corto ("TEST") queda al filo, y si se pierde el
+  // primer carácter por un cambio de foco se descartaba en silencio. Tres
+  // caracteres en ráfaga de <50 ms cerrada con Enter no los tipea un humano.
+  minLargo = 3,
 }: {
   /** Con false no engancha nada (vista en lectura, modal abierto, etc.). */
   activo: boolean;
@@ -39,14 +42,15 @@ export function useEscaneoCodigo({
   onCodigoRef.current = onCodigo;
 
   React.useEffect(() => {
-    // Diagnóstico: `localStorage.setItem("debug:escaneo", "1")` en la consola
-    // y recargar. Loguea cada tecla con su gap y por qué se descartó, que es
-    // lo único que permite saber si el lector no manda Enter, si tipea más
-    // lento de lo esperado, o si el foco estaba en un campo.
-    const debug =
+    // Diagnóstico: `localStorage.setItem("debug:escaneo", "1")` en la consola.
+    // Se lee en CADA tecla (no al montar) para que prenda sin recargar.
+    // Loguea el gap de cada tecla y por qué se descartó: es lo único que
+    // permite saber si el lector tipea lento, si no manda Enter, o si el foco
+    // estaba en un campo.
+    const hayDebug = () =>
       typeof window !== "undefined" &&
       window.localStorage.getItem("debug:escaneo") === "1";
-    if (debug) {
+    if (hayDebug()) {
       console.info(
         `[escaneo] listener ${activo ? "ACTIVO" : "APAGADO"} (gap<=${maxGapMs}ms, largo>=${minLargo})`,
       );
@@ -65,7 +69,7 @@ export function useEscaneoCodigo({
       if (
         target?.closest("input, textarea, select, [contenteditable='true']")
       ) {
-        if (debug) {
+        if (hayDebug()) {
           console.info(
             `[escaneo] "${event.key}" IGNORADA: el foco está en ${target.tagName.toLowerCase()}`,
           );
@@ -73,7 +77,7 @@ export function useEscaneoCodigo({
         buffer = "";
         return;
       }
-      if (debug) {
+      if (hayDebug()) {
         const gapDbg = Math.round(event.timeStamp - ultimaTecla);
         console.info(
           `[escaneo] "${event.key}" gap=${gapDbg}ms buffer="${buffer}"`,
@@ -92,7 +96,7 @@ export function useEscaneoCodigo({
         if (codigo.length >= minLargo && gap <= maxGapMs) {
           event.preventDefault();
           onCodigoRef.current(codigo);
-        } else if (debug) {
+        } else if (hayDebug()) {
           console.warn(
             `[escaneo] Enter DESCARTADO: código="${codigo}" (largo ${codigo.length}, mínimo ${minLargo}) gap=${Math.round(gap)}ms (máximo ${maxGapMs})`,
           );
