@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { SelectBuscable } from "@/components/ui/select-buscable";
 import {
   actualizarCupon,
   crearCupon,
@@ -49,8 +50,11 @@ const ALCANCE_LABEL: Record<CuponAlcanceTipo, string> = {
   CLIENTE: "Cliente",
 };
 
-/** Una opción elegible del alcance: `ref` es lo técnico, `nombre` lo visible. */
-type OpcionAlcance = { ref: string; nombre: string };
+/**
+ * Una opción elegible del alcance: `ref` es lo técnico (lo que compara el
+ * motor), `nombre` lo visible, `grupo` el encabezado bajo el que se lista.
+ */
+type OpcionAlcance = { ref: string; nombre: string; grupo?: string };
 
 /**
  * Trae las opciones que corresponden al alcance elegido. El `ref` tiene que
@@ -65,12 +69,14 @@ async function opcionesDeAlcance(
     if (tipo === "CATEGORIA") {
       return catalogo.map((c) => ({ ref: c.codigo, nombre: c.nombre }));
     }
-    // La subcategoría se muestra con su categoría delante: hay nombres que
-    // se repiten entre familias ("Vinilos" está en más de una).
+    // La subcategoría va AGRUPADA bajo su categoría: hay nombres que se
+    // repiten entre familias ("Vinilos" está en más de una), y el grupo
+    // además es buscable (tipear "gran formato" trae todas las suyas).
     return catalogo.flatMap((c) =>
       (c.subcategorias ?? []).map((s) => ({
         ref: s.codigo,
-        nombre: `${c.nombre} › ${s.nombre}`,
+        nombre: s.nombre,
+        grupo: c.nombre,
       })),
     );
   }
@@ -504,7 +510,15 @@ function CuponModal({
         // volver a pedir catálogos, y sobrevive a que renombren la categoría.
         alcanceNombre:
           alcanceTipo !== "ORDEN"
-            ? (opciones.find((o) => o.ref === alcanceRef)?.nombre ?? undefined)
+            ? (() => {
+                const elegida = opciones.find((o) => o.ref === alcanceRef);
+                if (!elegida) return undefined;
+                // Con grupo se guarda "Categoría › Subcategoría": en la card
+                // "Vinilos" solo no dice de qué familia es.
+                return elegida.grupo
+                  ? `${elegida.grupo} › ${elegida.nombre}`
+                  : elegida.nombre;
+              })()
             : undefined,
         montoMinimo: montoMinimo ? Number(montoMinimo) : undefined,
         vigenciaHasta: vigenciaHasta || undefined,
@@ -626,24 +640,34 @@ function CuponModal({
                       ? "Subcategoría"
                       : "Categoría"}
               </label>
-              <select
+              {/* Lista con buscador (la misma de Egresos): con cientos de
+                  clientes o productos, un <select> nativo obliga a
+                  recorrerlos a mano. */}
+              <SelectBuscable
                 value={alcanceRef}
+                onChange={setAlcanceRef}
+                opciones={opciones.map((o) => ({
+                  value: o.ref,
+                  label: o.nombre,
+                  grupo: o.grupo ?? null,
+                }))}
                 disabled={cargandoOpciones || opciones.length === 0}
-                onChange={(e) => setAlcanceRef(e.target.value)}
-              >
-                <option value="">
-                  {cargandoOpciones
+                placeholder={
+                  cargandoOpciones
                     ? "Cargando…"
                     : opciones.length === 0
                       ? "No hay opciones disponibles"
-                      : "Elegí una opción…"}
-                </option>
-                {opciones.map((o) => (
-                  <option key={o.ref} value={o.ref}>
-                    {o.nombre}
-                  </option>
-                ))}
-              </select>
+                      : `Elegí ${
+                          alcanceTipo === "CLIENTE"
+                            ? "el cliente"
+                            : alcanceTipo === "PRODUCTO"
+                              ? "el producto"
+                              : "la categoría"
+                        }`
+                }
+                placeholderBusqueda="Buscar…"
+                vacio="Nada coincide con la búsqueda."
+              />
             </div>
           ) : null}
         </div>

@@ -244,7 +244,9 @@
 
 .modal {
   position: relative;
-  width: 460px;
+  /* 520 y no 460: con dos columnas y nombres de categoría/cliente reales,
+     460 dejaba todo demasiado justo. */
+  width: 520px;
   max-width: 100%;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
