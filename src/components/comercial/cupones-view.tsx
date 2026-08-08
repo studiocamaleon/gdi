@@ -100,6 +100,7 @@ export function CuponesView({
 
   return (
     <section className={s.wrap}>
+      <div className={s.inner}>
       <div className="page-head">
         <div>
           <h1>Cupones</h1>
@@ -253,6 +254,7 @@ export function CuponesView({
           </div>
         </div>
       ) : null}
+      </div>
     </section>
   );
 }

@@ -526,6 +526,12 @@ Comercial con **QR escaneable** (lector 2D tipea el código + Enter), cupón
   alcanza), aplicar materializa por línea (% igual; $ prorrateado, residuo a
   la última) y avisa si pisó manual. `descuentoInput.cuponId/cuponCodigo`
   viaja por recotización → emisión → rehidratación.
+- **Botón Cupón propio** (feedback de Lucas): `TicketPercent` junto al de
+  Descuento en la barra de resumen → abre el modal en **modo escaneo**: input
+  invisible que captura al lector (recupera el foco cada 400ms), animación de
+  línea de escaneo sobre el ticket, y al Enter **valida y aplica de una** sin
+  mostrar el código; si falla, avisa y sigue escuchando. Fallback "ingresar el
+  código a mano".
 - **Vista Comercial → Cupones** (`cupones-view.tsx` + módulo CSS): cards con
   estado/usos/vigencia, alta (SUPERVISOR/ADMIN), activar/desactivar, y
   **modal QR** con PNG descargable para imprimir.

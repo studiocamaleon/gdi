@@ -28,6 +28,7 @@ import {
   SaveIcon,
   SearchIcon,
   StarIcon,
+  TicketPercentIcon,
   Trash2Icon,
   TriangleAlertIcon,
   UserIcon,
@@ -4058,6 +4059,7 @@ export function ResumenBar({
   onGuardarBorrador,
   guardandoBorrador = false,
   onDescuentoOrden,
+  onCuponOrden,
   readOnly = false,
 }: {
   items: PropuestaItem[];
@@ -4072,6 +4074,8 @@ export function ResumenBar({
   guardandoBorrador?: boolean;
   /** Abre el modal de descuento a nivel orden (ausente en modo lectura). */
   onDescuentoOrden?: () => void;
+  /** Abre el modal directo en modo escaneo de cupón (F4). */
+  onCuponOrden?: () => void;
   readOnly?: boolean;
 }) {
   const { moneda } = useConfigRegional();
@@ -4159,6 +4163,19 @@ export function ResumenBar({
                 style={{ color: "#c2410c" }}
               >
                 <BadgePercentIcon />
+              </button>
+            ) : null}
+            {onCuponOrden ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={onCuponOrden}
+                disabled={emitiendo || items.length === 0}
+                aria-label="Escanear o ingresar un cupón"
+                title="Cupón: escaneá el QR o tecleá el código"
+                style={{ color: "#c2410c" }}
+              >
+                <TicketPercentIcon />
               </button>
             ) : null}
             <button
@@ -4548,8 +4565,13 @@ function CargoOrdenSheet({
   );
 }
 
-/** Qué se va a descontar: abierto desde una fila (item) o desde la barra (orden). */
-type DescuentoTarget = { scope: "item" | "orden"; itemId: string | null };
+/** Qué se va a descontar: abierto desde una fila (item) o desde la barra
+ * (orden). `cupon` abre directo en modo escaneo de cupón. */
+type DescuentoTarget = {
+  scope: "item" | "orden";
+  itemId: string | null;
+  cupon?: boolean;
+};
 
 /**
  * Modal de descuento comercial (F1). Alcance item u orden, % o monto. El preview
@@ -4593,6 +4615,10 @@ function DescuentoModal({
     cupon: Cupon;
     alcanzadas: string[];
   } | null>(null);
+  // Modo ESCANEO: input invisible con foco capturando lo que tipea el lector;
+  // al Enter valida y aplica directo, sin mostrar el código.
+  const [escaneando, setEscaneando] = React.useState(false);
+  const scanRef = React.useRef<HTMLInputElement | null>(null);
   const abierto = target != null;
 
   // Ref con los items para leerlos en el efecto de init sin volverlo a disparar.
@@ -4616,11 +4642,22 @@ function DescuentoModal({
       setTipo("PORCENTAJE");
       setValor(0);
     }
-    setModo("manual");
+    setModo(target.cupon ? "cupon" : "manual");
+    setEscaneando(Boolean(target.cupon));
     setCodigoCupon("");
     setCuponValidado(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target?.scope, target?.itemId]);
+  }, [target?.scope, target?.itemId, target?.cupon]);
+
+  // El input de escaneo pelea por el foco mientras dura el modo: el lector
+  // tipea "a ciegas" y cualquier click no puede robárselo.
+  React.useEffect(() => {
+    if (!abierto || !escaneando) return;
+    const focus = () => scanRef.current?.focus();
+    focus();
+    const timer = setInterval(focus, 400);
+    return () => clearInterval(timer);
+  }, [abierto, escaneando]);
 
   React.useEffect(() => {
     if (!abierto) return;
@@ -4678,16 +4715,9 @@ function DescuentoModal({
     onApply(scope, scope === "item" ? target.itemId : null, descuentoInput);
   };
 
-  const handleValidarCupon = async () => {
-    const codigo = codigoCupon.trim();
-    if (!codigo) {
-      toast.error("Ingresá o escaneá el código del cupón.");
-      return;
-    }
-    setValidandoCupon(true);
-    setCuponValidado(null);
-    try {
-      const resultado = await validarCupon({
+  const validarContraCarrito = React.useCallback(
+    (codigo: string) =>
+      validarCupon({
         codigo,
         clienteId: clienteId ?? undefined,
         items: items.map((item) => ({
@@ -4697,13 +4727,43 @@ function DescuentoModal({
           subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
           neto: netoListaDeItem(item),
         })),
-      });
-      setCuponValidado(resultado);
+      }),
+    [clienteId, items],
+  );
+
+  const handleValidarCupon = async () => {
+    const codigo = codigoCupon.trim();
+    if (!codigo) {
+      toast.error("Ingresá o escaneá el código del cupón.");
+      return;
+    }
+    setValidandoCupon(true);
+    setCuponValidado(null);
+    try {
+      setCuponValidado(await validarContraCarrito(codigo));
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "No se pudo validar el cupón.",
       );
     } finally {
+      setValidandoCupon(false);
+    }
+  };
+
+  /** Escaneo: valida y APLICA de una, sin mostrar el código. Si el cupón no
+   * pasa, avisa y sigue escuchando (el buffer se limpia solo). */
+  const handleEscaneado = async (codigo: string) => {
+    if (!codigo.trim() || validandoCupon) return;
+    setValidandoCupon(true);
+    try {
+      const resultado = await validarContraCarrito(codigo.trim());
+      onApplyCupon(resultado.cupon, resultado.alcanzadas);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo validar el cupón.",
+      );
+    } finally {
+      setCodigoCupon("");
       setValidandoCupon(false);
     }
   };
@@ -4823,6 +4883,51 @@ function DescuentoModal({
                 </small>
               </div>
             </>
+          ) : escaneando ? (
+            <>
+              {/* Escaneo: input invisible que captura al lector; el código
+                  nunca se muestra — valida y aplica de una. */}
+              <div className={descM.scan}>
+                <input
+                  ref={scanRef}
+                  className={descM.scanInput}
+                  type="text"
+                  value={codigoCupon}
+                  onChange={(event) =>
+                    setCodigoCupon(event.target.value.toUpperCase())
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleEscaneado(codigoCupon);
+                    }
+                  }}
+                  aria-label="Escaneá el cupón"
+                />
+                <span
+                  className={`${descM.scanBox}${validandoCupon ? ` ${descM.scanOk}` : ""}`}
+                >
+                  <TicketPercentIcon />
+                  <span className={descM.scanLine} />
+                </span>
+                <strong>
+                  {validandoCupon ? "Validando…" : "Escaneá el cupón"}
+                </strong>
+                <small>
+                  Apuntá el lector al QR: se valida y aplica solo.
+                </small>
+                <button
+                  type="button"
+                  className="btn-link"
+                  onClick={() => {
+                    setEscaneando(false);
+                    setCodigoCupon("");
+                  }}
+                >
+                  Ingresar el código a mano
+                </button>
+              </div>
+            </>
           ) : (
             <>
               <div className={descM.field}>
@@ -4914,10 +5019,10 @@ function DescuentoModal({
                 onApplyCupon(cuponValidado.cupon, cuponValidado.alcanzadas)
               }
             >
-              <BadgePercentIcon />
+              <TicketPercentIcon />
               {aplicando ? "Aplicando…" : "Aplicar cupón"}
             </button>
-          ) : (
+          ) : escaneando ? null : (
             <button
               type="button"
               className="btn btn-primary"
@@ -7686,6 +7791,16 @@ export function PropuestaFicha({
               modoOrden
                 ? undefined
                 : () => setDescuentoTarget({ scope: "orden", itemId: null })
+            }
+            onCuponOrden={
+              modoOrden
+                ? undefined
+                : () =>
+                    setDescuentoTarget({
+                      scope: "orden",
+                      itemId: null,
+                      cupon: true,
+                    })
             }
             readOnly={modoOrden}
           />
