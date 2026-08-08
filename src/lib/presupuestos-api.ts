@@ -96,6 +96,8 @@ export type PresupuestoDetalle = {
   publicToken: string | null;
   ordenConvertida: string | null;
   ordenConvertidaId: string | null;
+  /** Σ del descuento comercial de los items (0 = sin descuento). */
+  descuentoTotal: number;
   items: Array<{
     cotizacionItemId: string | null;
     codigo: string;
@@ -106,6 +108,11 @@ export type PresupuestoDetalle = {
     subtotal: number;
     impuestos: number;
     total: number;
+    /** Descuento comercial de la línea — sólo presentes si hubo. */
+    descuentoMonto?: number;
+    descuentoPct?: number;
+    /** Precio final SIN descuento (para "antes / ahora"). */
+    totalLista?: number;
     specs: Array<{ etiqueta: string; valor: string }>;
     adicionales: string[];
   }>;
@@ -133,11 +140,18 @@ export type PresupuestoPublico = {
   impuestos: number;
   cargosDirectos: number;
   total: number;
+  /** Σ del descuento comercial de los items (0 = sin descuento). */
+  descuentoTotal: number;
   items: Array<{
     nombre: string;
     cantidad: number;
     cantidadUnidad: string;
     total: number;
+    /** Descuento comercial de la línea — sólo presentes si hubo. */
+    descuentoMonto?: number;
+    descuentoPct?: number;
+    /** Precio final SIN descuento (para "antes / ahora"). */
+    totalLista?: number;
     specs: Array<{ etiqueta: string; valor: string }>;
     adicionales: string[];
   }>;

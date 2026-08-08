@@ -146,7 +146,36 @@ export function PresupuestoPublicoView({
                   <div className="it-nm">{i.nombre}</div>
                   <div className="it-qty">{i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}</div>
                 </div>
-                <div className="it-price">{fmtMoneda(i.total, moneda)}</div>
+                {/* Con descuento: lista tachada arriba, precio final + badge
+                    verde (para el cliente es un beneficio). */}
+                {i.descuentoMonto && i.totalLista ? (
+                  <div style={{ textAlign: "right" }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--muted, #6e6e76)",
+                        textDecoration: "line-through",
+                      }}
+                    >
+                      {fmtMoneda(i.totalLista, moneda)}
+                    </div>
+                    <div className="it-price">
+                      {fmtMoneda(i.total, moneda)}{" "}
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "var(--ok, #15803d)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        −{(i.descuentoPct ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 1 })}%
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="it-price">{fmtMoneda(i.total, moneda)}</div>
+                )}
               </div>
               {i.specs.length ? (
                 <div className="pp-chips" style={{ marginTop: 13 }}>
@@ -172,7 +201,17 @@ export function PresupuestoPublicoView({
           ))}
 
           <div className="pp-ol-tot">
-            <div className="tr"><span>Subtotal</span><span className="v">{fmtMoneda(d.subtotal, moneda)}</span></div>
+            {/* Con descuento el desglose cuenta la historia: lista → descuento
+                → subtotal. Sin descuento, como siempre. */}
+            {d.descuentoTotal > 0 ? (
+              <>
+                <div className="tr"><span>Subtotal de lista</span><span className="v">{fmtMoneda(d.subtotal + d.descuentoTotal, moneda)}</span></div>
+                <div className="tr"><span>Descuento</span><span className="v" style={{ color: "var(--ok, #15803d)" }}>−{fmtMoneda(d.descuentoTotal, moneda)}</span></div>
+                <div className="tr"><span>Subtotal con descuento</span><span className="v">{fmtMoneda(d.subtotal, moneda)}</span></div>
+              </>
+            ) : (
+              <div className="tr"><span>Subtotal</span><span className="v">{fmtMoneda(d.subtotal, moneda)}</span></div>
+            )}
             {d.cargosDirectos > 0 ? <div className="tr"><span>Cargos</span><span className="v">{fmtMoneda(d.cargosDirectos, moneda)}</span></div> : null}
             <div className="tr"><span>Impuestos</span><span className="v">{fmtMoneda(d.impuestos, moneda)}</span></div>
             <div className="tr grand"><span className="l">Total</span><span className="v">{fmtMoneda(d.total, moneda)}</span></div>

@@ -285,6 +285,7 @@ export class PresupuestosService {
       impuestos: detalle.impuestos,
       cargosDirectos: detalle.cargosDirectos,
       total: detalle.total,
+      descuentoTotal: detalle.descuentoTotal,
       items: detalle.items,
     });
 
@@ -296,6 +297,37 @@ export class PresupuestosService {
       mimeType: 'application/pdf',
       contenido,
     });
+  }
+
+  /**
+   * Descuento comercial de un item de la emisión, listo para MOSTRAR (F2
+   * descuentos): monto, % y precio final de lista. `totalLista` sale por
+   * gross-up escala-libre del total persistido (el IVA es proporcional al
+   * neto — mismo criterio que facturación). Presupuestos viejos sin los
+   * campos devuelven `{}` y nada cambia.
+   */
+  private descuentoDeItem(i: {
+    subtotal: number;
+    total: number;
+    descuentoMonto?: number | null;
+  }): { descuentoMonto?: number; descuentoPct?: number; totalLista?: number } {
+    const monto = Number(i.descuentoMonto ?? 0);
+    if (!(monto > 0)) return {};
+    const netoLista = i.subtotal + monto;
+    const pct = netoLista > 0 ? (monto / netoLista) * 100 : 0;
+    const totalLista = pct < 100 ? i.total / (1 - pct / 100) : i.total + monto;
+    return {
+      descuentoMonto: monto,
+      descuentoPct: r2(pct),
+      totalLista: r2(totalLista),
+    };
+  }
+
+  /** Σ del descuento de los items de la emisión (0 en presupuestos viejos). */
+  private descuentoTotalDe(emision: EmisionJson): number {
+    return r2(
+      emision.items.reduce((a, i) => a + Number(i.descuentoMonto ?? 0), 0),
+    );
   }
 
   private async nombreDelNegocio(tenantId: string): Promise<string> {
@@ -447,6 +479,7 @@ export class PresupuestosService {
       subtotal: Number(c.subtotal ?? 0),
       impuestos: Number(c.impuestos ?? 0),
       total: Number(c.total ?? 0),
+      descuentoTotal: this.descuentoTotalDe(emision),
       cargosDirectos: emision.cargosDirectos ?? 0,
       fechaEntrega: emision.fechaEntrega ?? null,
       publicToken: c.publicToken,
@@ -462,6 +495,7 @@ export class PresupuestosService {
         subtotal: i.subtotal,
         impuestos: i.impuestos,
         total: i.total,
+        ...this.descuentoDeItem(i),
         specs: i.specs ?? [],
         adicionales: i.adicionales ?? [],
       })),
@@ -810,11 +844,13 @@ export class PresupuestosService {
       impuestos: Number(c.impuestos ?? 0),
       cargosDirectos: emision.cargosDirectos ?? 0,
       total: Number(c.total ?? 0),
+      descuentoTotal: this.descuentoTotalDe(emision),
       items: emision.items.map((i) => ({
         nombre: i.nombre,
         cantidad: i.cantidad,
         cantidadUnidad: i.cantidadUnidad,
         total: i.total,
+        ...this.descuentoDeItem(i),
         specs: i.specs ?? [],
         adicionales: i.adicionales ?? [],
       })),

@@ -122,11 +122,18 @@ export type PresupuestoPdfDatos = {
   impuestos: number;
   cargosDirectos: number;
   total: number;
+  /** Σ del descuento comercial (0 = sin descuento; no se dibuja nada). */
+  descuentoTotal?: number;
   items: Array<{
     nombre: string;
     cantidad: number;
     cantidadUnidad: string;
     total: number;
+    /** Descuento de la línea (F2 descuentos): sólo si hubo. */
+    descuentoMonto?: number;
+    descuentoPct?: number;
+    /** Precio final SIN descuento (para "antes / ahora"). */
+    totalLista?: number;
     specs: Array<{ etiqueta: string; valor: string }>;
     adicionales: string[];
   }>;
@@ -580,6 +587,28 @@ export class PresupuestoPdfService {
   }
 
   /**
+   * Línea de descuento del renglón ("Bonificación −10% · antes AR$ 51.468").
+   * En verde, como los adicionales: para el cliente es un beneficio, no una
+   * advertencia. Vacía si la línea no tuvo descuento.
+   */
+  private lineasDescuento(
+    pdf: jsPDF,
+    item: PresupuestoPdfDatos['items'][number],
+  ): string[] {
+    if (!item.descuentoMonto || item.descuentoMonto <= 0) return [];
+    const pct = item.descuentoPct
+      ? `−${item.descuentoPct.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`
+      : `−${this.money(item.descuentoMonto)}`;
+    const antes =
+      item.totalLista != null ? ` · antes ${this.money(item.totalLista)}` : '';
+    this.fuente(pdf, 11.5);
+    return pdf.splitTextToSize(
+      `Bonificación ${pct}${antes}`,
+      this.xColumnas.anchoDesc,
+    ) as string[];
+  }
+
+  /**
    * Alto del renglón. Tiene que coincidir EXACTO con lo que dibuja
    * `filaItem`: si midiera distinto, la paginación cortaría renglones.
    */
@@ -590,11 +619,13 @@ export class PresupuestoPdfService {
     const nombre = this.lineasNombre(pdf, item).length;
     const specs = this.lineasSpecs(pdf, item).length;
     const adic = this.lineasAdicionales(pdf, item).length;
+    const desc = this.lineasDescuento(pdf, item).length;
     return (
       px(14) +
       nombre * px(19) +
       (specs > 0 ? px(4) + specs * px(15) : 0) +
       (adic > 0 ? px(3) + adic * px(15) : 0) +
+      (desc > 0 ? px(3) + desc * px(15) : 0) +
       px(14)
     );
   }
@@ -630,6 +661,14 @@ export class PresupuestoPdfService {
       this.fuente(pdf, 11.5, false, VERDE);
       yTexto += px(3) + px(15);
       adic.forEach((l, i) => pdf.text(l, x.desc, yTexto + i * px(15)));
+      yTexto += (adic.length - 1) * px(15);
+    }
+
+    const descLineas = this.lineasDescuento(pdf, item);
+    if (descLineas.length > 0) {
+      this.fuente(pdf, 11.5, false, VERDE);
+      yTexto += px(3) + px(15);
+      descLineas.forEach((l, i) => pdf.text(l, x.desc, yTexto + i * px(15)));
     }
 
     // Las cifras se alinean con la PRIMERA línea del nombre: leídas en
@@ -655,7 +694,17 @@ export class PresupuestoPdfService {
     const pctIva =
       d.subtotal > 0 ? Math.round((d.impuestos / d.subtotal) * 100) : 0;
 
-    const filas: Array<[string, number]> = [['Subtotal', d.subtotal]];
+    // Con descuento, el desglose cuenta la historia completa: lista →
+    // descuento → subtotal. Sin descuento, nada cambia.
+    const descuento = d.descuentoTotal ?? 0;
+    const filas: Array<[string, number]> =
+      descuento > 0
+        ? [
+            ['Subtotal de lista', d.subtotal + descuento],
+            ['Descuento', -descuento],
+            ['Subtotal con descuento', d.subtotal],
+          ]
+        : [['Subtotal', d.subtotal]];
     if (d.cargosDirectos > 0) filas.push(['Cargos directos', d.cargosDirectos]);
     filas.push([
       d.impuestos > 0 && pctIva > 0
@@ -671,10 +720,15 @@ export class PresupuestoPdfService {
     for (const [k, v] of filas) {
       this.fuente(pdf, 14, false, MUTED);
       pdf.text(k, x + px(4), y + px(9) + px(6));
-      this.fuente(pdf, 14, false, INK_2);
-      pdf.text(this.money(v), x + anchoCaja - px(4), y + px(9) + px(6), {
-        align: 'right',
-      });
+      // El descuento (único valor negativo) va en verde y con el signo
+      // afuera del formato: "−AR$ 4.620", no "AR$ -4.620".
+      this.fuente(pdf, 14, false, v < 0 ? VERDE : INK_2);
+      pdf.text(
+        v < 0 ? `−${this.money(-v)}` : this.money(v),
+        x + anchoCaja - px(4),
+        y + px(9) + px(6),
+        { align: 'right' },
+      );
       y += px(31);
     }
 

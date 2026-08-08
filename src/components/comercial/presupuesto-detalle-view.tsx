@@ -606,7 +606,28 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
                 <td className="mono">
                   {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
                 </td>
-                <td className="right mono">{fmtMoneda(i.subtotal, moneda)}</td>
+                <td className="right mono">
+                  {/* Con descuento: lista neta tachada + badge, precio abajo. */}
+                  {i.descuentoMonto ? (
+                    <>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--muted)",
+                          textDecoration: "line-through",
+                        }}
+                      >
+                        {fmtMoneda(i.subtotal + i.descuentoMonto, moneda)}
+                      </div>
+                      {fmtMoneda(i.subtotal, moneda)}{" "}
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#b91c1c" }}>
+                        −{(i.descuentoPct ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 1 })}%
+                      </span>
+                    </>
+                  ) : (
+                    fmtMoneda(i.subtotal, moneda)
+                  )}
+                </td>
                 <td className="right mono">
                   <b>{fmtMoneda(i.total, moneda)}</b>
                 </td>
@@ -624,7 +645,15 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
           </span>
         </div>
         <div className="pp-resumen">
-          <Cifra l="Subtotal" v={fmtMoneda(d.subtotal, moneda)} s="sin impuestos" />
+          <Cifra
+            l="Subtotal"
+            v={fmtMoneda(d.subtotal, moneda)}
+            s={
+              d.descuentoTotal > 0
+                ? `con descuento −${fmtMoneda(d.descuentoTotal, moneda)}`
+                : "sin impuestos"
+            }
+          />
           <span className="op">+</span>
           <Cifra l="Impuestos" v={fmtMoneda(d.impuestos, moneda)} s={d.impuestos > 0 ? "IVA incluido" : "sin impuestos"} />
           <span className="op">+</span>

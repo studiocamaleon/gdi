@@ -439,7 +439,27 @@ comprobante como bonificación. Decisión de producto (Lucas, 2026-08-08):
   líneas (patrón existente); ventas del Panel leen `subtotal` ya descontado;
   la NC por monto no cambia.
 
-### Después de F1+F5
-F2-restante (descuento en PDF del presupuesto + tracking público), F3
-(aprobación por umbral, `aprobacionDescuentoMaxPct`), F4 (cupones), F6
+### ✅ F2-restante — Cara al cliente (implementado 2026-08-08)
+
+Los items de la emisión reusan `CrearOrdenTrabajoItemDto`, así que el
+`emisionJson` ya traía el descuento gratis desde F1.4 — sólo faltaba mapearlo
+en los consumidores. `descuentoDeItem()` en presupuestos.service expone
+`descuentoMonto/descuentoPct/totalLista` (gross-up escala-libre, mismo criterio
+que F5) + `descuentoTotal` agregado; presupuestos viejos sin los campos → `{}`.
+
+- **PDF** (`presupuesto-pdf.service`): línea verde "Bonificación −10% · antes
+  AR$ X" por renglón (medida en `medirItem`, misma familia visual que
+  "Incluye:") + desglose "Subtotal de lista / Descuento (verde, signo afuera)
+  / Subtotal con descuento" en los totales. Verificado visualmente con un PDF
+  de muestra generado por spec descartable.
+- **Página pública `/p/`**: lista tachada + badge verde −% por item, y el mismo
+  desglose en los totales. En verde: para el cliente es un beneficio.
+- **Vista staff del presupuesto**: lista neta tachada + badge −% en la columna
+  Subtotal, y nota "con descuento −$X" en el resumen.
+- **Tracking `/t/`: N/A** — no muestra montos por diseño (sólo progreso de
+  producción); no hay descuento que mostrar.
+- La conversión presupuesto→OT ya arrastraba el descuento (mismo DTO).
+
+### Después de F1+F2+F5
+F3 (aprobación por umbral, `aprobacionDescuentoMaxPct`), F4 (cupones), F6
 (self-service). Menor: columna `descuentoMotivo`.
