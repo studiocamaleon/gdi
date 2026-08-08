@@ -29,6 +29,11 @@ import {
   type Cupon,
   type CuponAlcanceTipo,
 } from "@/lib/cupones-api";
+import { getClientes } from "@/lib/clientes-api";
+import {
+  getCatalogoComercial,
+  getProductos,
+} from "@/lib/productos-servicios-api";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import {
   useConfigRegional,
@@ -43,6 +48,43 @@ const ALCANCE_LABEL: Record<CuponAlcanceTipo, string> = {
   PRODUCTO: "Producto",
   CLIENTE: "Cliente",
 };
+
+/** Una opción elegible del alcance: `ref` es lo técnico, `nombre` lo visible. */
+type OpcionAlcance = { ref: string; nombre: string };
+
+/**
+ * Trae las opciones que corresponden al alcance elegido. El `ref` tiene que
+ * ser EXACTAMENTE lo que compara el motor al validar el cupón
+ * (cupon-reglas.ts): código para categorías y productos, id para clientes.
+ */
+async function opcionesDeAlcance(
+  tipo: CuponAlcanceTipo,
+): Promise<OpcionAlcance[]> {
+  if (tipo === "CATEGORIA" || tipo === "SUBCATEGORIA") {
+    const catalogo = await getCatalogoComercial();
+    if (tipo === "CATEGORIA") {
+      return catalogo.map((c) => ({ ref: c.codigo, nombre: c.nombre }));
+    }
+    // La subcategoría se muestra con su categoría delante: hay nombres que
+    // se repiten entre familias ("Vinilos" está en más de una).
+    return catalogo.flatMap((c) =>
+      (c.subcategorias ?? []).map((s) => ({
+        ref: s.codigo,
+        nombre: `${c.nombre} › ${s.nombre}`,
+      })),
+    );
+  }
+  if (tipo === "PRODUCTO") {
+    // El motor compara contra el CÓDIGO del producto, no contra su uuid.
+    const productos = await getProductos(true);
+    return productos.map((p) => ({ ref: p.codigo, nombre: p.nombre }));
+  }
+  if (tipo === "CLIENTE") {
+    const clientes = await getClientes({ limit: 500 });
+    return clientes.map((c) => ({ ref: c.id, nombre: c.nombre }));
+  }
+  return [];
+}
 
 function valorLabel(cupon: Cupon, moneda: Moneda) {
   return cupon.tipo === "PORCENTAJE"
@@ -190,8 +232,13 @@ export function CuponesView({
                     <div className={s.dato}>
                       <dt>Alcance</dt>
                       <dd>
-                        {ALCANCE_LABEL[cupon.alcanceTipo]}
-                        {cupon.alcanceRef ? ` · ${cupon.alcanceRef}` : ""}
+                        {/* El nombre legible; los cupones creados antes de
+                            guardarlo caen a la ref cruda. */}
+                        {cupon.alcanceTipo === "ORDEN"
+                          ? ALCANCE_LABEL.ORDEN
+                          : `${ALCANCE_LABEL[cupon.alcanceTipo]} · ${
+                              cupon.alcanceNombre ?? cupon.alcanceRef ?? "—"
+                            }`}
                       </dd>
                     </div>
                     <div className={s.dato}>
@@ -388,6 +435,38 @@ function CuponModal({
     cupon?.alcanceTipo ?? "ORDEN",
   );
   const [alcanceRef, setAlcanceRef] = React.useState(cupon?.alcanceRef ?? "");
+  // Opciones del alcance: el usuario elige de una lista, nunca tipea códigos
+  // internos. Se cargan on-demand al elegir el tipo (no al abrir el modal).
+  const [opciones, setOpciones] = React.useState<OpcionAlcance[]>([]);
+  const [cargandoOpciones, setCargandoOpciones] = React.useState(false);
+
+  React.useEffect(() => {
+    if (alcanceTipo === "ORDEN") {
+      setOpciones([]);
+      return;
+    }
+    let vivo = true;
+    setCargandoOpciones(true);
+    opcionesDeAlcance(alcanceTipo)
+      .then((lista) => {
+        if (!vivo) return;
+        setOpciones(lista);
+        // Si lo que había seleccionado no está en la lista nueva (cambió el
+        // tipo de alcance), se limpia para no mandar una ref que no existe.
+        setAlcanceRef((actual) =>
+          lista.some((o) => o.ref === actual) ? actual : "",
+        );
+      })
+      .catch(() => {
+        if (vivo) setOpciones([]);
+      })
+      .finally(() => {
+        if (vivo) setCargandoOpciones(false);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [alcanceTipo]);
   const [montoMinimo, setMontoMinimo] = React.useState(
     cupon?.montoMinimo != null ? String(cupon.montoMinimo) : "",
   );
@@ -406,7 +485,9 @@ function CuponModal({
       return;
     }
     if (alcanceTipo !== "ORDEN" && !alcanceRef.trim()) {
-      toast.error("Indicá a qué apunta el alcance (código o id).");
+      toast.error(
+        `Elegí ${alcanceTipo === "CLIENTE" ? "el cliente" : alcanceTipo === "PRODUCTO" ? "el producto" : "la categoría"} al que aplica el cupón.`,
+      );
       return;
     }
     setGuardando(true);
@@ -419,6 +500,12 @@ function CuponModal({
         valor,
         alcanceTipo,
         alcanceRef: alcanceTipo !== "ORDEN" ? alcanceRef.trim() : undefined,
+        // El nombre se congela junto con la ref: así la card lo muestra sin
+        // volver a pedir catálogos, y sobrevive a que renombren la categoría.
+        alcanceNombre:
+          alcanceTipo !== "ORDEN"
+            ? (opciones.find((o) => o.ref === alcanceRef)?.nombre ?? undefined)
+            : undefined,
         montoMinimo: montoMinimo ? Number(montoMinimo) : undefined,
         vigenciaHasta: vigenciaHasta || undefined,
         usoMax: usoMax ? Number(usoMax) : undefined,
@@ -532,16 +619,31 @@ function CuponModal({
             <div className={s.field}>
               <label>
                 {alcanceTipo === "CLIENTE"
-                  ? "Id del cliente"
+                  ? "Cliente"
                   : alcanceTipo === "PRODUCTO"
-                    ? "Id del producto (motor)"
-                    : "Código de la categoría"}
+                    ? "Producto"
+                    : alcanceTipo === "SUBCATEGORIA"
+                      ? "Subcategoría"
+                      : "Categoría"}
               </label>
-              <input
-                type="text"
+              <select
                 value={alcanceRef}
+                disabled={cargandoOpciones || opciones.length === 0}
                 onChange={(e) => setAlcanceRef(e.target.value)}
-              />
+              >
+                <option value="">
+                  {cargandoOpciones
+                    ? "Cargando…"
+                    : opciones.length === 0
+                      ? "No hay opciones disponibles"
+                      : "Elegí una opción…"}
+                </option>
+                {opciones.map((o) => (
+                  <option key={o.ref} value={o.ref}>
+                    {o.nombre}
+                  </option>
+                ))}
+              </select>
             </div>
           ) : null}
         </div>

@@ -4089,6 +4089,9 @@ model Cupon {
   /// subcategoría, id de producto, id de cliente; null si ORDEN).
   alcanceTipo  String    @default("ORDEN")
   alcanceRef   String?
+  /// Nombre legible de `alcanceRef`, congelado al crear el cupón: la UI
+  /// muestra "Cartelería" y no el código con el que filtra el motor.
+  alcanceNombre String?
   /// Neto mínimo de la orden para poder aplicarlo (null = sin mínimo).
   montoMinimo  Decimal?  @db.Decimal(14, 2)
   vigenciaDesde DateTime?

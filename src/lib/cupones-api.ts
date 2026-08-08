@@ -20,7 +20,10 @@ export type Cupon = {
   tipo: "PORCENTAJE" | "MONTO";
   valor: number;
   alcanceTipo: CuponAlcanceTipo;
+  /** Código/id con el que filtra el motor (dato técnico, no se muestra). */
   alcanceRef: string | null;
+  /** Nombre legible de `alcanceRef`, congelado al crear ("Cartelería"). */
+  alcanceNombre: string | null;
   montoMinimo: number | null;
   vigenciaDesde: string | null;
   vigenciaHasta: string | null;
@@ -37,6 +40,7 @@ export type CrearCuponPayload = {
   valor: number;
   alcanceTipo?: CuponAlcanceTipo;
   alcanceRef?: string;
+  alcanceNombre?: string;
   montoMinimo?: number;
   vigenciaDesde?: string;
   vigenciaHasta?: string;

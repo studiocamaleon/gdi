@@ -51,6 +51,7 @@ export class CuponesService {
           valor: dto.valor,
           alcanceTipo: dto.alcanceTipo ?? 'ORDEN',
           alcanceRef: dto.alcanceRef ?? null,
+          alcanceNombre: dto.alcanceNombre ?? null,
           montoMinimo: dto.montoMinimo ?? null,
           vigenciaDesde: dto.vigenciaDesde ? new Date(dto.vigenciaDesde) : null,
           vigenciaHasta: dto.vigenciaHasta ? new Date(dto.vigenciaHasta) : null,
@@ -97,13 +98,20 @@ export class CuponesService {
         ...(dto.alcanceTipo !== undefined
           ? {
               alcanceTipo: dto.alcanceTipo,
-              // Cambiar a ORDEN limpia la referencia: si no, quedaría
-              // apuntando a una categoría que ya no filtra nada.
+              // Cambiar a ORDEN limpia la referencia y su nombre: si no,
+              // quedarían apuntando a una categoría que ya no filtra nada.
               alcanceRef:
                 dto.alcanceTipo === 'ORDEN' ? null : (alcanceRef ?? null),
+              alcanceNombre:
+                dto.alcanceTipo === 'ORDEN'
+                  ? null
+                  : (dto.alcanceNombre ?? existente.alcanceNombre ?? null),
             }
           : dto.alcanceRef !== undefined
-            ? { alcanceRef: dto.alcanceRef }
+            ? {
+                alcanceRef: dto.alcanceRef,
+                alcanceNombre: dto.alcanceNombre ?? null,
+              }
             : {}),
         ...(dto.valor !== undefined ? { valor: dto.valor } : {}),
         ...(dto.montoMinimo !== undefined
@@ -241,6 +249,7 @@ export class CuponesService {
     valor: Prisma.Decimal;
     alcanceTipo: string;
     alcanceRef: string | null;
+    alcanceNombre: string | null;
     montoMinimo: Prisma.Decimal | null;
     vigenciaDesde: Date | null;
     vigenciaHasta: Date | null;
@@ -257,6 +266,7 @@ export class CuponesService {
       valor: Number(cupon.valor),
       alcanceTipo: cupon.alcanceTipo,
       alcanceRef: cupon.alcanceRef,
+      alcanceNombre: cupon.alcanceNombre,
       montoMinimo: cupon.montoMinimo != null ? Number(cupon.montoMinimo) : null,
       vigenciaDesde: cupon.vigenciaDesde?.toISOString() ?? null,
       vigenciaHasta: cupon.vigenciaHasta?.toISOString() ?? null,

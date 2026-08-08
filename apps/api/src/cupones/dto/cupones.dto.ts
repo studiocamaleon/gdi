@@ -55,6 +55,12 @@ export class CrearCuponDto {
   @MaxLength(120)
   alcanceRef?: string;
 
+  /** Nombre legible de a qué apunta, para mostrarlo sin resolver catálogos. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  alcanceNombre?: string;
+
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -97,6 +103,11 @@ export class ActualizarCuponDto {
   @IsString()
   @MaxLength(120)
   alcanceRef?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  alcanceNombre?: string | null;
 
   @IsOptional()
   @IsNumber()
