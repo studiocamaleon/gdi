@@ -3799,6 +3799,17 @@ type DescuentoInput = {
 };
 
 /**
+ * Proyección del descuento para el MOTOR: sólo { tipo, valor }. El cupón
+ * (cuponId/cuponCodigo) es asunto comercial — el DTO del motor no lo conoce
+ * y el ValidationPipe (forbidNonWhitelisted) rechaza campos extra.
+ */
+function descuentoParaMotor(
+  input: DescuentoInput | null | undefined,
+): { tipo: "PORCENTAJE" | "MONTO"; valor: number } | undefined {
+  return input ? { tipo: input.tipo, valor: input.valor } : undefined;
+}
+
+/**
  * Margen efectivo por debajo del cual se avisa al aplicar un descuento. Es sólo
  * un aviso blando; el gate duro con aprobación por umbral es F2
  * (`aprobacionDescuentoMaxPct`). Ver docs/descuentos-diseno.md §10.
@@ -5875,7 +5886,7 @@ export function PropuestaFicha({
         jobContext: item.jobContext as never,
         clienteId: clienteId || null,
         periodo: getCurrentPeriodo(),
-        descuento: item.descuentoInput ?? undefined,
+        descuento: descuentoParaMotor(item.descuentoInput),
       };
       let cotizacionItemId = item.cotizacionItemId;
       if (cotizacionItemId) {
@@ -6580,7 +6591,7 @@ export function PropuestaFicha({
               jobContext: item.jobContext as never,
               clienteId: targetClienteId || null,
               periodo: getCurrentPeriodo(),
-              descuento: item.descuentoInput ?? undefined,
+              descuento: descuentoParaMotor(item.descuentoInput),
             };
             const response = item.cotizacionItemId
               ? await recotizarCotizacionItem(item.cotizacionItemId, request)
@@ -6668,7 +6679,7 @@ export function PropuestaFicha({
         jobContext: item.jobContext as never,
         clienteId: clienteId || null,
         periodo: getCurrentPeriodo(),
-        descuento: descuentoInput ?? undefined,
+        descuento: descuentoParaMotor(descuentoInput),
       };
       const response = item.cotizacionItemId
         ? await recotizarCotizacionItem(item.cotizacionItemId, request)
@@ -7017,7 +7028,7 @@ export function PropuestaFicha({
         jobContext: nextJobContext as never,
         clienteId: clienteId || null,
         periodo: getCurrentPeriodo(),
-        descuento: item.descuentoInput ?? undefined,
+        descuento: descuentoParaMotor(item.descuentoInput),
       };
       const response = item.cotizacionItemId
         ? await recotizarCotizacionItem(item.cotizacionItemId, request)
