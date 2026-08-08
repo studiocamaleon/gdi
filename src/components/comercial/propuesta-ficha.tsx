@@ -31,6 +31,7 @@ import {
   TriangleAlertIcon,
   UserIcon,
   XIcon,
+  ZapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -157,6 +158,8 @@ import {
 } from "@/lib/nesting-compra-pliego";
 import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
 import nestC from "./nesting-compra-pliego-viewer.module.css";
+import { ConstelacionCanvas } from "@/components/constelacion-canvas";
+import resumenBar from "./resumen-financiero-bar.module.css";
 import { listClientes } from "@/lib/clientes-api";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
@@ -405,11 +408,6 @@ function applyCotizacionToItem(
     jobContext,
     rutaAlternativaId: cotizacion.rutaAlternativaId ?? item.rutaAlternativaId,
   };
-}
-
-function parseLocalDate(value: string) {
-  const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function isPanelEditableStep(paso: PasoCosteo): paso is PanelEditorPaso {
@@ -685,21 +683,6 @@ function applyPanelRuntimeOverride(args: {
   return next;
 }
 
-function formatPlazoEntrega(fechaEstimada: string, fechaCreacion: string) {
-  const estimated = parseLocalDate(fechaEstimada);
-  const created = parseLocalDate(fechaCreacion);
-  if (!estimated || !created) return "A definir";
-
-  const dayMs = 24 * 60 * 60 * 1000;
-  const days = Math.max(
-    0,
-    Math.ceil((estimated.getTime() - created.getTime()) / dayMs),
-  );
-  if (days === 0) return "Hoy";
-  if (days === 1) return "1 dia";
-  return `${days} dias`;
-}
-
 function OrdenSegmented({
   value,
   onChange,
@@ -811,7 +794,14 @@ function OrdenTabs({
   ];
 
   return (
-    <div className="orden-tabs" role="tablist">
+    <div
+      className="orden-tabs"
+      role="tablist"
+      // overflow-x:auto (scroll horizontal de pestañas) fuerza overflow-y a
+      // `auto` y saca una barra vertical fantasma por 1px de desborde. Inline
+      // para no depender del recompile de globals.css (Turbopack lo saltea).
+      style={{ overflowY: "hidden" }}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -3688,17 +3678,6 @@ function calcularCargosDirectosItems(items: PropuestaItem[]) {
   );
 }
 
-function calcularComisionesItems(items: PropuestaItem[]) {
-  return items.reduce((acc, item) => {
-    const desglose = item.cotizacion.desglosePrecio;
-    if (!desglose) return acc;
-
-    const cantidad = getCotizacionCantidadPrecio(item.cotizacion, item.cantidad);
-
-    return acc + desglose.totalComisiones * cantidad;
-  }, 0);
-}
-
 type ImpuestoResumenLinea = {
   key: string;
   nombre: string;
@@ -3755,47 +3734,6 @@ function getItemOrderVisibleAmounts(item: PropuestaItem) {
     impuestos,
     total: roundVisibleCurrency(item.total),
   };
-}
-
-function getImpuestosProductoResumen(items: PropuestaItem[]) {
-  const lineas = new Map<string, ImpuestoResumenLinea>();
-  let ocultos = 0;
-
-  for (const item of items) {
-    const resumenItem = getImpuestosItemResumen(item);
-    ocultos += resumenItem.ocultos;
-
-    for (const impuesto of resumenItem.visibles) {
-      const key = impuesto.key;
-      const current = lineas.get(key) ?? {
-        key,
-        nombre: impuesto.nombre,
-        porcentaje: impuesto.porcentaje,
-        monto: 0,
-      };
-      current.monto += impuesto.monto;
-      lineas.set(key, current);
-    }
-  }
-
-  return {
-    visibles: Array.from(lineas.values()).sort((a, b) => b.monto - a.monto),
-    ocultos,
-  };
-}
-
-function formatImpuestoResumenLabel(linea: ImpuestoResumenLinea) {
-  if (linea.porcentaje <= 0) return linea.nombre;
-  const porcentaje = linea.porcentaje.toFixed(2);
-  const porcentajeCompacto = Number.isInteger(linea.porcentaje)
-    ? linea.porcentaje.toFixed(0)
-    : porcentaje.replace(/0+$/, "").replace(/\.$/, "");
-  const nombreNormalizado = linea.nombre.replace(",", ".").toLowerCase();
-  const yaIncluyePorcentaje =
-    nombreNormalizado.includes(`${porcentaje.toLowerCase()}%`) ||
-    nombreNormalizado.includes(`${porcentajeCompacto.toLowerCase()}%`);
-
-  return yaIncluyePorcentaje ? linea.nombre : `${linea.nombre} ${porcentaje}%`;
 }
 
 function asNumber(value: unknown, fallback = 0) {
@@ -4012,8 +3950,6 @@ export function ResumenBar({
   items,
   cargosOrden,
   tipo,
-  fechaEstimada,
-  fechaCreacion,
   onEmitir,
   onEmitirPresupuesto,
   emitiendo = false,
@@ -4024,8 +3960,6 @@ export function ResumenBar({
   items: PropuestaItem[];
   cargosOrden: PropuestaCargoDirecto[];
   tipo: "orden" | "presupuesto";
-  fechaEstimada: string;
-  fechaCreacion: string;
   /** Ausente en modo lectura (OT emitida): sin acciones de guardado/emisión. */
   onEmitir?: () => void;
   /** Emisión del PRESUPUESTO (toggle en "Presupuesto"). */
@@ -4038,7 +3972,6 @@ export function ResumenBar({
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatCurrency(v, moneda);
   const resumen = calcularResumenOrden(items, cargosOrden);
-  const impuestosProductoResumen = getImpuestosProductoResumen(items);
   const cargosImpuestos = resumen.cargosImpuestos;
   const productosVisibles = items.reduce(
     (acc, item) => {
@@ -4056,141 +3989,78 @@ export function ResumenBar({
   const cargosItems = calcularCargosDirectosItems(items);
   const cargosOrdenTotal = resumen.cargosSubtotal;
   const cargos = cargosItems + cargosOrdenTotal;
-  const comisiones = calcularComisionesItems(items);
   const totalConCargos = productosVisibles.total + resumen.cargosTotal;
-  const impuestoLineas = [
-    ...impuestosProductoResumen.visibles,
-    ...(cargosImpuestos > 0
-      ? [
-          {
-            key: "cargos-directos",
-            nombre: "Impuestos sobre cargos",
-            porcentaje: 0,
-            monto: cargosImpuestos,
-          },
-        ]
-      : []),
+
+  // Las comisiones ya están dentro del subtotal (son parte del precio): no se
+  // muestran como línea aparte ni en la barra ni en el desglose del item.
+  const brk = [
+    { k: "Subtotal", v: subtotal },
+    { k: "Impuestos", v: impuestosVisibles },
+    { k: "Cargos", v: cargos },
   ];
-  if (impuestosVisibles > 0 && impuestoLineas.length === 0) {
-    impuestoLineas.push({
-      key: "impuestos",
-      nombre: "Impuestos",
-      porcentaje: 0,
-      monto: impuestosVisibles,
-    });
-  }
 
+  // Modelo C del diseño: barra anclada al fondo del scroll, con el papel y la
+  // constelación del encabezado. La lista de productos corre por detrás y el
+  // total nunca se pierde de vista. Ver producto/Resumen financiero.html.
   return (
-    <div className="resumen-bar">
-      <div className="rbar-head">
-        <div>
-          <div className="ttl">Resumen financiero</div>
-          <div className="sub">
-            {items.length} productos ·{" "}
-            {tipo === "orden" ? "Orden de trabajo" : "Presupuesto"}
-          </div>
-        </div>
-        <div className="rbar-conditions">
-          {tipo === "presupuesto" ? (
-            <span className="cond">
-              <span className="cl">Validez</span>
-              <span className="cv">7 dias</span>
+    <div className={resumenBar.wrap}>
+      <ConstelacionCanvas
+        className={resumenBar.canvas}
+        nodes={34}
+        pulses={3}
+        cx={0.88}
+        cy={0.5}
+        radius={1.5}
+      />
+      <span className={resumenBar.veil} />
+      <div className={resumenBar.in}>
+        <span className={resumenBar.tot}>
+          <span className={resumenBar.totK}>Total</span>
+          <span className={resumenBar.totV}>{fmt(totalConCargos)}</span>
+        </span>
+        <span className={resumenBar.brk}>
+          {brk.map((c) => (
+            <span
+              key={c.k}
+              className={`${resumenBar.cell}${c.v > 0 ? "" : ` ${resumenBar.zero}`}`}
+            >
+              <span className={resumenBar.cellK}>{c.k}</span>
+              <span className={resumenBar.cellV}>{fmt(c.v)}</span>
             </span>
-          ) : null}
-          <span className="cond">
-            <span className="cl">Plazo entrega</span>
-            <span className="cv">
-              {formatPlazoEntrega(fechaEstimada, fechaCreacion)}
-            </span>
+          ))}
+        </span>
+        {readOnly ? null : (
+          <span className={resumenBar.acts}>
+            <button
+              type="button"
+              className="btn"
+              onClick={tipo === "orden" ? onGuardarBorrador : undefined}
+              disabled={guardandoBorrador || emitiendo || items.length === 0}
+            >
+              <SaveIcon />
+              {guardandoBorrador ? "Guardando…" : "Borrador"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={emitiendo || items.length === 0}
+              onClick={tipo === "orden" ? onEmitir : onEmitirPresupuesto}
+            >
+              {tipo === "orden" ? (
+                <>
+                  <CheckIcon />
+                  {emitiendo ? "Emitiendo…" : "Emitir OT"}
+                </>
+              ) : (
+                <>
+                  <ExternalLinkIcon />
+                  {emitiendo ? "Emitiendo…" : "Emitir presupuesto"}
+                </>
+              )}
+            </button>
           </span>
-          <span className="cond">
-            <span className="cl">Forma de pago</span>
-            <span className="cv">A definir</span>
-          </span>
-        </div>
+        )}
       </div>
-
-      <div className="rbar-cols">
-        <div className="rbcol">
-          <div className="lbl">Subtotal</div>
-          <div className="val">{fmt(subtotal)}</div>
-          <div className="hint">{items.length} productos</div>
-        </div>
-        <div className="rbsep">+</div>
-        <div className="rbcol">
-          <div className="lbl">Impuestos</div>
-          <div className="val">{fmt(impuestosVisibles)}</div>
-          <div className="hint">
-            {impuestoLineas.length > 0
-              ? impuestoLineas
-                  .map((linea) => formatImpuestoResumenLabel(linea))
-                  .join(" · ")
-              : impuestosProductoResumen.ocultos > 0
-                ? "Incluidos en subtotal"
-                : "Sin impuestos"}
-          </div>
-        </div>
-        <div className="rbsep">+</div>
-        <div className="rbcol">
-          <div className="lbl">Cargos directos</div>
-          <div className="val">{fmt(cargos)}</div>
-          <div className="hint">
-            {cargosOrdenTotal > 0
-              ? `${cargosOrden.length} cargo${cargosOrden.length === 1 ? "" : "s"} de orden`
-              : cargosItems > 0
-                ? "Incluidos en productos"
-                : "Sin cargos configurados"}
-          </div>
-        </div>
-        <div className="rbsep">·</div>
-        <div className="rbcol muted">
-          <div className="lbl">Comisiones</div>
-          <div className="val">{fmt(comisiones)}</div>
-          <div className="hint">
-            {comisiones > 0 ? "Incluidas en subtotal" : "Sin comisiones"}
-          </div>
-        </div>
-        <div className="rbsep eq">=</div>
-        <div className="rbcol total">
-          <div className="lbl">Total c/ imp.</div>
-          <div className="val">{fmt(totalConCargos)}</div>
-          <div className="hint">Para emitir al cliente</div>
-        </div>
-      </div>
-
-      {readOnly ? null : (
-      <div className="rbar-foot">
-        <div className="rbar-actions">
-          <button
-            type="button"
-            className="btn"
-            onClick={tipo === "orden" ? onGuardarBorrador : undefined}
-            disabled={guardandoBorrador || emitiendo || items.length === 0}
-          >
-            <SaveIcon />
-            {guardandoBorrador ? "Guardando…" : "Guardar borrador"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={emitiendo || items.length === 0}
-            onClick={tipo === "orden" ? onEmitir : onEmitirPresupuesto}
-          >
-            {tipo === "orden" ? (
-              <>
-                <CheckIcon />
-                {emitiendo ? "Emitiendo…" : "Emitir OT"}
-              </>
-            ) : (
-              <>
-                <ExternalLinkIcon />
-                {emitiendo ? "Emitiendo…" : "Emitir presupuesto"}
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-      )}
     </div>
   );
 }
@@ -4948,9 +4818,6 @@ export function PropuestaFicha({
   );
   const [fechaEstimada, setFechaEstimada] = React.useState(
     () => orden?.fechaEntrega ?? offsetDate(7),
-  );
-  const [fechaCreacion] = React.useState(() =>
-    orden ? orden.creadaEl.slice(0, 10) : offsetDate(0),
   );
 
   // ── Demora estimada por el sistema (fase 3, simulación de flujo) ──────
@@ -6169,15 +6036,8 @@ export function PropuestaFicha({
   ]);
 
   function toggle(id: string) {
-    setOpenIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    // Acordeón de uno por vez: abrir un item cierra el que estaba abierto.
+    setOpenIds((prev) => (prev.has(id) ? new Set() : new Set([id])));
   }
 
   async function recotizarPaneles(
@@ -6588,7 +6448,14 @@ export function PropuestaFicha({
         </FieldCard>
       </div>
 
-      <div className="orden-main-full">
+      {/* Columna flex que llena el alto disponible: deja que el resumen
+          financiero de la pestaña Productos caiga anclado al fondo (margin-top
+          auto) aun con la OT vacía, y que el `sticky` lo mantenga abajo al
+          scrollear cuando hay muchos productos. */}
+      <div
+        className="orden-main-full"
+        style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 }}
+      >
         <div className="orden-tabs-row">
           <OrdenTabs
             value={tab}
@@ -6615,10 +6482,11 @@ export function PropuestaFicha({
                   type="button"
                   className="btn"
                   onClick={abrirCentroCopiado}
-                  title="Centro de copiado (C)"
+                  title="Carga rápida (C)"
                 >
-                  <PlusIcon />
-                  Centro de copiado
+                  {/* Rayo en el naranja de acento del sistema. */}
+                  <ZapIcon style={{ color: "#c2410c" }} />
+                  Carga rápida
                 </button>
               ) : null}
               <button
@@ -6634,6 +6502,7 @@ export function PropuestaFicha({
           ) : null}
         </div>
 
+        <div className={resumenBar.scroll}>
         {tab === "productos" ? (
           <div className="orden-table">
             <div className="ohead">
@@ -6938,14 +6807,13 @@ export function PropuestaFicha({
             )}
           </div>
         ) : null}
+        </div>
 
         {tab === "productos" ? (
           <ResumenBar
             items={items}
             cargosOrden={cargosOrden}
             tipo={ordenTipo}
-            fechaEstimada={fechaEstimada}
-            fechaCreacion={fechaCreacion}
             onEmitir={emitirOrden}
             onEmitirPresupuesto={emitirPresupuestoCb}
             emitiendo={emitiendo || emitiendoPresupuesto}

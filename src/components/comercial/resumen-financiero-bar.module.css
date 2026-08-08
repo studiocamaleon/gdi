@@ -1,0 +1,125 @@
+/* Resumen financiero de la OT — modelo C de claude.ai/design ("fijo abajo, con
+ * la textura del encabezado"). Barra anclada al fondo del scroll: la lista de
+ * productos corre por detrás y el total nunca se pierde de vista. Reusa el papel
+ * y la constelación del encabezado del sheet. Ver producto/Resumen financiero.html
+ *
+ * `--muted`/`--muted-2` se fijan acá al gris de diseño: fuera de un contenedor
+ * que los remapee (como `.ot-v1`), caerían al gris casi-blanco del dashboard. */
+/* La lista de productos scrollea acá dentro; la barra queda de footer fijo. */
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Footer fijo al pie del contenedor (no sticky): la lista corre por arriba en
+ * `.scroll` y el total no se mueve. `relative` contiene el canvas/velo. */
+.wrap {
+  --muted: var(--muted-text, #6e6e76);
+  --muted-2: var(--muted-text-2, #92929b);
+  position: relative;
+  flex: 0 0 auto;
+  height: 62px;
+  border-top: 1px solid var(--border, #e5e2db);
+  background: linear-gradient(0deg, #fbfaf8, #f4f2ee);
+  box-shadow: 0 -2px 6px rgba(20, 20, 26, 0.05);
+  overflow: hidden;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Velo blanco → transparente: apaga la malla del lado del texto. */
+.veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.95) 0,
+    rgba(255, 255, 255, 0.8) 52%,
+    rgba(255, 255, 255, 0.35) 100%
+  );
+}
+
+.in {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 100%;
+  padding: 0 14px;
+}
+
+.tot {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: none;
+}
+
+.totK {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.totV {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 23px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  color: var(--ink, #14141a);
+}
+
+.brk {
+  display: flex;
+  gap: 0;
+  margin-left: 18px;
+  padding-left: 18px;
+  border-left: 1px solid var(--hairline, #eeebe4);
+  min-width: 0;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.cellK {
+  font-size: 10.5px;
+  color: var(--muted-2);
+}
+
+.cellV {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  color: var(--ink-2, #2c2c33);
+}
+
+/* Valor en cero: gris apagado, para que la vista caiga en lo que sí suma. */
+.zero .cellV {
+  color: var(--muted-2);
+}
+
+.acts {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex: none;
+}
+
+/* En pantallas angostas el desglose se esconde: total + acciones siempre. */
+@media (max-width: 860px) {
+  .brk {
+    display: none;
+  }
+}

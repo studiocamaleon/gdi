@@ -70,6 +70,11 @@ export class GuardarDatosEmpresaDto {
   @IsString()
   urlResenas?: string;
 
+  /** URL del perfil de Google (ficha de Maps). A dónde apunta "Ver mapa". */
+  @IsOptional()
+  @IsString()
+  urlPerfilGoogle?: string;
+
   /** ISO 4217, contra el catálogo. Etiqueta y formato, nunca conversión. */
   @IsOptional()
   @IsIn(CODIGOS_MONEDA, { message: 'Moneda desconocida' })

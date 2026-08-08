@@ -2,54 +2,44 @@
 
 import * as React from "react";
 
-import s from "./producto-sheet-header.module.css";
-
-interface ProductoSheetHeaderProps {
-  /** Nombre del producto (título grande). */
-  name: string;
-  /** Descripción bajo el título. */
-  desc: string;
-  /** Línea mono en mayúsculas: familia · unidad de cobro. */
-  eyebrow: string;
-  /** Botón "← Cambiar" a la izquierda. Si no se pasa, no se muestra. */
-  onBack?: () => void;
-  /** Cierra el sheet (X arriba a la derecha). */
-  onClose?: () => void;
-  /**
-   * Full-bleed + sticky pineado al borde: cancela el padding del `.ap-body` del
-   * sheet de producto. Para modales con su propio layout (ej. Centro de copiado)
-   * dejalo en false: el header queda flush arriba del modal sin breakout.
-   */
-  sticky?: boolean;
+interface ConstelacionCanvasProps {
+  /** Nodos de la esfera de Fibonacci. */
+  nodes?: number;
+  /** Pulsos naranja simultáneos recorriendo aristas. */
+  pulses?: number;
+  /** Centro X/Y como fracción del canvas (0..1). */
+  cx?: number;
+  cy?: number;
+  /** Radio como fracción de min(W, H). */
+  radius?: number;
+  className?: string;
 }
 
+const ACC = "255,106,43";
+
 /**
- * Encabezado del sheet "Agregar producto" — modelo D "Constelación del login".
- * La malla 3D es una esfera de Fibonacci que rota; los pulsos naranja recorren
- * las aristas. Portado del prototipo de claude.ai/design a un canvas manejado
- * por React (rAF con cleanup, ResizeObserver, respeta `prefers-reduced-motion`).
+ * Malla 3D "constelación" (misma metáfora del encabezado del sheet): esfera de
+ * Fibonacci que rota, con pulsos naranja por las aristas. Canvas manejado por
+ * React — rAF con cleanup, ResizeObserver, respeta `prefers-reduced-motion`.
+ * Parametrizable para reusar en el encabezado, el sidebar, etc.
  */
-export function ProductoSheetHeaderConstelacion({
-  name,
-  desc,
-  eyebrow,
-  onBack,
-  onClose,
-  sticky = false,
-}: ProductoSheetHeaderProps) {
-  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+export function ConstelacionCanvas({
+  nodes: N = 40,
+  pulses: P = 3,
+  cx: cxF = 0.5,
+  cy: cyF = 0.5,
+  radius: rF = 0.7,
+  className,
+}: ConstelacionCanvasProps) {
+  const ref = React.useRef<HTMLCanvasElement | null>(null);
 
   React.useEffect(() => {
-    const cv = canvasRef.current;
+    const cv = ref.current;
     if (!cv) return;
     const ctx = cv.getContext("2d");
     if (!ctx) return;
-
-    const ACC = "255,106,43";
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const N = 46;
 
-    // Nodos sobre una esfera de Fibonacci.
     const nodes: Array<{ x: number; y: number; z: number; sc: number }> = [];
     for (let i = 0; i < N; i++) {
       const y = 1 - (i / (N - 1)) * 2;
@@ -63,7 +53,6 @@ export function ProductoSheetHeaderConstelacion({
       });
     }
 
-    // Aristas: cada nodo con sus 3 vecinos más cercanos (sin duplicar).
     const edges: Array<[number, number]> = [];
     nodes.forEach((a, i) => {
       nodes
@@ -75,7 +64,7 @@ export function ProductoSheetHeaderConstelacion({
             (a.z - b.z) * (a.z - b.z),
         }))
         .filter((o) => o.j !== i)
-        .sort((p, q) => p.d - q.d)
+        .sort((u, v) => u.d - v.d)
         .slice(0, 3)
         .forEach((o) => {
           if (i < o.j) edges.push([i, o.j]);
@@ -83,22 +72,22 @@ export function ProductoSheetHeaderConstelacion({
     });
 
     const pulses: Array<{ e: number; t: number; v: number }> = [];
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < P; k++) {
       pulses.push({
         e: (Math.random() * edges.length) | 0,
         t: Math.random(),
-        v: 0.006 + Math.random() * 0.008,
+        v: 0.005 + Math.random() * 0.007,
       });
     }
 
     let W = 0;
     let H = 0;
-    let ry = 0;
+    let ry = 0.3;
     let raf = 0;
 
     function size() {
       const b = cv!.getBoundingClientRect();
-      if (!b.width) return;
+      if (!b.width || !b.height) return;
       W = b.width;
       H = b.height;
       cv!.width = W * dpr;
@@ -112,9 +101,9 @@ export function ProductoSheetHeaderConstelacion({
         if (!W) return;
       }
       ctx!.clearRect(0, 0, W, H);
-      const cx = W * 0.74;
-      const cy = H / 2;
-      const rad = Math.min(W * 0.5, H) * 0.92;
+      const cx = W * cxF;
+      const cy = H * cyF;
+      const rad = Math.min(W, H) * rF;
       const cos = Math.cos(ry);
       const sin = Math.sin(ry);
       const p = nodes.map((n) => {
@@ -170,7 +159,7 @@ export function ProductoSheetHeaderConstelacion({
     }
 
     function loop() {
-      ry += 0.0026;
+      ry += 0.0024;
       pulses.forEach((u) => {
         u.t += u.v;
         if (u.t > 1) {
@@ -194,7 +183,6 @@ export function ProductoSheetHeaderConstelacion({
 
     size();
     if (reduce) {
-      // Un solo cuadro estático, sin loop ni pulsos animándose.
       ry = 0.6;
       draw();
     } else {
@@ -205,58 +193,7 @@ export function ProductoSheetHeaderConstelacion({
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, []);
+  }, [N, P, cxF, cyF, rF]);
 
-  return (
-    <div className={`${s.header} ${sticky ? s.sticky : ""}`}>
-      <canvas ref={canvasRef} className={s.canvas} aria-hidden="true" />
-      <span className={s.veil} aria-hidden="true" />
-      <div className={s.inner}>
-        {onBack ? (
-          <button type="button" className={s.back} onClick={onBack}>
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M19 12H5M11 6l-6 6 6 6" />
-            </svg>
-            Cambiar
-          </button>
-        ) : null}
-        <span className={s.nm}>
-          <span className={s.eyebrow}>{eyebrow}</span>
-          <h2 className={s.title}>{name}</h2>
-          <span className={s.desc}>{desc}</span>
-        </span>
-        {onClose ? (
-          <button
-            type="button"
-            className={s.close}
-            onClick={onClose}
-            aria-label="Cerrar"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
+  return <canvas ref={ref} className={className} aria-hidden="true" />;
 }

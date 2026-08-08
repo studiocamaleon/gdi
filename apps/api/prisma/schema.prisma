@@ -1620,6 +1620,11 @@ model DatosEmpresa {
   /// Es el dato que le falta a la plantilla de WhatsApp `grafo_resena_v2`, que
   /// está aprobada por Meta desde hace meses y no la manda nadie.
   urlResenas         String?
+  /// URL del perfil de Google del negocio (ficha de Google Maps / Google
+  /// Business, `https://maps.app.goo.gl/…` o `https://g.page/…`). Es a dónde
+  /// apunta "Ver mapa" en el seguimiento público: si está cargada, se abre tal
+  /// cual; si no, el front cae a buscar el domicilio en Google Maps.
+  urlPerfilGoogle    String?
   /// ISO 4217 de la moneda en la que trabaja el negocio. Es ETIQUETA y
   /// formato, nunca conversión: cambiarla no reconvierte ningún monto
   /// histórico (multi-moneda-zona-horaria D1/D2). El catálogo con símbolo y

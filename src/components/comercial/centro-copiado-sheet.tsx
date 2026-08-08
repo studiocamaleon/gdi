@@ -30,6 +30,7 @@ import {
   NIVEL_COBERTURA_LABELS,
 } from "@/lib/cobertura-toner";
 import s from "./centro-copiado-sheet.module.css";
+import { ProductoSheetHeaderConstelacion } from "./producto-sheet-header";
 
 /** Un tamaño resuelto en una fila: nombre + medidas (para el payload y el motor). */
 type TamanoFila = { tamano: string; tamanoAnchoMm: number; tamanoAltoMm: number };
@@ -1014,24 +1015,12 @@ export default function CentroCopiadoSheet({
     <>
       <div className={s.backdrop} onClick={intentarCerrar} />
       <div className={s.sheet} role="dialog" aria-modal="true" aria-label="Centro de copiado">
-        <header className={s.head}>
-          <div>
-            <div className={s.eyebrow}>Comercial · Nueva orden</div>
-            <h2 className={s.titulo}>
-              Centro de copiado{" "}
-              <span className={s.badge}>
-                {editItems?.length ? "Editar carga" : "Carga rápida"}
-              </span>
-            </h2>
-            <p className={s.sub}>
-              Cargá varios documentos de una vez. Seleccioná dos o más y agrupalos para anillar
-              juntos.
-            </p>
-          </div>
-          <button type="button" className={s.close} onClick={intentarCerrar} aria-label="Cerrar">
-            ✕
-          </button>
-        </header>
+        <ProductoSheetHeaderConstelacion
+          eyebrow={editItems?.length ? "Editar carga" : "Carga rápida"}
+          name="Centro de copiado"
+          desc="Cargá varios documentos de una vez. Seleccioná dos o más y agrupalos para anillar juntos."
+          onClose={intentarCerrar}
+        />
 
         <div className={s.body}>
           <section className={s.cargar}>

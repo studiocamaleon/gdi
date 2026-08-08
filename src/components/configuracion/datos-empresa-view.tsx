@@ -40,6 +40,7 @@ type FormState = {
   provincia: string;
   horarioAtencion: string;
   urlResenas: string;
+  urlPerfilGoogle: string;
   monedaCodigo: string;
   zonaHoraria: string;
   redondeoPrecio: string;
@@ -83,6 +84,7 @@ function estadoInicial(d: DatosEmpresa): FormState {
     provincia: vacio(d.provincia),
     horarioAtencion: vacio(d.horarioAtencion),
     urlResenas: vacio(d.urlResenas),
+    urlPerfilGoogle: vacio(d.urlPerfilGoogle),
     monedaCodigo: d.monedaCodigo || MONEDA_DEFAULT,
     zonaHoraria: d.zonaHoraria || zonaHorariaDe(PAIS_DEFAULT),
     redondeoPrecio: d.redondeoPrecio || "moneda",
@@ -128,6 +130,7 @@ export function DatosEmpresaView({
         provincia: form.provincia || undefined,
         horarioAtencion: form.horarioAtencion || undefined,
         urlResenas: form.urlResenas || undefined,
+        urlPerfilGoogle: form.urlPerfilGoogle || undefined,
         monedaCodigo: form.monedaCodigo || undefined,
         zonaHoraria: form.zonaHoraria || undefined,
         redondeoPrecio: form.redondeoPrecio || undefined,
@@ -365,6 +368,24 @@ export function DatosEmpresaView({
                     onChange={(e) => set("provincia", e.target.value)}
                     placeholder="Santa Fe"
                   />
+                </div>
+              </div>
+              <div className="arc-frow">
+                <div className="arc-field">
+                  <label>
+                    URL de tu perfil de Google{" "}
+                    <span className="opt">(opcional)</span>
+                  </label>
+                  <input
+                    value={form.urlPerfilGoogle}
+                    onChange={(e) => set("urlPerfilGoogle", e.target.value)}
+                    placeholder="https://maps.app.goo.gl/…"
+                  />
+                  <div className="arc-hint">
+                    Es a dónde lleva el botón “Ver mapa” del seguimiento que ve
+                    el cliente. Si lo dejás vacío, busca tu domicilio en Google
+                    Maps.
+                  </div>
                 </div>
               </div>
             </div>

@@ -3560,8 +3560,8 @@ function ApSelectStep({
 }: SelectStepProps) {
   const { moneda } = useConfigRegional();
   const [activeIndex, setActiveIndex] = React.useState(0);
+  const [filtrosAbiertos, setFiltrosAbiertos] = React.useState(false);
   const activeResultRef = React.useRef<HTMLButtonElement | null>(null);
-  const visibleRecientes = products.slice(0, 3);
   const families = React.useMemo(
     () => ["Todos", ...Array.from(new Set(products.map((product) => product.family)))],
     [products],
@@ -3630,53 +3630,56 @@ function ApSelectStep({
         <span className="kbd">⌘K</span>
       </div>
 
+      {/* Filtros por categoría plegados: por defecto sólo se ven los productos;
+          el botón despliega los chips si hace falta afinar. */}
       <div className="ap-filters">
-        {families.map((item) => (
-          <button
-            key={item}
-            type="button"
-            className={`ap-chip ${family === item ? "on" : ""}`}
-            onClick={() => setFamily(item)}
+        <button
+          type="button"
+          className={`ap-chip ${family !== "Todos" ? "on" : ""}`}
+          onClick={() => setFiltrosAbiertos((v) => !v)}
+          aria-expanded={filtrosAbiertos}
+        >
+          {family === "Todos" ? "Filtrar por categoría" : family}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              marginLeft: 4,
+              transform: filtrosAbiertos ? "rotate(180deg)" : "none",
+              transition: "transform .15s",
+            }}
+            aria-hidden="true"
           >
-            {item}
-            {item !== "Todos" ? (
-              <span className="ct">
-                {products.filter((product) => product.family === item).length}
-              </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
-
-      {!query && family === "Todos" ? (
-        <div className="ap-section">
-          <div className="ap-section-head">
-            <span>Recientes</span>
-            <span className="ap-section-hint">Usados en las últimas órdenes</span>
-          </div>
-          <div className="ap-recent">
-            {visibleRecientes.map((product) => (
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+        {filtrosAbiertos
+          ? families.map((item) => (
               <button
-                key={product.code}
+                key={item}
                 type="button"
-                className="ap-recent-row"
-                onClick={() => onPick(product)}
+                className={`ap-chip ${family === item ? "on" : ""}`}
+                onClick={() => {
+                  setFamily(item);
+                  setFiltrosAbiertos(false);
+                }}
               >
-                <span className={`ap-fam-dot tipo-${familyColor(product.family)}`} />
-                <span className="lb">
-                  <span className="nm">{product.name}</span>
-                  <span className="cd">{product.family}</span>
-                </span>
-                {loadingProductId === product.id ? (
-                  <span className="ap-section-hint">Cargando</span>
-                ) : (
-                  <ArrowRightIcon />
-                )}
+                {item}
+                {item !== "Todos" ? (
+                  <span className="ct">
+                    {products.filter((product) => product.family === item).length}
+                  </span>
+                ) : null}
               </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+            ))
+          : null}
+      </div>
 
       <div className="ap-section">
         <div className="ap-section-head">
@@ -3713,16 +3716,13 @@ function ApSelectStep({
                   <ApAtomMode mode={product.cobro} />
                   {product.cobro}
                 </span>
-                <span className="ap-precio">
-                  {product.real ? (
-                    <>Precio por motor</>
-                  ) : (
-                    <>
-                      Referencia <strong>{formatCurrency(product.precioBase, moneda)}</strong> /{" "}
-                      {product.unidad}
-                    </>
-                  )}
-                </span>
+                {!product.real ? (
+                  <span className="ap-precio">
+                    Referencia{" "}
+                    <strong>{formatCurrency(product.precioBase, moneda)}</strong> /{" "}
+                    {product.unidad}
+                  </span>
+                ) : null}
               </span>
               <span className="ap-prod-pick">
                 {loadingProductId === product.id ? "..." : <ArrowRightIcon />}
@@ -5544,6 +5544,7 @@ function ApConfigStep({
           eyebrow={`${product.family} · ${product.cobro}`}
           onBack={onBack}
           onClose={onClose}
+          sticky
         />
         <div className={cartS.sheetHost}>
           <CarteleriaConfigurador
@@ -5613,6 +5614,7 @@ function ApConfigStep({
         eyebrow={`${product.family} · ${product.cobro}`}
         onBack={onBack}
         onClose={onClose}
+        sticky
       />
 
       <div className="ap-config-section">
@@ -5663,17 +5665,20 @@ function ApConfigStep({
 
             {metroLinealConMedidasVariables ? (
               <>
-                <div className="ap-spec ap-spec-wide">
-                  <label>Modo de cotización lineal</label>
-                  {renderSegmentedControl(
-                    "Modo de cotización lineal",
-                    motorConfig.modoCotizacionLineal,
-                    [
-                      { value: "nesting", label: "Calcular por piezas" },
-                      { value: "directo", label: "Ingresar ml" },
-                    ],
-                    (value) => setModoCotizacionLineal(value as ModoCotizacionLineal),
-                  )}
+                <div className={seC.card}>
+                  <div className={seC.gh}>Modo de cotización</div>
+                  <div className={seC.body}>
+                    {renderSegmentedControl(
+                      "Modo de cotización lineal",
+                      motorConfig.modoCotizacionLineal,
+                      [
+                        { value: "nesting", label: "Calcular por piezas" },
+                        { value: "directo", label: "Ingresar ml" },
+                      ],
+                      (value) =>
+                        setModoCotizacionLineal(value as ModoCotizacionLineal),
+                    )}
+                  </div>
                 </div>
                 {mostrarEditorPiezas ? (
                   renderPiezasEditor()
@@ -6689,6 +6694,12 @@ export function AgregarProductoSheet({
   const { moneda } = useConfigRegional();
   const [step, setStep] = React.useState<"select" | "config">("select");
   const [product, setProduct] = React.useState<CatalogProduct | null>(null);
+  // El scroll del cuerpo es el mismo elemento en los dos pasos: sin resetearlo,
+  // al entrar a configurar un producto la vista arranca donde quedó el listado.
+  const bodyRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [step, product?.id]);
   const [productoDetalle, setProductoDetalle] = React.useState<ProductoDetalle | null>(null);
   const [query, setQuery] = React.useState("");
   const [family, setFamily] = React.useState("Todos");
@@ -7134,6 +7145,7 @@ export function AgregarProductoSheet({
         ) : null}
 
         <div
+          ref={bodyRef}
           className={`sheet-body ap-body${esCarteleriaFull ? ` ${cartS.sheetBodyFull}` : ""}`}
         >
           {step === "select" ? (

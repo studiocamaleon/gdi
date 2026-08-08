@@ -17,6 +17,9 @@ import {
   seccionesConfigVisibles,
 } from "@/components/configuracion/configuracion-secciones";
 import { useSidebar } from "@/components/ui/sidebar";
+import { ConstelacionCanvas } from "@/components/constelacion-canvas";
+import { PerfilUsuarioModal } from "@/components/perfil-usuario-modal";
+import s from "@/components/app-sidebar.module.css";
 
 type AppSidebarProps = {
   currentUser: CurrentUser;
@@ -118,16 +121,24 @@ const LogoNodes = ({ size = 22 }: { size?: number }) => (
 
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
-    <div className="side-brand" title={collapsed ? "grafoprint" : undefined}>
-      <div className="mark">
-        <LogoNodes size={31} />
-      </div>
-      <div className="brand-text">
-        <div className="wordmark">grafoprint</div>
-        <div className="org">gráfica digital inteligente</div>
-      </div>
+    <div className={s.brand} title={collapsed ? "grafoprint" : undefined}>
+      <span className={s.mk}>
+        <LogoNodes size={30} />
+      </span>
+      <span className={s.nm}>
+        <div className={s.wordmark}>grafoprint</div>
+        <div className={s.org}>gráfica digital inteligente</div>
+      </span>
     </div>
   );
+}
+
+/** Iniciales para el avatar del pie (2 letras). */
+function inicialesDe(nombre: string): string {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "—";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
 }
 
 function matchesRoute(pathname: string, href: string) {
@@ -142,7 +153,7 @@ function highlightMatch(text: string, q: string): React.ReactNode {
   return (
     <>
       {text.slice(0, idx)}
-      <strong style={{ fontWeight: 700, color: "var(--side-ink)" }}>
+      <strong style={{ fontWeight: 700, color: "#c2410c" }}>
         {text.slice(idx, idx + q.length)}
       </strong>
       {text.slice(idx + q.length)}
@@ -210,6 +221,15 @@ function getSuscripcionProgress(susc: TenantSummary["suscripcion"]) {
   return Math.min(100, Math.max(8, Math.round((dias / total) * 100)));
 }
 
+// Secciones del menú (sólo reordenan; las rutas y permisos siguen en
+// nav-items.ts). Un módulo que el permiso oculta desaparece de su sección, y
+// una sección sin módulos visibles no muestra encabezado. "Sistema" (control
+// plane) se arma aparte porque es staff-only.
+const SECCIONES: ReadonlyArray<{ label: string; keys: string[] }> = [
+  { label: "Operación", keys: ["panel", "comercial", "produccion", "inventario"] },
+  { label: "Gestión", keys: ["registros", "costos", "administracion", "reportes"] },
+];
+
 export function AppSidebar({ currentUser }: AppSidebarProps) {
   const pathname = usePathname();
   // Lo que este usuario puede ver. Se calcula una vez y de acá sale todo el
@@ -242,9 +262,16 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   const suscripcion = currentUser.tenantActual.suscripcion;
   const planNombre = suscripcion?.planNombre?.trim() || "Suscripción";
   const suscripcionProgress = getSuscripcionProgress(suscripcion);
-  const { state, setOpen } = useSidebar();
+  const { state, setOpen, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
+  const usuarioNombre =
+    currentUser.nombreCompleto?.trim() || currentUser.email;
+  const tenantNombre = currentUser.tenantActual.nombre;
+  const rolNombre =
+    currentUser.tenantActual.rolNombre?.trim() ||
+    currentUser.tenantActual.rol;
   const [query, setQuery] = React.useState("");
+  const [perfilAbierto, setPerfilAbierto] = React.useState(false);
   const q = query.trim().toLowerCase();
   const filtering = q.length > 0;
   const configActiva = matchesRoute(pathname, "/configuracion");
@@ -301,14 +328,127 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
     }
   };
 
+  // Render de un módulo (hoja o grupo con hijos). Se llama por sección.
+  const renderItem = (item: NavItem) => {
+    const IconCmp = Ico[item.icon];
+    const itemHasChildren = hasChildren(item);
+    // Al filtrar, los grupos se muestran expandidos; sino, acordeón.
+    const open = itemHasChildren && (filtering || openKey === item.key);
+    const isDirectActive = !itemHasChildren && activeKey === item.key;
+
+    if (!itemHasChildren) {
+      return (
+        <NavLink
+          key={item.key}
+          href={item.href}
+          title={item.label}
+          className={`${s.it} ${isDirectActive ? s.on : ""}`}
+        >
+          <span className={s.ic}>
+            <IconCmp />
+          </span>
+          <span className={s.tx}>
+            {filtering ? highlightMatch(item.label, q) : item.label}
+          </span>
+        </NavLink>
+      );
+    }
+
+    return (
+      <React.Fragment key={item.key}>
+        <button
+          type="button"
+          title={item.label}
+          className={s.it}
+          aria-expanded={open}
+          onClick={() => onGroupClick(item.key)}
+        >
+          <span className={s.ic}>
+            <IconCmp />
+          </span>
+          <span className={s.tx}>
+            {filtering ? highlightMatch(item.label, q) : item.label}
+          </span>
+          <svg
+            className={s.cv}
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+
+        {open && !collapsed ? (
+          <div className={s.sub}>
+            {item.children.map((child) => (
+              <NavLink
+                key={child.key}
+                href={child.href}
+                className={`${s.si} ${activeKey === child.key ? s.on : ""}`}
+              >
+                <span className={s.dot} />
+                <span className={s.tx}>
+                  {filtering ? highlightMatch(child.label, q) : child.label}
+                </span>
+              </NavLink>
+            ))}
+          </div>
+        ) : null}
+      </React.Fragment>
+    );
+  };
+
   return (
-    <aside className={`side${collapsed ? " collapsed" : ""}`} data-collapsed={collapsed}>
+    <aside
+      className={`${s.sb} ${collapsed ? s.mini : ""}`}
+      data-collapsed={collapsed}
+    >
+      {/* Malla 3D velada hacia abajo; se oculta al colapsar (regla del módulo). */}
+      <ConstelacionCanvas
+        className={s.canvas}
+        nodes={34}
+        pulses={3}
+        cx={0.5}
+        cy={0.14}
+        radius={0.62}
+      />
+      <span className={s.veil} aria-hidden="true" />
+
+      <button
+        type="button"
+        className={s.tgl}
+        onClick={toggleSidebar}
+        title={collapsed ? "Expandir menú" : "Contraer menú"}
+        aria-label={collapsed ? "Expandir menú" : "Contraer menú"}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m14 6-6 6 6 6" />
+        </svg>
+      </button>
+
       <Brand collapsed={collapsed} />
 
       {collapsed ? (
         <button
           type="button"
-          className="side-search collapsed"
+          className={s.search}
           onClick={() => setOpen(true)}
           title="Buscar"
           aria-label="Buscar"
@@ -316,7 +456,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
           <Ico.Search />
         </button>
       ) : (
-        <div className="side-search">
+        <label className={s.search}>
           <Ico.Search />
           <input
             value={query}
@@ -330,146 +470,129 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             }}
             placeholder="Buscar…"
             aria-label="Buscar en el menú"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: "var(--side-ink)",
-              font: "inherit",
-              fontSize: "13.75px",
-            }}
           />
-        </div>
+        </label>
       )}
 
-      <nav className="side-nav">
-        {filteredNav.map((item) => {
-          const IconCmp = Ico[item.icon];
-          const itemHasChildren = hasChildren(item);
-          // Al filtrar, los grupos se muestran expandidos; sino, acordeón.
-          const open = itemHasChildren && (filtering || openKey === item.key);
-          const isDirectActive = !itemHasChildren && activeKey === item.key;
-
-          if (!itemHasChildren) {
-            return (
-              <NavLink
-                key={item.key}
-                href={item.href}
-                title={item.label}
-                className={`nav-item ${isDirectActive ? "active" : ""}`}
-              >
-                <span className="ico"><IconCmp /></span>
-                <span className="label">
-                  {filtering ? highlightMatch(item.label, q) : item.label}
-                </span>
-              </NavLink>
-            );
-          }
-
+      <nav className={s.nav}>
+        {SECCIONES.map((sec) => {
+          const items = sec.keys
+            .map((key) => filteredNav.find((it) => it.key === key))
+            .filter((it): it is NavItem => Boolean(it));
+          if (items.length === 0) return null;
           return (
-            <React.Fragment key={item.key}>
-              <button
-                type="button"
-                title={item.label}
-                className={`nav-item ${open ? "expanded" : ""}`}
-                onClick={() => onGroupClick(item.key)}
-              >
-                <span className="ico"><IconCmp /></span>
-                <span className="label">
-                  {filtering ? highlightMatch(item.label, q) : item.label}
-                </span>
-                <Ico.Chev className="chev" />
-              </button>
-
-              {open && !collapsed ? (
-                <div className="nav-children">
-                  {item.children.map((child) => (
-                    <NavLink
-                      key={child.key}
-                      href={child.href}
-                      className={`nav-child ${activeKey === child.key ? "active" : ""}`}
-                    >
-                      <span>
-                        {filtering ? highlightMatch(child.label, q) : child.label}
-                      </span>
-                    </NavLink>
-                  ))}
-                </div>
-              ) : null}
+            <React.Fragment key={sec.label}>
+              <div className={s.grp}>
+                <span className={s.lbl}>{sec.label}</span>
+                <span className={s.rule} />
+              </div>
+              {items.map(renderItem)}
             </React.Fragment>
           );
         })}
 
+        {/* Módulos fuera de las secciones definidas (futuros): sin encabezado,
+            para que un módulo nuevo nunca desaparezca por no estar mapeado. */}
+        {(() => {
+          const enSeccion = new Set(SECCIONES.flatMap((x) => x.keys));
+          return filteredNav
+            .filter((it) => !enSeccion.has(it.key))
+            .map(renderItem);
+        })()}
+
         {filtering && filteredNav.length === 0 && !configMatch ? (
-          <div
-            style={{
-              padding: "10px 12px",
-              fontSize: 12.5,
-              color: "var(--side-muted)",
-            }}
-          >
-            Sin resultados para “{query}”.
-          </div>
+          <div className={s.sinResultados}>Sin resultados para “{query}”.</div>
         ) : null}
 
-        {/* Control plane: sólo el staff de Grafo lo ve. La autorización real
-            la hace el API — esto es descubribilidad, no seguridad. */}
-        {currentUser.rolPlataforma ? (
-          <NavLink
-            href="/plataforma"
-            title="Plataforma"
-            className="nav-item"
-            style={{
-              marginTop: 10,
-              borderTop: "1px solid var(--side-hairline, rgba(255,255,255,.08))",
-              paddingTop: 12,
-            }}
-          >
-            <span className="ico"><Ico.Grid /></span>
-            <span className="label">Plataforma</span>
-          </NavLink>
+        {/* Sistema: control plane, sólo el staff de Grafo lo ve. La
+            autorización real la hace el API — esto es descubribilidad. */}
+        {currentUser.rolPlataforma &&
+        (!filtering || "plataforma".includes(q)) ? (
+          <React.Fragment>
+            <div className={s.grp}>
+              <span className={s.lbl}>Sistema</span>
+              <span className={s.rule} />
+            </div>
+            <NavLink href="/plataforma" title="Plataforma" className={s.it}>
+              <span className={s.ic}>
+                <Ico.Grid />
+              </span>
+              <span className={s.tx}>
+                {filtering ? highlightMatch("Plataforma", q) : "Plataforma"}
+              </span>
+            </NavLink>
+          </React.Fragment>
         ) : null}
       </nav>
 
       {/* El plan y la facturación son configuración: el operario no tiene por
-          qué ver cuánto paga la imprenta ni entrar a cambiarlo. Sin esto la
-          card lo mandaba a una pantalla que el API le contesta 403. */}
+          qué ver cuánto paga la imprenta ni entrar a cambiarlo. */}
       {puede(currentUser, "configuracion.ver") ? (
-      <Link href="/suscripcion" className="plan-card">
-        <div className="plan-row">
-          <div className="plan-title">
-            <span className="dot" />
-            <div>
-              <div className="name">{planNombre}</div>
-              <div className="tier">{formatPlanTier(suscripcion)}</div>
-            </div>
+        <Link href="/suscripcion" className={s.plan} title={planNombre}>
+          <div className={s.planT}>
+            <i />
+            <span>{planNombre}</span>
           </div>
-        </div>
-        <div className="plan-meter"><span style={{ width: `${suscripcionProgress}%` }} /></div>
-        <div className="plan-admin">Administrar suscripción</div>
-      </Link>
+          <div className={s.planD}>{formatPlanTier(suscripcion)}</div>
+          <div className={s.bar}>
+            <i style={{ width: `${suscripcionProgress}%` }} />
+          </div>
+          <span className={s.lnk}>Administrar suscripción</span>
+        </Link>
       ) : null}
 
-      {/* Configuración cierra el sidebar en vez de ocupar seis líneas del menú:
-          es el vecino del plan —plan y ajustes son la misma visita— y sus
-          secciones son la columna de su propia vista. Se esconde al filtrar
-          como cualquier otra entrada; si no, buscar "usuarios" dejaba la lista
-          vacía con Configuración igual de visible abajo. */}
-      {hayConfig && (!filtering || configMatch) ? (
-        <div className="side-foot">
+      <div className={s.foot}>
+        {hayConfig && (!filtering || configMatch) ? (
           <NavLink
             href="/configuracion"
             title="Configuración"
-            className={`nav-item ${configActiva ? "active" : ""}`}
+            className={`${s.it} ${configActiva ? s.on : ""}`}
           >
-            <span className="ico"><Ico.Cog /></span>
-            <span className="label">
+            <span className={s.ic}>
+              <Ico.Cog />
+            </span>
+            <span className={s.tx}>
               {filtering ? highlightMatch("Configuración", q) : "Configuración"}
             </span>
           </NavLink>
-        </div>
+        ) : null}
+
+        <button
+          type="button"
+          className={s.user}
+          onClick={() => setPerfilAbierto(true)}
+          title={`${usuarioNombre} · ${tenantNombre}`}
+          aria-label="Abrir perfil de usuario"
+        >
+          <span className={s.av}>{inicialesDe(usuarioNombre)}</span>
+          <span className={s.userNm}>
+            <span className={s.userA}>{usuarioNombre}</span>
+            <span className={s.userB}>
+              {tenantNombre} · {rolNombre}
+            </span>
+          </span>
+          <svg
+            className={s.userChev}
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m8 9 4-4 4 4M16 15l-4 4-4-4" />
+          </svg>
+        </button>
+      </div>
+
+      {perfilAbierto ? (
+        <PerfilUsuarioModal
+          currentUser={currentUser}
+          onClose={() => setPerfilAbierto(false)}
+        />
       ) : null}
     </aside>
   );

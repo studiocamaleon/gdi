@@ -113,12 +113,21 @@ function Confetti() {
 
 // ── Timeline de un item ──────────────────────────────────────────────────
 
+/**
+ * ¿El paso está REALMENTE en la máquina? Sólo `en_curso`/`pausado` cuentan.
+ * "Pendiente" es el próximo de la fila, no algo que esté pasando: tratarlo como
+ * activo hacía que un paso sin iniciar dijera "En curso" y que la animación de
+ * producción apareciera entre dos pasos (uno hecho, el siguiente sin arrancar).
+ */
+function pasoEnProduccion(p: TrackingPaso): boolean {
+  return p.estado === "en_curso" || p.estado === "pausado";
+}
+
 function pasoEstadoVisual(pasos: TrackingPaso[], i: number): "done" | "current" | "pending" {
   const p = pasos[i];
   if (p.estado === "hecho") return "done";
-  // El primer paso no-hecho es el "actual".
-  const primerNoHecho = pasos.findIndex((x) => x.estado !== "hecho");
-  return i === primerNoHecho ? "current" : "pending";
+  if (pasoEnProduccion(p)) return "current";
+  return "pending";
 }
 
 function ItemTimeline({ item }: { item: TrackingItem }) {
@@ -132,7 +141,8 @@ function ItemTimeline({ item }: { item: TrackingItem }) {
           <div key={paso.indice} className={`t-step ${state}`}>
             <span className="t-step-dot">{state === "done" ? <IcoCheck /> : i + 1}</span>
             <div className="t-step-body">
-              <div className="tec">{paso.nombre}</div>
+              {/* Sólo el nombre cliente-facing; el técnico ("Impresión por
+                  hoja CMYK") no le dice nada a quien recibe el link. */}
               <div className="simple">{copy.simple}</div>
               {state !== "pending" ? <div className="desc">{copy.desc}</div> : null}
               {state === "done" && paso.completadoEl ? (
@@ -168,7 +178,8 @@ function fmtMomento(iso: string): string {
 // ── Hero de producción por item (animación neutra, nombra el paso) ───────
 
 function ProdHero({ item, total }: { item: TrackingItem; total: number }) {
-  const idx = item.pasos.findIndex((p) => p.estado !== "hecho");
+  // El paso que se está trabajando de verdad, no el próximo de la fila.
+  const idx = item.pasos.findIndex(pasoEnProduccion);
   const paso = idx >= 0 ? item.pasos[idx] : null;
   if (!paso) return null;
   const copy = copyDePaso(paso.familiaCodigo, paso.plantillaCodigo);
@@ -255,8 +266,13 @@ function ItemPanel({
   onToggle: () => void;
   token: string;
 }) {
-  const enProduccion = item.progresoPct > 0 && item.progresoPct < 100;
+  // La animación de producción aparece SÓLO si hay un paso en la máquina, no
+  // por progreso a medias: un item al 67% entre dos pasos no está "produciendo".
+  const enProduccion = item.pasos.some(pasoEnProduccion);
   const listo = item.progresoPct >= 100;
+  // Las specs (material, archivo, tamaño…) arrancan colapsadas: son el detalle
+  // fino que el cliente casi nunca necesita y que, abierto, empuja la tarjeta.
+  const [verSpecs, setVerSpecs] = React.useState(false);
   return (
     <div className={`t-item-panel ${open ? "open" : ""}`}>
       <button type="button" className="t-item-head" onClick={onToggle} aria-expanded={open}>
@@ -278,13 +294,49 @@ function ItemPanel({
           {enProduccion ? <ProdHero item={item} total={item.pasos.length} /> : null}
           <ItemTimeline item={item} />
           {item.specs.length > 0 ? (
-            <div className="t-specs t-specs-inline">
-              {item.specs.map((spec, i) => (
-                <div key={i} className="spec">
-                  <div className="lbl">{spec.etiqueta}</div>
-                  <div className="v">{spec.valor}</div>
+            <div style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                onClick={() => setVerSpecs((v) => !v)}
+                aria-expanded={verSpecs}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  width: "100%",
+                  padding: "9px 12px",
+                  border: "1px solid var(--t-hairline)",
+                  borderRadius: "var(--t-r-3)",
+                  background: verSpecs ? "var(--t-surface-2)" : "transparent",
+                  color: "var(--t-muted)",
+                  font: "inherit",
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  letterSpacing: "0.01em",
+                  cursor: "pointer",
+                }}
+              >
+                <span>{verSpecs ? "Ocultar detalle" : "Detalle del producto"}</span>
+                <IcoChevron open={verSpecs} />
+              </button>
+              {verSpecs ? (
+                <div className="t-specs t-specs-inline">
+                  {item.specs.map((spec, i) => (
+                    // min-width:0 deja que la celda del grid se achique; sin
+                    // esto un nombre de archivo largo estira toda la tabla.
+                    <div key={i} className="spec" style={{ minWidth: 0 }}>
+                      <div className="lbl">{spec.etiqueta}</div>
+                      <div
+                        className="v"
+                        style={{ minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}
+                      >
+                        {spec.valor}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : null}
             </div>
           ) : null}
           <ArchivosCliente archivos={item.archivos} token={token} compacto />
@@ -357,13 +409,10 @@ export function TrackingView({
     return new Set<string>([data.items[enProd >= 0 ? enProd : 0]?.id].filter(Boolean) as string[]);
   }, [data.items]);
   const [abiertos, setAbiertos] = React.useState<Set<string>>(abiertoInicial);
+  // Acordeón de uno por vez: abrir un item cierra el que estaba abierto. En
+  // un celular tener varios paneles abiertos hace perder el hilo del scroll.
   const toggle = (id: string) =>
-    setAbiertos((cur) => {
-      const next = new Set(cur);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setAbiertos((cur) => (cur.has(id) ? new Set() : new Set([id])));
 
   const pill = estadoPill(data.estado);
   const entrega = fechaLarga(data.fechaEntrega);
@@ -373,7 +422,14 @@ export function TrackingView({
   // vieja: la página se re-consulta sola y no vale la pena romperla por eso.
   const contacto = data.imprenta.contacto ?? {
     telefono: null, whatsapp: null, domicilio: null, horario: null, sitioWeb: null,
+    urlPerfilGoogle: null,
   };
+  // "Ver mapa" abre la ficha de Google del negocio si la cargó; si no, cae a
+  // buscar el domicilio en Google Maps como hasta ahora.
+  const urlMapa = contacto.domicilio
+    ? contacto.urlPerfilGoogle ??
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contacto.domicilio)}`
+    : null;
   const hayContacto = Boolean(
     contacto.domicilio || contacto.horario || contacto.telefono || contacto.whatsapp,
   );
@@ -397,7 +453,7 @@ export function TrackingView({
           )}
           <div>
             <div className="nm">{data.imprenta.nombre}</div>
-            <div className="sub">Tu pedido en producción</div>
+            <div className="sub">Seguimiento de tu pedido</div>
           </div>
         </div>
         <div className="powered">
@@ -423,9 +479,28 @@ export function TrackingView({
         <div className="t-eyebrow">
           <span className="code">{data.numero}</span>
           <span className="sep">·</span>
-          <span>iniciada {fechaLarga(data.creadaEl)?.dia ?? ""}</span>
-          <span style={{ marginLeft: "auto" }} className={`t-status-pill ${pill.tone === "ok" ? "ok" : ""}`}>
-            <span className="dot" />{pill.label}
+          <span>recibida {fechaLarga(data.creadaEl)?.dia ?? ""}</span>
+          <span
+            style={{
+              marginLeft: "auto",
+              // "En cola" es neutro: fondo apagado y sin el naranja de
+              // "producción", que sugería trabajo en curso donde no lo hay.
+              ...(pill.tone === "wait"
+                ? {
+                    background: "var(--t-surface-2)",
+                    color: "var(--t-muted)",
+                    borderColor: "var(--t-border)",
+                  }
+                : {}),
+            }}
+            className={`t-status-pill ${pill.tone === "ok" ? "ok" : ""}`}
+          >
+            <span
+              className="dot"
+              // Sin pulso cuando está en cola: nada está pasando todavía.
+              style={pill.tone === "wait" ? { animation: "none", boxShadow: "none" } : undefined}
+            />
+            {pill.label}
           </span>
         </div>
         <h1 className="t-hero-title">
@@ -510,10 +585,10 @@ export function TrackingView({
               <span className="sub">dónde estamos</span>
             </div>
             <div className="t-shop">
-              {contacto.domicilio ? (
+              {contacto.domicilio && urlMapa ? (
                 <a
                   className="row"
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contacto.domicilio)}`}
+                  href={urlMapa}
                   target="_blank"
                   rel="noreferrer"
                 >

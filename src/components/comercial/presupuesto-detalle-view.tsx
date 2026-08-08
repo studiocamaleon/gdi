@@ -384,7 +384,11 @@ export function PresupuestoDetalleView({
           `.orden-tabs` tiene flex:1 y espera vivir dentro de `.orden-tabs-row`
           (flex en fila); suelto en una columna colapsa a 0 de alto. */}
       <div className="orden-tabs-row">
-      <div className="orden-tabs" role="tablist">
+      <div
+        className="orden-tabs"
+        role="tablist"
+        style={{ overflowY: "hidden" }}
+      >
         {(
           [
             { k: "productos", l: "Productos", ic: <PackageIcon />, ct: d.items.length },

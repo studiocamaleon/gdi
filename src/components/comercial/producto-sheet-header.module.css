@@ -4,19 +4,28 @@
  * que fija tokens siempre claros, así que el look papel no pelea con el tema
  * oscuro. Colores remapeados a tokens `--*` con fallback al valor del diseño. */
 .header {
-  /* Fijo al scrollear: se mantiene pineado al borde superior del panel.
-   * `top: -18px` compensa el padding-top del `.ap-body` (el scrollport mide
-   * los offsets sticky desde su padding edge). */
-  position: sticky;
-  top: -18px;
-  z-index: 2;
-  /* Full-bleed: cancela el padding del `.ap-body` (18px arriba, 22px a los
-   * lados) para tocar el borde del panel; deja 16px hasta el contenido. */
-  margin: -18px -22px 16px;
+  position: relative;
+  /* En el sheet, `.ot-v1` remapea `--muted` al gris de diseño; en un modal que
+   * NO vive en `.ot-v1` (centro de copiado), `--muted` caía al `#efede9` casi
+   * blanco del dashboard y la descripción se volvía ilegible. Se replica el
+   * remap acá para que el header sea legible en cualquier contenedor. */
+  --muted: var(--muted-text, #6e6e76);
+  --muted-2: var(--muted-text-2, #92929b);
   padding: 16px;
   border-bottom: 1px solid var(--hairline, #efece8);
   background: linear-gradient(180deg, #fbfaf8, #f4f2ee);
   overflow: hidden;
+}
+
+/* Variante del sheet de producto: full-bleed + fijo al scrollear. Cancela el
+ * padding del `.ap-body` (18px arriba, 22px a los lados) para tocar el borde
+ * del panel y se pinea arriba (`top: -18px` compensa el padding-top del
+ * scrollport). Los modales con layout propio no la usan. */
+.sticky {
+  position: sticky;
+  top: -18px;
+  z-index: 2;
+  margin: -18px -22px 16px;
 }
 
 .canvas {

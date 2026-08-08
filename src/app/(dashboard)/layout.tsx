@@ -8,7 +8,7 @@ import { ConfigRegionalProvider } from "@/components/navigation/config-regional-
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { PasosEnCursoWidget } from "@/components/produccion/pasos-en-curso-widget";
-import { UserTenantMenu } from "@/components/user-tenant-menu";
+import { LogoutButton } from "@/components/logout-button";
 import { ImpersonacionBanner } from "@/components/plataforma/impersonacion-banner";
 import {
   SidebarInset,
@@ -65,7 +65,7 @@ export default async function DashboardLayout({
             <header className="topbar">
               <SidebarTrigger className="icon-btn" />
               <div className="ml-auto">
-                <UserTenantMenu currentUser={currentUser} />
+                <LogoutButton />
               </div>
             </header>
 

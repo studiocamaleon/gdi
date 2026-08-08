@@ -1,0 +1,222 @@
+/* Modal de perfil de usuario. Superficie clara; tokens con fallback. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 20, 26, 0.4);
+  animation: perfilFade 0.12s ease;
+}
+
+@keyframes perfilFade {
+  from {
+    opacity: 0;
+  }
+}
+
+.modal {
+  /* Paleta FIJA (papel claro). El modal se portalea a <body> y hereda los
+   * tokens del :root, donde `--muted`/`--ink` resuelven claros y el texto
+   * quedaba lavado. Valores explícitos, un punto más oscuros. */
+  --ink: #14141a;
+  --ink-2: #23232a;
+  --muted: #4f4f58;
+  --muted-2: #7c7c86;
+  --border: #e5e2db;
+  --border-strong: #c8c4ba;
+  --surface: #fff;
+  --surface-2: #fafaf9;
+
+  position: relative;
+  width: 420px;
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px -12px rgba(20, 20, 26, 0.35);
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  z-index: 1;
+}
+.close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Encabezado oscuro (misma familia que el menú viejo). */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 22px;
+  color: #fff;
+  background: radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.14),
+      transparent 34%
+    ),
+    linear-gradient(145deg, #1c1c1f 0%, #0c0c0e 100%);
+  border-radius: 16px 16px 0 0;
+}
+.av {
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.12);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  font-weight: 600;
+  flex: none;
+}
+.ident {
+  min-width: 0;
+}
+.nm {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mail {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.body {
+  padding: 16px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sec {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.secTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #6e6e76);
+}
+
+.tenants {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tenant {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--ink, #14141a);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.tenant:hover:not(:disabled) {
+  border-color: var(--border-strong, #c8c4ba);
+  background: var(--surface-2, #fafaf9);
+}
+.tenant:disabled {
+  cursor: default;
+}
+.tenantOn {
+  border-color: var(--ink, #14141a);
+  box-shadow: inset 0 0 0 1px var(--ink, #14141a);
+}
+.tenantIco {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted, #6e6e76);
+}
+.tenantNm {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.tenantRol {
+  font-size: 11.5px;
+  color: var(--muted, #6e6e76);
+  flex: none;
+}
+.tenantCheck {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: #16794a;
+}
+.tenantSwap {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--muted-2, #92929b);
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--ink, #14141a);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.action:hover {
+  border-color: var(--border-strong, #c8c4ba);
+  background: var(--surface-2, #fafaf9);
+}
+.actionIco {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted, #6e6e76);
+}
+
+.soon {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted-2, #92929b);
+}

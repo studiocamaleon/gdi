@@ -3432,6 +3432,9 @@ export class OrdenesTrabajoService {
           domicilio: empresa.domicilio,
           horario: empresa.horarioAtencion,
           sitioWeb: empresa.sitioWeb,
+          // Si el negocio cargó su ficha de Google, "Ver mapa" abre esa; si
+          // no, el front cae a buscar el domicilio en Google Maps.
+          urlPerfilGoogle: empresa.urlPerfilGoogle,
         },
         // Sólo el flag: la URL la arma el front con su propio prefijo de
         // proxy (el token ya lo tiene, es el parámetro de la página). El API

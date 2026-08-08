@@ -73,6 +73,9 @@ export type TrackingPublico = {
       domicilio: string | null;
       horario: string | null;
       sitioWeb: string | null;
+      /** Ficha de Google del negocio; si está, "Ver mapa" abre esta URL en
+       *  vez de buscar el domicilio. Null = fallback a la búsqueda de siempre. */
+      urlPerfilGoogle: string | null;
     };
   };
   cliente: { nombre: string; iniciales: string };
@@ -210,11 +213,16 @@ export function estadoNarrativo(estado: string): string {
   }
 }
 
-export function estadoPill(estado: string): { label: string; tone: "ok" | "warm" } {
+export function estadoPill(
+  estado: string,
+): { label: string; tone: "ok" | "warm" | "wait" } {
   if (estado === "finalizada" || estado === "entregada") {
     return { label: estado === "entregada" ? "Entregado" : "Listo", tone: "ok" };
   }
-  return { label: "En producción", tone: "warm" };
+  if (estado === "produccion") return { label: "En producción", tone: "warm" };
+  // "pendiente" (y cualquier estado previo a producción): está en cola, no
+  // arrancó. Antes caía al "En producción" del default y decía algo falso.
+  return { label: "En cola", tone: "wait" };
 }
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];

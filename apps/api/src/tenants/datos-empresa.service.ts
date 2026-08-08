@@ -45,6 +45,7 @@ export class DatosEmpresaService {
       provincia: datos?.provincia ?? null,
       horarioAtencion: datos?.horarioAtencion ?? null,
       urlResenas: datos?.urlResenas ?? null,
+      urlPerfilGoogle: datos?.urlPerfilGoogle ?? null,
       monedaCodigo: datos?.monedaCodigo ?? MONEDA_DEFAULT,
       zonaHoraria: datos?.zonaHoraria ?? ZONA_DEFAULT,
       redondeoPrecio: datos?.redondeoPrecio ?? 'moneda',
@@ -112,6 +113,7 @@ export class DatosEmpresaService {
       domicilio,
       horarioAtencion: d.horarioAtencion,
       urlResenas: d.urlResenas,
+      urlPerfilGoogle: d.urlPerfilGoogle,
       moneda: monedaDe(d.monedaCodigo),
       zonaHoraria: d.zonaHoraria ?? ZONA_DEFAULT,
     };
@@ -143,6 +145,7 @@ export class DatosEmpresaService {
       provincia: limpio(dto.provincia),
       horarioAtencion: limpio(dto.horarioAtencion),
       urlResenas: conEsquema(dto.urlResenas),
+      urlPerfilGoogle: conEsquema(dto.urlPerfilGoogle),
       // Los tres regionales tienen default en la base: sólo pisan si vienen.
       ...(dto.monedaCodigo !== undefined && {
         monedaCodigo: dto.monedaCodigo.toUpperCase(),
@@ -202,6 +205,8 @@ export type EmpresaEnDocumentos = {
   domicilio: string | null;
   horarioAtencion: string | null;
   urlResenas: string | null;
+  /** Ficha de Google del negocio; a dónde apunta "Ver mapa" en el tracking. */
+  urlPerfilGoogle: string | null;
   /** Nunca null: sin fila de datos, la moneda es la default (ARS). */
   moneda: Moneda;
   zonaHoraria: string;
@@ -217,6 +222,7 @@ const SIN_DATOS: EmpresaEnDocumentos = {
   domicilio: null,
   horarioAtencion: null,
   urlResenas: null,
+  urlPerfilGoogle: null,
   moneda: monedaDe(null),
   zonaHoraria: ZONA_DEFAULT,
 };
@@ -235,6 +241,7 @@ export type DatosEmpresaResponse = {
   provincia: string | null;
   horarioAtencion: string | null;
   urlResenas: string | null;
+  urlPerfilGoogle: string | null;
   monedaCodigo: string;
   zonaHoraria: string;
   redondeoPrecio: string;

@@ -90,13 +90,35 @@ export function LogoTenantCard({
 
   return (
     <div className="arch-logo">
-      <div className="arch-logo-preview">
+      {/* Logo + "Quitar logo" apilados y centrados como una sola columna; el
+          `align-items:center` del `.arch-logo` la centra con los textos. */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 10,
+          flex: "0 0 auto",
+        }}
+      >
+        <div className="arch-logo-preview">
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={urlDeArchivo(logo.archivoId)} alt="Logo del negocio" />
+          ) : (
+            <div className="arch-logo-iniciales">{iniciales(nombreNegocio)}</div>
+          )}
+        </div>
         {logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={urlDeArchivo(logo.archivoId)} alt="Logo del negocio" />
-        ) : (
-          <div className="arch-logo-iniciales">{iniciales(nombreNegocio)}</div>
-        )}
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setConfirmarQuitar(true)}
+          >
+            <Trash2Icon />
+            Quitar logo
+          </button>
+        ) : null}
       </div>
 
       <div className="arch-logo-body">
@@ -117,18 +139,6 @@ export function LogoTenantCard({
           y el seguimiento que ve el cliente. Sin logo se dibujan las iniciales
           del negocio.
         </div>
-        {logo ? (
-          <div className="arch-logo-acc">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setConfirmarQuitar(true)}
-            >
-              <Trash2Icon />
-              Quitar logo
-            </button>
-          </div>
-        ) : null}
       </div>
 
       <ConfirmacionDestructiva
