@@ -12,6 +12,7 @@ import {
   type MaterialPresetVariant,
 } from "@/lib/biblioteca-materias-primas";
 import { instalarBibliotecaMateriaPrima } from "@/lib/materias-primas-api";
+import s from "./biblioteca-materias-primas.module.css";
 
 type Props = {
   initialItems: MaterialPresetListItem[];
@@ -1060,9 +1061,9 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
   };
 
   return (
-    <div className="bm-scope">
-      <div className="bm-page">
-        <div className="bm-head">
+    <div className={s.scope}>
+      <div className={s.page}>
+        <div className={s.head}>
           <div className="title-block">
             <div className="eyebrow">
               <span className="ic">
@@ -1078,17 +1079,17 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
             </div>
           </div>
           <div className="actions">
-            <button className="bm-btn ghost" type="button">
+            <button className={`${s.btn} ghost`} type="button">
               Ver instaladas <span className="ct">{counts.installed}</span>
             </button>
-            <button className="bm-btn" type="button">
+            <button className={s.btn} type="button">
               Sugerir material
             </button>
           </div>
         </div>
 
-        <div className="bm-toolbar">
-          <div className="bm-search">
+        <div className={s.toolbar}>
+          <div className={s.search}>
             <span className="ic">
               <BIco.Search />
             </span>
@@ -1099,7 +1100,7 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
             />
             <span className="kbd">/</span>
           </div>
-          <div className="bm-filter">
+          <div className={s.filter}>
             <span className="lbl">Familia</span>
             <select
               value={familyFilter}
@@ -1116,7 +1117,7 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
             <BIco.ChevDn />
           </div>
           {categoriaOptions.length > 0 ? (
-            <div className="bm-filter">
+            <div className={s.filter}>
               <span className="lbl">Categoría</span>
               <select
                 value={categoriaFilter}
@@ -1133,12 +1134,12 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
               <BIco.ChevDn />
             </div>
           ) : null}
-          <div className="bm-filter">
+          <div className={s.filter}>
             <span className="lbl">Uso</span>
             <span className="v">Todos</span>
             <BIco.ChevDn />
           </div>
-          <div className="bm-seg">
+          <div className={s.seg}>
             {(["all", "not-installed", "installed"] as const).map((key) => (
               <button
                 key={key}
@@ -1155,16 +1156,16 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
               </button>
             ))}
           </div>
-          <div className="bm-toolbar-summary">
+          <div className={s.toolbarSummary}>
             Mostrando <strong>{visibleItems.length}</strong> de{" "}
             <strong>{items.length}</strong>
           </div>
         </div>
 
-        <div className="bm-family-stack">
+        <div className={s.familyStack}>
           {visibleGroups.map(([familyKey, familyItems]) => (
-            <section key={familyKey} className="bm-family-section">
-              <div className="bm-family-head">
+            <section key={familyKey} className={s.familySection}>
+              <div className={s.familyHead}>
                 <div>
                   <h2>
                     {bibliotecaFamilias[familyKey]?.nm ??
@@ -1174,7 +1175,7 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
                 </div>
                 <span>{familyItems.length} materiales</span>
               </div>
-              <div className="bm-grid">
+              <div className={s.grid}>
                 {familyItems.map((item) => (
                   <MaterialCard
                     key={item.canonicalKey}
@@ -1213,12 +1214,12 @@ function MaterialCard({
   const aliases = item.aliasDisponibles.slice(1, 4);
   return (
     <button
-      className={`bm-card ${state.visibleName ? "has-banner" : ""}`}
+      className={`${s.card} ${state.visibleName ? "has-banner" : ""}`}
       onClick={() => onConfigure(item.canonicalKey)}
       type="button"
     >
       {state.visibleName && (
-        <div className="bm-visible-banner">
+        <div className={s.visibleBanner}>
           <span className="ic">
             <BIco.Check />
           </span>
@@ -1226,26 +1227,26 @@ function MaterialCard({
           <span className="nm">{state.visibleName}</span>
         </div>
       )}
-      <div className="bm-card-head">
-        <div className="bm-card-icon">
+      <div className={s.cardHead}>
+        <div className={s.cardIcon}>
           <MaterialIcon kind={item.iconKind} size={32} />
         </div>
-        <div className="bm-card-meta">
-          <div className="bm-card-canonical">
+        <div className={s.cardMeta}>
+          <div className={s.cardCanonical}>
             <span className="nm">{item.nombreCanonico}</span>
           </div>
-          <div className="bm-card-fam">
+          <div className={s.cardFam}>
             {bibliotecaFamilias[item.subfamilia]?.nm ?? item.subfamilia}
           </div>
         </div>
-        <span className={`bm-status ${state.status}`}>
+        <span className={`${s.status} ${state.status}`}>
           <span className="d" />
           {statusLabel(state)}
         </span>
       </div>
-      <div className="bm-card-desc">{item.descripcionCorta}</div>
+      <div className={s.cardDesc}>{item.descripcionCorta}</div>
       {aliases.length > 0 && (
-        <div className="bm-card-aliases">
+        <div className={s.cardAliases}>
           <span className="lbl">Alias</span>
           {aliases.map((alias, index) => (
             <React.Fragment key={alias}>
@@ -1255,18 +1256,18 @@ function MaterialCard({
           ))}
         </div>
       )}
-      <div className="bm-card-uses">
+      <div className={s.cardUses}>
         {uses.map((use) => (
-          <span key={use.code} className="bm-use">
+          <span key={use.code} className={s.use}>
             {use.code}
           </span>
         ))}
       </div>
-      <div className="bm-card-foot">
-        <span className="bm-card-counts">
+      <div className={s.cardFoot}>
+        <span className={s.cardCounts}>
           <strong>{item.variantes.length}</strong> variantes sugeridas
         </span>
-        <span className="bm-card-cta">
+        <span className={s.cardCta}>
           Configurar instalación{" "}
           <span className="arr">
             <BIco.Arrow />
@@ -1375,9 +1376,9 @@ function Wizard({
 
   return (
     <>
-      <div className="bm-backdrop" onClick={onClose} />
-      <div className="bm-sheet" role="dialog" aria-modal="true">
-        <div className="bm-sheet-head">
+      <div className={s.backdrop} onClick={onClose} />
+      <div className={s.sheet} role="dialog" aria-modal="true">
+        <div className={s.sheetHead}>
           <div className="icon-box">
             <MaterialIcon kind={item.iconKind} size={28} />
           </div>
@@ -1395,7 +1396,7 @@ function Wizard({
             </div>
           </div>
           <button
-            className="bm-sheet-close"
+            className={s.sheetClose}
             onClick={onClose}
             aria-label="Cerrar"
             type="button"
@@ -1404,7 +1405,7 @@ function Wizard({
           </button>
         </div>
         <Stepper current={step} onJump={setStep} />
-        <div className="bm-sheet-body">
+        <div className={s.sheetBody}>
           {step === 0 && (
             <StepNombre
               item={item}
@@ -1437,8 +1438,8 @@ function Wizard({
           )}
         </div>
         {step < 3 && (
-          <div className="bm-sheet-foot">
-            <button className="bm-btn ghost" onClick={onClose} type="button">
+          <div className={s.sheetFoot}>
+            <button className={`${s.btn} ghost`} onClick={onClose} type="button">
               Cancelar
             </button>
             <div className="spacer" />
@@ -1462,7 +1463,7 @@ function Wizard({
             </span>
             {step > 0 && (
               <button
-                className="bm-btn"
+                className={s.btn}
                 onClick={() => setStep((s) => Math.max(0, s - 1))}
                 type="button"
               >
@@ -1470,7 +1471,7 @@ function Wizard({
               </button>
             )}
             <button
-              className="bm-btn primary"
+              className={`${s.btn} primary`}
               onClick={
                 step === 2 ? install : () => setStep((s) => Math.min(2, s + 1))
               }
@@ -1503,14 +1504,14 @@ function Stepper({
   onJump: (step: number) => void;
 }) {
   return (
-    <div className="bm-stepper">
+    <div className={s.stepper}>
       {steps.map((step, index) => {
         const state =
           index < current ? "done" : index === current ? "current" : "pending";
         return (
           <React.Fragment key={step.key}>
             <button
-              className={`bm-step ${state}`}
+              className={`${s.step} ${state}`}
               onClick={() => onJump(index)}
               type="button"
             >
@@ -1524,7 +1525,7 @@ function Stepper({
             </button>
             {index < steps.length - 1 && (
               <span
-                className={`bm-step-rule ${state === "done" ? "done" : ""}`}
+                className={`${s.stepRule} ${state === "done" ? "done" : ""}`}
               />
             )}
           </React.Fragment>
@@ -1536,7 +1537,7 @@ function Stepper({
 
 function CanonicalRecap({ item }: { item: MaterialPresetListItem }) {
   return (
-    <div className="bm-canonical-recap">
+    <div className={s.canonicalRecap}>
       <span className="ic">
         <BIco.Library />
       </span>
@@ -1547,7 +1548,7 @@ function CanonicalRecap({ item }: { item: MaterialPresetListItem }) {
           {item.canonicalKey} · {item.templateId}
         </div>
       </div>
-      <span className="bm-canonical-pill">
+      <span className={s.canonicalPill}>
         <span className="ic">
           <BIco.Sparkles />
         </span>
@@ -1577,12 +1578,12 @@ function StepNombre({
   const customMode = !item.aliasDisponibles.includes(draft.visibleName);
   return (
     <>
-      <div className="bm-section">
+      <div className={s.section}>
         <CanonicalRecap item={item} />
       </div>
       {yaInstalado && (
-        <div className="bm-section">
-          <div className="bm-section-head">
+        <div className={s.section}>
+          <div className={s.sectionHead}>
             <div className="ttl">Ya tenés este material instalado</div>
             <div className="sub">
               {item.installState.visibleName
@@ -1591,15 +1592,15 @@ function StepNombre({
               Elegí qué querés hacer.
             </div>
           </div>
-          <div className="bm-mode-grid">
+          <div className={s.modeGrid}>
             {puedeCompletar && (
               <button
                 type="button"
-                className={`bm-mode ${installMode === "completar" ? "on" : ""}`}
+                className={`${s.mode} ${installMode === "completar" ? "on" : ""}`}
                 onClick={() => setInstallMode("completar")}
               >
-                <span className="bm-mode-title">Completar el existente</span>
-                <span className="bm-mode-sub">
+                <span className={s.modeTitle}>Completar el existente</span>
+                <span className={s.modeSub}>
                   Agrega las variantes que falten a la materia prima ya
                   instalada.
                 </span>
@@ -1607,11 +1608,11 @@ function StepNombre({
             )}
             <button
               type="button"
-              className={`bm-mode ${installMode === "separado" ? "on" : ""}`}
+              className={`${s.mode} ${installMode === "separado" ? "on" : ""}`}
               onClick={() => setInstallMode("separado")}
             >
-              <span className="bm-mode-title">Instalar copia separada</span>
-              <span className="bm-mode-sub">
+              <span className={s.modeTitle}>Instalar copia separada</span>
+              <span className={s.modeSub}>
                 Crea otra materia prima independiente (otro precio, proveedor o
                 máquina). El código y los SKU se ajustan para no repetirse.
               </span>
@@ -1619,17 +1620,17 @@ function StepNombre({
           </div>
         </div>
       )}
-      <div className="bm-section">
-        <div className="bm-section-head">
+      <div className={s.section}>
+        <div className={s.sectionHead}>
           <div className="ttl">Nombre visible en tu empresa</div>
           <div className="sub">
             Elegí cómo llama tu equipo a este material. Será el nombre que
             aparezca en cotizaciones, órdenes y consumos.
           </div>
         </div>
-        <div className="bm-field" style={{ marginBottom: 14 }}>
+        <div className={s.field} style={{ marginBottom: 14 }}>
           <input
-            className="bm-input lg"
+            className={`${s.input} lg`}
             value={draft.visibleName}
             onChange={(event) =>
               setDraft((d) => ({ ...d, visibleName: event.target.value }))
@@ -1637,13 +1638,13 @@ function StepNombre({
             placeholder="Nombre visible..."
           />
         </div>
-        <div className="bm-field">
+        <div className={s.field}>
           <label>O elegí un alias común</label>
-          <div className="bm-alias-grid">
+          <div className={s.aliasGrid}>
             {item.aliasDisponibles.map((alias) => (
               <button
                 key={alias}
-                className={`bm-alias ${!customMode && draft.visibleName === alias ? "on" : ""}`}
+                className={`${s.alias} ${!customMode && draft.visibleName === alias ? "on" : ""}`}
                 onClick={() => setDraft((d) => ({ ...d, visibleName: alias }))}
                 type="button"
               >
@@ -1651,7 +1652,7 @@ function StepNombre({
               </button>
             ))}
             <button
-              className={`bm-alias custom ${customMode ? "on" : ""}`}
+              className={`${s.alias} custom ${customMode ? "on" : ""}`}
               onClick={() => setDraft((d) => ({ ...d, visibleName: "" }))}
               type="button"
             >
@@ -1659,7 +1660,7 @@ function StepNombre({
             </button>
           </div>
         </div>
-        <div className="bm-mapping">
+        <div className={s.mapping}>
           <div className="col">
             <div className="k">
               <BIco.Library /> Canónico SaaS
@@ -1678,7 +1679,7 @@ function StepNombre({
             <div className="meta">se mostrará en inventario</div>
           </div>
         </div>
-        <div className="bm-field-help" style={{ marginTop: 10 }}>
+        <div className={s.fieldHelp} style={{ marginTop: 10 }}>
           <span className="ic">
             <BIco.Info />
           </span>
@@ -1686,32 +1687,32 @@ function StepNombre({
           nombre canónico para reportes cross-tenant y compatibilidad técnica.
         </div>
       </div>
-      <div className="bm-section">
-        <div className="bm-section-head">
+      <div className={s.section}>
+        <div className={s.sectionHead}>
           <div className="ttl">Código y descripción</div>
           <div className="sub">
             Opcional. Se autogeneran a partir del canónico.
           </div>
         </div>
-        <div className="bm-two-cols">
-          <div className="bm-field">
+        <div className={s.twoCols}>
+          <div className={s.field}>
             <label>
               Código <span className="opt">interno</span>
             </label>
             <input
-              className="bm-input mono"
+              className={`${s.input} mono`}
               value={draft.codigo}
               onChange={(event) =>
                 setDraft((d) => ({ ...d, codigo: event.target.value }))
               }
             />
           </div>
-          <div className="bm-field">
+          <div className={s.field}>
             <label>
               Descripción <span className="opt">corta</span>
             </label>
             <input
-              className="bm-input"
+              className={s.input}
               value={draft.descripcion}
               onChange={(event) =>
                 setDraft((d) => ({ ...d, descripcion: event.target.value }))
@@ -1780,15 +1781,15 @@ function StepVariantes({
   };
   return (
     <>
-      <div className="bm-section">
+      <div className={s.section}>
         <CanonicalRecap item={item} />
       </div>
-      <div className="bm-section">
-        <div className="bm-section-head">
+      <div className={s.section}>
+        <div className={s.sectionHead}>
           <div className="ttl">Variantes a instalar</div>
           <div className="sub">{variantHelpText(item)}</div>
         </div>
-        <div className="bm-variant-actions">
+        <div className={s.variantActions}>
           <button className="quick" onClick={setRecommended} type="button">
             Seleccionar comunes
           </button>
@@ -1803,8 +1804,8 @@ function StepVariantes({
           </div>
         </div>
         {groups.map(([format, variants]) => (
-          <div key={format} className="bm-variant-group">
-            <div className="bm-variant-group-head">
+          <div key={format} className={s.variantGroup}>
+            <div className={s.variantGroupHead}>
               <span className="nm">Formato {format}</span>
               <span className="ct">{variants.length} variantes</span>
             </div>
@@ -1817,12 +1818,12 @@ function StepVariantes({
               return (
                 <button
                   key={variant.id}
-                  className={`bm-variant ${checked ? "checked" : ""} ${bloqueada ? "installed" : ""}`}
+                  className={`${s.variant} ${checked ? "checked" : ""} ${bloqueada ? "installed" : ""}`}
                   onClick={() => toggle(variant)}
                   type="button"
                 >
-                  <span className="bm-check">{checked && <BIco.Check />}</span>
-                  <div className="bm-variant-info">
+                  <span className={s.check}>{checked && <BIco.Check />}</span>
+                  <div className={s.variantInfo}>
                     <div className="nm">
                       {variantDescriptor(item, variant)}
                       {variant.recomendada && !bloqueada && (
@@ -1834,13 +1835,13 @@ function StepVariantes({
                     </div>
                   </div>
                   {bloqueada ? (
-                    <span className="bm-variant-installed-tag">
+                    <span className={s.variantInstalledTag}>
                       ya instalada
                     </span>
                   ) : (
                     <span style={{ width: 70 }} />
                   )}
-                  <span className="bm-variant-edit">
+                  <span className={s.variantEdit}>
                     <BIco.Edit />
                   </span>
                 </button>
@@ -1849,7 +1850,7 @@ function StepVariantes({
           </div>
         ))}
         <button
-          className="bm-variant-add"
+          className={s.variantAdd}
           disabled
           title="Las variantes personalizadas se agregan desde la ficha de materia prima una vez instalada."
           type="button"
@@ -1858,7 +1859,7 @@ function StepVariantes({
           Agregar variante personalizada
         </button>
         {item.advertencias.length > 0 && (
-          <div className="bm-warning" style={{ marginTop: 14 }}>
+          <div className={s.warning} style={{ marginTop: 14 }}>
             <span className="ic">
               <BIco.Warn />
             </span>
@@ -1889,63 +1890,63 @@ function StepPreview({
   separado: boolean;
 }) {
   return (
-    <div className="bm-section">
-      <div className="bm-section-head">
+    <div className={s.section}>
+      <div className={s.sectionHead}>
         <div className="ttl">Revisá lo que se va a crear</div>
         <div className="sub">
           Verificá que la información sea correcta antes de instalar.
         </div>
       </div>
-      <div className="bm-preview-card">
+      <div className={s.previewCard}>
         <div className="head">
           <div className="ic-box">
             <MaterialIcon kind={item.iconKind} size={28} />
           </div>
           <div style={{ flex: 1 }}>
             <h3>{draft.visibleName || "—"}</h3>
-            <div className="bm-preview-meta">
+            <div className={s.previewMeta}>
               {draft.codigo} · {selectedVariants.length} variantes nuevas
             </div>
           </div>
-          <span className="bm-canonical-pill">
+          <span className={s.canonicalPill}>
             <span className="ic">
               <BIco.Sparkles />
             </span>
             {item.canonicalKey}
           </span>
         </div>
-        <div className="bm-preview-row">
+        <div className={s.previewRow}>
           <span className="k">Nombre visible</span>
           <span className="v">{draft.visibleName}</span>
         </div>
-        <div className="bm-preview-row">
+        <div className={s.previewRow}>
           <span className="k">Nombre canónico</span>
           <span className="v">
             {item.nombreCanonico}
             <span className="muted">conservado para reportes</span>
           </span>
         </div>
-        <div className="bm-preview-row">
+        <div className={s.previewRow}>
           <span className="k">Familia</span>
           <span className="v muted">{familyLine(item)}</span>
         </div>
-        <div className="bm-preview-row">
+        <div className={s.previewRow}>
           <span className="k">Template</span>
           <span className="v mono">{item.templateId}</span>
         </div>
       </div>
-      <div className="bm-preview-card">
+      <div className={s.previewCard}>
         <div className="head">
           <div style={{ flex: 1 }}>
-            <h3 className="bm-preview-title-small">Variantes a instalar</h3>
-            <div className="bm-preview-meta">
+            <h3 className={s.previewTitleSmall}>Variantes a instalar</h3>
+            <div className={s.previewMeta}>
               {selectedVariants.length} nuevas
             </div>
           </div>
         </div>
-        <div className="bm-preview-list">
+        <div className={`bm-preview-list`}>
           {selectedVariants.map((variant) => (
-            <div key={variant.id} className="bm-preview-item">
+            <div key={variant.id} className={s.previewItem}>
               <span className="ic">
                 <BIco.CheckCircle />
               </span>
@@ -1958,7 +1959,7 @@ function StepPreview({
         </div>
       </div>
       {separado && item.installState.visibleName && (
-        <div className="bm-dup">
+        <div className={s.dup}>
           <div className="head">
             <span>
               <BIco.Sparkles />
@@ -1978,7 +1979,7 @@ function StepPreview({
         </div>
       )}
       {!separado && item.installState.status === "partial" && (
-        <div className="bm-dup">
+        <div className={s.dup}>
           <div className="head">
             <span>
               <BIco.Warn />
@@ -2010,8 +2011,8 @@ function StepListo({
 }) {
   const router = useRouter();
   return (
-    <div className="bm-success">
-      <div className="bm-success-ico">
+    <div className={s.success}>
+      <div className={s.successIco}>
         <BIco.CheckCircleFill />
       </div>
       <h2>Se instaló {draft.visibleName}</h2>
@@ -2020,21 +2021,21 @@ function StepListo({
         trabajo. El sistema mantiene <strong>{item.nombreCanonico}</strong> como
         nombre canónico para reportes.
       </div>
-      <div className="bm-success-summary">
-        <div className="bm-success-stat">
+      <div className={s.successSummary}>
+        <div className={s.successStat}>
           <div className="v">
             {item.templateId.replace("_v1", "").replaceAll("_", " ")}
           </div>
           <div className="k">Template aplicado</div>
         </div>
-        <div className="bm-success-stat">
+        <div className={s.successStat}>
           <div className="v">1</div>
           <div className="k">Materia prima</div>
         </div>
       </div>
-      <div className="bm-success-actions">
+      <div className={s.successActions}>
         <button
-          className="bm-btn primary lg"
+          className={`${s.btn} primary lg`}
           onClick={() =>
             draft.lastMateriaPrimaId &&
             router.push(
@@ -2045,11 +2046,11 @@ function StepListo({
         >
           Ver materia prima
         </button>
-        <button className="bm-btn lg" onClick={onClose} type="button">
+        <button className={`${s.btn} lg`} onClick={onClose} type="button">
           Instalar otro material
         </button>
         <button
-          className="bm-btn ghost lg"
+          className={`${s.btn} ghost lg`}
           onClick={() => router.push("/inventario/materias-primas")}
           type="button"
         >
