@@ -82,6 +82,10 @@ export type ClienteDetalle = {
   pais: string;
   telefonoCodigo: string;
   telefonoNumero: string;
+  /** DNI, cuando el alta salió del documento escaneado. */
+  documentoNumero: string | null;
+  /** 'mostrador' = alta rápida por DNI; puede faltarle email o teléfono. */
+  origenAlta: string | null;
   contactos: ClienteContacto[];
   direcciones: ClienteDireccion[];
 };
@@ -122,6 +126,8 @@ export function createEmptyCliente(): ClienteDetalle {
     nombre: "",
     razonSocial: "",
     cuit: "",
+    documentoNumero: null,
+    origenAlta: null,
     condicionFiscal: "consumidor_final",
     activo: true,
     limiteCredito: null,

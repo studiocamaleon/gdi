@@ -17,7 +17,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ClienteContactoDto } from './dto/contacto.dto';
 import { ClienteDireccionDto, TipoDireccionDto } from './dto/direccion.dto';
 import { ClientesQueryDto } from './dto/clientes-query.dto';
-import { UpsertClienteDto } from './dto/upsert-cliente.dto';
+import {
+  AltaPorDocumentoDto,
+  UpsertClienteDto,
+} from './dto/upsert-cliente.dto';
 
 type ClienteCompleto = Cliente & {
   contactos: ClienteContacto[];
@@ -74,6 +77,52 @@ export class ClientesService {
   async findOne(auth: CurrentAuth, id: string) {
     const cliente = await this.findClienteOrThrow(auth, id, this.prisma);
     return this.toResponse(cliente);
+  }
+
+  /**
+   * Alta desde el DNI escaneado en el mostrador.
+   *
+   * Existe para que un pedido de mostrador deje de cargarse como "Mostrador":
+   * con el documento en la mano hay nombre y número, así que el cliente queda
+   * identificado sin tipear ni frenar la atención. Se marca `origenAlta =
+   * 'mostrador'` para poder listarlos después y completarles los datos.
+   *
+   * Si ese documento ya existe en el tenant devuelve el cliente que hay, sin
+   * tocarlo: el que vuelve al mostrador es el mismo cliente, no uno nuevo, y
+   * pisarle los datos con los del documento borraría lo que alguien completó
+   * a mano después.
+   */
+  async altaPorDocumento(auth: CurrentAuth, payload: AltaPorDocumentoDto) {
+    const documento = payload.documento.replace(/\D/g, '');
+    const existente = await this.prisma.cliente.findFirst({
+      where: { tenantId: auth.tenantId, documentoNumero: documento },
+      include: { contactos: true, direcciones: true },
+    });
+    if (existente) {
+      return { cliente: this.toResponse(existente), yaExistia: true };
+    }
+
+    const telefonoNumero = (payload.telefonoNumero ?? '').trim();
+    const cliente = await this.prisma.cliente.create({
+      data: {
+        tenantId: auth.tenantId,
+        nombre: payload.nombre.trim(),
+        documentoNumero: documento,
+        cuit: payload.cuit ?? null,
+        origenAlta: 'mostrador',
+        // Consumidor final: es lo que corresponde a una persona identificada
+        // con DNI, y define la letra del comprobante.
+        condicionFiscal: 'consumidor_final',
+        emailPrincipal: null,
+        telefonoCodigo: telefonoNumero
+          ? (payload.telefonoCodigo ?? '+54').trim()
+          : '',
+        telefonoNumero,
+        paisCodigo: 'AR',
+      },
+      include: { contactos: true, direcciones: true },
+    });
+    return { cliente: this.toResponse(cliente), yaExistia: false };
   }
 
   async create(auth: CurrentAuth, payload: UpsertClienteDto) {
@@ -384,9 +433,14 @@ export class ClientesService {
       activo: cliente.activo,
       limiteCredito:
         cliente.limiteCredito === null ? null : Number(cliente.limiteCredito),
-      email: cliente.emailPrincipal,
+      // Sin email es '' y no null: el front lo pone en un <input>, y un null
+      // ahí lo volvería no-controlado a mitad de camino.
+      email: cliente.emailPrincipal ?? '',
       telefonoCodigo: cliente.telefonoCodigo,
       telefonoNumero: cliente.telefonoNumero,
+      documentoNumero: cliente.documentoNumero,
+      /** 'mostrador' = alta rápida por DNI, puede tener datos incompletos. */
+      origenAlta: cliente.origenAlta,
       pais: cliente.paisCodigo,
       contacto: contactoPrincipal?.nombre ?? '',
       ciudad: direccionPrincipal?.ciudad ?? '',

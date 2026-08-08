@@ -1,0 +1,198 @@
+/* Alta de cliente escaneando el DNI. Lo que se ve mientras el cliente
+   espera: los datos que trajo el documento y un celular opcional. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 20, 26, 0.42);
+}
+
+.modal {
+  position: relative;
+  width: 420px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px -12px rgba(20, 20, 26, 0.4);
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-text);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ico {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.ico svg {
+  width: 18px;
+  height: 18px;
+}
+
+.head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.head .sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+/* Lo que trajo el documento: se muestra, no se edita. Si está mal, el
+   documento está mal. */
+.datos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.nombre {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.fila {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.fila dt {
+  color: var(--muted-text);
+}
+
+.fila dd {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--ink-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+}
+
+.tel {
+  display: flex;
+  gap: 8px;
+}
+
+.tel input {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.tel input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.tel .cod {
+  width: 74px;
+  flex: none;
+  text-align: center;
+}
+
+.tel .num {
+  flex: 1;
+}
+
+.hint {
+  font-size: 11.5px;
+  color: var(--muted-text);
+  line-height: 1.4;
+}
+
+/* Ya existía: no se duplica, se usa el que hay. */
+.existe {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #eff3fd;
+  color: #1d4ed8;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.existe svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

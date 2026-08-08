@@ -8,6 +8,7 @@ import {
   IsString,
   Length,
   Matches,
+  MaxLength,
   Min,
   MinLength,
   ValidateNested,
@@ -79,4 +80,37 @@ export class UpsertClienteDto {
   @ValidateNested({ each: true })
   @Type(() => ClienteDireccionDto)
   direcciones: ClienteDireccionDto[];
+}
+
+/**
+ * Alta desde el DNI escaneado en el mostrador. Pide lo mínimo que hace falta
+ * para no perder de vista quién es el cliente: nombre y documento salen del
+ * propio documento, el celular es opcional y el email no se pide.
+ */
+export class AltaPorDocumentoDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(160)
+  nombre: string;
+
+  /** Sólo dígitos, tal como sale del PDF417. */
+  @IsString()
+  @Matches(/^\d{7,9}$/, { message: 'El documento no parece un DNI.' })
+  documento: string;
+
+  /** CUIL derivado del documento; null si no se pudo calcular. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{11}$/)
+  cuit?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  telefonoCodigo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  telefonoNumero?: string;
 }

@@ -11,7 +11,10 @@ import {
   Query,
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
-import { UpsertClienteDto } from './dto/upsert-cliente.dto';
+import {
+  AltaPorDocumentoDto,
+  UpsertClienteDto,
+} from './dto/upsert-cliente.dto';
 import { ClientesQueryDto } from './dto/clientes-query.dto';
 import { ClientesService } from './clientes.service';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -42,6 +45,20 @@ export class ClientesController {
     @Body() payload: UpsertClienteDto,
   ) {
     return this.clientesService.create(auth, payload);
+  }
+
+  /**
+   * Alta escaneando el DNI en el mostrador. Lo usa el comercial mientras
+   * atiende, así que va con `comercial.gestionar` además del permiso de
+   * registros: quien puede cargar la venta puede identificar al cliente.
+   */
+  @Permiso('registros.gestionar', 'comercial.gestionar')
+  @Post('alta-por-documento')
+  altaPorDocumento(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: AltaPorDocumentoDto,
+  ) {
+    return this.clientesService.altaPorDocumento(auth, payload);
   }
 
   @Permiso('registros.gestionar')

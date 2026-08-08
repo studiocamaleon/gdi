@@ -14,7 +14,12 @@
 import * as React from "react";
 
 import { useEscaneoCodigo } from "@/lib/use-escaneo-codigo";
+import {
+  parsearDniArgentino,
+  type DatosDocumento,
+} from "@/lib/dni-argentino";
 import { EntregaModal } from "./entrega-modal";
+import { AltaDniModal } from "./alta-dni-modal";
 
 /** OT-2026-0184, ya normalizado. */
 const NUMERO_ORDEN = /^OT-\d{4}-\d+$/;
@@ -42,18 +47,35 @@ export function normalizarNumeroOrden(crudo: string): string {
 
 export function EntregaEscaneoWatcher() {
   const [codigo, setCodigo] = React.useState<string | null>(null);
+  const [documento, setDocumento] = React.useState<DatosDocumento | null>(null);
 
   useEscaneoCodigo({
-    // Con el modal abierto se apaga: el segundo escaneo tendría que
-    // reemplazar la orden en pantalla y eso confunde más de lo que ayuda.
-    activo: codigo == null,
+    // Con un modal abierto se apaga: el segundo escaneo tendría que
+    // reemplazar lo que hay en pantalla y eso confunde más de lo que ayuda.
+    activo: codigo == null && documento == null,
     onCodigo: (leido) => {
-      const limpio = normalizarNumeroOrden(leido);
-      if (!NUMERO_ORDEN.test(limpio)) return;
-      setCodigo(limpio);
+      // Dos cosas distintas entran por el mismo lector, y cada una se
+      // reconoce por su forma: el QR de una orden es OT-AAAA-NNNN, y el
+      // PDF417 de un DNI trae apellido, nombre y número separados.
+      const numero = normalizarNumeroOrden(leido);
+      if (NUMERO_ORDEN.test(numero)) {
+        setCodigo(numero);
+        return;
+      }
+      // Sobre el texto CRUDO: la normalización de arriba se come los
+      // separadores que este parser necesita.
+      const dni = parsearDniArgentino(leido);
+      if (dni) setDocumento(dni);
     },
   });
 
-  if (!codigo) return null;
-  return <EntregaModal codigo={codigo} onClose={() => setCodigo(null)} />;
+  if (documento) {
+    return (
+      <AltaDniModal datos={documento} onClose={() => setDocumento(null)} />
+    );
+  }
+  if (codigo) {
+    return <EntregaModal codigo={codigo} onClose={() => setCodigo(null)} />;
+  }
+  return null;
 }

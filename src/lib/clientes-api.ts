@@ -80,3 +80,21 @@ export async function toggleCliente(id: string) {
     method: "PATCH",
   });
 }
+
+/**
+ * Alta rápida escaneando el DNI en el mostrador. Si ese documento ya existe
+ * en el tenant devuelve el cliente que hay (`yaExistia`), sin duplicarlo ni
+ * pisarle los datos que alguien haya completado después.
+ */
+export async function altaClientePorDocumento(payload: {
+  nombre: string;
+  documento: string;
+  cuit?: string;
+  telefonoCodigo?: string;
+  telefonoNumero?: string;
+}) {
+  return apiRequest<{ cliente: ClienteDetalle; yaExistia: boolean }>(
+    "/clientes/alta-por-documento",
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+}
