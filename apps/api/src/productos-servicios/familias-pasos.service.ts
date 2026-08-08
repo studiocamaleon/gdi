@@ -9,7 +9,10 @@ import {
 } from './pasos/familias';
 import { MODOS_ACTIVACION_UNIVERSALES } from './pasos/types';
 import { proyectarPasoTenant } from './pasos/paso-tenant';
-import { resumenCapacidades } from './pasos/capacidades';
+import {
+  resumenCapacidades,
+  outputsPublicablesDeFamilia,
+} from './pasos/capacidades';
 
 import { outputsReferenciadosPorRegla } from './pasos/validacion-pre-pasada';
 import { declaraEfectoDemasia } from '../motor-universal/efectos-paso';
@@ -342,6 +345,7 @@ function serializarFamilia(
     inputsRequeridos: f.inputsRequeridos,
     outputsCanonicos: f.outputsCanonicos,
     capacidades: resumenCapacidades(f.outputsCanonicos),
+    outputsPublicables: outputsPublicablesDeFamilia(f.outputsCanonicos),
     defaults: defaultsPorFamilia.get(f.codigo as string) ?? null,
     validaciones: f.validaciones,
     paramsPasoSchema: f.paramsPasoSchema,

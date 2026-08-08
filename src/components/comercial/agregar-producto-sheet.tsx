@@ -22,7 +22,9 @@ import {
   arrastradosPorDependencia,
   opcionalesActivadosEfectivos,
 } from "@/lib/arrastre-opcionales";
+import { esConfigPasoEjecutable } from "@/lib/config-paso-activacion";
 import { etiquetaValorParam } from "@/lib/params-familia";
+import { ProductoSheetHeaderConstelacion } from "./producto-sheet-header";
 import {
   type CampoEditableComercial,
   type PasoConParamsComercial,
@@ -49,6 +51,9 @@ import {
   type CarteleriaValor,
 } from "@/components/carteleria/carteleria-editor-sheet";
 import cartS from "@/components/carteleria/carteleria.module.css";
+import matS from "./materiales-compacto.module.css";
+import plS from "./params-planilla.module.css";
+import seC from "./cotizador-seccion.module.css";
 import {
   SelloEditorSheet,
   type DisenoSello,
@@ -718,7 +723,7 @@ function getRutaSeleccionada(
 function isExecutableConfigPaso(
   config: RutaAlternativaDetalle["configPasos"][number],
 ) {
-  return config.rutaPaso.activo && config.modoActivacion !== "NO_EJECUTAR";
+  return esConfigPasoEjecutable(config);
 }
 
 /**
@@ -1798,6 +1803,132 @@ function describeCandidateVariants(
   return cards;
 }
 
+// ── Materiales del cotizador: fila compacta que expande (Propuesta B) ──────
+// Cada material es un renglón (avatar + slot + variante elegida); al tocarlo
+// se despliegan las variantes como renglones con radio, igual que la lista de
+// máquinas del editor de rutas. Sin <select> nativo ni Radix.
+type VariantOpcionCompacta = {
+  value: string;
+  title: string;
+  spec: string;
+  isDefault: boolean;
+  missingPrice: boolean;
+};
+type VariantGrupoCompacto = {
+  label: string | null;
+  opciones: VariantOpcionCompacta[];
+};
+
+function MaterialSelectorCompacto({
+  etiquetaSlot,
+  grupos,
+  selected,
+  onSelect,
+  alerta,
+  hint,
+}: {
+  etiquetaSlot: string;
+  grupos: VariantGrupoCompacto[];
+  selected: string;
+  onSelect: (variantId: string) => void;
+  alerta?: string | null;
+  hint?: string | null;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const opciones = grupos.flatMap((grupo) => grupo.opciones);
+  const elegida =
+    opciones.find((opcion) => opcion.value === selected) ?? opciones[0];
+  const chevron = (
+    <svg
+      className={matS.chev}
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+  return (
+    <div className={matS.group}>
+      <div className={matS.gh}>{etiquetaSlot}</div>
+      <button
+        type="button"
+        className={matS.selrow}
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className={matS.pick}>
+          {elegida?.title ?? "Elegir variante"}
+          {elegida?.spec ? (
+            <span className={matS.pickSpec}> · {elegida.spec}</span>
+          ) : null}
+        </span>
+        <span className={matS.right}>
+          {elegida?.isDefault ? (
+            <span className={matS.badge}>Predet.</span>
+          ) : null}
+          {elegida?.missingPrice ? (
+            <span className={matS.warnTag}>sin precio</span>
+          ) : null}
+          {chevron}
+        </span>
+      </button>
+      {open ? (
+        <div
+          className={matS.variants}
+          role="radiogroup"
+          aria-label={etiquetaSlot}
+        >
+          {grupos.map((grupo, gi) => (
+            <React.Fragment key={grupo.label ?? `g${gi}`}>
+              {grupo.label ? (
+                <div className={matS.ghead}>{grupo.label}</div>
+              ) : null}
+              {grupo.opciones.map((opcion) => {
+                const on = opcion.value === selected;
+                return (
+                  <button
+                    key={opcion.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    className={`${matS.srow} ${on ? matS.srowOn : ""}`}
+                    onClick={() => {
+                      onSelect(opcion.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <span className={matS.radio} aria-hidden="true" />
+                    <span className={matS.st}>{opcion.title}</span>
+                    {opcion.spec ? (
+                      <span className={matS.ss}>· {opcion.spec}</span>
+                    ) : null}
+                    {opcion.isDefault ? (
+                      <span className={matS.rec}>Recomendado</span>
+                    ) : null}
+                    {opcion.missingPrice ? (
+                      <span className={matS.warnTag}>sin precio</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      ) : null}
+      {alerta ? (
+        <div className={matS.alert}>{alerta}</div>
+      ) : hint ? (
+        <div className={matS.hint}>{hint}</div>
+      ) : null}
+    </div>
+  );
+}
+
 function findSelectedCandidateVariant(
   slot: SlotComercialElige,
   config: Pick<MotorConfigState, "seleccionMaterial">,
@@ -2199,93 +2330,6 @@ function medidasPersonalizadasIncompletas(
   return config.piezas.some(
     (pieza) => !(pieza.anchoMm > 0) || !(pieza.altoMm > 0),
   );
-}
-
-/**
- * Muestra de color aproximada a partir del nombre de la variante. El backend
- * hoy sólo nos da el `colorLabel` (texto), no un hex, así que mapeamos los
- * colores frecuentes de sustratos a una muestra visual y caemos a un gris
- * neutro con aro para lo desconocido. `ring` agrega un borde interno para que
- * los colores muy claros (blanco, crema) no se pierdan contra el fondo.
- */
-// El ORDEN importa: gana el primer match, así que los colores específicos van
-// ANTES que los generales (celeste antes que azul, bordó antes que rojo, oliva
-// antes que verde). Match parcial e insensible a mayúsculas, español + inglés.
-const SUBSTRATE_SWATCHES: Array<{ match: RegExp; background: string; ring?: boolean }> = [
-  // Especiales / efectos
-  {
-    match: /transparente|cristal|clear|incoloro|traslu/i,
-    background:
-      "repeating-conic-gradient(#dedede 0% 25%, #ffffff 0% 50%) 50% / 8px 8px",
-    ring: true,
-  },
-  {
-    match: /holograf|tornasol|iridis|perlad|nacar|nácar/i,
-    background: "linear-gradient(135deg,#a8e6ff,#ffd1f0,#c9b8ff,#fff3b0)",
-    ring: true,
-  },
-  // Neutros
-  { match: /negr|black/i, background: "#1c1c1e" },
-  { match: /antracit|carbon|carbón|grafit/i, background: "#36393f" },
-  { match: /blanc|white/i, background: "#fafafa", ring: true },
-  { match: /gris|gray|grey|plom/i, background: "#9aa0a6" },
-  // Metálicos
-  { match: /plat|silver|alumini|aluminio|niquel|níquel|acero/i, background: "linear-gradient(135deg,#e2e2e4,#b7b9bd)", ring: true },
-  { match: /dorad|\boro\b|gold|laton|latón/i, background: "linear-gradient(135deg,#e8cf8a,#c8a13a)" },
-  { match: /cobre|copper|bronce|bronze/i, background: "linear-gradient(135deg,#e0a487,#b06a43)" },
-  // Rojos / rosados
-  { match: /bordo|bordó|borravino|vinotinto|\bvino\b|granate/i, background: "#7a1f2b" },
-  { match: /roj|red|carmin|carmín|escarlata|teja/i, background: "#d93636" },
-  { match: /coral|salmon|salmón/i, background: "#f28066", ring: true },
-  { match: /fucsia|fuchsia|magenta/i, background: "#d81b8c" },
-  { match: /rosa|rosad|\bpink\b/i, background: "#f18fb4", ring: true },
-  // Naranjas / amarillos
-  { match: /naranj|orange|mandarin|ambar|ámbar/i, background: "#e2712b" },
-  { match: /mostaz|mustard/i, background: "#c99a2e" },
-  { match: /amarill|yellow|canario|limon amarillo/i, background: "#e6b800" },
-  // Verdes
-  { match: /lima|\blime\b/i, background: "#9bcf3a" },
-  { match: /oliva|olive/i, background: "#7a7d2a" },
-  { match: /menta|mint/i, background: "#5fc9a3", ring: true },
-  { match: /esmeralda|emerald/i, background: "#0f9d6b" },
-  { match: /verde|green/i, background: "#1f9d57" },
-  // Cianes / azules
-  { match: /turquesa|turquoise|teal|aqua/i, background: "#1fb6b0" },
-  { match: /cian|cyan/i, background: "#22b8d6" },
-  { match: /celest|ciel|sky/i, background: "#5db3f0", ring: true },
-  { match: /marino|navy|cobalt|cobalto/i, background: "#1c3f8f" },
-  { match: /azul|blue/i, background: "#2f6fe0" },
-  // Violetas
-  { match: /violeta|violet|lila|lavand|malva/i, background: "#8a63d2" },
-  { match: /purpur|púrpura|purple|morad/i, background: "#7a3fb0" },
-  // Marrones / tierra
-  { match: /marron|marrón|cafe|café|brown|chocolate/i, background: "#6b4326" },
-  { match: /terracot|ladrillo|tierra|ocre/i, background: "#b5603f" },
-  { match: /kraft|tabaco|habano/i, background: "#c19a6b", ring: true },
-  // Claros / madera
-  { match: /beige|crema|marfil|ivory|hueso|arena|natural/i, background: "#efe7d6", ring: true },
-  { match: /madera|wood|roble|nogal|pino|cedro|haya/i, background: "linear-gradient(135deg,#c8a06a,#9c6b3a)" },
-];
-
-function substrateColorSwatch(label: string | null): { background: string; ring: boolean } {
-  const name = (label ?? "").trim();
-  if (name) {
-    for (const entry of SUBSTRATE_SWATCHES) {
-      if (entry.match.test(name)) {
-        return { background: entry.background, ring: entry.ring ?? false };
-      }
-    }
-  }
-  return { background: "#cfccc6", ring: true };
-}
-
-/** Sigla corta para el chip del sustrato: respeta siglas ya en mayúsculas (PVC, MDF). */
-function materialChipInitials(label: string): string {
-  const cleaned = label.replace(/[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g, " ").trim();
-  if (!cleaned) return "—";
-  const firstWord = cleaned.split(/\s+/)[0];
-  if (/^[A-Z0-9]{2,4}$/.test(firstWord)) return firstWord.slice(0, 4);
-  return firstWord.slice(0, 3).toUpperCase();
 }
 
 function getCotizacionPasos(cotizacion: CotizacionExitosa): PasoProduccionPropuesta[] {
@@ -3715,6 +3759,7 @@ type ConfigStepProps = {
   cotizacionError: string | null;
   onCotizar: () => void;
   onBack: () => void;
+  onClose: () => void;
 };
 
 function ApConfigStep({
@@ -3733,6 +3778,7 @@ function ApConfigStep({
   cotizacionError,
   onCotizar,
   onBack,
+  onClose,
 }: ConfigStepProps) {
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatCurrency(v, moneda);
@@ -4033,8 +4079,6 @@ function ApConfigStep({
   );
   const [leyendoPlanos, setLeyendoPlanos] = React.useState(false);
   const [arrastrandoPlanos, setArrastrandoPlanos] = React.useState(false);
-  // Slot cuyo desplegable de material está abierto (selector tipo lista).
-  const [openMaterialSlot, setOpenMaterialSlot] = React.useState<string | null>(null);
 
   const handleAdjuntarPlanos = React.useCallback(
     async (files: FileList | File[]) => {
@@ -4513,109 +4557,6 @@ function ApConfigStep({
     </div>
   );
 
-  const renderMaterialCardInner = (
-    candidate: SlotMaterialCandidato,
-    trailing: React.ReactNode,
-  ) => {
-    const variantCount = candidate.variantes.length;
-    return (
-      <>
-        <span className="ap-mat-badge" aria-hidden="true">
-          {materialChipInitials(candidate.label)}
-        </span>
-        <span className="ap-mat-text">
-          <span className="ap-mat-name">{candidate.label}</span>
-          {variantCount > 1 ? (
-            <span className="ap-mat-meta">{variantCount} variantes</span>
-          ) : null}
-        </span>
-        {trailing}
-      </>
-    );
-  };
-
-  const renderFilmChips = (
-    slot: SlotComercialElige,
-    selectedMateriaPrimaId: string,
-    onSelect: (materiaPrimaId: string) => void,
-  ) => {
-    const slotKey = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
-    const open = openMaterialSlot === slotKey;
-    const selectedCandidate =
-      slot.candidatos.find(
-        (candidate) => candidate.materiaPrimaId === selectedMateriaPrimaId,
-      ) ?? slot.candidatos[0];
-    if (!selectedCandidate) return null;
-
-    // Un solo candidato: tarjeta informativa, sin desplegable.
-    if (slot.candidatos.length === 1) {
-      return (
-        <div className="ap-mat-select">
-          <div className="ap-mat-card is-static">
-            {renderMaterialCardInner(selectedCandidate, null)}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className={`ap-mat-select ${open ? "is-open" : ""}`}>
-        <button
-          type="button"
-          className="ap-mat-card ap-mat-trigger"
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => setOpenMaterialSlot(open ? null : slotKey)}
-        >
-          {renderMaterialCardInner(
-            selectedCandidate,
-            <svg
-              className="ap-mat-chev"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              aria-hidden="true"
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>,
-          )}
-        </button>
-        {open ? (
-          <div
-            className="ap-mat-list"
-            role="radiogroup"
-            aria-label={humanizeCodigo(slot.slotCodigo)}
-          >
-            {slot.candidatos.map((candidate) => {
-              const on = candidate.materiaPrimaId === selectedCandidate.materiaPrimaId;
-              return (
-                <button
-                  key={candidate.materiaPrimaId}
-                  type="button"
-                  className={`ap-mat-card ap-mat-option ${on ? "on" : ""}`}
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => {
-                    onSelect(candidate.materiaPrimaId);
-                    setOpenMaterialSlot(null);
-                  }}
-                >
-                  {renderMaterialCardInner(
-                    candidate,
-                    <span className="ap-mat-radio" aria-hidden="true" />,
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
-    );
-  };
-
   const renderMaterialSelect = (
     slot: SlotComercialElige,
     options?: { showHint?: boolean; collapseSingleCandidate?: boolean },
@@ -4636,223 +4577,79 @@ function ApConfigStep({
     const selectedVariant = selectedCandidate?.variantes.find(
       (variant) => variant.variantId === selected,
     );
-    const useAttributePicker = selectedCandidate
-      ? selectedCandidate.variantes.length > 1 && candidateUsesColorThickness(selectedCandidate)
-      : false;
-    const colorOptions = useAttributePicker && selectedCandidate
-      ? Array.from(
-          new Set(
-            selectedCandidate.variantes.map((variant) => variant.colorLabel || "Sin color"),
-          ),
-        )
-      : [];
-    const selectedColor =
-      selectedVariant?.colorLabel ||
-      selectedCandidate?.variantes.find((variant) => variant.colorLabel)?.colorLabel ||
-      colorOptions[0] ||
-      "Sin color";
-    const variantsBySelectedColor = selectedCandidate?.variantes.filter(
-      (variant) => (variant.colorLabel || "Sin color") === selectedColor,
-    ) ?? [];
-    const selectMaterial = (materiaPrimaId: string) => {
-      const candidate = slot.candidatos.find((item) => item.materiaPrimaId === materiaPrimaId);
-      const variantId =
-        candidate?.defaultVarianteId ??
-        (candidate?.variantes.length === 1 ? candidate.variantes[0]?.variantId : undefined) ??
-        candidate?.variantes[0]?.variantId ??
-        "";
-      setMaterial(key, variantId);
-    };
-    const materialOptions = slot.candidatos.map((candidate) => ({
-      value: candidate.materiaPrimaId,
-      label: candidate.label,
-    }));
-    // Con un solo candidato el selector no ofrece elección: es ruido. En las
-    // cards de opcionales (donde el nombre ya está en el encabezado) lo
-    // colapsamos y dejamos solo las variantes.
-    const hideFilmSelector =
-      Boolean(options?.collapseSingleCandidate) && materialOptions.length === 1;
+    // Cada material es UNA fila que expande sus variantes (Propuesta B): sin
+    // <select> nativo ni tarjetas grandes. Se agrupa por candidato (si hay más
+    // de uno) o por color (materiales con color+espesor); título = atributos
+    // que distinguen la variante, spec = specs compartidas.
+    const multiplesCandidatos = slot.candidatos.length > 1;
+    const gruposVariante = new Map<string, VariantGrupoCompacto>();
+    let totalOpciones = 0;
+    for (const candidate of slot.candidatos) {
+      const usaColorEspesor =
+        candidate.variantes.length > 1 &&
+        candidateUsesColorThickness(candidate);
+      const cards = usaColorEspesor ? null : describeCandidateVariants(candidate);
+      for (const variant of candidate.variantes) {
+        const card = cards?.get(variant.variantId);
+        const title = usaColorEspesor
+          ? variant.espesorLabel ?? variant.label
+          : card?.title ?? variant.label;
+        const spec =
+          !usaColorEspesor && card && card.specs.length > 0
+            ? card.specs.map((s) => s.value).join(" · ")
+            : "";
+        const groupLabel = usaColorEspesor
+          ? variant.colorLabel || "Sin color"
+          : multiplesCandidatos
+            ? candidate.label
+            : null;
+        const gk = groupLabel ?? "__ungrouped";
+        let grupo = gruposVariante.get(gk);
+        if (!grupo) {
+          grupo = { label: groupLabel, opciones: [] };
+          gruposVariante.set(gk, grupo);
+        }
+        grupo.opciones.push({
+          value: variant.variantId,
+          title,
+          spec,
+          isDefault: variant.variantId === candidate.defaultVarianteId,
+          missingPrice: variant.missingPrice === true,
+        });
+        totalOpciones += 1;
+      }
+    }
+    const grupos = [...gruposVariante.values()];
+
+    if (slot.candidatos.length === 0) {
+      return (
+        <div className={matS.group} key={key}>
+          <div className={matS.gh}>{etiquetaSlot}</div>
+          <div className={matS.empty}>Sin materiales candidatos</div>
+        </div>
+      );
+    }
+
+    const alerta = selectedVariant?.missingPrice
+      ? "Sin precio cargado para la variante elegida"
+      : null;
+    const hint =
+      !alerta && options?.showHint !== false && totalOpciones <= 1
+        ? selectedVariant?.isFallbackLabel
+          ? `Sin atributos descriptivos. Código interno: ${selectedVariant.sku}`
+          : selectedVariant?.description ?? null
+        : null;
+
     return (
-      <div
-        className={`ap-spec ${
-          (selectedCandidate && selectedCandidate.variantes.length > 1) ||
-          materialOptions.length > 2
-            ? "ap-spec-wide"
-            : ""
-        }`}
+      <MaterialSelectorCompacto
         key={key}
-      >
-        {materialOptions.length === 0 ? (
-          <>
-            <label>{etiquetaSlot}</label>
-            <div className="ctrl-input">
-              <span>Sin materiales candidatos configurados</span>
-            </div>
-          </>
-        ) : hideFilmSelector ? null : (
-          <>
-            <label>{etiquetaSlot}</label>
-            {renderFilmChips(
-              slot,
-              selectedCandidate?.materiaPrimaId ?? "",
-              selectMaterial,
-            )}
-          </>
-        )}
-        {selectedCandidate && selectedCandidate.variantes.length > 1 ? (
-          useAttributePicker ? (
-            <div className="ap-material-attrs">
-              <div className="ap-material-attr-block">
-                <div className="ap-material-attr-label">
-                  Color
-                  <span className="ap-sub-count">
-                    {colorOptions.length}{" "}
-                    {colorOptions.length === 1 ? "disponible" : "disponibles"}
-                  </span>
-                </div>
-                <div className="ap-sub-swatches" role="radiogroup" aria-label="Color">
-                  {colorOptions.map((color) => {
-                    const firstVariantForColor = selectedCandidate.variantes.find(
-                      (variant) => (variant.colorLabel || "Sin color") === color,
-                    );
-                    const active = selectedColor === color;
-                    const swatch = substrateColorSwatch(
-                      color === "Sin color" ? null : color,
-                    );
-                    return (
-                      <button
-                        key={color}
-                        type="button"
-                        className={`ap-sub-swatch ${active ? "on" : ""}`}
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => {
-                          if (firstVariantForColor) {
-                            setMaterial(key, firstVariantForColor.variantId);
-                          }
-                        }}
-                      >
-                        <span
-                          className={`ap-sub-swatch-dot ${swatch.ring ? "ring" : ""}`}
-                          style={{ background: swatch.background }}
-                          aria-hidden="true"
-                        />
-                        <span>{color}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="ap-material-attr-block">
-                <div className="ap-material-attr-label">
-                  Espesor
-                  {selectedColor && selectedColor !== "Sin color" ? (
-                    <span className="ap-sub-count">{selectedColor}</span>
-                  ) : null}
-                </div>
-                <div className="ap-sub-thicks" role="radiogroup" aria-label="Espesor">
-                  {variantsBySelectedColor.map((variant) => {
-                    const active = variant.variantId === selected;
-                    const isDefault =
-                      variant.variantId === selectedCandidate.defaultVarianteId;
-                    return (
-                      <button
-                        key={variant.variantId}
-                        type="button"
-                        className={`ap-sub-thick ${active ? "on" : ""}`}
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => setMaterial(key, variant.variantId)}
-                      >
-                        <span className="ap-sub-thick-radio" aria-hidden="true" />
-                        <span className="ap-sub-thick-name">
-                          {variant.espesorLabel ?? variant.label}
-                          {isDefault ? (
-                            <span className="ap-sub-rec">Recomendado</span>
-                          ) : null}
-                        </span>
-                        {variant.missingPrice ? (
-                          <span className="ap-material-price-alert">Sin precio</span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : (
-          <div className="ap-variant-section">
-            <div className="ap-variant-head">
-              <span>Variante</span>
-              {hideFilmSelector ? null : <small>{selectedCandidate.label}</small>}
-            </div>
-            <div className="ap-variant-grid">
-              {(() => {
-                const variantCards = describeCandidateVariants(selectedCandidate);
-                return selectedCandidate.variantes.map((variant) => {
-                  const active = variant.variantId === selected;
-                  const isDefault =
-                    variant.variantId === selectedCandidate.defaultVarianteId;
-                  const card = variantCards.get(variant.variantId);
-                  return (
-                    <button
-                      key={variant.variantId}
-                      type="button"
-                      className={`ap-variant-card ${active ? "active" : ""}`}
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => setMaterial(key, variant.variantId)}
-                    >
-                      <span className="ap-variant-top">
-                        <span className="ap-variant-pip" aria-hidden="true" />
-                        <span className="ap-variant-title">
-                          {card?.title ?? variant.label}
-                        </span>
-                        {isDefault ? (
-                          <span className="ap-variant-badge">Predeterminada</span>
-                        ) : null}
-                      </span>
-                      {card && card.specs.length > 0 ? (
-                        <span className="ap-variant-specs">
-                          {card.specs.map((spec) => (
-                            <span className="ap-variant-spec" key={spec.label}>
-                              <span className="k">{spec.label}</span>
-                              <span className="v">{spec.value}</span>
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
-                      {variant.isFallbackLabel ? (
-                        <span className="ap-variant-meta">
-                          Sin atributos descriptivos · {variant.sku}
-                        </span>
-                      ) : null}
-                      {variant.missingPrice ? (
-                        <span className="ap-variant-alert">Sin precio cargado</span>
-                      ) : null}
-                    </button>
-                  );
-                });
-              })()}
-            </div>
-          </div>
-          )
-        ) : null}
-        {options?.showHint !== false &&
-        materialOptions.length <= 1 &&
-        !useAttributePicker &&
-        selectedVariant?.isFallbackLabel ? (
-          <p className="ap-spec-hint">
-            Esta variante no tiene atributos descriptivos cargados. Código interno:{" "}
-            {selectedVariant.sku}
-          </p>
-        ) : options?.showHint !== false &&
-          materialOptions.length <= 1 &&
-          !useAttributePicker &&
-          selectedVariant?.description ? (
-          <p className="ap-spec-hint">{selectedVariant.description}</p>
-        ) : null}
-      </div>
+        etiquetaSlot={etiquetaSlot}
+        grupos={grupos}
+        selected={selected}
+        onSelect={(variantId) => setMaterial(key, variantId)}
+        alerta={alerta}
+        hint={hint}
+      />
     );
   };
 
@@ -5087,6 +4884,111 @@ function ApConfigStep({
     return null;
   };
 
+  // Planilla densa de params de pasos, agrupada por paso (el nombre del paso
+  // encabeza el grupo y el label del campo se acorta). Reemplaza los inputs
+  // full-width sueltos por una tabla compacta a lo ancho del sheet.
+  const renderParamPlanilla = () => (
+    <div className={plS.plan}>
+      {pasosParamsComercialPrincipales.map((paso) => (
+        <div className={plS.group} key={paso.configPasoId}>
+          <div className={plS.gh}>{paso.nombre}</div>
+          {paso.campos.map((campo) => {
+            const elegido = motorConfig.paramsComercial?.[paso.configPasoId];
+            const valor = valorEfectivoCampo(campo, elegido);
+            const rowKey = `plan-${paso.configPasoId}-${campo.campo}`;
+
+            if (campo.tipo === "number") {
+              return (
+                <div className={plS.prow} key={rowKey}>
+                  <span className={plS.plabel}>{campo.etiqueta}</span>
+                  <span className={plS.field}>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={typeof valor === "number" ? valor : ""}
+                      placeholder="Sugerido"
+                      onChange={(event) =>
+                        setParamComercial(
+                          paso.configPasoId,
+                          campo.campo,
+                          event.target.value === ""
+                            ? null
+                            : Number(event.target.value),
+                        )
+                      }
+                    />
+                  </span>
+                </div>
+              );
+            }
+
+            if (campo.tipo === "boolean") {
+              return (
+                <label className={plS.prow} key={rowKey}>
+                  <span className={plS.plabel}>{campo.etiqueta}</span>
+                  <span className={plS.check}>
+                    <input
+                      type="checkbox"
+                      checked={valor !== false}
+                      onChange={(event) =>
+                        setParamComercial(
+                          paso.configPasoId,
+                          campo.campo,
+                          event.target.checked,
+                        )
+                      }
+                    />
+                  </span>
+                </label>
+              );
+            }
+
+            const seleccion = Array.isArray(valor) ? valor.map(String) : [];
+            return (
+              <div key={rowKey}>
+                <div className={plS.prow}>
+                  <span className={plS.plabel}>{campo.etiqueta}</span>
+                  <span className={plS.chips}>
+                    {campo.valoresPermitidos.map((opcion) => {
+                      const activo = seleccion.includes(opcion);
+                      return (
+                        <button
+                          key={opcion}
+                          type="button"
+                          className={`${plS.chip} ${activo ? plS.chipOn : ""}`}
+                          onClick={() =>
+                            setParamComercial(
+                              paso.configPasoId,
+                              campo.campo,
+                              campo.valoresPermitidos.filter((v) =>
+                                v === opcion ? !activo : seleccion.includes(v),
+                              ),
+                            )
+                          }
+                        >
+                          {etiquetaValorParam(opcion)}
+                        </button>
+                      );
+                    })}
+                  </span>
+                </div>
+                {seleccion.length === 0 ? (
+                  <div className={plS.alert}>
+                    <CircleAlertIcon />
+                    <span>
+                      Elegí al menos uno o la cotización no va a poder calcularse.
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+
   const renderTiempoManualField = (tiempoPaso: TiempoManualComercial) => {
     const nombrePaso =
       tiempoPaso.nombreVisible?.trim() ||
@@ -5140,6 +5042,11 @@ function ApConfigStep({
     isExecutableConfigPaso,
   );
   const profundidadCartel = getProfundidadDeRuta(rutaSel, isExecutableConfigPaso);
+  // Con una sola pieza, la profundidad se muestra INLINE como tercer input
+  // junto a Ancho × Alto (deja de ser un campo colgado). Con varias piezas cae
+  // al bloque aparte (es product-level, no per-pieza).
+  const profundidadInline =
+    Boolean(profundidadCartel) && motorConfig.piezas.length === 1;
   // Configurador 3D de cartelería (herramienta estilo sello): edita EN VIVO el
   // motorConfig (medidas, profundidad, params comerciales de los dos pasos) y
   // el precio se re-cotiza solo con el debounce del sheet.
@@ -5286,6 +5193,13 @@ function ApConfigStep({
     cotizacionExitosa,
   );
 
+  const renderCantidadCard = () => (
+    <div className={seC.card}>
+      <div className={seC.gh}>Cantidad</div>
+      <div className={seC.body}>{renderQuantityControl()}</div>
+    </div>
+  );
+
   const renderQuantityControl = () => {
     if (usesExactPricingQuantities) {
       return (
@@ -5351,11 +5265,49 @@ function ApConfigStep({
     );
   };
 
-  const renderPiezasEditor = (options?: { hideCantidad?: boolean }) => (
-    <div className="ap-spec ap-spec-wide">
+  const renderPiezasEditor = (options?: { hideCantidad?: boolean }) => {
+    const mostrarProf = profundidadInline;
+    // Override del grid (sin tocar globals ni sumar clases): suma "× [prof]".
+    const gridConProf = options?.hideCantidad
+      ? "minmax(80px, 1fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) 38px"
+      : "minmax(60px, 0.8fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) 38px";
+    const estiloGrid = mostrarProf
+      ? { gridTemplateColumns: gridConProf }
+      : undefined;
+    const inputProf = mostrarProf ? (
+      <>
+        <span>x</span>
+        <label className="ap-input-unit">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={motorConfig.profundidadCm ?? ""}
+            placeholder={
+              profundidadCartel?.profundidadDefaultMm
+                ? String(profundidadCartel.profundidadDefaultMm / 10)
+                : "Prof."
+            }
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              updateMotorConfig({
+                profundidadCm:
+                  Number.isFinite(value) && value > 0 ? value : null,
+              });
+            }}
+            aria-label="Profundidad del cajón en cm"
+          />
+          <span>cm</span>
+        </label>
+      </>
+    ) : null;
+    return (
+    <div className={seC.card}>
+      <div className={seC.gh}>Medida</div>
+      <div className={seC.body}>
       <div className="ap-piezas">
         <div
           className={`ap-pieza-head${options?.hideCantidad ? " ap-pieza-head-medidas" : ""}`}
+          style={estiloGrid}
           aria-hidden="true"
         >
           {options?.hideCantidad ? null : (
@@ -5368,6 +5320,12 @@ function ApConfigStep({
           <span />
           <span>Alto</span>
           <span />
+          {mostrarProf ? (
+            <>
+              <span>Prof.</span>
+              <span />
+            </>
+          ) : null}
         </div>
         {motorConfig.piezas.map((pieza, index) => {
           const ajustada =
@@ -5378,6 +5336,7 @@ function ApConfigStep({
           <React.Fragment key={pieza.uiKey}>
           <div
             className={`ap-pieza-row${options?.hideCantidad ? " ap-pieza-row-medidas" : ""}`}
+            style={estiloGrid}
           >
             {options?.hideCantidad ? null : (
               <>
@@ -5431,6 +5390,7 @@ function ApConfigStep({
               />
               <span>cm</span>
             </label>
+            {index === 0 ? inputProf : null}
             <button
               type="button"
               className="ap-qty-btn"
@@ -5536,8 +5496,16 @@ function ApConfigStep({
           Agregar pieza
         </button>
       </div>
+      {mostrarProf ? (
+        <span className="ap-section-hint">
+          La profundidad define los metros de perfil, la cenefa y los conectores
+          del bastidor.
+        </span>
+      ) : null}
+      </div>
     </div>
-  );
+    );
+  };
 
   const setModoCotizacionLineal = (modo: ModoCotizacionLineal) => {
     setMotorConfig((current) => ({
@@ -5570,18 +5538,13 @@ function ApConfigStep({
       }));
     return (
       <>
-        <div className="ap-product-banner">
-          <button type="button" className="ap-back" onClick={onBack}>
-            <ArrowLeftIcon />
-            Cambiar producto
-          </button>
-          <div className="ap-product-banner-info">
-            <div className="ap-product-banner-name">{product.name}</div>
-            <div className="ap-product-banner-desc">
-              Configurador de cartelería · el precio lo cotiza el motor en vivo
-            </div>
-          </div>
-        </div>
+        <ProductoSheetHeaderConstelacion
+          name={product.name}
+          desc="Configurador de cartelería · el precio lo cotiza el motor en vivo"
+          eyebrow={`${product.family} · ${product.cobro}`}
+          onBack={onBack}
+          onClose={onClose}
+        />
         <div className={cartS.sheetHost}>
           <CarteleriaConfigurador
             tipoCartel={carteleriaInfo.tipoCartel}
@@ -5644,32 +5607,15 @@ function ApConfigStep({
 
   return (
     <>
-      <div className="ap-product-banner">
-        <button type="button" className="ap-back" onClick={onBack}>
-          <ArrowLeftIcon />
-          Cambiar producto
-        </button>
-        <div className="ap-pb-body">
-          <div className="ap-pb-head">
-            <span className={`tipo-chip tipo-${familyColor(product.family)}`}>
-              <span className="d" />
-              {product.family}
-            </span>
-            <span className="ap-pb-mode">
-              <ApAtomMode mode={product.cobro} />
-              {product.cobro}
-            </span>
-          </div>
-          <div className="ap-pb-name">{product.name}</div>
-          <div className="ap-pb-desc">{product.descripcion}</div>
-        </div>
-      </div>
+      <ProductoSheetHeaderConstelacion
+        name={product.name}
+        desc={product.descripcion}
+        eyebrow={`${product.family} · ${product.cobro}`}
+        onBack={onBack}
+        onClose={onClose}
+      />
 
       <div className="ap-config-section">
-        <div className="ap-cs-head">
-          <div className="ttl">Datos para calcular</div>
-        </div>
-
         {product.real && productoDetalle?.rutasAlternativas.length ? (
           <div className="ap-specs ap-specs-calculo">
             {productoDetalle.rutasAlternativas.length > 1 ? (
@@ -5746,18 +5692,14 @@ function ApConfigStep({
             ) : usaMedidaPersonalizada && !usaMedidaMixta ? (
               <>
                 {renderPiezasEditor({ hideCantidad: piezasUsanCantidadComercial })}
-                {piezasUsanCantidadComercial ? (
-                  <div className="ap-spec ap-spec-wide">
-                    <label>Cantidad</label>
-                    {renderQuantityControl()}
-                  </div>
-                ) : null}
+                {piezasUsanCantidadComercial ? renderCantidadCard() : null}
               </>
             ) : (
               <>
                 {usaMedidaMixta || medidasPredefinidas.length > 1 ? (
-                  <div className="ap-spec ap-spec-wide">
-                    <label>Medida</label>
+                  <div className={seC.card}>
+                    <div className={seC.gh}>Medida</div>
+                    <div className={seC.body}>
                     {renderMedidaCards(
                       usaMedidaMixta && motorConfig.piezas.length > 0
                         ? CUSTOM_MEASURE_ID
@@ -5781,15 +5723,13 @@ function ApConfigStep({
                       },
                       usaMedidaMixta,
                     )}
+                    </div>
                   </div>
                 ) : null}
               {usaMedidaMixta && motorConfig.piezas.length > 0
                 ? renderPiezasEditor({ hideCantidad: piezasUsanCantidadComercial })
                 : null}
-              <div className="ap-spec ap-spec-wide">
-                <label>Cantidad</label>
-                {renderQuantityControl()}
-              </div>
+              {renderCantidadCard()}
               {minimoComercialStatus ? (
                 <div
                   className={`ap-minimum-alert ${
@@ -5804,8 +5744,9 @@ function ApConfigStep({
             )}
 
             {usaCaras ? (
-              <div className="ap-spec ap-spec-wide">
-                <label>Caras</label>
+              <div className={seC.card}>
+                <div className={seC.gh}>Caras</div>
+                <div className={seC.body}>
                 {renderChoiceCards(
                   "Caras",
                   String(motorConfig.caras),
@@ -5870,6 +5811,7 @@ function ApConfigStep({
                     })}
                   </details>
                 ) : null}
+                </div>
               </div>
             ) : null}
 
@@ -6082,7 +6024,7 @@ function ApConfigStep({
                 sin profundidad fija — el comercial la carga acá. En cm (el
                 motor la recibe en mm). Volvió al flujo genérico cuando el
                 configurador 3D quedó a un costado (§17 derivadores). */}
-            {profundidadCartel ? (
+            {profundidadCartel && !profundidadInline ? (
               <div className="ap-spec">
                 <label>Profundidad del cajón</label>
                 <input
@@ -6160,8 +6102,8 @@ function ApConfigStep({
               const labelPaso =
                 paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
               return (
-                <div className="ap-spec ap-spec-wide" key={paso.configPasoId}>
-                  <label>
+                <div className={seC.card} key={paso.configPasoId}>
+                  <div className={seC.gh}>
                     {mostrarTecnologia
                       ? pasosConTecnologias.length === 1
                         ? "Tecnología de impresión"
@@ -6169,30 +6111,34 @@ function ApConfigStep({
                       : pasosConTecnologias.length === 1
                         ? "Máquina"
                         : `${labelPaso} · máquina`}
-                  </label>
-                  {mostrarTecnologia
-                    ? renderChoiceCards(
-                        "Tecnología de impresión",
-                        selectedTechnology?.value ?? "",
-                        techOptions,
-                        setTechnology,
-                        { columns: 3, layout: "tile" },
-                      )
-                    : null}
-                  {mostrarDropdownMaquina && selectedTechnology ? (
-                    <select
-                      className="ap-native-select"
-                      value={selectedId}
-                      onChange={(event) => setMaquina(paso.configPasoId, event.target.value)}
-                    >
-                      {selectedTechnology.candidatas.map((candidata) => (
-                        <option key={candidata.maquinaId} value={candidata.maquinaId}>
-                          {candidata.maquina.nombre}
-                          {candidata.esPreferida ? " · preferida" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
+                  </div>
+                  <div className={seC.body}>
+                    {mostrarTecnologia
+                      ? renderChoiceCards(
+                          "Tecnología de impresión",
+                          selectedTechnology?.value ?? "",
+                          techOptions,
+                          setTechnology,
+                          { columns: 3, layout: "tile" },
+                        )
+                      : null}
+                    {mostrarDropdownMaquina && selectedTechnology ? (
+                      <select
+                        className="ap-native-select"
+                        value={selectedId}
+                        onChange={(event) =>
+                          setMaquina(paso.configPasoId, event.target.value)
+                        }
+                      >
+                        {selectedTechnology.candidatas.map((candidata) => (
+                          <option key={candidata.maquinaId} value={candidata.maquinaId}>
+                            {candidata.maquina.nombre}
+                            {candidata.esPreferida ? " · preferida" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
@@ -6234,12 +6180,13 @@ function ApConfigStep({
                 setModoColor(modo.configPasoId, nextValue);
               };
               return (
-                <div className="ap-spec ap-spec-wide" key={modo.configPasoId}>
-                  <label>
+                <div className={seC.card} key={modo.configPasoId}>
+                  <div className={seC.gh}>
                     {modosColorVisibles.length === 1
                       ? "Modo de color"
                       : `${modo.nombreVisible?.trim() || humanizeCodigo(modo.familiaCodigo)} · color`}
-                  </label>
+                  </div>
+                  <div className={seC.body}>
                   {renderChoiceCards(
                     "Modo de color",
                     value,
@@ -6315,6 +6262,7 @@ function ApConfigStep({
                       </details>
                     );
                   })()}
+                  </div>
                 </div>
               );
             })}
@@ -6323,11 +6271,15 @@ function ApConfigStep({
               renderTiempoManualField(tiempoPaso),
             )}
 
-            {pasosParamsComercialPrincipales.flatMap((paso) =>
-              paso.campos.map((campo) => renderParamComercialField(paso, campo)),
-            )}
+            {pasosParamsComercialPrincipales.length > 0
+              ? renderParamPlanilla()
+              : null}
 
-            {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
+            {slotsMaterialesGenerales.length > 0 ? (
+              <div className={matS.list}>
+                {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
+              </div>
+            ) : null}
 
             {editorSelloHabilitado && selloModel ? (
               <div className="ap-spec ap-spec-wide">
@@ -6400,10 +6352,7 @@ function ApConfigStep({
           </div>
         ) : (
           <>
-            <div className="ap-spec ap-spec-wide">
-              <label>Cantidad</label>
-              {renderQuantityControl()}
-            </div>
+            {renderCantidadCard()}
             {minimoComercialStatus ? (
               <div
                 className={`ap-minimum-alert ${
@@ -6506,12 +6455,16 @@ function ApConfigStep({
                       )}
                     </div>
                     <div className="ap-optional-config-fields">
-                      {slots.map((slot) =>
-                        renderMaterialSelect(slot, {
-                          showHint: false,
-                          collapseSingleCandidate: true,
-                        }),
-                      )}
+                      {slots.length > 0 ? (
+                        <div className={matS.list}>
+                          {slots.map((slot) =>
+                            renderMaterialSelect(slot, {
+                              showHint: false,
+                              collapseSingleCandidate: true,
+                            }),
+                          )}
+                        </div>
+                      ) : null}
                       {tiempoManual
                         ? renderTiempoManualField(tiempoManual)
                         : null}
@@ -7156,36 +7109,29 @@ export function AgregarProductoSheet({
         aria-modal="true"
         aria-labelledby="ap-title"
       >
-        <div className="sheet-head ap-head">
-          <div className="body">
-            <div className="ap-eyebrow">
-              <BriefcaseBusinessIcon />
-              Comercial · Nueva orden
+        {step === "select" ? (
+          <div className="sheet-head ap-head">
+            <div className="body">
+              <div className="ap-eyebrow">
+                <BriefcaseBusinessIcon />
+                Comercial · Nueva orden
+              </div>
+              <h2 id="ap-title">Agregar producto a la OT</h2>
+              <div className="sub">
+                Elegí un producto del catálogo para configurar cantidad, datos
+                reales y opcionales.
+              </div>
             </div>
-            <h2 id="ap-title">{isEditing ? "Editar producto de la OT" : "Agregar producto a la OT"}</h2>
-            <div className="sub">
-              {step === "select"
-                ? "Elegí un producto del catálogo para configurar cantidad, datos reales y opcionales."
-                : isEditing
-                  ? "Actualizá los datos de cálculo y opcionales del producto seleccionado."
-                  : "Configurá los datos de cálculo y opcionales del producto seleccionado."}
-            </div>
+            <button
+              type="button"
+              className="close"
+              onClick={close}
+              aria-label="Cerrar"
+            >
+              <XIcon />
+            </button>
           </div>
-          <div className="ap-steps">
-            <span className={`ap-step ${step === "select" ? "on" : "done"}`}>
-              <span className="n">{step === "select" ? "1" : <CheckIcon />}</span>
-              Producto
-            </span>
-            <span className="ap-step-rule" />
-            <span className={`ap-step ${step === "config" ? "on" : ""}`}>
-              <span className="n">2</span>
-              Configurar
-            </span>
-          </div>
-          <button type="button" className="close" onClick={close} aria-label="Cerrar">
-            <XIcon />
-          </button>
-        </div>
+        ) : null}
 
         <div
           className={`sheet-body ap-body${esCarteleriaFull ? ` ${cartS.sheetBodyFull}` : ""}`}
@@ -7217,6 +7163,7 @@ export function AgregarProductoSheet({
               cotizacionError={cotizacionError}
               onCotizar={cotizarActual}
               onBack={back}
+              onClose={close}
             />
           ) : null}
         </div>

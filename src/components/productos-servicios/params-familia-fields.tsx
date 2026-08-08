@@ -4,10 +4,10 @@ import type { FamiliaListItem } from "@/lib/productos-servicios";
 import {
   DESCRIPCIONES_VALOR_PARAM,
   familiaConParamsEditables,
-  camposEditablesComercial,
+  esEditableComercial,
   etiquetaValorParam,
   patchParaEnum,
-  toggleCampoEditable,
+  toggleEditableComercial,
   toggleMultiEnum,
   valorBooleanoParam,
 } from "@/lib/params-familia";
@@ -76,8 +76,6 @@ export function ParamsFamiliaFields({
   if (!familiaConParamsEditables(familia) || schema.length === 0) {
     return null;
   }
-
-  const abiertos = camposEditablesComercial(params);
 
   const renderControl = (param: ParamSchema) => {
     const valor = params[param.campo];
@@ -164,7 +162,8 @@ export function ParamsFamiliaFields({
   };
 
   const renderRow = (param: ParamSchema) => {
-    const editable = abiertos.includes(param.campo);
+    const expuesto = param.expuestoAlComercial === true;
+    const editable = esEditableComercial(params, param.campo, expuesto);
     const descripcion = [
       param.descripcion,
       DESCRIPCIONES_VALOR_PARAM[param.campo],
@@ -190,8 +189,15 @@ export function ParamsFamiliaFields({
           type="button"
           className={s.lock}
           aria-pressed={editable}
+          title={
+            expuesto
+              ? "La familia sugiere abrirlo; podés fijarlo igual."
+              : undefined
+          }
           onClick={() =>
-            onChange(toggleCampoEditable(params, param.campo, !editable))
+            onChange(
+              toggleEditableComercial(params, param.campo, !editable, expuesto),
+            )
           }
         >
           {editable ? OPEN : LOCK}

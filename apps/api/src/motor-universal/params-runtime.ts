@@ -14,11 +14,26 @@
  */
 
 export const CAMPO_EDITABLES = 'camposEditablesComercial';
+export const CAMPO_FIJADOS = 'camposFijadosComercial';
 
 /** Campos que el modelador dejó abiertos al comercial en este paso. */
 export function camposEditablesComercial(paramsPasoJson: unknown): string[] {
   const params = (paramsPasoJson ?? {}) as Record<string, unknown>;
   const declarados = params[CAMPO_EDITABLES];
+  if (!Array.isArray(declarados)) return [];
+  return declarados.filter((c): c is string => typeof c === 'string');
+}
+
+/**
+ * Campos que el modelador FIJÓ explícitamente aunque la familia los exponga por
+ * defecto (`expuestoAlComercial`). El default de esos params es "editable"; esta
+ * lista es la forma de que el modelador los cierre. Vacía = nada cerrado (el
+ * comportamiento histórico). El toggle Fijo/Editable del editor es la autoridad:
+ * la familia sólo pone el default.
+ */
+export function camposFijadosComercial(paramsPasoJson: unknown): string[] {
+  const params = (paramsPasoJson ?? {}) as Record<string, unknown>;
+  const declarados = params[CAMPO_FIJADOS];
   if (!Array.isArray(declarados)) return [];
   return declarados.filter((c): c is string => typeof c === 'string');
 }
@@ -41,10 +56,14 @@ export function paramsEfectivos(
   editablesExtra: string[] = [],
 ): Record<string, unknown> {
   const base = { ...((paramsPasoJson ?? {}) as Record<string, unknown>) };
+  // Abiertos = lo que el modelador abrió ∪ lo que la familia expone por
+  // default, MENOS lo que el modelador fijó explícitamente. `fijados` gana
+  // sobre TODO: si un campo quedó en las dos listas, manda el Fijo.
+  const fijados = new Set(camposFijadosComercial(paramsPasoJson));
   const editables = [
     ...camposEditablesComercial(paramsPasoJson),
     ...editablesExtra,
-  ];
+  ].filter((campo) => !fijados.has(campo));
   if (editables.length === 0) return base;
 
   const runtime = (runtimeDelPaso ?? {}) as Record<string, unknown>;

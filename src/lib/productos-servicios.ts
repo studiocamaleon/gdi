@@ -473,6 +473,11 @@ export interface FamiliaListItem {
   /** B.3.3 — qué deja este paso (Registro de Capacidades), para el
    *  selector "hereda de" del editor de configuración. */
   capacidades?: Array<{ key: string; nombre: string; heredable: boolean }>;
+  /** Las magnitudes publicadas que un paso siguiente puede heredar POR NOMBRE
+   *  (mecanismo HEREDAR con `campoOutput`): "puntos de soldadura", "m² a
+   *  pintar"… A diferencia de `capacidades`, conserva la identidad de los
+   *  outputs derivados en vez de colapsarlos en "unidades procesadas". */
+  outputsPublicables?: Array<{ key: string; etiqueta: string }>;
   /** Derivadores: lo mínimo para que el editor NOMBRE la cantidad del paso
    *  ("6 ml de perfil/h" en vez de "6 unid./h" — H1 del relevamiento). */
   /** [Efectos] Qué le puede exigir al trabajo un paso de esta familia

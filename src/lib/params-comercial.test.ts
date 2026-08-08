@@ -78,6 +78,20 @@ describe("getParamsComercialDeRuta", () => {
     });
     expect(getParamsComercialDeRuta([raro], familias)).toEqual([]);
   });
+
+  /** Un paso "No se usa acá" no corre en la ruta: el motor lo ignora, así que
+   * no se le ofrece configuración (mismo gate que materiales, modo color, etc.). */
+  it("un paso NO_EJECUTAR no aporta params aunque tenga campos abiertos", () => {
+    const noEjecuta = configPaso({ modoActivacion: "NO_EJECUTAR" });
+    expect(getParamsComercialDeRuta([noEjecuta], familias)).toEqual([]);
+  });
+
+  it("un rutaPaso inactivo no aporta params", () => {
+    const inactivo = configPaso({
+      rutaPaso: { familiaCodigo: "colocacion_ojales", activo: false },
+    });
+    expect(getParamsComercialDeRuta([inactivo], familias)).toEqual([]);
+  });
 });
 
 describe("valorEfectivoCampo", () => {

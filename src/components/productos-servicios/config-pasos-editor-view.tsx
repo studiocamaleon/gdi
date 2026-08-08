@@ -792,6 +792,11 @@ function jsonToText(value: Record<string, unknown> | null | undefined): string {
 // guardar); estos helpers leen/escriben esa clave sin pisar el resto.
 type OrigenHerencia = { rutaPasoId: string; capacidad: string };
 
+// Herencia por MAGNITUD PUBLICADA (H6): "hereda «puntos de soldadura» del que
+// lo publique". El motor la resuelve leyendo la key plana del jobContext — es
+// el patrón que usan los pasos de cartelería (soldadura←puntos, pintura←m²).
+type SeleccionHerencia = OrigenHerencia | { campoOutput: string };
+
 function leerOrigenHerencia(texto: string): Partial<OrigenHerencia> | null {
   const r = textToJson(texto);
   if (!r.ok || !r.value) return null;
@@ -801,14 +806,24 @@ function leerOrigenHerencia(texto: string): Partial<OrigenHerencia> | null {
     : null;
 }
 
+function leerCampoOutputHerencia(texto: string): string | null {
+  const r = textToJson(texto);
+  if (!r.ok || !r.value) return null;
+  const c = r.value.campoOutput;
+  return typeof c === "string" && c.trim() ? c : null;
+}
+
 function escribirOrigenHerencia(
   texto: string,
-  origen: OrigenHerencia | null,
+  sel: SeleccionHerencia | null,
 ): string {
   const r = textToJson(texto);
   const obj: Record<string, unknown> = r.ok && r.value ? { ...r.value } : {};
-  if (origen) obj.origen = origen;
-  else delete obj.origen;
+  // Las dos formas son mutuamente excluyentes: al fijar una, se limpia la otra.
+  delete obj.origen;
+  delete obj.campoOutput;
+  if (sel && "campoOutput" in sel) obj.campoOutput = sel.campoOutput;
+  else if (sel) obj.origen = sel;
   return jsonToText(obj);
 }
 
@@ -4187,11 +4202,11 @@ export function ConfigPasosEditorView({
   // click parecía no hacer nada.
   const aplicarOrigenHerencia = (
     pasoId: string,
-    origen: OrigenHerencia | null,
+    sel: SeleccionHerencia | null,
   ) => {
     const texto = escribirOrigenHerencia(
       jsonTexts[pasoId]?.mecanismo ?? "",
-      origen,
+      sel,
     );
     setJsonTexts((prev) => ({
       ...prev,
@@ -9049,12 +9064,23 @@ function RitmoGuiado({
   cfg,
   familia,
   onParams,
+  pasos,
+  familiasMap,
+  jsonTexts,
+  onPatch,
+  onHerencia,
 }: {
   variante: "productividad" | "batch" | "fijo";
   pasoId: string;
   cfg: UpsertConfigPasoPayload;
   familia: FamiliaListItem | undefined;
   onParams: (pasoId: string, patch: Record<string, unknown>) => void;
+  // Para inlinear el control de cantidad ("6 puntos de soldadura por hora").
+  pasos: PasoAsistente[];
+  familiasMap: Map<string, FamiliaListItem>;
+  jsonTexts: Record<string, { params: string; mecanismo: string }>;
+  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
+  onHerencia: (pasoId: string, sel: SeleccionHerencia | null) => void;
 }) {
   const params = asRecord(cfg.paramsPasoJson);
   // Normalizada: hay pasos guardados con el alias "piezas_h" y el selector
@@ -9099,12 +9125,26 @@ function RitmoGuiado({
     fontSize: 12.5,
     color: "var(--muted-text, #6e6e76)",
   };
+  // Para el desplegable de magnitudes usamos el nombre NEUTRO de lo que cuenta
+  // el paso (ml de perfil, la magnitud principal), NO la fuente derivada ya
+  // elegida: si pasáramos `unidadCantidad` (que prioriza la derivada elegida,
+  // p. ej. "cortes de hierro"), la opción genérica "cantidad" quedaría
+  // etiquetada igual que la opción `derivada:cortes` y aparecería duplicada.
+  const unidadCantidadNeutra = unidadCantidadDe(cfg, familia);
   const magnitudes = getRitmoMagnitudOptions(
     familia,
     params,
-    unidadCantidad,
+    unidadCantidadNeutra,
   );
   const magnitudActual = `${unidad}|${fuente}`;
+  // Cuando el paso tiene sección de cantidad (hereda / la calcula / la pedida),
+  // esa magnitud ES la del ritmo. En productividad la mostramos INLINE aquí
+  // ("6 puntos de soldadura por hora") en vez de un selector de magnitud
+  // redundante + una sección aparte abajo.
+  const inlineCantidad =
+    variante === "productividad" &&
+    requiereMecanismoCantidad(cfg, familia) &&
+    (familia?.mecanismosCantidadSoportados?.length ?? 4) > 1;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {variante === "fijo" ? (
@@ -9149,23 +9189,38 @@ function RitmoGuiado({
             inputMode="decimal"
             style={{ maxWidth: 92, textAlign: "right" }}
           />
-          <div style={{ minWidth: 190 }}>
-            <HumanSelect
-              value={magnitudActual}
-              onValueChange={(value) => {
-                const elegida = magnitudes.find((m) => m.value === value);
-                if (!elegida) return;
-                onParams(pasoId, {
-                  productivityUnit: elegida.unidad,
-                  productivityQuantitySource: elegida.fuente,
-                });
-              }}
-              options={magnitudes.map((m) => ({
-                value: m.value,
-                label: m.label,
-              }))}
-              placeholder="Elegir magnitud"
-            />
+          <div style={{ minWidth: 200 }}>
+            {inlineCantidad ? (
+              // La magnitud sale del control de cantidad (hereda puntos de
+              // soldadura, m² a pintar…): se elige acá, una sola vez.
+              <CantidadUnificadaGuiada
+                pasoId={pasoId}
+                pasos={pasos}
+                familia={familia}
+                familiasMap={familiasMap}
+                jsonTexts={jsonTexts}
+                cfg={cfg}
+                onPatch={onPatch}
+                onHerencia={onHerencia}
+              />
+            ) : (
+              <HumanSelect
+                value={magnitudActual}
+                onValueChange={(value) => {
+                  const elegida = magnitudes.find((m) => m.value === value);
+                  if (!elegida) return;
+                  onParams(pasoId, {
+                    productivityUnit: elegida.unidad,
+                    productivityQuantitySource: elegida.fuente,
+                  });
+                }}
+                options={magnitudes.map((m) => ({
+                  value: m.value,
+                  label: m.label,
+                }))}
+                placeholder="Elegir magnitud"
+              />
+            )}
           </div>
           <span style={notaStyle}>por hora</span>
         </div>
@@ -9197,34 +9252,10 @@ function RitmoGuiado({
           <span style={notaStyle}>min</span>
         </div>
       )}
-      {/* Cómo lo guarda el sistema: el modelador escribe "30 m de borde/h" y
-          adentro queda `ml/h`. Decirlo evita la sorpresa de ver otra unidad
-          en la ficha del paso o en un export. */}
-      {variante === "productividad" && ritmoTexto.trim() !== "" ? (
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            width: "fit-content",
-            fontSize: 11,
-            color: "var(--muted-text, #6e6e76)",
-            background: "var(--surface-2, #fafaf9)",
-            border: "1px solid var(--hairline, #eeebe4)",
-            borderRadius: 6,
-            padding: "4px 8px",
-          }}
-        >
-          Equivale a{" "}
-          <b style={{ fontWeight: 500, color: "var(--fg-2, #2c2c33)" }}>
-            {ritmoTexto} {getT2ProductivityUnitSuffix(unidad, fuente, unidadCantidad)}
-          </b>{" "}
-          · el sistema lo guarda como{" "}
-          <b style={{ fontWeight: 500, color: "var(--fg-2, #2c2c33)" }}>
-            {unidad.replace("_", "/")}
-          </b>
-        </div>
-      ) : null}
+      {/* Antes había un "Equivale a X · el sistema lo guarda como Y": la
+          primera mitad repetía el control de ritmo de arriba y la segunda
+          exponía la unidad interna. La UI es para el usuario, no cuenta cómo
+          trabaja el sistema por dentro. */}
     </div>
   );
 }
@@ -9531,68 +9562,191 @@ function HerenciaOrigenGuiada({
   pasos: PasoAsistente[];
   familiasMap: Map<string, FamiliaListItem>;
   jsonTexts: Record<string, { params: string; mecanismo: string }>;
-  onHerencia: (pasoId: string, origen: OrigenHerencia | null) => void;
+  onHerencia: (pasoId: string, sel: SeleccionHerencia | null) => void;
 }) {
-  const origenActual = leerOrigenHerencia(jsonTexts[pasoId]?.mecanismo ?? "");
-  const [herenciaPaso, setHerenciaPaso] = React.useState(
-    typeof origenActual?.rutaPasoId === "string" ? origenActual.rutaPasoId : "",
+  const texto = jsonTexts[pasoId]?.mecanismo ?? "";
+  const campoActual = leerCampoOutputHerencia(texto);
+  const origenActual = leerOrigenHerencia(texto);
+
+  // Las magnitudes que dejan los pasos anteriores, con su NOMBRE real
+  // ("puntos de soldadura", "m² a pintar"), no colapsadas a "unidades". Cada
+  // una se hereda por su key de output (mecanismo H6: `campoOutput`), que es
+  // como el motor las resuelve del jobContext.
+  const previos = pasos.filter(
+    (_, i) => i < pasos.findIndex((x) => x.id === pasoId),
   );
-  const [herenciaCap, setHerenciaCap] = React.useState(
-    typeof origenActual?.capacidad === "string"
+  const magnitudes: {
+    key: string;
+    etiqueta: string;
+    pasoNombre: string;
+  }[] = [];
+  const vistas = new Set<string>();
+  for (const p of previos) {
+    const pubs = familiasMap.get(p.familiaCodigo)?.outputsPublicables ?? [];
+    for (const o of pubs) {
+      if (vistas.has(o.key)) continue;
+      vistas.add(o.key);
+      magnitudes.push({ key: o.key, etiqueta: o.etiqueta, pasoNombre: p.nombre });
+    }
+  }
+
+  // Valor mostrado: la magnitud elegida (campoOutput) o, si viniera una
+  // herencia por origen explícito legacy, esa capacidad; si no, automático.
+  const valor =
+    campoActual ??
+    (typeof origenActual?.capacidad === "string"
       ? origenActual.capacidad
-      : "unidades_procesadas",
-  );
-  const previos = pasos
-    .filter((p, i) => i < pasos.findIndex((x) => x.id === pasoId))
-    .map((p) => ({
-      id: p.id,
-      nombre: p.nombre,
-      capacidades: (familiasMap.get(p.familiaCodigo)?.capacidades ?? []).filter(
-        (c: { heredable: boolean }) => c.heredable,
-      ),
-    }));
+      : "auto");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <HumanSelect
-        value={herenciaPaso}
-        onValueChange={(id) => setHerenciaPaso(id)}
-        options={previos.map((p) => ({
-          value: p.id,
-          label: p.nombre,
-          description: p.capacidades.length
-            ? `Deja: ${p.capacidades.map((c: { nombre: string }) => c.nombre.toLowerCase()).join(", ")}`
-            : undefined,
-        }))}
-        placeholder="¿De qué paso?"
+        value={valor}
+        onValueChange={(v) =>
+          onHerencia(pasoId, !v || v === "auto" ? null : { campoOutput: v })
+        }
+        options={[
+          {
+            value: "auto",
+            label: "Automático (del paso anterior)",
+            description:
+              "Toma la cantidad final que viene del paso previo, sin fijar una magnitud.",
+          },
+          ...magnitudes.map((m) => ({
+            value: m.key,
+            label: m.etiqueta.charAt(0).toUpperCase() + m.etiqueta.slice(1),
+            description: `La publica ${m.pasoNombre}`,
+          })),
+        ]}
+        placeholder="¿Qué magnitud hereda?"
       />
-      {herenciaPaso ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <HumanSelect
-            value={herenciaCap}
-            onValueChange={(v) => setHerenciaCap(v || "unidades_procesadas")}
-            options={(
-              previos.find((p) => p.id === herenciaPaso)?.capacidades ?? []
-            ).map((c: { key: string; nombre: string }) => ({
-              value: c.key,
-              label: c.nombre,
-            }))}
-            placeholder="Qué número usa"
-          />
-          <Button
-            type="button"
-            size="sm"
-            onClick={() =>
-              onHerencia(pasoId, {
-                rutaPasoId: herenciaPaso,
-                capacidad: herenciaCap,
-              })
-            }
-          >
-            Aplicar
-          </Button>
-        </div>
-      ) : null}
     </div>
+  );
+}
+
+// Copy de cada método NO-heredar, pensado para el usuario (no el nombre
+// interno del mecanismo). El de HEREDAR se expande por magnitud, así que no
+// vive acá.
+const CANTIDAD_METODO_LABEL: Record<string, string> = {
+  DIRECT_FROM_JOBCONTEXT: "La cantidad pedida",
+  CALCULADO_POR_PASO: "La que calcula el paso",
+  CONVERSION: "Conversión por empaque",
+};
+const CANTIDAD_METODO_DESC: Record<string, string> = {
+  DIRECT_FROM_JOBCONTEXT: "La que pide el comercial al cotizar (ej: 30 carteles).",
+  CALCULADO_POR_PASO: "El paso la calcula solo (acomodo de piezas, geometría).",
+  CONVERSION: "Convierte la cantidad a otra unidad (ej: piezas por caja).",
+};
+
+// ─── "Sobre qué cantidad se aplica": UN solo control (Opción A) ──────────
+// Fusiona el método (mecanismoCantidad) y la magnitud heredada (campoOutput)
+// en un desplegable. Antes eran dos filas — "Base de cantidad" + "Hereda de" —
+// que confundían: la magnitud ya se nombra arriba en el ritmo, y elegir "de
+// qué paso" por separado sobraba. Acá se elige directo QUÉ número multiplica
+// al ritmo.
+function CantidadUnificadaGuiada({
+  pasoId,
+  pasos,
+  familia,
+  familiasMap,
+  jsonTexts,
+  cfg,
+  onPatch,
+  onHerencia,
+}: {
+  pasoId: string;
+  pasos: PasoAsistente[];
+  familia: FamiliaListItem | undefined;
+  familiasMap: Map<string, FamiliaListItem>;
+  jsonTexts: Record<string, { params: string; mecanismo: string }>;
+  cfg: UpsertConfigPasoPayload;
+  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
+  onHerencia: (pasoId: string, sel: SeleccionHerencia | null) => void;
+}) {
+  const mecanismos = familia?.mecanismosCantidadSoportados ?? [
+    "DIRECT_FROM_JOBCONTEXT",
+    "HEREDAR_DEL_OUTPUT_CANONICO",
+    "CALCULADO_POR_PASO",
+    "CONVERSION",
+  ];
+  const mecanismoActual =
+    cfg.mecanismoCantidad ??
+    getDefaultMecanismoCantidad(familia, mecanismos) ??
+    mecanismos[0];
+  const campoActual = leerCampoOutputHerencia(jsonTexts[pasoId]?.mecanismo ?? "");
+
+  // Las magnitudes que dejan los pasos anteriores, con su nombre real.
+  const previos = pasos.filter(
+    (_, i) => i < pasos.findIndex((x) => x.id === pasoId),
+  );
+  const magnitudes: { key: string; etiqueta: string; pasoNombre: string }[] = [];
+  const vistas = new Set<string>();
+  for (const p of previos) {
+    for (const o of familiasMap.get(p.familiaCodigo)?.outputsPublicables ?? []) {
+      if (vistas.has(o.key)) continue;
+      vistas.add(o.key);
+      magnitudes.push({ key: o.key, etiqueta: o.etiqueta, pasoNombre: p.nombre });
+    }
+  }
+
+  const heredaSoportado = mecanismos.includes("HEREDAR_DEL_OUTPUT_CANONICO");
+
+  // Valor actual codificado: "m:<mecanismo>" para los métodos directos,
+  // "h:<campoOutput>" para heredar una magnitud, "h:" para heredar automático.
+  const valor =
+    mecanismoActual === "HEREDAR_DEL_OUTPUT_CANONICO"
+      ? `h:${campoActual ?? ""}`
+      : `m:${mecanismoActual}`;
+
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  const options: {
+    value: string;
+    label: string;
+    description?: string;
+  }[] = [];
+  for (const m of mecanismos) {
+    if (m === "HEREDAR_DEL_OUTPUT_CANONICO") continue;
+    options.push({
+      value: `m:${m}`,
+      label: CANTIDAD_METODO_LABEL[m] ?? m,
+      description: CANTIDAD_METODO_DESC[m],
+    });
+  }
+  if (heredaSoportado) {
+    for (const mg of magnitudes) {
+      options.push({
+        value: `h:${mg.key}`,
+        label: cap(mg.etiqueta),
+        description: `Emitida por el paso: ${mg.pasoNombre}`,
+      });
+    }
+    options.push({
+      value: "h:",
+      label: "La del paso anterior",
+      description: "Sin fijar una magnitud: toma la cantidad del paso previo.",
+    });
+  }
+
+  const aplicar = (v: string) => {
+    if (v.startsWith("h:")) {
+      const key = v.slice(2);
+      onPatch(pasoId, { mecanismoCantidad: "HEREDAR_DEL_OUTPUT_CANONICO" });
+      onHerencia(pasoId, key ? { campoOutput: key } : null);
+      return;
+    }
+    const mecanismo = v.slice(2);
+    onPatch(pasoId, { mecanismoCantidad: mecanismo || null });
+    onHerencia(pasoId, null);
+  };
+
+  return (
+    <HumanSelect
+      value={valor}
+      onValueChange={(v) => v && aplicar(v)}
+      options={options}
+      placeholder="Elegir"
+    />
   );
 }
 
@@ -11462,7 +11616,7 @@ function SeccionesEsquemaPaso({
   vivos: PendientePaso[];
   onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
   onParams: (pasoId: string, patch: Record<string, unknown>) => void;
-  onHerencia: (pasoId: string, origen: OrigenHerencia | null) => void;
+  onHerencia: (pasoId: string, sel: SeleccionHerencia | null) => void;
   onAddSlotFamilia: (pasoId: string, slotCodigo: string) => void;
   reglaProps: {
     includeMeasureFields: boolean;
@@ -11984,6 +12138,25 @@ function SeccionesEsquemaPaso({
                 cfg={cfg}
                 familia={familia}
                 onParams={onParams}
+                pasos={pasos}
+                familiasMap={familiasMap}
+                jsonTexts={jsonTexts}
+                onPatch={onPatch}
+                onHerencia={onHerencia}
+              />
+            );
+          }
+          if (id === "cantidad-unificada") {
+            return (
+              <CantidadUnificadaGuiada
+                pasoId={pasoActual.id}
+                pasos={pasos}
+                familia={familia}
+                familiasMap={familiasMap}
+                jsonTexts={jsonTexts}
+                cfg={cfg}
+                onPatch={onPatch}
+                onHerencia={onHerencia}
               />
             );
           }
@@ -12681,7 +12854,7 @@ function AsistenteGuiado({
   jsonTexts: Record<string, { params: string; mecanismo: string }>;
   onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
   onParams: (pasoId: string, patch: Record<string, unknown>) => void;
-  onHerencia: (pasoId: string, origen: OrigenHerencia | null) => void;
+  onHerencia: (pasoId: string, sel: SeleccionHerencia | null) => void;
   onAddSlotFamilia: (pasoId: string, slotCodigo: string) => void;
   onGuardarPaso: (pasoId: string) => Promise<void>;
   guardando: string | null;

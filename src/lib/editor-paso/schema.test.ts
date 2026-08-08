@@ -461,7 +461,26 @@ describe("sección Tiempo y costo", () => {
     expect(clavesPrensa).not.toContain("oficio.talonario");
   });
 
-  it("la herencia aparece con mecanismo HEREDAR y nombra el paso origen", () => {
+  it("con HEREDAR, el control único de cantidad nombra la magnitud", () => {
+    const cantidad = ESQUEMA_PASO.find(
+      (op) => op.clave === "tiempo.cantidad_operativa",
+    )!;
+    const ctx = ctxBase({
+      cfg: {
+        mecanismoCantidad: "HEREDAR_DEL_OUTPUT_CANONICO",
+        mecanismoCantidadConfigJson: {
+          origen: { rutaPasoId: "rp-2", capacidad: "pliegos" },
+        },
+      },
+      otros: [{ id: "rp-2", nombre: "Pre-prensa" }],
+    });
+    // Opción A: un solo control fusiona método + magnitud; con HEREDAR el
+    // resumen es la magnitud, no "Hereda del paso anterior".
+    expect(cantidad.visible(ctx)).toBe(true);
+    expect(cantidad.resumen(ctx)).toBe("Pliegos");
+  });
+
+  it("la opción separada 'Hereda de' quedó fusionada (oculta) pero su resumen sigue vivo", () => {
     const herencia = ESQUEMA_PASO.find((op) => op.clave === "tiempo.herencia")!;
     expect(herencia.pendiente).toBe("herencia_origen");
     const ctx = ctxBase({
@@ -473,7 +492,9 @@ describe("sección Tiempo y costo", () => {
       },
       otros: [{ id: "rp-2", nombre: "Pre-prensa" }],
     });
-    expect(herencia.visible(ctx)).toBe(true);
+    // El editor guiado ya no la renderiza aparte…
+    expect(herencia.visible(ctx)).toBe(false);
+    // …pero el detallado y el resumen siguen leyendo su lógica.
     expect(herencia.resumen(ctx)).toBe("Hereda de Pre-prensa (pliegos)");
     expect(herencia.origenValor(ctx)).toBe("config");
   });

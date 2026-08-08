@@ -151,6 +151,12 @@ import {
 } from "@/lib/modificaciones-fisicas";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
+import {
+  layoutPliegosEnHoja,
+  type LayoutPliegosEnHoja,
+} from "@/lib/nesting-compra-pliego";
+import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
+import nestC from "./nesting-compra-pliego-viewer.module.css";
 import { listClientes } from "@/lib/clientes-api";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
@@ -1579,8 +1585,100 @@ function getCentroCostoLabel(paso: PasoCosteo) {
   return "Sin tiempo";
 }
 
-function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
+/**
+ * Pliego de impresión del paso, para el dibujo de acomodado. Sale de dos
+ * fuentes según cómo se resolvió el sustrato:
+ *  - `pliegoImpresionSeleccionado` cuando el motor lo AUTO-selecciona.
+ *  - el sustrato nesteado (`substrates[0]`) cuando el sustrato es fijo
+ *    (HARDCODED): las piezas se acomodan sobre el pliego, así que ese sheet
+ *    ES el pliego de impresión. Los conteos salen de `outputsCanonicos`.
+ */
+type PliegoPaso = {
+  anchoMm: number;
+  altoMm: number;
+  label?: string;
+  pliegosImpresion?: number;
+  materiaPrimaVarianteId?: string;
+};
+
+function pliegoDePaso(
+  nesting: PasoCosteo["nestingResult"] | undefined,
+): PliegoPaso | null {
+  if (!nesting) return null;
+  const numPos = (v: unknown) =>
+    typeof v === "number" && v > 0 ? v : undefined;
+  const sel = nesting.pliegoImpresionSeleccionado;
+  if (sel && sel.anchoMm > 0 && sel.altoMm > 0) {
+    return {
+      anchoMm: sel.anchoMm,
+      altoMm: sel.altoMm,
+      label: sel.nombre,
+      pliegosImpresion: numPos(sel.pliegosImpresion),
+      materiaPrimaVarianteId: sel.materiaPrima?.varianteId,
+    };
+  }
+  const sheet = nesting.substrates?.find((sub) => sub.kind === "sheet");
+  if (sheet && "widthMm" in sheet && sheet.widthMm > 0 && sheet.heightMm > 0) {
+    const oc = nesting.outputsCanonicos ?? {};
+    return {
+      anchoMm: sheet.widthMm,
+      altoMm: sheet.heightMm,
+      label: "Pliego de impresión",
+      pliegosImpresion:
+        numPos(oc.pliegos_impresos) ?? numPos(oc.pliegos_calculados),
+    };
+  }
+  return null;
+}
+
+/** Dims (mm) de la hoja de COMPRA a partir de los atributos de la variante. */
+function hojaDeCompraDeMaterial(
+  material: MaterialCosteo,
+): { anchoMm: number; altoMm: number } | null {
+  const attrs = material.atributosVarianteJson;
+  if (!attrs) return null;
+  const num = (v: unknown) => (typeof v === "number" && v > 0 ? v : null);
+  const anchoMm = num(attrs.anchoMm);
+  const altoMm = num(attrs.altoMm) ?? num(attrs.largoMm);
+  if (anchoMm == null || altoMm == null) return null;
+  return { anchoMm, altoMm };
+}
+
+/**
+ * Acomodado hoja-de-compra → pliego para esta línea, o `null` si no aplica
+ * (no hay pliego, la línea no es el sustrato nesteado, o entra 1:1).
+ */
+function acomodadoDeLinea(
+  material: MaterialCosteo,
+  pliego: PliegoPaso | null,
+): LayoutPliegosEnHoja | null {
+  if (!pliego) return null;
+  // Sólo la línea del sustrato que se nesteó: por varianteId si el motor lo
+  // expone, si no, la línea de MATERIAL con medidas.
+  const esLaLinea = pliego.materiaPrimaVarianteId
+    ? material.materialVarianteId === pliego.materiaPrimaVarianteId
+    : material.tipoLineaCosto === "MATERIAL";
+  if (!esLaLinea) return null;
+  const hoja = hojaDeCompraDeMaterial(material);
+  if (!hoja) return null;
+  const layout = layoutPliegosEnHoja(hoja, {
+    anchoMm: pliego.anchoMm,
+    altoMm: pliego.altoMm,
+  });
+  if (!layout || !layout.esDerivado || layout.pliegosPorHoja <= 1) return null;
+  return layout;
+}
+
+function MaterialesPasoTable({
+  materiales,
+  nesting,
+}: {
+  materiales: MaterialCosteo[];
+  nesting?: PasoCosteo["nestingResult"];
+}) {
   const { moneda } = useConfigRegional();
+  const [abierto, setAbierto] = React.useState<string | null>(null);
+  const pliego = pliegoDePaso(nesting);
   const visibles = materiales.filter((material) => material.costoTotal > 0);
   if (visibles.length === 0) {
     return (
@@ -1589,6 +1687,14 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
       </div>
     );
   }
+
+  const abierta = visibles
+    .map((material, index) => ({
+      key: `${material.slotCodigo}-${material.materialVarianteId}-${index}`,
+      material,
+      layout: acomodadoDeLinea(material, pliego),
+    }))
+    .find((row) => row.key === abierto && row.layout);
 
   return (
     <div className="cost-detail-table-wrap">
@@ -1603,35 +1709,66 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
           </tr>
         </thead>
         <tbody>
-          {visibles.map((material, index) => (
-            <tr
-              key={`${material.slotCodigo}-${material.materialVarianteId}-${index}`}
-            >
-              <td>
-                <strong>{getMaterialCosteoLabel(material)}</strong>
-              </td>
-              <td>
-                <span className="cost-chip">
-                  {formatModoSeleccion(material.modoSeleccion)}
-                </span>
-              </td>
-              <td className="num">
-                {formatCantidadCosto(material.cantidad, material.unidad)}
-              </td>
-              <td className="num">
-                {formatCostoUnitarioMaterial(
-                  material.precioUnitario,
-                  material.unidad,
-                  moneda,
-                )}
-              </td>
-              <td className="num strong">
-                {formatCurrency(material.costoTotal, moneda)}
-              </td>
-            </tr>
-          ))}
+          {visibles.map((material, index) => {
+            const key = `${material.slotCodigo}-${material.materialVarianteId}-${index}`;
+            const tieneAcomodado = Boolean(acomodadoDeLinea(material, pliego));
+            return (
+              <tr key={key}>
+                <td>
+                  <strong>{getMaterialCosteoLabel(material)}</strong>
+                  {tieneAcomodado ? (
+                    <button
+                      type="button"
+                      className={nestC.trigger}
+                      onClick={() => setAbierto(key)}
+                      title="Ver cómo entran los pliegos en la hoja de compra"
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="1.5" />
+                        <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+                      </svg>
+                    </button>
+                  ) : null}
+                </td>
+                <td>
+                  <span className="cost-chip">
+                    {formatModoSeleccion(material.modoSeleccion)}
+                  </span>
+                </td>
+                <td className="num">
+                  {formatCantidadCosto(material.cantidad, material.unidad)}
+                </td>
+                <td className="num">
+                  {formatCostoUnitarioMaterial(
+                    material.precioUnitario,
+                    material.unidad,
+                    moneda,
+                  )}
+                </td>
+                <td className="num strong">
+                  {formatCurrency(material.costoTotal, moneda)}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+      {abierta && abierta.layout && pliego ? (
+        <NestingCompraPliegoModal
+          hoja={hojaDeCompraDeMaterial(abierta.material)!}
+          pliego={{ anchoMm: pliego.anchoMm, altoMm: pliego.altoMm }}
+          layout={abierta.layout}
+          onClose={() => setAbierto(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -2535,7 +2672,10 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
 
       <div className="cost-detail-block">
         <div className="cost-detail-title">Materiales del paso</div>
-        <MaterialesPasoTable materiales={materiales} />
+        <MaterialesPasoTable
+          materiales={materiales}
+          nesting={paso.nestingResult}
+        />
       </div>
 
       {cargosTotal > 0 ? (

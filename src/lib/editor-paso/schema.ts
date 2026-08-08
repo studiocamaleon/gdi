@@ -214,6 +214,7 @@ export type ControlOpcion =
         | "activacion-modo"
         | "tiempo-comercial-ayudas"
         | "centro-productivo"
+        | "cantidad-unificada"
         | "efectos-paso";
     };
 
@@ -459,6 +460,18 @@ function unidadRitmoNombrada(ctx: ContextoOpcion): string | null {
 
 function esT2(ctx: ContextoOpcion): boolean {
   return modoTiempoEfectivo(ctx) === "T-2";
+}
+
+/** El ritmo activo es "productividad por hora" (no tanda, no tiempo fijo). En
+ *  ese modo el control de cantidad se muestra INLINE junto al ritmo
+ *  ("6 puntos de soldadura por hora"), no como sección aparte. */
+function esRitmoProductividad(ctx: ContextoOpcion): boolean {
+  return (
+    esT2(ctx) &&
+    !comercialEstimaTiempo(ctx) &&
+    ritmoModoEfectivo(ctx) !== "batch_time" &&
+    ritmoModoEfectivo(ctx) !== "tiempo_fijo"
+  );
 }
 
 function mecanismoCantidadEfectivo(ctx: ContextoOpcion): string | null {
@@ -1184,43 +1197,36 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "tiempo.cantidad_operativa",
     seccion: "tiempo",
     eje: "tiempo",
+    anchoCompleto: true,
     grupo: "cantidad",
-    etiqueta: "Base de cantidad",
+    etiqueta: "El ritmo se multiplica por",
     pregunta: "¿Sobre cuántas piezas trabaja?",
     ayuda:
-      "La cantidad que este paso procesa: la del pedido, la que hereda de otro paso, o la que calcula acá (nesting/conversión).",
+      "El número que multiplica al ritmo cuando entra una orden: la cantidad pedida, la que calcula el paso, o una magnitud que dejó un paso anterior (puntos de soldadura, m² a pintar…).",
     visible: (ctx) =>
       requiereMecanismoCantidad(ctx.cfg, ctx.familia) &&
-      (ctx.familia?.mecanismosCantidadSoportados?.length ?? 4) > 1,
+      (ctx.familia?.mecanismosCantidadSoportados?.length ?? 4) > 1 &&
+      // En productividad por hora el control se muestra INLINE junto al ritmo
+      // ("6 puntos de soldadura por hora"), así que la sección aparte se oculta.
+      !esRitmoProductividad(ctx),
+    // Resumen ÚNICO: fusiona el mecanismo y la magnitud heredada (antes eran
+    // dos filas — "Base de cantidad" + "Hereda de"). Si hereda por output,
+    // nombra la magnitud; si no, el método.
     resumen: (ctx) => {
       const mecanismo = mecanismoCantidadEfectivo(ctx);
-      return mecanismo
-        ? labelMecanismoCantidad(ctx, mecanismo)
-        : "Sin definir";
+      if (!mecanismo) return "Sin definir";
+      if (mecanismo === "HEREDAR_DEL_OUTPUT_CANONICO") {
+        const magnitud = unidadCantidadDe(ctx.cfg, ctx.familia);
+        if (magnitud) {
+          return magnitud.charAt(0).toUpperCase() + magnitud.slice(1);
+        }
+        return "La del paso anterior";
+      }
+      return labelMecanismoCantidad(ctx, mecanismo);
     },
     origenValor: (ctx) =>
       ctx.cfg.mecanismoCantidad ? "config" : "default-paso",
-    control: {
-      tipo: "select",
-      opciones: (ctx) =>
-        (
-          ctx.familia?.mecanismosCantidadSoportados ?? [
-            "DIRECT_FROM_JOBCONTEXT",
-            "HEREDAR_DEL_OUTPUT_CANONICO",
-            "CALCULADO_POR_PASO",
-            "CONVERSION",
-          ]
-        ).map((m) => ({
-          value: m,
-          label: labelMecanismoCantidad(ctx, m),
-          descripcion: mecanismoCantidadLabels[m]?.descripcion,
-        })),
-      valor: (ctx) => mecanismoCantidadEfectivo(ctx) ?? "",
-      aplicar: (_ctx, v) => ({
-        tipo: "config",
-        patch: { mecanismoCantidad: v || null },
-      }),
-    },
+    control: { tipo: "componente", id: "cantidad-unificada" },
   },
   {
     clave: "tiempo.herencia",
@@ -1232,9 +1238,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿De qué paso hereda la cantidad?",
     ayuda:
       "Este paso trabaja sobre un número que dejó un paso anterior (los pliegos impresos, los puntos de soldadura, los m² a pintar…). Señalá el paso, o la magnitud publicada que corresponda; sin origen, toma el del paso anterior que publica cantidad.",
-    visible: (ctx) =>
-      requiereMecanismoCantidad(ctx.cfg, ctx.familia) &&
-      mecanismoCantidadEfectivo(ctx) === "HEREDAR_DEL_OUTPUT_CANONICO",
+    // El editor guiado fusionó esto en `tiempo.cantidad_operativa` (un solo
+    // control que ya expande las magnitudes heredables). Se mantiene la
+    // definición para el detallado y el resumen, pero no se renderiza aparte.
+    visible: () => false,
     resumen: (ctx) => {
       const config = (ctx.cfg.mecanismoCantidadConfigJson ?? {}) as {
         origen?: { rutaPasoId?: string; capacidad?: string };

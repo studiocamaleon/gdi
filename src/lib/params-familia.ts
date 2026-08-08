@@ -88,6 +88,7 @@ export function toggleMultiEnum(
  * Espejo de `apps/api/src/motor-universal/params-runtime.ts`.
  */
 export const CAMPO_EDITABLES = "camposEditablesComercial";
+export const CAMPO_FIJADOS = "camposFijadosComercial";
 
 export function camposEditablesComercial(
   params: Record<string, unknown>,
@@ -95,6 +96,64 @@ export function camposEditablesComercial(
   const declarados = params[CAMPO_EDITABLES];
   if (!Array.isArray(declarados)) return [];
   return declarados.filter((c): c is string => typeof c === "string");
+}
+
+/**
+ * Campos que el modelador FIJÓ explícitamente aunque la familia los exponga por
+ * defecto (`expuestoAlComercial`). Espejo de `params-runtime.ts` del motor.
+ */
+export function camposFijadosComercial(
+  params: Record<string, unknown>,
+): string[] {
+  const declarados = params[CAMPO_FIJADOS];
+  if (!Array.isArray(declarados)) return [];
+  return declarados.filter((c): c is string => typeof c === "string");
+}
+
+/**
+ * ¿El campo queda editable por el comercial? El DEFAULT lo pone la familia
+ * (`expuestoAlComercial`), pero la elección explícita del modelador manda:
+ *  - expuesto por la familia → editable salvo que lo haya fijado;
+ *  - no expuesto → fijo salvo que lo haya abierto.
+ */
+export function esEditableComercial(
+  params: Record<string, unknown>,
+  campo: string,
+  expuestoAlComercial: boolean,
+): boolean {
+  // `fijados` gana sobre todo; si no, editable si el modelador lo abrió o la
+  // familia lo expone por default.
+  if (camposFijadosComercial(params).includes(campo)) return false;
+  return (
+    expuestoAlComercial ||
+    camposEditablesComercial(params).includes(campo)
+  );
+}
+
+/**
+ * Patch al mover el toggle Fijo/Editable. Cada param queda a lo sumo en UNA
+ * lista, y sólo si se desvía del default de la familia: un no-expuesto se abre
+ * agregándolo a `editables`; un expuesto se cierra agregándolo a `fijados`. Al
+ * cambiar, se limpia la lista opuesta (evita que quede en las dos).
+ */
+export function toggleEditableComercial(
+  params: Record<string, unknown>,
+  campo: string,
+  abierto: boolean,
+  expuestoAlComercial: boolean,
+): Record<string, unknown> {
+  const editables = camposEditablesComercial(params).filter((c) => c !== campo);
+  const fijados = camposFijadosComercial(params).filter((c) => c !== campo);
+  if (abierto) {
+    // Editable: si el default ya es abierto (expuesto), alcanza con no fijarlo;
+    // si el default es fijo, hay que abrirlo explícitamente.
+    if (!expuestoAlComercial) editables.push(campo);
+  } else {
+    // Fijo: si el default es abierto (expuesto), hay que cerrarlo explícito;
+    // si el default ya es fijo, alcanza con no abrirlo.
+    if (expuestoAlComercial) fijados.push(campo);
+  }
+  return { [CAMPO_EDITABLES]: editables, [CAMPO_FIJADOS]: fijados };
 }
 
 /** Patch al marcar/desmarcar "el comercial puede cambiarlo" en un campo. */

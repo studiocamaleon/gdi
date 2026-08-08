@@ -10200,6 +10200,12 @@ body {
 
   .ot-v1 .sheet.sheet-ap {
     width: min(720px, 92vw);
+    top: 14px;
+    right: 14px;
+    bottom: 14px;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 18px 48px -12px rgba(20, 20, 26, 0.3);
   }
 
   .ot-v1 .sheet-head {
@@ -11310,7 +11316,8 @@ body {
 
   .ot-v1 .ap-spec input,
   .ot-v1 .ap-spec .ap-native-select,
-  .ot-v1 .ap-spec .ap-select {
+  .ot-v1 .ap-spec .ap-select,
+  .ot-v1 .ap-piezas input {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -11328,7 +11335,8 @@ body {
 
   .ot-v1 .ap-spec input:focus,
   .ot-v1 .ap-spec .ap-native-select:focus,
-  .ot-v1 .ap-spec .ap-select:focus {
+  .ot-v1 .ap-spec .ap-select:focus,
+  .ot-v1 .ap-piezas input:focus {
     border-color: var(--ink);
     box-shadow: 0 0 0 3px rgba(20, 20, 26, 0.06);
   }
@@ -12467,9 +12475,9 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
-    min-height: 74px;
-    padding: 13px 14px 12px;
+    gap: 3px;
+    min-height: 54px;
+    padding: 9px 13px;
     text-align: left;
     font: inherit;
     cursor: pointer;
@@ -12492,9 +12500,10 @@ body {
 
   .ot-v1 .ap-size-name {
     color: var(--ink);
-    font-size: 16px;
+    font-size: 12.5px;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .ot-v1 .ap-size-real {

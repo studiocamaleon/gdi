@@ -1,0 +1,30 @@
+/* Sección del cotizador con barra negra — el mismo idioma que la planilla de
+ * params y la lista de materiales, para que TODO el sheet sea una pila de
+ * tarjetas parejas. Variables `--c-` para no chocar con los tokens de la app. */
+.card {
+  --c-surface: var(--surface-1, #fff);
+  --c-border: var(--border, #e5e2db);
+  --c-hairline: var(--hairline, #eeebe4);
+  --c-ink: var(--fg, #14141a);
+  /* Ocupa el ancho completo del grid de 2 columnas de `.ap-specs`. */
+  grid-column: 1 / -1;
+  border: 1px solid var(--c-border);
+  border-radius: 11px;
+  overflow: hidden;
+  background: var(--c-surface);
+}
+
+.gh {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* Barra negra con texto blanco (invierte en tema oscuro). */
+  color: var(--c-surface);
+  background: var(--c-ink);
+  padding: 7px 12px;
+}
+
+.body {
+  padding: 12px;
+}

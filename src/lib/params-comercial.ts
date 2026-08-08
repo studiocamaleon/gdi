@@ -10,7 +10,11 @@
  * Mismo patrón que `tiempoManual` (docs/tiempo-manual-por-paso-diseno.md).
  * Ver `docs/modificaciones-fisicas-lona-diseno.md`.
  */
-import { camposEditablesComercial } from "@/lib/params-familia";
+import { esConfigPasoEjecutable } from "@/lib/config-paso-activacion";
+import {
+  camposEditablesComercial,
+  camposFijadosComercial,
+} from "@/lib/params-familia";
 import type { FamiliaListItem } from "@/lib/productos-servicios";
 
 /**
@@ -56,24 +60,32 @@ export function getParamsComercialDeRuta(
     nombreVisible?: string | null;
     modoActivacion: string | null;
     paramsPasoJson?: unknown;
-    rutaPaso: { familiaCodigo: string };
+    rutaPaso: { familiaCodigo: string; activo?: boolean };
   }>,
   familias: Map<string, FamiliaListItem>,
 ): PasoConParamsComercial[] {
   const resultado: PasoConParamsComercial[] = [];
 
   for (const config of configPasos) {
+    // Un paso NO_EJECUTAR (o de un rutaPaso inactivo) no corre en esta ruta: el
+    // motor lo ignora, así que no se le ofrece configuración. Mismo gate que las
+    // demás derivaciones del sheet. [[esConfigPasoEjecutable]]
+    if (!esConfigPasoEjecutable(config)) continue;
     const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
     const familia = familias.get(config.rutaPaso.familiaCodigo);
     const schema = familia?.paramsPasoSchema ?? [];
 
-    // Abiertos por el modelador (paramsPasoJson) ∪ expuestos POR DISEÑO de
-    // la familia (`expuestoAlComercial` en el schema — densidad LED,
-    // refuerzos del bastidor). El motor acepta ambos en configPasoRuntime.
-    const abiertos = new Set([
-      ...camposEditablesComercial(params),
-      ...schema.filter((p) => p.expuestoAlComercial).map((p) => p.campo),
-    ]);
+    // Abiertos por el modelador (paramsPasoJson) ∪ expuestos POR DEFAULT de la
+    // familia (`expuestoAlComercial` — densidad LED, refuerzos del bastidor),
+    // MENOS los que el modelador cerró explícitamente. El toggle Fijo/Editable
+    // manda; la familia sólo pone el default. Espejo de `paramsEfectivos`.
+    const fijados = new Set(camposFijadosComercial(params));
+    const abiertos = new Set(
+      [
+        ...camposEditablesComercial(params),
+        ...schema.filter((p) => p.expuestoAlComercial).map((p) => p.campo),
+      ].filter((campo) => !fijados.has(campo)),
+    );
     if (abiertos.size === 0) continue;
 
     const campos = schema

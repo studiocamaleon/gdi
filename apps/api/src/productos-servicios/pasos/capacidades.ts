@@ -173,36 +173,22 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
 
   // ── acabados ────────────────────────────────────────────────────────
   pliegos_plegados: { capacidad: 'unidades_procesadas', etiqueta: 'pliegos plegados' },
-  piezas_perforadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas perforadas' },
   piezas_laminadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas laminadas' },
   metros_lineales_film: { capacidad: 'metros_lineales', etiqueta: 'metros de film' },
-  piezas_barnizadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas barnizadas' },
-  piezas_decoradas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas decoradas' },
   piezas_pintadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas pintadas' },
-  piezas_lijadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas lijadas' },
 
   // ── encuadernado / armado ───────────────────────────────────────────
-  libros_engrapados: { capacidad: 'unidades_procesadas', etiqueta: 'libros engrapados' },
   libros_anillados: { capacidad: 'unidades_procesadas', etiqueta: 'libros anillados' },
   blocks_emblocados: { capacidad: 'unidades_procesadas', etiqueta: 'blocks emblocados' },
-  cajas_armadas: { capacidad: 'unidades_procesadas', etiqueta: 'cajas armadas' },
-  piezas_soldadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas soldadas' },
   piezas_ensambladas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas ensambladas' },
   piezas_montadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas montadas' },
-  luminosos_instalados: { capacidad: 'unidades_procesadas', etiqueta: 'luminosos instalados' },
 
   // ── terminación / logística ─────────────────────────────────────────
-  // cajas_embaladas y atados_completados son GRUPOS (N unidades por caja/
-  // atado, algo se cobra por grupo), no la unidad final.
+  // cajas_embaladas es un GRUPO (N unidades por caja, algo se cobra por
+  // grupo), no la unidad final.
   cajas_embaladas: { capacidad: 'grupos', etiqueta: 'cajas de embalaje' },
-  atados_completados: { capacidad: 'grupos', etiqueta: 'atados' },
-  piezas_contadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas contadas' },
-  piezas_etiquetadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas etiquetadas' },
-  piezas_verificadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas verificadas' },
   trabajos_manuales_realizados: { capacidad: 'unidades_procesadas', etiqueta: 'trabajos realizados' },
-  envios_realizados: { capacidad: 'unidades_procesadas', etiqueta: 'envíos realizados' },
   m2_instalados_realizados: { capacidad: 'm2_consumidos', etiqueta: 'm² instalados' },
-  visitas_realizadas: { capacidad: 'unidades_procesadas', etiqueta: 'visitas realizadas' },
 
   // ── modificaciones físicas (lona) ───────────────────────────────────
   piezas_modificadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas modificadas' },
@@ -321,6 +307,46 @@ export function resumenCapacidades(
     nombre: CAPACIDADES[key].nombre,
     heredable: CAPACIDADES[key].heredable,
   }));
+}
+
+/**
+ * Una magnitud PUBLICADA que un paso deja disponible para que otro la herede
+ * POR NOMBRE (mecanismo HEREDAR con `campoOutput`). A diferencia de
+ * `resumenCapacidades` — que colapsa los outputs en las 8 capacidades
+ * canónicas y pierde la identidad de los derivados — acá cada output conserva
+ * su nombre real: "puntos de soldadura", "m² a pintar", "metros de perfil".
+ * Es justo lo que el paso siguiente cuenta con su ritmo.
+ */
+export interface OutputPublicable {
+  /** La key histórica del output, tal cual viaja en el jobContext plano. */
+  key: string;
+  /** Nombre humano de la magnitud (de `ALIAS_LEGACY`). */
+  etiqueta: string;
+}
+
+/**
+ * Las magnitudes que una familia publica y otro paso puede heredar por nombre.
+ * Se excluyen las trazas (imposición, aprovechamiento) y los minutos: no son
+ * conteos que un ritmo multiplique. Los `atributo: true` (puntos de soldadura,
+ * m² de cenefa/pintura…) SÍ entran — son derivados geométricos que el paso
+ * siguiente cuenta, aunque no sean la capacidad canónica del emisor.
+ */
+export function outputsPublicablesDeFamilia(
+  outputsCanonicos: readonly string[] | undefined,
+): OutputPublicable[] {
+  const out: OutputPublicable[] = [];
+  const vistos = new Set<string>();
+  for (const key of outputsCanonicos ?? []) {
+    if (KEYS_INTERNAS.has(key) || KEYS_PODADAS.has(key)) continue;
+    if (vistos.has(key)) continue;
+    const alias = resolverAliasLegacy(key);
+    const tipo = CAPACIDADES[alias.capacidad]?.tipo;
+    if (tipo === 'traza') continue;
+    if (alias.capacidad === 'minutos_reales') continue;
+    vistos.add(key);
+    out.push({ key, etiqueta: alias.etiqueta });
+  }
+  return out;
 }
 
 /** Una capacidad emitida por un paso ejecutado, para la trazabilidad. */

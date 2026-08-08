@@ -1,0 +1,147 @@
+/* Params de pasos del cotizador — planilla densa agrupada por paso.
+ * Reemplaza los inputs full-width sueltos ("Corte de hierros · Separación…")
+ * por una tabla compacta: el nombre del paso encabeza el grupo y el label del
+ * campo se acorta. Mismo idioma que la tabla de params del editor de rutas.
+ * Variables con prefijo `--c-` para no chocar con los tokens de la app. */
+.plan {
+  --c-surface: var(--surface-1, #fff);
+  --c-surface-2: var(--surface-2, #fafaf9);
+  --c-border: var(--border, #e5e2db);
+  --c-border-strong: var(--border-strong, #c8c4ba);
+  --c-hairline: var(--hairline, #eeebe4);
+  --c-ink: var(--fg, #14141a);
+  --c-ink-2: var(--fg-2, #2c2c33);
+  --c-muted: var(--muted-text, #6e6e76);
+  --c-muted-2: var(--muted-text-2, #92929b);
+  --c-warn: #b45309;
+  --c-warn-bg: #fdf7e6;
+  --c-ink-inv: #fff;
+  /* La sección vive en un grid de 2 columnas: ocupa el ancho completo. Cada
+   * paso es una tarjeta separada por espacio, no una lista continua. */
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group {
+  border: 1px solid var(--c-border);
+  border-radius: 11px;
+  overflow: hidden;
+  background: var(--c-surface);
+}
+.gh {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* Barra negra con texto blanco (invierte en tema oscuro): separa fuerte el
+   * encabezado del contenido de la tabla. */
+  color: var(--c-surface);
+  background: var(--c-ink);
+  padding: 7px 12px;
+}
+
+.prow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--c-hairline);
+}
+.prow:last-child {
+  border-bottom: 0;
+}
+.plabel {
+  font-size: 12.5px;
+  color: var(--c-ink-2);
+  flex: 1;
+  min-width: 0;
+}
+
+/* input numérico compacto (derecha) */
+.field {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-surface);
+  height: 30px;
+  padding: 0 9px;
+  width: 104px;
+  flex: none;
+}
+.field:focus-within {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+}
+.field input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  width: 100%;
+  text-align: right;
+  color: var(--c-ink);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+.field input::-webkit-outer-spin-button,
+.field input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* chips (multi-enum) a la derecha */
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: none;
+  max-width: 62%;
+}
+.chip {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  border-radius: 7px;
+  height: 28px;
+  padding: 0 11px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--c-ink-2);
+  cursor: pointer;
+}
+.chip:hover {
+  background: var(--c-surface-2);
+}
+.chipOn {
+  background: var(--c-ink);
+  color: var(--c-ink-inv);
+  border-color: var(--c-ink);
+}
+
+/* checkbox (boolean) */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  flex: none;
+}
+.check input {
+  width: 15px;
+  height: 15px;
+  accent-color: #1d4ed8;
+}
+
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--c-warn);
+  padding: 6px 12px 8px;
+  background: var(--c-warn-bg);
+}

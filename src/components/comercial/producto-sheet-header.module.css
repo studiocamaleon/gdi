@@ -1,0 +1,129 @@
+/* Encabezado del sheet "Agregar producto" — modelo D "Constelación del login,
+ * en claro" (claude.ai/design). Malla 3D girando a la derecha sobre papel,
+ * velada hacia la izquierda para que el texto respire. Vive dentro de `.ot-v1`,
+ * que fija tokens siempre claros, así que el look papel no pelea con el tema
+ * oscuro. Colores remapeados a tokens `--*` con fallback al valor del diseño. */
+.header {
+  /* Fijo al scrollear: se mantiene pineado al borde superior del panel.
+   * `top: -18px` compensa el padding-top del `.ap-body` (el scrollport mide
+   * los offsets sticky desde su padding edge). */
+  position: sticky;
+  top: -18px;
+  z-index: 2;
+  /* Full-bleed: cancela el padding del `.ap-body` (18px arriba, 22px a los
+   * lados) para tocar el borde del panel; deja 16px hasta el contenido. */
+  margin: -18px -22px 16px;
+  padding: 16px;
+  border-bottom: 1px solid var(--hairline, #efece8);
+  background: linear-gradient(180deg, #fbfaf8, #f4f2ee);
+  overflow: hidden;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Velo blanco → transparente: apaga la malla del lado del texto. */
+.veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.94) 0,
+    rgba(255, 255, 255, 0.72) 46%,
+    rgba(255, 255, 255, 0) 78%
+  );
+}
+
+.inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 56px;
+}
+
+.back {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border, #e7e5e2);
+  background: var(--surface, #fff);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2, #2c2c33);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  cursor: pointer;
+}
+
+.back:hover {
+  background: var(--surface-2, #fafaf9);
+  border-color: var(--border-strong, #d4d2cd);
+}
+
+/* X para cerrar el sheet: flota arriba a la derecha, sobre la malla. */
+.close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted, #6e6e76);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: rgba(20, 20, 26, 0.06);
+  color: var(--ink, #14141a);
+}
+
+.nm {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-2, #92929b);
+}
+
+.title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink, #14141a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desc {
+  display: block;
+  margin-top: 2px;
+  max-width: 44ch;
+  font-size: 12px;
+  color: var(--muted, #6e6e76);
+  text-wrap: pretty;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
