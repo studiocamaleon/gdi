@@ -39,6 +39,18 @@ export function useEscaneoCodigo({
   onCodigoRef.current = onCodigo;
 
   React.useEffect(() => {
+    // Diagnóstico: `localStorage.setItem("debug:escaneo", "1")` en la consola
+    // y recargar. Loguea cada tecla con su gap y por qué se descartó, que es
+    // lo único que permite saber si el lector no manda Enter, si tipea más
+    // lento de lo esperado, o si el foco estaba en un campo.
+    const debug =
+      typeof window !== "undefined" &&
+      window.localStorage.getItem("debug:escaneo") === "1";
+    if (debug) {
+      console.info(
+        `[escaneo] listener ${activo ? "ACTIVO" : "APAGADO"} (gap<=${maxGapMs}ms, largo>=${minLargo})`,
+      );
+    }
     if (!activo) return;
     let buffer = "";
     let ultimaTecla = 0;
@@ -53,8 +65,19 @@ export function useEscaneoCodigo({
       if (
         target?.closest("input, textarea, select, [contenteditable='true']")
       ) {
+        if (debug) {
+          console.info(
+            `[escaneo] "${event.key}" IGNORADA: el foco está en ${target.tagName.toLowerCase()}`,
+          );
+        }
         buffer = "";
         return;
+      }
+      if (debug) {
+        const gapDbg = Math.round(event.timeStamp - ultimaTecla);
+        console.info(
+          `[escaneo] "${event.key}" gap=${gapDbg}ms buffer="${buffer}"`,
+        );
       }
 
       const ahora = event.timeStamp;
@@ -69,6 +92,10 @@ export function useEscaneoCodigo({
         if (codigo.length >= minLargo && gap <= maxGapMs) {
           event.preventDefault();
           onCodigoRef.current(codigo);
+        } else if (debug) {
+          console.warn(
+            `[escaneo] Enter DESCARTADO: código="${codigo}" (largo ${codigo.length}, mínimo ${minLargo}) gap=${Math.round(gap)}ms (máximo ${maxGapMs})`,
+          );
         }
         return;
       }
