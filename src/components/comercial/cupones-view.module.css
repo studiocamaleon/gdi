@@ -1,216 +1,393 @@
-/* Vista Comercial → Cupones (F4 descuentos). Listado + drawer de alta y QR.
-   El padding de página es responsabilidad de la vista (el layout no lo pone):
-   mismo 28/34 que Presupuestos, con el contenido centrado a 1360px.
+/* Vista Comercial → Cupones. Card con forma de CUPÓN: talón troquelado a la
+   derecha con el QR, separado por línea de corte con muescas circulares.
+   Portado de claude.ai/design → producto/Cupones.html (variante A).
 
-   OJO con los tokens: en el dashboard `--muted` es un gris de FONDO (#efede9).
-   El de texto atenuado es `--muted-text`. */
+   Tokens: el diseño trae su propia paleta de estados; los grises salen de la
+   app. OJO: en el dashboard `--muted` es un gris de FONDO (#efede9), el de
+   texto es `--muted-text`. */
 
 .wrap {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 28px 34px 60px;
+
+  /* Paleta del ticket (del diseño). */
+  --tk-ok: #16794a;
+  --tk-ok-bg: #eef7f2;
+  --tk-ok-bd: #cfe7db;
+  --tk-warn: #9a6a11;
+  --tk-warn-bg: #fdf7e6;
+  --tk-warn-bd: #e8d7a6;
+  --tk-acc-ink: #c2410c;
+  --tk-border-strong: #c8c4ba;
+  --tk-mono: var(--font-mono, "Geist Mono", ui-monospace, monospace);
 }
 
 .inner {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
   max-width: 1360px;
   margin: 0 auto;
 }
 
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
 }
 
-/* ── Card del cupón ───────────────────────────────────────────────────── */
+/* ── Cupón ─────────────────────────────────────────────────────────────
+   El troquel se hace con `mask`: dos círculos transparentes recortan el
+   papel justo sobre la línea de corte. Por eso el borde va en `.paper` y la
+   sombra en `.tk` (una sombra sobre el elemento enmascarado se recortaría
+   con él y perdería las muescas). */
 
-.card {
-  display: flex;
-  flex-direction: column;
+.tk {
+  position: relative;
+  width: 390px;
+  max-width: 100%;
+  filter: drop-shadow(0 1px 1px rgba(20, 20, 26, 0.05));
+  font-size: 13px;
+}
+
+.paper {
+  display: grid;
+  grid-template-columns: 1fr 104px;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface);
-  overflow: hidden;
+  --nx: 104px;
+  mask:
+    radial-gradient(
+      circle 8px at calc(100% - var(--nx)) 0,
+      transparent 8px,
+      #000 8.5px
+    ),
+    radial-gradient(
+      circle 8px at calc(100% - var(--nx)) 100%,
+      transparent 8px,
+      #000 8.5px
+    );
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
 }
 
-.card.inactivo {
+/* Agotado o vencido: el cupón queda "usado", en papel apagado. */
+.tk.anulado .paper {
   background: var(--surface-2);
 }
 
-.card.inactivo .codigo,
-.card.inactivo .valor {
-  color: var(--muted-text);
+.tk.anulado .body,
+.tk.anulado .stub {
+  opacity: 0.62;
 }
 
-/* Encabezado: código + estado. El valor es el protagonista, va debajo. */
-.cardHead {
+.body {
+  padding: 13px 14px 12px;
+  min-width: 0;
+}
+
+.top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--hairline);
+  gap: 9px;
+  margin-bottom: 11px;
 }
 
+/* Código: se copia con un click (el vendedor lo dicta por teléfono). */
 .codigo {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--tk-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   color: var(--ink);
+  background: var(--surface-2);
+  border: 1px dashed var(--tk-border-strong);
+  border-radius: 7px;
+  padding: 3px 9px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.codigo:hover {
+  border-style: solid;
+  background: var(--surface);
+}
+
+.codigo svg {
+  width: 12px;
+  height: 12px;
+  color: var(--muted-text-2);
+  flex: none;
+}
+
+.codigo:hover svg {
+  color: var(--ink-2);
+}
+
+.codigo span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Chip de estado: resume activo/vencido/agotado en una sola lectura. */
+.spacer {
+  flex: 1;
+}
+
+/* Chip de estado. */
 .estado {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  flex: none;
-  padding: 3px 9px;
-  border-radius: 999px;
+  height: 21px;
+  padding: 0 8px;
+  border-radius: 6px;
   font-size: 11px;
-  font-weight: 600;
-  background: var(--surface-2);
-  color: var(--muted-text);
+  font-weight: 500;
+  white-space: nowrap;
+  flex: none;
 }
 
 .estado::before {
   content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
   background: currentColor;
+  display: block;
 }
 
-.estado.ok {
-  background: rgba(21, 128, 61, 0.1);
-  color: #15803d;
+.estado.on {
+  background: var(--tk-ok-bg);
+  border: 1px solid var(--tk-ok-bd);
+  color: var(--tk-ok);
 }
 
-.estado.alerta {
-  background: rgba(185, 28, 28, 0.09);
-  color: #b91c1c;
+.estado.pausa {
+  background: var(--tk-warn-bg);
+  border: 1px solid var(--tk-warn-bd);
+  color: var(--tk-warn);
 }
 
-.cardBody {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+.estado.off {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted-text);
 }
 
-.valorRow {
+/* Valor: el dato que se lee de lejos. */
+.valor {
   display: flex;
   align-items: baseline;
   gap: 8px;
 }
 
-.valor {
-  font-size: 26px;
-  font-weight: 800;
+.valor b {
+  font-family: var(--tk-mono);
+  font-size: 31px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
   line-height: 1;
-  letter-spacing: -0.02em;
-  color: #15803d;
 }
 
-.valorSub {
+.valor span {
   font-size: 12px;
   color: var(--muted-text);
 }
 
 .desc {
   font-size: 12.5px;
-  line-height: 1.45;
+  color: var(--ink-2);
+  margin-top: 5px;
+}
+
+/* Alcance: hasta dos líneas, después recorta. */
+.alcance {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 11.5px;
+  color: var(--muted-text);
+  min-width: 0;
+}
+
+.alcance svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  margin-top: 2px;
+}
+
+.alcance .path {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.alcance b {
+  font-weight: 500;
   color: var(--ink-2);
 }
 
-/* Datos en filas etiqueta → valor: se leen de un vistazo, sin chips sueltos. */
-.datos {
+/* Pie: vencimiento + acciones. */
+.meta {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 2px;
+  align-items: center;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
 }
 
 .dato {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  gap: 1px;
+  padding-right: 14px;
+  min-width: 0;
+}
+
+.dato + .dato {
+  padding-left: 14px;
+  border-left: 1px solid var(--hairline);
+}
+
+.dato .k {
+  font-family: var(--tk-mono);
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted-text-2);
+}
+
+.dato .v {
   font-size: 12px;
-}
-
-.dato dt {
-  color: var(--muted-text);
-}
-
-.dato dd {
-  margin: 0;
-  text-align: right;
   color: var(--ink-2);
-  font-weight: 500;
+  white-space: nowrap;
 }
 
-.dato dd.alerta {
-  color: #b91c1c;
+.dato .v.warn {
+  color: var(--tk-warn);
 }
 
-/* Acciones: iconos discretos al pie, no botones grandes. */
 .acts {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: auto;
-  padding: 8px 10px;
-  border-top: 1px solid var(--hairline);
-  background: var(--surface-2);
+  gap: 2px;
+  margin-left: auto;
 }
 
-.act {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
+.ib {
+  width: 27px;
+  height: 27px;
   border: 0;
+  background: none;
   border-radius: 7px;
-  background: transparent;
-  color: var(--muted-text);
-  font-size: 12px;
-  font-weight: 500;
+  display: grid;
+  place-items: center;
+  color: var(--muted-text-2);
   cursor: pointer;
 }
 
-.act:hover {
-  background: var(--surface);
+.ib svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ib:hover {
+  background: var(--surface-2);
   color: var(--ink);
 }
 
-.act svg {
-  width: 15px;
-  height: 15px;
+.ib.peligro:hover {
+  background: #fdeee8;
+  color: var(--tk-acc-ink);
 }
 
-.act.solo {
-  width: 30px;
+/* ── Talón troquelado ── */
+.stub {
+  position: relative;
+  border-left: 1px dashed var(--tk-border-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 12px 8px;
+}
+
+.qr {
+  width: 52px;
+  height: 52px;
+  display: block;
+  border-radius: 6px;
+  border: 0;
+  background: none;
   padding: 0;
+  cursor: pointer;
 }
 
-.act.peligro:hover {
-  background: rgba(185, 28, 28, 0.09);
-  color: #b91c1c;
+.qr img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 6px;
 }
 
-.actSpacer {
-  flex: 1;
+/* Mientras el QR se genera en el cliente. */
+.qrVacio {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+}
+
+.usos {
+  font-family: var(--tk-mono);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.usoBarra {
+  width: 46px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hairline);
+  overflow: hidden;
+}
+
+.usoBarra i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--tk-ok);
+}
+
+.usoBarra.lleno i {
+  background: var(--muted-text-2);
+}
+
+.cap {
+  font-family: var(--tk-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-text-2);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .tk {
+    width: 100%;
+  }
 }
 
 .vacio {
@@ -229,8 +406,7 @@
   font-size: 14px;
 }
 
-/* ── Drawer de alta / QR (overlay centrado, mismo lenguaje del modal de
-   descuento) ── */
+/* ── Modal de alta / edición y QR grande ── */
 .overlay {
   position: fixed;
   inset: 0;
@@ -244,13 +420,10 @@
 
 .modal {
   position: relative;
-  /* 520 y no 460: con dos columnas y nombres de categoría/cliente reales,
-     460 dejaba todo demasiado justo. */
   width: 520px;
   max-width: 100%;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
-  /* Red de seguridad: el modal nunca scrollea de costado. */
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
@@ -275,7 +448,7 @@
 .modal h2 svg {
   width: 18px;
   height: 18px;
-  color: #c2410c;
+  color: var(--tk-acc-ink);
 }
 
 .close {
@@ -303,10 +476,6 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  /* Sin esto, un item de grid/flex no se encoge por debajo del ancho de su
-     contenido (min-width: auto): un <select> con nombres largos —"Gran
-     formato › Vinilos autoadhesivos"— estiraba la columna y desbordaba el
-     modal, con barra de scroll horizontal. */
   min-width: 0;
 }
 
@@ -322,8 +491,6 @@
 .field select,
 .field textarea {
   min-height: 38px;
-  /* width + border-box: el padding y el borde entran DENTRO del ancho, así
-     un control nunca se sale de su columna. */
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -336,8 +503,6 @@
   font-family: inherit;
 }
 
-/* Nombre largo elegido: se recorta con puntos suspensivos en vez de estirar
-   el control (el desplegable lo muestra completo igual). */
 .field select {
   text-overflow: ellipsis;
 }
@@ -349,7 +514,6 @@
   border-color: var(--ink);
 }
 
-/* El código en edición: se muestra pero no se toca (hay QRs impresos). */
 .field input:disabled {
   background: var(--surface-2);
   color: var(--muted-text);
@@ -385,7 +549,6 @@
   padding-top: 4px;
 }
 
-/* QR: el código abajo en grande para verificar a ojo qué se imprime. */
 .qrBox {
   display: flex;
   flex-direction: column;
@@ -402,6 +565,10 @@
   background: #fff;
 }
 
-.qrBox .codigo {
+.qrBox .codigoGrande {
+  font-family: var(--tk-mono);
   font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink);
 }

@@ -9,10 +9,11 @@
 
 import * as React from "react";
 import {
+  CopyIcon,
   Edit3Icon,
   PlusIcon,
   PowerIcon,
-  QrCodeIcon,
+  TagIcon,
   TicketPercentIcon,
   Trash2Icon,
   XIcon,
@@ -123,6 +124,38 @@ export function CuponesView({
       .catch(() => {});
   }, []);
 
+  // Los QR del talón se generan en el CLIENTE: pedirle uno por cupón al API
+  // serían N requests, y mandarlos en el listado lo engordaría sin necesidad
+  // (el QR sólo codifica el código, que ya viaja).
+  const [qrs, setQrs] = React.useState<Record<string, string>>({});
+  React.useEffect(() => {
+    let vivo = true;
+    void (async () => {
+      const { toDataURL } = await import("qrcode");
+      const pares = await Promise.all(
+        cupones.map(async (c) => {
+          try {
+            return [
+              c.id,
+              await toDataURL(c.codigo, { margin: 0, width: 120 }),
+            ] as const;
+          } catch {
+            return [c.id, ""] as const;
+          }
+        }),
+      );
+      if (vivo) setQrs(Object.fromEntries(pares.filter(([, url]) => url)));
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [cupones]);
+
+  // "Hoy" se fija en el cliente: calcularlo durante el render lo haría
+  // distinto en el server y rompería la hidratación.
+  const [hoy, setHoy] = React.useState<number | null>(null);
+  React.useEffect(() => setHoy(Date.now()), []);
+
   const toggleActivo = async (cupon: Cupon) => {
     try {
       const actualizado = await actualizarCupon(cupon.id, {
@@ -162,6 +195,15 @@ export function CuponesView({
     toast.success(`Cupón ${cupon.codigo} eliminado.`);
   };
 
+  const copiarCodigo = async (codigo: string) => {
+    try {
+      await navigator.clipboard.writeText(codigo);
+      toast.success(`Código ${codigo} copiado.`);
+    } catch {
+      toast.error("El navegador no dejó copiar. Seleccionalo a mano.");
+    }
+  };
+
   return (
     <section className={s.wrap}>
       <div className={s.inner}>
@@ -197,132 +239,160 @@ export function CuponesView({
           {cupones.map((cupon) => {
             const agotado =
               cupon.usoMax != null && cupon.usoCount >= cupon.usoMax;
-            const vencido =
-              cupon.vigenciaHasta != null &&
-              new Date(cupon.vigenciaHasta) < new Date();
-            // Un solo chip resume el estado real: sirve más que ver los
-            // datos crudos y decidir uno mismo si el cupón sigue sirviendo.
-            const estado = !cupon.activo
-              ? { label: "Inactivo", clase: "" }
-              : vencido
-                ? { label: "Vencido", clase: s.alerta }
-                : agotado
-                  ? { label: "Sin usos", clase: s.alerta }
-                  : { label: "Activo", clase: s.ok };
+            const vence = cupon.vigenciaHasta
+              ? new Date(cupon.vigenciaHasta).getTime()
+              : null;
+            const vencido = vence != null && hoy != null && vence < hoy;
+            // Días que le quedan: sólo para avisar cuando está por vencerse.
+            const diasRestantes =
+              vence != null && hoy != null && !vencido
+                ? Math.ceil((vence - hoy) / 86_400_000)
+                : null;
+            const porVencer = diasRestantes != null && diasRestantes <= 14;
+            // Tres estados, como el diseño: activo · en pausa (desactivado a
+            // mano) · sin efecto (agotado o vencido, el cupón queda "usado").
+            const anulado = agotado || vencido;
+            const estado = anulado
+              ? { clase: s.off, label: vencido ? "Vencido" : "Sin usos" }
+              : !cupon.activo
+                ? { clase: s.pausa, label: "En pausa" }
+                : { clase: s.on, label: "Activo" };
+            const usoPct =
+              cupon.usoMax != null && cupon.usoMax > 0
+                ? Math.min(100, (cupon.usoCount / cupon.usoMax) * 100)
+                : 0;
+
             return (
               <article
                 key={cupon.id}
-                className={`${s.card}${cupon.activo ? "" : ` ${s.inactivo}`}`}
+                className={`${s.tk}${anulado ? ` ${s.anulado}` : ""}`}
               >
-                <div className={s.cardHead}>
-                  <span className={s.codigo}>{cupon.codigo}</span>
-                  <span className={`${s.estado} ${estado.clase}`}>
-                    {estado.label}
-                  </span>
-                </div>
+                <div className={s.paper}>
+                  <div className={s.body}>
+                    <div className={s.top}>
+                      <button
+                        type="button"
+                        className={s.codigo}
+                        onClick={() => void copiarCodigo(cupon.codigo)}
+                        title="Copiar código"
+                      >
+                        <span>{cupon.codigo}</span>
+                        <CopyIcon />
+                      </button>
+                      <span className={s.spacer} />
+                      <span className={`${s.estado} ${estado.clase}`}>
+                        {estado.label}
+                      </span>
+                    </div>
 
-                <div className={s.cardBody}>
-                  <div className={s.valorRow}>
-                    <span className={s.valor}>{valorLabel(cupon, moneda)}</span>
-                    <span className={s.valorSub}>
-                      {cupon.tipo === "PORCENTAJE"
-                        ? "sobre el neto"
-                        : "de descuento"}
+                    <div className={s.valor}>
+                      <b>{valorLabel(cupon, moneda)}</b>
+                      <span>
+                        {cupon.tipo === "PORCENTAJE"
+                          ? "sobre el neto"
+                          : "de descuento"}
+                      </span>
+                    </div>
+
+                    {cupon.descripcion ? (
+                      <div className={s.desc}>{cupon.descripcion}</div>
+                    ) : null}
+
+                    <span className={s.alcance}>
+                      <TagIcon />
+                      <span className={s.path}>
+                        <b>{ALCANCE_LABEL[cupon.alcanceTipo]}</b>
+                        {cupon.alcanceTipo !== "ORDEN"
+                          ? ` · ${cupon.alcanceNombre ?? cupon.alcanceRef ?? "—"}`
+                          : ""}
+                        {cupon.montoMinimo
+                          ? ` · desde ${formatearMoneda(cupon.montoMinimo, moneda, { decimales: 0 })}`
+                          : ""}
+                      </span>
                     </span>
+
+                    <div className={s.meta}>
+                      <span className={s.dato}>
+                        <span className={s.k}>
+                          {vencido ? "Venció" : "Vence"}
+                        </span>
+                        <span
+                          className={`${s.v}${porVencer || vencido ? ` ${s.warn}` : ""}`}
+                        >
+                          {cupon.vigenciaHasta
+                            ? `${fechaCorta(cupon.vigenciaHasta)}${
+                                porVencer ? ` · ${diasRestantes} días` : ""
+                              }`
+                            : "Sin vencimiento"}
+                        </span>
+                      </span>
+                      {puedeEditar ? (
+                        <span className={s.acts}>
+                          <button
+                            type="button"
+                            className={s.ib}
+                            onClick={() => setEditor(cupon)}
+                            title="Editar"
+                            aria-label={`Editar ${cupon.codigo}`}
+                          >
+                            <Edit3Icon />
+                          </button>
+                          <button
+                            type="button"
+                            className={s.ib}
+                            onClick={() => void toggleActivo(cupon)}
+                            title={cupon.activo ? "Pausar" : "Reactivar"}
+                            aria-label={cupon.activo ? "Pausar" : "Reactivar"}
+                          >
+                            <PowerIcon />
+                          </button>
+                          <button
+                            type="button"
+                            className={`${s.ib} ${s.peligro}`}
+                            onClick={() => setAEliminar(cupon)}
+                            title="Eliminar"
+                            aria-label={`Eliminar ${cupon.codigo}`}
+                          >
+                            <Trash2Icon />
+                          </button>
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
-                  {cupon.descripcion ? (
-                    <div className={s.desc}>{cupon.descripcion}</div>
-                  ) : null}
-
-                  <dl className={s.datos}>
-                    <div className={s.dato}>
-                      <dt>Alcance</dt>
-                      <dd>
-                        {/* El nombre legible; los cupones creados antes de
-                            guardarlo caen a la ref cruda. */}
-                        {cupon.alcanceTipo === "ORDEN"
-                          ? ALCANCE_LABEL.ORDEN
-                          : `${ALCANCE_LABEL[cupon.alcanceTipo]} · ${
-                              cupon.alcanceNombre ?? cupon.alcanceRef ?? "—"
-                            }`}
-                      </dd>
-                    </div>
-                    <div className={s.dato}>
-                      <dt>Usos</dt>
-                      <dd className={agotado ? s.alerta : undefined}>
-                        {cupon.usoMax == null
-                          ? `${cupon.usoCount} · sin límite`
-                          : `${cupon.usoCount} de ${cupon.usoMax}`}
-                      </dd>
-                    </div>
-                    {cupon.vigenciaHasta ? (
-                      <div className={s.dato}>
-                        <dt>{vencido ? "Venció" : "Vence"}</dt>
-                        <dd className={vencido ? s.alerta : undefined}>
-                          {fechaCorta(cupon.vigenciaHasta)}
-                        </dd>
-                      </div>
+                  {/* Talón troquelado: el QR se ve siempre; al tocarlo se
+                      abre grande para imprimir. */}
+                  <div className={s.stub}>
+                    {qrs[cupon.id] ? (
+                      <button
+                        type="button"
+                        className={s.qr}
+                        onClick={() => void verQr(cupon)}
+                        title="Ver el QR grande para imprimir"
+                        aria-label={`QR de ${cupon.codigo}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={qrs[cupon.id]} alt="" />
+                      </button>
+                    ) : (
+                      <span className={s.qrVacio} />
+                    )}
+                    <span className={s.usos}>
+                      {cupon.usoMax == null
+                        ? cupon.usoCount
+                        : `${cupon.usoCount} / ${cupon.usoMax}`}
+                    </span>
+                    {cupon.usoMax != null ? (
+                      <span
+                        className={`${s.usoBarra}${agotado ? ` ${s.lleno}` : ""}`}
+                      >
+                        <i style={{ width: `${usoPct}%` }} />
+                      </span>
                     ) : null}
-                    {cupon.montoMinimo ? (
-                      <div className={s.dato}>
-                        <dt>Compra mínima</dt>
-                        <dd>
-                          {formatearMoneda(cupon.montoMinimo, moneda, {
-                            decimales: 0,
-                          })}
-                        </dd>
-                      </div>
-                    ) : null}
-                  </dl>
-                </div>
-
-                <div className={s.acts}>
-                  <button
-                    type="button"
-                    className={s.act}
-                    onClick={() => void verQr(cupon)}
-                    title="Ver el QR para imprimir o escanear"
-                  >
-                    <QrCodeIcon />
-                    QR
-                  </button>
-                  <span className={s.actSpacer} />
-                  {puedeEditar ? (
-                    <>
-                      <button
-                        type="button"
-                        className={`${s.act} ${s.solo}`}
-                        onClick={() => setEditor(cupon)}
-                        title="Editar el cupón"
-                        aria-label={`Editar ${cupon.codigo}`}
-                      >
-                        <Edit3Icon />
-                      </button>
-                      <button
-                        type="button"
-                        className={`${s.act} ${s.solo}`}
-                        onClick={() => void toggleActivo(cupon)}
-                        title={
-                          cupon.activo
-                            ? "Desactivar: deja de poder aplicarse"
-                            : "Activar"
-                        }
-                        aria-label={cupon.activo ? "Desactivar" : "Activar"}
-                      >
-                        <PowerIcon />
-                      </button>
-                      <button
-                        type="button"
-                        className={`${s.act} ${s.solo} ${s.peligro}`}
-                        onClick={() => setAEliminar(cupon)}
-                        title="Eliminar el cupón"
-                        aria-label={`Eliminar ${cupon.codigo}`}
-                      >
-                        <Trash2Icon />
-                      </button>
-                    </>
-                  ) : null}
+                    <span className={s.cap}>
+                      {cupon.usoMax == null ? "usos · libre" : "usos"}
+                    </span>
+                  </div>
                 </div>
               </article>
             );
@@ -393,7 +463,7 @@ export function CuponesView({
             <div className={s.qrBox}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr.dataUrl} alt={`QR ${qr.codigo}`} />
-              <span className={s.codigo}>{qr.codigo}</span>
+              <span className={s.codigoGrande}>{qr.codigo}</span>
             </div>
             <div className={s.foot}>
               <a
