@@ -480,10 +480,17 @@ Enchufado a la maquinaria de aprobación interna de presupuestos que ya existía
   el gate real vive en el backend al enviar).
 - El motivo fluye a la UI existente como texto (sin cambios de render).
 
-**Alcance consciente**: el gate corre en el ENVÍO del presupuesto (la
-maquinaria existente). La emisión DIRECTA de OT con descuento no bloquea — el
-vendedor ve el aviso pero puede emitir; si el negocio pide gate duro ahí,
-es otra fase (nueva UX de aprobación sobre OTs).
+**Gate también en la OT directa** (decisión de Lucas, mismo día): un OPERADOR
+no manda al taller un descuento sobre el umbral —
+`exigirDescuentoEmitible` en ordenes-trabajo.service (+6 tests unitarios con
+prisma fake). Cubre los tres caminos: emisión directa (`create` con
+`pendiente`), emitir un borrador (`cambiarEstado` desde `borrador`), y el
+bypass por API de agregar/editar items en una orden ya emitida (editar sólo
+gatea si el % AUMENTA — reeditar specs con un descuento ya firmado no traba).
+El BORRADOR nunca gatea (no viaja al taller). SUPERVISOR/ADMIN exentos. El
+error del backend guía: borrador, presupuesto con aprobación, o supervisor.
+No hay flujo de "aprobación de OT" — la aprobación formal vive en el circuito
+de presupuestos; acá el supervisor simplemente la emite él.
 
 ### Después de F1+F2+F3+F5
 F4 (cupones con alcance), F6 (cupón self-service). Menor: `descuentoMotivo`.

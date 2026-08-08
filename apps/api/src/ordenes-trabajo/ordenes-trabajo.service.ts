@@ -6,7 +6,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ArchivoEstado, Prisma, TipoEnlacePublico } from '@prisma/client';
+import {
+  ArchivoEstado,
+  Prisma,
+  RolSistema,
+  TipoEnlacePublico,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import {
@@ -619,6 +624,11 @@ export class OrdenesTrabajoService {
       payload.fechaEntrega ?? null,
     );
     this.validarMontosItems(payload.items);
+    // Emisión directa (no borrador): el descuento por encima del umbral exige
+    // un supervisor — el mismo control que el envío de presupuestos.
+    if (emitida) {
+      await this.exigirDescuentoEmitible(auth, payload.items);
+    }
 
     // Dos items de la orden no pueden apuntar al mismo snapshot del cotizador.
     const idsSnapshot = payload.items
@@ -1159,6 +1169,12 @@ export class OrdenesTrabajoService {
       ordenId,
     );
     this.validarMontosItems([payload]);
+    // La orden ya está en el taller: un item nuevo con descuento sobre el
+    // umbral es el mismo gate que la emisión (si no, sería el bypass obvio:
+    // emitir limpia y agregar el descuento después).
+    if (orden.estado !== 'borrador') {
+      await this.exigirDescuentoEmitible(auth, [payload]);
+    }
     await this.validarSnapshotDisponible(
       auth,
       orden.id,
@@ -1232,6 +1248,15 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró el producto en la orden.');
     }
     this.validarMontosItems([payload]);
+    // En una orden ya emitida sólo gatea un descuento que AUMENTA: reeditar
+    // specs de un item cuyo descuento ya salió firmado (o emitido por un
+    // supervisor) no puede trabarse por reenviar el mismo porcentaje.
+    if (
+      orden.estado !== 'borrador' &&
+      this.descuentoPctDe(payload) > this.descuentoPctDe(existente) + 0.01
+    ) {
+      await this.exigirDescuentoEmitible(auth, [payload]);
+    }
     await this.validarSnapshotDisponible(
       auth,
       orden.id,
@@ -1400,6 +1425,13 @@ export class OrdenesTrabajoService {
           ? orden.fechaEntrega.toISOString().slice(0, 10)
           : null,
       );
+      // Emitir el borrador es mandarlo al taller: mismo gate de descuento
+      // que la emisión directa (F3 descuentos).
+      const itemsDescuento = await this.prisma.ordenTrabajoItem.findMany({
+        where: { ordenId: orden.id },
+        select: { subtotal: true, descuentoMonto: true },
+      });
+      await this.exigirDescuentoEmitible(auth, itemsDescuento);
     }
 
     const progresoPct =
@@ -1780,6 +1812,52 @@ export class OrdenesTrabajoService {
    * redondeo a 2 decimales como el del redondeo a entero (CLP, o
    * `redondeoPrecio: 'entero'`), donde el error máximo es exactamente 1.
    */
+  /** % de descuento de un item sobre su neto de lista (0 = sin descuento). */
+  private descuentoPctDe(item: {
+    subtotal: number | Prisma.Decimal;
+    descuentoMonto?: number | Prisma.Decimal | null;
+  }): number {
+    const monto = Number(item.descuentoMonto ?? 0);
+    if (monto <= 0) return 0;
+    const netoLista = Number(item.subtotal) + monto;
+    return netoLista > 0 ? (monto / netoLista) * 100 : 0;
+  }
+
+  /**
+   * Gate de descuento en la emisión DIRECTA de OT (F3 descuentos): un
+   * OPERADOR no manda al taller un descuento que supera el umbral del tenant.
+   * Mismo criterio que el envío de presupuestos: SUPERVISOR/ADMIN exentos,
+   * umbral null = desactivado, el igual pasa. El BORRADOR no gatea (no viaja
+   * al taller) — por eso esto corre sólo al emitir, no al guardar.
+   */
+  private async exigirDescuentoEmitible(
+    auth: CurrentAuth,
+    items: Array<{
+      subtotal: number | Prisma.Decimal;
+      descuentoMonto?: number | Prisma.Decimal | null;
+    }>,
+  ) {
+    if (auth.role !== RolSistema.OPERADOR) return;
+    const maxPct = items.reduce(
+      (max, item) => Math.max(max, this.descuentoPctDe(item)),
+      0,
+    );
+    if (maxPct <= 0) return;
+    const cfg = await this.prisma.configuracionPresupuestos.findUnique({
+      where: { tenantId: auth.tenantId },
+      select: { aprobacionDescuentoMaxPct: true },
+    });
+    const umbral =
+      cfg?.aprobacionDescuentoMaxPct != null
+        ? Number(cfg.aprobacionDescuentoMaxPct)
+        : null;
+    if (umbral == null || maxPct <= umbral) return;
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    throw new BadRequestException(
+      `El descuento del ${r1(maxPct)}% supera el máximo del ${r1(umbral)}% permitido sin aprobación. Guardala como borrador, emitila como presupuesto para pedir la aprobación, o pedile a un supervisor que la emita.`,
+    );
+  }
+
   validarMontosItems(
     items: Array<{
       nombre: string;

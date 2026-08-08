@@ -622,3 +622,85 @@ describe('registro de tiempos — materialización asigna modoRegistro', () => {
     ]);
   });
 });
+
+describe('OrdenesTrabajoService — gate de descuento al emitir (F3 descuentos)', () => {
+  const authDe = (role: string) =>
+    ({ userId: 'u-1', tenantId: 't-1', role }) as never;
+
+  /** Service con un prisma fake que devuelve el umbral configurado. */
+  const svcConUmbral = (umbral: number | null) => {
+    const s = svc() as unknown as {
+      prisma: unknown;
+      exigirDescuentoEmitible: (
+        auth: never,
+        items: Array<{ subtotal: number; descuentoMonto?: number | null }>,
+      ) => Promise<void>;
+    };
+    s.prisma = {
+      configuracionPresupuestos: {
+        findUnique: async () => ({ aprobacionDescuentoMaxPct: umbral }),
+      },
+    };
+    return s;
+  };
+
+  // 10.000 de descuento sobre 100.000 de lista = 10%.
+  const item = (subtotal: number, descuentoMonto: number | null) => ({
+    subtotal,
+    descuentoMonto,
+  });
+
+  it('OPERADOR con descuento sobre el umbral → rechaza con el porcentaje', async () => {
+    await expect(
+      svcConUmbral(10).exigirDescuentoEmitible(authDe('OPERADOR'), [
+        item(85_000, 15_000), // 15%
+      ]),
+    ).rejects.toThrow(/15%.*10%/);
+  });
+
+  it('el igual al umbral pasa (el gate es estrictamente mayor)', async () => {
+    await expect(
+      svcConUmbral(10).exigirDescuentoEmitible(authDe('OPERADOR'), [
+        item(90_000, 10_000), // exactamente 10%
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
+  it('gatea por la línea más descontada, no por el promedio', async () => {
+    await expect(
+      svcConUmbral(10).exigirDescuentoEmitible(authDe('OPERADOR'), [
+        item(100_000, 0),
+        item(80_000, 20_000), // 20% en una sola línea
+      ]),
+    ).rejects.toThrow(/20%/);
+  });
+
+  it('SUPERVISOR y ADMINISTRADOR emiten sin gate', async () => {
+    for (const role of ['SUPERVISOR', 'ADMINISTRADOR']) {
+      await expect(
+        svcConUmbral(10).exigirDescuentoEmitible(authDe(role), [
+          item(50_000, 50_000), // 50%
+        ]),
+      ).resolves.toBeUndefined();
+    }
+  });
+
+  it('umbral null (regla desactivada) no gatea nada', async () => {
+    await expect(
+      svcConUmbral(null).exigirDescuentoEmitible(authDe('OPERADOR'), [
+        item(10_000, 90_000), // 90%
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
+  it('sin descuento ni siquiera consulta la config', async () => {
+    const s = svcConUmbral(10);
+    (s.prisma as { configuracionPresupuestos: { findUnique: () => never } })
+      .configuracionPresupuestos.findUnique = () => {
+      throw new Error('no debería consultar');
+    };
+    await expect(
+      s.exigirDescuentoEmitible(authDe('OPERADOR'), [item(100_000, 0)]),
+    ).resolves.toBeUndefined();
+  });
+});

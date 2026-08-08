@@ -6560,7 +6560,7 @@ export function PropuestaFicha({
           void umbralDescuentoAprobacion().then((umbral) => {
             if (umbral != null && maxPct > umbral) {
               toast.warning(
-                `El descuento supera el ${umbral.toLocaleString("es-AR", { maximumFractionDigits: 1 })}% permitido: como presupuesto va a requerir aprobación interna de un supervisor.`,
+                `El descuento supera el ${umbral.toLocaleString("es-AR", { maximumFractionDigits: 1 })}% permitido: emitir (OT o presupuesto) va a requerir la firma de un supervisor.`,
                 { duration: 8000 },
               );
             }
