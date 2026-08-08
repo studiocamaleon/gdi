@@ -1,0 +1,133 @@
+/* QR de retiro de una OT: lo que el cliente presenta en el mostrador.
+   El código que lleva adentro es el NÚMERO de la orden (OT-2026-0184):
+   legible si el QR se arruina, y distinguible de un código de cupón. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 20, 26, 0.42);
+}
+
+.modal {
+  position: relative;
+  width: 380px;
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 26px 24px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px -12px rgba(20, 20, 26, 0.4);
+  text-align: center;
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-text);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.titulo {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.bajada {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted-text);
+  max-width: 30ch;
+}
+
+/* El QR sobre papel blanco: los lectores 2D leen peor sobre gris. */
+.qr {
+  width: 236px;
+  height: 236px;
+  margin: 14px 0 10px;
+  padding: 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.qr img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.qrVacio {
+  width: 236px;
+  height: 236px;
+  margin: 14px 0 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+}
+
+.numero {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.cliente {
+  font-size: 12.5px;
+  color: var(--muted-text);
+}
+
+.foot {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* Al imprimir queda sólo el QR con su número: nada de la app alrededor. */
+@media print {
+  .overlay {
+    position: static;
+    background: none;
+    padding: 0;
+  }
+
+  .modal {
+    box-shadow: none;
+    border: 0;
+    width: 100%;
+  }
+
+  .close,
+  .foot {
+    display: none;
+  }
+}

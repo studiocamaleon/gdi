@@ -23,6 +23,7 @@ import {
   HistoryIcon,
   PackageIcon,
   PlusIcon,
+  QrCodeIcon,
   LinkIcon,
   ReceiptTextIcon,
   SaveIcon,
@@ -70,6 +71,7 @@ import {
   CuponAvisoModal,
   type AvisoCupon,
 } from "@/components/comercial/cupon-aviso";
+import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
@@ -5424,6 +5426,8 @@ export function PropuestaFicha({
   // Modal "Facturar" del header (la acción también vive en el tab
   // Comprobantes). Ver docs/facturacion-ordenes-deuda-comercial-diseno.md §6.1.
   const [facturarOpen, setFacturarOpen] = React.useState(false);
+  // QR que el cliente presenta en el mostrador para retirar.
+  const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
   // Se incrementa al facturar desde el header, para que el tab Comprobantes
   // (que hace su propio fetch) recargue la lista sin refrescar la página.
   const [comprobantesToken, setComprobantesToken] = React.useState(0);
@@ -7325,6 +7329,15 @@ export function PropuestaFicha({
                       {trackCopiado ? "Link copiado" : "Compartir seguimiento"}
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setQrRetiroOpen(true)}
+                    title="QR que el cliente presenta para retirar el trabajo"
+                  >
+                    <QrCodeIcon />
+                    QR de retiro
+                  </button>
                   {camposEditablesOrden(orden.estado).size > 0 ? (
                     <button
                       type="button"
@@ -8117,6 +8130,14 @@ export function PropuestaFicha({
         aviso={avisoCupon}
         onCerrar={() => setAvisoCupon(null)}
       />
+
+      {qrRetiroOpen && orden ? (
+        <QrRetiroModal
+          numero={orden.numero}
+          cliente={orden.clienteNombre}
+          onClose={() => setQrRetiroOpen(false)}
+        />
+      ) : null}
       {panelEditor ? (
         <PanelesManualEditor
           item={panelEditor.item}
