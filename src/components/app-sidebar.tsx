@@ -17,7 +17,6 @@ import {
   seccionesConfigVisibles,
 } from "@/components/configuracion/configuracion-secciones";
 import { useSidebar } from "@/components/ui/sidebar";
-import { ConstelacionCanvas } from "@/components/constelacion-canvas";
 import { PerfilUsuarioModal } from "@/components/perfil-usuario-modal";
 import s from "@/components/app-sidebar.module.css";
 
@@ -262,7 +261,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   const suscripcion = currentUser.tenantActual.suscripcion;
   const planNombre = suscripcion?.planNombre?.trim() || "Suscripción";
   const suscripcionProgress = getSuscripcionProgress(suscripcion);
-  const { state, setOpen, toggleSidebar } = useSidebar();
+  const { state, setOpen } = useSidebar();
   const collapsed = state === "collapsed";
   const usuarioNombre =
     currentUser.nombreCompleto?.trim() || currentUser.email;
@@ -410,39 +409,8 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
       className={`${s.sb} ${collapsed ? s.mini : ""}`}
       data-collapsed={collapsed}
     >
-      {/* Malla 3D velada hacia abajo; se oculta al colapsar (regla del módulo). */}
-      <ConstelacionCanvas
-        className={s.canvas}
-        nodes={34}
-        pulses={3}
-        cx={0.5}
-        cy={0.14}
-        radius={0.62}
-      />
-      <span className={s.veil} aria-hidden="true" />
-
-      <button
-        type="button"
-        className={s.tgl}
-        onClick={toggleSidebar}
-        title={collapsed ? "Expandir menú" : "Contraer menú"}
-        aria-label={collapsed ? "Expandir menú" : "Contraer menú"}
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="m14 6-6 6 6 6" />
-        </svg>
-      </button>
-
+      {/* Sin malla 3D ni toggle propio: el colapso vive en el botón del
+          topbar (SidebarTrigger), que hace exactamente lo mismo. */}
       <Brand collapsed={collapsed} />
 
       {collapsed ? (

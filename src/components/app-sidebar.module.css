@@ -32,63 +32,9 @@
   width: 66px;
 }
 
-/* Malla 3D: al colapsar se OCULTA para no quedar rara en la columna angosta. */
-.canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-.mini .canvas {
-  display: none;
-}
-
-/* Velo: apaga la malla hacia abajo para que el menú se lea. */
-.veil {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0) 0,
-    rgba(255, 255, 255, 0.55) 24%,
-    rgba(255, 255, 255, 0.92) 44%,
-    rgba(255, 255, 255, 0.97) 100%
-  );
-}
-.mini .veil {
-  background: none;
-}
-
-/* Todo el contenido va por encima del canvas/velo. */
-.sb > *:not(.canvas):not(.veil) {
+.sb > * {
   position: relative;
   z-index: 1;
-}
-
-/* Toggle de colapso, flotante en el borde. */
-.tgl {
-  position: absolute;
-  top: 22px;
-  right: -11px;
-  z-index: 3;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #e5e2db);
-  display: grid;
-  place-items: center;
-  color: var(--muted, #6e6e76);
-  box-shadow: 0 1px 3px rgba(20, 20, 26, 0.1);
-  cursor: pointer;
-}
-.tgl:hover {
-  color: var(--ink, #14141a);
-  border-color: var(--border-strong, #c8c4ba);
-}
-.mini .tgl svg {
-  transform: rotate(180deg);
 }
 
 /* Marca. */
