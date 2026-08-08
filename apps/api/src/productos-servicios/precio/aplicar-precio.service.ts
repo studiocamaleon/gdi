@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   AplicarPrecioInput,
   AplicarPrecioOutput,
+  DescuentoPrecio,
   DetalleFijadoPorCantidad,
   DetalleFijoConMargenVariable,
   DetalleMargenVariable,
@@ -86,12 +87,23 @@ export class AplicarPrecioService {
 
     const cargas = this.normalizarCargas(input.impuestos, input.comisiones);
 
-    const neto = this.calcularNeto(
+    const netoLista = this.calcularNeto(
       input.precioConfig,
       input.costoUnitario,
       input.cantidad,
       cargas,
     );
+
+    // Descuento comercial: sale del neto de lista, ANTES del IVA. Como todo lo
+    // de abajo (impuestos, comisiones, margen) es lineal en el neto, aplicarlo
+    // acá hace que se recompute coherente solo. El costo es fijo → el descuento
+    // lo absorbe el margen (puede quedar negativo; el gate vive aguas arriba).
+    const descuentoUnitario = this.calcularDescuentoUnitario(
+      netoLista,
+      input.descuento,
+      input.cantidad,
+    );
+    const neto = Math.max(0, netoLista - descuentoUnitario);
 
     const impuestosPorFuera = this.r((neto * cargas.porFueraPct) / 100);
     const brutoUnitario = this.r(neto + impuestosPorFuera);
@@ -129,6 +141,13 @@ export class AplicarPrecioService {
         totalImpuestos,
         totalComisiones,
         margenEfectivoPct,
+      },
+      descuento: {
+        aplicado: descuentoUnitario > 0,
+        montoUnitario: this.r(descuentoUnitario),
+        montoTotal: this.r(descuentoUnitario * input.cantidad),
+        netoListaUnitario: this.r(netoLista),
+        netoListaTotal: this.r(netoLista * input.cantidad),
       },
       snapshots: {
         precioConfig: input.precioConfig,
@@ -191,6 +210,26 @@ export class AplicarPrecioService {
       factorPorFuera,
       cargaInternaNetoPct,
     };
+  }
+
+  /**
+   * Cuánto se descuenta del neto de lista, POR UNIDAD. El `MONTO` es sobre el
+   * neto total de la línea, así que se prorratea por cantidad. Clampeado para
+   * no dejar el neto negativo y para ignorar valores <= 0.
+   */
+  private calcularDescuentoUnitario(
+    netoLista: number,
+    descuento: DescuentoPrecio | null | undefined,
+    cantidad: number,
+  ): number {
+    if (!descuento || descuento.valor <= 0) return 0;
+    if (descuento.tipo === 'PORCENTAJE') {
+      const pct = Math.min(100, descuento.valor);
+      return (netoLista * pct) / 100;
+    }
+    // MONTO: $ sobre el neto TOTAL de la línea → por unidad.
+    if (cantidad <= 0) return 0;
+    return Math.min(netoLista, descuento.valor / cantidad);
   }
 
   // ── Métodos de cálculo del precio NETO ───────────────────────────────

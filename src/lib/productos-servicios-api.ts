@@ -926,6 +926,8 @@ export interface CotizarRequest {
   rutaAlternativaId?: string | null;
   /** Cliente de la OT: habilita el override de precios especiales por cliente. */
   clienteId?: string | null;
+  /** Descuento comercial de la línea (sobre el neto, antes del IVA). */
+  descuento?: { tipo: "PORCENTAJE" | "MONTO"; valor: number } | null;
   jobContext: {
     cantidad: number;
     caras?: 1 | 2;
@@ -1038,6 +1040,14 @@ export interface CotizarResponse {
       precioBrutoUnitario: number;
       precioNetoTotal: number;
       precioBrutoTotal: number;
+      /** Efecto del descuento comercial (montos en 0 si no hubo). */
+      descuento: {
+        aplicado: boolean;
+        montoUnitario: number;
+        montoTotal: number;
+        netoListaUnitario: number;
+        netoListaTotal: number;
+      };
     };
     pasos: Array<{
       /**

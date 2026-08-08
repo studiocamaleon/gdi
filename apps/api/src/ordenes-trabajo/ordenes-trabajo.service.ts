@@ -681,6 +681,12 @@ export class OrdenesTrabajoService {
     const subtotal = payload.items.reduce((s, i) => s + i.subtotal, 0);
     const impuestos = payload.items.reduce((s, i) => s + i.impuestos, 0);
     const cargosDirectos = payload.cargosDirectos ?? 0;
+    // Denormalizado para el listado. El descuento YA está dentro de `subtotal`
+    // de cada item (el neto persistido es el descontado), no se resta de nuevo.
+    const descuentoTotal = payload.items.reduce(
+      (s, i) => s + (i.descuentoMonto ?? 0),
+      0,
+    );
     const total = subtotal + impuestos + cargosDirectos;
     const vendedorEmpleadoId = payload.vendedorEmpleadoId ?? emisor?.id ?? null;
     const usuarioNombre = firmaActor(
@@ -719,6 +725,7 @@ export class OrdenesTrabajoService {
           subtotal,
           impuestos,
           cargosDirectos,
+          descuentoTotal,
           total,
           items: {
             create: payload.items.map((item, indice) => ({
@@ -734,6 +741,9 @@ export class OrdenesTrabajoService {
               subtotal: item.subtotal,
               impuestos: item.impuestos,
               total: item.total,
+              descuentoTipo: item.descuentoTipo ?? null,
+              descuentoValor: item.descuentoValor ?? null,
+              descuentoMonto: item.descuentoMonto ?? null,
               // Serializado a objetos planos: los DTOs (clases) no matchean
               // InputJsonValue de Prisma.
               specsJson: (item.specs ?? []).map((spec) => ({
@@ -1054,10 +1064,11 @@ export class OrdenesTrabajoService {
   ) {
     const agregado = await tx.ordenTrabajoItem.aggregate({
       where: { ordenId },
-      _sum: { subtotal: true, impuestos: true },
+      _sum: { subtotal: true, impuestos: true, descuentoMonto: true },
     });
     const subtotal = Number(agregado._sum.subtotal ?? 0);
     const impuestos = Number(agregado._sum.impuestos ?? 0);
+    const descuentoTotal = Number(agregado._sum.descuentoMonto ?? 0);
     const total = subtotal + impuestos + cargosDirectos;
     // El total no puede quedar por debajo de lo ya FACTURADO: antes hay
     // que anular la factura o emitir una nota de crédito.
@@ -1078,6 +1089,7 @@ export class OrdenesTrabajoService {
       data: {
         subtotal,
         impuestos,
+        descuentoTotal,
         total,
       },
     });
@@ -1096,6 +1108,9 @@ export class OrdenesTrabajoService {
       subtotal: item.subtotal,
       impuestos: item.impuestos,
       total: item.total,
+      descuentoTipo: item.descuentoTipo ?? null,
+      descuentoValor: item.descuentoValor ?? null,
+      descuentoMonto: item.descuentoMonto ?? null,
       specsJson: (item.specs ?? []).map((spec) => ({
         etiqueta: spec.etiqueta,
         valor: spec.valor,

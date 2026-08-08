@@ -26,6 +26,8 @@ export interface CotizarInput {
   clienteId?: string | null;
   /** Período de tarifas a usar (ej: "2026-04"). Si null, usa el último publicado. */
   periodo?: string | null;
+  /** Descuento comercial de la línea (sobre el neto, antes del IVA). */
+  descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
 }
 
 /**
@@ -291,6 +293,14 @@ export interface CotizacionResultado {
     precioBrutoUnitario: number;
     precioNetoTotal: number;
     precioBrutoTotal: number;
+    /** Efecto del descuento comercial (montos en 0 si no hubo). */
+    descuento: {
+      aplicado: boolean;
+      montoUnitario: number;
+      montoTotal: number;
+      netoListaUnitario: number;
+      netoListaTotal: number;
+    };
   };
   /** Trazabilidad por paso (orden topológico). */
   pasos: PasoEjecutado[];

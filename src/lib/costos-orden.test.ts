@@ -62,6 +62,13 @@ function item(over: Partial<PropuestaItem> = {}): PropuestaItem {
         precioBrutoUnitario: 1210,
         precioNetoTotal: 1000,
         precioBrutoTotal: 1210,
+        descuento: {
+          aplicado: false,
+          montoUnitario: 0,
+          montoTotal: 0,
+          netoListaUnitario: 1000,
+          netoListaTotal: 1000,
+        },
       },
       pasos: [
         {

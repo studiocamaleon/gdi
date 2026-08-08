@@ -122,6 +122,17 @@ export interface PrecioEspecialClienteSnapshot {
   config: PrecioConfig;
 }
 
+/** Descuento comercial de la línea. Se aplica sobre el NETO de lista. */
+export interface DescuentoPrecio {
+  tipo: 'PORCENTAJE' | 'MONTO';
+  /**
+   * Si `PORCENTAJE`: porcentaje 0–100 sobre el neto de lista.
+   * Si `MONTO`: monto en $ sobre el NETO TOTAL de la línea (se prorratea por
+   * unidad). Nunca deja el neto por debajo de 0.
+   */
+  valor: number;
+}
+
 export interface AplicarPrecioInput {
   /** Costo unitario comercial del producto, ya devuelto por el motor universal. */
   costoUnitario: number;
@@ -146,6 +157,13 @@ export interface AplicarPrecioInput {
    * a la unidad (`redondeoPrecio = 'entero'`). Default 2 = lo de siempre.
    */
   decimalesPrecio?: number;
+  /**
+   * Descuento comercial de la línea. Se aplica sobre el neto de lista (antes
+   * del IVA); impuestos, comisiones y margen se recomputan sobre el neto ya
+   * descontado. El costo es fijo, así que el descuento sale del margen (puede
+   * volverlo negativo — el control por umbral vive aguas arriba, no acá).
+   */
+  descuento?: DescuentoPrecio | null;
 }
 
 export interface DesglosePrecio {
@@ -173,6 +191,17 @@ export interface AplicarPrecioOutput {
   precioBrutoTotal: number;
   /** Desglose de cómo se compuso el precio. */
   desglose: DesglosePrecio;
+  /** Efecto del descuento comercial (montos en 0 si no hubo). */
+  descuento: {
+    aplicado: boolean;
+    /** $ descontado por unidad. */
+    montoUnitario: number;
+    /** $ descontado en la línea (× cantidad). */
+    montoTotal: number;
+    /** Neto de LISTA (antes del descuento), unitario y total. */
+    netoListaUnitario: number;
+    netoListaTotal: number;
+  };
   /**
    * Snapshots para persistir en CotizacionItem. Inmutables.
    * Si en el futuro cambian los catálogos, la cotización mantiene esto.

@@ -2725,6 +2725,11 @@ model CotizacionItem {
   costoTotal                        Decimal?           @db.Decimal(14, 2)
   precioUnitario                    Decimal?           @db.Decimal(14, 2)
   precioTotal                       Decimal?           @db.Decimal(14, 2)
+  /// Descuento comercial de la línea (sobre el neto). El efecto ya está en
+  /// precioUnitario/precioTotal y los snapshots; esto es la traza para editar.
+  descuentoTipo                     String?
+  descuentoValor                    Decimal?           @db.Decimal(14, 2)
+  descuentoMonto                    Decimal?           @db.Decimal(14, 2)
   /// Trazabilidad por bucket (a-g del molde).
   trazabilidadJson                  Json?
   /// === Snapshots inmutables del Tab Precio al momento de cotizar (Sprint 5.a) ===
@@ -2779,6 +2784,9 @@ model OrdenTrabajo {
   subtotal                Decimal?               @db.Decimal(14, 2)
   impuestos               Decimal?               @db.Decimal(14, 2)
   cargosDirectos          Decimal?               @db.Decimal(14, 2)
+  /// Σ de los descuentos comerciales de los items (sobre el neto), denormalizado
+  /// para el listado. El descuento ya está DENTRO de `subtotal`/`total`.
+  descuentoTotal          Decimal?               @db.Decimal(14, 2)
   total                   Decimal?               @db.Decimal(14, 2)
   /// Avance 0-100 informado por producción; null = sin dato.
   progresoPct             Int?
@@ -2872,6 +2880,12 @@ model OrdenTrabajoItem {
   subtotal              Decimal                @db.Decimal(14, 2)
   impuestos             Decimal                @db.Decimal(14, 2)
   total                 Decimal                @db.Decimal(14, 2)
+  /// Descuento comercial de la línea (sobre el neto, antes del IVA). El efecto
+  /// YA está dentro de subtotal/impuestos/total; estos campos son la traza:
+  /// tipo + valor ingresado + monto neto efectivamente descontado.
+  descuentoTipo         String?
+  descuentoValor        Decimal?               @db.Decimal(14, 2)
+  descuentoMonto        Decimal?               @db.Decimal(14, 2)
   /// Proyección visible: [{ etiqueta, valor }].
   specsJson             Json?
   /// string[] de adicionales incluidos.

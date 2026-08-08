@@ -87,6 +87,21 @@ export class CrearOrdenTrabajoItemDto {
   @Min(0)
   total: number;
 
+  // Descuento comercial de la línea (traza; el efecto ya está en subtotal/total).
+  @IsOptional()
+  @IsIn(['PORCENTAJE', 'MONTO'])
+  descuentoTipo?: 'PORCENTAJE' | 'MONTO' | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  descuentoValor?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  descuentoMonto?: number | null;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

@@ -887,6 +887,7 @@ export class MotorUniversalService {
         clienteId: input.clienteId ?? undefined,
         costoUnitario: cotizacion.costos.unitario,
         cantidad: cantidadComercialPricing,
+        descuento: input.descuento ?? null,
       });
     } catch (error) {
       return {
@@ -931,6 +932,7 @@ export class MotorUniversalService {
         precioBrutoUnitario: desglose.precioBrutoUnitario,
         precioNetoTotal: desglose.precioNetoTotal,
         precioBrutoTotal: desglose.precioBrutoTotal,
+        descuento: desglose.descuento,
       };
     }
 
@@ -1042,6 +1044,7 @@ export class MotorUniversalService {
             jobContext: input.jobContext,
             producto: productoCargado,
             cotizacion: result.cotizacion!,
+            descuento: input.descuento ?? null,
           }),
         });
 
@@ -1059,6 +1062,7 @@ export class MotorUniversalService {
     jobContext: JobContext;
     clienteId?: string | null;
     periodo?: string | null;
+    descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
   }): Promise<{
     result: CotizarOutput;
     cotizacionId?: string;
@@ -1086,6 +1090,7 @@ export class MotorUniversalService {
       jobContext: input.jobContext,
       clienteId: input.clienteId ?? item.cotizacion.clienteId ?? null,
       periodo: input.periodo ?? null,
+      descuento: input.descuento ?? null,
     });
     if (!result.exitoso || !result.cotizacion) {
       return { result };
@@ -1106,6 +1111,7 @@ export class MotorUniversalService {
         jobContext: input.jobContext,
         producto,
         cotizacion: result.cotizacion,
+        descuento: input.descuento ?? null,
       }),
     });
 
@@ -1123,6 +1129,7 @@ export class MotorUniversalService {
     jobContext: JobContext;
     producto: ProductoCargado;
     cotizacion: CotizacionResultado;
+    descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
   }) {
     const desglosePrecio = args.cotizacion.desglosePrecio;
     const precioResultado = desglosePrecio
@@ -1185,6 +1192,13 @@ export class MotorUniversalService {
       costoTotal: args.cotizacion.costos.total.toString(),
       precioUnitario: precioResultado?.precioUnitario?.toString() ?? null,
       precioTotal: precioResultado?.precioTotal?.toString() ?? null,
+      descuentoTipo: args.descuento?.tipo ?? null,
+      descuentoValor:
+        args.descuento?.valor != null ? args.descuento.valor.toString() : null,
+      descuentoMonto:
+        desglosePrecio?.descuento.montoTotal != null
+          ? desglosePrecio.descuento.montoTotal.toString()
+          : null,
       trazabilidadJson: {
         pasos: args.cotizacion.pasos,
         cargosDirectosCotizacion: args.cotizacion.cargosDirectosCotizacion,
@@ -1216,6 +1230,7 @@ export class MotorUniversalService {
     clienteId?: string;
     costoUnitario: number;
     cantidad: number;
+    descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
   }): Promise<{
     precioUnitario: number;
     precioTotal: number;
@@ -1227,6 +1242,13 @@ export class MotorUniversalService {
     precioBrutoUnitario: number;
     precioNetoTotal: number;
     precioBrutoTotal: number;
+    descuento: {
+      aplicado: boolean;
+      montoUnitario: number;
+      montoTotal: number;
+      netoListaUnitario: number;
+      netoListaTotal: number;
+    };
     snapshots: {
       precioConfig: TabPrecioConfig;
       impuestos: PrecioImpuestoSnapshot[];
@@ -1395,6 +1417,7 @@ export class MotorUniversalService {
       impuestos: impuestosSnapshot,
       comisiones: comisionesSnapshot,
       precioEspecialCliente: precioEspecialSnapshot ?? undefined,
+      descuento: args.descuento ?? null,
       decimalesPrecio:
         regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales,
     });
@@ -1410,6 +1433,7 @@ export class MotorUniversalService {
       precioBrutoUnitario: out.precioBrutoUnitario,
       precioNetoTotal: out.precioNetoTotal,
       precioBrutoTotal: out.precioBrutoTotal,
+      descuento: out.descuento,
       snapshots: out.snapshots,
     };
   }

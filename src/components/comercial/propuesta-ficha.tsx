@@ -4635,6 +4635,15 @@ function rehidratarOrdenItem(
           precioBrutoUnitario: brutoUnit,
           precioNetoTotal: producto.subtotal,
           precioBrutoTotal: snap.precioTotal ?? producto.total,
+          // Snapshot histórico sin descuento: no-op (el neto de lista es el
+          // propio neto). En F1.3 se rehidrata desde el descuento persistido.
+          descuento: {
+            aplicado: false,
+            montoUnitario: 0,
+            montoTotal: 0,
+            netoListaUnitario: netoUnit,
+            netoListaTotal: producto.subtotal,
+          },
         } as NonNullable<CotizacionPropuestaSnapshot["desglosePrecio"]>)
       : undefined,
   } as CotizacionPropuestaSnapshot;

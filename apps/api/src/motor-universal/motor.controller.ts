@@ -49,6 +49,7 @@ export class MotorUniversalController {
       jobContext: dto.jobContext as never,
       clienteId: dto.clienteId ?? null,
       periodo: dto.periodo ?? null,
+      descuento: dto.descuento ?? null,
     });
   }
 
@@ -77,6 +78,7 @@ export class MotorUniversalController {
       jobContext: dto.jobContext as never,
       clienteId: dto.clienteId ?? null,
       periodo: dto.periodo ?? null,
+      descuento: dto.descuento ?? null,
       cotizacionId: dto.cotizacionId,
     });
   }
@@ -84,7 +86,11 @@ export class MotorUniversalController {
   @Patch('cotizacion-items/:id/recotizar')
   async recotizarItem(
     @Param('id') id: string,
-    @Body() dto: Pick<CotizarDto, 'jobContext' | 'rutaAlternativaId' | 'clienteId' | 'periodo'>,
+    @Body()
+    dto: Pick<
+      CotizarDto,
+      'jobContext' | 'rutaAlternativaId' | 'clienteId' | 'periodo' | 'descuento'
+    >,
     @Req() req: RequestWithAuth,
   ) {
     const tenantId = req.auth?.tenantId;
@@ -101,6 +107,7 @@ export class MotorUniversalController {
       jobContext: dto.jobContext as never,
       clienteId: dto.clienteId ?? null,
       periodo: dto.periodo ?? null,
+      descuento: dto.descuento ?? null,
     });
   }
 }

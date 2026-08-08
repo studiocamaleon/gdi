@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsIn,
   IsInt,
   IsNumber,
   IsObject,
@@ -10,6 +11,16 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+
+/** Descuento comercial de la línea (sobre el neto, antes del IVA). */
+export class DescuentoCotizarDto {
+  @IsIn(['PORCENTAJE', 'MONTO'])
+  tipo!: 'PORCENTAJE' | 'MONTO';
+
+  @IsNumber()
+  @Min(0)
+  valor!: number;
+}
 
 export class PiezaJobContextDto {
   @IsInt()
@@ -145,6 +156,12 @@ export class CotizarDto {
   @IsOptional()
   @IsUUID()
   clienteId?: string | null;
+
+  /** Descuento comercial de la línea. El motor lo aplica sobre el neto. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DescuentoCotizarDto)
+  descuento?: DescuentoCotizarDto | null;
 
   @IsOptional()
   @IsString()

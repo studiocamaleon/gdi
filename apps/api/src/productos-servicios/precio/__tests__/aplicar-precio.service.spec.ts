@@ -585,4 +585,88 @@ describe('AplicarPrecioService', () => {
       );
     });
   });
+
+  // ════════════════════════════════════════════════════════════════════
+  // Descuento comercial (sobre el neto de lista, antes del IVA)
+  // ════════════════════════════════════════════════════════════════════
+
+  describe('descuento', () => {
+    it('sin descuento: aplicado=false y montos en 0, precio intacto', () => {
+      const r = service.aplicar(baseInput());
+      expect(r.descuento.aplicado).toBe(false);
+      expect(r.descuento.montoUnitario).toBe(0);
+      expect(r.descuento.montoTotal).toBe(0);
+      expect(r.descuento.netoListaUnitario).toBe(200);
+      expect(r.precioNetoUnitario).toBe(200);
+    });
+
+    it('PORCENTAJE: 10% baja el neto de lista y recomputa el margen', () => {
+      // costo 100, margen 50% → neto lista 200; −10% → neto 180.
+      const r = service.aplicar(
+        baseInput({ descuento: { tipo: 'PORCENTAJE', valor: 10 } }),
+      );
+      expect(r.precioNetoUnitario).toBe(180);
+      expect(r.descuento.montoUnitario).toBe(20);
+      expect(r.descuento.montoTotal).toBe(200);
+      expect(r.descuento.netoListaUnitario).toBe(200);
+      // margen efectivo = (180 − 100) / 180 × 100
+      expect(r.desglose.margenEfectivoPct).toBe(44.44);
+    });
+
+    it('PORCENTAJE: el IVA se calcula sobre el neto YA descontado', () => {
+      const r = service.aplicar(
+        baseInput({
+          impuestos: [iva21],
+          descuento: { tipo: 'PORCENTAJE', valor: 10 },
+        }),
+      );
+      expect(r.precioNetoUnitario).toBe(180);
+      // IVA 21% sobre 180 = 37.8 → bruto 217.8 (no sobre 200)
+      expect(r.precioBrutoUnitario).toBe(217.8);
+    });
+
+    it('PORCENTAJE: la comisión escala con el neto descontado', () => {
+      // Con comisión 5% el neto de lista viene grosseado-up: 100/(1−.50−.05)
+      // = 222.22. El −10% lo baja a 200, y la comisión recomputa: 200×5% = 10.
+      const r = service.aplicar(
+        baseInput({
+          comisiones: [comisVend5],
+          descuento: { tipo: 'PORCENTAJE', valor: 10 },
+        }),
+      );
+      expect(r.precioNetoUnitario).toBe(200);
+      expect(r.desglose.totalComisiones).toBe(10);
+      expect(r.desglose.precioBase).toBe(190);
+    });
+
+    it('MONTO: es sobre el neto TOTAL de la línea, prorrateado por unidad', () => {
+      // cantidad 10, neto lista 2000; −$500 → neto total 1500, unitario 150.
+      const r = service.aplicar(
+        baseInput({ descuento: { tipo: 'MONTO', valor: 500 } }),
+      );
+      expect(r.precioNetoUnitario).toBe(150);
+      expect(r.precioNetoTotal).toBe(1500);
+      expect(r.descuento.montoTotal).toBe(500);
+    });
+
+    it('deja el margen NEGATIVO si el descuento se pasa (costo fijo)', () => {
+      // costo 100, neto lista 200; −60% → neto 80 < costo → margen negativo.
+      const r = service.aplicar(
+        baseInput({ descuento: { tipo: 'PORCENTAJE', valor: 60 } }),
+      );
+      expect(r.precioNetoUnitario).toBe(80);
+      expect(r.desglose.margenEfectivoPct).toBeLessThan(0);
+    });
+
+    it('nunca deja el neto por debajo de 0 (clamp)', () => {
+      const pct = service.aplicar(
+        baseInput({ descuento: { tipo: 'PORCENTAJE', valor: 150 } }),
+      );
+      expect(pct.precioNetoUnitario).toBe(0);
+      const monto = service.aplicar(
+        baseInput({ descuento: { tipo: 'MONTO', valor: 999999 } }),
+      );
+      expect(monto.precioNetoUnitario).toBe(0);
+    });
+  });
 });
