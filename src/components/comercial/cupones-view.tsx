@@ -9,10 +9,10 @@
 
 import * as React from "react";
 import {
-  BadgePercentIcon,
   PlusIcon,
   PowerIcon,
   QrCodeIcon,
+  TicketPercentIcon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -102,12 +102,12 @@ export function CuponesView({
     <section className={s.wrap}>
       <div className={s.inner}>
       <div className="page-head">
-        <div>
+        <div className="title-block">
           <h1>Cupones</h1>
-          <p>
+          <div className="sub">
             Descuentos con código: el cupón define alcance, vigencia y usos, y
             se redime al emitir la orden. El QR se escanea con el lector 2D.
-          </p>
+          </div>
         </div>
         {puedeEditar ? (
           <button
@@ -136,6 +136,15 @@ export function CuponesView({
             const vencido =
               cupon.vigenciaHasta != null &&
               new Date(cupon.vigenciaHasta) < new Date();
+            // Un solo chip resume el estado real: sirve más que ver los
+            // datos crudos y decidir uno mismo si el cupón sigue sirviendo.
+            const estado = !cupon.activo
+              ? { label: "Inactivo", clase: "" }
+              : vencido
+                ? { label: "Vencido", clase: s.alerta }
+                : agotado
+                  ? { label: "Sin usos", clase: s.alerta }
+                  : { label: "Activo", clase: s.ok };
             return (
               <article
                 key={cupon.id}
@@ -143,54 +152,86 @@ export function CuponesView({
               >
                 <div className={s.cardHead}>
                   <span className={s.codigo}>{cupon.codigo}</span>
-                  <span className={s.valor}>{valorLabel(cupon, moneda)}</span>
-                </div>
-                <div className={s.desc}>{cupon.descripcion ?? ""}</div>
-                <div className={s.metas}>
-                  <span className={s.meta}>
-                    {ALCANCE_LABEL[cupon.alcanceTipo]}
-                    {cupon.alcanceRef ? ` · ${cupon.alcanceRef}` : ""}
+                  <span className={`${s.estado} ${estado.clase}`}>
+                    {estado.label}
                   </span>
-                  <span className={`${s.meta}${agotado ? ` ${s.alerta}` : ""}`}>
-                    {cupon.usoMax == null
-                      ? `${cupon.usoCount} usos`
-                      : `${cupon.usoCount}/${cupon.usoMax} usos`}
-                  </span>
-                  {cupon.vigenciaHasta ? (
-                    <span
-                      className={`${s.meta}${vencido ? ` ${s.alerta}` : ""}`}
-                    >
-                      {vencido ? "Venció" : "Vence"}{" "}
-                      {fechaCorta(cupon.vigenciaHasta)}
-                    </span>
-                  ) : null}
-                  {cupon.montoMinimo ? (
-                    <span className={s.meta}>
-                      mín.{" "}
-                      {formatearMoneda(cupon.montoMinimo, moneda, {
-                        decimales: 0,
-                      })}
-                    </span>
-                  ) : null}
                 </div>
+
+                <div className={s.cardBody}>
+                  <div className={s.valorRow}>
+                    <span className={s.valor}>{valorLabel(cupon, moneda)}</span>
+                    <span className={s.valorSub}>
+                      {cupon.tipo === "PORCENTAJE"
+                        ? "sobre el neto"
+                        : "de descuento"}
+                    </span>
+                  </div>
+
+                  {cupon.descripcion ? (
+                    <div className={s.desc}>{cupon.descripcion}</div>
+                  ) : null}
+
+                  <dl className={s.datos}>
+                    <div className={s.dato}>
+                      <dt>Alcance</dt>
+                      <dd>
+                        {ALCANCE_LABEL[cupon.alcanceTipo]}
+                        {cupon.alcanceRef ? ` · ${cupon.alcanceRef}` : ""}
+                      </dd>
+                    </div>
+                    <div className={s.dato}>
+                      <dt>Usos</dt>
+                      <dd className={agotado ? s.alerta : undefined}>
+                        {cupon.usoMax == null
+                          ? `${cupon.usoCount} · sin límite`
+                          : `${cupon.usoCount} de ${cupon.usoMax}`}
+                      </dd>
+                    </div>
+                    {cupon.vigenciaHasta ? (
+                      <div className={s.dato}>
+                        <dt>{vencido ? "Venció" : "Vence"}</dt>
+                        <dd className={vencido ? s.alerta : undefined}>
+                          {fechaCorta(cupon.vigenciaHasta)}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {cupon.montoMinimo ? (
+                      <div className={s.dato}>
+                        <dt>Compra mínima</dt>
+                        <dd>
+                          {formatearMoneda(cupon.montoMinimo, moneda, {
+                            decimales: 0,
+                          })}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                </div>
+
                 <div className={s.acts}>
                   <button
                     type="button"
-                    className="btn"
+                    className={s.act}
                     onClick={() => void verQr(cupon)}
+                    title="Ver el QR para imprimir o escanear"
                   >
                     <QrCodeIcon />
                     QR
                   </button>
+                  <span className={s.actSpacer} />
                   {puedeEditar ? (
                     <button
                       type="button"
-                      className="btn"
+                      className={`${s.act} ${s.solo}`}
                       onClick={() => void toggleActivo(cupon)}
-                      title={cupon.activo ? "Desactivar" : "Activar"}
+                      title={
+                        cupon.activo
+                          ? "Desactivar: deja de poder aplicarse"
+                          : "Activar"
+                      }
+                      aria-label={cupon.activo ? "Desactivar" : "Activar"}
                     >
                       <PowerIcon />
-                      {cupon.activo ? "Desactivar" : "Activar"}
                     </button>
                   ) : null}
                 </div>
@@ -229,7 +270,10 @@ export function CuponesView({
             >
               <XIcon />
             </button>
-            <h2>QR del cupón</h2>
+            <h2>
+              <TicketPercentIcon />
+              QR del cupón
+            </h2>
             <div className={s.qrBox}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr.dataUrl} alt={`QR ${qr.codigo}`} />
@@ -327,9 +371,7 @@ function AltaCuponModal({
           <XIcon />
         </button>
         <h2>
-          <BadgePercentIcon
-            style={{ verticalAlign: "-3px", marginRight: 6 }}
-          />
+          <TicketPercentIcon />
           Nuevo cupón
         </h2>
 
@@ -411,18 +453,7 @@ function AltaCuponModal({
                 onChange={(e) => setAlcanceRef(e.target.value)}
               />
             </div>
-          ) : (
-            <div className={s.field}>
-              <label>Compra mínima ($ neto)</label>
-              <input
-                type="number"
-                min={0}
-                placeholder="Sin mínimo"
-                value={montoMinimo}
-                onChange={(e) => setMontoMinimo(e.target.value)}
-              />
-            </div>
-          )}
+          ) : null}
         </div>
 
         <div className={s.grid2}>
@@ -434,18 +465,18 @@ function AltaCuponModal({
               onChange={(e) => setVigenciaHasta(e.target.value)}
             />
           </div>
-          {alcanceTipo !== "ORDEN" ? (
-            <div className={s.field}>
-              <label>Compra mínima ($ neto)</label>
-              <input
-                type="number"
-                min={0}
-                placeholder="Sin mínimo"
-                value={montoMinimo}
-                onChange={(e) => setMontoMinimo(e.target.value)}
-              />
-            </div>
-          ) : null}
+          {/* La compra mínima es del ticket completo, no del alcance: va
+              siempre, cualquiera sea a qué apunte el cupón. */}
+          <div className={s.field}>
+            <label>Compra mínima ($ neto)</label>
+            <input
+              type="number"
+              min={0}
+              placeholder="Sin mínimo"
+              value={montoMinimo}
+              onChange={(e) => setMontoMinimo(e.target.value)}
+            />
+          </div>
         </div>
 
         <div className={s.field}>
