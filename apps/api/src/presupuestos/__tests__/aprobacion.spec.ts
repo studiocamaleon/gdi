@@ -61,4 +61,68 @@ describe('evaluarAprobacion', () => {
       ),
     ).toEqual([]);
   });
+
+  describe('descuento (F3)', () => {
+    const config = {
+      aprobacionMontoMax: null,
+      aprobacionMargenMinPct: null,
+      aprobacionDescuentoMaxPct: 10,
+    };
+
+    it('dispara sólo por encima del umbral (el igual pasa)', () => {
+      expect(
+        evaluarAprobacion(config, { total: 0, items: [], descuentoMaxPct: 10 }),
+      ).toEqual([]);
+      const motivos = evaluarAprobacion(config, {
+        total: 0,
+        items: [],
+        descuentoMaxPct: 15,
+      });
+      expect(motivos).toHaveLength(1);
+      expect(motivos[0].regla).toBe('descuento');
+      expect(motivos[0].detalle).toContain('15%');
+      expect(motivos[0].detalle).toContain('10%');
+    });
+
+    it('sin descuento (o sin el campo) no dispara', () => {
+      expect(
+        evaluarAprobacion(config, { total: 0, items: [], descuentoMaxPct: 0 }),
+      ).toEqual([]);
+      expect(evaluarAprobacion(config, { total: 0, items: [] })).toEqual([]);
+    });
+
+    it('regla desactivada (null/ausente) ignora cualquier descuento', () => {
+      expect(
+        evaluarAprobacion(
+          { aprobacionMontoMax: null, aprobacionMargenMinPct: null },
+          { total: 0, items: [], descuentoMaxPct: 99 },
+        ),
+      ).toEqual([]);
+      expect(
+        evaluarAprobacion(
+          {
+            aprobacionMontoMax: null,
+            aprobacionMargenMinPct: null,
+            aprobacionDescuentoMaxPct: null,
+          },
+          { total: 0, items: [], descuentoMaxPct: 99 },
+        ),
+      ).toEqual([]);
+    });
+
+    it('combina con las otras reglas', () => {
+      const motivos = evaluarAprobacion(
+        {
+          aprobacionMontoMax: 50_000,
+          aprobacionMargenMinPct: null,
+          aprobacionDescuentoMaxPct: 10,
+        },
+        { total: 121_000, items: [], descuentoMaxPct: 20 },
+      );
+      expect(motivos.map((m) => m.regla).sort()).toEqual([
+        'descuento',
+        'monto',
+      ]);
+    });
+  });
 });

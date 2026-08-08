@@ -319,6 +319,11 @@ function ConfigPresupuestosSheet({ onCerrar }: { onCerrar: () => void }) {
                   value={cfg.aprobacionMargenMinPct ?? ""}
                   onChange={(e) => setCfg({ ...cfg, aprobacionMargenMinPct: num(e.target.value) })} />
               ))}
+              {campo("Descuento máximo (%)", "Descuentos por encima de este porcentaje (en cualquier línea) requieren aprobación. Sugerido: 10.", (
+                <input type="number" min={0} max={100} style={inputStyle} placeholder="Desactivado"
+                  value={cfg.aprobacionDescuentoMaxPct ?? ""}
+                  onChange={(e) => setCfg({ ...cfg, aprobacionDescuentoMaxPct: num(e.target.value) })} />
+              ))}
 
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button type="button" className="pp-da primary" disabled={guardando} onClick={() => void guardar()}>

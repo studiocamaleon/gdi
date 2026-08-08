@@ -164,6 +164,8 @@ export type ConfigPresupuestos = {
   /** Reglas de aprobación interna; null = desactivada. */
   aprobacionMontoMax: number | null;
   aprobacionMargenMinPct: number | null;
+  /** Descuento máximo (%) sin aprobación interna. null = regla desactivada. */
+  aprobacionDescuentoMaxPct: number | null;
 };
 
 export function listarPresupuestos(filtros?: {

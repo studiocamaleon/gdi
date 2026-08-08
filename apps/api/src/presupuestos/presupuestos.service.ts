@@ -106,6 +106,10 @@ export class PresupuestosService {
         row?.aprobacionMargenMinPct != null
           ? Number(row.aprobacionMargenMinPct)
           : null,
+      aprobacionDescuentoMaxPct:
+        row?.aprobacionDescuentoMaxPct != null
+          ? Number(row.aprobacionDescuentoMaxPct)
+          : null,
     };
   }
 
@@ -612,18 +616,35 @@ export class PresupuestosService {
     cotizacionId: string,
     total: number,
   ) {
-    const [cfg, items, regional] = await Promise.all([
+    const [cfg, items, cotizacion, regional] = await Promise.all([
       this.config(tenantId),
       this.prisma.cotizacionItem.findMany({
         where: { cotizacionId },
         select: { precioTotal: true, costoTotal: true },
       }),
+      // El % de descuento por línea sale del emisionJson (neto + monto,
+      // ambos en términos netos — exacto, sin asumir alícuota de IVA). El
+      // CotizacionItem tiene la traza pero no el neto descontado.
+      this.prisma.cotizacion.findUnique({
+        where: { id: cotizacionId },
+        select: { emisionJson: true },
+      }),
       this.empresa.regional(tenantId),
     ]);
+    const emision = (cotizacion?.emisionJson ?? {
+      items: [],
+    }) as unknown as EmisionJson;
+    const descuentoMaxPct = emision.items.reduce((max, i) => {
+      const monto = Number(i.descuentoMonto ?? 0);
+      const netoLista = Number(i.subtotal) + monto;
+      const pct = monto > 0 && netoLista > 0 ? (monto / netoLista) * 100 : 0;
+      return Math.max(max, pct);
+    }, 0);
     return evaluarAprobacion(
       {
         aprobacionMontoMax: cfg.aprobacionMontoMax,
         aprobacionMargenMinPct: cfg.aprobacionMargenMinPct,
+        aprobacionDescuentoMaxPct: cfg.aprobacionDescuentoMaxPct,
       },
       {
         total,
@@ -631,6 +652,7 @@ export class PresupuestosService {
           subtotal: Number(i.precioTotal ?? 0),
           costoTotal: i.costoTotal != null ? Number(i.costoTotal) : null,
         })),
+        descuentoMaxPct,
       },
       regional.moneda,
     );

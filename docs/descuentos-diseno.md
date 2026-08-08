@@ -460,6 +460,30 @@ que F5) + `descuentoTotal` agregado; presupuestos viejos sin los campos → `{}`
   producción); no hay descuento que mostrar.
 - La conversión presupuesto→OT ya arrastraba el descuento (mismo DTO).
 
-### Después de F1+F2+F5
-F3 (aprobación por umbral, `aprobacionDescuentoMaxPct`), F4 (cupones), F6
-(self-service). Menor: columna `descuentoMotivo`.
+### ✅ F3 — Aprobación por umbral (implementado 2026-08-08)
+
+Enchufado a la maquinaria de aprobación interna de presupuestos que ya existía
+(evaluador puro + `pendiente_aprobacion` + permiso `comercial.aprobar_descuento`
++ `aprobacionMotivosJson`; OPERADOR bloqueado, SUPERVISOR/ADMIN exentos):
+
+- `aprobacion.ts`: regla `descuento` — dispara si `descuentoMaxPct` (el mayor %
+  entre las líneas, agregado del presupuesto) supera `aprobacionDescuentoMaxPct`.
+  El igual pasa; null = desactivada. +4 tests.
+- `evaluarReglas`: el % por línea sale del `emisionJson` (descuentoMonto /
+  neto de lista, ambos en términos netos — exacto, sin asumir alícuota). No se
+  zipea contra `CotizacionItem` (listas distintas); va como agregado.
+- Config: `config()`/DTO/tipo front exponen `aprobacionDescuentoMaxPct` (la
+  columna YA existía como placeholder — sin migración) + input "Descuento
+  máximo (%)" en la config de Presupuestos.
+- Ficha: al aplicar un descuento que supera el umbral del tenant, toast
+  inmediato "va a requerir aprobación interna" (config buscada lazy y cacheada;
+  el gate real vive en el backend al enviar).
+- El motivo fluye a la UI existente como texto (sin cambios de render).
+
+**Alcance consciente**: el gate corre en el ENVÍO del presupuesto (la
+maquinaria existente). La emisión DIRECTA de OT con descuento no bloquea — el
+vendedor ve el aviso pero puede emitir; si el negocio pide gate duro ahí,
+es otra fase (nueva UX de aprobación sobre OTs).
+
+### Después de F1+F2+F3+F5
+F4 (cupones con alcance), F6 (cupón self-service). Menor: `descuentoMotivo`.

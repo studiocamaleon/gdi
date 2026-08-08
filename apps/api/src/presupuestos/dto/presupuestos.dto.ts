@@ -187,4 +187,12 @@ export class ActualizarConfigPresupuestosDto {
   @Min(0)
   @Max(100)
   aprobacionMargenMinPct?: number | null;
+
+  /** Descuento máximo (%) sin aprobación (F3 descuentos). null = desactivada. */
+  @IsOptional()
+  @ValidateIf((o) => o.aprobacionDescuentoMaxPct !== null)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  aprobacionDescuentoMaxPct?: number | null;
 }

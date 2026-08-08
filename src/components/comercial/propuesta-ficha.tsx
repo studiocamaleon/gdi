@@ -59,7 +59,10 @@ import {
   getTableroProduccion,
   quitarOrdenItem,
 } from "@/lib/ordenes-trabajo-api";
-import { emitirPresupuesto } from "@/lib/presupuestos-api";
+import {
+  emitirPresupuesto,
+  getConfigPresupuestos,
+} from "@/lib/presupuestos-api";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
@@ -6429,6 +6432,22 @@ export function PropuestaFicha({
     [clienteId],
   );
 
+  // Umbral de aprobación por descuento del tenant (F3): se busca una sola vez
+  // y recién cuando se aplica un descuento; error de red = sin aviso (el gate
+  // real vive en el backend al enviar el presupuesto).
+  const umbralDescuentoRef = React.useRef<number | null | undefined>(undefined);
+  const umbralDescuentoAprobacion = React.useCallback(async () => {
+    if (umbralDescuentoRef.current === undefined) {
+      try {
+        umbralDescuentoRef.current = (await getConfigPresupuestos())
+          .aprobacionDescuentoMaxPct;
+      } catch {
+        umbralDescuentoRef.current = null;
+      }
+    }
+    return umbralDescuentoRef.current;
+  }, []);
+
   /**
    * Aplica (o quita, con `descuentoInput = null`) un descuento. Alcance `item`
    * toca una línea; alcance `orden` reparte a TODAS: un % se copia igual a cada
@@ -6517,7 +6536,7 @@ export function PropuestaFicha({
           toast.success("Descuento aplicado.");
         }
 
-        // Aviso blando de margen bajo (el gate duro por umbral llega en F2).
+        // Aviso blando de margen bajo (el gate duro es la aprobación interna).
         if (descuentoInput != null && actualizados.size > 0) {
           const margenes = [...actualizados.values()]
             .filter((item) => descuentoMontoDeItem(item) > 0)
@@ -6528,13 +6547,31 @@ export function PropuestaFicha({
               `El margen queda en ${minMargen.toLocaleString("es-AR", { maximumFractionDigits: 1 })}% en el producto más ajustado. Revisá antes de emitir.`,
             );
           }
+          // F3: si el % supera el umbral del tenant, avisar YA que el
+          // presupuesto va a pedir aprobación interna (mejor enterarse acá
+          // que con el presupuesto trabado en pendiente_aprobacion).
+          const maxPct = [...actualizados.values()].reduce((max, item) => {
+            const monto = descuentoMontoDeItem(item);
+            const lista = netoListaDeItem(item);
+            return monto > 0 && lista > 0
+              ? Math.max(max, (monto / lista) * 100)
+              : max;
+          }, 0);
+          void umbralDescuentoAprobacion().then((umbral) => {
+            if (umbral != null && maxPct > umbral) {
+              toast.warning(
+                `El descuento supera el ${umbral.toLocaleString("es-AR", { maximumFractionDigits: 1 })}% permitido: como presupuesto va a requerir aprobación interna de un supervisor.`,
+                { duration: 8000 },
+              );
+            }
+          });
         }
         setDescuentoTarget(null);
       } finally {
         setDescuentoAplicando(false);
       }
     },
-    [recotizarItemConDescuento],
+    [recotizarItemConDescuento, umbralDescuentoAprobacion],
   );
 
   React.useEffect(() => {
