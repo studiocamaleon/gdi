@@ -541,6 +541,13 @@ Comercial con **QR escaneable** (lector 2D tipea el código + Enter), cupón
   Validado en el navegador contra 8 casos: lector 8/30 ms ✓ detecta; humano
   90/180 ms, atajos P/C sueltos, código corto, Enter tardío y Ctrl ✓ ignora.
   Nota macOS: un atajo con teclas F habría exigido Fn+F2 (son multimedia).
+  **Trampa del lector real** (2026-08-08, lector de Lucas): escribe las
+  mayúsculas como **Shift+letra**, así que la ráfaga llega intercalada
+  (`Shift, T, Shift, E, …`). La primera versión trataba `Shift` como tecla
+  no imprimible y reseteaba el buffer en cada una: al Enter llegaba con una
+  sola letra y descartaba en silencio. Las modificadoras ahora se ignoran
+  sin tocar el buffer ni `ultimaTecla` (el gap se mide entre caracteres
+  reales). `shiftKey` NO puede usarse como señal de "atajo" por lo mismo.
 - **Vista Comercial → Cupones** (`cupones-view.tsx` + módulo CSS): cards con
   estado/usos/vigencia, alta (SUPERVISOR/ADMIN), activar/desactivar, y
   **modal QR** con PNG descargable para imprimir.

@@ -18,6 +18,22 @@ import * as React from "react";
  * en ese campo, que es lo que se espera (el modo escaneo del modal tiene su
  * propio input).
  */
+/**
+ * Teclas que no son parte del código y no lo interrumpen. Shift es la clave:
+ * los lectores escriben las mayúsculas como Shift+letra.
+ */
+const TECLAS_MODIFICADORAS = new Set([
+  "Shift",
+  "Control",
+  "Alt",
+  "Meta",
+  "CapsLock",
+  "AltGraph",
+  "NumLock",
+  "ScrollLock",
+  "Dead",
+]);
+
 export function useEscaneoCodigo({
   activo,
   onCodigo,
@@ -60,7 +76,14 @@ export function useEscaneoCodigo({
     let ultimaTecla = 0;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      // El lector no manda modificadores; un atajo del usuario no es un código.
+      // Las modificadoras se ignoran SIN tocar el buffer: el lector escribe
+      // las mayúsculas como Shift+letra, así que llegan intercaladas
+      // (Shift, T, Shift, E, …) y resetear ahí dejaba el código en una sola
+      // letra. Tampoco mueven `ultimaTecla`: el gap se mide entre caracteres
+      // reales, que es lo que distingue al lector de una persona.
+      if (TECLAS_MODIFICADORAS.has(event.key)) return;
+      // Un atajo del usuario (Ctrl+C) no es un código. Shift NO cuenta acá:
+      // es parte normal de escribir en mayúsculas.
       if (event.metaKey || event.ctrlKey || event.altKey) {
         buffer = "";
         return;
