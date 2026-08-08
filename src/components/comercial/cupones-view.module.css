@@ -248,6 +248,8 @@
   max-width: 100%;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
+  /* Red de seguridad: el modal nunca scrollea de costado. */
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -299,6 +301,11 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+  /* Sin esto, un item de grid/flex no se encoge por debajo del ancho de su
+     contenido (min-width: auto): un <select> con nombres largos —"Gran
+     formato › Vinilos autoadhesivos"— estiraba la columna y desbordaba el
+     modal, con barra de scroll horizontal. */
+  min-width: 0;
 }
 
 .field label {
@@ -313,6 +320,11 @@
 .field select,
 .field textarea {
   min-height: 38px;
+  /* width + border-box: el padding y el borde entran DENTRO del ancho, así
+     un control nunca se sale de su columna. */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -320,6 +332,12 @@
   color: var(--ink);
   font-size: 14px;
   font-family: inherit;
+}
+
+/* Nombre largo elegido: se recorta con puntos suspensivos en vez de estirar
+   el control (el desplegable lo muestra completo igual). */
+.field select {
+  text-overflow: ellipsis;
 }
 
 .field input:focus,
@@ -352,6 +370,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.grid2 > * {
+  min-width: 0;
 }
 
 .foot {
