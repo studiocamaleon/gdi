@@ -2896,6 +2896,16 @@ model OrdenTrabajoItem {
   /// string[] de adicionales incluidos.
   adicionalesJson       Json?
   ordenIndice           Int                    @default(0)
+  /// ── Entrega en el mostrador (docs/entrega-por-escaneo-diseno.md).
+  /// La entrega es POR ITEM: el cliente puede llevarse lo que está listo y
+  /// dejar el resto en producción. La orden pasa a `entregada` recién cuando
+  /// todos sus items lo están. null = todavía no se entregó.
+  entregadoEl           DateTime?
+  /// Quién lo despachó (firma del operador, congelada).
+  entregadoPorNombre    String?
+  /// Si no lo retiró el cliente sino un tercero, con qué documento.
+  retiradoPorNombre     String?
+  retiradoPorDni        String?
   createdAt             DateTime               @default(now())
   /// ── Descomposición del ciclo real, calculada UNA vez al finalizar el
   /// item (docs/eta-metricas-historicas-diseno.md §4.4). null hasta el
@@ -2915,6 +2925,7 @@ model OrdenTrabajoItem {
   archivos              Archivo[]
 
   @@index([tenantId, ordenId])
+  @@index([ordenId, entregadoEl])
 }
 
 /// Promesa de ETA congelada en un hito de negocio

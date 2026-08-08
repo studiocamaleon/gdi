@@ -6,6 +6,7 @@ import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.modu
 import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
 import { OrdenesTrabajoController } from './ordenes-trabajo.controller';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
+import { EntregaService } from './entrega.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { OrdenesTrabajoService } from './ordenes-trabajo.service';
     DatosEmpresaModule,
   ],
   controllers: [OrdenesTrabajoController],
-  providers: [OrdenesTrabajoService],
+  providers: [OrdenesTrabajoService, EntregaService],
   // Presupuestos convierte en OT reusando el create canónico.
   exports: [OrdenesTrabajoService],
 })

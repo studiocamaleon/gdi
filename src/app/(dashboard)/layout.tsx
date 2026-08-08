@@ -8,6 +8,7 @@ import { ConfigRegionalProvider } from "@/components/navigation/config-regional-
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { PasosEnCursoWidget } from "@/components/produccion/pasos-en-curso-widget";
+import { EntregaEscaneoWatcher } from "@/components/mostrador/entrega-escaneo-watcher";
 import { LogoutButton } from "@/components/logout-button";
 import { ImpersonacionBanner } from "@/components/plataforma/impersonacion-banner";
 import {
@@ -77,6 +78,9 @@ export default async function DashboardLayout({
             </main>
           </SidebarInset>
           <PasosEnCursoWidget />
+          {/* Escanear el QR del cliente abre la entrega desde cualquier
+              pantalla. */}
+          <EntregaEscaneoWatcher />
         </SidebarProvider>
       </NavigationFeedbackProvider>
       </ConfigRegionalProvider>

@@ -23,6 +23,12 @@ import {
   EditarOrdenTrabajoDto,
 } from './dto/crear-orden-trabajo.dto';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
+import {
+  EntregarItemsDto,
+  EscanearOrdenDto,
+  RevertirEntregaDto,
+} from './dto/entrega.dto';
+import { EntregaService } from './entrega.service';
 import { MesaPasoDto } from './dto/mesa-paso.dto';
 import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
 import { CompletarPasosLoteDto } from './dto/completar-pasos-lote.dto';
@@ -45,7 +51,10 @@ import { OcultaMargenes } from '../auth/margenes.decorator';
 @Permiso('produccion.ver')
 @Controller('ordenes-trabajo')
 export class OrdenesTrabajoController {
-  constructor(private readonly ordenesTrabajoService: OrdenesTrabajoService) {}
+  constructor(
+    private readonly ordenesTrabajoService: OrdenesTrabajoService,
+    private readonly entrega: EntregaService,
+  ) {}
 
   /**
    * Seguimiento PÚBLICO por link privado (sin sesión). El token único ES la
@@ -263,6 +272,39 @@ export class OrdenesTrabajoController {
     @Body() payload: CancelarOrdenTrabajoDto,
   ) {
     return this.ordenesTrabajoService.cancelar(auth, id, payload);
+  }
+
+  // ── Mostrador: entrega por escaneo ──────────────────────────────────
+  // Resolver el código es de lectura (el operador todavía no hizo nada);
+  // entregar y revertir mueven el estado de la orden.
+
+  @Post('escaneo')
+  escanear(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: EscanearOrdenDto,
+  ) {
+    return this.entrega.escanear(auth, payload.codigo);
+  }
+
+  @Permiso('produccion.gestionar')
+  @Post(':id/entregar')
+  entregar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: EntregarItemsDto,
+  ) {
+    return this.entrega.entregar(auth, id, payload);
+  }
+
+  /** Deshacer una entrega: el único retroceso desde `entregada`. */
+  @Permiso('produccion.gestionar')
+  @Post(':id/entregar/revertir')
+  revertirEntrega(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: RevertirEntregaDto,
+  ) {
+    return this.entrega.revertir(auth, id, payload);
   }
 
   @Permiso('comercial.gestionar')
