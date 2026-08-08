@@ -14,6 +14,24 @@ import type {
 } from './dto/entrega.dto';
 
 /**
+ * Normaliza el número de orden tal como puede llegar del lector.
+ *
+ * Los lectores 2D emulan un teclado **US** y mandan la POSICIÓN de la tecla:
+ * con el sistema en español, el `-` sale como `'` y el código llega
+ * `OT'2026'0009` (comprobado 2026-08-09). Como el formato es cerrado —letras,
+ * dígitos y guiones— todo lo que no sea alfanumérico se toma por separador.
+ * Se normaliza también acá y no sólo en el front: el código puede llegar
+ * tecleado, desde otro cliente o desde una integración.
+ */
+export function normalizarNumeroOrden(crudo: string): string {
+  return crudo
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
  * Entrega en el mostrador (docs/entrega-por-escaneo-diseno.md).
  *
  * El cliente llega con el QR de su orden, el operador lo escanea y se
@@ -43,7 +61,7 @@ export class EntregaService {
    * un QR, no de un buscador.
    */
   async escanear(auth: CurrentAuth, codigo: string) {
-    const numero = codigo.trim().toUpperCase();
+    const numero = normalizarNumeroOrden(codigo);
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { tenantId: auth.tenantId, numero },
       include: {
