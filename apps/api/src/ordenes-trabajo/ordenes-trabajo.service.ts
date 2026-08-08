@@ -625,9 +625,14 @@ export class OrdenesTrabajoService {
     );
     this.validarMontosItems(payload.items);
     // Emisión directa (no borrador): el descuento por encima del umbral exige
-    // un supervisor — el mismo control que el envío de presupuestos.
+    // un supervisor — el mismo control que el envío de presupuestos. Las
+    // líneas con CUPÓN están exentas: el cupón ES la autorización, y la
+    // redención (misma transacción de emisión) valida que sea real y vigente.
     if (emitida) {
-      await this.exigirDescuentoEmitible(auth, payload.items);
+      await this.exigirDescuentoEmitible(
+        auth,
+        payload.items.filter((item) => !item.descuentoCuponId),
+      );
     }
 
     // Dos items de la orden no pueden apuntar al mismo snapshot del cotizador.
@@ -754,6 +759,7 @@ export class OrdenesTrabajoService {
               descuentoTipo: item.descuentoTipo ?? null,
               descuentoValor: item.descuentoValor ?? null,
               descuentoMonto: item.descuentoMonto ?? null,
+              descuentoCuponId: item.descuentoCuponId ?? null,
               // Serializado a objetos planos: los DTOs (clases) no matchean
               // InputJsonValue de Prisma.
               specsJson: (item.specs ?? []).map((spec) => ({
@@ -784,6 +790,10 @@ export class OrdenesTrabajoService {
           select: { id: true, ordenId: true, cotizacionItemId: true },
         });
         await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
+        // Cupones: la redención (contador + auditoría) va en la MISMA
+        // transacción que emite — si el cupón se agotó o venció entre
+        // aplicarlo y emitir, la emisión entera se cae con error claro.
+        await this.redimirCupones(tx, auth, orden.id, payload.items);
       }
 
       // Timeline: se insertan en orden cronológico (productos → borrador →
@@ -1121,6 +1131,7 @@ export class OrdenesTrabajoService {
       descuentoTipo: item.descuentoTipo ?? null,
       descuentoValor: item.descuentoValor ?? null,
       descuentoMonto: item.descuentoMonto ?? null,
+      descuentoCuponId: item.descuentoCuponId ?? null,
       specsJson: (item.specs ?? []).map((spec) => ({
         etiqueta: spec.etiqueta,
         valor: spec.valor,
@@ -1426,12 +1437,17 @@ export class OrdenesTrabajoService {
           : null,
       );
       // Emitir el borrador es mandarlo al taller: mismo gate de descuento
-      // que la emisión directa (F3 descuentos).
+      // que la emisión directa (F3 descuentos). Las líneas con CUPÓN quedan
+      // exentas — el cupón es la autorización, y la redención de acá abajo
+      // lo valida en la misma transacción.
       const itemsDescuento = await this.prisma.ordenTrabajoItem.findMany({
         where: { ordenId: orden.id },
-        select: { subtotal: true, descuentoMonto: true },
+        select: { subtotal: true, descuentoMonto: true, descuentoCuponId: true },
       });
-      await this.exigirDescuentoEmitible(auth, itemsDescuento);
+      await this.exigirDescuentoEmitible(
+        auth,
+        itemsDescuento.filter((item) => !item.descuentoCuponId),
+      );
     }
 
     const progresoPct =
@@ -1489,9 +1505,18 @@ export class OrdenesTrabajoService {
       if (desde === 'borrador') {
         const items = await tx.ordenTrabajoItem.findMany({
           where: { ordenId: orden.id },
-          select: { id: true, ordenId: true, cotizacionItemId: true },
+          select: {
+            id: true,
+            ordenId: true,
+            cotizacionItemId: true,
+            descuentoCuponId: true,
+            descuentoMonto: true,
+          },
         });
         await this.materializarPasosItems(tx, auth.tenantId, items);
+        // Cupones aplicados en el borrador: se redimen recién acá, que es
+        // cuando la orden se compromete (misma transacción, F4 descuentos).
+        await this.redimirCupones(tx, auth, orden.id, items);
       }
       await tx.ordenTrabajoEvento.create({
         data: {
@@ -1666,6 +1691,10 @@ export class OrdenesTrabajoService {
         TipoEnlacePublico.SEGUIMIENTO_OT,
         orden.id,
       );
+
+      // 5. Los cupones redimidos por esta orden se liberan: un sorteo no se
+      //    quema con una orden que no salió (F4 descuentos).
+      await this.liberarCupones(tx, auth.tenantId, orden.id);
 
       await tx.ordenTrabajo.update({
         where: { id: orden.id },
@@ -1856,6 +1885,88 @@ export class OrdenesTrabajoService {
     throw new BadRequestException(
       `El descuento del ${r1(maxPct)}% supera el máximo del ${r1(umbral)}% permitido sin aprobación. Guardala como borrador, emitila como presupuesto para pedir la aprobación, o pedile a un supervisor que la emita.`,
     );
+  }
+
+  /**
+   * Redime los cupones aplicados a los items en la MISMA transacción que
+   * emite la orden (F4 descuentos). Reserva atómica al estilo del despachador
+   * de WhatsApp: el UPDATE condicional sólo incrementa si el cupón sigue
+   * activo, vigente y con usos — carrera de dos vendedores por el último uso:
+   * uno emite, el otro recibe el error. Cancelar la orden libera la redención.
+   */
+  private async redimirCupones(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    ordenId: string,
+    items: Array<{
+      descuentoCuponId?: string | null;
+      descuentoMonto?: number | Prisma.Decimal | null;
+    }>,
+  ) {
+    const montos = new Map<string, number>();
+    for (const item of items) {
+      if (!item.descuentoCuponId) continue;
+      montos.set(
+        item.descuentoCuponId,
+        (montos.get(item.descuentoCuponId) ?? 0) +
+          Number(item.descuentoMonto ?? 0),
+      );
+    }
+    for (const [cuponId, monto] of montos) {
+      const tomados = await tx.$executeRaw`
+        UPDATE "Cupon" SET "usoCount" = "usoCount" + 1
+        WHERE "id" = ${cuponId}::uuid AND "tenantId" = ${auth.tenantId}::uuid
+          AND "activo" = true
+          AND ("usoMax" IS NULL OR "usoCount" < "usoMax")
+          AND ("vigenciaHasta" IS NULL OR "vigenciaHasta" >= NOW())`;
+      if (tomados === 0) {
+        // Diagnóstico para el error: por qué no se pudo tomar.
+        const cupon = await tx.cupon.findFirst({
+          where: { id: cuponId, tenantId: auth.tenantId },
+          select: { codigo: true, activo: true, usoMax: true, usoCount: true, vigenciaHasta: true },
+        });
+        const motivo = !cupon
+          ? 'el cupón ya no existe'
+          : !cupon.activo
+            ? `el cupón ${cupon.codigo} fue desactivado`
+            : cupon.usoMax != null && cupon.usoCount >= cupon.usoMax
+              ? `el cupón ${cupon.codigo} se quedó sin usos`
+              : `el cupón ${cupon.codigo} venció`;
+        throw new BadRequestException(
+          `No se pudo emitir: ${motivo}. Quitá el descuento del cupón y volvé a intentar.`,
+        );
+      }
+      await tx.cuponRedencion.create({
+        data: {
+          tenantId: auth.tenantId,
+          cuponId,
+          ordenId,
+          montoAplicado: monto,
+        },
+      });
+    }
+  }
+
+  /**
+   * Cancelar una orden devuelve los usos de sus cupones (un sorteo no se
+   * quema con una orden que no salió): borra la redención y decrementa el
+   * contador, con piso 0 por las dudas.
+   */
+  private async liberarCupones(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    ordenId: string,
+  ) {
+    const redenciones = await tx.cuponRedencion.findMany({
+      where: { tenantId, ordenId },
+      select: { id: true, cuponId: true },
+    });
+    for (const redencion of redenciones) {
+      await tx.cuponRedencion.delete({ where: { id: redencion.id } });
+      await tx.$executeRaw`
+        UPDATE "Cupon" SET "usoCount" = GREATEST("usoCount" - 1, 0)
+        WHERE "id" = ${redencion.cuponId}::uuid AND "tenantId" = ${tenantId}::uuid`;
+    }
   }
 
   validarMontosItems(
@@ -3295,6 +3406,7 @@ export class OrdenesTrabajoService {
           descuentoTipo?: 'PORCENTAJE' | 'MONTO' | null;
           descuentoValor?: unknown;
           descuentoMonto?: unknown;
+          descuentoCuponId?: string | null;
         };
         return {
           id: item.id,
@@ -3310,6 +3422,7 @@ export class OrdenesTrabajoService {
             itemDescuento.descuentoMonto != null
               ? Number(itemDescuento.descuentoMonto)
               : null,
+          descuentoCuponId: itemDescuento.descuentoCuponId ?? null,
           codigo: item.codigo,
           nombre: item.nombre,
           familia: item.familia,

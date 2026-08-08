@@ -102,6 +102,11 @@ export class CrearOrdenTrabajoItemDto {
   @Min(0)
   descuentoMonto?: number | null;
 
+  /** Cupón que originó el descuento (F4): se redime al emitir la OT. */
+  @IsOptional()
+  @IsUUID()
+  descuentoCuponId?: string | null;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

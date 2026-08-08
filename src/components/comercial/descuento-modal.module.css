@@ -138,6 +138,33 @@
   border-color: var(--ink, #14141a);
 }
 
+/* Switch Manual | Cupón (sólo alcance orden). */
+.modos {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  align-self: flex-start;
+}
+
+.modos button {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted, #6e6e76);
+  cursor: pointer;
+}
+
+.modos button.modoOn {
+  background: var(--ink, #14141a);
+  color: #fff;
+}
+
 /* Objetivo del descuento (fijado por el punto de entrada, sólo lectura). */
 .target {
   display: flex;

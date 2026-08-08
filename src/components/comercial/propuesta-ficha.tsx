@@ -63,6 +63,7 @@ import {
   emitirPresupuesto,
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
+import { validarCupon, type Cupon } from "@/lib/cupones-api";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
@@ -3787,8 +3788,14 @@ function roundVisibleCurrency(value: number) {
   return Math.round(value);
 }
 
-/** Input crudo de un descuento comercial (lo que pide el vendedor). */
-type DescuentoInput = { tipo: "PORCENTAJE" | "MONTO"; valor: number };
+/** Input crudo de un descuento comercial (lo que pide el vendedor). Con
+ * `cuponId` viene de un cupón: exento del gate y redimido al emitir. */
+type DescuentoInput = {
+  tipo: "PORCENTAJE" | "MONTO";
+  valor: number;
+  cuponId?: string;
+  cuponCodigo?: string;
+};
 
 /**
  * Margen efectivo por debajo del cual se avisa al aplicar un descuento. Es sólo
@@ -4552,14 +4559,18 @@ type DescuentoTarget = { scope: "item" | "orden"; itemId: string | null };
 function DescuentoModal({
   target,
   items,
+  clienteId,
   aplicando,
   onClose,
   onApply,
+  onApplyCupon,
 }: {
   /** null = cerrado. `scope`/`itemId` fijan el estado inicial del formulario. */
   target: DescuentoTarget | null;
   /** Sólo los items recotizables (con jobContext + motor). */
   items: PropuestaItem[];
+  /** Para validar cupones con alcance CLIENTE. */
+  clienteId: string | null;
   aplicando: boolean;
   onClose: () => void;
   onApply: (
@@ -4567,10 +4578,21 @@ function DescuentoModal({
     targetItemId: string | null,
     descuento: DescuentoInput | null,
   ) => void;
+  /** Cupón validado por el backend, listo para materializar por línea. */
+  onApplyCupon: (cupon: Cupon, alcanzadas: string[]) => void;
 }) {
   const { moneda } = useConfigRegional();
   const [tipo, setTipo] = React.useState<"PORCENTAJE" | "MONTO">("PORCENTAJE");
   const [valor, setValor] = React.useState(0);
+  // Cupón (sólo alcance orden): el código define su propio alcance, el
+  // backend valida y dice qué líneas toca. El lector 2D tipea + Enter.
+  const [modo, setModo] = React.useState<"manual" | "cupon">("manual");
+  const [codigoCupon, setCodigoCupon] = React.useState("");
+  const [validandoCupon, setValidandoCupon] = React.useState(false);
+  const [cuponValidado, setCuponValidado] = React.useState<{
+    cupon: Cupon;
+    alcanzadas: string[];
+  } | null>(null);
   const abierto = target != null;
 
   // Ref con los items para leerlos en el efecto de init sin volverlo a disparar.
@@ -4594,6 +4616,9 @@ function DescuentoModal({
       setTipo("PORCENTAJE");
       setValor(0);
     }
+    setModo("manual");
+    setCodigoCupon("");
+    setCuponValidado(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.scope, target?.itemId]);
 
@@ -4653,6 +4678,36 @@ function DescuentoModal({
     onApply(scope, scope === "item" ? target.itemId : null, descuentoInput);
   };
 
+  const handleValidarCupon = async () => {
+    const codigo = codigoCupon.trim();
+    if (!codigo) {
+      toast.error("Ingresá o escaneá el código del cupón.");
+      return;
+    }
+    setValidandoCupon(true);
+    setCuponValidado(null);
+    try {
+      const resultado = await validarCupon({
+        codigo,
+        clienteId: clienteId ?? undefined,
+        items: items.map((item) => ({
+          key: item.id,
+          productoId: item.motorCodigo || undefined,
+          categoriaCodigo: item.categoriaComercialCodigo || undefined,
+          subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
+          neto: netoListaDeItem(item),
+        })),
+      });
+      setCuponValidado(resultado);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo validar el cupón.",
+      );
+    } finally {
+      setValidandoCupon(false);
+    }
+  };
+
   return (
     <div className={descM.overlay} onClick={onClose}>
       <div
@@ -4689,57 +4744,137 @@ function DescuentoModal({
             <strong>{objetivoLabel}</strong>
           </div>
 
-          <div className={descM.grid2}>
-            <div className={descM.field}>
-              <label>Tipo</label>
-              <select
-                value={tipo}
-                onChange={(event) =>
-                  setTipo(event.target.value as "PORCENTAJE" | "MONTO")
-                }
+          {/* El cupón define su propio alcance → sólo se ofrece al entrar
+              por la orden. Desde una fila, siempre manual. */}
+          {scope === "orden" ? (
+            <div className={descM.modos}>
+              <button
+                type="button"
+                className={modo === "manual" ? descM.modoOn : ""}
+                onClick={() => setModo("manual")}
               >
-                <option value="PORCENTAJE">Porcentaje (%)</option>
-                <option value="MONTO">Monto ($)</option>
-              </select>
+                Manual
+              </button>
+              <button
+                type="button"
+                className={modo === "cupon" ? descM.modoOn : ""}
+                onClick={() => setModo("cupon")}
+              >
+                Cupón
+              </button>
             </div>
-            <div className={descM.field}>
-              <label>{tipo === "PORCENTAJE" ? "Porcentaje" : "Monto neto"}</label>
-              <input
-                type="number"
-                min="0"
-                step={tipo === "PORCENTAJE" ? "0.5" : "1"}
-                max={tipo === "PORCENTAJE" ? "100" : undefined}
-                value={valor}
-                onChange={(event) => setValor(Number(event.target.value) || 0)}
-              />
-            </div>
-          </div>
+          ) : null}
 
-          <div className={descM.calc}>
-            <div>
-              <span className={descM.lbl}>Neto de lista</span>
-              <strong>{formatCurrency(netoLista, moneda)}</strong>
-            </div>
-            <div className={descM.neg}>
-              <span className={descM.lbl}>Descuento</span>
-              <strong>−{formatCurrency(montoPreview, moneda)}</strong>
-            </div>
-            <div>
-              <span className={descM.lbl}>Neto con descuento</span>
-              <strong>{formatCurrency(netoDescontado, moneda)}</strong>
-            </div>
-          </div>
+          {modo === "manual" ? (
+            <>
+              <div className={descM.grid2}>
+                <div className={descM.field}>
+                  <label>Tipo</label>
+                  <select
+                    value={tipo}
+                    onChange={(event) =>
+                      setTipo(event.target.value as "PORCENTAJE" | "MONTO")
+                    }
+                  >
+                    <option value="PORCENTAJE">Porcentaje (%)</option>
+                    <option value="MONTO">Monto ($)</option>
+                  </select>
+                </div>
+                <div className={descM.field}>
+                  <label>
+                    {tipo === "PORCENTAJE" ? "Porcentaje" : "Monto neto"}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step={tipo === "PORCENTAJE" ? "0.5" : "1"}
+                    max={tipo === "PORCENTAJE" ? "100" : undefined}
+                    value={valor}
+                    onChange={(event) =>
+                      setValor(Number(event.target.value) || 0)
+                    }
+                  />
+                </div>
+              </div>
 
-          <div className={descM.note}>
-            {scope === "orden"
-              ? tipo === "MONTO"
-                ? "Se reparte entre los productos según su peso."
-                : "Se aplica el mismo porcentaje a cada producto."
-              : "El margen resultante se recalcula al aplicar."}
-            <small>
-              Impuestos y comisiones se recalculan sobre el neto descontado.
-            </small>
-          </div>
+              <div className={descM.calc}>
+                <div>
+                  <span className={descM.lbl}>Neto de lista</span>
+                  <strong>{formatCurrency(netoLista, moneda)}</strong>
+                </div>
+                <div className={descM.neg}>
+                  <span className={descM.lbl}>Descuento</span>
+                  <strong>−{formatCurrency(montoPreview, moneda)}</strong>
+                </div>
+                <div>
+                  <span className={descM.lbl}>Neto con descuento</span>
+                  <strong>{formatCurrency(netoDescontado, moneda)}</strong>
+                </div>
+              </div>
+
+              <div className={descM.note}>
+                {scope === "orden"
+                  ? tipo === "MONTO"
+                    ? "Se reparte entre los productos según su peso."
+                    : "Se aplica el mismo porcentaje a cada producto."
+                  : "El margen resultante se recalcula al aplicar."}
+                <small>
+                  Impuestos y comisiones se recalculan sobre el neto descontado.
+                </small>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={descM.field}>
+                <label>Código del cupón</label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Tecleá o escaneá el QR…"
+                  value={codigoCupon}
+                  onChange={(event) => {
+                    setCodigoCupon(event.target.value.toUpperCase());
+                    setCuponValidado(null);
+                  }}
+                  onKeyDown={(event) => {
+                    // El lector 2D tipea el código y manda Enter: valida solo.
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleValidarCupon();
+                    }
+                  }}
+                />
+              </div>
+              {cuponValidado ? (
+                <div className={descM.calc}>
+                  <div>
+                    <span className={descM.lbl}>Cupón</span>
+                    <strong>{cuponValidado.cupon.codigo}</strong>
+                  </div>
+                  <div className={descM.neg}>
+                    <span className={descM.lbl}>Descuento</span>
+                    <strong>
+                      {cuponValidado.cupon.tipo === "PORCENTAJE"
+                        ? `−${cuponValidado.cupon.valor.toLocaleString("es-AR")}%`
+                        : `−${formatCurrency(cuponValidado.cupon.valor, moneda)}`}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className={descM.lbl}>Alcanza</span>
+                    <strong>
+                      {cuponValidado.alcanzadas.length} de {items.length}
+                    </strong>
+                  </div>
+                </div>
+              ) : null}
+              <div className={descM.note}>
+                {cuponValidado
+                  ? (cuponValidado.cupon.descripcion ??
+                    "Validado: se aplica a las líneas del alcance y se redime al emitir la orden.")
+                  : "El cupón valida vigencia, usos y alcance contra esta orden. Si alguna línea tenía descuento manual, el cupón lo reemplaza."}
+              </div>
+            </>
+          )}
         </div>
 
         <div className={descM.foot}>
@@ -4760,15 +4895,38 @@ function DescuentoModal({
             </button>
           ) : null}
           <div className={descM.spacer} />
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleApply}
-            disabled={aplicando || items.length === 0}
-          >
-            <BadgePercentIcon />
-            {aplicando ? "Aplicando…" : "Aplicar descuento"}
-          </button>
+          {modo === "manual" ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleApply}
+              disabled={aplicando || items.length === 0}
+            >
+              <BadgePercentIcon />
+              {aplicando ? "Aplicando…" : "Aplicar descuento"}
+            </button>
+          ) : cuponValidado ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={aplicando}
+              onClick={() =>
+                onApplyCupon(cuponValidado.cupon, cuponValidado.alcanzadas)
+              }
+            >
+              <BadgePercentIcon />
+              {aplicando ? "Aplicando…" : "Aplicar cupón"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={validandoCupon || codigoCupon.trim().length === 0}
+              onClick={() => void handleValidarCupon()}
+            >
+              {validandoCupon ? "Validando…" : "Validar cupón"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -4810,6 +4968,7 @@ function itemToOrdenItemPayload(
       item.descuentoInput && descuento?.aplicado
         ? Math.round(descuento.montoTotal)
         : null,
+    descuentoCuponId: item.descuentoInput?.cuponId ?? null,
     codigo: item.productoCodigo,
     nombre: item.productoNombre,
     familia:
@@ -5064,7 +5223,11 @@ function rehidratarOrdenItem(
     // Descuento que aplicó el vendedor (para reeditarlo si se recotiza el ítem).
     descuentoInput:
       producto.descuentoTipo && producto.descuentoValor != null
-        ? { tipo: producto.descuentoTipo, valor: producto.descuentoValor }
+        ? {
+            tipo: producto.descuentoTipo,
+            valor: producto.descuentoValor,
+            cuponId: producto.descuentoCuponId ?? undefined,
+          }
         : undefined,
   };
 }
@@ -6574,6 +6737,104 @@ export function PropuestaFicha({
     [recotizarItemConDescuento, umbralDescuentoAprobacion],
   );
 
+  /**
+   * Materializa un cupón validado por el backend (F4): las líneas alcanzadas
+   * reciben el MISMO descuento por línea de siempre, marcado con `cuponId`
+   * (exento del gate; se redime al emitir). Un % va igual a cada línea; un $
+   * se prorratea por peso del neto de lista y la última absorbe el residuo.
+   * Pisa el descuento manual de las líneas alcanzadas, con aviso.
+   */
+  const aplicarCupon = React.useCallback(
+    async (cupon: Cupon, alcanzadas: string[]) => {
+      const objetivo = itemsRef.current.filter(
+        (item) =>
+          alcanzadas.includes(item.id) && item.jobContext && item.motorCodigo,
+      );
+      if (objetivo.length === 0) {
+        toast.error("El cupón no alcanza a ningún producto de la orden.");
+        return;
+      }
+      const pisadas = objetivo.filter(
+        (item) => item.descuentoInput && !item.descuentoInput.cuponId,
+      ).length;
+
+      let plan: Array<{ item: PropuestaItem; descuento: DescuentoInput }>;
+      const marca = { cuponId: cupon.id, cuponCodigo: cupon.codigo };
+      if (cupon.tipo === "PORCENTAJE") {
+        plan = objetivo.map((item) => ({
+          item,
+          descuento: { tipo: "PORCENTAJE", valor: cupon.valor, ...marca },
+        }));
+      } else {
+        const pesos = objetivo.map((item) => netoListaDeItem(item));
+        const totalPeso = pesos.reduce((acc, peso) => acc + peso, 0);
+        let repartido = 0;
+        plan = objetivo.map((item, index) => {
+          let share: number;
+          if (totalPeso <= 0) {
+            share = 0;
+          } else if (index === objetivo.length - 1) {
+            share = Math.max(0, Math.round(cupon.valor - repartido));
+          } else {
+            share = Math.round((cupon.valor * pesos[index]) / totalPeso);
+            repartido += share;
+          }
+          return {
+            item,
+            descuento: { tipo: "MONTO" as const, valor: share, ...marca },
+          };
+        });
+      }
+
+      setDescuentoAplicando(true);
+      try {
+        const results = await Promise.all(
+          plan.map(async ({ item, descuento }) => {
+            try {
+              return {
+                id: item.id,
+                updated: await recotizarItemConDescuento(item, descuento),
+              };
+            } catch {
+              return { id: item.id, updated: null as PropuestaItem | null };
+            }
+          }),
+        );
+        const actualizados = new Map<string, PropuestaItem>();
+        let fallidos = 0;
+        for (const result of results) {
+          if (result.updated) actualizados.set(result.id, result.updated);
+          else fallidos += 1;
+        }
+        if (actualizados.size > 0) {
+          setItems((current) =>
+            current.map(
+              (candidate) => actualizados.get(candidate.id) ?? candidate,
+            ),
+          );
+        }
+        if (fallidos > 0) {
+          toast.warning(
+            `${fallidos} producto${fallidos === 1 ? "" : "s"} no se pudo recotizar con el cupón.`,
+          );
+        } else {
+          toast.success(
+            `Cupón ${cupon.codigo} aplicado a ${actualizados.size} producto${actualizados.size === 1 ? "" : "s"}. Se redime al emitir.`,
+          );
+        }
+        if (pisadas > 0) {
+          toast.warning(
+            `El cupón reemplazó el descuento manual en ${pisadas} producto${pisadas === 1 ? "" : "s"}.`,
+          );
+        }
+        setDescuentoTarget(null);
+      } finally {
+        setDescuentoAplicando(false);
+      }
+    },
+    [recotizarItemConDescuento],
+  );
+
   React.useEffect(() => {
     if (modoOrden) return; // la orden persistida no se recotiza al vuelo
     if (prevClienteIdRef.current === clienteId) return;
@@ -7604,10 +7865,14 @@ export function PropuestaFicha({
       <DescuentoModal
         target={descuentoTarget}
         items={items.filter((item) => item.jobContext && item.motorCodigo)}
+        clienteId={clienteId || null}
         aplicando={descuentoAplicando}
         onClose={() => setDescuentoTarget(null)}
         onApply={(scope, targetItemId, descuento) =>
           void aplicarDescuento(scope, targetItemId, descuento)
+        }
+        onApplyCupon={(cupon, alcanzadas) =>
+          void aplicarCupon(cupon, alcanzadas)
         }
       />
       {panelEditor ? (

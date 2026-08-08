@@ -54,8 +54,16 @@ export type PropuestaItem = {
    * calcula el motor y vuelve en `cotizacion.desglosePrecio.descuento`. Se
    * manda en cada (re)cotización para que sobreviva a los recálculos y se
    * persiste al emitir. Un descuento de ORDEN se materializa acá, prorrateado.
+   * `cuponId` marca que vino de un cupón (F4): exento del gate de aprobación
+   * y redimido al emitir la OT.
    */
-  descuentoInput?: { tipo: "PORCENTAJE" | "MONTO"; valor: number } | null;
+  descuentoInput?: {
+    tipo: "PORCENTAJE" | "MONTO";
+    valor: number;
+    cuponId?: string;
+    /** Sólo para mostrar de qué cupón vino ("SORTEO2026"). */
+    cuponCodigo?: string;
+  } | null;
   atributosSchema: Array<{
     key: string;
     label: string;

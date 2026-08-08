@@ -31,6 +31,7 @@ import { ProductosServiciosModule } from './productos-servicios/productos-servic
 import { MotorUniversalModule } from './motor-universal/motor.module';
 import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
 import { PresupuestosModule } from './presupuestos/presupuestos.module';
+import { CuponesModule } from './cupones/cupones.module';
 import { AdministracionModule } from './administracion/administracion.module';
 import { EgresosModule } from './egresos/egresos.module';
 import { ReportesModule } from './reportes/reportes.module';
@@ -98,6 +99,7 @@ import { CentroCopiadoModule } from './centro-copiado/centro-copiado.module';
     MotorUniversalModule,
     OrdenesTrabajoModule,
     PresupuestosModule,
+    CuponesModule,
     AdministracionModule,
     EgresosModule,
     ReportesModule,

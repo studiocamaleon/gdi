@@ -25,6 +25,8 @@ export type CrearOrdenTrabajoItemPayload = {
   descuentoTipo?: "PORCENTAJE" | "MONTO" | null;
   descuentoValor?: number | null;
   descuentoMonto?: number | null;
+  /** Cupón que originó el descuento (F4): se redime al emitir. */
+  descuentoCuponId?: string | null;
   codigo: string;
   nombre: string;
   familia: string;

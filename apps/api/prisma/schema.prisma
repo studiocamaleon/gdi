@@ -608,6 +608,8 @@ model Tenant {
   empleadoComisions                                EmpleadoComision[]
   productosImpuestosCatalogo                       ProductoImpuestoCatalogo[]
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
+  cupones                                          Cupon[]
+  cuponRedenciones                                 CuponRedencion[]
   estaciones                                       Estacion[]
   estacionFamilias                                 EstacionFamilia[]
   pasosTenant                                      PasoTenant[]
@@ -2881,6 +2883,9 @@ model OrdenTrabajoItem {
   impuestos             Decimal                @db.Decimal(14, 2)
   total                 Decimal                @db.Decimal(14, 2)
   /// Descuento comercial de la línea (sobre el neto, antes del IVA). El efecto
+  /// Cupón que originó el descuento (F4). Sin FK dura: el cupón puede
+  /// borrarse del catálogo sin romper órdenes históricas.
+  descuentoCuponId      String?                @db.Uuid
   /// YA está dentro de subtotal/impuestos/total; estos campos son la traza:
   /// tipo + valor ingresado + monto neto efectivamente descontado.
   descuentoTipo         String?
@@ -4064,6 +4069,61 @@ model EnlacePublico {
   /// Un link vivo por entidad: re-emitir pisa el token anterior.
   @@unique([tipo, entidadId])
   @@index([tenantId, tipo])
+}
+
+/// Cupón de descuento (F4 descuentos — docs/descuentos-diseno.md §5.3).
+/// Es una FUENTE AUTORIZADA del mismo descuento por línea de F1: quien lo
+/// crea (supervisor/admin) define reglas y vigencia; aplicarlo no gatea.
+model Cupon {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @db.Uuid
+  /// Tecleable o escaneable: el QR codifica este código plano (el lector 2D
+  /// lo tipea como teclado). Se guarda en MAYÚSCULAS.
+  codigo       String
+  descripcion  String?
+  /// PORCENTAJE | MONTO — mismo contrato que el descuento manual.
+  tipo         String
+  valor        Decimal   @db.Decimal(14, 2)
+  /// ORDEN | CATEGORIA | SUBCATEGORIA | PRODUCTO | CLIENTE. Sin FK: el tipo
+  /// decide a qué catálogo apunta `alcanceRef` (código de categoría/
+  /// subcategoría, id de producto, id de cliente; null si ORDEN).
+  alcanceTipo  String    @default("ORDEN")
+  alcanceRef   String?
+  /// Neto mínimo de la orden para poder aplicarlo (null = sin mínimo).
+  montoMinimo  Decimal?  @db.Decimal(14, 2)
+  vigenciaDesde DateTime?
+  vigenciaHasta DateTime?
+  /// null = ilimitado; 1 = sorteo de un solo uso.
+  usoMax       Int?
+  usoCount     Int       @default(0)
+  activo       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  redenciones CuponRedencion[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, activo])
+}
+
+/// Redención de un cupón: auditoría + el candado del "un solo uso". Se crea
+/// en la MISMA transacción que emite la OT (reserva atómica); cancelar la
+/// orden la libera (borra la fila y decrementa el contador).
+model CuponRedencion {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  cuponId       String   @db.Uuid
+  ordenId       String   @db.Uuid
+  montoAplicado Decimal  @db.Decimal(14, 2)
+  createdAt     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cupon  Cupon  @relation(fields: [cuponId], references: [id], onDelete: Cascade)
+
+  /// Un cupón se redime una sola vez por orden.
+  @@unique([cuponId, ordenId])
+  @@index([tenantId, cuponId])
 }
 
 /// Auditoría del control plane: todo lo que el staff ESCRIBE queda acá,

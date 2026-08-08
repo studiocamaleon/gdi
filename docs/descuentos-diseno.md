@@ -492,5 +492,49 @@ error del backend guía: borrador, presupuesto con aprobación, o supervisor.
 No hay flujo de "aprobación de OT" — la aprobación formal vive en el circuito
 de presupuestos; acá el supervisor simplemente la emite él.
 
-### Después de F1+F2+F3+F5
-F4 (cupones con alcance), F6 (cupón self-service). Menor: `descuentoMotivo`.
+### ✅ F4 — Cupones con alcance (implementado 2026-08-08)
+
+Principio: **el cupón es una fuente AUTORIZADA del mismo descuento por línea
+de F1** — validar un código devuelve qué líneas alcanza; la ficha lo
+materializa con la maquinaria existente (`descuentoInput` + `cuponId`) y todo
+el pipeline (PDF, factura, reportes) sale gratis. Decisiones de Lucas: ABM en
+Comercial con **QR escaneable** (lector 2D tipea el código + Enter), cupón
+**exento del gate** (crearlo ES autorizar), y **pisa al manual** con aviso.
+
+- **Modelo** (migración `20260808200000_cupones_descuento`, aplicada a dev y
+  test): `Cupon` (código único por tenant, %/$, alcance ORDEN/CATEGORIA/
+  SUBCATEGORIA/PRODUCTO/CLIENTE por `alcanceRef` blando, montoMinimo,
+  vigencia, usoMax/usoCount, activo) + `CuponRedencion` (@@unique
+  cupon+orden) + `OrdenTrabajoItem.descuentoCuponId`.
+- **API** `src/cupones/`: reglas PURAS en `cupon-reglas.ts` (+9 tests) —
+  elegibilidad y líneas alcanzadas; CRUD (escribir = `comercial.
+  aprobar_descuento` + SUPERVISOR/ADMIN); `POST /validar` (no redime);
+  `GET /:id/qr` (dep `qrcode` ya presente por AFIP; QR = código plano).
+- **Redención al emitir la OT** (decisión §4.6): `redimirCupones` en la MISMA
+  transacción de emisión — UPDATE condicional atómico (activo + vigente +
+  usos), estilo reserva del despachador de WhatsApp; carrera por el último
+  uso → el segundo falla con motivo claro. Cubre emisión directa y
+  borrador→emitida. **Cancelar libera** (`liberarCupones`: borra redención y
+  decrementa con piso 0). El monto mínimo NO se re-chequea al emitir (se
+  validó al aplicar; la orden pudo cambiar — consciente).
+- **Exenciones del gate F3**: líneas con `descuentoCuponId` no cuentan para
+  el umbral (emisión de OT y envío de presupuesto). Ojo: agregar/editar items
+  en una orden YA emitida NO exime cupones (ahí no corre redención que los
+  valide — conservador a propósito).
+- **Ficha**: el modal de descuento (alcance orden) tiene modo **Cupón**:
+  input con Enter-para-validar (lector 2D), preview (valor + a cuántas líneas
+  alcanza), aplicar materializa por línea (% igual; $ prorrateado, residuo a
+  la última) y avisa si pisó manual. `descuentoInput.cuponId/cuponCodigo`
+  viaja por recotización → emisión → rehidratación.
+- **Vista Comercial → Cupones** (`cupones-view.tsx` + módulo CSS): cards con
+  estado/usos/vigencia, alta (SUPERVISOR/ADMIN), activar/desactivar, y
+  **modal QR** con PNG descargable para imprimir.
+
+Pendiente de verificación manual: alta de cupón + validar en ficha + emitir
+(redime) + cancelar (libera). El API de la otra sesión debe reiniciarse para
+levantar el módulo nuevo.
+
+### Después de F1+F2+F3+F4+F5
+F6 (cupón self-service en el link público del presupuesto). Menores:
+`descuentoMotivo`, selector de alcance con búsqueda en el ABM (hoy se pega el
+código/id a mano).

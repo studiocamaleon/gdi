@@ -178,6 +178,8 @@ export type OrdenTrabajoProducto = {
   descuentoTipo?: "PORCENTAJE" | "MONTO" | null;
   descuentoValor?: number | null;
   descuentoMonto?: number | null;
+  /** Cupón que originó el descuento (F4). */
+  descuentoCuponId?: string | null;
   codigo: string;
   nombre: string;
   /** Etiqueta corta legada (subcategoría). Preferir los campos de abajo. */

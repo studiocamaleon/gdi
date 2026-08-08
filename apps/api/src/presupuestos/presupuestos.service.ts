@@ -634,7 +634,10 @@ export class PresupuestosService {
     const emision = (cotizacion?.emisionJson ?? {
       items: [],
     }) as unknown as EmisionJson;
+    // Las líneas con CUPÓN no cuentan para el umbral: el cupón ES la
+    // autorización (lo creó un supervisor/admin con reglas y vigencia).
     const descuentoMaxPct = emision.items.reduce((max, i) => {
+      if (i.descuentoCuponId) return max;
       const monto = Number(i.descuentoMonto ?? 0);
       const netoLista = Number(i.subtotal) + monto;
       const pct = monto > 0 && netoLista > 0 ? (monto / netoLista) * 100 : 0;
