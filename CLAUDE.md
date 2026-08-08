@@ -28,6 +28,12 @@ npm run css:guard
 Falla si apareció una clase global nueva. Detalle completo, cómo migrar una
 vista y qué cuenta como global: [docs/css-convenciones.md](docs/css-convenciones.md).
 
+**Turbopack congela globals.css** (probado 2026-08-08): tras el primer compile,
+el bundle CSS no se reconstruye más — ediciones posteriores de globals.css no
+llegan al navegador por más reload que se haga (los `.tsx` y los `.module.css`
+sí reflejan). Para trabajar CSS global usar `npm run dev:webpack` (HMR aplica en
+vivo). El fix de fondo es este mismo plan de migración: achicar globals.css.
+
 ## El proxy va en `src/`
 
 `src/proxy.ts` (era `middleware.ts` hasta Next 16). Con estructura `src/`, Next
