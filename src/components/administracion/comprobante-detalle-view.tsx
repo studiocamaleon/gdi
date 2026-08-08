@@ -23,6 +23,7 @@ import {
 import { cargarCae, emitirComprobante } from "@/lib/administracion-api";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { formatearMoneda } from "@/lib/moneda";
+import s from "./comprobante.module.css";
 
 export function ComprobanteDetalleView({
   comprobante,
@@ -84,7 +85,7 @@ export function ComprobanteDetalleView({
 
   return (
     <div
-      className="acd-page"
+      className={s.page}
       style={{
         flex: 1,
         minHeight: 0,
@@ -92,12 +93,12 @@ export function ComprobanteDetalleView({
         padding: "26px 28px 90px",
       }}
     >
-      <div className="acd-wrap">
-        <Link className="acd-crumb" href="/administracion/comprobantes">
+      <div className={s.wrap}>
+        <Link className={s.crumb} href="/administracion/comprobantes">
           <ArrowLeftIcon />
           Comprobantes
         </Link>
-        <div className="acd-head">
+        <div className={s.head}>
           <div>
             <h1>Comprobante {c.numeroCompleto}</h1>
             <div className="sub">
@@ -109,8 +110,8 @@ export function ComprobanteDetalleView({
           </div>
         </div>
 
-        <div className="acd-detail-head">
-          <div className={`acd-tipo-badge ${COMPROBANTE_TIPO_SIGLA[c.tipo].toLowerCase()}`}>
+        <div className={s.detailHead}>
+          <div className={`${s.tipoBadge} ${COMPROBANTE_TIPO_SIGLA[c.tipo].toLowerCase()}`}>
             {c.letra}
           </div>
           <div>
@@ -128,7 +129,7 @@ export function ComprobanteDetalleView({
             </div>
           </div>
           <span
-            className={`acd-estado ${rechazado ? "rech" : emitido && c.cae ? "cae" : "pend"}`}
+            className={`${s.estado} ${rechazado ? "rech" : emitido && c.cae ? "cae" : "pend"}`}
           >
             <span className="d" />
             {rechazado
@@ -141,11 +142,11 @@ export function ComprobanteDetalleView({
           </span>
         </div>
 
-        <div className="acd-grid">
-          <div className="acd-card">
+        <div className={s.grid}>
+          <div className={s.card}>
             {rechazado && c.rechazo?.errores?.length ? (
-              <div className="acd-card-sec">
-                <div className="acd-rech-box">
+              <div className={s.cardSec}>
+                <div className={s.rechBox}>
                   <TriangleAlertIcon />
                   <div>
                     <div className="t">ARCA rechazó el comprobante</div>
@@ -159,9 +160,9 @@ export function ComprobanteDetalleView({
               </div>
             ) : null}
 
-            <div className="acd-card-sec">
-              <div className="acd-sec-t">Datos del comprobante</div>
-              <div className="acd-info-grid">
+            <div className={s.cardSec}>
+              <div className={s.secT}>Datos del comprobante</div>
+              <div className={s.infoGrid}>
                 <div className="c">
                   <div className="l">Fecha de emisión</div>
                   <div className="v mono">{c.fecha}</div>
@@ -200,23 +201,23 @@ export function ComprobanteDetalleView({
                 </div>
               </div>
               {c.leyenda ? (
-                <div className="acd-leyenda">{c.leyenda}</div>
+                <div className={s.leyenda}>{c.leyenda}</div>
               ) : null}
             </div>
 
-            <div className="acd-card-sec">
-              <div className="acd-sec-t">
+            <div className={s.cardSec}>
+              <div className={s.secT}>
                 Ítems <span className="n">{c.items.length}</span>
               </div>
-              <div className="acd-items-t">
-                <div className="acd-it-th">
+              <div className={s.itemsT}>
+                <div className={s.itTh}>
                   <span>Descripción</span>
                   <span className="r">Cant.</span>
                   <span className="r">Precio unit.</span>
                   <span className="r">Subtotal</span>
                 </div>
                 {c.items.map((it, i) => (
-                  <div key={i} className="acd-it-r">
+                  <div key={i} className={s.itR}>
                     <span className="desc">{it.descripcion}</span>
                     <span className="r mono">{it.cantidad}</span>
                     <span className="r mono">{fmt(it.precioUnitarioSinIva)}</span>
@@ -229,19 +230,19 @@ export function ComprobanteDetalleView({
             </div>
 
             {emitido ? (
-              <div className="acd-card-sec">
-                <div className="acd-sec-t">
+              <div className={s.cardSec}>
+                <div className={s.secT}>
                   Cobros imputados{" "}
                   <span className="n">{c.cobrosImputados.length}</span>
                 </div>
                 {c.cobrosImputados.length === 0 ? (
-                  <div className="acd-vacio">
+                  <div className={s.vacio}>
                     Todavía no se imputó ningún cobro a este comprobante.
                   </div>
                 ) : (
                   c.cobrosImputados.map((i) => (
-                    <div key={i.id} className="acd-cob-row">
-                      <span className="acd-cob-badge">
+                    <div key={i.id} className={s.cobRow}>
+                      <span className={s.cobBadge}>
                         {i.metodoNombre.slice(0, 2).toUpperCase()}
                       </span>
                       <div className="c">
@@ -254,7 +255,7 @@ export function ComprobanteDetalleView({
                     </div>
                   ))
                 )}
-                <div className="acd-saldo-box">
+                <div className={s.saldoBox}>
                   <span className="l">
                     {c.saldoPendiente > 0
                       ? "Saldo pendiente de cobro"
@@ -265,7 +266,7 @@ export function ComprobanteDetalleView({
                   </span>
                 </div>
                 {cobrado > 0 ? (
-                  <div className="acd-cobrado-nota">
+                  <div className={s.cobradoNota}>
                     Cobrado {fmt(cobrado)} de {fmt(c.total)}
                   </div>
                 ) : null}
@@ -273,17 +274,17 @@ export function ComprobanteDetalleView({
             ) : null}
           </div>
 
-          <div className="acd-aside">
+          <div className={s.aside}>
             {emitido && c.cae ? (
-              <div className="acd-cae-card">
+              <div className={s.caeCard}>
                 <div className="h">
                   <ShieldCheckIcon />
                   Autorizado por ARCA
                 </div>
-                <div className="acd-cae-body">
+                <div className={s.caeBody}>
                   <div className="l">CAE</div>
-                  <div className="acd-cae-num">{c.cae}</div>
-                  <div className="acd-cae-venc">
+                  <div className={s.caeNum}>{c.cae}</div>
+                  <div className={s.caeVenc}>
                     <span className="l">Vencimiento CAE</span>
                     <span className="v">{c.caeVencimiento ?? "—"}</span>
                   </div>
@@ -292,7 +293,7 @@ export function ComprobanteDetalleView({
             ) : null}
 
             {emitido && !c.cae ? (
-              <div className="acd-cae-pend">
+              <div className={s.caePend}>
                 <div className="h">CAE pendiente</div>
                 <p>
                   El comprobante está emitido con su número, pero todavía no
@@ -300,7 +301,7 @@ export function ComprobanteDetalleView({
                 </p>
                 {caeForm ? (
                   <>
-                    <div className="acd-field">
+                    <div className={s.field}>
                       <label>CAE</label>
                       <input
                         value={caeForm.cae}
@@ -310,7 +311,7 @@ export function ComprobanteDetalleView({
                         placeholder="74039288451120"
                       />
                     </div>
-                    <div className="acd-field">
+                    <div className={s.field}>
                       <label>Vencimiento del CAE</label>
                       <input
                         type="date"
@@ -320,7 +321,7 @@ export function ComprobanteDetalleView({
                         }
                       />
                     </div>
-                    <div className="acd-aside-actions">
+                    <div className={s.asideActions}>
                       <button
                         type="button"
                         className="btn btn-primary"
@@ -353,7 +354,7 @@ export function ComprobanteDetalleView({
               </div>
             ) : null}
 
-            <div className="acd-aside-actions">
+            <div className={s.asideActions}>
               {c.estado === "borrador" ? (
                 <button
                   type="button"
@@ -386,7 +387,7 @@ export function ComprobanteDetalleView({
             </div>
 
             {c.estado === "borrador" ? (
-              <div className="acd-nota-emision">
+              <div className={s.notaEmision}>
                 Al emitir se le asigna el número correlativo del punto de
                 venta. El CAE se carga después, a mano, desde el portal de
                 ARCA.
