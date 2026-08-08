@@ -405,6 +405,41 @@ Decisiones ya confirmadas (defaults del §4): IVA sobre neto descontado ✓,
 comisión sobre precio con descuento ✓, gate de margen (F3, después) ✓, un
 descuento por eje ✓, sólo comercial (no cupón) en F1 ✓.
 
-### Después de F1
-F2 (aprobación por umbral, `aprobacionDescuentoMaxPct`), F3 (cupones), F4
-(facturación: mapear a `bonificacionPct` del comprobante), F5 (self-service).
+### ✅ F5 — Facturación coherente (implementado 2026-08-08)
+
+Hallazgo del relevamiento: **los totales fiscales ya eran coherentes** (el
+descuento viaja dentro de `OrdenTrabajoItem.subtotal`, y de ahí salen factura,
+deuda y reportes). F5 no corrige plata: **expresa** el descuento en el
+comprobante como bonificación. Decisión de producto (Lucas, 2026-08-08):
+**factura detallada sólo cuando hay descuento**.
+
+- **Helper puro** `invoicing/items-orden-descuento.ts` (+13 tests):
+  - `itemsOrdenConDescuento(letra, items)`: renglón con precio de LISTA +
+    `bonificacionPct` sin redondear (float) — bonificar devuelve la base
+    persistida al centavo. El % es escala-libre: en A la base es el neto
+    (`subtotal`), en B/C/E el precio final (`total` persistido — cierra exacto
+    aunque el IVA no fuera 21%). El precio unitario NO se redondea (redondearlo
+    × cantidades grandes desvía pesos enteros).
+  - `renglonesDetalladosOrden(...)`: gate — descuento > 0 + factura del saldo
+    COMPLETO y de una vez (tolerancia $0,50: el modal redondea el monto) + el
+    recálculo cierra contra el saldo (±$0,05; si no, renglón único antes que
+    desviar la deuda). Devuelve `null` → caller cae al renglón por monto.
+- **`facturarOrden`** usa el gate; montos parciales y órdenes sin descuento
+  siguen saliendo como renglón único ("Trabajos de impresión — OT-X").
+- **`resolverReceptorEItems`** (Administración → "desde orden"): los auto-items
+  expresan lista + bonificación con la misma base de siempre (subtotal).
+- **Fix crítico en `afip-sdk.provider`**: el desglose de IVA de letra A armaba
+  `BaseImp` desde los items IGNORANDO `bonificacionPct` → hubiera declarado
+  base de lista contra un `ImpNeto` bonificado (rechazo ARCA). Ahora bonifica.
+- **Render**: PDF (`factura-pdf.service`) con columna "Bonif." condicional y
+  subtotal de línea bonificado (`factura.service.itemsDocumento`); detalle web
+  (`comprobante-detalle-view`) idem con anotación en la descripción; el modal
+  Facturar avisa cuando la factura va a salir detallada.
+- **Deuda/reportes verificados**: el vínculo toma el total recalculado de las
+  líneas (patrón existente); ventas del Panel leen `subtotal` ya descontado;
+  la NC por monto no cambia.
+
+### Después de F1+F5
+F2-restante (descuento en PDF del presupuesto + tracking público), F3
+(aprobación por umbral, `aprobacionDescuentoMaxPct`), F4 (cupones), F6
+(self-service). Menor: columna `descuentoMotivo`.

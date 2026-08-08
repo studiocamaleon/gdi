@@ -64,12 +64,19 @@ export function FacturarOrdenModal({
   ordenId,
   numero,
   saldoSinFacturar,
+  descuentoTotal = 0,
   onClose,
   onFacturada,
 }: {
   ordenId: string;
   numero: string;
   saldoSinFacturar: number;
+  /**
+   * Descuento comercial de la orden. Con descuento y facturación del 100%,
+   * el backend emite la factura DETALLADA (un renglón por producto con su
+   * bonificación) y el concepto no se usa — este prop sólo avisa eso.
+   */
+  descuentoTotal?: number;
   onClose: () => void;
   onFacturada: (comprobante: Comprobante) => void;
 }) {
@@ -183,6 +190,19 @@ export function FacturarOrdenModal({
                   onChange={(e) => setConcepto(e.target.value)}
                   placeholder="Trabajos de impresión…"
                 />
+                {descuentoTotal > 0 &&
+                Math.abs(montoNum - saldoSinFacturar) <= 0.5 ? (
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: "var(--muted)",
+                      marginTop: 4,
+                    }}
+                  >
+                    La orden tiene descuento: la factura sale detallada por
+                    producto con su bonificación (el concepto no se imprime).
+                  </span>
+                ) : null}
               </label>
             </div>
             <div className="cf-actions">

@@ -306,34 +306,40 @@ export class FacturaPdfService {
   }
 
   private items(pdf: jsPDF, d: Documento, y0: number): number {
-    const head = d.discriminaIva
-      ? [
-          [
-            'Código / Descripción',
-            'Cant.',
-            'Precio unit.',
-            'Alíc. IVA',
-            'Subtotal',
-          ],
-        ]
-      : [['Código / Descripción', 'Cant.', 'Precio unit.', 'Subtotal']];
+    // La columna Bonif. aparece sólo si alguna línea la lleva (descuento
+    // comercial expresado): el precio unit. impreso es el de LISTA y el
+    // subtotal ya viene bonificado — las líneas suman el total del
+    // comprobante. Ver descuentos-diseno.md §10 (F5).
+    const conBonif = d.items.some((it) => (it.bonificacionPct ?? 0) > 0);
+    const head = [
+      [
+        'Código / Descripción',
+        'Cant.',
+        'Precio unit.',
+        ...(conBonif ? ['Bonif.'] : []),
+        ...(d.discriminaIva ? ['Alíc. IVA'] : []),
+        'Subtotal',
+      ],
+    ];
 
     const body = d.items.map((it) => {
       const desc = it.codigo
         ? `${it.descripcion}\n${it.codigo}`
         : it.descripcion;
-      const base = [
-        desc,
-        String(it.cantidad),
-        money(it.precioUnitario),
-        money(it.subtotal),
-      ];
-      if (!d.discriminaIva) return base;
       return [
         desc,
         String(it.cantidad),
         money(it.precioUnitario),
-        it.alicuota !== null ? `${it.alicuota}%` : '—',
+        ...(conBonif
+          ? [
+              it.bonificacionPct
+                ? `-${(Math.round(it.bonificacionPct * 100) / 100).toLocaleString('es-AR')}%`
+                : '—',
+            ]
+          : []),
+        ...(d.discriminaIva
+          ? [it.alicuota !== null ? `${it.alicuota}%` : '—']
+          : []),
         money(it.subtotal),
       ];
     });
@@ -359,20 +365,29 @@ export class FacturaPdfService {
         lineColor: BORDE,
         lineWidth: { bottom: 0.4 },
       },
-      columnStyles: d.discriminaIva
-        ? {
-            0: { cellWidth: 'auto' },
-            1: { cellWidth: 14, halign: 'center' },
-            2: { cellWidth: 26, halign: 'right' },
-            3: { cellWidth: 18, halign: 'center' },
-            4: { cellWidth: 28, halign: 'right' },
-          }
-        : {
-            0: { cellWidth: 'auto' },
-            1: { cellWidth: 14, halign: 'center' },
-            2: { cellWidth: 30, halign: 'right' },
-            3: { cellWidth: 32, halign: 'right' },
-          },
+      columnStyles: (() => {
+        // Anchos por índice: la descripción absorbe lo que las columnas
+        // opcionales (Bonif., Alíc.) no usan.
+        const estilos: Record<
+          number,
+          { cellWidth: number | 'auto'; halign?: 'center' | 'right' }
+        > = { 0: { cellWidth: 'auto' } };
+        let col = 1;
+        estilos[col++] = { cellWidth: 14, halign: 'center' };
+        estilos[col++] = {
+          cellWidth: d.discriminaIva ? 26 : 30,
+          halign: 'right',
+        };
+        if (conBonif) estilos[col++] = { cellWidth: 16, halign: 'center' };
+        if (d.discriminaIva) {
+          estilos[col++] = { cellWidth: 18, halign: 'center' };
+        }
+        estilos[col] = {
+          cellWidth: d.discriminaIva ? 28 : 32,
+          halign: 'right',
+        };
+        return estilos;
+      })(),
       // Una fila de ítem no se parte entre dos páginas.
       rowPageBreak: 'avoid',
     });

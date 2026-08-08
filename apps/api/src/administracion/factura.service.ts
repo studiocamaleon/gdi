@@ -249,6 +249,11 @@ export class FacturaService {
       const cantidad = Number(o.cantidad) || 0;
       const unit = Number(o.precioUnitarioSinIva) || 0;
       const ali = o.alicuotaIva;
+      // Bonificación (descuento comercial expresado en la línea): el precio
+      // unitario impreso es el de LISTA y el subtotal va ya bonificado —
+      // igual que calcularTotales, así las líneas suman el total del
+      // comprobante. Ver descuentos-diseno.md §10 (F5).
+      const bonif = Number(o.bonificacionPct) || 0;
       return [
         {
           codigo: typeof o.codigo === 'string' ? o.codigo : null,
@@ -256,7 +261,8 @@ export class FacturaService {
           cantidad,
           precioUnitario: unit,
           alicuota: discrimina && typeof ali === 'number' ? ali : null,
-          subtotal: r2(cantidad * unit),
+          bonificacionPct: bonif > 0 ? bonif : null,
+          subtotal: r2(cantidad * unit * (1 - bonif / 100)),
         },
       ];
     });

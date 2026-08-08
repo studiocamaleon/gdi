@@ -7293,6 +7293,10 @@ export function PropuestaFicha({
             ordenId={orden.id}
             numero={orden.numero}
             saldoSinFacturar={Math.max(0, orden.total - orden.facturadoTotal)}
+            descuentoTotal={orden.productos.reduce(
+              (acc, p) => acc + (p.descuentoMonto ?? 0),
+              0,
+            )}
             onClose={() => setFacturarOpen(false)}
             onFacturada={() => {
               setTab("comprobantes");

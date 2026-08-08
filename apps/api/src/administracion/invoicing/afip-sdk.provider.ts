@@ -241,9 +241,15 @@ export class AfipSdkProvider implements InvoicingProvider {
     const alicIva: Array<{ Id: number; BaseImp: number; Importe: number }> = [];
     if (input.letra === 'A') {
       // En A los items vienen a precio NETO: el desglose se arma de ahí.
+      // La bonificación (descuento comercial) reduce la base — sin esto,
+      // BaseImp iría a precio de LISTA y descuadraría contra ImpNeto (que
+      // viene bonificado de totales-comprobante) → rechazo de ARCA.
       const porAli = new Map<number, { base: number; monto: number }>();
       for (const it of input.items) {
-        const base = it.cantidad * it.precioUnitarioSinIva;
+        const base =
+          it.cantidad *
+          it.precioUnitarioSinIva *
+          (1 - (it.bonificacionPct ?? 0) / 100);
         const ali = typeof it.alicuotaIva === 'number' ? it.alicuotaIva : 0;
         const acc = porAli.get(ali) ?? { base: 0, monto: 0 };
         porAli.set(ali, {

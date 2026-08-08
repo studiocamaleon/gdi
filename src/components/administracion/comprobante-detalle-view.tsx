@@ -215,16 +215,39 @@ export function ComprobanteDetalleView({
                   <span className="r">Precio unit.</span>
                   <span className="r">Subtotal</span>
                 </div>
-                {c.items.map((it, i) => (
-                  <div key={i} className="acd-it-r">
-                    <span className="desc">{it.descripcion}</span>
-                    <span className="r mono">{it.cantidad}</span>
-                    <span className="r mono">{fmt(it.precioUnitarioSinIva)}</span>
-                    <span className="r mono" style={{ fontWeight: 600 }}>
-                      {fmt(it.cantidad * it.precioUnitarioSinIva)}
-                    </span>
-                  </div>
-                ))}
+                {c.items.map((it, i) => {
+                  // Línea con bonificación (descuento comercial expresado):
+                  // el precio unitario es el de LISTA y el subtotal va
+                  // bonificado, así las líneas suman el total del comprobante.
+                  const bonif = it.bonificacionPct ?? 0;
+                  return (
+                    <div key={i} className="acd-it-r">
+                      <span className="desc">
+                        {it.descripcion}
+                        {bonif > 0 ? (
+                          <small style={{ color: "#b91c1c", marginLeft: 6 }}>
+                            bonif −
+                            {(Math.round(bonif * 100) / 100).toLocaleString(
+                              "es-AR",
+                            )}
+                            %
+                          </small>
+                        ) : null}
+                      </span>
+                      <span className="r mono">{it.cantidad}</span>
+                      <span className="r mono">
+                        {fmt(it.precioUnitarioSinIva)}
+                      </span>
+                      <span className="r mono" style={{ fontWeight: 600 }}>
+                        {fmt(
+                          it.cantidad *
+                            it.precioUnitarioSinIva *
+                            (1 - bonif / 100),
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

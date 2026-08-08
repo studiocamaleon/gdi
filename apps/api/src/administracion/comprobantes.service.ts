@@ -55,6 +55,7 @@ import {
   calcularTotales,
   type ItemCalculo,
 } from './invoicing/totales-comprobante';
+import { renglonesDetalladosOrden } from './invoicing/items-orden-descuento';
 
 /** Lo que guardamos en itemsJson: el ítem que calcula + su descripción. */
 type ItemPersistido = ItemCalculo & { descripcion: string };
@@ -797,6 +798,17 @@ export class ComprobantesService {
         clienteId: true,
         total: true,
         facturadoTotal: true,
+        descuentoTotal: true,
+        items: {
+          orderBy: { ordenIndice: 'asc' },
+          select: {
+            nombre: true,
+            cantidad: true,
+            subtotal: true,
+            total: true,
+            descuentoMonto: true,
+          },
+        },
       },
     });
     if (!orden) throw new NotFoundException('La orden no existe.');
@@ -837,21 +849,28 @@ export class ComprobantesService {
     const puntoVentaId =
       payload.puntoVentaId ?? (await this.puntoVentaDefault(auth));
     const letra = await this.letraParaCliente(auth, orden.clienteId);
-    const item = this.renglonPorMonto(
+    // F5 descuentos: una orden CON descuento que se factura completa y de una
+    // sola vez sale DETALLADA — un renglón por producto con precio de lista +
+    // bonificación (decisión 2026-08-08, ver descuentos-diseno.md §10). Los
+    // montos parciales siguen como renglón único: no mapean a items y el
+    // descuento ya viaja embebido en el monto.
+    const items = this.itemsFacturaOrden(
+      orden,
       letra,
       monto,
+      saldo,
       payload.concepto?.trim() || `Trabajos de impresión — ${orden.numero}`,
     );
-    // El vínculo lleva el total RECALCULADO del renglón (en A el redondeo
+    // El vínculo lleva el total RECALCULADO de los renglones (en A el redondeo
     // del neto puede correr un centavo) para que el reparto cierre exacto.
-    const total = calcularTotales(letra, [item]).total;
+    const total = calcularTotales(letra, items).total;
 
     const borrador = await this.crear(auth, {
       tipo: 'factura',
       puntoVentaId,
       clienteId: orden.clienteId ?? undefined,
       ordenes: [{ ordenId: orden.id, monto: total }],
-      items: [item],
+      items,
       condicionVenta: 'contado',
     } as CrearComprobanteDto);
     if (payload.emitir === false) return borrador;
@@ -1128,6 +1147,45 @@ export class ComprobantesService {
     };
   }
 
+  /**
+   * Renglones de la factura de una orden (F5 descuentos): detallados con
+   * bonificación cuando `renglonesDetalladosOrden` lo permite; si no, el
+   * renglón único por monto de siempre.
+   */
+  private itemsFacturaOrden(
+    orden: {
+      facturadoTotal: Prisma.Decimal | number;
+      descuentoTotal: Prisma.Decimal | number | null;
+      items: Array<{
+        nombre: string;
+        cantidad: Prisma.Decimal | number;
+        subtotal: Prisma.Decimal | number;
+        total: Prisma.Decimal | number;
+        descuentoMonto: Prisma.Decimal | number | null;
+      }>;
+    },
+    letra: LetraProvider,
+    monto: number,
+    saldo: number,
+    concepto: string,
+  ): ItemPersistido[] {
+    const detallados = renglonesDetalladosOrden({
+      letra,
+      monto,
+      saldo,
+      facturadoTotal: Number(orden.facturadoTotal),
+      descuentoTotal: Number(orden.descuentoTotal ?? 0),
+      items: orden.items.map((item) => ({
+        nombre: item.nombre,
+        cantidad: Number(item.cantidad),
+        subtotal: Number(item.subtotal),
+        total: Number(item.total),
+        descuentoMonto: Number(item.descuentoMonto ?? 0),
+      })),
+    });
+    return detallados ?? [this.renglonPorMonto(letra, monto, concepto)];
+  }
+
   private async puntoVentaDefault(auth: CurrentAuth): Promise<string> {
     const pv = await this.prisma.puntoVenta.findFirst({
       where: { tenantId: auth.tenantId, activo: true },
@@ -1198,16 +1256,25 @@ export class ComprobantesService {
       if (items.length === 0) {
         // Los ítems de la OT ya traen el precio con impuestos calculados por
         // el motor. Acá se factura el subtotal (neto): el IVA lo recalcula
-        // el comprobante según su letra.
-        items = orden.items.map((it) => ({
-          descripcion: it.nombre,
-          cantidad: Number(it.cantidad),
-          precioUnitarioSinIva:
-            Number(it.cantidad) > 0
-              ? Number(it.subtotal) / Number(it.cantidad)
-              : Number(it.subtotal),
-          alicuotaIva: 21,
-        })) as ItemCalculo[];
+        // el comprobante según su letra. Una línea con descuento comercial se
+        // expresa como precio de LISTA + bonificación — misma base, el
+        // descuento se hace visible en el comprobante (F5 descuentos). El pct
+        // va sin redondear para que la bonificación aterrice en el subtotal
+        // persistido al centavo.
+        items = orden.items.map((it) => {
+          const subtotal = Number(it.subtotal);
+          const descuento = Math.max(0, Number(it.descuentoMonto ?? 0));
+          const lista = subtotal + descuento;
+          const pct = lista > 0 ? (descuento / lista) * 100 : 0;
+          const cantidad = Number(it.cantidad) > 0 ? Number(it.cantidad) : 1;
+          return {
+            descripcion: it.nombre,
+            cantidad,
+            precioUnitarioSinIva: lista / cantidad,
+            alicuotaIva: 21,
+            ...(pct > 0 ? { bonificacionPct: pct } : {}),
+          };
+        }) as ItemCalculo[];
       }
     }
 
