@@ -532,6 +532,15 @@ Comercial con **QR escaneable** (lector 2D tipea el código + Enter), cupón
   línea de escaneo sobre el ticket, y al Enter **valida y aplica de una** sin
   mostrar el código; si falla, avisa y sigue escuchando. Fallback "ingresar el
   código a mano".
+- **Escaneo global sin abrir nada** (`src/lib/use-escaneo-codigo.ts`): se
+  descartó el atajo de teclado. El lector 2D tipea a 10–30 ms por carácter y
+  un humano a 100–180 ms, así que la ráfaga + Enter es distinguible: la ficha
+  escucha en toda la vista y aplica el cupón sola. Umbrales: 50 ms entre
+  teclas, 4 caracteres mínimo. No engancha con el foco en un campo editable
+  (ahí escribe el input), con modificadores, ni con un modal abierto.
+  Validado en el navegador contra 8 casos: lector 8/30 ms ✓ detecta; humano
+  90/180 ms, atajos P/C sueltos, código corto, Enter tardío y Ctrl ✓ ignora.
+  Nota macOS: un atajo con teclas F habría exigido Fn+F2 (son multimedia).
 - **Vista Comercial → Cupones** (`cupones-view.tsx` + módulo CSS): cards con
   estado/usos/vigencia, alta (SUPERVISOR/ADMIN), activar/desactivar, y
   **modal QR** con PNG descargable para imprimir.

@@ -1,0 +1,88 @@
+"use client";
+
+import * as React from "react";
+
+/**
+ * Detecta un código escaneado con lector 2D en cualquier parte de la vista,
+ * sin que el usuario tenga que abrir nada ni enfocar un input.
+ *
+ * Cómo distingue el lector de una persona: el lector "tipea" el código como
+ * teclado a una velocidad que un humano no alcanza (10–30 ms por carácter;
+ * alguien rápido tipea a 100–150 ms). Si llegan varios caracteres seguidos
+ * con menos de `maxGapMs` entre uno y otro y cierra con Enter/Tab, es un
+ * escaneo. Cualquier pausa humana reinicia el buffer, así que teclear el
+ * mismo código a mano NO dispara — y los atajos de una tecla (P, C) siguen
+ * funcionando porque nunca acumulan largo ni terminador.
+ *
+ * No escucha cuando el foco está en un campo editable: ahí el lector escribe
+ * en ese campo, que es lo que se espera (el modo escaneo del modal tiene su
+ * propio input).
+ */
+export function useEscaneoCodigo({
+  activo,
+  onCodigo,
+  maxGapMs = 50,
+  minLargo = 4,
+}: {
+  /** Con false no engancha nada (vista en lectura, modal abierto, etc.). */
+  activo: boolean;
+  onCodigo: (codigo: string) => void;
+  /** Máximo entre teclas para seguir considerándolo una ráfaga del lector. */
+  maxGapMs?: number;
+  /** Largo mínimo para tomarlo por código y no por pulsación suelta. */
+  minLargo?: number;
+}) {
+  // El callback vive en un ref para que el efecto dependa sólo de `activo`:
+  // si dependiera de la función, cada render reengancharía el listener y
+  // perdería el buffer a mitad de un escaneo.
+  const onCodigoRef = React.useRef(onCodigo);
+  onCodigoRef.current = onCodigo;
+
+  React.useEffect(() => {
+    if (!activo) return;
+    let buffer = "";
+    let ultimaTecla = 0;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // El lector no manda modificadores; un atajo del usuario no es un código.
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        buffer = "";
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        buffer = "";
+        return;
+      }
+
+      const ahora = event.timeStamp;
+      const gap = ahora - ultimaTecla;
+      ultimaTecla = ahora;
+
+      if (event.key === "Enter" || event.key === "Tab") {
+        const codigo = buffer;
+        buffer = "";
+        // El terminador también tiene que llegar en ráfaga: si alguien deja
+        // el foco quieto y aprieta Enter mucho después, no es un escaneo.
+        if (codigo.length >= minLargo && gap <= maxGapMs) {
+          event.preventDefault();
+          onCodigoRef.current(codigo);
+        }
+        return;
+      }
+
+      // Sólo caracteres imprimibles (`key` de largo 1 descarta Shift, F5…).
+      if (event.key.length !== 1) {
+        buffer = "";
+        return;
+      }
+      // Una pausa humana corta el código en curso y empieza uno nuevo.
+      buffer = gap > maxGapMs ? event.key : buffer + event.key;
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activo, maxGapMs, minLargo]);
+}

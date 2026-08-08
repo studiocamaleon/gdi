@@ -65,6 +65,7 @@ import {
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
 import { validarCupon, type Cupon } from "@/lib/cupones-api";
+import { useEscaneoCodigo } from "@/lib/use-escaneo-codigo";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
@@ -6949,6 +6950,62 @@ export function PropuestaFicha({
     },
     [recotizarItemConDescuento],
   );
+
+  /**
+   * Cupón escaneado SIN abrir nada: valida contra el carrito y aplica. Lo
+   * dispara el detector de lector 2D (ver useEscaneoCodigo); el modal sigue
+   * disponible para tipear el código a mano.
+   */
+  const aplicarCuponEscaneado = React.useCallback(
+    async (codigo: string) => {
+      const recotizables = itemsRef.current.filter(
+        (item) => item.jobContext && item.motorCodigo,
+      );
+      if (recotizables.length === 0) {
+        toast.error("Agregá productos antes de escanear un cupón.");
+        return;
+      }
+      const aviso = toast.loading(`Leyendo cupón ${codigo}…`);
+      try {
+        const resultado = await validarCupon({
+          codigo,
+          clienteId: clienteId || undefined,
+          items: recotizables.map((item) => ({
+            key: item.id,
+            productoId: item.motorCodigo || undefined,
+            categoriaCodigo: item.categoriaComercialCodigo || undefined,
+            subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
+            neto: netoListaDeItem(item),
+          })),
+        });
+        toast.dismiss(aviso);
+        await aplicarCupon(resultado.cupon, resultado.alcanzadas);
+      } catch (error) {
+        toast.dismiss(aviso);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo validar el cupón escaneado.",
+        );
+      }
+    },
+    [clienteId, aplicarCupon],
+  );
+
+  // Escaneo global: el vendedor apunta el lector y listo. Se apaga en modo
+  // lectura, sin productos, o con cualquier modal abierto (ahí el foco vive
+  // en un input y el lector escribe donde corresponde).
+  useEscaneoCodigo({
+    activo:
+      !modoOrden &&
+      items.length > 0 &&
+      descuentoTarget == null &&
+      !addOpen &&
+      !copiadoOpen &&
+      !cargoOpen &&
+      !panelEditor,
+    onCodigo: (codigo) => void aplicarCuponEscaneado(codigo),
+  });
 
   React.useEffect(() => {
     if (modoOrden) return; // la orden persistida no se recotiza al vuelo
