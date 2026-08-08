@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
+  BadgePercentIcon,
   CalendarIcon,
   ClockIcon,
   CheckIcon,
@@ -158,6 +159,7 @@ import {
 } from "@/lib/nesting-compra-pliego";
 import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
 import nestC from "./nesting-compra-pliego-viewer.module.css";
+import descM from "./descuento-modal.module.css";
 import { ConstelacionCanvas } from "@/components/constelacion-canvas";
 import resumenBar from "./resumen-financiero-bar.module.css";
 import { listClientes } from "@/lib/clientes-api";
@@ -2510,6 +2512,20 @@ function CommercialPriceDetailPanel({
         </div>
       </div>
 
+      {item.cotizacion.desglosePrecio?.descuento?.aplicado ? (
+        <div className="op-price-note">
+          Precio de lista{" "}
+          <strong>
+            {fmt(item.cotizacion.desglosePrecio.descuento.netoListaTotal)}
+          </strong>{" "}
+          · descuento{" "}
+          <strong>
+            −{fmt(item.cotizacion.desglosePrecio.descuento.montoTotal)}
+          </strong>{" "}
+          → neto {fmt(detail.precioNeto)}.
+        </div>
+      ) : null}
+
       {detail.pieceRows.length > 0 ? (
         <div className="op-price-table-wrap">
           <table className="op-price-table">
@@ -3248,6 +3264,7 @@ export function ProductRow({
   onToggle,
   onRemove,
   onEdit,
+  onDescuento,
   onVerPrecios,
   onEditPanels,
   onChangeFechaEntrega,
@@ -3266,6 +3283,8 @@ export function ProductRow({
   /** Ausentes en modo lectura (OT emitida): la fila no se puede mutar. */
   onRemove?: () => void;
   onEdit?: () => void;
+  /** Abre el modal de descuento con esta línea como objetivo. */
+  onDescuento?: () => void;
   /** Sólo para ítems de centro de copiado: abre el resumen de precios por hoja. */
   onVerPrecios?: () => void;
   onEditPanels?: (item: PropuestaItem, paso: PanelEditorPaso) => void;
@@ -3370,9 +3389,31 @@ export function ProductRow({
           <span className="u">{formatUnidad(item.unidadMedida)}</span>
         </div>
         <div className="num">
-          {calculoPendiente
-            ? "A cotizar"
-            : formatCurrency(visibleAmounts.subtotal, moneda)}
+          {calculoPendiente ? (
+            "A cotizar"
+          ) : item.cotizacion.desglosePrecio?.descuento?.aplicado ? (
+            <span className={descM.cellDesc}>
+              <span className={descM.cellLista}>
+                {formatCurrency(
+                  visibleAmounts.subtotal +
+                    Math.round(
+                      item.cotizacion.desglosePrecio.descuento.montoTotal,
+                    ),
+                  moneda,
+                )}
+              </span>
+              <span className={descM.cellRow}>
+                <span className={descM.cellTag}>
+                  {item.descuentoInput?.tipo === "PORCENTAJE"
+                    ? `−${formatDecimal(item.descuentoInput.valor, 1)}%`
+                    : `−${formatCurrency(item.cotizacion.desglosePrecio.descuento.montoTotal, moneda)}`}
+                </span>
+                <span>{formatCurrency(visibleAmounts.subtotal, moneda)}</span>
+              </span>
+            </span>
+          ) : (
+            formatCurrency(visibleAmounts.subtotal, moneda)
+          )}
         </div>
         <div className="num">
           {calculoPendiente
@@ -3412,6 +3453,11 @@ export function ProductRow({
       {expanded ? (
         <div className="oprow-body">
           <div className="op-sub">
+            {/* Tabs + acciones agrupados a la izquierda: como op-sub queda con un
+                único hijo, las acciones caen "a continuación" de los tabs en vez
+                de colgar a la derecha. Layout inline para no depender de globals.css
+                (Turbopack no recompila ese archivo de forma confiable). */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div className="op-subnav">
               <button
                 type="button"
@@ -3439,6 +3485,21 @@ export function ProductRow({
               <button type="button" className="btn-link" onClick={onEdit}>
                 <Edit3Icon />
                 Editar especificaciones
+              </button>
+            ) : null}
+            </div>
+            {/* Descuento al final (derecha). `marginLeft: auto` lo empuja al
+                borde sin depender del `justify-content` de op-sub en globals.css
+                (Turbopack lo cachea y no lo recompila de forma confiable). */}
+            {onDescuento ? (
+              <button
+                type="button"
+                className="btn-link"
+                onClick={onDescuento}
+                style={{ color: "#c2410c", marginLeft: "auto" }}
+              >
+                <BadgePercentIcon />
+                {item.descuentoInput ? "Editar descuento" : "Descuento"}
               </button>
             ) : null}
           </div>
@@ -3723,6 +3784,37 @@ function roundVisibleCurrency(value: number) {
   return Math.round(value);
 }
 
+/** Input crudo de un descuento comercial (lo que pide el vendedor). */
+type DescuentoInput = { tipo: "PORCENTAJE" | "MONTO"; valor: number };
+
+/**
+ * Margen efectivo por debajo del cual se avisa al aplicar un descuento. Es sólo
+ * un aviso blando; el gate duro con aprobación por umbral es F2
+ * (`aprobacionDescuentoMaxPct`). Ver docs/descuentos-diseno.md §10.
+ */
+const DESCUENTO_MARGEN_ALERTA_PCT = 15;
+
+/**
+ * Neto de LISTA de la línea (antes del descuento): base para prorratear un
+ * descuento de orden por peso. Cae al neto normal / subtotal en snapshots que
+ * no traen el bloque de descuento.
+ */
+function netoListaDeItem(item: PropuestaItem): number {
+  const desglose = item.cotizacion.desglosePrecio;
+  return (
+    desglose?.descuento?.netoListaTotal ??
+    desglose?.precioNetoTotal ??
+    item.subtotal ??
+    0
+  );
+}
+
+/** Monto del descuento ya resuelto por el motor para la línea (0 si no hubo). */
+function descuentoMontoDeItem(item: PropuestaItem): number {
+  const descuento = item.cotizacion.desglosePrecio?.descuento;
+  return descuento?.aplicado ? descuento.montoTotal : 0;
+}
+
 function getItemOrderVisibleAmounts(item: PropuestaItem) {
   const impuestosResumen = getImpuestosItemResumen(item);
   const subtotal = roundVisibleCurrency(item.subtotal + impuestosResumen.ocultos);
@@ -3955,6 +4047,7 @@ export function ResumenBar({
   emitiendo = false,
   onGuardarBorrador,
   guardandoBorrador = false,
+  onDescuentoOrden,
   readOnly = false,
 }: {
   items: PropuestaItem[];
@@ -3967,6 +4060,8 @@ export function ResumenBar({
   emitiendo?: boolean;
   onGuardarBorrador?: () => void;
   guardandoBorrador?: boolean;
+  /** Abre el modal de descuento a nivel orden (ausente en modo lectura). */
+  onDescuentoOrden?: () => void;
   readOnly?: boolean;
 }) {
   const { moneda } = useConfigRegional();
@@ -3993,8 +4088,16 @@ export function ResumenBar({
 
   // Las comisiones ya están dentro del subtotal (son parte del precio): no se
   // muestran como línea aparte ni en la barra ni en el desglose del item.
+  // Descuento comercial total: suma de lo que resolvió el motor por línea. El
+  // subtotal de arriba YA está descontado (el motor lo restó del neto); esta
+  // línea es informativa, para que el precio de lista quede a la vista.
+  const descuentoTotal = items.reduce(
+    (acc, item) => acc + descuentoMontoDeItem(item),
+    0,
+  );
   const brk = [
     { k: "Subtotal", v: subtotal },
+    { k: "Descuento", v: -descuentoTotal },
     { k: "Impuestos", v: impuestosVisibles },
     { k: "Cargos", v: cargos },
   ];
@@ -4022,7 +4125,7 @@ export function ResumenBar({
           {brk.map((c) => (
             <span
               key={c.k}
-              className={`${resumenBar.cell}${c.v > 0 ? "" : ` ${resumenBar.zero}`}`}
+              className={`${resumenBar.cell}${c.v !== 0 ? "" : ` ${resumenBar.zero}`}`}
             >
               <span className={resumenBar.cellK}>{c.k}</span>
               <span className={resumenBar.cellV}>{fmt(c.v)}</span>
@@ -4031,6 +4134,23 @@ export function ResumenBar({
         </span>
         {readOnly ? null : (
           <span className={resumenBar.acts}>
+            {onDescuentoOrden ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={onDescuentoOrden}
+                disabled={emitiendo || items.length === 0}
+                aria-label="Aplicar un descuento a toda la orden"
+                title={
+                  descuentoTotal > 0
+                    ? "Descuento aplicado — editar"
+                    : "Aplicar un descuento a toda la orden"
+                }
+                style={{ color: "#c2410c" }}
+              >
+                <BadgePercentIcon />
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn"
@@ -4418,6 +4538,240 @@ function CargoOrdenSheet({
   );
 }
 
+/** Qué se va a descontar: abierto desde una fila (item) o desde la barra (orden). */
+type DescuentoTarget = { scope: "item" | "orden"; itemId: string | null };
+
+/**
+ * Modal de descuento comercial (F1). Alcance item u orden, % o monto. El preview
+ * es sólo monetario (neto de lista → descontado); el margen efectivo y su aviso
+ * los resuelve el motor al aplicar (recotización). Ver §10 del diseño.
+ */
+function DescuentoModal({
+  target,
+  items,
+  aplicando,
+  onClose,
+  onApply,
+}: {
+  /** null = cerrado. `scope`/`itemId` fijan el estado inicial del formulario. */
+  target: DescuentoTarget | null;
+  /** Sólo los items recotizables (con jobContext + motor). */
+  items: PropuestaItem[];
+  aplicando: boolean;
+  onClose: () => void;
+  onApply: (
+    scope: "item" | "orden",
+    targetItemId: string | null,
+    descuento: DescuentoInput | null,
+  ) => void;
+}) {
+  const { moneda } = useConfigRegional();
+  const [tipo, setTipo] = React.useState<"PORCENTAJE" | "MONTO">("PORCENTAJE");
+  const [valor, setValor] = React.useState(0);
+  const abierto = target != null;
+
+  // Ref con los items para leerlos en el efecto de init sin volverlo a disparar.
+  const itemsRefDescuento = React.useRef(items);
+  itemsRefDescuento.current = items;
+
+  // El alcance y el item los fija el punto de entrada (la fila o la barra), no el
+  // usuario. Init en el flanco de apertura: precarga tipo/valor desde el descuento
+  // existente del objetivo (o de cualquiera, si es a nivel orden) para editarlo.
+  React.useEffect(() => {
+    if (!target) return;
+    const itemsRecotizables = itemsRefDescuento.current;
+    const ref =
+      target.scope === "item"
+        ? itemsRecotizables.find((item) => item.id === target.itemId)
+        : itemsRecotizables.find((item) => item.descuentoInput);
+    if (ref?.descuentoInput) {
+      setTipo(ref.descuentoInput.tipo);
+      setValor(ref.descuentoInput.valor);
+    } else {
+      setTipo("PORCENTAJE");
+      setValor(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.scope, target?.itemId]);
+
+  React.useEffect(() => {
+    if (!abierto) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [abierto, onClose]);
+
+  if (!abierto) return null;
+
+  const scope = target.scope;
+  const itemObjetivo =
+    scope === "item"
+      ? (items.find((item) => item.id === target.itemId) ?? null)
+      : null;
+  const objetivoLabel =
+    scope === "item"
+      ? (itemObjetivo?.productoNombre ?? "Producto")
+      : `Toda la orden · ${items.length} ${items.length === 1 ? "producto" : "productos"}`;
+  const netoLista =
+    scope === "item"
+      ? itemObjetivo
+        ? netoListaDeItem(itemObjetivo)
+        : 0
+      : items.reduce((acc, item) => acc + netoListaDeItem(item), 0);
+  const descuentoInput: DescuentoInput | null =
+    valor > 0 ? { tipo, valor } : null;
+  // Preview monetario (no es la matemática de precio del motor, sólo la resta
+  // sobre el neto de lista para que el vendedor vea el orden de magnitud).
+  const montoPreview =
+    tipo === "PORCENTAJE"
+      ? (netoLista * Math.min(Math.max(valor, 0), 100)) / 100
+      : Math.min(Math.max(valor, 0), netoLista);
+  const netoDescontado = Math.max(0, netoLista - montoPreview);
+  const hayDescuentoActivo =
+    scope === "item"
+      ? Boolean(itemObjetivo?.descuentoInput)
+      : items.some((item) => item.descuentoInput);
+
+  const handleApply = () => {
+    if (scope === "item" && !itemObjetivo) {
+      toast.error("No se pudo identificar el producto a descontar.");
+      return;
+    }
+    if (!descuentoInput) {
+      toast.error("Ingresá un descuento mayor a cero.");
+      return;
+    }
+    if (tipo === "PORCENTAJE" && valor > 100) {
+      toast.error("El porcentaje no puede superar el 100%.");
+      return;
+    }
+    onApply(scope, scope === "item" ? target.itemId : null, descuentoInput);
+  };
+
+  return (
+    <div className={descM.overlay} onClick={onClose}>
+      <div
+        className={descM.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Aplicar descuento"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          className={descM.close}
+          onClick={onClose}
+          aria-label="Cerrar"
+        >
+          <XIcon />
+        </button>
+
+        <div className={descM.head}>
+          <span className={descM.ico}>
+            <BadgePercentIcon />
+          </span>
+          <div>
+            <h2>Aplicar descuento</h2>
+            <div className={descM.sub}>
+              Reduce la base antes de impuestos. El costo no baja: come margen.
+            </div>
+          </div>
+        </div>
+
+        <div className={descM.body}>
+          <div className={descM.target}>
+            <span className={descM.targetLbl}>Descuento para</span>
+            <strong>{objetivoLabel}</strong>
+          </div>
+
+          <div className={descM.grid2}>
+            <div className={descM.field}>
+              <label>Tipo</label>
+              <select
+                value={tipo}
+                onChange={(event) =>
+                  setTipo(event.target.value as "PORCENTAJE" | "MONTO")
+                }
+              >
+                <option value="PORCENTAJE">Porcentaje (%)</option>
+                <option value="MONTO">Monto ($)</option>
+              </select>
+            </div>
+            <div className={descM.field}>
+              <label>{tipo === "PORCENTAJE" ? "Porcentaje" : "Monto neto"}</label>
+              <input
+                type="number"
+                min="0"
+                step={tipo === "PORCENTAJE" ? "0.5" : "1"}
+                max={tipo === "PORCENTAJE" ? "100" : undefined}
+                value={valor}
+                onChange={(event) => setValor(Number(event.target.value) || 0)}
+              />
+            </div>
+          </div>
+
+          <div className={descM.calc}>
+            <div>
+              <span className={descM.lbl}>Neto de lista</span>
+              <strong>{formatCurrency(netoLista, moneda)}</strong>
+            </div>
+            <div className={descM.neg}>
+              <span className={descM.lbl}>Descuento</span>
+              <strong>−{formatCurrency(montoPreview, moneda)}</strong>
+            </div>
+            <div>
+              <span className={descM.lbl}>Neto con descuento</span>
+              <strong>{formatCurrency(netoDescontado, moneda)}</strong>
+            </div>
+          </div>
+
+          <div className={descM.note}>
+            {scope === "orden"
+              ? tipo === "MONTO"
+                ? "Se reparte entre los productos según su peso."
+                : "Se aplica el mismo porcentaje a cada producto."
+              : "El margen resultante se recalcula al aplicar."}
+            <small>
+              Impuestos y comisiones se recalculan sobre el neto descontado.
+            </small>
+          </div>
+        </div>
+
+        <div className={descM.foot}>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancelar
+          </button>
+          {hayDescuentoActivo ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={aplicando}
+              onClick={() =>
+                onApply(scope, scope === "item" ? target.itemId : null, null)
+              }
+            >
+              <Trash2Icon />
+              Quitar
+            </button>
+          ) : null}
+          <div className={descM.spacer} />
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleApply}
+            disabled={aplicando || items.length === 0}
+          >
+            <BadgePercentIcon />
+            {aplicando ? "Aplicando…" : "Aplicar descuento"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────── Rehidratación (modo orden) ───────────
    OrdenTrabajoProducto → PropuestaItem: la OT emitida se muestra con esta
    misma ficha. Specs persistidas → schema sintético (mismas filas que vio el
@@ -4441,8 +4795,18 @@ function itemToOrdenItemPayload(
   cotizacionItemId: string | undefined,
 ) {
   const amounts = getItemOrderVisibleAmounts(item);
+  // El descuento YA está dentro de `subtotal` (el motor lo aplicó sobre el
+  // neto): estos campos son la traza persistida (tipo/valor que pidió el
+  // comercial + el monto que resolvió el motor), no se vuelven a restar.
+  const descuento = item.cotizacion.desglosePrecio?.descuento;
   return {
     cotizacionItemId,
+    descuentoTipo: item.descuentoInput?.tipo ?? null,
+    descuentoValor: item.descuentoInput?.valor ?? null,
+    descuentoMonto:
+      item.descuentoInput && descuento?.aplicado
+        ? Math.round(descuento.montoTotal)
+        : null,
     codigo: item.productoCodigo,
     nombre: item.productoNombre,
     familia:
@@ -4548,6 +4912,7 @@ function rehidratarOrdenItem(
   // muestra márgenes absurdos (precioBase=0 ⇒ margen = −costo).
   const cantidadPricing =
     resumen?.ejecucion?.cantidadComercialPricing ?? producto.cantidad;
+  const descuentoMontoPersistido = Math.max(0, producto.descuentoMonto ?? 0);
   const netoUnit =
     cantidadPricing > 0 ? producto.subtotal / cantidadPricing : 0;
   const brutoUnit =
@@ -4635,14 +5000,19 @@ function rehidratarOrdenItem(
           precioBrutoUnitario: brutoUnit,
           precioNetoTotal: producto.subtotal,
           precioBrutoTotal: snap.precioTotal ?? producto.total,
-          // Snapshot histórico sin descuento: no-op (el neto de lista es el
-          // propio neto). En F1.3 se rehidrata desde el descuento persistido.
+          // Descuento persistido (F1.3 escribió tipo/valor/monto en el item). El
+          // subtotal ya viene descontado, así que el neto de LISTA se reconstruye
+          // sumándole el monto. Sin descuento persistido, no-op (lista = neto).
           descuento: {
-            aplicado: false,
-            montoUnitario: 0,
-            montoTotal: 0,
-            netoListaUnitario: netoUnit,
-            netoListaTotal: producto.subtotal,
+            aplicado: descuentoMontoPersistido > 0,
+            montoUnitario:
+              cantidadPricing > 0 ? descuentoMontoPersistido / cantidadPricing : 0,
+            montoTotal: descuentoMontoPersistido,
+            netoListaUnitario:
+              cantidadPricing > 0
+                ? (producto.subtotal + descuentoMontoPersistido) / cantidadPricing
+                : netoUnit,
+            netoListaTotal: producto.subtotal + descuentoMontoPersistido,
           },
         } as NonNullable<CotizacionPropuestaSnapshot["desglosePrecio"]>)
       : undefined,
@@ -4688,6 +5058,11 @@ function rehidratarOrdenItem(
     adicionales: producto.adicionales,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
     jobContext: (snap?.jobContext as Record<string, unknown>) ?? undefined,
+    // Descuento que aplicó el vendedor (para reeditarlo si se recotiza el ítem).
+    descuentoInput:
+      producto.descuentoTipo && producto.descuentoValor != null
+        ? { tipo: producto.descuentoTipo, valor: producto.descuentoValor }
+        : undefined,
   };
 }
 
@@ -4813,6 +5188,9 @@ export function PropuestaFicha({
     PropuestaItem[] | null
   >(null);
   const [cargoOpen, setCargoOpen] = React.useState(false);
+  const [descuentoTarget, setDescuentoTarget] =
+    React.useState<DescuentoTarget | null>(null);
+  const [descuentoAplicando, setDescuentoAplicando] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(
     null,
   );
@@ -5227,6 +5605,7 @@ export function PropuestaFicha({
         jobContext: item.jobContext as never,
         clienteId: clienteId || null,
         periodo: getCurrentPeriodo(),
+        descuento: item.descuentoInput ?? undefined,
       };
       let cotizacionItemId = item.cotizacionItemId;
       if (cotizacionItemId) {
@@ -5931,6 +6310,7 @@ export function PropuestaFicha({
               jobContext: item.jobContext as never,
               clienteId: targetClienteId || null,
               periodo: getCurrentPeriodo(),
+              descuento: item.descuentoInput ?? undefined,
             };
             const response = item.cotizacionItemId
               ? await recotizarCotizacionItem(item.cotizacionItemId, request)
@@ -5997,6 +6377,164 @@ export function PropuestaFicha({
       }
     },
     [],
+  );
+
+  // ── Descuento comercial (F1) ──────────────────────────────────────────────
+  // Enfoque A del diseño: el motor es la autoridad. El front sólo manda el
+  // descuento en la (re)cotización y muestra lo que vuelve; no duplica la
+  // matemática de precio. Un descuento de ORDEN se materializa por item
+  // (prorrateado si es monto), así todo colapsa a un descuento por línea que
+  // sobrevive a los recálculos vía `PropuestaItem.descuentoInput`.
+
+  /** Recotiza UNA línea con el descuento dado; devuelve el item actualizado. */
+  const recotizarItemConDescuento = React.useCallback(
+    async (
+      item: PropuestaItem,
+      descuentoInput: DescuentoInput | null,
+    ): Promise<PropuestaItem | null> => {
+      if (!item.jobContext || !item.motorCodigo) return null;
+      const request = {
+        rutaAlternativaId: item.rutaAlternativaId ?? null,
+        jobContext: item.jobContext as never,
+        clienteId: clienteId || null,
+        periodo: getCurrentPeriodo(),
+        descuento: descuentoInput ?? undefined,
+      };
+      const response = item.cotizacionItemId
+        ? await recotizarCotizacionItem(item.cotizacionItemId, request)
+        : {
+            result: await cotizar({
+              productoId: item.motorCodigo,
+              ...request,
+            }),
+            cotizacionItemId: undefined as string | undefined,
+          };
+      if (!response.result.exitoso || !response.result.cotizacion) {
+        throw new Error(
+          response.result.errores?.[0]?.mensaje ??
+            `No se pudo aplicar el descuento a "${item.productoNombre}".`,
+        );
+      }
+      const updated = applyCotizacionToItem(
+        item,
+        response.result.cotizacion,
+        item.jobContext as Record<string, unknown>,
+      );
+      return {
+        ...updated,
+        descuentoInput: descuentoInput ?? undefined,
+        cotizacionItemId: response.cotizacionItemId ?? item.cotizacionItemId,
+      };
+    },
+    [clienteId],
+  );
+
+  /**
+   * Aplica (o quita, con `descuentoInput = null`) un descuento. Alcance `item`
+   * toca una línea; alcance `orden` reparte a TODAS: un % se copia igual a cada
+   * una (es escala-libre), un monto se prorratea por peso del neto de lista y
+   * el último item absorbe el residuo para cuadrar exacto.
+   */
+  const aplicarDescuento = React.useCallback(
+    async (
+      scope: "item" | "orden",
+      targetItemId: string | null,
+      descuentoInput: DescuentoInput | null,
+    ) => {
+      const recotizables = itemsRef.current.filter(
+        (item) => item.jobContext && item.motorCodigo,
+      );
+      if (recotizables.length === 0) {
+        toast.error("No hay productos con datos para aplicar un descuento.");
+        return;
+      }
+
+      let plan: Array<{ item: PropuestaItem; descuento: DescuentoInput | null }>;
+      if (scope === "item") {
+        const target = recotizables.find((item) => item.id === targetItemId);
+        if (!target) {
+          toast.error("No se pudo identificar el producto a descontar.");
+          return;
+        }
+        plan = [{ item: target, descuento: descuentoInput }];
+      } else if (!descuentoInput || descuentoInput.tipo === "PORCENTAJE") {
+        plan = recotizables.map((item) => ({ item, descuento: descuentoInput }));
+      } else {
+        const pesos = recotizables.map((item) => netoListaDeItem(item));
+        const totalPeso = pesos.reduce((acc, peso) => acc + peso, 0);
+        const monto = Math.max(0, descuentoInput.valor);
+        let repartido = 0;
+        plan = recotizables.map((item, index) => {
+          let share: number;
+          if (totalPeso <= 0) {
+            share = 0;
+          } else if (index === recotizables.length - 1) {
+            share = Math.max(0, Math.round(monto - repartido));
+          } else {
+            share = Math.round((monto * pesos[index]) / totalPeso);
+            repartido += share;
+          }
+          return {
+            item,
+            descuento: share > 0 ? { tipo: "MONTO" as const, valor: share } : null,
+          };
+        });
+      }
+
+      setDescuentoAplicando(true);
+      try {
+        const results = await Promise.all(
+          plan.map(async ({ item, descuento }) => {
+            try {
+              return {
+                id: item.id,
+                updated: await recotizarItemConDescuento(item, descuento),
+              };
+            } catch {
+              return { id: item.id, updated: null as PropuestaItem | null };
+            }
+          }),
+        );
+        const actualizados = new Map<string, PropuestaItem>();
+        let fallidos = 0;
+        for (const result of results) {
+          if (result.updated) actualizados.set(result.id, result.updated);
+          else fallidos += 1;
+        }
+        if (actualizados.size > 0) {
+          setItems((current) =>
+            current.map((candidate) => actualizados.get(candidate.id) ?? candidate),
+          );
+        }
+
+        if (fallidos > 0) {
+          toast.warning(
+            `${fallidos} producto${fallidos === 1 ? "" : "s"} no se pudo recotizar con el descuento.`,
+          );
+        } else if (descuentoInput == null) {
+          toast.success("Descuento quitado.");
+        } else {
+          toast.success("Descuento aplicado.");
+        }
+
+        // Aviso blando de margen bajo (el gate duro por umbral llega en F2).
+        if (descuentoInput != null && actualizados.size > 0) {
+          const margenes = [...actualizados.values()]
+            .filter((item) => descuentoMontoDeItem(item) > 0)
+            .map((item) => item.cotizacion.desglosePrecio?.margenEfectivoPct ?? 0);
+          const minMargen = margenes.length ? Math.min(...margenes) : null;
+          if (minMargen != null && minMargen < DESCUENTO_MARGEN_ALERTA_PCT) {
+            toast.warning(
+              `El margen queda en ${minMargen.toLocaleString("es-AR", { maximumFractionDigits: 1 })}% en el producto más ajustado. Revisá antes de emitir.`,
+            );
+          }
+        }
+        setDescuentoTarget(null);
+      } finally {
+        setDescuentoAplicando(false);
+      }
+    },
+    [recotizarItemConDescuento],
   );
 
   React.useEffect(() => {
@@ -6077,6 +6615,7 @@ export function PropuestaFicha({
         jobContext: nextJobContext as never,
         clienteId: clienteId || null,
         periodo: getCurrentPeriodo(),
+        descuento: item.descuentoInput ?? undefined,
       };
       const response = item.cotizacionItemId
         ? await recotizarCotizacionItem(item.cotizacionItemId, request)
@@ -6585,6 +7124,15 @@ export function PropuestaFicha({
                           : undefined
                         : () => abrirEdicion(item)
                     }
+                    onDescuento={
+                      !modoOrden && item.jobContext && item.motorCodigo
+                        ? () =>
+                            setDescuentoTarget({
+                              scope: "item",
+                              itemId: item.id,
+                            })
+                        : undefined
+                    }
                     onVerPrecios={
                       esCentroCopiado(item)
                         ? () => setPreciosOpen(true)
@@ -6832,6 +7380,11 @@ export function PropuestaFicha({
                 : void guardarBorrador()
             }
             guardandoBorrador={guardandoBorrador}
+            onDescuentoOrden={
+              modoOrden
+                ? undefined
+                : () => setDescuentoTarget({ scope: "orden", itemId: null })
+            }
             readOnly={modoOrden}
           />
         ) : null}
@@ -6918,11 +7471,42 @@ export function PropuestaFicha({
           focusProductRow(item.id);
         }}
         onSaveItem={(item) => {
-          setItems((current) =>
-            current.map((candidate) =>
-              candidate.id === item.id ? item : candidate,
-            ),
-          );
+          // El sheet recotiza SIN descuento: si la línea tenía uno, se reaplica
+          // sobre la nueva config (recotización) para no perderlo.
+          const descuentoPrevio =
+            items.find((candidate) => candidate.id === item.id)
+              ?.descuentoInput ?? null;
+          if (descuentoPrevio) {
+            void recotizarItemConDescuento(item, descuentoPrevio)
+              .then((actualizado) =>
+                setItems((current) =>
+                  current.map((candidate) =>
+                    candidate.id === item.id
+                      ? (actualizado ?? {
+                          ...item,
+                          descuentoInput: descuentoPrevio,
+                        })
+                      : candidate,
+                  ),
+                ),
+              )
+              .catch(() => {
+                setItems((current) =>
+                  current.map((candidate) =>
+                    candidate.id === item.id ? item : candidate,
+                  ),
+                );
+                toast.warning(
+                  "El producto se guardó, pero no se pudo reaplicar el descuento. Volvé a cargarlo.",
+                );
+              });
+          } else {
+            setItems((current) =>
+              current.map((candidate) =>
+                candidate.id === item.id ? item : candidate,
+              ),
+            );
+          }
           if (modoOrden && persistedItemIds.has(item.id)) {
             // Marca el item persistido como editado en el staging.
             setEditadosIds((prev) => new Set(prev).add(item.id));
@@ -6975,6 +7559,15 @@ export function PropuestaFicha({
           setCargoOpen(false);
           toast.success(`${cargo.nombreSnapshot} agregado a la orden.`);
         }}
+      />
+      <DescuentoModal
+        target={descuentoTarget}
+        items={items.filter((item) => item.jobContext && item.motorCodigo)}
+        aplicando={descuentoAplicando}
+        onClose={() => setDescuentoTarget(null)}
+        onApply={(scope, targetItemId, descuento) =>
+          void aplicarDescuento(scope, targetItemId, descuento)
+        }
       />
       {panelEditor ? (
         <PanelesManualEditor

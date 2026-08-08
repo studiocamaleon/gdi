@@ -3213,9 +3213,25 @@ export class OrdenesTrabajoService {
           categoriaComercial?: string;
           subcategoriaComercial?: string;
         };
+        const itemDescuento = item as typeof item & {
+          descuentoTipo?: 'PORCENTAJE' | 'MONTO' | null;
+          descuentoValor?: unknown;
+          descuentoMonto?: unknown;
+        };
         return {
           id: item.id,
           cotizacionItemId: item.cotizacionItemId,
+          // Descuento comercial persistido (F1): para rehidratar la ficha con el
+          // mismo descuento que aplicó el vendedor. Ver descuentos-diseno.md §10.
+          descuentoTipo: itemDescuento.descuentoTipo ?? null,
+          descuentoValor:
+            itemDescuento.descuentoValor != null
+              ? Number(itemDescuento.descuentoValor)
+              : null,
+          descuentoMonto:
+            itemDescuento.descuentoMonto != null
+              ? Number(itemDescuento.descuentoMonto)
+              : null,
           codigo: item.codigo,
           nombre: item.nombre,
           familia: item.familia,

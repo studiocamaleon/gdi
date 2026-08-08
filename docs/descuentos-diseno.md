@@ -1,7 +1,7 @@
 # Descuentos — diseño
 
-Estado: **F1 backend implementado y testeado; falta F1.4 (front UI).**
-Rama `feat/descuentos`. Ver §10 para el estado de implementación y el handoff.
+Estado: **F1 completo (backend + front UI). Falta verificación interactiva en
+el navegador.** Rama `feat/descuentos`. Ver §10 para el detalle.
 
 Objetivo: poder aplicar descuentos en una cotización / OT. Varios tipos:
 **por % o monto**, sobre **un item** o sobre **la orden**, y por **cupón de
@@ -328,9 +328,56 @@ muestra lo que vuelve (no duplica matemática de precio).
 **Todo lo anterior está inerte hasta que el front mande un descuento.** Verificado:
 API tsc + front tsc + `aplicar-precio`/`cotizar-dto`/`costos-orden` specs verdes.
 
-### ⏳ F1.4 — Front UI (PENDIENTE — la parte a probar en el browser)
+### ✅ F1.4 — Front UI (implementado; falta smoke test en el browser)
 
-Todo en `src/components/comercial/propuesta-ficha.tsx` (+ helpers).
+Todo en `src/components/comercial/propuesta-ficha.tsx` salvo el read del API.
+Modelo elegido: **todo colapsa a un descuento por línea** (`PropuestaItem
+.descuentoInput = { tipo, valor }`). El descuento de ORDEN no es un eje aparte:
+se materializa por item (un % se copia igual a cada línea; un monto se prorratea
+por peso del neto de lista y el último item absorbe el residuo). Así sobrevive a
+cualquier recotización sin matemática duplicada — el motor sigue siendo la única
+autoridad.
+
+Lo implementado (mapea 1:1 con los pasos de abajo):
+1. **Estado** `descuentoInput` en `PropuestaItem` (propuestas.ts). Se enhebra en
+   TODA (re)cotización: `persistirItemOrden`, `recotizarItemsPorCliente`,
+   `recotizarPaneles` y el nuevo `recotizarItemConDescuento`. `applyCotizacionToItem`
+   lo preserva por spread.
+2. **Aplicar = recotizar**: `recotizarItemConDescuento` (una línea) +
+   `aplicarDescuento(scope, itemId, input|null)` (item u orden con prorrateo).
+3. **Modal**: `DescuentoModal` (centrado, módulo propio `descuento-modal.module.css`
+   al estilo del modal de acomodado). Es `target`-driven: se abre **por fila**
+   (acción "Descuento" junto a "Editar especificaciones", `scope=item`) o **desde
+   la barra de resumen de abajo** (botón "Descuento", `scope=orden`). Alcance
+   editable, tipo %/$, preview monetario (neto de lista → descontado).
+4. **Mostrarlo**: en la fila con descuento, la celda **Subtotal** muestra el
+   precio de lista tachado → el descontado + un tag `−%`/`−$` (clases del módulo
+   de descuento, sin globales nuevas). Además: línea "Descuento −$X" en
+   `ResumenBar` (informativa; el total ya viene descontado) y banda "Precio de
+   lista … → neto" en el detalle expandido del item.
+5. **Emisión**: `itemToOrdenItemPayload` manda `descuentoTipo/Valor/Monto`
+   (monto = `desglosePrecio.descuento.montoTotal`). El DTO ya los aceptaba.
+6. **Rehidratar**: el read staff del API (`ordenes-trabajo.service.ts` `toDetalle`)
+   ahora expone `descuentoTipo/Valor/Monto`; `OrdenTrabajoProducto` +
+   `CrearOrdenTrabajoItemPayload` los tipan; `rehidratarOrdenItem` reconstruye el
+   bloque `desglosePrecio.descuento` (neto de lista = subtotal + monto) y setea
+   `descuentoInput`. Editar un producto reaplica su descuento (el sheet de alta
+   recotiza sin él).
+
+Verificado: `tsc` front + API, `css:guard`, specs del motor (45). **Pendiente el
+smoke test interactivo** (crear propuesta → aplicar descuento → ver resumen/detalle
+→ emitir/rehidratar): bloqueado por login + Wati vivo en dev (emitir dispara
+WhatsApps reales).
+
+Desviaciones conscientes respecto del plan original:
+- **Margen resultante**: en vez de un preview en vivo dentro del sheet (que
+  duplicaría la matemática del motor), el sheet muestra el preview monetario y el
+  aviso de margen bajo sale como toast al aplicar (umbral `DESCUENTO_MARGEN_ALERTA_PCT`
+  = 15; el gate duro por umbral es F2).
+- **Motivo**: no se implementó — la migración F1.3 no agregó columna. Sumar
+  `descuentoMotivo` (migración aditiva + DTO + read) queda para un follow-up.
+
+### F1.4 — texto original del handoff (referencia)
 
 1. **Estado del descuento por item + de orden.** Guardar en el estado del item
    (o un `Map itemId→descuento`) `{ tipo, valor }`. El de orden se **prorratea a

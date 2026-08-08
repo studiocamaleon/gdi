@@ -1,0 +1,278 @@
+/* Modal de descuento comercial (F1). Overlay + card centrada, al estilo del
+   modal de acomodado de pliegos. Ver docs/descuentos-diseno.md §10. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 20, 26, 0.4);
+  animation: descFade 0.12s ease;
+}
+
+@keyframes descFade {
+  from {
+    opacity: 0;
+  }
+}
+
+.modal {
+  position: relative;
+  width: 420px;
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px -12px rgba(20, 20, 26, 0.35);
+  animation: descRise 0.14s ease;
+}
+
+@keyframes descRise {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted, #6e6e76);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-2, #fafaf9);
+  color: var(--ink, #14141a);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--hairline, #f0efec);
+}
+
+.ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  background: var(--surface-2, #fafaf9);
+  color: var(--ink, #14141a);
+}
+
+.ico svg {
+  width: 18px;
+  height: 18px;
+}
+
+.head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink, #14141a);
+}
+
+.head .sub {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted, #6e6e76);
+}
+
+.body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #6e6e76);
+}
+
+.field select,
+.field input {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--ink, #14141a);
+  font-size: 14px;
+}
+
+.field select:focus,
+.field input:focus {
+  outline: none;
+  border-color: var(--ink, #14141a);
+}
+
+/* Objetivo del descuento (fijado por el punto de entrada, sólo lectura). */
+.target {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 10px;
+  background: var(--surface-2, #fafaf9);
+}
+
+.targetLbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #6e6e76);
+}
+
+.target strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink, #14141a);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Tarjeta de cálculo: neto de lista → descuento → neto descontado. */
+.calc {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--border, #e7e5e2);
+}
+
+.calc > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  background: var(--surface-2, #fafaf9);
+}
+
+.calc .lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #6e6e76);
+}
+
+.calc strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink, #14141a);
+}
+
+.calc .neg strong {
+  color: #b91c1c;
+}
+
+.note {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted, #6e6e76);
+}
+
+.note small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted, #6e6e76);
+  opacity: 0.85;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--hairline, #f0efec);
+}
+
+.foot .spacer {
+  flex: 1;
+}
+
+/* ── Badge de la fila con descuento (celda Subtotal de la tabla de items) ──
+   El precio con descuento queda en el flujo (centrado, alineado con Cantidad/
+   Imp./Total); la lista tachada flota por encima sin correr la línea base. */
+.cellDesc {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.cellRow {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.cellLista {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 1px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted, #6e6e76);
+  text-decoration: line-through;
+  white-space: nowrap;
+}
+
+.cellTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(185, 28, 28, 0.1);
+  color: #b91c1c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.cellTag svg {
+  width: 10px;
+  height: 10px;
+}

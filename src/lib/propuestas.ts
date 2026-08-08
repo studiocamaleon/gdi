@@ -48,6 +48,14 @@ export type PropuestaItem = {
   notaProduccion?: string;
   rutaAlternativaId?: string | null;
   jobContext?: Record<string, unknown>;
+  /**
+   * Descuento comercial que el vendedor aplicó a ESTA línea. Sólo el input
+   * ({ tipo, valor }); el efecto (monto, neto de lista, margen resultante) lo
+   * calcula el motor y vuelve en `cotizacion.desglosePrecio.descuento`. Se
+   * manda en cada (re)cotización para que sobreviva a los recálculos y se
+   * persiste al emitir. Un descuento de ORDEN se materializa acá, prorrateado.
+   */
+  descuentoInput?: { tipo: "PORCENTAJE" | "MONTO"; valor: number } | null;
   atributosSchema: Array<{
     key: string;
     label: string;

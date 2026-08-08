@@ -17,6 +17,14 @@ import type {
 
 export type CrearOrdenTrabajoItemPayload = {
   cotizacionItemId?: string;
+  /**
+   * Descuento comercial de la línea (F1 descuentos). `tipo`/`valor` = lo que
+   * pidió el vendedor; `monto` = lo que resolvió el motor (ya restado dentro de
+   * `subtotal`, no se descuenta de nuevo). Ver docs/descuentos-diseno.md §10.
+   */
+  descuentoTipo?: "PORCENTAJE" | "MONTO" | null;
+  descuentoValor?: number | null;
+  descuentoMonto?: number | null;
   codigo: string;
   nombre: string;
   familia: string;

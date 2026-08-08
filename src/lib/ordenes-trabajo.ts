@@ -170,6 +170,14 @@ export type OrdenTrabajoProducto = {
   /** Id del OrdenTrabajoItem persistido (para editar/quitar). */
   id?: string;
   cotizacionItemId?: string | null;
+  /**
+   * Descuento comercial persistido en el `OrdenTrabajoItem` (F1 descuentos).
+   * `tipo`/`valor` = lo que pidió el vendedor; `monto` = lo que resolvió el
+   * motor (ya restado dentro de `subtotal`). Para rehidratar la ficha.
+   */
+  descuentoTipo?: "PORCENTAJE" | "MONTO" | null;
+  descuentoValor?: number | null;
+  descuentoMonto?: number | null;
   codigo: string;
   nombre: string;
   /** Etiqueta corta legada (subcategoría). Preferir los campos de abajo. */
