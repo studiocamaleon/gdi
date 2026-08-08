@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  calcularCostoItem,
   consolidarCostosOrden,
   cruzarRealVsCotizado,
   reconciliarComisionPasarela,
@@ -420,5 +421,84 @@ describe("reconciliarComisionPasarela", () => {
     expect(r.cobradoBruto).toBe(1000);
     expect(r.saldada).toBe(true);
     expect(r.margenAjustadoMonto).toBe(350); // 300 + (80 - 30)
+  });
+});
+
+/**
+ * El waterfall de Costos tiene que contar la verdad DESPUÉS del descuento: el
+ * costo no baja, así que un descuento sale íntegro del margen. Nadie debería
+ * poder mirar el tab Costos de una línea descontada y ver el margen de lista.
+ *
+ * Estos números salen del mismo item de arriba (neto 1000, costo 400, margen
+ * 60%) recotizado con −20%: el motor devuelve neto 800 y precioBase 800.
+ */
+describe("calcularCostoItem con descuento aplicado", () => {
+  const conDescuento = () => {
+    const base = item();
+    const desglose = base.cotizacion.desglosePrecio!;
+    return {
+      ...base,
+      // Lo que devuelve el motor tras recotizar con −20%.
+      subtotal: 800,
+      impuestoMonto: 168,
+      total: 968,
+      cotizacion: {
+        ...base.cotizacion,
+        desglosePrecio: {
+          ...desglose,
+          precioBase: 800,
+          totalImpuestos: 168,
+          margenEfectivoPct: 50,
+          precioNetoUnitario: 800,
+          precioBrutoUnitario: 968,
+          precioNetoTotal: 800,
+          precioBrutoTotal: 968,
+          descuento: {
+            aplicado: true,
+            montoUnitario: 200,
+            montoTotal: 200,
+            netoListaUnitario: 1000,
+            netoListaTotal: 1000,
+          },
+        },
+      },
+    } as PropuestaItem;
+  };
+
+  it("el margen baja: el descuento sale entero del margen, no del costo", () => {
+    const sin = calcularCostoItem(item(), 400);
+    const con = calcularCostoItem(conDescuento(), 400);
+
+    // Sin descuento: 1000 − 400 = 600 (60% del neto).
+    expect(sin.margenMonto).toBe(600);
+    expect(sin.margenPct).toBe(60);
+
+    // Con −$200: el costo sigue siendo 400, así que el margen pierde los 200
+    // completos → 400. Sobre el neto nuevo (800) eso es 50%.
+    expect(con.margenMonto).toBe(400);
+    expect(con.margenPct).toBe(50);
+    expect(sin.margenMonto - con.margenMonto).toBe(200);
+  });
+
+  it("la contribución también refleja el descuento", () => {
+    const sin = calcularCostoItem(item(), 400);
+    const con = calcularCostoItem(conDescuento(), 400);
+    expect(sin.contribucionMonto - con.contribucionMonto).toBe(200);
+  });
+
+  it("un descuento que se pasa deja el margen NEGATIVO, no en cero", () => {
+    const base = conDescuento();
+    const desglose = base.cotizacion.desglosePrecio!;
+    const regalado = {
+      ...base,
+      subtotal: 300,
+      cotizacion: {
+        ...base.cotizacion,
+        desglosePrecio: { ...desglose, precioBase: 300 },
+      },
+    } as PropuestaItem;
+    const r = calcularCostoItem(regalado, 400);
+    expect(r.margenMonto).toBe(-100);
+    expect(r.margenPct).toBeLessThan(0);
   });
 });
