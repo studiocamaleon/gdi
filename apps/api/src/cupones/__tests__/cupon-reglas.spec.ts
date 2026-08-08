@@ -81,6 +81,36 @@ describe('evaluarCupon', () => {
     expect(r).toEqual({ ok: true, alcanzadas: ['a'] });
   });
 
+  it('alcance PRODUCTO matchea por id O por código', () => {
+    // La ficha manda el uuid en `productoId` y el código aparte: un cupón
+    // pudo guardar cualquiera de los dos según cómo se creó.
+    const carritoConCodigos: ContextoCarrito = {
+      ...carrito(),
+      items: [
+        {
+          key: 'a',
+          productoId: 'uuid-1',
+          productoCodigo: 'FOLLETOS_A5',
+          neto: 50_000,
+        },
+      ],
+    };
+    for (const ref of ['uuid-1', 'FOLLETOS_A5']) {
+      expect(
+        evaluarCupon(
+          { ...base, alcanceTipo: 'PRODUCTO', alcanceRef: ref },
+          carritoConCodigos,
+        ),
+      ).toEqual({ ok: true, alcanzadas: ['a'] });
+    }
+    expect(
+      evaluarCupon(
+        { ...base, alcanceTipo: 'PRODUCTO', alcanceRef: 'otro' },
+        carritoConCodigos,
+      ).ok,
+    ).toBe(false);
+  });
+
   it('alcance SUBCATEGORIA y PRODUCTO filtran igual', () => {
     expect(
       evaluarCupon(

@@ -150,6 +150,11 @@ export class ItemCarritoDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
+  productoCodigo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   categoriaCodigo?: string;
 
   @IsOptional()

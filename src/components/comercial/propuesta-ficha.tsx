@@ -4743,6 +4743,7 @@ function DescuentoModal({
       items: items.map((item) => ({
         key: item.id,
         productoId: item.motorCodigo || undefined,
+        productoCodigo: item.productoCodigo || undefined,
         categoriaCodigo: item.categoriaComercialCodigo || undefined,
         subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
         neto: netoListaDeItem(item),
@@ -7019,6 +7020,7 @@ export function PropuestaFicha({
           items: recotizables.map((item) => ({
             key: item.id,
             productoId: item.motorCodigo || undefined,
+            productoCodigo: item.productoCodigo || undefined,
             categoriaCodigo: item.categoriaComercialCodigo || undefined,
             subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
             neto: netoListaDeItem(item),

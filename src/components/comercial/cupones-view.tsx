@@ -81,9 +81,10 @@ async function opcionesDeAlcance(
     );
   }
   if (tipo === "PRODUCTO") {
-    // El motor compara contra el CÓDIGO del producto, no contra su uuid.
+    // El ID, no el código: el item de la ficha lleva `motorCodigo =
+    // producto.id` (el uuid), que es contra lo que se compara al validar.
     const productos = await getProductos(true);
-    return productos.map((p) => ({ ref: p.codigo, nombre: p.nombre }));
+    return productos.map((p) => ({ ref: p.id, nombre: p.nombre }));
   }
   if (tipo === "CLIENTE") {
     const clientes = await getClientes({ limit: 500 });

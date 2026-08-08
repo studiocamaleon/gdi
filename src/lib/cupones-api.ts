@@ -88,7 +88,11 @@ export type ValidarCuponPayload = {
   clienteId?: string;
   items: Array<{
     key: string;
+    /** Id (uuid) del producto: lo que la ficha lleva como `motorCodigo`. */
     productoId?: string;
+    /** Código del producto. Va además del id porque un cupón con alcance
+     *  PRODUCTO pudo guardar cualquiera de los dos. */
+    productoCodigo?: string;
     categoriaCodigo?: string;
     subcategoriaCodigo?: string;
     /** Neto de lista de la línea (sin descuentos previos). */

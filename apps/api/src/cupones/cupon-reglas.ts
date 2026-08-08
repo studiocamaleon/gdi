@@ -26,7 +26,11 @@ export type CuponEvaluable = {
 export type ItemCarrito = {
   /** Clave del front para devolver qué líneas alcanza (id del item de la ficha). */
   key: string;
+  /** Id (uuid) del producto — lo que la ficha lleva como `motorCodigo`. */
   productoId?: string | null;
+  /** Código del producto. Viaja además del id porque un cupón con alcance
+   *  PRODUCTO puede haber guardado cualquiera de los dos. */
+  productoCodigo?: string | null;
   categoriaCodigo?: string | null;
   subcategoriaCodigo?: string | null;
   /** Neto de lista de la línea (sin descuentos previos). */
@@ -80,7 +84,13 @@ export function evaluarCupon(
         case 'SUBCATEGORIA':
           return item.subcategoriaCodigo === cupon.alcanceRef;
         case 'PRODUCTO':
-          return item.productoId === cupon.alcanceRef;
+          // Contra el id Y contra el código: hay dos identificadores del
+          // producto dando vueltas (la ficha usa el uuid, el catálogo
+          // muestra el código) y el cupón pudo guardar cualquiera.
+          return (
+            item.productoId === cupon.alcanceRef ||
+            item.productoCodigo === cupon.alcanceRef
+          );
         // ORDEN y CLIENTE alcanzan todas las líneas.
         default:
           return true;

@@ -159,6 +159,7 @@ export class CuponesService {
       items: dto.items.map((i) => ({
         key: i.key,
         productoId: i.productoId ?? null,
+        productoCodigo: i.productoCodigo ?? null,
         categoriaCodigo: i.categoriaCodigo ?? null,
         subcategoriaCodigo: i.subcategoriaCodigo ?? null,
         neto: i.neto,
