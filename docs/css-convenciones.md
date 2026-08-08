@@ -198,6 +198,16 @@ sano — lo que de verdad es de todos.
 
 No hay plan de migración masiva y no hace falta. **Se migra al tocar.**
 
+Hay un script que hace la parte mecánica —
+`node scripts/migrar-familia-css.mjs <prefijo> <desde> <hasta> <módulo> <tsx…> [--dry]` —
+extrae el bloque, camelCasea las clases de la familia, envuelve en `:global()`
+los hijos genéricos y los estados hermanos (así sus strings en el TSX no se
+tocan y la cascada queda idéntica), y reescribe los `className`. Lo que NO
+hace solo: las clases construidas en runtime (`` `acp-e-${clave}` ``) — avisa
+y las deja literales para resolver a mano con un mapa estático. Antes de
+correrlo, verificar que ningún token genérico del bloque sea global de verdad
+(compararlos contra `scripts/css-guard-baseline.json`).
+
 El archivo ya viene pre-cortado por los 74 prefijos, así que es mecánico:
 
 1. Buscar el bloque de la vista (`.gf`, `.otd-page`, `.est-sheet`…).
