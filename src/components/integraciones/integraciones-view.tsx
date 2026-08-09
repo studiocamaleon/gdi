@@ -128,7 +128,18 @@ function Logo({ proveedor, size = 44 }: { proveedor: ProveedorIntegracion; size?
 
 /* ═══════════════ Índice ═══════════════ */
 
-export function IntegracionesView({ inicial }: { inicial: EstadoIntegraciones }) {
+export function IntegracionesView({
+  inicial,
+  extra,
+}: {
+  inicial: EstadoIntegraciones;
+  /**
+   * Secciones adicionales que viven DENTRO del mismo int-page, después del
+   * catálogo (hoy: "Tu IA (MCP)"). Renderizadas sólo en la vista de grilla —
+   * los detalles (Wati/AFIP) retornan antes y no las muestran.
+   */
+  extra?: React.ReactNode;
+}) {
   const [datos, setDatos] = React.useState(inicial);
   const [abierta, setAbierta] = React.useState<ProveedorIntegracion | null>(null);
   const [afip, setAfip] = React.useState<AfipIntegracion | null>(null);
@@ -237,6 +248,8 @@ export function IntegracionesView({ inicial }: { inicial: EstadoIntegraciones })
           />
         ))}
       </Seccion>
+
+      {extra}
     </div>
   );
 }

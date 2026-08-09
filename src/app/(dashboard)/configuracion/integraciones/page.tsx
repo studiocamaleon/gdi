@@ -29,10 +29,21 @@ export default async function IntegracionesPage() {
   const credenciales = puedeGestionar
     ? await getCredencialesMcp().catch(() => [])
     : [];
+  // La URL del MCP es la del API (no la del front): se resuelve en el server
+  // desde el env — calcularla en el cliente con window fue el bug de
+  // hidratación y encima apuntaba al puerto del front.
+  const apiBase =
+    process.env.NEXT_PUBLIC_API_URL ??
+    process.env.API_URL ??
+    "http://localhost:3001/api";
   return (
-    <>
-      <IntegracionesView inicial={inicial} />
-      {puedeGestionar ? <CredencialesMcp inicial={credenciales} /> : null}
-    </>
+    <IntegracionesView
+      inicial={inicial}
+      extra={
+        puedeGestionar ? (
+          <CredencialesMcp inicial={credenciales} mcpUrl={`${apiBase}/mcp`} />
+        ) : null
+      }
+    />
   );
 }

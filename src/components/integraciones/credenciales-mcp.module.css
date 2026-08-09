@@ -1,33 +1,14 @@
-/* Credenciales MCP — "Conectá tu IA". Vista nueva ⇒ módulo propio
-   (CLAUDE.md: nada nuevo en globals.css). */
+/* Credenciales MCP — "Conectá tu IA". La card usa las clases compartidas de
+   integraciones (int-card etc.); acá vive sólo el PANEL de gestión que se
+   abre debajo. Vista nueva ⇒ módulo propio (CLAUDE.md: nada nuevo en
+   globals.css). */
 
-.wrap {
-  margin-top: 28px;
+.panel {
+  margin-top: 14px;
   border: 1px solid var(--border, #e3e3e0);
-  border-radius: 12px;
-  background: var(--card, #fff);
-  padding: 20px 22px;
-}
-
-.head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 4px;
-}
-
-.titulo {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.bajada {
-  margin: 4px 0 16px;
-  font-size: 13px;
-  color: var(--muted-foreground, #6b6b68);
-  max-width: 60ch;
+  border-radius: var(--r-3, 12px);
+  background: var(--surface, #fff);
+  padding: 18px 20px;
 }
 
 .formCrear {
@@ -99,6 +80,12 @@
   word-break: break-all;
   margin: 8px 0;
   user-select: all;
+}
+
+.tokenAcciones {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .tokenAviso {
