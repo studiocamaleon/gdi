@@ -128,6 +128,7 @@ import {
   CANALES_VENTA,
   formatCurrency,
   formatUnidad,
+  formatUnitPrice,
   offsetDate,
   type CotizacionPropuestaSnapshot,
   type PropuestaCargoDirecto,
@@ -3434,6 +3435,15 @@ export function ProductRow({
           {calculoPendiente
             ? "-"
             : formatCurrency(visibleAmounts.impuestos, moneda)}
+        </div>
+        {/* Precio por unidad de la magnitud cotizada (m², ml, u., hoja): el
+            total dividido por la cantidad. Le da al comercial "¿cuánto sale el
+            m²/cada folleto?" sin sacar la cuenta a mano. Usa el total visible,
+            así unitario × cantidad = total mostrado. */}
+        <div className="num">
+          {calculoPendiente || item.cantidad <= 0
+            ? "—"
+            : `${formatUnitPrice(visibleAmounts.total / item.cantidad, moneda)} / ${formatUnidad(item.unidadMedida)}`}
         </div>
         <div className={`num total${tienePrecioEspecial ? " especial" : ""}`}>
           {calculoPendiente
@@ -7637,6 +7647,7 @@ export function PropuestaFicha({
               <span className="num qty">Cantidad</span>
               <span className="num">Subtotal</span>
               <span className="num">Imp.</span>
+              <span className="num">Unitario</span>
               <span className="num">Total</span>
               <span className="x" />
             </div>

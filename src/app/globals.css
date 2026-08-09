@@ -783,7 +783,7 @@
     display: grid;
     grid-template-columns:
       36px 22px minmax(220px, 1fr)
-      110px 130px 110px 130px 36px;
+      110px 130px 110px 140px 130px 36px;
     align-items: center;
     gap: 8px;
     padding: 0 14px;
@@ -3173,8 +3173,8 @@
     .oprow-head {
       grid-template-columns:
         28px 18px minmax(180px, 1fr)
-        90px 110px 100px 115px 32px;
-      min-width: 790px;
+        90px 110px 100px 125px 115px 32px;
+      min-width: 915px;
     }
 
     .orden-table {
@@ -3182,7 +3182,7 @@
     }
 
     .oprow-body {
-      min-width: 790px;
+      min-width: 915px;
       padding-left: 58px;
     }
   }
