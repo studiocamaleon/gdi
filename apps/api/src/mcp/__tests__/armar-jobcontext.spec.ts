@@ -195,6 +195,80 @@ describe('armarJobContext', () => {
     ).toThrow(/no existe en este producto/);
   });
 
+  it('personalizados sin medida propia: piezas sintetizadas desde estampas', () => {
+    // El caso taza/remera: el motor cortaba con requires_piezas porque la
+    // pieza que se imprime ES la estampa y nadie la declaraba.
+    const form = formularioBase();
+    form.medidas = { instruccion: 'no_preguntar', predefinidas: [], default: null };
+    form.preguntas = [];
+    form.multiplicadores = [];
+    form.personalizaciones = [
+      {
+        codigo: 'pers_1',
+        nombre: 'Estampa DTF',
+        obligatoria: true,
+        modoMedida: 'FIJA',
+        anchoMm: 120,
+        altoMm: 80,
+        jobContextKey: 'personalizacion_pers_1',
+      },
+    ];
+    const jc = armarJobContext(form, { cantidad: 20 });
+    expect(jc.piezas).toEqual([{ cantidad: 20, anchoMm: 120, altoMm: 80 }]);
+    expect(jc.personalizacion_pers_1_areaM2).toBeCloseTo(0.192); // 0.0096 × 20
+    expect(jc.medidaCustomMm).toEqual({ anchoMm: 120, altoMm: 80 });
+    expect(
+      (jc.personalizaciones as Array<{ codigo: string }>)[0].codigo,
+    ).toBe('pers_1');
+  });
+
+  it('personalización CLIENTE: la medida viene en la respuesta; sin medida es faltante', () => {
+    const form = formularioBase();
+    form.medidas = { instruccion: 'no_preguntar', predefinidas: [], default: null };
+    form.preguntas = [];
+    form.multiplicadores = [];
+    form.personalizaciones = [
+      {
+        codigo: 'pers_1',
+        nombre: 'Estampa pecho',
+        obligatoria: true,
+        modoMedida: 'CLIENTE',
+        anchoMm: null, // sin sugerencia: la medida es del cliente sí o sí
+        altoMm: null,
+        jobContextKey: 'personalizacion_pers_1',
+      },
+    ];
+    const jc = armarJobContext(form, {
+      cantidad: 100,
+      respuestas: { personalizacion_pers_1: { anchoMm: 200, altoMm: 250 } },
+    });
+    expect(jc.piezas).toEqual([{ cantidad: 100, anchoMm: 200, altoMm: 250 }]);
+    expect(jc.personalizacion_pers_1_areaM2).toBeCloseTo(5); // 0.05 × 100
+    // Sin respuesta y sin sugerencia: pide la medida, no cotiza mal.
+    expect(() => armarJobContext(form, { cantidad: 100 })).toThrow(
+      /medida de "Estampa pecho".*anchoMm.*altoMm/s,
+    );
+  });
+
+  it('personalización opcional no activada no aporta pieza ni área', () => {
+    const form = formularioBase();
+    form.personalizaciones = [
+      {
+        codigo: 'pers_2',
+        nombre: 'Estampa espalda',
+        obligatoria: false,
+        modoMedida: 'FIJA',
+        anchoMm: 280,
+        altoMm: 280,
+        jobContextKey: 'personalizacion_pers_2',
+      },
+    ];
+    const jc = armarJobContext(form, { cantidad: 1, ...medida });
+    expect(jc.personalizacion_pers_2_areaM2).toBeUndefined();
+    // El producto tiene medida propia: piezas salen de la medida, no de estampas.
+    expect(jc.piezas).toEqual([{ cantidad: 1, anchoMm: 3000, altoMm: 1500 }]);
+  });
+
   it('param con configPasoRuntime anidado y validación de tipo', () => {
     const form = formularioBase();
     form.preguntas.push({

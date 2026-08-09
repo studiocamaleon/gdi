@@ -112,6 +112,8 @@ export function armarJobContext(
   }
 
   // ── Índice de preguntas por jobContextKey ────────────────────────────
+  // (las personalizaciones van aparte: su respuesta es medida/activación y
+  // producen área + piezas, no un passthrough de clave)
   const porKey = new Map<string, Pregunta>();
   for (const p of formulario.preguntas) {
     if (p.jobContextKey) porKey.set(p.jobContextKey, p);
@@ -123,21 +125,17 @@ export function armarJobContext(
       jobContextKey: String(m.jobContextKey),
     });
   }
-  for (const p of formulario.personalizaciones) {
-    porKey.set(String(p.jobContextKey), {
-      tipo: 'personalizacion',
-      ...p,
-      jobContextKey: String(p.jobContextKey),
-    });
-  }
+  const persPorKey = new Map(
+    formulario.personalizaciones.map((p) => [String(p.jobContextKey), p]),
+  );
 
   // ── Respuestas: cada clave tiene que existir en el formulario ────────
   // (el motor las descartaría en silencio; acá es un error explícito)
   for (const key of Object.keys(respuestas)) {
-    if (!porKey.has(key)) {
+    if (!porKey.has(key) && !persPorKey.has(key)) {
       fail(
-        `"${key}" no es una pregunta de este producto. ` +
-          `Claves válidas: ${[...porKey.keys()].join(', ') || '(ninguna)'}.`,
+        `"${key}" no es una pregunta de este producto. Claves válidas: ` +
+          `${[...porKey.keys(), ...persPorKey.keys()].join(', ') || '(ninguna)'}.`,
       );
     }
   }
@@ -148,6 +146,17 @@ export function armarJobContext(
     const valor = respuestas[key];
     aplicarPregunta(jobContext, pregunta, key, valor, faltantes);
   }
+  aplicarPersonalizaciones(
+    jobContext,
+    formulario,
+    respuestas,
+    input.cantidad,
+    // Medida propia: la que respondió el usuario, o la default que el motor
+    // sintetiza solo. Sólo sin NINGUNA de las dos las piezas salen de las
+    // estampas (taza/remera), igual que la cascada del sheet.
+    medida !== null || formulario.medidas.default !== null,
+    faltantes,
+  );
   if (faltantes.length) {
     fail(
       `Faltan respuestas obligatorias: ${faltantes.join('; ')}. ` +
@@ -244,6 +253,96 @@ function resolverMedida(
   const def =
     predefinidas.find((m) => m.esDefault) ?? predefinidas[0] ?? null;
   return def ? { anchoMm: def.anchoMm, altoMm: def.altoMm } : null;
+}
+
+/**
+ * Personalizaciones (estampas): activación + medida → área en m² por clave
+ * `personalizacion_<codigo>_areaM2` + detalle `personalizaciones[]`, y — para
+ * productos SIN medida propia (taza, remera: la pieza que se imprime ES la
+ * estampa) — sintetiza `piezas` desde las estampas activas. Espejo exacto de
+ * buildJobContext del sheet (piezasDesdePersonalizaciones, L2519-2586): sin
+ * esto el motor corta con requires_piezas.
+ *
+ * Respuesta aceptada por personalización: `true` (activar con la medida
+ * declarada/sugerida), `{anchoMm, altoMm}` (medida CLIENTE), o ausencia
+ * (las obligatorias van igual; las opcionales quedan afuera).
+ */
+function aplicarPersonalizaciones(
+  jobContext: Record<string, unknown>,
+  formulario: FormularioParaJobContext,
+  respuestas: Record<string, unknown>,
+  cantidad: number,
+  hayMedidaPropia: boolean,
+  faltantes: string[],
+): void {
+  const detalles: Array<{
+    codigo: string;
+    nombre: string;
+    anchoMm: number;
+    altoMm: number;
+    areaM2: number;
+  }> = [];
+
+  for (const p of formulario.personalizaciones) {
+    const key = String(p.jobContextKey);
+    const codigo = String(p.codigo);
+    const nombre = String(p.nombre ?? codigo);
+    const obligatoria = p.obligatoria === true;
+    const respuesta = respuestas[key];
+
+    const activa = obligatoria || (respuesta !== undefined && respuesta !== false);
+    if (!activa) continue;
+
+    let anchoMm = asNumber(p.anchoMm);
+    let altoMm = asNumber(p.altoMm);
+    if (
+      typeof respuesta === 'object' &&
+      respuesta !== null &&
+      p.modoMedida === 'CLIENTE'
+    ) {
+      const r = respuesta as { anchoMm?: unknown; altoMm?: unknown };
+      anchoMm = asNumber(r.anchoMm);
+      altoMm = asNumber(r.altoMm);
+    }
+    if (!anchoMm || !altoMm || anchoMm <= 0 || altoMm <= 0) {
+      if (p.modoMedida === 'CLIENTE') {
+        faltantes.push(
+          `${key} — medida de "${nombre}" como {anchoMm, altoMm} en mm`,
+        );
+        continue;
+      }
+      continue; // FIJA sin medida válida: no aporta pieza (producto mal cargado)
+    }
+
+    const areaM2 = ((anchoMm * altoMm) / 1_000_000) * Math.max(0, cantidad);
+    jobContext[`personalizacion_${codigo}_areaM2`] = areaM2;
+    detalles.push({ codigo, nombre, anchoMm, altoMm, areaM2 });
+  }
+
+  if (detalles.length === 0) return;
+  jobContext.personalizaciones = detalles;
+
+  // Merchandising sin medida propia: la pieza producida ES la estampa.
+  if (!hayMedidaPropia) {
+    jobContext.piezas = detalles.map((d) => ({
+      cantidad,
+      anchoMm: d.anchoMm,
+      altoMm: d.altoMm,
+    }));
+    jobContext.piezaAnchoMaxMm = Math.max(...detalles.map((d) => d.anchoMm));
+    jobContext.piezaAltoMaxMm = Math.max(...detalles.map((d) => d.altoMm));
+    jobContext.piezaAreaTotalM2 = detalles.reduce((t, d) => t + d.areaM2, 0);
+    jobContext.piezaPerimetroTotalM = detalles.reduce(
+      (t, d) => t + (cantidad * 2 * (d.anchoMm + d.altoMm)) / 1000,
+      0,
+    );
+    if (detalles.length === 1) {
+      jobContext.medidaCustomMm = {
+        anchoMm: detalles[0].anchoMm,
+        altoMm: detalles[0].altoMm,
+      };
+    }
+  }
 }
 
 /** Setea una clave con puntos ("slotMateriales.X" / "configPasoRuntime.a.b"). */
@@ -421,21 +520,6 @@ function aplicarPregunta(
       }
       if (permitidos.length && !permitidos.includes(n)) {
         fail(`${key} sólo acepta ${permitidos.join(' o ')} (llegó ${n}).`);
-      }
-      setAnidado(jobContext, key, n);
-      return;
-    }
-
-    case 'personalizacion': {
-      if (valor === undefined) {
-        if (pregunta.obligatoria === true) {
-          faltantes.push(`${key} — área en m² de "${String(pregunta.nombre)}"`);
-        }
-        return;
-      }
-      const n = asNumber(valor);
-      if (n === null || n < 0) {
-        fail(`${key} debe ser un área en m² (número ≥ 0).`);
       }
       setAnidado(jobContext, key, n);
       return;

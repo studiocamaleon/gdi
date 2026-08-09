@@ -273,4 +273,84 @@ describe('formulario de cotización', () => {
       /no tiene rutas/,
     );
   });
+
+  it('los pasos EXTRAS aportan preguntas (el caso Cartelería PVC)', async () => {
+    // El montaje_sobre_sustrato como paso extra con slot COMERCIAL_ELIGE era
+    // invisible para el formulario: la IA no veía la plancha y el motor
+    // cortaba con montaje_sin_nesting.
+    const fixture = productoFixture();
+    (fixture.rutasAlternativas[0] as Record<string, unknown>).pasosExtras = [
+      {
+        id: 'pe-montaje',
+        familiaCodigo: 'montaje_sobre_sustrato',
+        nombreVisible: null,
+        modoActivacion: 'OBLIGATORIO',
+        ordenInterno: 1,
+        activo: true,
+        paramsPasoJson: {},
+        multiplicadoresActivos: [],
+        tercerizado: false,
+        slotsMateriales: [
+          {
+            slotCodigo: 'sustrato_montaje',
+            slotNombre: 'Plancha',
+            modoSeleccion: 'COMERCIAL_ELIGE',
+            candidatos: [
+              {
+                materiaPrimaId: 'mp-pvc',
+                defaultVarianteId: 'var-pvc3',
+                todasLasVariantes: false,
+                materiaPrima: { nombre: 'PVC espumado', variantes: [] },
+                variantes: [
+                  {
+                    variante: {
+                      id: 'var-pvc3',
+                      sku: 'PVC-3',
+                      nombreVariante: null,
+                      precioReferencia: 500,
+                      atributosVarianteJson: {
+                        espesorMm: 3,
+                        anchoMm: 1220,
+                        colorBase: 'Blanco',
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const form = await servicio(fixture).obtener('t1', 'prod-1');
+    const slot = form.preguntas.find(
+      (p) => p.jobContextKey === 'slotMateriales.pe-montaje_sustrato_montaje',
+    );
+    expect(slot).toBeDefined();
+    const opciones = slot!.opciones as Array<Record<string, unknown>>;
+    // La etiqueta distingue color (colorBase): dos planchas del mismo espesor
+    // sólo difieren en eso.
+    expect(opciones[0].etiqueta).toBe(
+      'PVC espumado · 3mm · 1220mm de ancho · Blanco',
+    );
+  });
+
+  it('personalizaciones: clave de medida, no de área calculada', async () => {
+    const fixture = productoFixture();
+    (fixture as Record<string, unknown>).personalizacionesJson = [
+      {
+        codigo: 'pers_1',
+        nombre: 'Estampa pecho',
+        modoMedida: 'CLIENTE',
+        anchoMm: 280,
+        altoMm: 280,
+        obligatoria: false,
+      },
+    ];
+    const form = await servicio(fixture).obtener('t1', 'prod-1');
+    expect(form.personalizaciones[0].jobContextKey).toBe(
+      'personalizacion_pers_1',
+    );
+    expect(form.personalizaciones[0].modoMedida).toBe('CLIENTE');
+  });
 });

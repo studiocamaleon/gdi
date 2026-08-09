@@ -34,6 +34,36 @@ type Detalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaAlt = Detalle['rutasAlternativas'][number];
 type ConfigPaso = RutaAlt['configPasos'][number];
 
+/**
+ * Un paso EXTRA del producto (inline, no reusable) hidratado por el detalle al
+ * mismo shape que un configPaso (slots con candidatos, candidatas M-2). Acá se
+ * adapta a la forma que consumen las derivaciones: la diferencia estructural
+ * es que no cuelga de un rutaPaso — la familia y el orden son propios.
+ *
+ * SIN esta adaptación los pasos extras eran invisibles para el formulario: el
+ * caso real fue "Cartelería PVC con vinilo", cuyo montaje_sobre_sustrato (paso
+ * extra) tiene el slot de la plancha en COMERCIAL_ELIGE — la IA no veía la
+ * pregunta y el motor cortaba con montaje_sin_nesting.
+ */
+function adaptarPasoExtra(pe: Record<string, unknown>): ConfigPaso {
+  const familiaCodigo = String(pe.familiaCodigo ?? '');
+  return {
+    ...pe,
+    requiereRutaPasoIds: pe.requiereRutaPasoIds ?? [],
+    tercerizadoEntradas: pe.tercerizadoEntradas ?? [],
+    slotsMateriales: pe.slotsMateriales ?? [],
+    multiplicadoresActivos: pe.multiplicadoresActivos ?? [],
+    cargosDirectosPaso: pe.cargosDirectosPaso ?? [],
+    rutaPaso: {
+      familiaCodigo,
+      familiaNombre: resolverFamilia(familiaCodigo)?.nombre ?? null,
+      activo: pe.activo !== false,
+      // Después de los pasos de la ruta, en su orden interno.
+      orden: 1000 + Number(pe.ordenInterno ?? 0),
+    },
+  } as unknown as ConfigPaso;
+}
+
 /** Pregunta genérica del formulario. El `tipo` discrimina el resto. */
 export type PreguntaFormulario = Record<string, unknown> & {
   tipo: string;
@@ -106,7 +136,12 @@ function etiquetaVariante(
   const anchoMm = positivo(attrs.anchoMm ?? attrs.ancho);
   if (anchoMm) partes.push(`${anchoMm}mm de ancho`);
 
-  const color = typeof attrs.color === 'string' ? attrs.color.trim() : '';
+  const color =
+    typeof attrs.color === 'string' && attrs.color.trim()
+      ? attrs.color.trim()
+      : typeof attrs.colorBase === 'string'
+        ? attrs.colorBase.trim()
+        : '';
   if (color) partes.push(color);
 
   if (partes.length === 1 && variante.sku) partes.push(variante.sku);
@@ -146,7 +181,17 @@ export class FormularioCotizacionService {
       );
     }
 
-    const ejecutables = ruta.configPasos.filter(esEjecutable);
+    // Los pasos EXTRAS del producto cotizan igual que los de la ruta (el motor
+    // los ejecuta con su propio id como configPasoId): entran a TODAS las
+    // derivaciones — preguntas, multiplicadores, adicionales y validaciones.
+    const extras = (
+      (ruta as { pasosExtras?: Array<Record<string, unknown>> }).pasosExtras ??
+      []
+    ).map(adaptarPasoExtra);
+    const ejecutables = [
+      ...ruta.configPasos.filter(esEjecutable),
+      ...extras.filter(esEjecutable),
+    ];
     // rutaPasoId → configPasoId, para traducir requiereRutaPasoIds (arrastre).
     const rutaPasoAConfig = new Map(
       ruta.configPasos.map((c) => [c.rutaPasoId, c.id]),
@@ -160,7 +205,7 @@ export class FormularioCotizacionService {
       medidas: this.bloqueMedidas(producto),
       preguntas: this.preguntasDePasos(ejecutables),
       multiplicadores: this.bloqueMultiplicadores(ejecutables),
-      adicionales: this.bloqueAdicionales(producto, ruta, rutaPasoAConfig),
+      adicionales: this.bloqueAdicionales(producto, ejecutables, rutaPasoAConfig),
       personalizaciones: this.bloquePersonalizaciones(producto),
       validaciones: this.bloqueValidaciones(ejecutables),
     };
@@ -588,7 +633,7 @@ export class FormularioCotizacionService {
    */
   private bloqueAdicionales(
     producto: Detalle,
-    ruta: RutaAlt,
+    ejecutables: ConfigPaso[],
     rutaPasoAConfig: Map<string, string>,
   ) {
     const adicionales: Array<Record<string, unknown>> = [];
@@ -604,8 +649,7 @@ export class FormularioCotizacionService {
       });
     }
 
-    for (const config of ruta.configPasos) {
-      if (!esEjecutable(config)) continue;
+    for (const config of ejecutables) {
       const familiaCodigo = config.rutaPaso?.familiaCodigo ?? '';
       if (config.modoActivacion === 'OPCIONAL') {
         adicionales.push({
@@ -674,22 +718,41 @@ export class FormularioCotizacionService {
     return [...campos];
   }
 
+  /**
+   * Personalizaciones (áreas de decoración: estampas de remera, taza).
+   *
+   * El que responde manda MEDIDAS (o `true` para activar una de medida fija);
+   * el área en m² y las piezas sintetizadas las calcula la capa de traducción
+   * (armarJobContext), nunca la IA — pedirle el área calculada fue el bug de
+   * los personalizados. `obligatoria !== false` espejo de getPersonalizaciones.
+   */
   private bloquePersonalizaciones(producto: Detalle) {
     const json = producto.personalizacionesJson;
     if (!Array.isArray(json)) return [];
     return json
-      .map((p) => {
+      .map((p, i) => {
         const item = asRecord(p);
-        const codigo = typeof item.codigo === 'string' ? item.codigo : '';
-        if (!codigo) return null;
+        const codigo =
+          typeof item.codigo === 'string' && item.codigo.trim()
+            ? item.codigo.trim()
+            : `pers_${i + 1}`;
+        const modoMedida = item.modoMedida === 'CLIENTE' ? 'CLIENTE' : 'FIJA';
+        const obligatoria = item.obligatoria !== false;
         return {
           codigo,
           nombre: typeof item.nombre === 'string' ? item.nombre : codigo,
-          obligatoria: item.obligatoria === true,
-          modoMedida: typeof item.modoMedida === 'string' ? item.modoMedida : null,
+          obligatoria,
+          modoMedida,
+          // FIJA: la medida real. CLIENTE: sugerencia (puede venir vacía).
           anchoMm: positivo(item.anchoMm),
           altoMm: positivo(item.altoMm),
-          jobContextKey: `personalizacion_${codigo}_areaM2`,
+          instruccion:
+            modoMedida === 'CLIENTE'
+              ? 'responder {anchoMm, altoMm} de la estampa (mm); true usa la sugerencia'
+              : obligatoria
+                ? 'incluida siempre: no hay que responder nada'
+                : 'responder true para incluirla',
+          jobContextKey: `personalizacion_${codigo}`,
         };
       })
       .filter((p): p is NonNullable<typeof p> => p !== null);
