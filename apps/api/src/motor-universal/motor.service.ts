@@ -50,6 +50,7 @@ import type {
   MaterialEjecutado,
   CargoDirectoEjecutado,
   CargoPasoCargado,
+  EstructuraBastidorEjecutada,
   NestingEjecutado,
   NestingCostingPreview,
   TiempoManualConfig,
@@ -2531,6 +2532,13 @@ export class MotorUniversalService {
         }
       : undefined;
 
+    // Estructura del bastidor para el visor 3D de Producción: la deja el
+    // derivador en su traza (con los params efectivos del paso). Se persiste
+    // en la trazabilidad, igual que `nestingResult`, para dibujar lo cotizado.
+    const estructuraBastidor = derivacionesDelJobContext(jobContext)[
+      paso.configPasoId
+    ]?.traza?.estructura as EstructuraBastidorEjecutada | undefined;
+
     return {
       rutaPasoId: paso.rutaPasoId,
       rutaPasoOrden: paso.rutaPasoOrden,
@@ -2545,6 +2553,7 @@ export class MotorUniversalService {
       outputsCanonicos,
       capacidades,
       nestingResult,
+      estructuraBastidor,
     };
   }
 

@@ -22,6 +22,7 @@ import {
   type CalendarioEstacion,
 } from './calendario';
 import { evaluateRollLayoutForConfiguredAlgorithm } from '../motor-universal/nesting-dispatcher';
+import type { EstructuraBastidorEjecutada } from '../motor-universal/tipos';
 import type { SimularNestingDto } from './dto/simular-nesting.dto';
 
 /**
@@ -856,6 +857,40 @@ export class ProduccionService {
         ),
       })),
     };
+  }
+
+  /**
+   * Estructura del bastidor de un ítem, para el visor 3D de Producción.
+   *
+   * Sale del SNAPSHOT del ítem: el paso de bastidor persiste su estructura
+   * efectiva (con overrides del sheet) en la trazabilidad. Un ítem cotizado
+   * antes de esa persistencia no la tiene → 404 (se re-cotiza). No se lee la
+   * config de la ruta a propósito: sería el default, no lo que se va a fabricar.
+   */
+  async estructuraBastidor(
+    auth: CurrentAuth,
+    itemId: string,
+  ): Promise<EstructuraBastidorEjecutada> {
+    const item = await this.prisma.ordenTrabajoItem.findFirst({
+      where: { id: itemId, tenantId: auth.tenantId },
+      select: { cotizacionItem: { select: { trazabilidadJson: true } } },
+    });
+    if (!item) throw new NotFoundException('No se encontró el ítem.');
+
+    const pasos = ((
+      item.cotizacionItem?.trazabilidadJson as { pasos?: unknown[] } | null
+    )?.pasos ?? []) as Array<{
+      estructuraBastidor?: EstructuraBastidorEjecutada;
+    }>;
+    const estructura = pasos.find(
+      (paso) => paso.estructuraBastidor,
+    )?.estructuraBastidor;
+    if (!estructura) {
+      throw new NotFoundException(
+        'El ítem no tiene estructura de bastidor en el snapshot (si es anterior a esta función, re-cotizalo).',
+      );
+    }
+    return estructura;
   }
 
   // ── Simulador de impresión LÁSER (cola real por hoja) ────────────────

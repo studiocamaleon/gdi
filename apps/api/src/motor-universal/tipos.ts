@@ -419,6 +419,30 @@ export interface PasoEjecutado {
    * placements para visualización en frontend.
    */
   nestingResult?: NestingEjecutado;
+  /**
+   * Estructura del bastidor (cartelería) para el visor 3D de Producción: el
+   * marco a fabricar, con los params EFECTIVOS del paso —incluye overrides del
+   * sheet, no el default de la ruta—. Sólo en pasos con derivador de bastidor.
+   */
+  estructuraBastidor?: EstructuraBastidorEjecutada;
+}
+
+/** El bastidor a fabricar, autosuficiente para dibujarlo en 3D. */
+export interface EstructuraBastidorEjecutada {
+  /** simple = marco plano (frontlight) · doble = cajón (backlight). */
+  tipoBastidor: 'simple' | 'doble';
+  anchoM: number;
+  altoM: number;
+  profundidadM: number;
+  /** Separación efectiva de refuerzos (cm). El visor dibuja con la misma
+   *  fórmula que el motor, así que recompone los MISMOS refuerzos. */
+  sepRefuerzoVcm: number;
+  sepRefuerzoHcm: number;
+  refuerzosV: number;
+  refuerzosH: number;
+  /** Largo de cada barra a cortar, en mm (para el despiece al costado). */
+  despieceMm: number[];
+  puntosSoldadura: number;
 }
 
 /** Resultado del nesting visible al consumidor (motor, frontend). */

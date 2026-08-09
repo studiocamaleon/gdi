@@ -464,10 +464,17 @@ type SceneState = {
 export function CarteleriaViewport({
   vista,
   hoverComponent,
+  soloEstructura = false,
 }: {
   vista: CarteleriaVista;
   /** Grupo a resaltar desde afuera (hover del desglose). */
   hoverComponent?: string | null;
+  /**
+   * Modo lectura para el visor de Producción: muestra SÓLO el bastidor
+   * (perfil + refuerzos), sin lona/LEDs/cenefa, y oculta los controles de
+   * capas y día/noche. Deja vistas y "explotado" —útiles para fabricar—.
+   */
+  soloEstructura?: boolean;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const stateRef = React.useRef<SceneState>({
@@ -476,7 +483,9 @@ export function CarteleriaViewport({
     hovered: null,
     exploded: false,
   });
-  const [mood, setMood] = React.useState<"dia" | "noche">("noche");
+  const [mood, setMood] = React.useState<"dia" | "noche">(
+    soloEstructura ? "dia" : "noche",
+  );
   const [viewMode, setViewMode] = React.useState("iso");
   const [exploded, setExploded] = React.useState(false);
   const [layers, setLayers] = React.useState<Record<string, boolean>>({});
@@ -698,9 +707,11 @@ export function CarteleriaViewport({
     }
     st.groups = buildSign(sg, vista, metricas, mood);
     Object.entries(st.groups).forEach(([k, g]) => {
-      g.visible = layers[k] !== false;
+      g.visible = soloEstructura
+        ? k === "frame" || k === "reinforce-v" || k === "reinforce-h"
+        : layers[k] !== false;
     });
-  }, [vista, metricas, mood, layers]);
+  }, [vista, metricas, mood, layers, soloEstructura]);
 
   // Hover desde el desglose
   React.useEffect(() => {
@@ -772,23 +783,25 @@ export function CarteleriaViewport({
         ))}
       </div>
 
-      <div className={`${s.overlay} ${s.vpViews} ${s.vpMood}`}>
-        {(
-          [
-            ["dia", "día"],
-            ["noche", "noche"],
-          ] as const
-        ).map(([k, nm]) => (
-          <button
-            key={k}
-            type="button"
-            className={k === mood ? s.on : ""}
-            onClick={() => setMood(k)}
-          >
-            {nm}
-          </button>
-        ))}
-      </div>
+      {!soloEstructura ? (
+        <div className={`${s.overlay} ${s.vpViews} ${s.vpMood}`}>
+          {(
+            [
+              ["dia", "día"],
+              ["noche", "noche"],
+            ] as const
+          ).map(([k, nm]) => (
+            <button
+              key={k}
+              type="button"
+              className={k === mood ? s.on : ""}
+              onClick={() => setMood(k)}
+            >
+              {nm}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className={`${s.overlay} ${s.vpExplode}`}>
         <button
@@ -801,7 +814,10 @@ export function CarteleriaViewport({
         </button>
       </div>
 
-      <div className={`${s.overlay} ${s.vpLayers}`}>
+      <div
+        className={`${s.overlay} ${s.vpLayers}`}
+        style={soloEstructura ? { display: "none" } : undefined}
+      >
         <div className={s.lgnd}>Capas</div>
         {CAPAS.map((l) => {
           const exists = capaExiste[l.k] !== false;

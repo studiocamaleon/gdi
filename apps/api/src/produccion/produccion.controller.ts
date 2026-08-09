@@ -7,6 +7,7 @@ import {
   Patch,
   Body,
   Param,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -66,6 +67,18 @@ export class ProduccionController {
   @Get('simulador-laser')
   simuladorLaser(@CurrentSession() auth: CurrentAuth) {
     return this.service.simuladorLaser(auth);
+  }
+
+  /**
+   * Estructura del bastidor de un ítem (cartelería), para el visor 3D del tab
+   * de Producción. Sale del snapshot del ítem: es lo cotizado, con overrides.
+   */
+  @Get('estructura-bastidor/:itemId')
+  estructuraBastidor(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+  ) {
+    return this.service.estructuraBastidor(auth, itemId);
   }
 
   // ── Configuración de producción (margen de la ETA sugerida) ───────────

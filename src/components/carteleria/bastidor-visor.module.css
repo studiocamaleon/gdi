@@ -1,0 +1,121 @@
+/*
+ * Visor 3D del bastidor + despiece, en el tab de Producción del ítem.
+ * Módulo propio: nada de esto vive en globals.css.
+ */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 14px;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ttl {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink, #14140f);
+}
+
+.sub {
+  font-size: 0.82rem;
+  color: var(--muted-text, #6e6e76);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.canvas {
+  position: relative;
+  min-height: 360px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2, #f4f2ee);
+}
+
+/* El viewport llena su contenedor. */
+.canvas > * {
+  position: absolute;
+  inset: 0;
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 360px;
+  color: var(--muted-text, #6e6e76);
+  font-size: 0.85rem;
+}
+
+.despiece {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2, #f4f2ee);
+}
+
+.despTtl {
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-text, #6e6e76);
+}
+
+.despList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.despList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.85rem;
+  color: var(--ink, #14140f);
+}
+
+.cant {
+  font-weight: 700;
+}
+
+.largo {
+  color: var(--muted-text, #6e6e76);
+}
+
+.meta {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--muted-text, #6e6e76);
+}

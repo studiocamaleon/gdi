@@ -28,10 +28,8 @@ import type { Derivador, ResultadoDerivador } from './tipos';
  * cenefa/pintura/fondo que los pasos siguientes heredan como drivers.
  */
 const bastidor_rectangular: Derivador = (jobContext, params) => {
-  const resultado = calcularEstructuraBastidor(
-    jobContext,
-    parsearParamsEstructuraBastidor(params),
-  );
+  const parametros = parsearParamsEstructuraBastidor(params);
+  const resultado = calcularEstructuraBastidor(jobContext, parametros);
   if (!resultado) return null;
   return {
     magnitudes: {
@@ -53,6 +51,22 @@ const bastidor_rectangular: Derivador = (jobContext, params) => {
       refuerzosH: resultado.refuerzosH,
       profundidadM: resultado.profundidadM,
       cenefaDesarrolloCm: resultado.cenefaDesarrolloCm,
+      // Estructura autosuficiente para el visor 3D de Producción. Se arma con
+      // los params EFECTIVOS (`paramsEfectivos` ya trae los overrides del
+      // sheet), así el dibujo es el bastidor cotizado y no el default de la
+      // ruta. El motor la persiste en la trazabilidad del paso.
+      estructura: {
+        tipoBastidor: parametros.tipoBastidor,
+        anchoM: resultado.anchoM,
+        altoM: resultado.altoM,
+        profundidadM: resultado.profundidadM,
+        sepRefuerzoVcm: parametros.sepRefuerzoVcm,
+        sepRefuerzoHcm: parametros.sepRefuerzoHcm,
+        refuerzosV: resultado.refuerzosV,
+        refuerzosH: resultado.refuerzosH,
+        despieceMm: resultado.despieceMm,
+        puntosSoldadura: resultado.puntosSoldadura,
+      },
     },
   };
 };
