@@ -7413,7 +7413,7 @@ export function PropuestaFicha({
 
       {orden && !orden.cancelacion ? (
         <div style={{ marginBottom: 12 }}>
-          <StepperOt estado={orden.estado} eventos={orden.eventos} />
+          <StepperOt estado={orden.estado} fechasEstado={orden.fechasEstado} />
         </div>
       ) : null}
 

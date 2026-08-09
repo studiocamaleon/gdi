@@ -73,6 +73,13 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
 }
 
+/* Las etapas del final quedan pegadas al borde derecho: el tooltip se ancla a
+   la derecha y se abre hacia la izquierda, para no salirse de pantalla. */
+.tipEnd {
+  left: auto;
+  right: 0;
+}
+
 .stage:hover .tip {
   opacity: 1;
   transform: translateY(0);

@@ -4,7 +4,7 @@
  * Stepper compacto del estado de la OT, para el header del detalle. Reemplaza
  * al grande para ganar alto en pantallas chicas. Al pasar el mouse por un
  * estado ya alcanzado muestra la fecha en que la orden llegó a ese estado
- * (sale del timeline de eventos).
+ * (`fechasEstado`, que calcula el backend desde el timeline de eventos).
  */
 
 import * as React from "react";
@@ -13,48 +13,27 @@ import {
   ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_FLOW,
   type OrdenTrabajoEstado,
-  type OrdenTrabajoEvento,
 } from "@/lib/ordenes-trabajo";
 import { fechaHoraCorta } from "@/lib/fecha";
 import s from "./stepper-ot.module.css";
 
-/** Fecha en que la orden ALCANZÓ un estado, desde el timeline. `null` si no. */
-function fechaDeEstado(
-  estado: OrdenTrabajoEstado,
-  eventos: OrdenTrabajoEvento[],
-): string | null {
-  if (estado === "borrador") {
-    return eventos.find((e) => e.tipo === "borrador")?.fecha ?? null;
-  }
-  // La emisión es la que deja la orden en "pendiente".
-  if (estado === "pendiente") {
-    const emision = eventos.find((e) => e.tipo === "emision");
-    if (emision) return emision.fecha;
-  }
-  // El resto salen de los cambios de estado (`estado` con `despues` = destino).
-  const cambio = eventos.find((e) => {
-    if (e.tipo !== "estado") return false;
-    const datos = e.datosJson as { despues?: unknown } | null;
-    return datos?.despues === estado;
-  });
-  return cambio?.fecha ?? null;
-}
-
 export function StepperOt({
   estado,
-  eventos,
+  fechasEstado,
 }: {
   estado: OrdenTrabajoEstado;
-  eventos: OrdenTrabajoEvento[];
+  /** Fecha (ISO) por estado alcanzado. Los futuros no están. */
+  fechasEstado?: Partial<Record<OrdenTrabajoEstado, string>>;
 }) {
   const curIdx = ORDEN_TRABAJO_FLOW.indexOf(estado);
+  const ultimo = ORDEN_TRABAJO_FLOW.length - 1;
 
   return (
     <div className={s.flow}>
       {ORDEN_TRABAJO_FLOW.map((k, i) => {
         const e = ORDEN_TRABAJO_ESTADOS[k];
         const st = i < curIdx ? "past" : i === curIdx ? "cur" : "future";
-        const fecha = st === "future" ? null : fechaDeEstado(k, eventos);
+        const fecha = fechasEstado?.[k] ?? null;
         return (
           <React.Fragment key={k}>
             <div
@@ -71,7 +50,10 @@ export function StepperOt({
                 {e.label}
               </span>
               {fecha ? (
-                <span className={s.tip} role="tooltip">
+                <span
+                  className={`${s.tip}${i >= ultimo - 1 ? ` ${s.tipEnd}` : ""}`}
+                  role="tooltip"
+                >
                   {e.label} · {fechaHoraCorta(fecha)}
                 </span>
               ) : null}

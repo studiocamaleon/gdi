@@ -250,6 +250,10 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   cancelacion: OrdenTrabajoCancelacion | null;
   productos: OrdenTrabajoProducto[];
   eventos: OrdenTrabajoEvento[];
+  /** Fecha (ISO) en que la orden alcanzó cada estado. Para el stepper (hover).
+   *  Sólo trae los alcanzados; los futuros no están. El API real siempre lo
+   *  manda; opcional para no obligar a los mocks. */
+  fechasEstado?: Partial<Record<OrdenTrabajoEstado, string>>;
   pago: OrdenTrabajoPago | null;
 };
 

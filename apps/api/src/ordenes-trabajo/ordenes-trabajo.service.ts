@@ -305,6 +305,32 @@ export function ordenSeFinaliza(
   return accion === 'completar' && total > 0 && hechos === total;
 }
 
+/**
+ * Fecha (ISO) en que la orden ALCANZÓ cada estado, desde los eventos de
+ * transición. `emision` deja la orden en pendiente; los `estado` traen el
+ * destino en `despues`; la ENTREGA cierra la orden con `{cerrada:true}` en vez
+ * de `despues`, así que se mapea aparte. Eventos en orden ascendente: se toma
+ * la PRIMERA vez que se alcanzó cada estado.
+ */
+function fechasEstadoDeEventos(
+  eventos: Array<{ tipo: string; fecha: Date; datosJson: Prisma.JsonValue }>,
+): Record<string, string> {
+  const fechas: Record<string, string> = {};
+  const marcar = (estado: string, fecha: Date) => {
+    if (!fechas[estado]) fechas[estado] = fecha.toISOString();
+  };
+  for (const evento of eventos) {
+    const datos = (evento.datosJson ?? {}) as Record<string, unknown>;
+    if (evento.tipo === 'borrador') marcar('borrador', evento.fecha);
+    else if (evento.tipo === 'emision') marcar('pendiente', evento.fecha);
+    else if (evento.tipo === 'estado') {
+      if (typeof datos.despues === 'string') marcar(datos.despues, evento.fecha);
+      else if (datos.cerrada === true) marcar('entregada', evento.fecha);
+    }
+  }
+  return fechas;
+}
+
 @Injectable()
 export class OrdenesTrabajoService {
   private readonly logger = new Logger(OrdenesTrabajoService.name);
@@ -645,7 +671,22 @@ export class OrdenesTrabajoService {
         });
       });
     }
-    return this.toDetalle({ ...orden, publicToken });
+    // Fecha en que la orden alcanzó cada estado, para el stepper del detalle.
+    // El detalle no trae `datosJson` (pesa), así que los eventos de transición
+    // se leen aparte —son pocos— y se computa el mapa acá.
+    const transiciones = await this.prisma.ordenTrabajoEvento.findMany({
+      where: {
+        ordenId: orden.id,
+        tenantId: auth.tenantId,
+        tipo: { in: ['borrador', 'emision', 'estado'] },
+      },
+      select: { tipo: true, fecha: true, datosJson: true },
+      orderBy: { fecha: 'asc' as const },
+    });
+    return {
+      ...this.toDetalle({ ...orden, publicToken }),
+      fechasEstado: fechasEstadoDeEventos(transiciones),
+    };
   }
 
   // ── Crear ────────────────────────────────────────────────────────────
