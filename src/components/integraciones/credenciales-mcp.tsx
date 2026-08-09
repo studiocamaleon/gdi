@@ -7,34 +7,92 @@ import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiv
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import {
   crearCredencialMcp,
-  getCredencialesMcp,
   revocarCredencialMcp,
   type CredencialMcp,
 } from "@/lib/credenciales-mcp-api";
 import s from "./credenciales-mcp.module.css";
 
 /**
- * "Tu IA (MCP)" — misma anatomía que el resto de integraciones: una int-card
- * en su sección (clases compartidas del sistema, no nuevas) que abre el panel
- * de gestión de credenciales.
+ * "Conectá tu IA (MCP)" — misma anatomía que el resto de integraciones:
+ * una int-card en la grilla (McpCard) que abre una VISTA DE DETALLE aparte
+ * (McpDetalle), igual que Wati/AFIP. El estado de apertura y la lista viven
+ * en IntegracionesView, que es quien alterna grilla ↔ detalle.
  *
  * El token se muestra UNA sola vez (en la base vive hasheado). Revocar es
  * inmediato y sin deshacer: ConfirmacionDestructiva, nunca confirm() nativo.
  *
  * `mcpUrl` llega del SERVER component (env API_URL): calcularla acá con
- * window.location fue el bug de hidratación (SSR renderiza "" y el cliente
- * el origin) y además apuntaba al front (3000) en vez del API (3001).
+ * window.location fue el bug de hidratación y encima apuntaba al front.
  */
-export function CredencialesMcp({
-  inicial,
-  mcpUrl,
+
+export function McpCard({
+  activas,
+  onAbrir,
 }: {
-  inicial: CredencialMcp[];
+  activas: number;
+  onAbrir: () => void;
+}) {
+  return (
+    <div
+      className={`int-card ${activas ? "status-connected" : "status-available"}`}
+      role="button"
+      tabIndex={0}
+      onClick={onAbrir}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onAbrir();
+        }
+      }}
+    >
+      <div className="int-card-head">
+        <div
+          className="int-logo"
+          style={{ width: 40, height: 40, background: "#14141a" }}
+        >
+          <IconoIA size={22} />
+        </div>
+        <div className="int-card-titles">
+          <div className="nm">Conectá tu IA (MCP)</div>
+          <div className="cat">Cotización conversando</div>
+        </div>
+        {activas > 0 && (
+          <span className="int-status ok">
+            <span className="dot" />
+            {activas === 1 ? "1 activa" : `${activas} activas`}
+          </span>
+        )}
+      </div>
+      <div className="int-card-desc">
+        Tu asistente (Claude, ChatGPT u otro compatible con MCP) cotiza
+        productos de tu catálogo conversando. Ve precios de venta; nunca costos
+        ni márgenes.
+      </div>
+      <div className="int-card-foot">
+        <span className="installs">
+          {activas ? "Conectada" : "Creá un token para conectar"}
+        </span>
+        <span className="cta">
+          {activas ? "Administrar" : "Conectar"}
+          <Flecha />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function McpDetalle({
+  credenciales,
+  mcpUrl,
+  onVolver,
+  onCambio,
+}: {
+  credenciales: CredencialMcp[];
   mcpUrl: string;
+  onVolver: () => void;
+  onCambio: () => Promise<void>;
 }) {
   const { fechaHora } = useFecha();
-  const [credenciales, setCredenciales] = React.useState(inicial);
-  const [abierto, setAbierto] = React.useState(false);
   const [nombre, setNombre] = React.useState("");
   const [creando, setCreando] = React.useState(false);
   const [tokenNuevo, setTokenNuevo] = React.useState<{
@@ -45,14 +103,6 @@ export function CredencialesMcp({
 
   const activas = credenciales.filter((c) => !c.revocadoEl);
   const revocadas = credenciales.filter((c) => c.revocadoEl);
-
-  const recargar = React.useCallback(async () => {
-    try {
-      setCredenciales(await getCredencialesMcp());
-    } catch {
-      /* la lista vieja sigue siendo útil */
-    }
-  }, []);
 
   const crear = async () => {
     const limpio = nombre.trim();
@@ -65,7 +115,7 @@ export function CredencialesMcp({
       const creada = await crearCredencialMcp(limpio);
       setTokenNuevo({ nombre: creada.nombre, token: creada.token });
       setNombre("");
-      await recargar();
+      await onCambio();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo crear la credencial.");
     } finally {
@@ -85,70 +135,54 @@ export function CredencialesMcp({
       await revocarCredencialMcp(aRevocar.id);
       toast.success(`Credencial “${aRevocar.nombre}” revocada.`);
       setARevocar(null);
-      await recargar();
+      await onCambio();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo revocar.");
     }
   };
 
   return (
-    <div className="int-section">
-      <div className="int-section-head">
-        <h3>Tu IA</h3>
-        <span className="rule" />
-        <span className="ct">1</span>
+    <div className="int-detail">
+      <div className="int-detail-top">
+        <button className="btn ghost" onClick={onVolver}>
+          <FlechaVolver /> Integraciones
+        </button>
       </div>
-      <div className="int-grid">
+
+      <div className="int-hero">
         <div
-          className={`int-card ${activas.length ? "status-connected" : "status-available"}`}
-          role="button"
-          tabIndex={0}
-          onClick={() => setAbierto((v) => !v)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setAbierto((v) => !v);
-            }
-          }}
+          className="int-logo"
+          style={{ width: 64, height: 64, background: "#14141a" }}
         >
-          <div className="int-card-head">
-            <div
-              className="int-logo"
-              style={{ width: 40, height: 40, background: "#14141a" }}
-            >
-              <IconoIA />
-            </div>
-            <div className="int-card-titles">
-              <div className="nm">Conectá tu IA (MCP)</div>
-              <div className="cat">Cotización conversando</div>
-            </div>
-            {activas.length > 0 && (
-              <span className="int-status ok">
-                <span className="dot" />
-                {activas.length === 1 ? "1 activa" : `${activas.length} activas`}
-              </span>
-            )}
+          <IconoIA size={34} />
+        </div>
+        <div className="int-hero-body">
+          <div className="eyebrow">
+            <span>Inteligencia artificial</span>
+            <span className="sep">·</span>
+            <span>Protocolo MCP</span>
           </div>
-          <div className="int-card-desc">
-            Tu asistente (Claude, ChatGPT u otro compatible con MCP) cotiza
-            productos de tu catálogo conversando. Ve precios de venta; nunca
-            costos ni márgenes.
-          </div>
-          <div className="int-card-foot">
-            <span className="installs">
-              {activas.length
-                ? "Conectada"
-                : "Creá un token para conectar"}
+          <h1>
+            Conectá tu IA{" "}
+            <span style={{ color: "var(--muted-text)", fontWeight: 500 }}>
+              · cotización conversando
             </span>
-            <span className="cta">
-              {abierto ? "Cerrar" : activas.length ? "Administrar" : "Conectar"}
-              <Flecha />
-            </span>
+          </h1>
+          <div className="sub">
+            Creá un token para que tu asistente (Claude, ChatGPT u otro
+            compatible con MCP) cotice productos de tu catálogo charlando con
+            vos. La IA ve precios de venta; nunca costos ni márgenes.
           </div>
         </div>
       </div>
 
-      {abierto ? (
+      <div className="int-section">
+        <div className="int-section-head">
+          <h3>Credenciales</h3>
+          <span className="rule" />
+          <span className="ct">{activas.length}</span>
+        </div>
+
         <div className={s.panel}>
           <div className={s.formCrear}>
             <input
@@ -217,18 +251,32 @@ export function CredencialesMcp({
               ))}
             </div>
           )}
+        </div>
+      </div>
 
-          <p className={s.instrucciones}>
+      <div className="int-section">
+        <div className="int-section-head">
+          <h3>Cómo conectar</h3>
+          <span className="rule" />
+        </div>
+        <div className={s.panel}>
+          <p className={s.instrucciones} style={{ marginTop: 0 }}>
             Conectá el asistente a <code>{mcpUrl}</code> con el token como{" "}
-            <code>Authorization: Bearer</code>. En Claude Code:{" "}
+            <code>Authorization: Bearer</code>.
+          </p>
+          <p className={s.instrucciones}>
+            En Claude Code:{" "}
             <code>
               claude mcp add grafo --transport http {mcpUrl} --header
               {' "Authorization: Bearer <token>"'}
             </code>
-            .
+          </p>
+          <p className={s.instrucciones}>
+            En claude.ai / Claude Desktop: Configuración → Conectores → Agregar
+            conector personalizado, con la misma URL y el token.
           </p>
         </div>
-      ) : null}
+      </div>
 
       <ConfirmacionDestructiva
         open={aRevocar !== null}
@@ -244,9 +292,9 @@ export function CredencialesMcp({
 }
 
 /** Chip/spark de IA, blanco sobre el logo oscuro (mismo trato que Ico.*). */
-function IconoIA() {
+function IconoIA({ size }: { size: number }) {
   return (
-    <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 32 32" width={size} height={size} fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="8" y="10" width="16" height="13" rx="3" />
       <path d="M16 10V6M12 6h8" />
       <circle cx="12.5" cy="16" r="0.5" fill="#fff" />
@@ -260,6 +308,14 @@ function Flecha() {
   return (
     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function FlechaVolver() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5M11 18l-6-6 6-6" />
     </svg>
   );
 }

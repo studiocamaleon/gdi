@@ -39,6 +39,11 @@ import {
   type EstadoIntegraciones,
 } from "@/lib/integraciones-api";
 import { AfipDetalle } from "@/components/integraciones/afip-detalle";
+import { McpCard, McpDetalle } from "@/components/integraciones/credenciales-mcp";
+import {
+  getCredencialesMcp,
+  type CredencialMcp,
+} from "@/lib/credenciales-mcp-api";
 
 /* ─────────── Iconos (calcados del diseño, sin dependencias) ─────────── */
 
@@ -130,19 +135,32 @@ function Logo({ proveedor, size = 44 }: { proveedor: ProveedorIntegracion; size?
 
 export function IntegracionesView({
   inicial,
-  extra,
+  mcp,
 }: {
   inicial: EstadoIntegraciones;
   /**
-   * Secciones adicionales que viven DENTRO del mismo int-page, después del
-   * catálogo (hoy: "Tu IA (MCP)"). Renderizadas sólo en la vista de grilla —
-   * los detalles (Wati/AFIP) retornan antes y no las muestran.
+   * Credenciales MCP ("Conectá tu IA"). undefined = el usuario no puede
+   * gestionarlas y la sección no se muestra. Como Wati/AFIP, la card de la
+   * grilla abre una vista de detalle aparte (McpDetalle).
    */
-  extra?: React.ReactNode;
+  mcp?: { inicial: CredencialMcp[]; mcpUrl: string };
 }) {
   const [datos, setDatos] = React.useState(inicial);
   const [abierta, setAbierta] = React.useState<ProveedorIntegracion | null>(null);
   const [afip, setAfip] = React.useState<AfipIntegracion | null>(null);
+  // MCP va aparte del union de proveedores: no es una IntegracionTenant.
+  const [mcpAbierto, setMcpAbierto] = React.useState(false);
+  const [credencialesMcp, setCredencialesMcp] = React.useState<CredencialMcp[]>(
+    mcp?.inicial ?? [],
+  );
+
+  const recargarMcp = React.useCallback(async () => {
+    try {
+      setCredencialesMcp(await getCredencialesMcp());
+    } catch {
+      // La lista vieja sigue siendo útil; el toast del detalle ya avisó.
+    }
+  }, []);
 
   // AFIP se carga on-demand al abrir (la lista no trae su detalle enriquecido);
   // el resto abre directo por estado.
@@ -171,6 +189,17 @@ export function IntegracionesView({
 
   const estadoDe = (p: ProveedorIntegracion): EstadoIntegracion =>
     datos.integraciones.find((i) => i.proveedor === p)?.estado ?? "DESCONECTADA";
+
+  if (mcpAbierto && mcp) {
+    return (
+      <McpDetalle
+        credenciales={credencialesMcp}
+        mcpUrl={mcp.mcpUrl}
+        onVolver={() => setMcpAbierto(false)}
+        onCambio={recargarMcp}
+      />
+    );
+  }
 
   if (abierta === "WATI") {
     return (
@@ -249,7 +278,14 @@ export function IntegracionesView({
         ))}
       </Seccion>
 
-      {extra}
+      {mcp ? (
+        <Seccion titulo="Tu IA" cuenta={1}>
+          <McpCard
+            activas={credencialesMcp.filter((c) => !c.revocadoEl).length}
+            onAbrir={() => setMcpAbierto(true)}
+          />
+        </Seccion>
+      ) : null}
     </div>
   );
 }

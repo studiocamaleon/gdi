@@ -1,7 +1,6 @@
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { tienePermiso } from "@/lib/permisos-server";
 import { IntegracionesView } from "@/components/integraciones/integraciones-view";
-import { CredencialesMcp } from "@/components/integraciones/credenciales-mcp";
 import {
   getIntegraciones,
   type EstadoIntegraciones,
@@ -39,10 +38,10 @@ export default async function IntegracionesPage() {
   return (
     <IntegracionesView
       inicial={inicial}
-      extra={
-        puedeGestionar ? (
-          <CredencialesMcp inicial={credenciales} mcpUrl={`${apiBase}/mcp`} />
-        ) : null
+      mcp={
+        puedeGestionar
+          ? { inicial: credenciales, mcpUrl: `${apiBase}/mcp` }
+          : undefined
       }
     />
   );
