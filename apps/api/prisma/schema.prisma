@@ -581,6 +581,7 @@ model Tenant {
   eventosAcceso                                    EventoAcceso[]
   authSessions                                     AuthSession[]
   invitations                                      Invitation[]
+  credencialesMcp                                  CredencialMcp[]
   clientes                                         Cliente[]
   proveedores                                      Proveedor[]
   empleados                                        Empleado[]
@@ -842,6 +843,7 @@ model Membership {
   rolDelTenant    Rol?          @relation(fields: [rolId], references: [id], onDelete: SetNull)
   authSessions    AuthSession[]
   invitationsSent Invitation[]  @relation("InvitationSender")
+  credencialesMcp CredencialMcp[]
 
   @@unique([userId, tenantId])
   @@index([tenantId])
@@ -899,6 +901,44 @@ model Invitation {
 
   @@index([tenantId, email])
   @@index([empleadoId])
+}
+
+/// Credencial de larga duración para que la IA del tenant opere el API vía
+/// MCP. El token opaco `grafo_mcp_...` viaja como Bearer y acá vive HASHEADO
+/// (SHA-256, patrón Invitation.tokenHash — nunca en claro como EnlacePublico).
+///
+/// Permisos efectivos = permisos del rol de la membership ∩ scopes, y NUNCA
+/// incluyen finanzas.ver_margenes: la IA ve precios, jamás costos ni márgenes.
+///
+/// Se busca por tokenHash SIN contexto de tenant (el tenant sale de la fila),
+/// por eso está en MODELOS_EXENTOS del tenant-guard.
+/// Ver docs/mcp-cotizador-diseno.md
+model CredencialMcp {
+  id           String     @id @default(uuid()) @db.Uuid
+  tenantId     String     @db.Uuid
+  /// De quién hereda rol + ipsPermitidas. Membership inactiva = credencial
+  /// muerta: se valida en cada request, igual que la sesión.
+  membershipId String     @db.Uuid
+  /// "Claude de Lucas", "Bot del mostrador" — para reconocerla en el listado.
+  nombre       String
+  tokenHash    String     @unique
+  /// Últimos 4 chars del token: identificable sin ser usable.
+  pista        String
+  /// Subset de permisos que esta credencial puede ejercer. Vacío = todos los
+  /// del rol (menos márgenes, que se filtra siempre en el guard).
+  scopes       String[]   @default([])
+  expiraEl     DateTime?
+  revocadoEl   DateTime?
+  /// Best-effort, escrito sin await y como mucho una vez por minuto.
+  ultimoUsoEl  DateTime?
+  /// Congelado como en EventoAcceso: la auditoría no depende de que el
+  /// usuario siga existiendo.
+  creadaPorId  String     @db.Uuid
+  createdAt    DateTime   @default(now())
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model Cliente {

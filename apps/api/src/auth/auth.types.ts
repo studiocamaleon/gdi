@@ -60,4 +60,15 @@ export type CurrentAuth = {
    * contexto, leería todos). undefined = sesión de tenant.
    */
   esPlataforma?: boolean;
+  /**
+   * Credencial MCP: la IA del tenant operando vía token opaco `grafo_mcp_...`.
+   * No hay AuthSession detrás (`sessionId` es `mcp:<credencialId>`, sólo para
+   * el cache). Sus permisos ya vienen intersecados con los scopes de la
+   * credencial y NUNCA incluyen finanzas.ver_margenes. undefined = humano.
+   */
+  mcp?: {
+    credencialId: string;
+    /** Congelado para logs/auditoría: "Claude de Lucas". */
+    credencialNombre: string;
+  };
 };

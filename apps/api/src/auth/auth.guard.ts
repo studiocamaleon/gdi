@@ -14,6 +14,11 @@ import { CurrentAuth, JwtPayload } from './auth.types';
 import { ipDeRequest, ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
+import {
+  PREFIJO_TOKEN_MCP,
+  hashTokenMcp,
+  permisosEfectivosMcp,
+} from './credencial-mcp.util';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -45,6 +50,13 @@ export class AuthGuard implements CanActivate {
 
     if (!token) {
       throw new UnauthorizedException('Debes iniciar sesion.');
+    }
+
+    // ── Credencial MCP (token opaco, no es un JWT) ─────────────────────
+    // El prefijo decide el camino ANTES de verifyAsync: un token grafo_mcp_
+    // jamás pasa por el verificador JWT ni viceversa.
+    if (token.startsWith(PREFIJO_TOKEN_MCP)) {
+      return this.autenticarCredencialMcp(token, context, request);
     }
 
     let payload: JwtPayload;
@@ -246,6 +258,138 @@ export class AuthGuard implements CanActivate {
     this.sessionCache.set(auth);
     request.auth = auth;
 
+    return true;
+  }
+
+  /**
+   * Autentica un token opaco de credencial MCP (`grafo_mcp_...`).
+   *
+   * Espejo del camino de sesión normal, con tres diferencias:
+   *  - No hay AuthSession: la credencial ES la sesión. Revocación/expiración
+   *    se validan acá en cada request (con el mismo cache de 30 s).
+   *  - Los permisos son rol ∩ scopes y NUNCA incluyen finanzas.ver_margenes
+   *    (permisosEfectivosMcp): la IA ve precios, jamás costos ni márgenes.
+   *  - Rutas @SinTenant se rechazan siempre: una credencial MCP vive DENTRO
+   *    de un tenant (inverso exacto de la sesión de plataforma).
+   *
+   * El mensaje de error es único a propósito: no se le cuenta a un cliente
+   * externo si la credencial no existe, venció o fue revocada.
+   */
+  private async autenticarCredencialMcp(
+    token: string,
+    context: ExecutionContext,
+    request: {
+      headers: Record<string, string | undefined>;
+      auth?: CurrentAuth;
+      ip?: string;
+      socket?: { remoteAddress?: string };
+    },
+  ): Promise<boolean> {
+    const rechazo = new UnauthorizedException(
+      'Credencial MCP invalida, vencida o revocada.',
+    );
+
+    const esSinTenant = this.reflector.getAllAndOverride<boolean>(
+      SIN_TENANT_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (esSinTenant) {
+      throw new UnauthorizedException(
+        'Las credenciales MCP operan dentro de un tenant.',
+      );
+    }
+
+    const tokenHash = hashTokenMcp(token);
+    // La clave del cache sale del hash (determinística, sin ir a la base).
+    // El service de credenciales invalida esta misma clave al revocar.
+    const cacheKey = `mcp:${tokenHash}`;
+
+    const cached = this.sessionCache.get(cacheKey);
+    if (cached?.mcp) {
+      if (!ipPermitida(ipDeRequest(request), cached.ipsPermitidas ?? [])) {
+        throw new UnauthorizedException(
+          'Tu cuenta sólo puede usarse desde la red autorizada de tu empresa.',
+        );
+      }
+      request.auth = cached;
+      return true;
+    }
+
+    const credencial = await this.prisma.credencialMcp.findUnique({
+      where: { tokenHash },
+      include: {
+        membership: {
+          include: {
+            rolDelTenant: true,
+            user: { select: { activo: true, email: true } },
+            tenant: { select: { activo: true } },
+          },
+        },
+      },
+    });
+
+    if (
+      !credencial ||
+      credencial.revocadoEl ||
+      (credencial.expiraEl && credencial.expiraEl <= new Date()) ||
+      !credencial.membership.activa ||
+      !credencial.membership.user.activo ||
+      !credencial.membership.tenant.activo ||
+      // Cinturón: la credencial y su membership tienen que ser del mismo
+      // tenant. No debería poder divergir, pero si diverge es fuga, no bug.
+      credencial.tenantId !== credencial.membership.tenantId
+    ) {
+      throw rechazo;
+    }
+
+    const membership = credencial.membership;
+    if (!ipPermitida(ipDeRequest(request), membership.ipsPermitidas)) {
+      throw new UnauthorizedException(
+        'Tu cuenta sólo puede usarse desde la red autorizada de tu empresa.',
+      );
+    }
+
+    const rol = membership.rolDelTenant;
+    const permisosDelRol = expandir(
+      rol ? rol.permisos : permisosDeRolBase(membership.rol),
+    );
+    const auth: CurrentAuth = {
+      userId: membership.userId,
+      sessionId: cacheKey,
+      tenantId: credencial.tenantId,
+      membershipId: credencial.membershipId,
+      role: membership.rol,
+      email: membership.user.email,
+      // Expandir ANTES de intersecar: expandir después podría resucitar un
+      // `ver` que la intersección había sacado.
+      permisos: permisosEfectivosMcp(
+        permisosDelRol,
+        expandir(credencial.scopes),
+      ),
+      ipsPermitidas: membership.ipsPermitidas,
+      mcp: {
+        credencialId: credencial.id,
+        credencialNombre: credencial.nombre,
+      },
+    };
+
+    // Último uso best-effort: como mucho un UPDATE por minuto por credencial,
+    // sin await y sin tumbar el request si falla (es métrica, no autorización).
+    const haceUnMinuto = Date.now() - 60_000;
+    if (
+      !credencial.ultimoUsoEl ||
+      credencial.ultimoUsoEl.getTime() < haceUnMinuto
+    ) {
+      void this.prisma.credencialMcp
+        .update({
+          where: { id: credencial.id },
+          data: { ultimoUsoEl: new Date() },
+        })
+        .catch(() => {});
+    }
+
+    this.sessionCache.set(auth);
+    request.auth = auth;
     return true;
   }
 

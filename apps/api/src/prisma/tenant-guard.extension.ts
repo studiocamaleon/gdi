@@ -17,6 +17,9 @@ const MODELOS_EXENTOS = new Set<string>([
   'AuthSession',
   'Membership',
   'Invitation',
+  // Se resuelve por tokenHash único global ANTES de que exista contexto de
+  // tenant (el tenant sale de la fila). Ver docs/mcp-cotizador-diseno.md
+  'CredencialMcp',
   'MaterialPreset',
   // Catálogo del SaaS: mismos planes para todos los tenants.
   'Plan',
