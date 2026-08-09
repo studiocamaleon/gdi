@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AppThrottlerGuard } from './common/app-throttler.guard';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
@@ -128,8 +129,9 @@ import { CentroCopiadoModule } from './centro-copiado/centro-copiado.module';
       useClass: MargenesInterceptor,
     },
     {
+      // Tracker por credencial MCP (una cubeta por token) o IP (default).
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: AppThrottlerGuard,
     },
     {
       provide: APP_GUARD,

@@ -7,6 +7,7 @@ import {
   Res,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { SoloAutenticado } from '../auth/permiso.decorator';
@@ -32,6 +33,11 @@ import { McpServerFactory } from './mcp-server.factory';
 export class McpController {
   constructor(private readonly factory: McpServerFactory) {}
 
+  // 30/min POR CREDENCIAL (tracker de AppThrottlerGuard): una conversación
+  // usa ~4-8 requests por cotización (initialize, tools/list, tools). Las
+  // llamadas loopback de las tools van a otras rutas y cuentan contra el
+  // default de 100/min de la misma cubeta — el total queda acotado igual.
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @SoloAutenticado()
   @Post()
   async handle(
