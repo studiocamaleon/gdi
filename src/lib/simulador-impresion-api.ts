@@ -93,6 +93,14 @@ export type SimuladorNestingGrupo = {
   /** pasoIds sin medidas: quedan fuera del nesting, dentro del lote. */
   sinMedidas: string[];
   anchos: SimuladorNestingAncho[];
+  /**
+   * Bordes efectivos de la tanda en mm (margen de máquina + demasía), los
+   * mismos que insetan las piezas. `null` cuando no hubo acomodo. El
+   * lateral corre por los dos bordes del ancho; el longitudinal, al inicio y
+   * fin del largo (una vez por tanda — de ahí el ahorro por consolidación).
+   */
+  margenLateralMm: number | null;
+  margenLongitudinalMm: number | null;
 };
 
 export type SimuladorNestingRequest = {

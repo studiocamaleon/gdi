@@ -229,7 +229,13 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
           },
       null,
   );
-  if (!config || medidas.length === 0) return { sinMedidas, anchos: [] };
+  if (!config || medidas.length === 0)
+    return {
+      sinMedidas,
+      anchos: [],
+      margenLateralMm: null,
+      margenLongitudinalMm: null,
+    };
 
   // Bordes efectivos: margen de máquina MÁS demasía, igual que al cotizar
   // (el snapshot guarda usableArea 565 contra printableArea 570 en un 600).
@@ -306,7 +312,16 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
     };
   });
 
-  return { sinMedidas, anchos };
+  // Bordes efectivos de la tanda (margen de máquina + demasía), los mismos que
+  // insetan las piezas. El simulador los usa para dibujar los márgenes REALES
+  // —no un adorno— y mostrar que el avance corre una vez por tanda. Son iguales
+  // para todos los anchos, así que van a nivel grupo.
+  return {
+    sinMedidas,
+    anchos,
+    margenLateralMm: bordeLateralMm,
+    margenLongitudinalMm: bordeLongitudinalMm,
+  };
 }
 
 /** Paso de trazabilidad para el simulador LÁSER (por hoja). */

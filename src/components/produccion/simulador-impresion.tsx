@@ -260,6 +260,8 @@ function SimRollLayout({
   colorMap,
   nesteando,
   nestingError,
+  margenLateralCm,
+  margenLongitudinalCm,
   height = 190,
 }: {
   pack: SimRollResult | undefined;
@@ -267,6 +269,10 @@ function SimRollLayout({
   colorMap: Record<string, string>;
   nesteando: boolean;
   nestingError: string | null;
+  /** Margen de orilla (ancho) y de avance (largo), en cm. Los mismos que
+   *  insetan las piezas al cotizar. `null` = sin dato. */
+  margenLateralCm?: number | null;
+  margenLongitudinalCm?: number | null;
   height?: number;
 }) {
   // El acomodo lo calcula el motor: mientras no llegue no se dibuja un rollo
@@ -295,11 +301,42 @@ function SimRollLayout({
   const rollW = lenCm * scale;
   const oy = padT + (innerH - rollH) / 2;
 
+  // Márgenes reales (los mismos que insetan las piezas). El de orilla corre por
+  // los dos bordes del ancho; el de avance, al inicio y fin del largo — una vez
+  // por tanda, que es de dónde sale el ahorro por consolidación.
+  const mLat = margenLateralCm && margenLateralCm > 0 ? margenLateralCm : 0;
+  const mLon =
+    margenLongitudinalCm && margenLongitudinalCm > 0 ? margenLongitudinalCm : 0;
+  const latPx = mLat * scale;
+  const lonPx = mLon * scale;
+  const hayMargenes = latPx > 0 || lonPx > 0;
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
       <rect x={padL} y={oy} width={rollW} height={rollH} fill="#faf9f7" stroke="#d4d2cd" strokeWidth="1.5" rx="2" />
-      <line x1={padL} x2={padL + rollW} y1={oy + 3 * scale} y2={oy + 3 * scale} stroke="#e7e5e2" strokeWidth="1" strokeDasharray="5 4" />
-      <line x1={padL} x2={padL + rollW} y1={oy + rollH - 3 * scale} y2={oy + rollH - 3 * scale} stroke="#e7e5e2" strokeWidth="1" strokeDasharray="5 4" />
+      {/* Franjas no imprimibles (sombreado) + límite del área útil (punteada).
+          Se dibujan antes que las piezas; como las piezas ya vienen insetadas
+          por el motor, apoyan justo contra la punteada, sin cruzarla. */}
+      {hayMargenes ? (
+        <g>
+          {latPx > 0 ? (
+            <>
+              <rect x={padL} y={oy} width={rollW} height={latPx} fill="#e7e5e2" fillOpacity="0.55" />
+              <rect x={padL} y={oy + rollH - latPx} width={rollW} height={latPx} fill="#e7e5e2" fillOpacity="0.55" />
+              <line x1={padL} x2={padL + rollW} y1={oy + latPx} y2={oy + latPx} stroke="#c9c6c0" strokeWidth="1" strokeDasharray="4 3" />
+              <line x1={padL} x2={padL + rollW} y1={oy + rollH - latPx} y2={oy + rollH - latPx} stroke="#c9c6c0" strokeWidth="1" strokeDasharray="4 3" />
+            </>
+          ) : null}
+          {lonPx > 0 ? (
+            <>
+              <rect x={padL} y={oy} width={lonPx} height={rollH} fill="#e7e5e2" fillOpacity="0.55" />
+              <rect x={padL + rollW - lonPx} y={oy} width={lonPx} height={rollH} fill="#e7e5e2" fillOpacity="0.55" />
+              <line x1={padL + lonPx} x2={padL + lonPx} y1={oy} y2={oy + rollH} stroke="#c9c6c0" strokeWidth="1" strokeDasharray="4 3" />
+              <line x1={padL + rollW - lonPx} x2={padL + rollW - lonPx} y1={oy} y2={oy + rollH} stroke="#c9c6c0" strokeWidth="1" strokeDasharray="4 3" />
+            </>
+          ) : null}
+        </g>
+      ) : null}
       {pack.placed.map((p, i) => {
         const x = padL + p.y * scale;
         const y = oy + p.x * scale;
@@ -334,6 +371,13 @@ function SimRollLayout({
       <text x={padL + rollW / 2} y={oy + rollH + 18} textAnchor="middle" fill="#6e6e76" fontSize="11" fontFamily="var(--font-mono)" fontWeight="600">
         {simFmt(pack.totalLen / 100, 2)} m lineales
       </text>
+      {/* Valores de los márgenes, arriba del rollo. El de avance corre una sola
+          vez por tanda (por eso "×1"): es lo que explica el ahorro. */}
+      {hayMargenes ? (
+        <text x={padL + rollW / 2} y={11} textAnchor="middle" fill="#9a9a9f" fontSize="9.5" fontFamily="var(--font-mono)">
+          {`orilla ${simFmt(mLat * 10, 0)} mm · avance ${simFmt(mLon * 10, 0)} mm ×1`}
+        </text>
+      ) : null}
     </svg>
   );
 }
@@ -560,6 +604,16 @@ function SimMaterialCard({
                   colorMap={colorMap}
                   nesteando={nesteando}
                   nestingError={nestingError}
+                  margenLateralCm={
+                    nesting?.margenLateralMm != null
+                      ? nesting.margenLateralMm / 10
+                      : null
+                  }
+                  margenLongitudinalCm={
+                    nesting?.margenLongitudinalMm != null
+                      ? nesting.margenLongitudinalMm / 10
+                      : null
+                  }
                 />
               </div>
 
