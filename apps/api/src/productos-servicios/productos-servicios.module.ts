@@ -8,6 +8,7 @@ import { PasosTenantService } from './pasos-tenant.service';
 import { ProductoRutasService } from './producto-rutas.service';
 import { ProductoValidacionService } from './producto-validacion.service';
 import { ProductosService } from './productos.service';
+import { FormularioCotizacionService } from './formulario-cotizacion.service';
 import { ProductosServiciosService } from './productos-servicios.service';
 import { RutasProduccionService } from './rutas-produccion.service';
 import { PrecioModule } from './precio/precio.module';
@@ -38,6 +39,7 @@ import { PrecioModule } from './precio/precio.module';
     PasosTenantService,
     CargosDirectosProductoService,
     ProductoValidacionService,
+    FormularioCotizacionService,
   ],
   exports: [ProductosServiciosService, PrecioModule],
 })

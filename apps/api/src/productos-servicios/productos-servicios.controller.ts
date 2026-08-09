@@ -45,6 +45,7 @@ import {
   CrearCargoDirectoDto,
 } from './dto/cargo-directo.dto';
 import { Permiso } from '../auth/permiso.decorator';
+import { FormularioCotizacionService } from './formulario-cotizacion.service';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -62,6 +63,7 @@ export class ProductosServiciosController {
   constructor(
     private readonly service: ProductosServiciosService,
     private readonly pasosTenant: PasosTenantService,
+    private readonly formulario: FormularioCotizacionService,
   ) {}
 
   @Get('catalogo-comercial')
@@ -97,6 +99,29 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.validarProducto(tenantId, id);
+  }
+
+  /**
+   * Formulario de cotización derivado: las preguntas que hay que responder
+   * para cotizar este producto, con su clave de jobContext explícita. Es la
+   * vista COMERCIAL del producto (sin costos), por eso baja el permiso de la
+   * clase (costos.ver) a comercial.ver — lo consume el MCP y a futuro el
+   * propio sheet. Ver docs/mcp-cotizador-diseno.md §4.
+   */
+  @Permiso('comercial.ver')
+  @Get('productos/:id/formulario-cotizacion')
+  async formularioCotizacion(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Query('rutaAlternativaId') rutaAlternativaId?: string,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.formulario.obtener(
+      tenantId,
+      id,
+      rutaAlternativaId?.trim() || undefined,
+    );
   }
 
   @Permiso('costos.gestionar')
