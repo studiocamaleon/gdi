@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import {
   altaClientePorDocumento,
+  avisarClienteEscaneado,
   buscarClientePorDocumento,
 } from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
@@ -97,6 +98,10 @@ export function AltaDniModal({
           ? `${r.cliente.nombre} ya estaba cargado: se usa ese.`
           : `Cliente ${r.cliente.nombre} creado.`,
       );
+      // Aviso global: la ficha que el operador tenga abierta lo toma como
+      // cliente de la orden. Sin esto el alta quedaba en la nada — había que
+      // ir a buscarlo a mano en el selector.
+      avisarClienteEscaneado(r.cliente);
       onCreado?.(r.cliente, r.yaExistia);
       onClose();
     } catch (e) {

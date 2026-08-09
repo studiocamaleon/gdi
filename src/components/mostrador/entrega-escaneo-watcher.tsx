@@ -25,6 +25,14 @@ import { AltaDniModal } from "./alta-dni-modal";
 const NUMERO_ORDEN = /^OT-\d{4}-\d+$/;
 
 /**
+ * ¿Lo escaneado es el QR de una orden? Lo usan también los listeners que
+ * NO quieren órdenes (el de cupones de la ficha), para no pisarse.
+ */
+export function esNumeroOrden(crudo: string): boolean {
+  return NUMERO_ORDEN.test(normalizarNumeroOrden(crudo));
+}
+
+/**
  * Arregla el guión que el lector no manda como guión.
  *
  * Los lectores 2D emulan un teclado **US**: mandan la POSICIÓN de la tecla,

@@ -66,6 +66,9 @@ import {
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
 import { validarCupon, type Cupon } from "@/lib/cupones-api";
+import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
+import { parsearDniArgentino } from "@/lib/dni-argentino";
+import { esNumeroOrden } from "@/components/mostrador/entrega-escaneo-watcher";
 import { useEscaneoCodigo } from "@/lib/use-escaneo-codigo";
 import {
   CuponAvisoModal,
@@ -5511,6 +5514,38 @@ export function PropuestaFicha({
   } | null>(null);
   const [panelSaving, setPanelSaving] = React.useState(false);
   const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? "");
+  // Clientes dados de alta escaneando el DNI durante ESTA sesión: no vienen
+  // en `initialClientes` (se cargó en el server) y sin esto el combobox no
+  // tendría cómo mostrar al recién creado.
+  const [clientesEscaneados, setClientesEscaneados] = React.useState<
+    ClienteDetalle[]
+  >([]);
+
+  // El modal del DNI vive en el layout —el lector anda en cualquier
+  // pantalla—, así que avisa por evento y la ficha abierta se lo pone como
+  // cliente de la orden.
+  React.useEffect(() => {
+    const onEscaneado = (event: Event) => {
+      const cliente = (event as CustomEvent<ClienteDetalle>).detail;
+      if (!cliente?.id) return;
+      setClientesEscaneados((prev) =>
+        prev.some((c) => c.id === cliente.id) ? prev : [...prev, cliente],
+      );
+      setClienteId(cliente.id);
+      toast.success(`${cliente.nombre} quedó como cliente de la orden.`);
+    };
+    window.addEventListener(CLIENTE_ESCANEADO_EVENT, onEscaneado);
+    return () =>
+      window.removeEventListener(CLIENTE_ESCANEADO_EVENT, onEscaneado);
+  }, []);
+
+  const clientesDisponibles = React.useMemo(
+    () =>
+      clientesEscaneados.length === 0
+        ? initialClientes
+        : [...initialClientes, ...clientesEscaneados],
+    [initialClientes, clientesEscaneados],
+  );
   const [canalVenta, setCanalVenta] = React.useState(
     orden?.canalVenta ?? "mostrador",
   );
@@ -7060,7 +7095,14 @@ export function PropuestaFicha({
       !copiadoOpen &&
       !cargoOpen &&
       !panelEditor,
-    onCodigo: (codigo) => void aplicarCuponEscaneado(codigo),
+    onCodigo: (codigo) => {
+      // Por el mismo lector entran tres cosas y este listener sólo quiere
+      // cupones. Sin este filtro, escanear un DNI o el QR de una orden acá
+      // los mandaba a validar como cupón y devolvía "no existe" — mientras
+      // el watcher global, en paralelo, hacía lo correcto.
+      if (esNumeroOrden(codigo) || parsearDniArgentino(codigo)) return;
+      void aplicarCuponEscaneado(codigo);
+    },
   });
 
   React.useEffect(() => {
@@ -7439,7 +7481,7 @@ export function PropuestaFicha({
             <ClienteCombobox
               value={clienteId}
               onChange={setClienteId}
-              initialClientes={initialClientes}
+              initialClientes={clientesDisponibles}
             />
           ) : (
             <div className="ctrl-input">

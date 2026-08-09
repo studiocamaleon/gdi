@@ -99,6 +99,25 @@ export async function altaClientePorDocumento(payload: {
   );
 }
 
+/**
+ * Un cliente quedó identificado escaneando su DNI.
+ *
+ * El modal de alta vive en el layout —el lector funciona desde cualquier
+ * pantalla— así que no puede hablarle por props a la ficha que el operador
+ * tenga abierta. Va por evento: quien esté cargando una orden lo escucha y
+ * se lo pone como cliente. Mismo patrón que TRAMOS_CAMBIARON_EVENT.
+ */
+export const CLIENTE_ESCANEADO_EVENT = "gdi:cliente-escaneado";
+
+export function avisarClienteEscaneado(cliente: ClienteDetalle) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<ClienteDetalle>(CLIENTE_ESCANEADO_EVENT, {
+      detail: cliente,
+    }),
+  );
+}
+
 /** ¿Ese documento ya está cargado? Se consulta al escanear, antes del alta. */
 export async function buscarClientePorDocumento(documento: string) {
   return apiRequest<{ cliente: ClienteDetalle | null }>(
