@@ -87,6 +87,30 @@ export class OrdenesTrabajoController {
   }
 
   /**
+   * QR de retiro de la orden. Se sirve como PNG para dos consumidores: la
+   * vista pública de seguimiento (la muestra el cliente en el mostrador) y el
+   * header de imagen del WhatsApp de "orden lista" (Meta busca esta URL al
+   * enviar). El token de la orden es lo único que autoriza.
+   */
+  @Public()
+  @Get('track/:token/qr-retiro.png')
+  async qrRetiroPublico(
+    @Param('token') token: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const png = await this.ordenesTrabajoService.qrRetiroPorToken(token);
+    if (!png) {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader('Content-Type', 'image/png');
+    // El QR es el número de la orden: estable, no cambia. Se puede cachear
+    // fuerte, y así WhatsApp no golpea el endpoint en cada reintento de envío.
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    res.end(png);
+  }
+
+  /**
    * Adjunto que la imprenta marcó visible para el cliente (prueba de color,
    * foto del trabajo terminado). El token autoriza, y el service comprueba
    * además que el archivo sea de ESA orden.

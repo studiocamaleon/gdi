@@ -17,6 +17,7 @@ import {
   type TrackingPublico,
 } from "@/lib/tracking";
 import { formatBytes } from "@/lib/archivos";
+import sQr from "./tracking-qr.module.css";
 
 /** Cada cuánto se sincroniza el avance con la planta (sin recargar). */
 const POLL_MS = 15000;
@@ -26,6 +27,12 @@ const POLL_MS = 15000;
 const IcoCheck = () => (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 12l4 4 10-10" />
+  </svg>
+);
+const IcoCheckCircle = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <path d="M22 4 12 14.01l-3-3" />
   </svg>
 );
 const IcoPhone = () => (
@@ -513,6 +520,29 @@ export function TrackingView({
         <div className="t-hero-sub">
           {data.progresoPct}% completado. Te avisaremos ni bien esté listo para retirar.
         </div>
+
+        {/* QR de retiro: sólo cuando el trabajo está listo. Es el respaldo del
+            que va por WhatsApp — acá siempre está a mano, aunque hayan borrado
+            el mensaje. Ya entregada no hace falta. */}
+        {data.estado === "finalizada" ? (
+          <div className={sQr.card}>
+            <div className={sQr.titulo}>
+              <IcoCheckCircle />
+              ¡Listo para retirar!
+            </div>
+            <div className={sQr.bajada}>
+              Mostrá este QR en el mostrador y te entregamos el pedido.
+            </div>
+            <div className={sQr.qr}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/backend/ordenes-trabajo/track/${token}/qr-retiro.png`}
+                alt={`QR de retiro de la orden ${data.numero}`}
+              />
+            </div>
+            <div className={sQr.numero}>{data.numero}</div>
+          </div>
+        ) : null}
 
         {/* Entrega + progreso global */}
         <div className="t-deliver">

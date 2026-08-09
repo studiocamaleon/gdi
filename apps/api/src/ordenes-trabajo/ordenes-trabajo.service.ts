@@ -12,6 +12,7 @@ import {
   RolSistema,
   TipoEnlacePublico,
 } from '@prisma/client';
+import QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import {
@@ -355,6 +356,40 @@ export class OrdenesTrabajoService {
     );
     if (!enlace) return null;
     return this.archivos.urlDeLogoPublico(enlace.tenantId);
+  }
+
+  /**
+   * QR de retiro para el seguimiento público y para el WhatsApp de "orden
+   * lista" (que lo manda como header de imagen: Meta busca esta URL).
+   *
+   * Codifica el NÚMERO de la orden —lo mismo que el modal del mostrador—, no
+   * un token: así el operador puede tipearlo si el QR no lee, y su forma lo
+   * distingue de un código de cupón en el mismo lector. El token de la URL es
+   * sólo la credencial que autoriza a generarlo; nunca viaja adentro del QR.
+   *
+   * Corrección de errores alta y con margen: el papel se dobla y se mancha en
+   * el mostrador, y WhatsApp recomprime la imagen. Un QR de un número corto es
+   * poco denso y sobrevive esa recompresión sin drama.
+   */
+  async qrRetiroPorToken(token: string): Promise<Buffer | null> {
+    const enlace = await this.enlaces.resolver(
+      token,
+      TipoEnlacePublico.SEGUIMIENTO_OT,
+    );
+    if (!enlace) return null;
+    const orden = await this.prisma.ordenTrabajo.findUnique({
+      where: { id: enlace.entidadId },
+      select: { numero: true, estado: true },
+    });
+    // Un borrador no tiene por qué exponer un QR de retiro: todavía no es una
+    // orden que el cliente vaya a buscar.
+    if (!orden || orden.estado === 'borrador') return null;
+    return QRCode.toBuffer(orden.numero, {
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 512,
+      type: 'png',
+    });
   }
 
   /**

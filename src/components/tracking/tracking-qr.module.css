@@ -1,0 +1,69 @@
+/*
+ * Tarjeta del QR de retiro en el seguimiento público. Aparece sólo cuando la
+ * orden está lista: es el respaldo del QR que va por WhatsApp, para el cliente
+ * que borró el mensaje o no le descargó la imagen.
+ *
+ * Módulo propio a propósito: la vista de tracking se estila con clases `t-*`
+ * globales, pero una vista nueva no suma más globales (css:guard). Usa los
+ * mismos tokens `--t-*` para que combine con el resto.
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 24px 20px;
+  margin: 4px 0 20px;
+  background: var(--t-ok-bg, #eafaf1);
+  border: 1px solid var(--t-ok, #16a34a);
+  border-radius: var(--t-r-4, 16px);
+  box-shadow: var(--t-shadow-card, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+.titulo {
+  font-family: var(--t-font-sans);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--t-ink, #14140f);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.titulo svg {
+  color: var(--t-ok, #16a34a);
+}
+
+.bajada {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--t-muted, #6b6b60);
+  max-width: 32ch;
+}
+
+.qr {
+  width: 220px;
+  max-width: 68vw;
+  aspect-ratio: 1;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--t-border, #e6e3da);
+  border-radius: var(--t-r-3, 12px);
+}
+
+.qr img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.numero {
+  font-family: var(--t-font-mono, ui-monospace, monospace);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--t-ink, #14140f);
+}
