@@ -92,6 +92,8 @@ import {
 import type { Estacion } from "@/lib/estaciones";
 import type { TableroItemData } from "@/lib/tablero-produccion";
 import { ProduccionOrdenTab } from "@/components/comercial/produccion-orden-tab";
+import { BastidorVisor } from "@/components/carteleria/bastidor-visor";
+import { StepperOt } from "@/components/comercial/stepper-ot";
 import {
   estimarDemoraNuevos,
   etiquetaEta,
@@ -1802,6 +1804,9 @@ function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
   );
 }
 
+/** Clave del tab del visor 3D del bastidor dentro de "Disposición de piezas". */
+const TAB_BASTIDOR_3D = "__bastidor3d__";
+
 function ProduccionItemView({
   item,
   calculoPendiente,
@@ -1814,6 +1819,12 @@ function ProduccionItemView({
 }) {
   const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
   const pasosActivos = pasosCosteoActivos;
+  // Cartelería con estructura de bastidor: se muestra el visor 3D del marco a
+  // fabricar. El visor pide la estructura del snapshot y se auto-oculta si no
+  // la hay (ítem sin OT emitida todavía).
+  const esBastidor = item.cotizacion.pasos.some(
+    (paso) => paso.familiaCodigo === "estructura_bastidor",
+  );
   const pasosConNesting = pasosCosteoActivos.filter(
     (paso): paso is PanelEditorPaso => Boolean(paso.nestingResult),
   );
@@ -1836,17 +1847,26 @@ function ProduccionItemView({
   }, [item.cotizacion.pasos]);
 
   const [activeNestingKey, setActiveNestingKey] = React.useState("");
-  const activeNestingTab =
-    nestingTabs.find((tab) => tab.key === activeNestingKey) ??
-    nestingTabs[0] ??
-    null;
+  const bastidorActivo = activeNestingKey === TAB_BASTIDOR_3D;
+  const activeNestingTab = bastidorActivo
+    ? null
+    : (nestingTabs.find((tab) => tab.key === activeNestingKey) ??
+      nestingTabs[0] ??
+      null);
+
+  // Los tabs de "Disposición de piezas": los del nesting primero y el visor 3D
+  // del bastidor al final (cuando el ítem lo tiene). Comparten la misma tira.
+  const tabsDisposicion = [
+    ...nestingTabs.map((tab) => ({ key: tab.key, label: tab.label })),
+    ...(esBastidor ? [{ key: TAB_BASTIDOR_3D, label: "Bastidor 3D" }] : []),
+  ];
 
   React.useEffect(() => {
-    if (nestingTabs.length === 0) return;
-    if (!nestingTabs.some((tab) => tab.key === activeNestingKey)) {
-      setActiveNestingKey(nestingTabs[0]?.key ?? "");
-    }
-  }, [activeNestingKey, nestingTabs]);
+    const keys = tabsDisposicion.map((tab) => tab.key);
+    if (keys.length === 0) return;
+    if (!keys.includes(activeNestingKey)) setActiveNestingKey(keys[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNestingKey, tabsDisposicion.map((tab) => tab.key).join()]);
 
   if (calculoPendiente) {
     return (
@@ -1900,29 +1920,34 @@ function ProduccionItemView({
         </div>
       </div>
 
-      {pasosConNesting.length > 0 ? (
+      {pasosConNesting.length > 0 || esBastidor ? (
         <div className="cost-section">
-          <div className="mb-[18px] flex flex-wrap items-end gap-4">
-            <div className="min-w-0 flex-1 basis-80">
-              <div className="cost-title mb-1">Nesting del item</div>
-              <h1 className="m-0 text-[22px] font-semibold leading-[1.2] tracking-[-0.018em] text-[var(--ink)]">
-                Disposición de piezas
-              </h1>
-              <div className="mt-1 text-[13px] text-[var(--muted)]">
-                Acomodo calculado por la ruta activa para controlar consumo,
-                demasía y cortes.
+          {/* Con tabs (nesting + bastidor), la tira de tabs ES el encabezado
+              de la sección: el título grande repetía lo que ya dice el tab.
+              Con una sola disposición (sin tabs) se mantiene el título. */}
+          {tabsDisposicion.length > 1 ? null : (
+            <div className="mb-[18px] flex flex-wrap items-end gap-4">
+              <div className="min-w-0 flex-1 basis-80">
+                <div className="cost-title mb-1">Nesting del item</div>
+                <h1 className="m-0 text-[22px] font-semibold leading-[1.2] tracking-[-0.018em] text-[var(--ink)]">
+                  Disposición de piezas
+                </h1>
+                <div className="mt-1 text-[13px] text-[var(--muted)]">
+                  Acomodo calculado por la ruta activa para controlar consumo,
+                  demasía y cortes.
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <div className="production-nestings">
-            {nestingTabs.length > 1 ? (
+            {tabsDisposicion.length > 1 ? (
               <div
                 className="production-nesting-tabs"
                 role="tablist"
-                aria-label="Nesting del item"
+                aria-label="Disposición de piezas"
               >
-                {nestingTabs.map((tab) => {
-                  const selected = tab.key === activeNestingTab?.key;
+                {tabsDisposicion.map((tab) => {
+                  const selected = tab.key === activeNestingKey;
                   return (
                     <button
                       key={tab.key}
@@ -1938,7 +1963,11 @@ function ProduccionItemView({
                 })}
               </div>
             ) : null}
-            {activeNestingTab ? (
+            {bastidorActivo ? (
+              <div className="production-nesting" key="bastidor3d">
+                <BastidorVisor itemId={item.id} />
+              </div>
+            ) : activeNestingTab ? (
               <div className="production-nesting" key={activeNestingTab.key}>
                 {onEditPanels && isPanelEditableStep(activeNestingTab.paso) ? (
                   <div className="mb-3 flex justify-end">
@@ -4092,6 +4121,7 @@ export function ResumenBar({
   onDescuentoOrden,
   onCuponOrden,
   readOnly = false,
+  accionesOrden,
 }: {
   items: PropuestaItem[];
   cargosOrden: PropuestaCargoDirecto[];
@@ -4108,6 +4138,9 @@ export function ResumenBar({
   /** Abre el modal directo en modo escaneo de cupón (F4). */
   onCuponOrden?: () => void;
   readOnly?: boolean;
+  /** Acciones de la OT emitida (Editar / Cancelar): van acá, no en el header,
+   *  para ganar alto. Sólo en modo lectura. */
+  accionesOrden?: React.ReactNode;
 }) {
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatCurrency(v, moneda);
@@ -4177,7 +4210,11 @@ export function ResumenBar({
             </span>
           ))}
         </span>
-        {readOnly ? null : (
+        {readOnly ? (
+          accionesOrden ? (
+            <span className={resumenBar.acts}>{accionesOrden}</span>
+          ) : null
+        ) : (
           <span className={resumenBar.acts}>
             {onDescuentoOrden ? (
               <button
@@ -7286,22 +7323,19 @@ export function PropuestaFicha({
               </span>
             </h1>
           )}
-          <div className="sub">
-            {orden
-              ? `${orden.clienteNombre}${orden.resumen ? ` · ${orden.resumen}` : ""}`
-              : ordenTipo === "orden"
+          {/* En una OT emitida el cliente ya está en su card y el producto en
+              la tabla: el subtítulo repetía. Se deja sólo la guía del alta. */}
+          {!orden ? (
+            <div className="sub">
+              {ordenTipo === "orden"
                 ? "Confirma productos, especificaciones y pagos para emitir la OT al taller."
                 : "Arma la propuesta para enviar al cliente antes de confirmar la OT."}
-          </div>
+            </div>
+          ) : null}
         </div>
-        <div className="right">
+        <div className="right" style={{ alignItems: "center" }}>
           <div className="orden-meta">
-            <span className="meta-row">
-              <span className="ml">Nº</span>
-              <span className="mv mono">
-                {orden ? orden.numero : "Se asigna al emitir"}
-              </span>
-            </span>
+            {/* El N° ya está grande a la izquierda; acá sólo la fecha. */}
             <span className="meta-row">
               <span className="ml">{modoOrden ? "Emitida" : "Creado"}</span>
               <span className="mv mono">
@@ -7314,112 +7348,42 @@ export function PropuestaFicha({
               value={ordenTipo}
               onChange={(value) => setTipo(fromOrdenTipo(value))}
             />
-          ) : orden &&
-            (camposEditablesOrden(orden.estado).size > 0 ||
-              (orden.estado !== "borrador" &&
-                orden.total - orden.facturadoTotal > 0.01) ||
-              // Una finalizada y facturada por completo no tiene nada editable
-              // ni nada que facturar, pero se sigue pudiendo cancelar.
-              esCancelable(orden.estado)) ? (
+          ) : orden && orden.estado !== "cancelada" ? (
+            // Sólo las acciones "rápidas" arriba (Seguimiento, QR, y Emitir si
+            // es borrador). Editar/Cancelar bajaron a la barra de total para
+            // ganar alto. Facturar quedó sólo en el tab Comprobantes.
             <div style={{ display: "flex", gap: 8 }}>
-              {editandoOrden ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={cancelarEdicion}
-                    disabled={guardandoEdicion}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => void guardarEdicion()}
-                    disabled={guardandoEdicion}
-                  >
-                    <CheckIcon />
-                    {guardandoEdicion
-                      ? "Guardando…"
-                      : cambiosSinGuardar > 0
-                        ? `Guardar cambios (${cambiosSinGuardar})`
-                        : "Guardar cambios"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  {orden.estado === "borrador" ? (
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => void emitirBorrador()}
-                      disabled={emitiendoBorrador}
-                    >
-                      <CheckIcon />
-                      {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
-                    </button>
-                  ) : orden.estado !== "cancelada" &&
-                    orden.total - orden.facturadoTotal > 0.01 ? (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setFacturarOpen(true)}
-                      title="Emitir una factura vinculada a esta orden (total o parcial)"
-                    >
-                      <ReceiptTextIcon />
-                      Facturar
-                    </button>
-                  ) : null}
-                  {publicToken ? (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={compartirSeguimiento}
-                      title="Copiar el link público de seguimiento para el cliente"
-                    >
-                      {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
-                      {trackCopiado ? "Link copiado" : "Compartir seguimiento"}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setQrRetiroOpen(true)}
-                    title="QR que el cliente presenta para retirar el trabajo"
-                  >
-                    <QrCodeIcon />
-                    QR de retiro
-                  </button>
-                  {camposEditablesOrden(orden.estado).size > 0 ? (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setEditandoOrden(true)}
-                    >
-                      <Edit3Icon />
-                      Editar orden
-                    </button>
-                  ) : null}
-                  {esCancelable(orden.estado) ? (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setConfirmCancelar(true)}
-                      disabled={cancelando || (facturaViva && !puedeAnular)}
-                      title={
-                        facturaViva && !puedeAnular
-                          ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
-                          : acreditaYCancela
-                            ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
-                            : "Cancelar la orden: sale del taller y deja de contar como venta"
-                      }
-                    >
-                      <XCircleIcon />
-                      Cancelar orden
-                    </button>
-                  ) : null}
-                </>
-              )}
+              {orden.estado === "borrador" ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void emitirBorrador()}
+                  disabled={emitiendoBorrador}
+                >
+                  <CheckIcon />
+                  {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
+                </button>
+              ) : null}
+              {publicToken ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={compartirSeguimiento}
+                  title="Copiar el link público de seguimiento para el cliente"
+                >
+                  {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
+                  {trackCopiado ? "Copiado" : "Seguimiento"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setQrRetiroOpen(true)}
+                title="QR que el cliente presenta para retirar el trabajo"
+              >
+                <QrCodeIcon />
+                QR
+              </button>
             </div>
           ) : null}
         </div>
@@ -7457,31 +7421,8 @@ export function PropuestaFicha({
       ) : null}
 
       {orden && !orden.cancelacion ? (
-        <div className="otd-flow" style={{ marginBottom: 18 }}>
-          {ORDEN_TRABAJO_FLOW.map((k, i) => {
-            const e = ORDEN_TRABAJO_ESTADOS[k];
-            const curIdx = ORDEN_TRABAJO_FLOW.indexOf(orden.estado);
-            const st = i < curIdx ? "past" : i === curIdx ? "cur" : "future";
-            return (
-              <React.Fragment key={k}>
-                <div className={`otd-fstage ${st}`}>
-                  <span
-                    className="fs-dot"
-                    style={st !== "future" ? { background: e.dot } : {}}
-                  />
-                  <span
-                    className="fs-lbl"
-                    style={st === "cur" ? { color: e.fg } : {}}
-                  >
-                    {e.label}
-                  </span>
-                </div>
-                {i < ORDEN_TRABAJO_FLOW.length - 1 ? (
-                  <span className={`otd-fline ${i < curIdx ? "on" : ""}`} />
-                ) : null}
-              </React.Fragment>
-            );
-          })}
+        <div style={{ marginBottom: 12 }}>
+          <StepperOt estado={orden.estado} eventos={orden.eventos} />
         </div>
       ) : null}
 
@@ -7542,7 +7483,6 @@ export function PropuestaFicha({
         <FieldCard
           label={modoOrden ? "Fecha de entrega" : "Fecha estimada"}
           icon={<CalendarIcon />}
-          hint="Entrega"
         >
           {campoEditable("fechaEntrega") ? (
             <div className="ctrl-input">
@@ -7988,6 +7928,75 @@ export function PropuestaFicha({
                     })
             }
             readOnly={modoOrden}
+            accionesOrden={
+              modoOrden &&
+              orden &&
+              orden.estado !== "cancelada" &&
+              (camposEditablesOrden(orden.estado).size > 0 ||
+                esCancelable(orden.estado)) ? (
+                editandoOrden ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={cancelarEdicion}
+                      disabled={guardandoEdicion}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void guardarEdicion()}
+                      disabled={guardandoEdicion}
+                    >
+                      <CheckIcon />
+                      {guardandoEdicion
+                        ? "Guardando…"
+                        : cambiosSinGuardar > 0
+                          ? `Guardar cambios (${cambiosSinGuardar})`
+                          : "Guardar cambios"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {camposEditablesOrden(orden.estado).size > 0 ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => setEditandoOrden(true)}
+                      >
+                        <Edit3Icon />
+                        Editar orden
+                      </button>
+                    ) : null}
+                    {esCancelable(orden.estado) ? (
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{
+                          background: "#ea580c",
+                          color: "#fff",
+                          borderColor: "#ea580c",
+                        }}
+                        onClick={() => setConfirmCancelar(true)}
+                        disabled={cancelando || (facturaViva && !puedeAnular)}
+                        title={
+                          facturaViva && !puedeAnular
+                            ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
+                            : acreditaYCancela
+                              ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
+                              : "Cancelar la orden: sale del taller y deja de contar como venta"
+                        }
+                      >
+                        <XCircleIcon />
+                        Cancelar orden
+                      </button>
+                    ) : null}
+                  </>
+                )
+              ) : undefined
+            }
           />
         ) : null}
       </div>
