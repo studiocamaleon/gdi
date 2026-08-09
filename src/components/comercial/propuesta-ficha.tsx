@@ -8067,7 +8067,9 @@ export function PropuestaFicha({
           // En modo orden es staging: la fila queda local y el POST real va
           // recién en "Guardar cambios".
           setItems((current) => [...current, item]);
-          setOpenIds(new Set([item.id]));
+          // Se agrega COLAPSADO: la fila aparece cerrada (igual que el centro
+          // de copiado) y el comercial la expande si la necesita. Antes se
+          // abría sola y ocupaba media pantalla en cada alta.
           setAddOpen(false);
           setEditingItem(null);
           focusProductRow(item.id);
