@@ -94,6 +94,8 @@ export type ClientePayload = {
   nombre: string;
   razonSocial?: string;
   cuit?: string;
+  /** DNI sin puntos. Distinto del CUIT: ARCA los declara aparte. */
+  documentoNumero?: string;
   condicionFiscal?: CondicionFiscal;
   limiteCredito?: number | null;
   email: string;

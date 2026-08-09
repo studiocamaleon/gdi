@@ -33,6 +33,18 @@ export class ClientesController {
     return this.clientesService.findAll(auth, query);
   }
 
+  /**
+   * ¿Este documento ya está cargado? Se consulta al escanear, antes de
+   * ofrecer el alta. Va antes de `:id` — "por-documento" no es un id.
+   */
+  @Get('por-documento/:documento')
+  porDocumento(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('documento') documento: string,
+  ) {
+    return this.clientesService.buscarPorDocumento(auth, documento);
+  }
+
   @Get(':id')
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.clientesService.findOne(auth, id);

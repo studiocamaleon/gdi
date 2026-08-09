@@ -69,6 +69,7 @@ type DatosGeneralesState = {
   nombre: string;
   razonSocial: string;
   cuit: string;
+  documentoNumero: string;
   condicionFiscal: CondicionFiscal;
   limiteCredito: string;
   telefonoCodigo: string;
@@ -122,6 +123,8 @@ function buildPayload(
     nombre: datosGenerales.nombre.trim(),
     razonSocial: datosGenerales.razonSocial.trim() || undefined,
     cuit: datosGenerales.cuit.replace(/\D/g, "") || undefined,
+    documentoNumero:
+      datosGenerales.documentoNumero.replace(/\D/g, "") || undefined,
     condicionFiscal: datosGenerales.condicionFiscal,
     limiteCredito:
       datosGenerales.limiteCredito.trim() === ""
@@ -214,6 +217,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
     nombre: cliente.nombre,
     razonSocial: cliente.razonSocial,
     cuit: cliente.cuit,
+    documentoNumero: cliente.documentoNumero ?? "",
     condicionFiscal: cliente.condicionFiscal,
     limiteCredito:
       cliente.limiteCredito === null ? "" : String(cliente.limiteCredito),
@@ -538,6 +542,31 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                 {requiereCuit(datosGenerales.condicionFiscal)
                   ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
                   : "Con o sin guiones. Se valida el digito verificador."}
+              </FieldDescription>
+            </Field>
+
+            {/* El DNI va aparte del CUIT y no es lo mismo: ARCA los declara
+                con tipos distintos (96 vs 80). Lo llena solo el alta por
+                escaneo del documento en el mostrador. */}
+            <Field>
+              <FieldLabel htmlFor="cliente-documento">
+                DNI (opcional)
+              </FieldLabel>
+              <Input
+                id="cliente-documento"
+                inputMode="numeric"
+                value={datosGenerales.documentoNumero}
+                onChange={(event) =>
+                  setDatosGenerales((current) => ({
+                    ...current,
+                    documentoNumero: event.target.value.replace(/\D/g, ""),
+                  }))
+                }
+                placeholder="12345678"
+              />
+              <FieldDescription>
+                Sirve para identificar al cliente en la factura sin CUIT. Se
+                completa solo al dar de alta escaneando el documento.
               </FieldDescription>
             </Field>
 

@@ -98,3 +98,10 @@ export async function altaClientePorDocumento(payload: {
     { method: "POST", body: JSON.stringify(payload) },
   );
 }
+
+/** ¿Ese documento ya está cargado? Se consulta al escanear, antes del alta. */
+export async function buscarClientePorDocumento(documento: string) {
+  return apiRequest<{ cliente: ClienteDetalle | null }>(
+    `/clientes/por-documento/${encodeURIComponent(documento)}`,
+  );
+}

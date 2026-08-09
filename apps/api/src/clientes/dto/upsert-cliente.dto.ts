@@ -47,6 +47,12 @@ export class UpsertClienteDto {
   })
   cuit?: string;
 
+  /** DNI sin puntos. Va aparte del CUIT: ARCA los declara con tipos
+   *  distintos (96 = DNI, 80 = CUIT). */
+  @IsOptional()
+  @Matches(/^\d{7,9}$/, { message: 'El DNI no parece válido.' })
+  documentoNumero?: string;
+
   @IsOptional()
   @IsIn(CONDICIONES_FISCALES as unknown as string[], {
     message: `condicionFiscal debe ser uno de: ${CONDICIONES_FISCALES.join(', ')}`,

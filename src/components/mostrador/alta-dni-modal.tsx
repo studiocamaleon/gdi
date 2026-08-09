@@ -16,7 +16,10 @@ import * as React from "react";
 import { IdCardIcon, InfoIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { altaClientePorDocumento } from "@/lib/clientes-api";
+import {
+  altaClientePorDocumento,
+  buscarClientePorDocumento,
+} from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
 import {
   cuilDesdeDocumento,
@@ -43,6 +46,32 @@ export function AltaDniModal({
   const [numero, setNumero] = React.useState("");
   const [guardando, setGuardando] = React.useState(false);
   const cuil = cuilDesdeDocumento(datos.documento, datos.sexo);
+
+  // Se busca ANTES de ofrecer el alta: si el cliente ya está, el operador
+  // tiene que verlo de entrada y no después de completar el formulario.
+  // `undefined` = buscando todavía.
+  const [existente, setExistente] = React.useState<
+    ClienteDetalle | null | undefined
+  >(undefined);
+  React.useEffect(() => {
+    let vivo = true;
+    buscarClientePorDocumento(datos.documento)
+      .then((r) => {
+        if (!vivo) return;
+        setExistente(r.cliente);
+        // Si el que ya está no tiene teléfono, el celular que se cargue acá
+        // sirve para completarlo: se deja el campo listo.
+        if (r.cliente?.telefonoNumero) setNumero(r.cliente.telefonoNumero);
+      })
+      .catch(() => {
+        // Sin respuesta se sigue como si no existiera: el alta es
+        // idempotente en el backend, así que no se duplica igual.
+        if (vivo) setExistente(null);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [datos.documento]);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -102,18 +131,37 @@ export function AltaDniModal({
             <IdCardIcon />
           </span>
           <div>
-            <h2>Documento escaneado</h2>
-            <div className={s.sub}>Se da de alta como cliente.</div>
+            <h2>
+              {existente ? "Cliente ya registrado" : "Documento escaneado"}
+            </h2>
+            <div className={s.sub}>
+              {existente === undefined
+                ? "Buscando si ya está cargado…"
+                : existente
+                  ? "Se usa el que ya está, no se crea otro."
+                  : "Se da de alta como cliente."}
+            </div>
           </div>
         </div>
 
         <dl className={s.datos}>
-          <div className={s.nombre}>{datos.nombreCompleto}</div>
+          {/* Con un cliente ya cargado manda SU nombre, no el del documento:
+              puede haberlo corregido o completado alguien. */}
+          <div className={s.nombre}>
+            {existente?.nombre ?? datos.nombreCompleto}
+          </div>
           <div className={s.fila}>
             <dt>Documento</dt>
             <dd>{conPuntos(datos.documento)}</dd>
           </div>
-          {cuil ? (
+          {existente?.telefonoNumero ? (
+            <div className={s.fila}>
+              <dt>Celular</dt>
+              <dd>
+                {existente.telefonoCodigo} {existente.telefonoNumero}
+              </dd>
+            </div>
+          ) : cuil ? (
             <div className={s.fila}>
               <dt>CUIL</dt>
               <dd>{cuil}</dd>
@@ -121,8 +169,14 @@ export function AltaDniModal({
           ) : null}
         </dl>
 
+        {/* Con teléfono ya cargado no hay nada que pedir. Si el cliente
+            existe pero le falta, es la oportunidad de completarlo: lo tenés
+            enfrente. */}
+        {existente?.telefonoNumero ? null : (
         <div className={s.field}>
-          <label htmlFor="alta-dni-tel">Celular (opcional)</label>
+          <label htmlFor="alta-dni-tel">
+            {existente ? "Celular que falta (opcional)" : "Celular (opcional)"}
+          </label>
           <div className={s.tel}>
             <input
               className={s.cod}
@@ -147,14 +201,20 @@ export function AltaDniModal({
             esté listo. Se puede cargar después.
           </span>
         </div>
+        )}
 
-        <div className={s.existe}>
-          <InfoIcon />
-          <span>
-            Si este documento ya estaba cargado, se usa ese cliente en vez de
-            crear uno repetido.
-          </span>
-        </div>
+        {existente ? (
+          <div className={s.existe}>
+            <InfoIcon />
+            <span>
+              Ya estaba cargado
+              {existente.origenAlta === "mostrador"
+                ? " desde el mostrador"
+                : ""}
+              . Se usa ese cliente y no se crea uno repetido.
+            </span>
+          </div>
+        ) : null}
 
         <div className={s.foot}>
           <button
@@ -169,9 +229,13 @@ export function AltaDniModal({
             type="button"
             className="btn btn-primary"
             onClick={() => void crear()}
-            disabled={guardando}
+            disabled={guardando || existente === undefined}
           >
-            {guardando ? "Creando…" : "Crear cliente"}
+            {guardando
+              ? "Guardando…"
+              : existente
+                ? "Usar este cliente"
+                : "Crear cliente"}
           </button>
         </div>
       </div>

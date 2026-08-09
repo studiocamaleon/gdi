@@ -80,6 +80,21 @@ export class ClientesService {
   }
 
   /**
+   * ¿Ya tenemos a esta persona? Se consulta ANTES de ofrecer el alta, para
+   * que el operador vea de entrada que el cliente existe en vez de
+   * enterarse después de completar un formulario al pedo.
+   */
+  async buscarPorDocumento(auth: CurrentAuth, documento: string) {
+    const numero = documento.replace(/\D/g, '');
+    if (numero.length < 7) return { cliente: null };
+    const cliente = await this.prisma.cliente.findFirst({
+      where: { tenantId: auth.tenantId, documentoNumero: numero },
+      include: { contactos: true, direcciones: true },
+    });
+    return { cliente: cliente ? this.toResponse(cliente) : null };
+  }
+
+  /**
    * Alta desde el DNI escaneado en el mostrador.
    *
    * Existe para que un pedido de mostrador deje de cargarse como "Mostrador":
@@ -99,7 +114,27 @@ export class ClientesService {
       include: { contactos: true, direcciones: true },
     });
     if (existente) {
-      return { cliente: this.toResponse(existente), yaExistia: true };
+      // Rellena huecos, NUNCA pisa. Si el que ya está no tiene teléfono y el
+      // operador lo tiene enfrente, aprovechamos; si ya tenía uno, el que
+      // manda es el cargado —puede ser el bueno y el del mostrador un
+      // celular prestado—.
+      const telefonoNuevo = (payload.telefonoNumero ?? '').trim();
+      const completa =
+        telefonoNuevo && !existente.telefonoNumero.trim()
+          ? {
+              telefonoCodigo: (payload.telefonoCodigo ?? '+54').trim(),
+              telefonoNumero: telefonoNuevo,
+            }
+          : null;
+      if (!completa) {
+        return { cliente: this.toResponse(existente), yaExistia: true };
+      }
+      const actualizado = await this.prisma.cliente.update({
+        where: { id: existente.id },
+        data: completa,
+        include: { contactos: true, direcciones: true },
+      });
+      return { cliente: this.toResponse(actualizado), yaExistia: true };
     }
 
     const telefonoNumero = (payload.telefonoNumero ?? '').trim();
@@ -134,6 +169,7 @@ export class ClientesService {
         nombre: normalized.nombre,
         razonSocial: normalized.razonSocial,
         cuit: normalized.cuit,
+        documentoNumero: normalized.documentoNumero,
         condicionFiscal: normalized.condicionFiscal,
         limiteCredito: normalized.limiteCredito,
         emailPrincipal: normalized.email,
@@ -186,6 +222,7 @@ export class ClientesService {
           nombre: normalized.nombre,
           razonSocial: normalized.razonSocial,
           cuit: normalized.cuit,
+          documentoNumero: normalized.documentoNumero,
           condicionFiscal: normalized.condicionFiscal,
           limiteCredito: normalized.limiteCredito,
           emailPrincipal: normalized.email,
@@ -357,6 +394,7 @@ export class ClientesService {
       nombre: payload.nombre.trim(),
       razonSocial: payload.razonSocial?.trim() || null,
       cuit,
+      documentoNumero: payload.documentoNumero?.replace(/\D/g, '') || null,
       condicionFiscal,
       limiteCredito:
         payload.limiteCredito === undefined || payload.limiteCredito === null
