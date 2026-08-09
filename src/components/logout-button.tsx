@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { LogOutIcon } from "lucide-react";
+import { CirclePowerIcon } from "lucide-react";
 
 import { logout } from "@/lib/auth";
 import { clearSessionToken } from "@/lib/session";
@@ -38,7 +38,7 @@ export function LogoutButton() {
       disabled={saliendo}
       className="gap-2"
     >
-      <LogOutIcon className="size-4" />
+      <CirclePowerIcon className="size-4" />
       {saliendo ? "Cerrando sesión…" : "Cerrar sesión"}
     </Button>
   );
