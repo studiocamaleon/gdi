@@ -272,8 +272,16 @@ export function McpDetalle({
             </code>
           </p>
           <p className={s.instrucciones}>
-            En claude.ai / Claude Desktop: Configuración → Conectores → Agregar
-            conector personalizado, con la misma URL y el token.
+            En Claude Desktop (Configuración → Desarrollador → Editar
+            configuración):{" "}
+            <code>
+              {`{"mcpServers": {"grafo": {"command": "npx", "args": ["-y", "mcp-remote", "${mcpUrl}", "--header", "Authorization: Bearer <token>"]}}}`}
+            </code>
+          </p>
+          <p className={s.instrucciones}>
+            Los conectores de claude.ai se conectan desde la nube: necesitan
+            una URL pública con HTTPS e inicio de sesión OAuth. Está en la hoja
+            de ruta; por ahora usá Claude Code o Claude Desktop.
           </p>
         </div>
       </div>
