@@ -131,6 +131,52 @@ describe('WatiClient', () => {
       if (!r.ok) expect(r.motivo).toMatch(/no respondió/i);
     });
   });
+
+  describe('enviarPlantilla', () => {
+    const client = new WatiClient();
+    const fetchOriginal = global.fetch;
+    afterEach(() => {
+      global.fetch = fetchOriginal;
+    });
+
+    const cuerpoEnviado = () => {
+      const [, opciones] = (global.fetch as jest.Mock).mock.calls[0] as [
+        string,
+        RequestInit,
+      ];
+      return JSON.parse(opciones.body as string) as Record<string, unknown>;
+    };
+
+    beforeEach(() => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ result: true })),
+      }) as unknown as typeof fetch;
+    });
+
+    it('adjunta el header de imagen cuando hay media', async () => {
+      await client.enviarPlantilla(cred, {
+        telefono: '5491150000000',
+        plantilla: 'grafo_orden_lista_qr_v1',
+        parametros: { nombre_cliente: 'Ana' },
+        mediaHeaderUrl: 'https://r2.example/qr.png',
+      });
+      expect(cuerpoEnviado().header).toEqual({
+        type: 'IMAGE',
+        link: 'https://r2.example/qr.png',
+      });
+    });
+
+    it('no manda header en las de texto puro', async () => {
+      await client.enviarPlantilla(cred, {
+        telefono: '5491150000000',
+        plantilla: 'grafo_orden_recibida_v2',
+        parametros: { nombre_cliente: 'Ana' },
+      });
+      expect(cuerpoEnviado()).not.toHaveProperty('header');
+    });
+  });
 });
 
 describe('minutosDeEspera', () => {

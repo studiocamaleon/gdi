@@ -7,12 +7,12 @@ import { mapearParametros } from '../wati.client';
  * de este lado.
  */
 describe('catálogo canónico de plantillas', () => {
-  it('tiene las 13 plantillas y ningún código repetido', () => {
-    expect(CATALOGO).toHaveLength(13);
+  it('tiene las 15 plantillas y ningún código repetido', () => {
+    expect(CATALOGO).toHaveLength(15);
     const codigos = CATALOGO.map((p) => p.codigo);
-    expect(new Set(codigos).size).toBe(13);
+    expect(new Set(codigos).size).toBe(15);
     const eventos = CATALOGO.map((p) => p.evento);
-    expect(new Set(eventos).size).toBe(13);
+    expect(new Set(eventos).size).toBe(15);
   });
 
   it.each(CATALOGO.map((p) => [p.codigo, p] as const))(
@@ -132,5 +132,48 @@ describe('validar', () => {
     expect(errores).toContain(
       'Todos los parámetros necesitan un valor de ejemplo para el alta.',
     );
+  });
+
+  it('acepta un encabezado de imagen', () => {
+    expect(validar({ ...base, encabezado: { tipo: 'IMAGE' } })).toEqual([]);
+  });
+});
+
+describe('plantillas del QR de retiro', () => {
+  // Las dos variantes del momento "listo": sin saldo y con saldo, cada una
+  // con su QR. Espejan orden_lista / orden_lista_con_saldo.
+  const qrs = CATALOGO.filter(
+    (p) => p.evento === 'orden_lista_qr' || p.evento === 'orden_lista_con_saldo_qr',
+  );
+
+  it('son dos: la variante sin saldo y la con saldo', () => {
+    expect(qrs.map((p) => p.evento).sort()).toEqual([
+      'orden_lista_con_saldo_qr',
+      'orden_lista_qr',
+    ]);
+  });
+
+  it('las dos llevan header de imagen', () => {
+    for (const qr of qrs) {
+      expect(qr.encabezado?.tipo).toBe('IMAGE');
+    }
+  });
+
+  it('ninguna arranca prendida: el envío se cablea con la aprobación', () => {
+    for (const qr of qrs) {
+      expect(qr.activoPorDefecto).toBe(false);
+      expect(qr.cableado).toBeFalsy();
+    }
+  });
+
+  it('la con-saldo declara el saldo pendiente', () => {
+    const conSaldo = qrs.find((p) => p.evento === 'orden_lista_con_saldo_qr');
+    expect(conSaldo?.parametros.map((x) => x.nombre)).toContain(
+      'saldo_pendiente',
+    );
+  });
+
+  it('pasan las reglas de Meta como cualquier otra', () => {
+    for (const qr of qrs) expect(validar(qr)).toEqual([]);
   });
 });

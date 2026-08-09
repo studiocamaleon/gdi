@@ -78,11 +78,16 @@ export class NotificacionesOrdenesService {
     if (!orden?.clienteId) return;
 
     const saldo = Number(orden.total ?? 0) - Number(orden.cobradoTotal ?? 0);
+    // "Orden lista" sale con el QR de retiro en un header de imagen: las
+    // variantes `_qr`. El despacho arma la media (el QR de la orden) solo, y
+    // los params son los mismos que las plantillas sin QR. Verificado con un
+    // envío real (2026-08-09). Para volver a las de texto sin imagen, cambiar
+    // a 'orden_lista' / 'orden_lista_con_saldo'. Ver [[project_notificaciones_whatsapp_wati]].
     const evento =
       orden.estado === 'finalizada'
         ? saldo > 0
-          ? 'orden_lista_con_saldo'
-          : 'orden_lista'
+          ? 'orden_lista_con_saldo_qr'
+          : 'orden_lista_qr'
         : EVENTO_POR_ESTADO[orden.estado];
     if (!evento) return;
 
@@ -113,8 +118,10 @@ export class NotificacionesOrdenesService {
             ? [nombre, orden.numero, fecha(orden.fechaEntrega), seguimiento]
             : null;
         case 'orden_lista':
+        case 'orden_lista_qr':
           return seguimiento ? [nombre, orden.numero, seguimiento] : null;
         case 'orden_lista_con_saldo':
+        case 'orden_lista_con_saldo_qr':
           return seguimiento
             ? [nombre, orden.numero, money(saldo), seguimiento]
             : null;

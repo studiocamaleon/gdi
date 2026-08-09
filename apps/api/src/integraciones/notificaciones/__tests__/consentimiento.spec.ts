@@ -53,14 +53,14 @@ describe('consentimiento por categoría', () => {
 
   /**
    * Con el catálogo de verdad: sin pedir nada a nadie, un tenant tiene los
-   * once avisos de su operación andando y los dos promocionales apagados.
+   * trece avisos de su operación andando y los dos promocionales apagados.
    */
   it('sobre el catálogo real, sólo dos eventos exigen aceptación', () => {
     const conCatalogo = [...POR_EVENTO.values()];
     const sinPreguntar = conCatalogo.filter((p) =>
       puedeRecibir(null, p.categoria),
     );
-    expect(sinPreguntar).toHaveLength(11);
+    expect(sinPreguntar).toHaveLength(13);
 
     const bloqueados = conCatalogo
       .filter((p) => !puedeRecibir(null, p.categoria))

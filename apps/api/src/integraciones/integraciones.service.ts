@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   EstadoIntegracion,
   Prisma,
   ProveedorIntegracion,
 } from '@prisma/client';
+import QRCode from 'qrcode';
 
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,10 +24,14 @@ import type {
 import { aE164 } from './telefono';
 import { cruzar, type EstadoPlantillas } from './wati/plantillas';
 import { POR_CODIGO, validar } from './wati/catalogo';
+import {
+  STORAGE_DRIVER,
+  type StorageDriver,
+} from '../archivos/storage/storage.driver';
 
 /**
  * `esperaMinutos` sólo viene cuando Wati frenó por cupo: Meta acepta 10
- * plantillas por hora y un catálogo de 13 nunca entra de una. No es un error
+ * plantillas por hora y un catálogo de 15 nunca entra de una. No es un error
  * a reintentar, es una espera — quien llame tiene que dejar de insistir.
  */
 export type ResultadoSometer = {
@@ -67,6 +72,7 @@ export class IntegracionesService {
     private readonly prisma: PrismaService,
     private readonly secretos: SecretosService,
     private readonly wati: WatiClient,
+    @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
   ) {}
 
   /** ¿Se pueden guardar credenciales en este entorno? */
@@ -229,7 +235,7 @@ export class IntegracionesService {
    * hecha en el listado y no sirve para notificar a nadie, así que acá se
    * hacen los dos o se informa dónde se cortó.
    *
-   * De a una y no las 13 de un saque a propósito: son varias llamadas a un
+   * De a una y no las 15 de un saque a propósito: son varias llamadas a un
    * tercero con timeout de 10 s cada una, y meterlas en un solo request HTTP
    * daría una pantalla congelada un minuto que además pierde todo si se
    * corta. Con esto el front muestra el avance y reintenta sólo la que falló.
@@ -282,7 +288,15 @@ export class IntegracionesService {
       };
     }
 
-    const alta = await this.wati.crearPlantilla(cred, canonica);
+    const alta = await this.wati.crearPlantilla(cred, {
+      ...canonica,
+      // La muestra del header se sube a R2 recién acá y viaja como URL
+      // firmada: alcanzable por Meta desde cualquier lado, sin depender de que
+      // la app sea pública (clave para poder aprobar desde dev).
+      encabezado: canonica.encabezado
+        ? { tipo: 'IMAGE', ejemploUrl: await this.urlMuestraQrRetiro() }
+        : undefined,
+    });
     const creada = (await this.wati.listarPlantillas(cred)).find(
       (r) => r.nombre === canonica.codigo,
     );
@@ -320,6 +334,78 @@ export class IntegracionesService {
       (r) => r.nombre === codigo,
     );
     return { codigo, ok: true, estado: final?.estado ?? 'PENDING' };
+  }
+
+  /**
+   * Genera un QR con `contenido`, lo sube a R2 bajo `clave` y devuelve una URL
+   * firmada por `ttlSegundos`. Sale por R2 —no por la URL de la app— a
+   * propósito: la firma es alcanzable desde afuera aunque la app corra en
+   * localhost, que es lo que destraba probar todo esto desde dev.
+   */
+  private async subirQrYFirmar(
+    contenido: string,
+    clave: string,
+    ttlSegundos: number,
+  ): Promise<string> {
+    const png = await QRCode.toBuffer(contenido, {
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 512,
+      type: 'png',
+    });
+    // Idempotente: pisar la misma clave no molesta (imagen fija y minúscula).
+    await this.storage.subir(clave, png, 'image/png');
+    return this.storage.firmarDescarga(clave, {
+      disposition: 'inline',
+      contentType: 'image/png',
+      expiraSegundos: ttlSegundos,
+    });
+  }
+
+  /**
+   * URL de la imagen de MUESTRA del header de la plantilla del QR, la que Meta
+   * descarga para revisar.
+   *
+   * Un QR de ejemplo bajo una clave fija —el mismo para todos los tenants, no
+   * es de nadie— con firma de 7 días (el techo de S3), de sobra: Meta baja la
+   * muestra una vez y la deja congelada en la plantilla. El QR REAL, por orden,
+   * se arma al enviar; esto es sólo el machetazo para que Meta apruebe.
+   */
+  private urlMuestraQrRetiro(): Promise<string> {
+    return this.subirQrYFirmar(
+      'OT-0000-0000',
+      'sistema/ejemplo-qr-retiro.png',
+      7 * 24 * 60 * 60,
+    );
+  }
+
+  /**
+   * QR de retiro de UNA orden, para el header del WhatsApp de "orden lista".
+   * Codifica el número (lo mismo que el del mostrador). Firma corta: el envío
+   * es inmediato y Wati baja la media al toque. Clave por número: idempotente.
+   */
+  urlQrRetiroParaEnvio(numero: string): Promise<string> {
+    return this.subirQrYFirmar(
+      numero,
+      `sistema/qr-retiro/${numero}.png`,
+      10 * 60,
+    );
+  }
+
+  /**
+   * La URL de la media del header de una plantilla, si lleva header de imagen.
+   * Hoy es el QR de retiro, que codifica el número de orden —que ya viene en
+   * los params, en `numero_orden`—. `undefined` para las de texto puro, que
+   * son casi todas. Lo usan el envío de prueba y el despacho por igual.
+   */
+  async mediaHeaderDe(
+    codigo: string,
+    parametros: Record<string, string>,
+  ): Promise<string | undefined> {
+    const canonica = POR_CODIGO.get(codigo);
+    if (canonica?.encabezado?.tipo !== 'IMAGE') return undefined;
+    const numero = parametros['numero_orden'];
+    return numero ? this.urlQrRetiroParaEnvio(numero) : undefined;
   }
 
   /**
@@ -370,11 +456,18 @@ export class IntegracionesService {
       plantilla.parametros.map((nombre, i) => [nombre, dto.parametros[i]]),
     );
 
+    // Si la plantilla lleva header de imagen (el QR de retiro), se arma la
+    // media con el número que vino en los params. Es LO que sirve para
+    // verificar el envío con imagen sin tocar la cola de clientes: se manda a
+    // un número propio y se mira si llega el QR real o la muestra.
+    const mediaHeaderUrl = await this.mediaHeaderDe(dto.plantilla, parametros);
+
     const res = await this.wati.enviarPlantilla(cred, {
       telefono: tel.e164,
       plantilla: plantilla.nombre,
       parametros,
       broadcastName: `grafo_prueba_${plantilla.nombre}`,
+      mediaHeaderUrl,
     });
 
     return res.ok

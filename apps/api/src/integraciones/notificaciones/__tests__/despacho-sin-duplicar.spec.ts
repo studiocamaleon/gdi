@@ -69,6 +69,8 @@ describe('DespachoService — un hecho, un mensaje', () => {
     });
     const integraciones = {
       credencialesWati: jest.fn().mockResolvedValue({ token: 'x', url: 'y' }),
+      // Texto puro en estas pruebas: sin header de imagen no hay media.
+      mediaHeaderDe: jest.fn().mockResolvedValue(undefined),
     } as unknown as IntegracionesService;
     const wati = {
       listarPlantillas: jest

@@ -109,6 +109,11 @@ export class WatiClient {
       /** `{ nombre_del_parametro: valor }`. */
       parametros: Record<string, string>;
       broadcastName?: string;
+      /**
+       * URL de la imagen del header, para las plantillas que lo llevan (el QR
+       * de retiro). Se firma fresca por envío. Ausente en casi todas.
+       */
+      mediaHeaderUrl?: string;
     },
   ): Promise<{ ok: true; id: string | null } | { ok: false; motivo: string }> {
     try {
@@ -128,6 +133,17 @@ export class WatiClient {
             name,
             value,
           })),
+          // ⚠️ SIN VERIFICAR contra la cuenta real. La media DINÁMICA del
+          // header por envío (cada cliente su propio QR) es lo que no está
+          // confirmado: no se sabe si este endpoint v1 la respeta o usa la
+          // muestra estática aprobada —en cuyo caso a todos les llegaría el QR
+          // de ejemplo—. `link` acá espeja la clave que funcionó en el alta,
+          // pero el nombre/lugar exacto se confirma con el primer envío real
+          // (probar-envío a un número propio). Si v1 la ignora, el camino es la
+          // v2 `sendTemplateMessages`. Ver docs/integraciones-wati-diseno.md
+          ...(envio.mediaHeaderUrl
+            ? { header: { type: 'IMAGE', link: envio.mediaHeaderUrl } }
+            : {}),
         },
       );
 
@@ -172,6 +188,11 @@ export class WatiClient {
       cuerpo: string;
       footer: string;
       parametros: Array<{ nombre: string; ejemplo: string }>;
+      /**
+       * Header de imagen, si lo lleva. `ejemploUrl` es la muestra pública que
+       * Meta descarga para revisar; en el envío se reemplaza por el QR real.
+       */
+      encabezado?: { tipo: 'IMAGE'; ejemploUrl: string };
     },
   ): Promise<{ ok: true; id: string | null } | { ok: false; motivo: string }> {
     const cuerpoNombrado = p.cuerpo.replace(
@@ -223,7 +244,18 @@ export class WatiClient {
         // someter, junto con `bodyOriginal`.
         body: cuerpoNombrado,
         footer: p.footer,
-        header: null,
+        // Sin header en casi todas (texto puro). Cuando la plantilla lleva un
+        // header de imagen —hoy sólo la del QR de retiro— va este objeto.
+        //
+        // La muestra va en `link` (una URL) o en `mediaFromPC` (un archivo
+        // subido): son las dos formas que ofrece el dashboard, "pegar link" o
+        // "subir de la PC". Lo confirmó el propio Wati al rechazar el alta con
+        // "Link and MediaFromPC cannot be null at the same time" cuando la
+        // clave era la equivocada (`mediaUrl`). Usamos `link` con la URL
+        // firmada de R2. Ver docs/integraciones-wati-diseno.md
+        header: p.encabezado
+          ? { type: 'IMAGE', link: p.encabezado.ejemploUrl }
+          : null,
         buttonsType: 'none',
         buttons: [],
         customParams: p.parametros.map((x) => ({
@@ -410,7 +442,7 @@ function motivoDeAlta(json: {
 /**
  * Cuánto hay que esperar, si Wati frenó por el cupo de envíos.
  *
- * **Meta acepta 10 plantillas por hora**, así que un catálogo de 13 nunca
+ * **Meta acepta 10 plantillas por hora**, así que un catálogo de 15 nunca
  * entra de una. No es un error a reintentar: es un límite del que hay que
  * salirse y volver. Se extraen los minutos del mensaje —"please wait for 22
  * minutes"— para poder decirle a la persona cuándo volver en vez de dejarla

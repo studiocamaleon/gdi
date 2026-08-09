@@ -11,12 +11,12 @@ import { IntegracionesService } from '../integraciones.service';
  * Deja el catálogo de Grafo dado de alta y en revisión, solo.
  *
  * El tenant conecta Wati con sus credenciales y no hace nada más: en menos de
- * una hora tiene las 13 plantillas en revisión de Meta. Ése era el punto de
+ * una hora tiene las 15 plantillas en revisión de Meta. Ése era el punto de
  * toda la integración — que no haya que ir al dashboard de Wati a escribir
  * trece textos a mano.
  *
  * **Por qué no lleva la cuenta del cupo.** Meta acepta 10 plantillas por hora,
- * así que un catálogo de 13 nunca entra de una. Se podría llevar una ventana
+ * así que un catálogo de 15 nunca entra de una. Se podría llevar una ventana
  * deslizante de envíos por tenant, pero sería estado nuestro que se puede
  * desincronizar del de Meta. En vez de eso: intentar, y parar en el primer
  * "esperá N minutos". Se corrige solo — una corrida mete 10, rebota, y alguna
@@ -43,7 +43,7 @@ export class WatiScheduler {
     if (this.corriendo) return;
     this.corriendo = true;
     try {
-      // TTL holgado: son hasta 13 altas con dos llamadas de red cada una.
+      // TTL holgado: son hasta 15 altas con dos llamadas de red cada una.
       await conLockDeCron(this.prisma, 'wati-plantillas', 900, async () => {
         for (const tenantId of await this.tenantsConWati()) {
           await this.sincronizarTenant(tenantId);

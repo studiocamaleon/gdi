@@ -30,6 +30,8 @@ export type EventoNotificacion =
   | 'orden_demorada'
   | 'orden_lista'
   | 'orden_lista_con_saldo'
+  | 'orden_lista_qr'
+  | 'orden_lista_con_saldo_qr'
   | 'orden_entregada'
   | 'pago_recibido'
   | 'saldo_vencido'
@@ -67,6 +69,17 @@ export type PlantillaCanonica = {
    * muestra deshabilitado y dice que todavía no está disponible.
    */
   cableado?: boolean;
+  /**
+   * Header de imagen, si la plantilla lleva uno. Hoy sólo la del QR de retiro:
+   * el cuerpo va igual, pero arriba viaja una imagen (el QR) que Meta revisa
+   * contra una muestra y que en cada envío se reemplaza por el QR real de la
+   * orden. Sin esto, la plantilla no tiene header (el caso normal).
+   *
+   * La muestra para la revisión NO vive acá: se genera y se sube a R2 al
+   * someter, que da una URL firmada alcanzable por Meta desde cualquier lado
+   * (ver IntegracionesService). El catálogo sólo declara que hay header.
+   */
+  encabezado?: { tipo: 'IMAGE' };
   /** Cuerpo posicional, tal como lo ve Meta. */
   cuerpo: string;
   footer: string;
@@ -279,6 +292,65 @@ Si ya lo abonaste, puede que todavía no lo hayamos registrado.`,
     ],
   },
   {
+    evento: 'orden_lista_qr',
+    codigo: 'grafo_orden_lista_qr_v1',
+    titulo: 'Orden lista (con QR de retiro)',
+    cuando: 'Cuando la orden está lista, con el QR para retirar en el mostrador',
+    categoria: 'UTILITY',
+    idioma: IDIOMA,
+    activoPorDefecto: false,
+    // Sin `cableado`: el envío se conecta recién cuando esta plantilla esté
+    // aprobada por Meta. Hasta entonces "orden lista" sigue saliendo por
+    // grafo_orden_lista_v2 (sin imagen). No prender las dos a la vez cuando se
+    // cablee: son el mismo momento y duplicarían el aviso.
+    requiereLocalAbierto: true,
+    // El QR va de header de imagen. `v1` y no `v2` como el resto: este código
+    // nunca se sometió a Meta, así que su nombre no está quemado (ver D2).
+    encabezado: { tipo: 'IMAGE' },
+    cuerpo: `Hola {{1}}, tu orden {{2}} ya está lista. 📦
+
+Mostrá el QR de arriba en el mostrador y te la entregamos al toque.
+
+Detalle: {{3}}
+
+Si preferís, también podés retirarla dándonos el número de tu orden.`,
+    footer: FOOTER,
+    parametros: [
+      { nombre: 'nombre_cliente', ejemplo: 'Marcela' },
+      { nombre: 'numero_orden', ejemplo: 'OT-01285' },
+      { nombre: 'url_seguimiento', ejemplo: 'https://app.grafo.ar/s/x7y8z9' },
+    ],
+  },
+  {
+    evento: 'orden_lista_con_saldo_qr',
+    codigo: 'grafo_orden_lista_con_saldo_qr_v1',
+    titulo: 'Orden lista con saldo (con QR de retiro)',
+    cuando: 'Cuando la orden está lista, queda saldo y se manda el QR',
+    categoria: 'UTILITY',
+    idioma: IDIOMA,
+    activoPorDefecto: false,
+    // Igual que orden_lista_qr, pero con la línea del saldo: es el par con-saldo
+    // del momento "listo". Al cablear, reemplaza a orden_lista_con_saldo.
+    requiereLocalAbierto: true,
+    encabezado: { tipo: 'IMAGE' },
+    cuerpo: `Hola {{1}}, tu orden {{2}} ya está lista. 📦
+
+💰 Saldo pendiente: \${{3}}
+
+Mostrá el QR de arriba en el mostrador y coordinamos el pago al retirar.
+
+Detalle: {{4}}
+
+Si ya lo abonaste, puede que todavía no lo hayamos registrado.`,
+    footer: FOOTER,
+    parametros: [
+      { nombre: 'nombre_cliente', ejemplo: 'Marcela' },
+      { nombre: 'numero_orden', ejemplo: 'OT-01285' },
+      { nombre: 'saldo_pendiente', ejemplo: '92.700,00' },
+      { nombre: 'url_seguimiento', ejemplo: 'https://app.grafo.ar/s/x7y8z9' },
+    ],
+  },
+  {
     evento: 'orden_entregada',
     codigo: 'grafo_orden_entregada_v2',
     titulo: 'Orden entregada',
@@ -409,7 +481,7 @@ export const POR_EVENTO = new Map(CATALOGO.map((p) => [p.evento, p]));
  * Existe porque el ciclo de error del otro lado es carísimo: Meta tarda
  * 24-48 h en rechazar y el motivo que devuelve suele ser genérico. Estas
  * cinco reglas son las que se pueden verificar sin salir de casa, y las
- * ejercita un test sobre las 13 plantillas del catálogo.
+ * ejercita un test sobre las plantillas del catálogo.
  */
 export function validar(p: PlantillaCanonica): string[] {
   const errores: string[] = [];
@@ -460,6 +532,10 @@ export function validar(p: PlantillaCanonica): string[] {
     errores.push(
       'Todos los parámetros necesitan un valor de ejemplo para el alta.',
     );
+  }
+
+  if (p.encabezado && p.encabezado.tipo !== 'IMAGE') {
+    errores.push('El único tipo de encabezado soportado es IMAGE.');
   }
 
   return errores;

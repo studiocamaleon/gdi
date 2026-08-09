@@ -176,11 +176,22 @@ export class DespachoService {
       return { estado: 'descartada', motivo: 'Parámetros desalineados.' };
     }
 
+    const parametros = Object.fromEntries(nombres.map((x, i) => [x, valores[i]]));
+
+    // Las plantillas con header de imagen (el QR de retiro) arman la media por
+    // orden acá, con firma fresca por envío. Para las de texto puro es
+    // `undefined` y el envío va igual que siempre.
+    const mediaHeaderUrl = await this.integraciones.mediaHeaderDe(
+      n.plantilla,
+      parametros,
+    );
+
     const res = await this.wati.enviarPlantilla(cred, {
       telefono: n.telefono,
       plantilla: n.plantilla,
-      parametros: Object.fromEntries(nombres.map((x, i) => [x, valores[i]])),
+      parametros,
       broadcastName: `grafo_${n.evento}`,
+      mediaHeaderUrl,
     });
 
     if (res.ok) {
