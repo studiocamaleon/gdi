@@ -2483,7 +2483,8 @@ export class MotorUniversalService {
           // la impresión previa va en rollo y no publica pliegos.
           guard: 'montaje',
           debeCortar: () => true,
-          error: () => this.errorMontajeSinNesting(paso, jobContext),
+          error: () =>
+            this.errorMontajeSinNesting(paso, jobContext, materialPreliminar),
         },
       ];
 
@@ -3483,6 +3484,9 @@ export class MotorUniversalService {
   private errorMontajeSinNesting(
     paso: PasoCargado,
     jobContext: JobContext,
+    materialResuelto?: {
+      atributosVarianteJson?: Record<string, unknown> | null;
+    } | null,
   ): ErrorMotor {
     const params =
       paso.paramsPasoJson && typeof paso.paramsPasoJson === 'object'
@@ -3508,6 +3512,28 @@ export class MotorUniversalService {
         contexto: { fuentePiezasMontaje: fuente },
         sugerencia:
           'En la config del paso de montaje, seteá "Fuente de piezas" en "Piezas del job", o asegurate de que el paso previo imprima sobre pliegos.',
+      };
+    }
+
+    // La causa más común en la práctica: el material del slot resolvió pero
+    // su variante no declara medidas (una carga de tarifa por m² en vez de
+    // la presentación en hoja) — sin ancho×alto no hay hoja que nestear.
+    const attrs = materialResuelto?.atributosVarianteJson ?? null;
+    const sinMedidas =
+      attrs != null &&
+      !(Number(attrs.anchoMm) > 0 && Number(attrs.altoMm ?? attrs.largoMm) > 0);
+    if (sinMedidas) {
+      return {
+        codigo: 'montaje_material_sin_medidas',
+        severidad: 'ERROR',
+        mensaje:
+          'La variante elegida para el material de montaje no declara medidas de hoja (ancho × alto): el motor no sabe de qué hoja cortar. Suele pasar al elegir una carga de precio por m² en vez de la presentación en hoja.',
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        contexto: { fuentePiezasMontaje: fuente },
+        sugerencia:
+          'Elegí la variante con presentación "hoja" (con ancho y alto cargados), o completá las medidas de la variante en Inventario.',
       };
     }
 
