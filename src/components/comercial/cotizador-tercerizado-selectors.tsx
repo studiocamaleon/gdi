@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ConfigPasoDetalle } from "@/lib/productos-servicios";
 import type { TercerizadoEje } from "@/lib/productos-servicios-api";
+import seC from "./cotizador-seccion.module.css";
 
 /**
  * Selectores de eje para los pasos TERCERIZADOS con fuente `matriz` del
@@ -113,41 +114,48 @@ export function CotizadorTercerizadoCostoManual({
   const pasos = tercerizadoManualPasos(configPasos);
   if (pasos.length === 0) return null;
 
+  // Tarjeta con barra negra, el mismo idioma que Medida/params: una card por
+  // paso que el proveedor cotiza por trabajo.
   return (
     <>
       {pasos.map((cp) => {
         const estimado = tercerizadoCostoEstimado(cp);
         const valor = valores[cp.id];
         return (
-          <div key={`terc-manual-${cp.id}`} className="ap-spec">
-            <label>
-              {nombreDe(cp)} · costo del proveedor ({simboloMoneda} neto)
-            </label>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={valor ?? ""}
-              placeholder={
-                estimado != null
-                  ? `Estimado: ${simboloMoneda} ${estimado}`
-                  : "Requerido — cotización del proveedor"
-              }
-              onChange={(event) =>
-                onChange(
-                  cp.id,
-                  event.target.value === "" ? null : Number(event.target.value),
-                )
-              }
-            />
-            {valor == null && estimado != null ? (
-              <div className="ap-minimum-alert">
-                <span>
-                  Cotiza con el estimado de referencia — confirmá el costo con
-                  el proveedor antes de cerrar el precio.
-                </span>
+          <div key={`terc-manual-${cp.id}`} className={seC.card}>
+            <div className={seC.gh}>Costo del proveedor · {nombreDe(cp)}</div>
+            <div className={seC.body}>
+              <div className="ap-spec ap-spec-wide">
+                <label>Cotización del proveedor ({simboloMoneda} neto)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={valor ?? ""}
+                  placeholder={
+                    estimado != null
+                      ? `Estimado: ${simboloMoneda} ${estimado}`
+                      : "Requerido — cotización del proveedor"
+                  }
+                  onChange={(event) =>
+                    onChange(
+                      cp.id,
+                      event.target.value === ""
+                        ? null
+                        : Number(event.target.value),
+                    )
+                  }
+                />
+                {valor == null && estimado != null ? (
+                  <div className="ap-minimum-alert">
+                    <span>
+                      Cotiza con el estimado de referencia — confirmá el costo
+                      con el proveedor antes de cerrar el precio.
+                    </span>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
         );
       })}

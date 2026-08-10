@@ -5681,28 +5681,6 @@ function ApConfigStep({
               />
             ) : null}
 
-            {rutaSel ? (
-              <CotizadorTercerizadoCostoManual
-                configPasos={rutaSel.configPasos}
-                valores={motorConfig.tercerizadoCostoManual}
-                simboloMoneda={moneda.simbolo}
-                nombreDe={(cp) =>
-                  cp.nombreVisible?.trim() ||
-                  cp.rutaPaso.familiaNombre ||
-                  humanizeCodigo(cp.rutaPaso.familiaCodigo)
-                }
-                onChange={(configPasoId, valor) =>
-                  setMotorConfig((current) => ({
-                    ...current,
-                    tercerizadoCostoManual: {
-                      ...current.tercerizadoCostoManual,
-                      [configPasoId]: valor,
-                    },
-                  }))
-                }
-              />
-            ) : null}
-
             {metroLinealConMedidasVariables ? (
               <>
                 <div className={seC.card}>
@@ -5787,6 +5765,31 @@ function ApConfigStep({
               ) : null}
               </>
             )}
+
+            {/* Costo del proveedor (fuente `manual`): después de la Medida —
+                el comercial primero define QUÉ cotiza y recién ahí carga lo
+                que el proveedor le pasó. */}
+            {rutaSel ? (
+              <CotizadorTercerizadoCostoManual
+                configPasos={rutaSel.configPasos}
+                valores={motorConfig.tercerizadoCostoManual}
+                simboloMoneda={moneda.simbolo}
+                nombreDe={(cp) =>
+                  cp.nombreVisible?.trim() ||
+                  cp.rutaPaso.familiaNombre ||
+                  humanizeCodigo(cp.rutaPaso.familiaCodigo)
+                }
+                onChange={(configPasoId, valor) =>
+                  setMotorConfig((current) => ({
+                    ...current,
+                    tercerizadoCostoManual: {
+                      ...current.tercerizadoCostoManual,
+                      [configPasoId]: valor,
+                    },
+                  }))
+                }
+              />
+            ) : null}
 
             {usaCaras ? (
               <div className={seC.card}>
