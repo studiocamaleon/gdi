@@ -2,13 +2,16 @@
  * F1 Cartelería — Iluminación LED (docs/carteleria-configurador-diseno.md §4.2).
  *
  * La cantidad de módulos NO la carga nadie: se DERIVA de la geometría del
- * cartel y de los atributos del módulo elegido en el slot:
+ * cartel y del `paso` (mm) de la variante del módulo — "cada cuánto va un
+ * LED", que es como piensa el gráfico (decisión 2026-08-10; antes el área
+ * usaba `cobertura` en m², una abstracción que nadie sabía cargar):
  *
- *   por área (backlight, light box):  N = ceil(área / (cobertura ÷ densidad))
+ *   por área (backlight, light box):  N = ceil(ancho/paso) × ceil(alto/paso) × densidad
  *   por recorrido (corpóreas):        N = ceil(perímetro / paso × densidad)
  *
- * `coberturaM2` y `pasoMm` son ATRIBUTOS DE LA VARIANTE del módulo LED (cada
- * módulo ilumina distinto), no del paso — decisión del doc §9.
+ * `cobertura` (m²/módulo) queda como FALLBACK legacy para variantes sin
+ * paso: N = ceil(área / (cobertura ÷ densidad)). Ambos son ATRIBUTOS DE LA
+ * VARIANTE (cada módulo ilumina distinto), no del paso — doc §9.
  *
  * La fuente se elige sola con el selector MENOR_CAPACIDAD_QUE_CUMPLA (el de
  * la anilladora): este helper publica `watts_requeridos_led` en el JobContext
@@ -80,9 +83,16 @@ export function parsearAtributosModuloLed(
  * la medida VISIBLE (los LEDs se siembran sobre el cartel terminado — la
  * demasía de tensado de la lona no suma módulos).
  */
-function geometriaCartel(
-  jobContext: JobContext,
-): { areaM2: number; perimetroM: number } | null {
+function geometriaCartel(jobContext: JobContext): {
+  areaM2: number;
+  perimetroM: number;
+  /** Lados del cartel (0 si sólo hay un override de área sin medida). */
+  anchoM: number;
+  altoM: number;
+  /** true = el área vino de un override del configurador, no de ancho×alto:
+   *  la grilla por paso no tiene lados y cae a área/paso². */
+  areaEsOverride: boolean;
+} | null {
   // `piezaAreaTotalM2`/`piezaPerimetroTotalM` describen el MATERIAL y el motor
   // los recalcula cuando un paso PRE muta las piezas (demasía de tensado):
   // ahí dejan de servir como geometría del cartel y se cae a la visible.
@@ -101,11 +111,12 @@ function geometriaCartel(
     null;
   const anchoM = Number(pieza?.anchoMm ?? 0) / 1000;
   const altoM = Number(pieza?.altoMm ?? 0) / 1000;
-  const areaM2 = areaOverride > 0 ? areaOverride : anchoM * altoM;
+  const areaEsOverride = areaOverride > 0;
+  const areaM2 = areaEsOverride ? areaOverride : anchoM * altoM;
   const perimetroM =
     perimetroOverride > 0 ? perimetroOverride : 2 * (anchoM + altoM);
   if (areaM2 <= 0 && perimetroM <= 0) return null;
-  return { areaM2, perimetroM };
+  return { areaM2, perimetroM, anchoM, altoM, areaEsOverride };
 }
 
 export function calcularIluminacionLed(
@@ -122,7 +133,21 @@ export function calcularIluminacionLed(
     modulos = Math.ceil(
       ((geo.perimetroM * 1000) / modulo.pasoMm) * params.densidad,
     );
+  } else if (modulo.pasoMm) {
+    // ÁREA por paso de grilla: un módulo cada `paso` en ambos ejes —
+    // columnas × filas, como los siembra el gráfico. Con sólo un override
+    // de área (sin lados) cae a área/paso².
+    const pasoM = modulo.pasoMm / 1000;
+    modulos =
+      !geo.areaEsOverride && geo.anchoM > 0 && geo.altoM > 0
+        ? Math.ceil(
+            Math.ceil(geo.anchoM / pasoM) *
+              Math.ceil(geo.altoM / pasoM) *
+              params.densidad,
+          )
+        : Math.ceil((geo.areaM2 / (pasoM * pasoM)) * params.densidad);
   } else {
+    // Fallback legacy: variantes viejas que sólo declaran cobertura.
     if (!modulo.coberturaM2) return null;
     modulos = Math.ceil(geo.areaM2 / (modulo.coberturaM2 / params.densidad));
   }

@@ -1222,21 +1222,20 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       { key: "modelo", label: "Modelo", type: "text", required: true },
       { key: "potencia", label: "Potencia por módulo", type: "number", unit: "w", required: true },
       { key: "tension", label: "Tensión", type: "text", options: ["12V", "24V", "220V"], required: true },
-      { key: "cobertura", label: "Cobertura por módulo (sembrado por área)", type: "number", unit: "m2", required: false },
-      { key: "paso", label: "Paso entre módulos (sembrado por recorrido)", type: "number", unit: "mm", required: false },
+      // `paso` es LA perilla del sembrado ("cada cuánto va un LED"): en área
+      // arma la grilla ceil(ancho/paso)×ceil(alto/paso); en recorrido, el
+      // espaciado sobre el trazo. `cobertura` (m²/módulo) quedó como atributo
+      // legacy que el motor acepta de fallback pero ya no se edita acá.
+      { key: "paso", label: "Paso entre módulos", type: "number", unit: "mm", required: true },
       { key: "temperaturaColor", label: "Temperatura de color", type: "text", options: ["Cálido", "Neutro", "Frío"], required: false },
     ],
-    // cobertura y paso VAN en la grilla de variantes: son los atributos de
-    // los que el motor deriva la cantidad sembrada — invisibles eran
-    // ineditables y el cálculo parecía magia.
-    dimensionesVariante: ["modelo", "potencia", "tension", "cobertura", "paso", "temperaturaColor"],
-    requiredAtributos: ["modelo", "potencia", "tension"],
+    dimensionesVariante: ["modelo", "potencia", "tension", "paso", "temperaturaColor"],
+    requiredAtributos: ["modelo", "potencia", "tension", "paso"],
     atributosIniciales: {
       modelo: "SMD 2835 x3",
       potencia: 0.72,
       tension: "12V",
-      cobertura: 0.0625,
-      paso: 100,
+      paso: 250,
       temperaturaColor: "Frío",
     },
   },

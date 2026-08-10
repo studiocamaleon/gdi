@@ -100,7 +100,7 @@ const CASOS = [
     },
   },
   {
-    label: 'densidad_150', // esperado: 70 módulos
+    label: 'densidad_150', // esperado: 75 módulos (10×5×1,5)
     jobContext: {
       ...BASE,
       opcionalesActivados: TODOS_OPCIONALES,
@@ -108,7 +108,7 @@ const CASOS = [
     },
   },
   {
-    label: 'modulo_3w', // esperado: 16 módulos, 48 W, fuente 100 W
+    label: 'modulo_3w', // esperado: 18 módulos (grilla 6×3 con paso 424), fuente 100 W
     jobContext: {
       ...BASE,
       opcionalesActivados: TODOS_OPCIONALES,

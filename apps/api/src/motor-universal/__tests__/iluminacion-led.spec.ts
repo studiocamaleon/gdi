@@ -12,11 +12,11 @@ const ctx = (extra: Record<string, unknown> = {}): JobContext =>
     ...extra,
   }) as unknown as JobContext;
 
-// Módulo estándar del prototipo: 12V, 0,72 W, cubre 0,0625 m² (25×25 cm).
+// Módulo estándar del prototipo: 12V, 0,72 W, un módulo cada 250 mm (la
+// grilla de 25×25 cm que antes se expresaba como cobertura 0,0625 m²).
 // Claves canónicas de la plantilla (la unidad vive en `unit`, no en la clave).
 const MODULO = parsearAtributosModuloLed({
-  cobertura: 0.0625,
-  paso: 100,
+  paso: 250,
   potencia: 0.72,
 })!;
 
@@ -27,11 +27,11 @@ describe('Iluminación LED (F1 cartelería)', () => {
       parsearParamsIluminacionLed({ modoSembrado: 'area' }),
       MODULO,
     )!;
-    // 2,88 m² / 0,0625 = 46,08 → 47 módulos
-    expect(r.modulos).toBe(47);
-    expect(r.watts).toBeCloseTo(33.84, 1);
-    // ×1,3 de margen → la fuente tiene que cumplir ~44 W
-    expect(r.wattsRequeridos).toBeCloseTo(43.99, 1);
+    // Grilla cada 250 mm: ceil(2400/250)=10 columnas × ceil(1200/250)=5 filas
+    expect(r.modulos).toBe(50);
+    expect(r.watts).toBeCloseTo(36, 1);
+    // ×1,3 de margen → la fuente tiene que cumplir ~47 W
+    expect(r.wattsRequeridos).toBeCloseTo(46.8, 1);
   });
 
   it('la densidad multiplica el sembrado (1,5 = 50% más módulos)', () => {
@@ -40,8 +40,8 @@ describe('Iluminación LED (F1 cartelería)', () => {
       parsearParamsIluminacionLed({ modoSembrado: 'area', densidad: 1.5 }),
       MODULO,
     )!;
-    // 2,88 / (0,0625/1,5) = 69,12 → 70
-    expect(r.modulos).toBe(70);
+    // 10 × 5 × 1,5 = 75
+    expect(r.modulos).toBe(75);
   });
 
   it('sembrado por recorrido: los módulos siguen el trazo (corpóreas)', () => {
@@ -50,8 +50,8 @@ describe('Iluminación LED (F1 cartelería)', () => {
       parsearParamsIluminacionLed({ modoSembrado: 'recorrido' }),
       MODULO,
     )!;
-    // perímetro 2·(2,4+1,2) = 7,2 m / 100 mm = 72 módulos
-    expect(r.modulos).toBe(72);
+    // perímetro 2·(2,4+1,2) = 7,2 m / 250 mm = 28,8 → 29 módulos
+    expect(r.modulos).toBe(29);
   });
 
   it('el override de perímetro del configurador manda sobre el rectángulo', () => {
@@ -62,7 +62,8 @@ describe('Iluminación LED (F1 cartelería)', () => {
       parsearParamsIluminacionLed({ modoSembrado: 'recorrido' }),
       MODULO,
     )!;
-    expect(r.modulos).toBe(41);
+    // 4.100 mm / 250 = 16,4 → 17
+    expect(r.modulos).toBe(17);
   });
 
   it('el override de área manda en el sembrado por área', () => {
@@ -71,6 +72,7 @@ describe('Iluminación LED (F1 cartelería)', () => {
       parsearParamsIluminacionLed({ modoSembrado: 'area' }),
       MODULO,
     )!;
+    // Sin lados (override de área): 1 m² / 0,25² = 16
     expect(r.modulos).toBe(16);
   });
 
@@ -87,15 +89,18 @@ describe('Iluminación LED (F1 cartelería)', () => {
     expect(r.modulos).toBe(2);
   });
 
-  it('sin cobertura en la variante, el sembrado por área no puede calcular', () => {
-    const soloRecorrido = parsearAtributosModuloLed({ paso: 100, potencia: 1 })!;
-    expect(
-      calcularIluminacionLed(
-        ctx(),
-        parsearParamsIluminacionLed({ modoSembrado: 'area' }),
-        soloRecorrido,
-      ),
-    ).toBeNull();
+  it('variante legacy sin paso: el área cae al fallback de cobertura', () => {
+    const soloCobertura = parsearAtributosModuloLed({
+      cobertura: 0.0625,
+      potencia: 0.72,
+    })!;
+    const r = calcularIluminacionLed(
+      ctx(),
+      parsearParamsIluminacionLed({ modoSembrado: 'area' }),
+      soloCobertura,
+    )!;
+    // 2,88 m² / 0,0625 = 46,08 → 47 (la fórmula histórica)
+    expect(r.modulos).toBe(47);
   });
 
   it('una variante sin atributos LED no parsea (el guard avisa)', () => {
@@ -109,7 +114,7 @@ describe('Iluminación LED (F1 cartelería)', () => {
       parsearParamsIluminacionLed({ modoSembrado: 'area' }),
       MODULO,
     )!;
-    expect(r.cableMl).toBeCloseTo(7.2 * 1.4 + 47 * 0.12, 2);
+    expect(r.cableMl).toBeCloseTo(7.2 * 1.4 + 50 * 0.12, 2);
   });
 });
 
@@ -136,7 +141,7 @@ describe('Regla de oro: los LEDs se siembran sobre el cartel terminado', () => {
       parsearParamsIluminacionLed({ modoSembrado: 'area' }),
       MODULO,
     )!;
-    // 2,88 m² visibles / 0,0625 = 46,08 → 47 (no 59 del material mutado)
-    expect(r.modulos).toBe(47);
+    // Grilla sobre la VISIBLE 2,4×1,2: 10×5 = 50 (no la del material mutado)
+    expect(r.modulos).toBe(50);
   });
 });
