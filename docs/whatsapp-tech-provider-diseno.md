@@ -162,7 +162,33 @@ Alguien del tenant debe abrir la WhatsApp Business App cada ≤13 días o Meta d
 - **App Review** con screencasts de F1c/F1d → producción.
 - **F2 — Inbox** (proyecto aparte): materializar history/echoes/contactos ya persistidos, conversaciones, ventana de 24h, interactivos.
 
-## 10. Riesgos
+## 10. Referencia oficial: sample app de Meta
+
+`github.com/fbsamples/business-messaging-sample-tech-provider-app` (revisada
+2026-08-10) — la app de muestra para Tech Providers. Confirma el diseño y
+aporta los detalles finos de Graph:
+
+- **Webhook**: idéntico a nuestro F1a (GET challenge + HMAC-SHA256 del raw
+  body con app secret + `timingSafeEqual`). ✓
+- **Token exchange**: `GET /oauth/access_token?client_id&client_secret&code&`
+  **`redirect_uri`** — ojo: lleva `redirect_uri` y debe matchear el
+  configurado en la app (nuestro §4.3 debe incluirlo).
+- **Registro**: `POST /{phoneId}/register` body
+  `{messaging_product:'whatsapp', pin}` — el sample usa un PIN fijo de env
+  (`FB_REG_PIN`); nosotros: PIN por tenant guardado cifrado.
+- **Alta de número nuevo** (no lo teníamos): `POST /{phoneId}/request_code
+  ?code_method=SMS` + `POST /{phoneId}/verify_code?code=` — para tenants que
+  quieran un número nuevo en vez de coexistence.
+- **Salud del WABA**: `GET /{wabaId}?fields=account_review_status,
+  business_verification_status,phone_numbers,...` — la fuente para el estado
+  por tenant en Integraciones (§8).
+- **Secuencia post-signup del sample**: getToken → saveTokens →
+  registerNumber (condicional) → subscribeWebhook — mismo orden que §4.3.
+- Diferencias nuestras (a favor): tokens por tenant cifrados (el sample los
+  guarda planos en Postgres), persistencia cruda de webhooks (el sample
+  procesa y descarta), cola con idempotencia (el sample envía directo).
+
+## 11. Riesgos
 
 | Riesgo | Mitigación |
 |---|---|
