@@ -82,9 +82,17 @@ resuelven gratis; hacerlo al provisionar es un paso del empaquetado.
 
 ## 5. Pendientes técnicos que este análisis confirma (ya anotados en derivadores §8d)
 
+- ~~**Paños del montaje**~~ **HECHO 2026-08-10**: con el panelizado del paso
+  activo, el montaje parte la pieza más grande que la hoja en la grilla
+  mínima de paños iguales (junta `overlapMm`, eje manual respetado) y cuenta
+  las hojas reales — el backlight de 250×130 sale en 3 hojas
+  (`partirPiezasEnPanosDeHoja`, golden 7/7 + 152/152 intactos).
 - **Cenefa por hojas**: hoy cotiza m² teóricos ×1,08; el derivador ya conoce
   el desarrollo (perímetro × (D + 2·solapa)) — puede publicar las TIRAS como
-  despiece y nestearlas en la misma hoja de chapa que el fondo.
+  despiece y nestearlas en la misma hoja de chapa que el fondo. OJO: las
+  variantes de chapa "tarifa por m²" se borraron el 2026-08-10 por parecer
+  duplicadas; hubo que recrear una (misma id `27de75b1`, "Tarifa por m²
+  (cenefas)") porque el slot de Cenefas consume por m² hasta que esto exista.
 - `minimoCompra` genérico (§4.3).
 - Diagnóstico fino de barras del bastidor.
 
