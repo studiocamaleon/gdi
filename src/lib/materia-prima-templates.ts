@@ -35,6 +35,11 @@ export type MateriaPrimaTemplateDef = {
   dimensionesVariante: string[];
   requiredAtributos: string[];
   atributosIniciales: Record<string, unknown>;
+  /** Excepción puntual a la convención "sin unidad en la key": para declarar
+   *  campos cuyos DATOS ya viven con key sufijada porque el motor los lee
+   *  así (p.ej. `anchoMm`/`altoMm` de la hoja de chapa, que alimentan el
+   *  nesting). Renombrarlos rompería el costeo; acá se blanquean. */
+  allowUnitSuffixKeys?: string[];
   defaults?: {
     esConsumible?: boolean;
     esRepuesto?: boolean;
@@ -1397,13 +1402,22 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     camposTecnicos: [
       { key: "tipo", label: "Tipo", type: "text", options: ["Galvanizada", "Prepintada", "Aluminio", "Inoxidable"], required: true },
       { key: "espesor", label: "Espesor", type: "number", unit: "mm", required: true },
+      // La chapa se compra en hoja con medida (1220×2440) o se carga como
+      // tarifa por m² sin presentación: sin estos campos, dos variantes del
+      // mismo tipo+espesor se ven idénticas en el selector. Las keys llevan
+      // Mm porque el motor lee `anchoMm`/`altoMm` de los atributos para el
+      // nesting de la hoja (allowUnitSuffixKeys).
+      { key: "presentacion", label: "Presentación", type: "text", options: ["hoja"], optional: true },
+      { key: "anchoMm", label: "Ancho", type: "number", unit: "mm", optional: true },
+      { key: "altoMm", label: "Alto", type: "number", unit: "mm", optional: true },
     ],
-    dimensionesVariante: ["tipo", "espesor"],
+    dimensionesVariante: ["tipo", "espesor", "presentacion", "anchoMm", "altoMm"],
     requiredAtributos: ["tipo", "espesor"],
     atributosIniciales: {
       tipo: "Galvanizada",
       espesor: 0.7,
     },
+    allowUnitSuffixKeys: ["anchoMm", "altoMm"],
   },
 ];
 
@@ -1421,7 +1435,9 @@ const LEGACY_TEMPLATE_ALIASES: Record<string, string> = {
 
 for (const template of materiaPrimaTemplatesV1) {
   const fieldKeys = template.camposTecnicos.map((field) => field.key);
-  assertCanonicalTemplateKeys(template.id, fieldKeys);
+  assertCanonicalTemplateKeys(template.id, fieldKeys, {
+    allowUnitSuffixKeys: template.allowUnitSuffixKeys,
+  });
   assertAnchoAntesDeAlto(template.id, template.dimensionesVariante);
 }
 
