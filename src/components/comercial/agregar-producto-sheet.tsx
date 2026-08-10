@@ -40,7 +40,9 @@ import {
 } from "@/lib/producto-herramientas";
 import { leerMedidasPdf } from "@/lib/pdf-medidas";
 import {
+  CotizadorTercerizadoCostoManual,
   CotizadorTercerizadoSelectors,
+  tercerizadoManualPasos,
   getTercerizadoCantidades,
   tercerizadoEjes,
   tercerizadoMatrizPasos,
@@ -256,6 +258,12 @@ type MotorConfigState = {
   /** Valores de eje elegidos por paso tercerizado con matriz (`tercerizado_<configPasoId>`). */
   seleccionTercerizado: Record<string, Record<string, string>>;
   /**
+   * Costo cotizado por el proveedor para ESTE trabajo, por paso tercerizado
+   * con fuente `manual` (`tercerizadoCostoManual_<configPasoId>` al motor).
+   * Null/ausente = usar el costo estimado de referencia del paso, si existe.
+   */
+  tercerizadoCostoManual: Record<string, number | null>;
+  /**
    * Params del paso que el modelador dejó abiertos y el comercial cambió
    * (`configPasoRuntime[configPasoId]` al motor). Ausente = usar la sugerencia.
    * Ver docs/modificaciones-fisicas-lona-diseno.md
@@ -446,6 +454,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionPerfil: {},
   seleccionModoColor: {},
   seleccionTercerizado: {},
+  tercerizadoCostoManual: {},
   paramsComercial: {},
   modoCotizacionLineal: "nesting",
   zonaInstalacion: "CABA",
@@ -2645,6 +2654,15 @@ function buildJobContext(
       ? { ...elegidos, cantidad: String(qty) }
       : elegidos;
     if (Object.keys(valores).length > 0) ctx[`tercerizado_${cp.id}`] = valores;
+  }
+
+  // Fuente `manual`: la cotización del proveedor para ESTE trabajo. Sin valor
+  // no se manda nada — el motor usa el costo estimado de referencia si existe.
+  for (const cp of tercerizadoManualPasos(rutaSel?.configPasos ?? [])) {
+    const costo = config.tercerizadoCostoManual?.[cp.id];
+    if (typeof costo === "number" && Number.isFinite(costo) && costo > 0) {
+      ctx[`tercerizadoCostoManual_${cp.id}`] = costo;
+    }
   }
 
   // Params abiertos al comercial: sólo de pasos ACTIVOS y sólo lo que cambió.
@@ -5660,6 +5678,28 @@ function ApConfigStep({
                     },
                   }));
                 }}
+              />
+            ) : null}
+
+            {rutaSel ? (
+              <CotizadorTercerizadoCostoManual
+                configPasos={rutaSel.configPasos}
+                valores={motorConfig.tercerizadoCostoManual}
+                simboloMoneda={moneda.simbolo}
+                nombreDe={(cp) =>
+                  cp.nombreVisible?.trim() ||
+                  cp.rutaPaso.familiaNombre ||
+                  humanizeCodigo(cp.rutaPaso.familiaCodigo)
+                }
+                onChange={(configPasoId, valor) =>
+                  setMotorConfig((current) => ({
+                    ...current,
+                    tercerizadoCostoManual: {
+                      ...current.tercerizadoCostoManual,
+                      [configPasoId]: valor,
+                    },
+                  }))
+                }
               />
             ) : null}
 

@@ -29,6 +29,7 @@ const FUENTES = [
   { value: "matriz", label: "Matriz de cantidades" },
   { value: "tarifa_magnitud", label: "Tarifa por magnitud" },
   { value: "fijo", label: "Precio fijo" },
+  { value: "manual", label: "Cotización por trabajo" },
 ] as const;
 
 const FUENTE_HINT: Record<string, string> = {
@@ -37,6 +38,8 @@ const FUENTE_HINT: Record<string, string> = {
   tarifa_magnitud:
     "Un precio por unidad de magnitud — el costo escala con el tamaño del trabajo.",
   fijo: "Un único precio por orden, sin importar cantidad ni medida.",
+  manual:
+    "El proveedor cotiza cada trabajo: el costo se carga a mano al cotizar. Si hay un estimado de referencia, se usa hasta tener la cotización real.",
 };
 
 const MAGNITUDES = [
@@ -93,12 +96,17 @@ export function PasoTercerizadoPanel({
   value,
   onChange,
   onToggle,
+  esImpresion = false,
 }: {
   value: UpsertConfigPasoPayload;
   onChange: (patch: Patch) => void;
   /** Sólo el editor detallado viejo: prende/apaga la tercerización desde acá.
    *  En el editor guiado lo maneja el eje Identidad y no se pasa. */
   onToggle?: (tercerizado: boolean) => void;
+  /** La familia del paso es de impresión: sólo ahí tiene sentido (y se
+   *  muestra) el selector de Tecnología — una estructura soldada no tiene
+   *  tecnología de impresión que reportar. */
+  esImpresion?: boolean;
 }) {
   const [proveedores, setProveedores] = React.useState<
     Array<{ id: string; nombre: string }>
@@ -203,41 +211,43 @@ export function PasoTercerizadoPanel({
                   <span className={s.u}>días hábiles</span>
                 </span>
               </div>
-              <div className={`${s.f} ${s.full}`}>
-                <span className={s.k}>
-                  Tecnología{" "}
-                  <span className={s.o}>
-                    · solo para reportes, no afecta el costo
+              {esImpresion ? (
+                <div className={`${s.f} ${s.full}`}>
+                  <span className={s.k}>
+                    Tecnología{" "}
+                    <span className={s.o}>
+                      · solo para reportes, no afecta el costo
+                    </span>
                   </span>
-                </span>
-                <span
-                  className={`${s.ctl} ${s.sel}`}
-                  style={{ maxWidth: 300 }}
-                >
-                  <select
-                    value={
-                      typeof cfg.tecnologia === "string" && cfg.tecnologia
-                        ? cfg.tecnologia
-                        : SIN_TECNOLOGIA
-                    }
-                    onChange={(e) =>
-                      patchCfg({
-                        tecnologia:
-                          e.target.value === SIN_TECNOLOGIA
-                            ? null
-                            : e.target.value,
-                      })
-                    }
+                  <span
+                    className={`${s.ctl} ${s.sel}`}
+                    style={{ maxWidth: 300 }}
                   >
-                    <option value={SIN_TECNOLOGIA}>Sin tecnología</option>
-                    {TECNOLOGIAS_TERCERIZADO.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </span>
-              </div>
+                    <select
+                      value={
+                        typeof cfg.tecnologia === "string" && cfg.tecnologia
+                          ? cfg.tecnologia
+                          : SIN_TECNOLOGIA
+                      }
+                      onChange={(e) =>
+                        patchCfg({
+                          tecnologia:
+                            e.target.value === SIN_TECNOLOGIA
+                              ? null
+                              : e.target.value,
+                        })
+                      }
+                    >
+                      <option value={SIN_TECNOLOGIA}>Sin tecnología</option>
+                      {TECNOLOGIAS_TERCERIZADO.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -254,10 +264,11 @@ export function PasoTercerizadoPanel({
                     onChange({
                       fuenteCostoTercerizado: f.value,
                       // cambiar de fuente resetea la config específica pero
-                      // conserva la tecnología del proceso.
-                      tercerizadoConfigJson: cfg.tecnologia
-                        ? { tecnologia: cfg.tecnologia }
-                        : {},
+                      // conserva la tecnología del proceso (sólo impresión).
+                      tercerizadoConfigJson:
+                        cfg.tecnologia && esImpresion
+                          ? { tecnologia: cfg.tecnologia }
+                          : {},
                     })
                   }
                 >
@@ -269,6 +280,8 @@ export function PasoTercerizadoPanel({
               <TarifaEditor cfg={cfg} patchCfg={patchCfg} />
             ) : fuente === "fijo" ? (
               <FijoEditor cfg={cfg} patchCfg={patchCfg} />
+            ) : fuente === "manual" ? (
+              <ManualEditor cfg={cfg} patchCfg={patchCfg} />
             ) : null}
           </div>
 
@@ -366,6 +379,48 @@ function TarifaEditor({
               patchCfg({ minimoCosto: numOrNull(e.target.value) })
             }
           />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────── Fuente: cotización por trabajo (manual) ─────────── */
+function ManualEditor({
+  cfg,
+  patchCfg,
+}: {
+  cfg: Record<string, unknown>;
+  patchCfg: (extra: Record<string, unknown>) => void;
+}) {
+  const { moneda } = useConfigRegional();
+  return (
+    <div className={s.fields} style={{ marginTop: 12, maxWidth: 520 }}>
+      <div className={s.f}>
+        <span className={s.k}>
+          Costo estimado de referencia <span className={s.o}>· opcional</span>
+        </span>
+        <span className={s.ctl}>
+          <span className={s.pre}>{moneda.simbolo}</span>
+          <input
+            className={s.num}
+            inputMode="decimal"
+            placeholder="—"
+            value={(cfg.costoEstimado as number) ?? ""}
+            onChange={(e) =>
+              patchCfg({
+                costoEstimado:
+                  e.target.value === "" ? null : Number(e.target.value),
+              })
+            }
+          />
+        </span>
+      </div>
+      <div className={`${s.f} ${s.full}`}>
+        <span className={s.o}>
+          Permite presupuestar sin esperar al proveedor: la cotización sale con
+          este monto marcada como estimada, y al cargar el costo real en el
+          cotizador lo reemplaza.
         </span>
       </div>
     </div>

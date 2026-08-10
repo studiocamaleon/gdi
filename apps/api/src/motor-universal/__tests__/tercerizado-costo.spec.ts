@@ -165,6 +165,55 @@ describe('resolverCostoTercerizado', () => {
     });
   });
 
+  describe('fuente manual (el proveedor cotiza por trabajo)', () => {
+    it('con la cotización del proveedor cargada, ese monto manda', () => {
+      const r = resolverCostoTercerizado({
+        fuente: 'manual',
+        config: { costoEstimado: 50000 }, // el estimado NO pisa lo cotizado
+        magnitudes: {},
+        seleccionMatriz: {},
+        entradas: [],
+        costoManual: 68500,
+      });
+      expect(r).toMatchObject({
+        ok: true,
+        costo: 68500,
+        detalle: { fuente: 'manual', origen: 'cotizado' },
+      });
+    });
+
+    it('sin cotización cae al estimado de referencia, marcado como estimado', () => {
+      const r = resolverCostoTercerizado({
+        fuente: 'manual',
+        config: { costoEstimado: 50000 },
+        magnitudes: {},
+        seleccionMatriz: {},
+        entradas: [],
+      });
+      expect(r).toMatchObject({
+        ok: true,
+        costo: 50000,
+        detalle: { fuente: 'manual', origen: 'estimado' },
+      });
+    });
+
+    it('sin cotización NI estimado: error accionable con código propio', () => {
+      const r = resolverCostoTercerizado({
+        fuente: 'manual',
+        config: {},
+        magnitudes: {},
+        seleccionMatriz: {},
+        entradas: [],
+        costoManual: 0, // 0 no es una cotización
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.codigo).toBe('tercerizado_costo_manual_requerido');
+        expect(r.sugerencia).toMatch(/proveedor/);
+      }
+    });
+  });
+
   it('rechaza una fuente no soportada', () => {
     const r = resolverCostoTercerizado({
       fuente: 'inventada',

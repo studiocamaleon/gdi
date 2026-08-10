@@ -487,6 +487,23 @@ function aplicarPregunta(
       return;
     }
 
+    case 'tercerizado_costo': {
+      // Cotización del proveedor para este trabajo (neto). Sin respuesta:
+      // el motor usa el estimado de referencia; si tampoco hay, es faltante.
+      const n = valor === undefined ? null : asNumber(valor);
+      if (valor !== undefined && (n === null || n <= 0)) {
+        fail(`${etiqueta} debe ser un monto neto mayor a 0.`);
+      }
+      if (n === null) {
+        if (pregunta.requerido === true) {
+          faltantes.push(`${key} — ${etiqueta}`);
+        }
+        return;
+      }
+      setAnidado(jobContext, key, n);
+      return;
+    }
+
     case 'profundidad': {
       const n = valor === undefined ? null : asNumber(valor);
       if (valor !== undefined && (n === null || n <= 0)) {

@@ -228,6 +228,16 @@ producto normal cuya ruta tiene ≥1 paso marcado tercerizado.
     cantidad); al completar, el lookup da el costo. Si la combo no existe, estado
     claro ("no disponible").
   - **`fijo`**: nada que capturar.
+  - **`manual`** (agregada 2026-08-10): el proveedor cotiza CADA trabajo. El
+    comercial (o la IA vía MCP) carga el **costo del proveedor (neto)** en un
+    input por paso; viaja como `tercerizadoCostoManual_<configPasoId>`. La
+    config del paso admite un **costo estimado de referencia** opcional: sin
+    cotización real el motor usa el estimado y el detalle queda con
+    `origen: 'estimado'` (la UI avisa "confirmá con el proveedor"). Sin
+    ninguno de los dos → error `tercerizado_costo_manual_requerido`.
+    Nota: la tecnología del panel tercerizado sólo se ofrece en familias de
+    impresión (`esImpresion`) — una estructura soldada no tiene tecnología
+    que reportar.
 - El precio se dispara con el mismo `cotizar` y se muestra igual. Rutas mixtas:
   conviven la UI de medidas (para el refilado/impresión) y, si algún paso es
   matriz, sus selectores.

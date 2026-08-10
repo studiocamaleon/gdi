@@ -3,10 +3,15 @@
  * Puro y testeable (sin DB ni jobContext). Lo consume `ejecutarPasoTercerizado`
  * en motor.service. docs/productos-tercerizados-diseno.md §5.
  *
- * Tres fuentes:
+ * Cuatro fuentes:
  *  - `tarifa_magnitud`: costo = max(tarifa × max(magnitud, mínMag), mínCosto).
  *  - `matriz`:          lookup EXACTO por la clave de los valores de eje.
  *  - `fijo`:            costo fijo por trabajo o por unidad.
+ *  - `manual`:          el proveedor cotiza CADA trabajo — el comercial carga
+ *                       el monto al cotizar (`costoManual`); sin él vale el
+ *                       `costoEstimado` de referencia de la config, marcado
+ *                       como estimado para que la UI avise "confirmá con el
+ *                       proveedor".
  */
 
 export type EntradaMatriz = {
@@ -29,11 +34,23 @@ export type DetalleTercerizado = {
   valorMagnitud?: number;
   tarifa?: number;
   entradaClave?: string;
+  /**
+   * Sólo fuente `manual`: si el monto es la cotización REAL del proveedor
+   * (`cotizado`) o el costo de referencia de la config (`estimado`). La UI
+   * avisa cuando el precio salió de un estimado.
+   */
+  origen?: 'cotizado' | 'estimado';
 };
 
 export type ResultadoTercerizado =
   | { ok: true; costo: number; detalle: DetalleTercerizado }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      /** Código específico del error (default del caller: tercerizado_no_resoluble). */
+      codigo?: string;
+      sugerencia?: string;
+    };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -83,8 +100,37 @@ export function resolverCostoTercerizado(args: {
   magnitudes: MagnitudesJob;
   seleccionMatriz: Record<string, unknown>;
   entradas: EntradaMatriz[];
+  /** Fuente `manual`: lo que el proveedor cotizó para ESTE trabajo (neto). */
+  costoManual?: number | null;
 }): ResultadoTercerizado {
   const { fuente, config, magnitudes, seleccionMatriz, entradas } = args;
+
+  if (fuente === 'manual') {
+    const cotizado = Number(args.costoManual);
+    if (Number.isFinite(cotizado) && cotizado > 0) {
+      return {
+        ok: true,
+        costo: r2(cotizado),
+        detalle: { fuente, origen: 'cotizado' },
+      };
+    }
+    const estimado = Number(config.costoEstimado);
+    if (Number.isFinite(estimado) && estimado > 0) {
+      return {
+        ok: true,
+        costo: r2(estimado),
+        detalle: { fuente, origen: 'estimado' },
+      };
+    }
+    return {
+      ok: false,
+      error:
+        'El proveedor cotiza este paso por trabajo y no se cargó su costo.',
+      codigo: 'tercerizado_costo_manual_requerido',
+      sugerencia:
+        'Ingresá el costo que te cotizó el proveedor (o cargá un costo estimado de referencia en el paso del producto).',
+    };
+  }
 
   if (fuente === 'fijo') {
     const costoBase = Number(config.costo ?? 0);

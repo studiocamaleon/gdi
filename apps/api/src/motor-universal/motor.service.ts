@@ -2059,12 +2059,20 @@ export class MotorUniversalService {
       },
       seleccionMatriz,
       entradas: paso.tercerizadoEntradas ?? [],
+      // Fuente `manual`: la cotización del proveedor para ESTE trabajo viaja
+      // en el jobContext (la carga el comercial en el sheet, o la IA).
+      costoManual: Number(
+        (jobContext as Record<string, unknown>)[
+          `tercerizadoCostoManual_${paso.configPasoId}`
+        ],
+      ),
     });
     if (!resultado.ok) {
       errores.push({
-        codigo: 'tercerizado_no_resoluble',
+        codigo: resultado.codigo ?? 'tercerizado_no_resoluble',
         severidad: 'ERROR',
         mensaje: resultado.error,
+        sugerencia: resultado.sugerencia,
         rutaPasoId: paso.rutaPasoId,
         rutaPasoOrden: paso.rutaPasoOrden,
         familiaCodigo: paso.familiaCodigo,

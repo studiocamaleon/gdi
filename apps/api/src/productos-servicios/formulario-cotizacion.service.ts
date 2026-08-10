@@ -492,6 +492,27 @@ export class FormularioCotizacionService {
     base: Record<string, unknown>,
   ): PreguntaFormulario[] {
     if (!config.tercerizado) return [];
+    // Fuente `manual`: el proveedor cotiza este trabajo — la IA pregunta el
+    // monto (o cotiza con el estimado de referencia, avisando que es estimado).
+    if (config.fuenteCostoTercerizado === 'manual') {
+      const estimado = Number(
+        asRecord(config.tercerizadoConfigJson).costoEstimado,
+      );
+      const sugerido =
+        Number.isFinite(estimado) && estimado > 0 ? estimado : null;
+      return [
+        {
+          tipo: 'tercerizado_costo',
+          ...base,
+          etiqueta: `${base.paso as string} · costo del proveedor (neto)`,
+          descripcion:
+            'Lo que el proveedor cotizó para ESTE trabajo. Sin respuesta se usa el costo estimado de referencia y la cotización queda marcada como estimada.',
+          sugerido,
+          requerido: sugerido === null,
+          jobContextKey: `tercerizadoCostoManual_${config.id}`,
+        },
+      ];
+    }
     if (config.fuenteCostoTercerizado !== 'matriz') return [];
     const configJson = asRecord(config.tercerizadoConfigJson);
     const ejes = Array.isArray(configJson.ejes)

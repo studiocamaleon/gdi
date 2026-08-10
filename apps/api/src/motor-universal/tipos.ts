@@ -170,7 +170,9 @@ export interface JobContext {
    * Cualquier otro campo dinámico que el comercial cargue. Claves con
    * namespace por paso: `modoColor_<configPasoId>`, `caras_<configPasoId>`,
    * `maquinaSeleccionada_<configPasoId>`, `tiempoManualMin_<configPasoId>`
-   * (minutos estimados por el comercial — ver TiempoManualConfig).
+   * (minutos estimados por el comercial — ver TiempoManualConfig),
+   * `tercerizadoCostoManual_<configPasoId>` (cotización del proveedor para
+   * este trabajo, neto — fuente `manual` de tercerizado).
    */
   [key: string]: unknown;
 }

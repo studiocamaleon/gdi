@@ -70,6 +70,91 @@ export function tercerizadoMatrizPasos(
   );
 }
 
+/** Pasos tercerizados con fuente `manual` (el proveedor cotiza por trabajo). */
+export function tercerizadoManualPasos(
+  configPasos: ConfigPasoDetalle[],
+): ConfigPasoDetalle[] {
+  return configPasos.filter(
+    (cp) => cp.tercerizado && cp.fuenteCostoTercerizado === "manual",
+  );
+}
+
+/** Costo estimado de referencia de la config del paso (null si no hay). */
+export function tercerizadoCostoEstimado(
+  cp: ConfigPasoDetalle,
+): number | null {
+  const cfg = cp.tercerizadoConfigJson;
+  const est =
+    cfg && typeof cfg === "object"
+      ? Number((cfg as { costoEstimado?: unknown }).costoEstimado)
+      : NaN;
+  return Number.isFinite(est) && est > 0 ? est : null;
+}
+
+/**
+ * Inputs de costo del proveedor para los pasos con fuente `manual`: el
+ * proveedor cotizó ESTE trabajo y el comercial carga el monto (neto). Sin
+ * monto y con estimado de referencia, el motor usa el estimado y la
+ * cotización queda marcada como estimada.
+ */
+export function CotizadorTercerizadoCostoManual({
+  configPasos,
+  valores,
+  onChange,
+  simboloMoneda,
+  nombreDe,
+}: {
+  configPasos: ConfigPasoDetalle[];
+  valores: Record<string, number | null>;
+  onChange: (configPasoId: string, valor: number | null) => void;
+  simboloMoneda: string;
+  nombreDe: (cp: ConfigPasoDetalle) => string;
+}) {
+  const pasos = tercerizadoManualPasos(configPasos);
+  if (pasos.length === 0) return null;
+
+  return (
+    <>
+      {pasos.map((cp) => {
+        const estimado = tercerizadoCostoEstimado(cp);
+        const valor = valores[cp.id];
+        return (
+          <div key={`terc-manual-${cp.id}`} className="ap-spec">
+            <label>
+              {nombreDe(cp)} · costo del proveedor ({simboloMoneda} neto)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={valor ?? ""}
+              placeholder={
+                estimado != null
+                  ? `Estimado: ${simboloMoneda} ${estimado}`
+                  : "Requerido — cotización del proveedor"
+              }
+              onChange={(event) =>
+                onChange(
+                  cp.id,
+                  event.target.value === "" ? null : Number(event.target.value),
+                )
+              }
+            />
+            {valor == null && estimado != null ? (
+              <div className="ap-minimum-alert">
+                <span>
+                  Cotiza con el estimado de referencia — confirmá el costo con
+                  el proveedor antes de cerrar el precio.
+                </span>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /** Ejes de un paso tercerizado, ordenados por `orden`. */
 export function tercerizadoEjes(cp: ConfigPasoDetalle): TercerizadoEje[] {
   const cfg = cp.tercerizadoConfigJson;

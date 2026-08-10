@@ -4904,6 +4904,10 @@ export function ConfigPasosEditorView({
                           <div className="sb-body">
                             <PasoTercerizadoPanel
                               value={cfg}
+                              esImpresion={
+                                familiasMap.get(paso.familiaCodigo)
+                                  ?.esImpresion === true
+                              }
                               onChange={(patch) => updateConfig(paso.id, patch)}
                               onToggle={(tercerizado) =>
                                 updateConfig(
@@ -12309,6 +12313,7 @@ function SeccionesEsquemaPaso({
             return (
               <PasoTercerizadoPanel
                 value={cfg}
+                esImpresion={familia?.esImpresion === true}
                 onChange={(patch) => onPatch(pasoActual.id, patch)}
               />
             );
