@@ -3529,9 +3529,47 @@ export class MotorUniversalService {
     // su variante no declara medidas (una carga de tarifa por m² en vez de
     // la presentación en hoja) — sin ancho×alto no hay hoja que nestear.
     const attrs = materialResuelto?.atributosVarianteJson ?? null;
+    const hojaAnchoMm = Number(attrs?.anchoMm ?? 0);
+    const hojaAltoMm = Number(attrs?.altoMm ?? attrs?.largoMm ?? 0);
     const sinMedidas =
-      attrs != null &&
-      !(Number(attrs.anchoMm) > 0 && Number(attrs.altoMm ?? attrs.largoMm) > 0);
+      attrs != null && !(hojaAnchoMm > 0 && hojaAltoMm > 0);
+
+    // Pieza más grande que la hoja (ni rotada entra): el montaje todavía no
+    // sabe partir en paños — decirlo con la medida real es accionable;
+    // "no encontró piezas ni sustrato" era mentira en este caso.
+    if (!sinMedidas && hojaAnchoMm > 0 && hojaAltoMm > 0) {
+      // Mismo espejo que buildJobContextPiezas: con fuente `piezas_visibles`
+      // el montaje corta a la MEDIDA TERMINADA, no a la lona agrandada.
+      const visibles = jobContext.piezasVisibles ?? [];
+      const piezasCtx =
+        fuente === 'piezas_visibles' && visibles.length > 0
+          ? visibles
+          : (jobContext.piezas ?? []);
+      const noEntra = piezasCtx.find((p) => {
+        const entraDerecha = p.anchoMm <= hojaAnchoMm && p.altoMm <= hojaAltoMm;
+        const entraRotada = p.altoMm <= hojaAnchoMm && p.anchoMm <= hojaAltoMm;
+        return !(entraDerecha || entraRotada);
+      });
+      if (noEntra) {
+        return {
+          codigo: 'montaje_pieza_mas_grande_que_hoja',
+          severidad: 'ERROR',
+          mensaje: `La pieza de ${Math.round(noEntra.anchoMm)}×${Math.round(noEntra.altoMm)}mm no entra en la hoja de ${Math.round(hojaAnchoMm)}×${Math.round(hojaAltoMm)}mm ni rotada. El montaje todavía no divide la pieza en paños.`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          contexto: {
+            piezaAnchoMm: noEntra.anchoMm,
+            piezaAltoMm: noEntra.altoMm,
+            hojaAnchoMm,
+            hojaAltoMm,
+          },
+          sugerencia:
+            'Usá un material con hoja más grande, o dividí el trabajo en paños (varias piezas que entren en la hoja).',
+        };
+      }
+    }
+
     if (sinMedidas) {
       return {
         codigo: 'montaje_material_sin_medidas',
