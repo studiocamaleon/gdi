@@ -769,7 +769,7 @@ export interface PasoCargado {
   /** === Tercerización (docs/productos-tercerizados-diseno.md) === */
   tercerizado?: boolean;
   proveedorId?: string | null;
-  /** 'tarifa_magnitud' | 'matriz' | 'fijo'. */
+  /** 'tarifa_magnitud' | 'matriz' | 'fijo' | 'manual'. */
   fuenteCostoTercerizado?: string | null;
   tercerizadoConfigJson?: unknown;
   plazoProveedorDias?: number | null;

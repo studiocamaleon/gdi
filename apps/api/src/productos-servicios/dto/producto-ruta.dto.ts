@@ -227,7 +227,7 @@ export class UpsertProductoConfigPasoDto {
   proveedorId?: string | null;
 
   @IsOptional()
-  @IsIn(['tarifa_magnitud', 'matriz', 'fijo'])
+  @IsIn(['tarifa_magnitud', 'matriz', 'fijo', 'manual'])
   fuenteCostoTercerizado?: string | null;
 
   @IsOptional()
