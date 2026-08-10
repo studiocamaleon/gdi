@@ -3551,10 +3551,17 @@ export class MotorUniversalService {
         return !(entraDerecha || entraRotada);
       });
       if (noEntra) {
+        const nestingCfg = this.asRecord(params.nestingConfig);
+        const panelizadoActivo =
+          this.asRecord(nestingCfg.panelizado).enabled === true;
         return {
           codigo: 'montaje_pieza_mas_grande_que_hoja',
           severidad: 'ERROR',
-          mensaje: `La pieza de ${Math.round(noEntra.anchoMm)}×${Math.round(noEntra.altoMm)}mm no entra en la hoja de ${Math.round(hojaAnchoMm)}×${Math.round(hojaAltoMm)}mm ni rotada. El montaje todavía no divide la pieza en paños.`,
+          mensaje: `La pieza de ${Math.round(noEntra.anchoMm)}×${Math.round(noEntra.altoMm)}mm no entra en la hoja de ${Math.round(hojaAnchoMm)}×${Math.round(hojaAltoMm)}mm ni rotada${
+            panelizadoActivo
+              ? ', y ni partida en paños entra (revisá la junta y el eje del panelizado)'
+              : ''
+          }.`,
           rutaPasoId: paso.rutaPasoId,
           rutaPasoOrden: paso.rutaPasoOrden,
           familiaCodigo: paso.familiaCodigo,
@@ -3563,9 +3570,11 @@ export class MotorUniversalService {
             piezaAltoMm: noEntra.altoMm,
             hojaAnchoMm,
             hojaAltoMm,
+            panelizadoActivo,
           },
-          sugerencia:
-            'Usá un material con hoja más grande, o dividí el trabajo en paños (varias piezas que entren en la hoja).',
+          sugerencia: panelizadoActivo
+            ? 'Usá un material con hoja más grande, o revisá el panelizado del paso (eje fijo o junta muy grande pueden impedir la partición).'
+            : 'Activá el panelizado del paso para dividir la pieza en paños, o usá un material con hoja más grande.',
         };
       }
     }

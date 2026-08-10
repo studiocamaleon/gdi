@@ -395,12 +395,29 @@ async function runMontajeSobreSustrato(
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
 ): Promise<NestingDispatchResult | null> {
-  const montajeContext = buildJobContextPiezas(paso, jobContext);
+  let montajeContext = buildJobContextPiezas(paso, jobContext);
   if (!montajeContext) return null;
 
   if (config.algorithm === 'shelf-rollo' || config.algorithm === 'maxrects-rollo') {
     return runShelfRollo(paso, montajeContext, materialResuelto, config);
   }
+
+  // Panelizado sobre HOJA: una pieza más grande que la hoja (la chapa
+  // trasera de un cartel de 2,5 m contra la hoja de 1,22×2,44) se divide en
+  // paños que entren, y el nesting cuenta las hojas necesarias — igual que
+  // el taller, que hace el fondo en partes.
+  const piezasPaneladas = partirPiezasEnPanosDeHoja(
+    montajeContext.piezas ?? [],
+    config,
+  );
+  if (piezasPaneladas) {
+    montajeContext = {
+      ...montajeContext,
+      cantidad: piezasPaneladas.reduce((acc, p) => acc + p.cantidad, 0),
+      piezas: piezasPaneladas,
+    };
+  }
+
   if (config.algorithm === 'grid-2d-single') {
     return runGrid2DSingleForArea(montajeContext, config);
   }
@@ -415,6 +432,75 @@ async function runMontajeSobreSustrato(
     return runGrid2DMultiForArea(paso, montajeContext, config);
   }
   return null;
+}
+
+/**
+ * Divide las piezas que NO entran en la hoja útil en paños iguales que sí
+ * entren, respetando el panelizado del paso (eje manual o automático, junta
+ * `overlapMm` sumada a cada paño con corte). Devuelve null si el panelizado
+ * está apagado, si todas las piezas ya entran, o si ni partiendo entra
+ * (hoja demasiado chica) — el caller conserva su comportamiento y el guard
+ * diagnostica.
+ */
+export function partirPiezasEnPanosDeHoja(
+  piezas: Array<{ cantidad: number; anchoMm: number; altoMm: number }>,
+  config: NestingConfigResolved,
+): Array<{ cantidad: number; anchoMm: number; altoMm: number }> | null {
+  if (!config.panelizado?.enabled) return null;
+  const sheetW = config.sheetWidthMm ?? 0;
+  const sheetH = config.sheetHeightMm ?? 0;
+  if (sheetW <= 0 || sheetH <= 0 || piezas.length === 0) return null;
+  const utilW = Math.max(
+    0,
+    sheetW - config.margins.leftMm - config.margins.rightMm,
+  );
+  const utilH = Math.max(
+    0,
+    sheetH - config.margins.topMm - config.margins.bottomMm,
+  );
+  if (utilW <= 0 || utilH <= 0) return null;
+
+  const entra = (w: number, h: number) =>
+    (w <= utilW && h <= utilH) ||
+    (config.allowRotation && h <= utilW && w <= utilH);
+  if (piezas.every((p) => entra(p.anchoMm, p.altoMm))) return null;
+
+  const overlap = Math.max(0, config.panelizado.overlapMm ?? 0);
+  const eje = config.panelizado.mode === 'manual' ? config.panelizado.axis : 'automatic';
+  const resultado: Array<{ cantidad: number; anchoMm: number; altoMm: number }> = [];
+
+  for (const pieza of piezas) {
+    if (entra(pieza.anchoMm, pieza.altoMm)) {
+      resultado.push(pieza);
+      continue;
+    }
+    // Grilla mínima de paños iguales: menos paños primero, menos cortes
+    // como desempate. Eje manual: vertical = cortes a lo ancho (columnas),
+    // horizontal = cortes a lo alto (filas).
+    let mejor: { nx: number; ny: number } | null = null;
+    const maxDiv = 8;
+    for (let nx = 1; nx <= (eje === 'horizontal' ? 1 : maxDiv); nx++) {
+      for (let ny = 1; ny <= (eje === 'vertical' ? 1 : maxDiv); ny++) {
+        const panoW = pieza.anchoMm / nx + (nx > 1 ? overlap : 0);
+        const panoH = pieza.altoMm / ny + (ny > 1 ? overlap : 0);
+        if (!entra(panoW, panoH)) continue;
+        if (
+          !mejor ||
+          nx * ny < mejor.nx * mejor.ny ||
+          (nx * ny === mejor.nx * mejor.ny && nx + ny < mejor.nx + mejor.ny)
+        ) {
+          mejor = { nx, ny };
+        }
+      }
+    }
+    if (!mejor) return null;
+    resultado.push({
+      cantidad: pieza.cantidad * mejor.nx * mejor.ny,
+      anchoMm: pieza.anchoMm / mejor.nx + (mejor.nx > 1 ? overlap : 0),
+      altoMm: pieza.altoMm / mejor.ny + (mejor.ny > 1 ? overlap : 0),
+    });
+  }
+  return resultado;
 }
 
 /**
