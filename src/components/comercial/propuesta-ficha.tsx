@@ -1962,7 +1962,10 @@ function ProduccionItemView({
             ) : null}
             {bastidorActivo ? (
               <div className="production-nesting" key="bastidor3d">
-                <BastidorVisor itemId={item.id} />
+                {/* El CotizacionItem es donde la trazabilidad vive SIEMPRE:
+                    usarlo primero hace que el visor funcione también en el
+                    borrador del cotizador, antes de emitir la OT. */}
+                <BastidorVisor itemId={item.cotizacionItemId ?? item.id} />
               </div>
             ) : activeNestingTab ? (
               <div className="production-nesting" key={activeNestingTab.key}>

@@ -860,12 +860,17 @@ export class ProduccionService {
   }
 
   /**
-   * Estructura del bastidor de un ítem, para el visor 3D de Producción.
+   * Estructura del bastidor de un ítem, para el visor 3D.
    *
    * Sale del SNAPSHOT del ítem: el paso de bastidor persiste su estructura
    * efectiva (con overrides del sheet) en la trazabilidad. Un ítem cotizado
    * antes de esa persistencia no la tiene → 404 (se re-cotiza). No se lee la
    * config de la ruta a propósito: sería el default, no lo que se va a fabricar.
+   *
+   * `itemId` acepta un ítem de OT **o un CotizacionItem directo**: en el
+   * cotizador el bastidor tiene que verse ANTES de emitir la OT (el dato ya
+   * existe — la trazabilidad vive en el CotizacionItem; el camino OT siempre
+   * la leyó de ahí vía relación).
    */
   async estructuraBastidor(
     auth: CurrentAuth,
@@ -875,11 +880,22 @@ export class ProduccionService {
       where: { id: itemId, tenantId: auth.tenantId },
       select: { cotizacionItem: { select: { trazabilidadJson: true } } },
     });
-    if (!item) throw new NotFoundException('No se encontró el ítem.');
 
-    const pasos = ((
-      item.cotizacionItem?.trazabilidadJson as { pasos?: unknown[] } | null
-    )?.pasos ?? []) as Array<{
+    let trazabilidad = item?.cotizacionItem?.trazabilidadJson ?? null;
+    if (!item) {
+      // Borrador del cotizador: el id es el CotizacionItem, sin OT todavía.
+      const cotizacionItem = await this.prisma.cotizacionItem.findFirst({
+        where: { id: itemId, tenantId: auth.tenantId },
+        select: { trazabilidadJson: true },
+      });
+      if (!cotizacionItem) {
+        throw new NotFoundException('No se encontró el ítem.');
+      }
+      trazabilidad = cotizacionItem.trazabilidadJson;
+    }
+
+    const pasos = ((trazabilidad as { pasos?: unknown[] } | null)?.pasos ??
+      []) as Array<{
       estructuraBastidor?: EstructuraBastidorEjecutada;
     }>;
     const estructura = pasos.find(
