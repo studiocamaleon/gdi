@@ -1822,6 +1822,12 @@ function ProduccionItemView({
   const esBastidor = item.cotizacion.pasos.some(
     (paso) => paso.familiaCodigo === "estructura_bastidor",
   );
+  // La estructura viene DENTRO de la cotización que la ficha ya tiene: el
+  // visor la dibuja al toque, sin esperar a que el ítem exista en la base
+  // (mientras se compone la orden no hay nada persistido que fetchear).
+  const estructuraBastidorLocal =
+    item.cotizacion.pasos.find((paso) => paso.estructuraBastidor)
+      ?.estructuraBastidor ?? null;
   const pasosConNesting = pasosCosteoActivos.filter(
     (paso): paso is PanelEditorPaso => Boolean(paso.nestingResult),
   );
@@ -1962,10 +1968,13 @@ function ProduccionItemView({
             ) : null}
             {bastidorActivo ? (
               <div className="production-nesting" key="bastidor3d">
-                {/* El CotizacionItem es donde la trazabilidad vive SIEMPRE:
-                    usarlo primero hace que el visor funcione también en el
-                    borrador del cotizador, antes de emitir la OT. */}
-                <BastidorVisor itemId={item.cotizacionItemId ?? item.id} />
+                {/* Estructura local primero (cotización en memoria); el fetch
+                    por CotizacionItem/OT-item queda de fallback para ítems
+                    rehidratados sin cotización en mano. */}
+                <BastidorVisor
+                  itemId={item.cotizacionItemId ?? item.id}
+                  estructuraLocal={estructuraBastidorLocal}
+                />
               </div>
             ) : activeNestingTab ? (
               <div className="production-nesting" key={activeNestingTab.key}>

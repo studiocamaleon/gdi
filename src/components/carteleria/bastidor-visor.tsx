@@ -52,13 +52,31 @@ function agruparDespiece(despieceMm: number[]) {
     .sort((a, b) => b.largoMm - a.largoMm);
 }
 
-export function BastidorVisor({ itemId }: { itemId: string }) {
+export function BastidorVisor({
+  itemId,
+  estructuraLocal,
+}: {
+  itemId: string;
+  /**
+   * Estructura ya presente en el cliente (la cotización en memoria del
+   * cotizador). Con esto el visor dibuja SIN fetch — imprescindible mientras
+   * el ítem se está componiendo y todavía no existe en la base.
+   */
+  estructuraLocal?: EstructuraBastidor | null;
+}) {
   const [estructura, setEstructura] = React.useState<EstructuraBastidor | null>(
-    null,
+    estructuraLocal ?? null,
   );
-  const [cargando, setCargando] = React.useState(true);
+  const [cargando, setCargando] = React.useState(!estructuraLocal);
 
   React.useEffect(() => {
+    // Con estructura local no hay nada que buscar (y el fetch fallaría: el
+    // ítem puede no existir todavía en la base).
+    if (estructuraLocal) {
+      setEstructura(estructuraLocal);
+      setCargando(false);
+      return;
+    }
     let vivo = true;
     setCargando(true);
     getEstructuraBastidor(itemId)
@@ -68,7 +86,7 @@ export function BastidorVisor({ itemId }: { itemId: string }) {
     return () => {
       vivo = false;
     };
-  }, [itemId]);
+  }, [itemId, estructuraLocal]);
 
   // Sin estructura (no es bastidor, o el snapshot es viejo): no se muestra nada.
   if (!cargando && !estructura) return null;

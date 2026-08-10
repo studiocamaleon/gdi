@@ -1161,6 +1161,12 @@ export interface CotizarResponse {
       costoTotal: number;
       /** G-M1 — Resultado del nesting cuando el paso lo invoca. */
       nestingResult?: NestingViewerInput;
+      /**
+       * Sólo pasos con derivador de bastidor (cartelería): la estructura a
+       * fabricar. La dibuja el visor 3D directamente desde la cotización en
+       * memoria (sin esperar a que el ítem se persista).
+       */
+      estructuraBastidor?: import("@/lib/estructura-bastidor-api").EstructuraBastidor;
       // === Tercerización ===
       tercerizado?: boolean;
       /** Atributos elegidos (eje→valor) con etiquetas, para Especificaciones. */
