@@ -78,26 +78,29 @@ const COSTING_LABELS_POR_UNIDAD: Record<
   UnidadCosteoSustrato,
   Record<string, { label: string; descripcion: string }>
 > = {
+  // "placa" es el set GENÉRICO: lo usan placas rígidas, chapas y fierros.
+  // Los labels hablan de "materia prima" para no atar el modo a un material
+  // ("Placas enteras" en un caño de hierro confundía).
   placa: {
     simple: {
-      label: "Placas enteras",
+      label: "Materia prima completa",
       descripcion:
-        "Le imputa al trabajo todas las placas que tocó, incluida la última aunque se haya usado a medias.",
+        "Le imputa al trabajo todas las unidades que tocó (placa, chapa, barra), incluida la última aunque se haya usado a medias.",
     },
     "m2-exact": {
-      label: "Sólo los m² de las piezas",
+      label: "Sólo lo que ocupan las piezas",
       descripcion:
         "Cobra únicamente el área de las piezas. Ojo: también descuenta los recortes que sí se tiran, así que el margen se ve más alto de lo real.",
     },
     "consumed-length": {
-      label: "El largo usado de la última placa",
+      label: "Largo utilizado de la materia prima",
       descripcion:
-        "Placas llenas enteras + la última proporcional a lo que ocupó. Ej.: 2 placas + 30% de la tercera.",
+        "Unidades llenas enteras + la última proporcional a lo que ocupó. Ej.: 2 placas + 30% de la tercera.",
     },
     "plate-segments": {
-      label: "Por tramos de la última placa",
+      label: "Por tramos de la materia prima",
       descripcion:
-        "Placas llenas enteras + la última redondeada al escalón que corresponda (¼, ½, ¾ o entera).",
+        "Unidades llenas enteras + la última redondeada al escalón que corresponda (¼, ½, ¾ o entera).",
     },
   },
   pliego: {

@@ -1822,7 +1822,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     etiqueta: "Costeo",
     pregunta: "¿Cómo se costea este material?",
     ayuda:
-      "Cobrar exactamente lo consumido, sólo los m² de las piezas, o la placa/rollo según cómo se aprovecha.",
+      "Cobrar exactamente lo consumido, sólo lo que ocupan las piezas, o la materia prima completa según cómo se aprovecha.",
     // Un solo lugar por pregunta (feedback del usuario): para el SUSTRATO
     // de un paso que acomoda, el costeo vive en "Ajustes del trabajo"
     // (Costeo del sustrato del Acomodado); acá sólo queda para los demás
@@ -2117,7 +2117,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     etiqueta: " ",
     pregunta: "¿Cómo se acomodan y cobran las piezas en el material?",
     ayuda:
-      "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y —en placa— cómo se cobra la última placa a medio usar.",
+      "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y —en materia prima finita— cómo se cobra la última unidad a medio usar.",
     // H10: una familia con DERIVADOR deriva geometría, no acomoda piezas: la
     // card de Acomodado ahí era ruido puro. (El otro caso que se excluía —la
     // familia que mutaba medidas— murió con `modificacion_pre`: ahora la
