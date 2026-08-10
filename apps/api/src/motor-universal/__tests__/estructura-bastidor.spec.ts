@@ -27,20 +27,63 @@ describe('Estructura de bastidor (F1 cartelería)', () => {
     pintura: true,
   });
 
-  it('backlight 2,4×1,2×0,18: perfil, refuerzos y soldadura como el prototipo', () => {
+  it('backlight 2,4×1,2×0,18: perfil, refuerzos y soldadura (caño default 40×40)', () => {
     const r = calcularEstructuraBastidor(ctx(2400, 1200, 180), paramsBacklight)!;
     // refuerzosV = floor((240 − 1) / 100) = 2
     expect(r.refuerzosV).toBe(2);
     expect(r.refuerzosH).toBe(0);
-    // perímetro = 2·(2·(2,4+1,2)) + 4·0,18 = 14,4 + 0,72 = 15,12
-    expect(r.mlPerimetro).toBeCloseTo(15.12, 2);
-    // refuerzos = 2 barras × 1,2 alto × 2 marcos = 4,8
-    expect(r.mlRefuerzos).toBeCloseTo(4.8, 2);
-    // conectores = 2 × 0,18 = 0,36
-    expect(r.mlConectores).toBeCloseTo(0.36, 2);
-    expect(r.mlTotal).toBeCloseTo(20.28, 2);
+    // Largos de CORTE reales con caño 40×40 (lado 0,04):
+    //   largueros 4×2,4 + parantes 4×(1,2−0,08) + conectores 4×(0,18−0,08)
+    //   = 9,6 + 4,48 + 0,4 = 14,48
+    expect(r.mlPerimetro).toBeCloseTo(14.48, 2);
+    // refuerzos = 2 barras × 1,12 (entre largueros) × 2 marcos = 4,48
+    expect(r.mlRefuerzos).toBeCloseTo(4.48, 2);
+    // conectores de refuerzo = 2 × 0,10 = 0,20
+    expect(r.mlConectores).toBeCloseTo(0.2, 2);
+    expect(r.mlTotal).toBeCloseTo(19.16, 2);
     // soldadura = 8 vértices + 2·2 refuerzos + 2·2 conectores = 16
     expect(r.puntosSoldadura).toBe(16);
+  });
+
+  it('el caso de la herrería: 100×80 en caño 20×20 corta 2 de 100 y 2 de 76', () => {
+    const perfil20 = { ladoM: 0.02, desarrolloM: 0.08 };
+    const simple = calcularEstructuraBastidor(
+      ctx(1000, 800),
+      parsearParamsEstructuraBastidor({ tipoBastidor: 'simple', sepRefuerzoVcm: 0 }),
+      perfil20,
+    )!;
+    expect(simple.despieceMm.sort((a, b) => b - a)).toEqual([1000, 1000, 760, 760]);
+
+    // Backlight de 10 cm de profundidad: 4×100, 4×76 y conectores de 6 cm
+    // (10 − 2×2). Con un refuerzo vertical: +2 barras de 76 y su conector.
+    const doble = calcularEstructuraBastidor(
+      ctx(1000, 800, 100),
+      parsearParamsEstructuraBastidor({ tipoBastidor: 'doble', sepRefuerzoVcm: 50 }),
+      perfil20,
+    )!;
+    expect(doble.refuerzosV).toBe(1);
+    const conteo = new Map<number, number>();
+    for (const mm of doble.despieceMm) conteo.set(mm, (conteo.get(mm) ?? 0) + 1);
+    expect(conteo.get(1000)).toBe(4); // largueros
+    expect(conteo.get(760)).toBe(4 + 2); // parantes + refuerzo en ambos marcos
+    expect(conteo.get(60)).toBe(4 + 1); // conectores de esquina + del refuerzo
+  });
+
+  it('el lado del caño sale de la variante (seccion "20×20 mm")', () => {
+    const { parsearPerfilEstructural } = require('../estructura-bastidor');
+    expect(
+      parsearPerfilEstructural({ seccion: '20×20 mm', desarrolloSeccion: 0.08 }),
+    ).toEqual({ ladoM: 0.02, desarrolloM: 0.08 });
+    // Sin desarrollo declarado: perímetro de la sección (4 lados).
+    expect(parsearPerfilEstructural({ seccion: '30×30 mm' })).toEqual({
+      ladoM: 0.03,
+      desarrolloM: 0.12,
+    });
+    // Sin atributos: default 40×40 histórico.
+    expect(parsearPerfilEstructural(null)).toEqual({
+      ladoM: 0.04,
+      desarrolloM: 0.16,
+    });
   });
 
   it('la cenefa desarrolla profundidad + 2 solapas con 8% de desperdicio', () => {
@@ -58,9 +101,9 @@ describe('Estructura de bastidor (F1 cartelería)', () => {
       cenefa: true, // aunque la pidan, sin profundidad no hay cenefa
     });
     const r = calcularEstructuraBastidor(ctx(3000, 1000), params)!;
-    // perímetro = 2·(3+1) = 8 · refuerzosV = floor(299/100) = 2 → 2×1 = 2
-    expect(r.mlPerimetro).toBeCloseTo(8, 2);
-    expect(r.mlRefuerzos).toBeCloseTo(2, 2);
+    // perímetro = 2·3 + 2·(1−0,08) = 7,84 · refuerzos = 2 × 0,92 = 1,84
+    expect(r.mlPerimetro).toBeCloseTo(7.84, 2);
+    expect(r.mlRefuerzos).toBeCloseTo(1.84, 2);
     expect(r.mlConectores).toBe(0);
     expect(r.cenefaM2).toBe(0);
     // soldadura = 4 vértices + 2·2 = 8
@@ -128,7 +171,7 @@ describe('Regla de oro: se mide sobre la medida VISIBLE', () => {
       parsearParamsEstructuraBastidor({ tipoBastidor: 'doble', sepRefuerzoVcm: 100 }),
     )!;
     expect(r.anchoM).toBeCloseTo(2.4, 3);
-    expect(r.mlPerimetro).toBeCloseTo(15.12, 2);
+    expect(r.mlPerimetro).toBeCloseTo(14.48, 2);
   });
 });
 

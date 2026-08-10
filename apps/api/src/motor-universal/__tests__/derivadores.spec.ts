@@ -73,7 +73,9 @@ describe('bastidor_rectangular', () => {
       sepRefuerzoHcm: 0,
     });
     expect(r).not.toBeNull();
-    expect(r!.magnitudes.mlTotal).toBeCloseTo(20.28, 2);
+    // Largos de corte reales con el caño default 40×40 (sin material en el
+    // slot): parantes/conectores descuentan el lado del perfil.
+    expect(r!.magnitudes.mlTotal).toBeCloseTo(19.16, 2);
     expect(r!.magnitudes.puntosSoldadura).toBe(16);
     expect(r!.magnitudes.cenefaM2).toBeCloseTo(1.71, 2);
     // El despiece para comprar barras enteras viaja por el resultado.

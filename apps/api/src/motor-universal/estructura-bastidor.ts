@@ -23,9 +23,45 @@ export const MARGEN_PINTURA = 0.1;
 /**
  * Desarrollo de la sección del perfil (m² de superficie por metro lineal).
  * Un caño de 40×40 pinta 4 × 0,04 = 0,16 m² por metro. Se puede pisar desde
- * el atributo `desarrolloSeccionM` de la variante del perfil.
+ * el atributo `desarrolloSeccion` de la variante del perfil.
  */
 export const DESARROLLO_PERFIL_M_DEFAULT = 0.16;
+/** Lado del caño cuando la variante no declara `seccion` (40×40 histórico). */
+export const PERFIL_LADO_M_DEFAULT = 0.04;
+
+export interface PerfilEstructural {
+  /** Lado del caño en metros (20×20 → 0,02). */
+  ladoM: number;
+  /** m² de superficie por metro lineal (para pintura). */
+  desarrolloM: number;
+}
+
+/**
+ * Lee el perfil desde los atributos de la variante elegida en el slot
+ * `perfil_estructural`: `seccion` ("20×20 mm") da el lado del caño y
+ * `desarrolloSeccion` la superficie por metro. Sin atributos → default 40×40.
+ *
+ * El lado importa para el DESPIECE: las barras interiores (parantes,
+ * refuerzos, conectores) se cortan descontando el caño contra el que apoyan
+ * — un bastidor de 100×80 en 20×20 lleva parantes de 76, no de 80.
+ */
+export function parsearPerfilEstructural(
+  atributos: Record<string, unknown> | null | undefined,
+): PerfilEstructural {
+  const attrs = (atributos ?? {}) as Record<string, unknown>;
+  const seccion = String(attrs.seccion ?? '');
+  const match = seccion.match(/(\d+(?:[.,]\d+)?)/);
+  const ladoMm = match ? Number(match[1].replace(',', '.')) : NaN;
+  const ladoM =
+    Number.isFinite(ladoMm) && ladoMm > 0 ? ladoMm / 1000 : PERFIL_LADO_M_DEFAULT;
+  const desarrollo = Number(attrs.desarrolloSeccion);
+  return {
+    ladoM,
+    // Sin atributo: perímetro de la sección cuadrada (4 lados).
+    desarrolloM:
+      Number.isFinite(desarrollo) && desarrollo > 0 ? desarrollo : ladoM * 4,
+  };
+}
 
 export interface ParamsEstructuraBastidor {
   /** simple = marco plano (frontlight) · doble = cajón (backlight). */
@@ -49,6 +85,8 @@ export interface ResultadoEstructuraBastidor {
   anchoM: number;
   altoM: number;
   profundidadM: number;
+  /** Lado del caño usado en el despiece (el visor 3D dibuja con este grosor). */
+  perfilLadoM: number;
   refuerzosV: number;
   refuerzosH: number;
   mlPerimetro: number;
@@ -161,6 +199,10 @@ function medidaCartelM(
 export function calcularEstructuraBastidor(
   jobContext: JobContext,
   params: ParamsEstructuraBastidor,
+  perfil: PerfilEstructural = {
+    ladoM: PERFIL_LADO_M_DEFAULT,
+    desarrolloM: DESARROLLO_PERFIL_M_DEFAULT,
+  },
 ): ResultadoEstructuraBastidor | null {
   const medida = medidaCartelM(jobContext);
   if (!medida) return null;
@@ -173,6 +215,15 @@ export function calcularEstructuraBastidor(
   if (esDoble && profundidadM <= 0) return null;
   const D = esDoble ? profundidadM : 0;
 
+  // Largos REALES de corte: los largueros van enteros a lo ancho; todo lo que
+  // apoya ENTRE dos barras (parantes, refuerzos, conectores) se corta
+  // descontando el lado del caño de cada lado. Es como corta la herrería:
+  // un marco de 100×80 en caño 20×20 son 2 barras de 100 y 2 de 76.
+  const L = Math.max(0, perfil.ladoM);
+  const hInterior = Math.max(0, H - 2 * L);
+  const wInterior = Math.max(0, W - 2 * L);
+  const dInterior = Math.max(0, D - 2 * L);
+
   // Refuerzos: cuántas barras entran respetando la separación MÁXIMA.
   const refuerzosV =
     params.sepRefuerzoVcm > 0
@@ -183,10 +234,13 @@ export function calcularEstructuraBastidor(
       ? Math.max(0, Math.floor((H * 100 - 1) / params.sepRefuerzoHcm))
       : 0;
 
-  const mlPerimetro = esDoble ? 2 * (2 * (W + H)) + 4 * D : 2 * (W + H);
+  // Los ml salen de los largos de corte reales (= suma del despiece).
+  const mlPerimetro = esDoble
+    ? 4 * W + 4 * hInterior + 4 * dInterior
+    : 2 * W + 2 * hInterior;
   const mlRefuerzos =
-    (refuerzosV * H + refuerzosH * W) * (esDoble ? 2 : 1);
-  const mlConectores = esDoble ? (refuerzosV + refuerzosH) * D : 0;
+    (refuerzosV * hInterior + refuerzosH * wInterior) * (esDoble ? 2 : 1);
+  const mlConectores = esDoble ? (refuerzosV + refuerzosH) * dInterior : 0;
   const mlTotal = mlPerimetro + mlRefuerzos + mlConectores;
 
   const puntosSoldadura =
@@ -206,29 +260,34 @@ export function calcularEstructuraBastidor(
     cenefaM2 = 2 * (W + H) * desarrolloM * (1 + DESPERDICIO_CENEFA);
   }
 
-  // Despiece: cada barra que la herrería corta, con su largo real.
+  // Despiece: cada barra que la herrería corta, con su largo REAL de corte.
+  // Un largo que quedó en 0 (p.ej. conector de un cajón más finito que dos
+  // caños) no es una barra: no se lista.
   const despieceMm: number[] = [];
   const push = (largoM: number, veces: number) => {
-    for (let i = 0; i < veces; i++) despieceMm.push(Math.round(largoM * 1000));
+    const mm = Math.round(largoM * 1000);
+    if (mm <= 0) return;
+    for (let i = 0; i < veces; i++) despieceMm.push(mm);
   };
   if (esDoble) {
     push(W, 4); // largueros de frente y contra
-    push(H, 4); // parantes de frente y contra
-    push(D, 4); // conectores de esquina
-    push(H, refuerzosV * 2);
-    push(W, refuerzosH * 2);
-    push(D, refuerzosV + refuerzosH);
+    push(hInterior, 4); // parantes entre largueros
+    push(dInterior, 4); // conectores de esquina entre marcos
+    push(hInterior, refuerzosV * 2);
+    push(wInterior, refuerzosH * 2);
+    push(dInterior, refuerzosV + refuerzosH);
   } else {
     push(W, 2);
-    push(H, 2);
-    push(H, refuerzosV);
-    push(W, refuerzosH);
+    push(hInterior, 2);
+    push(hInterior, refuerzosV);
+    push(wInterior, refuerzosH);
   }
 
   return {
     anchoM: W,
     altoM: H,
     profundidadM: D,
+    perfilLadoM: L,
     refuerzosV,
     refuerzosH,
     mlPerimetro,
@@ -238,7 +297,7 @@ export function calcularEstructuraBastidor(
     puntosSoldadura,
     cenefaM2,
     cenefaDesarrolloCm,
-    pinturaM2: mlTotal * DESARROLLO_PERFIL_M_DEFAULT * (1 + MARGEN_PINTURA),
+    pinturaM2: mlTotal * perfil.desarrolloM * (1 + MARGEN_PINTURA),
     fondoM2: W * H * 1.1,
     anclajes: Math.max(2, Math.ceil(W / 0.8)) * 2,
     despieceMm,

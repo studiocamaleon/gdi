@@ -1357,6 +1357,9 @@ const estructura_bastidor: DefinicionFamilia = {
     codigo: 'bastidor_rectangular',
     magnitudPrincipal: 'mlTotal',
     unidadPrincipal: 'ml de perfil',
+    // El lado del caño (seccion "20×20 mm") define los largos de corte de
+    // las barras interiores; el desarrolloSeccion, la pintura por metro.
+    materialSlot: 'perfil_estructural',
     magnitudesTiempo: [
       { magnitud: 'cortes', etiqueta: 'cortes de hierro' },
       { magnitud: 'puntosSoldadura', etiqueta: 'puntos de soldadura' },

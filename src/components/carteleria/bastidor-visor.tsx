@@ -35,9 +35,9 @@ function vistaDeEstructura(e: EstructuraBastidor): CarteleriaVista {
     solapaCenefaCm: 0,
     pintura: false,
     fondo: false,
-    // 40×40 por defecto (MVP): el lado real del perfil saldrá del material del
-    // paso en una mejora posterior. Sólo afecta el grosor dibujado del caño.
-    perfilLadoM: 0.04,
+    // El lado real del caño viene del despiece del motor (la variante elegida
+    // en perfil_estructural); 40×40 sólo para snapshots anteriores al fix.
+    perfilLadoM: e.perfilLadoM ?? 0.04,
     densidadLed: 1,
     coberturaLedM2: 0,
   };

@@ -9,6 +9,7 @@
 import {
   calcularEstructuraBastidor,
   parsearParamsEstructuraBastidor,
+  parsearPerfilEstructural,
 } from '../estructura-bastidor';
 import {
   calcularIluminacionLed,
@@ -27,9 +28,12 @@ import type { Derivador, ResultadoDerivador } from './tipos';
  * para comprar barras enteras), los puntos de soldadura y los m² de
  * cenefa/pintura/fondo que los pasos siguientes heredan como drivers.
  */
-const bastidor_rectangular: Derivador = (jobContext, params) => {
+const bastidor_rectangular: Derivador = (jobContext, params, materialPrincipal) => {
   const parametros = parsearParamsEstructuraBastidor(params);
-  const resultado = calcularEstructuraBastidor(jobContext, parametros);
+  // El lado del caño sale de la variante elegida en `perfil_estructural`
+  // (seccion "20×20 mm"): las barras interiores se cortan descontándolo.
+  const perfil = parsearPerfilEstructural(materialPrincipal);
+  const resultado = calcularEstructuraBastidor(jobContext, parametros, perfil);
   if (!resultado) return null;
   return {
     magnitudes: {
@@ -60,6 +64,7 @@ const bastidor_rectangular: Derivador = (jobContext, params) => {
         anchoM: resultado.anchoM,
         altoM: resultado.altoM,
         profundidadM: resultado.profundidadM,
+        perfilLadoM: resultado.perfilLadoM,
         sepRefuerzoVcm: parametros.sepRefuerzoVcm,
         sepRefuerzoHcm: parametros.sepRefuerzoHcm,
         refuerzosV: resultado.refuerzosV,
