@@ -135,6 +135,7 @@ import {
   getRuleFields,
   jsonLogicToRuleGroup,
   type RuleFieldDefinition,
+  type RuleOperator,
   validateRuleGroup,
 } from "@/lib/rule-builder";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
@@ -2758,29 +2759,48 @@ export function ConfigPasosEditorView({
     () => getPersonalizaciones(producto.personalizacionesJson),
     [producto.personalizacionesJson],
   );
-  const technologyRuleFields = React.useMemo<RuleFieldDefinition[]>(
-    () =>
-      rutaAlternativa.ruta.pasos.flatMap((rutaPaso) => {
-        const configPaso = rutaAlternativa.configPasos.find(
-          (config) => config.rutaPasoId === rutaPaso.id,
-        );
-        const familia = familiasMap.get(rutaPaso.familiaCodigo);
-        const stepLabel = `Tecnología paso ${rutaPaso.orden} · ${
+  // Variables de regla POR PASO: "Si <Tecnología> de <Paso>", "Si <Quién
+  // hace el paso> de <Paso>". Una definición por variable con el selector de
+  // paso aparte (no un item de lista por cada paso). Extensible: agregar
+  // una variable nueva acá y su clave `<prefijo><configPasoId>` al jobContext.
+  const technologyRuleFields = React.useMemo<RuleFieldDefinition[]>(() => {
+    const pasos = rutaAlternativa.ruta.pasos.map((rutaPaso) => {
+      const configPaso = rutaAlternativa.configPasos.find(
+        (config) => config.rutaPasoId === rutaPaso.id,
+      );
+      const familia = familiasMap.get(rutaPaso.familiaCodigo);
+      return {
+        value: configPaso?.id ?? rutaPaso.id,
+        label: `Paso ${rutaPaso.orden} · ${
           familia?.nombre ?? rutaPaso.familiaCodigo
-        }`;
-        return [
-          {
-            key: `tecnologia_${configPaso?.id ?? rutaPaso.id}`,
-            label: stepLabel,
-            kind: "select" as const,
-            valueKind: "string" as const,
-            operators: ["=", "!="],
-            options: TECHNOLOGY_RULE_OPTIONS,
-          },
-        ];
-      }),
-    [familiasMap, rutaAlternativa.configPasos, rutaAlternativa.ruta.pasos],
-  );
+        }`,
+      };
+    });
+    if (pasos.length === 0) return [];
+    return [
+      {
+        key: "tecnologia_",
+        label: "Tecnología",
+        kind: "select" as const,
+        valueKind: "string" as const,
+        operators: ["=", "!="] as RuleOperator[],
+        options: TECHNOLOGY_RULE_OPTIONS,
+        pasos,
+      },
+      {
+        key: "quienHace_",
+        label: "Quién hace el paso",
+        kind: "select" as const,
+        valueKind: "string" as const,
+        operators: ["=", "!="] as RuleOperator[],
+        options: [
+          { value: "empresa", label: "Lo produce la empresa" },
+          { value: "proveedor", label: "La hace un proveedor" },
+        ],
+        pasos,
+      },
+    ];
+  }, [familiasMap, rutaAlternativa.configPasos, rutaAlternativa.ruta.pasos]);
 
   // Estado: por cada paso de la ruta, su configuración (existente o nueva)
   const [configs, setConfigs] = React.useState<ConfigState>(() => {
@@ -12445,25 +12465,32 @@ function SeccionesEsquemaPaso({
             />
             {/* Tercerizado o apagado: no se produce internamente —
                 sin tiempo/costo ni máquina (mismo criterio que el
-                detallado congelado). */}
-            {!noEjecutar && !cfg.tercerizado ? (
+                detallado congelado). Excepción: tercerizado con
+                "materiales propios" sí configura materiales, porque
+                salen de nuestro inventario. */}
+            {!noEjecutar &&
+            (!cfg.tercerizado ||
+              (cfg.tercerizadoConfigJson as { materialesPropios?: boolean } | null)
+                ?.materialesPropios === true) ? (
               <>
-                <EjeGuiado
-                  titulo="En qué máquina"
-                  subtitulo="El fierro que ejecuta el paso. Marcá todas las que puedan hacerlo y elegí cuál se usa por defecto."
-                  opciones={opcionesDeEje("maquina", ctx)}
-                  grupos={GRUPOS_EJE.maquina}
-                  fijo
-                  resumenPrincipal={[
-                    "maquina.maquina",
-                    "maquina.candidatas",
-                    "maquina.perfil",
-                  ]}
-                  ctx={ctx}
-                  pendientesVivos={pendientesVivos}
-                  onAplicar={onAplicar}
-                  renderComponente={renderComponente}
-                />
+                {!cfg.tercerizado ? (
+                  <EjeGuiado
+                    titulo="En qué máquina"
+                    subtitulo="El fierro que ejecuta el paso. Marcá todas las que puedan hacerlo y elegí cuál se usa por defecto."
+                    opciones={opcionesDeEje("maquina", ctx)}
+                    grupos={GRUPOS_EJE.maquina}
+                    fijo
+                    resumenPrincipal={[
+                      "maquina.maquina",
+                      "maquina.candidatas",
+                      "maquina.perfil",
+                    ]}
+                    ctx={ctx}
+                    pendientesVivos={pendientesVivos}
+                    onAplicar={onAplicar}
+                    renderComponente={renderComponente}
+                  />
+                ) : null}
                 {/* Materiales (sub-fase C): agregar a nivel paso + un
                     grupo por slot configurado, cada uno con las
                     preguntas del esquema evaluadas con ese slot. */}
@@ -12670,7 +12697,8 @@ function SeccionesEsquemaPaso({
                 {/* El trabajo: acomodado + parámetros del oficio. Si el paso no
                     configura nada propio, el caso vacío del diseño en vez de
                     esconder la sección (El trabajo.html · c-vacio). */}
-                {opcionesDeEje("trabajo", ctx).length > 0 ? (
+                {cfg.tercerizado ? null : opcionesDeEje("trabajo", ctx).length >
+                  0 ? (
                   <EjeGuiado
                     titulo="El trabajo"
                     subtitulo="Cómo se acomoda en el material y con qué parámetros trabaja el paso."
@@ -12768,24 +12796,27 @@ function SeccionesEsquemaPaso({
                   </div>
                 )}
 
-                <EjeGuiado
-                  titulo="Cuánto tarda"
-                  subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
-                  opciones={opcionesDeEje("tiempo", ctx)}
-                  grupos={GRUPOS_EJE.tiempo}
-                  fijo
-                  resumenPrincipal={[
-                    "tiempo.productividad",
-                    "tiempo.batch",
-                    "tiempo.tiempo_fijo",
-                    "tiempo.cantidad_operativa",
-                    "tiempo.dotacion",
-                  ]}
-                  ctx={ctx}
-                  pendientesVivos={pendientesVivos}
-                  onAplicar={onAplicar}
-                  renderComponente={renderComponente}
-                />              </>
+                {!cfg.tercerizado ? (
+                  <EjeGuiado
+                    titulo="Cuánto tarda"
+                    subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
+                    opciones={opcionesDeEje("tiempo", ctx)}
+                    grupos={GRUPOS_EJE.tiempo}
+                    fijo
+                    resumenPrincipal={[
+                      "tiempo.productividad",
+                      "tiempo.batch",
+                      "tiempo.tiempo_fijo",
+                      "tiempo.cantidad_operativa",
+                      "tiempo.dotacion",
+                    ]}
+                    ctx={ctx}
+                    pendientesVivos={pendientesVivos}
+                    onAplicar={onAplicar}
+                    renderComponente={renderComponente}
+                  />
+                ) : null}
+              </>
             ) : null}
           </>
         );

@@ -264,11 +264,16 @@ export function PasoTercerizadoPanel({
                     onChange({
                       fuenteCostoTercerizado: f.value,
                       // cambiar de fuente resetea la config específica pero
-                      // conserva la tecnología del proceso (sólo impresión).
-                      tercerizadoConfigJson:
-                        cfg.tecnologia && esImpresion
+                      // conserva lo ortogonal al precio: la tecnología del
+                      // proceso (sólo impresión) y quién pone los materiales.
+                      tercerizadoConfigJson: {
+                        ...(cfg.tecnologia && esImpresion
                           ? { tecnologia: cfg.tecnologia }
-                          : {},
+                          : {}),
+                        ...(cfg.materialesPropios === true
+                          ? { materialesPropios: true }
+                          : {}),
+                      },
                     })
                   }
                 >
@@ -288,6 +293,31 @@ export function PasoTercerizadoPanel({
           {fuente === "matriz" ? (
             <MatrizEditor value={value} onChange={onChange} />
           ) : null}
+
+          <div className={s.sec}>
+            <h4 className={s.h4}>Los materiales</h4>
+            <p className={s.hint}>
+              {cfg.materialesPropios === true
+                ? "El proveedor pone el trabajo; los materiales salen de nuestro inventario y se cotizan aparte del costo del proveedor."
+                : "El precio del proveedor ya incluye los materiales del paso."}
+            </p>
+            <div className={s.seg}>
+              <button
+                type="button"
+                aria-pressed={cfg.materialesPropios !== true}
+                onClick={() => patchCfg({ materialesPropios: false })}
+              >
+                Los incluye el proveedor
+              </button>
+              <button
+                type="button"
+                aria-pressed={cfg.materialesPropios === true}
+                onClick={() => patchCfg({ materialesPropios: true })}
+              >
+                Los ponemos nosotros
+              </button>
+            </div>
+          </div>
 
           <div className={s.foot}>
             <p>

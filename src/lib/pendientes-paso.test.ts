@@ -184,6 +184,66 @@ describe("pendientesDePaso (E.3.1)", () => {
     ).toEqual(["grilla_tercerizado"]);
   });
 
+  it("tercerizado manual: el proveedor cotiza cada trabajo — nunca faltan precios", () => {
+    const familiaTerc: FamiliaParaPendientes = {
+      codigo: "estructura-uuid",
+      relacionMaquinaSoportada: ["M-0"],
+      slotsRequeridos: [{ codigo: "perfil", nombre: "Perfil", requerido: true }],
+      defaults: null,
+    };
+    // Sin costo estimado tampoco bloquea: el costo se ingresa al cotizar.
+    expect(
+      pendientesDePaso(
+        cfgBase({
+          tercerizado: true,
+          proveedorId: "prov-1",
+          fuenteCostoTercerizado: "manual",
+          tercerizadoConfigJson: {},
+        }),
+        familiaTerc,
+      ),
+    ).toEqual([]);
+  });
+
+  it("tercerizado con materiales propios: valida los slots configurados", () => {
+    const familiaTerc: FamiliaParaPendientes = {
+      codigo: "estructura-uuid",
+      relacionMaquinaSoportada: ["M-0"],
+      slotsRequeridos: [{ codigo: "perfil", nombre: "Perfil", requerido: true }],
+      defaults: null,
+    };
+    // Slot en fijo sin variante → bloquea, igual que en un paso interno.
+    const pendientes = pendientesDePaso(
+      cfgBase({
+        tercerizado: true,
+        proveedorId: "prov-1",
+        fuenteCostoTercerizado: "manual",
+        tercerizadoConfigJson: { materialesPropios: true },
+        slotsMateriales: [
+          { slotCodigo: "perfil", modoSeleccion: "HARDCODED" } as never,
+        ],
+      }),
+      familiaTerc,
+    );
+    expect(pendientes.map((p) => p.tipo)).toEqual(["material_slot"]);
+
+    // Sin materiales propios, el mismo slot roto no molesta: lo pone el proveedor.
+    expect(
+      pendientesDePaso(
+        cfgBase({
+          tercerizado: true,
+          proveedorId: "prov-1",
+          fuenteCostoTercerizado: "manual",
+          tercerizadoConfigJson: {},
+          slotsMateriales: [
+            { slotCodigo: "perfil", modoSeleccion: "HARDCODED" } as never,
+          ],
+        }),
+        familiaTerc,
+      ),
+    ).toEqual([]);
+  });
+
   it("condicional sin regla bloquea (interno Y tercerizado)", () => {
     expect(
       pendientesDePaso(

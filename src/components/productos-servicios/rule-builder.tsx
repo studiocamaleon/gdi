@@ -8,10 +8,12 @@ import { HumanSelect, type HumanSelectOption } from "@/components/ui/human-selec
 import {
   createEmptyCondition,
   createEmptyRuleGroup,
+  findRuleField,
   getRuleFields,
   jsonLogicToRuleGroup,
   operatorLabel,
   ruleGroupToJsonLogic,
+  rulePasoDeFieldKey,
   type RuleConditionUI,
   type RuleFieldDefinition,
   type RuleGroupUI,
@@ -122,8 +124,11 @@ export function RuleBuilder({
       if (itemIdx !== idx) return condition;
       const next = { ...condition, ...patch };
       if (patch.fieldKey && patch.fieldKey !== condition.fieldKey) {
-        const nextField = fields.find((field) => field.key === patch.fieldKey);
-        if (nextField) {
+        const prevField = findRuleField(fields, condition.fieldKey);
+        const nextField = findRuleField(fields, patch.fieldKey);
+        // Cambiar SOLO el paso de la misma variable conserva operador y
+        // valor; cambiar de variable resetea ambos.
+        if (nextField && nextField !== prevField) {
           next.operator = nextField.operators[0] ?? "=";
           next.value = nextField.options?.[0]?.value ?? "";
         }
@@ -160,8 +165,8 @@ export function RuleBuilder({
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {group.conditions.map((condition, idx) => {
-        const field =
-          fields.find((item) => item.key === condition.fieldKey) ?? fields[0];
+        const field = findRuleField(fields, condition.fieldKey) ?? fields[0];
+        const pasoActual = rulePasoDeFieldKey(field, condition.fieldKey);
         const operatorOptions: HumanSelectOption[] = field.operators.map(
           (operator) => ({
             value: operator,
@@ -232,20 +237,51 @@ export function RuleBuilder({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1.15fr 30px",
+                gridTemplateColumns: field.pasos
+                  ? "1fr 1fr 1fr 1.15fr 30px"
+                  : "1fr 1fr 1.15fr 30px",
                 gap: 8,
                 alignItems: "center",
               }}
             >
               <HumanSelect
-                value={condition.fieldKey}
-                onValueChange={(next) =>
-                  updateCondition(idx, { fieldKey: next })
-                }
+                value={field.key}
+                onValueChange={(nextKey) => {
+                  const nextField = fields.find(
+                    (item) => item.key === nextKey,
+                  );
+                  if (!nextField) return;
+                  // Variable por paso: conserva el paso elegido si la nueva
+                  // variable también lo tiene; si no, el primero.
+                  const fieldKey = nextField.pasos?.length
+                    ? nextField.key +
+                      (pasoActual &&
+                      nextField.pasos.some(
+                        (p) => p.value === pasoActual.value,
+                      )
+                        ? pasoActual.value
+                        : nextField.pasos[0].value)
+                    : nextField.key;
+                  updateCondition(idx, { fieldKey });
+                }}
                 options={fieldOptions}
                 triggerClassName="h-[34px] text-[13px]"
                 contentClassName="min-w-60"
               />
+              {field.pasos ? (
+                <HumanSelect
+                  value={pasoActual?.value ?? field.pasos[0]?.value ?? ""}
+                  onValueChange={(pasoId) =>
+                    updateCondition(idx, { fieldKey: field.key + pasoId })
+                  }
+                  options={field.pasos.map((paso) => ({
+                    value: paso.value,
+                    label: paso.label,
+                  }))}
+                  triggerClassName="h-[34px] text-[13px]"
+                  contentClassName="min-w-60"
+                />
+              ) : null}
               <HumanSelect
                 value={condition.operator}
                 onValueChange={(next) =>

@@ -583,6 +583,7 @@ const FUENTE_TERCERIZADO_LABELS: Record<string, string> = {
   matriz: "con matriz de precios",
   tarifa_magnitud: "por tarifa",
   fijo: "a precio fijo por trabajo",
+  manual: "cotiza cada trabajo",
 };
 
 /** ¿La grilla/tarifa/costo del proveedor está cargada? (espejo del motor
@@ -592,6 +593,10 @@ function grillaTercerizadoCompleta(ctx: ContextoOpcion): boolean {
   if (fuente === "matriz") {
     return (ctx.cfg.tercerizadoEntradas?.length ?? 0) > 0;
   }
+  // `manual`: el costo llega AL COTIZAR (lo carga el comercial con la
+  // cotización del proveedor); el estimado de referencia es opcional. No hay
+  // precio que falte en la config: el paso está completo por definición.
+  if (fuente === "manual") return true;
   const configTerc = (ctx.cfg.tercerizadoConfigJson ?? {}) as Record<
     string,
     unknown
@@ -599,7 +604,9 @@ function grillaTercerizadoCompleta(ctx: ContextoOpcion): boolean {
   const crudo =
     fuente === "tarifa_magnitud"
       ? configTerc.tarifa
-      : (configTerc.costoFijo ?? configTerc.monto);
+      : // `costo` es lo que guarda el panel (FijoEditor); costoFijo/monto
+        // quedan por compatibilidad con configs viejas.
+        (configTerc.costo ?? configTerc.costoFijo ?? configTerc.monto);
   const numero = typeof crudo === "string" ? Number(crudo) : crudo;
   return typeof numero === "number" && Number.isFinite(numero);
 }

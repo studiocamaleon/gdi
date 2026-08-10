@@ -70,6 +70,39 @@ function asRecord(valor: unknown): Record<string, unknown> {
     : {};
 }
 
+/** Valida los slots de material YA configurados (fijo sin variante,
+ *  elección sin candidatos). Lo usan la rama interna y el tercerizado
+ *  con materiales propios. */
+function pendientesDeSlotsConfigurados(
+  cfg: UpsertConfigPasoPayload,
+  familia: FamiliaParaPendientes,
+  pendientes: PendientePaso[],
+): void {
+  for (const slot of cfg.slotsMateriales ?? []) {
+    const decl = familia.slotsRequeridos.find(
+      (d) => d.codigo === slot.slotCodigo,
+    );
+    if (decl && esConsumibleMaquina(decl)) continue;
+    const sinVariante =
+      slot.modoSeleccion === "HARDCODED" && !slot.materialVarianteId;
+    const sinCandidatos =
+      (slot.modoSeleccion === "COMERCIAL_ELIGE" ||
+        slot.modoSeleccion === "MOTOR_ELIGE_AUTO") &&
+      (slot.candidatos?.length ?? 0) === 0;
+    if (sinVariante || sinCandidatos) {
+      pendientes.push({
+        tipo: "material_slot",
+        etiqueta: (decl?.nombre ?? slot.slotCodigo).toLowerCase(),
+        motivo: sinVariante
+          ? "El slot está en material fijo pero sin variante elegida."
+          : "El slot deja elegir, pero no hay candidatos entre los que elegir.",
+        bloqueante: true,
+        slotCodigo: slot.slotCodigo,
+      });
+    }
+  }
+}
+
 export function pendientesDePaso(
   cfg: UpsertConfigPasoPayload,
   familia: FamiliaParaPendientes | undefined,
@@ -104,12 +137,17 @@ export function pendientesDePaso(
     }
     const fuente = cfg.fuenteCostoTercerizado ?? "matriz";
     const configTerc = asRecord(cfg.tercerizadoConfigJson);
+    // "manual": el proveedor cotiza cada trabajo al momento de cotizar; el
+    // costo estimado de referencia es opcional, así que nunca falta grilla.
     const sinGrilla =
-      fuente === "matriz"
-        ? (cfg.tercerizadoEntradas?.length ?? 0) === 0
-        : fuente === "tarifa_magnitud"
-          ? num(configTerc.tarifa) === null
-          : num(configTerc.costoFijo ?? configTerc.monto) === null;
+      fuente === "manual"
+        ? false
+        : fuente === "matriz"
+          ? (cfg.tercerizadoEntradas?.length ?? 0) === 0
+          : fuente === "tarifa_magnitud"
+            ? num(configTerc.tarifa) === null
+            : num(configTerc.costo ?? configTerc.costoFijo ?? configTerc.monto) ===
+              null;
     if (sinGrilla) {
       pendientes.push({
         tipo: "grilla_tercerizado",
@@ -122,6 +160,12 @@ export function pendientesDePaso(
               : "Falta el precio fijo del trabajo: sin él, el paso cotiza $0.",
         bloqueante: true,
       });
+    }
+    // Materiales propios: el proveedor hace el trabajo pero los materiales
+    // salen de nuestro inventario — los slots configurados se validan como
+    // en un paso interno.
+    if (configTerc.materialesPropios === true) {
+      pendientesDeSlotsConfigurados(cfg, familia, pendientes);
     }
     return pendientes;
   }
@@ -184,29 +228,7 @@ export function pendientesDePaso(
       });
     }
   }
-  for (const slot of cfg.slotsMateriales ?? []) {
-    const decl = familia.slotsRequeridos.find(
-      (d) => d.codigo === slot.slotCodigo,
-    );
-    if (decl && esConsumibleMaquina(decl)) continue;
-    const sinVariante =
-      slot.modoSeleccion === "HARDCODED" && !slot.materialVarianteId;
-    const sinCandidatos =
-      (slot.modoSeleccion === "COMERCIAL_ELIGE" ||
-        slot.modoSeleccion === "MOTOR_ELIGE_AUTO") &&
-      (slot.candidatos?.length ?? 0) === 0;
-    if (sinVariante || sinCandidatos) {
-      pendientes.push({
-        tipo: "material_slot",
-        etiqueta: (decl?.nombre ?? slot.slotCodigo).toLowerCase(),
-        motivo: sinVariante
-          ? "El slot está en material fijo pero sin variante elegida."
-          : "El slot deja elegir, pero no hay candidatos entre los que elegir.",
-        bloqueante: true,
-        slotCodigo: slot.slotCodigo,
-      });
-    }
-  }
+  pendientesDeSlotsConfigurados(cfg, familia, pendientes);
 
   // Tiempo: T-2 necesita un ritmo de ALGÚN lado (config → default).
   if (cfg.modoTiempo === "T-2") {

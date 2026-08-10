@@ -16,6 +16,34 @@ export interface RuleFieldDefinition {
   options?: RuleOption[];
   /** Unidad del valor, para mostrarla junto al input ("m²", "u"). */
   unidad?: string;
+  /** Variable POR PASO ("Si <Tecnología> de <Paso>"): `key` pasa a ser el
+   *  prefijo y la clave final es `key + <pasoId>`. La UI muestra un selector
+   *  de paso aparte; el valor de cada opción es el id del paso. */
+  pasos?: RuleOption[];
+}
+
+/** Resuelve la definición de campo de una condición. Para campos por paso
+ *  (`pasos`), la fieldKey guardada es `prefijo + pasoId`. */
+export function findRuleField(
+  fields: RuleFieldDefinition[],
+  fieldKey: string,
+): RuleFieldDefinition | undefined {
+  return fields.find((field) =>
+    field.pasos
+      ? field.pasos.some((paso) => field.key + paso.value === fieldKey)
+      : field.key === fieldKey,
+  );
+}
+
+/** El paso al que apunta la fieldKey de un campo por paso (o null). */
+export function rulePasoDeFieldKey(
+  field: RuleFieldDefinition,
+  fieldKey: string,
+): RuleOption | null {
+  if (!field.pasos) return null;
+  return (
+    field.pasos.find((paso) => field.key + paso.value === fieldKey) ?? null
+  );
 }
 
 export interface RuleConditionUI {
@@ -146,7 +174,9 @@ export function createEmptyRuleGroup(fields = RULE_FIELD_DEFINITIONS): RuleGroup
 export function createEmptyCondition(field: RuleFieldDefinition): RuleConditionUI {
   return {
     id: createRuleConditionId(),
-    fieldKey: field.key,
+    fieldKey: field.pasos?.length
+      ? field.key + field.pasos[0].value
+      : field.key,
     operator: field.operators[0] ?? "=",
     value: field.options?.[0]?.value ?? "",
   };
@@ -164,7 +194,7 @@ export function validateRuleGroup(
     return { ok: false, error: "Agregá al menos una condición." };
   }
   for (const condition of group.conditions) {
-    const field = fields.find((item) => item.key === condition.fieldKey);
+    const field = findRuleField(fields, condition.fieldKey);
     if (!field) return { ok: false, error: "Hay una condición con un campo no disponible." };
     if (!field.operators.includes(condition.operator)) {
       return { ok: false, error: `El operador no es válido para ${field.label}.` };
@@ -237,13 +267,15 @@ export function summarizeCondition(
   condition: RuleConditionUI,
   fields = RULE_FIELD_DEFINITIONS,
 ) {
-  const field = fields.find((item) => item.key === condition.fieldKey);
+  const field = findRuleField(fields, condition.fieldKey);
   if (!field) return "condición no disponible";
   const operator = operatorLabel(condition.operator, field.kind).toLocaleLowerCase("es-AR");
   const rawValue = condition.value.trim();
   const value =
     field.options?.find((option) => option.value === rawValue)?.label ?? rawValue;
-  return `${field.label} ${operator} ${value}`;
+  const paso = rulePasoDeFieldKey(field, condition.fieldKey);
+  const sujeto = paso ? `${field.label} de ${paso.label}` : field.label;
+  return `${sujeto} ${operator} ${value}`;
 }
 
 export function operatorLabel(operator: RuleOperator, kind: RuleFieldKind) {
@@ -271,7 +303,7 @@ function conditionToJsonLogic(
   condition: RuleConditionUI,
   fields: RuleFieldDefinition[],
 ): Record<string, unknown> {
-  const field = fields.find((item) => item.key === condition.fieldKey);
+  const field = findRuleField(fields, condition.fieldKey);
   const trimmedValue = condition.value.trim();
   const value =
     trimmedValue === ""
@@ -297,13 +329,13 @@ function jsonLogicConditionToUI(
   if (!Array.isArray(operands) || operands.length !== 2) return null;
   const variable = operands[0];
   if (!isPlainObject(variable) || typeof variable.var !== "string") return null;
-  const field = fields.find((item) => item.key === variable.var);
+  const field = findRuleField(fields, variable.var);
   if (!field || !field.operators.includes(operator)) return null;
   const rawValue = operands[1];
   if (rawValue === null) {
     return {
       id: createRuleConditionId(),
-      fieldKey: field.key,
+      fieldKey: variable.var,
       operator,
       value: "",
     };
@@ -312,7 +344,7 @@ function jsonLogicConditionToUI(
   if (field.valueKind === "string" && typeof rawValue !== "string") return null;
   return {
     id: createRuleConditionId(),
-    fieldKey: field.key,
+    fieldKey: variable.var,
     operator,
     value: String(rawValue),
   };

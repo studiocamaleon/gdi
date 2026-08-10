@@ -1902,11 +1902,38 @@ export class MotorUniversalService {
     const ctx = jobContext as Record<string, unknown>;
     const tecnologias = new Set<string>();
     for (const paso of pasos) {
-      const pasoConMaquina = this.resolverMaquinaM2(paso, jobContext);
-      const tecnologia = this.resolverTecnologiaMaquina(pasoConMaquina.maquina);
+      // Quién hace el paso: variable de regla ("Si <Quién hace el paso> de
+      // <Paso> es proveedor/empresa"). Sale de la config estática del paso.
+      const quienHace = paso.tercerizado ? 'proveedor' : 'empresa';
+      ctx[`quienHace_${paso.configPasoId}`] = quienHace;
+      ctx[`quienHace_${paso.rutaPasoId}`] = quienHace;
+
+      // Tecnología: en un paso interno sale de la máquina resuelta; en uno
+      // tercerizado, de lo que declaró el modelador en la config (sólo
+      // familias de impresión la cargan).
+      let tecnologia: string | null = null;
+      if (paso.tercerizado) {
+        const configTerc = (paso.tercerizadoConfigJson ?? {}) as Record<
+          string,
+          unknown
+        >;
+        tecnologia =
+          typeof configTerc.tecnologia === 'string' && configTerc.tecnologia
+            ? configTerc.tecnologia
+            : null;
+        if (tecnologia) {
+          ctx[`tecnologia_${paso.configPasoId}`] = tecnologia;
+          ctx[`tecnologia_${paso.rutaPasoId}`] = tecnologia;
+        }
+      } else {
+        const pasoConMaquina = this.resolverMaquinaM2(paso, jobContext);
+        tecnologia = this.resolverTecnologiaMaquina(pasoConMaquina.maquina);
+        if (tecnologia) {
+          ctx[`tecnologia_${pasoConMaquina.configPasoId}`] = tecnologia;
+          ctx[`tecnologia_${pasoConMaquina.rutaPasoId}`] = tecnologia;
+        }
+      }
       if (!tecnologia) continue;
-      ctx[`tecnologia_${pasoConMaquina.configPasoId}`] = tecnologia;
-      ctx[`tecnologia_${pasoConMaquina.rutaPasoId}`] = tecnologia;
       tecnologias.add(tecnologia);
     }
     if (tecnologias.size === 1) {
@@ -2018,11 +2045,12 @@ export class MotorUniversalService {
     return filas;
   }
 
-  private ejecutarPasoTercerizado(
+  private async ejecutarPasoTercerizado(
+    tenantId: string,
     paso: PasoCargado,
     jobContext: JobContext,
     errores: ErrorMotor[],
-  ): PasoEjecutado {
+  ): Promise<PasoEjecutado> {
     const config = (paso.tercerizadoConfigJson ?? {}) as Record<
       string,
       unknown
@@ -2083,8 +2111,29 @@ export class MotorUniversalService {
       });
       return { ...base, costoTotal: 0 };
     }
+
+    // MATERIALES PROPIOS — el proveedor pone la mano de obra pero el material
+    // sale de NUESTRO inventario (config.materialesPropios): los slots del
+    // paso se resuelven como en un paso interno y viajan en `materiales`.
+    // El bucket lo separa el compositor: `materialesTotal` suma los materiales
+    // de TODOS los pasos y `tercerizadoTotal` suma el costoTotal de los
+    // tercerizados — por eso `costoTotal` acá es SÓLO el costo del proveedor
+    // (sumar los materiales lo duplicaría).
+    let materiales: PasoEjecutado['materiales'];
+    if (config.materialesPropios === true && paso.slots.length > 0) {
+      materiales = await this.calcularMateriales(
+        tenantId,
+        paso,
+        jobContext,
+        null,
+        errores,
+        null,
+      );
+    }
+
     return {
       ...base,
+      ...(materiales?.length ? { materiales } : {}),
       costoTotal: resultado.costo,
       tercerizadoDetalle: resultado.detalle,
     };
@@ -2118,7 +2167,7 @@ export class MotorUniversalService {
     // TERCERIZADO — el paso lo compra un proveedor: costo por su fuente, sin
     // máquina ni tiempo interno. docs/productos-tercerizados-diseno.md §5.
     if (paso.tercerizado) {
-      return this.ejecutarPasoTercerizado(paso, jobContext, errores);
+      return this.ejecutarPasoTercerizado(tenantId, paso, jobContext, errores);
     }
 
     // a.1) F.2.8 — Ejecutar validaciones D.7 declaradas por la familia
