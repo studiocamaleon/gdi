@@ -795,10 +795,18 @@ export class MotorUniversalService {
     );
     const cargosDirectosTotal =
       cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
-    // Los pasos TERCERIZADOS aportan su costo directo (no tienen tiempo/material);
-    // se suman aparte para no perderlos ni duplicar el costo de los internos.
+    // Los pasos TERCERIZADOS aportan su costo directo; se suman aparte para no
+    // perderlos ni duplicar el costo de los internos. Con "materiales propios"
+    // el costoTotal del paso incluye los materiales del inventario — acá se
+    // restan porque `materialesTotal` (arriba) ya los contó: este bucket es
+    // SÓLO lo que cobra el proveedor.
     const tercerizadoTotal = pasosEjecutados.reduce(
-      (acc, p) => acc + (p.tercerizado ? p.costoTotal : 0),
+      (acc, p) =>
+        acc +
+        (p.tercerizado
+          ? p.costoTotal -
+            (p.materiales?.reduce((m, mat) => m + mat.costoTotal, 0) ?? 0)
+          : 0),
       0,
     );
     const total =
@@ -2055,6 +2063,37 @@ export class MotorUniversalService {
       string,
       unknown
     >;
+    const familia = resolverFamilia(paso.familiaCodigo);
+
+    // DERIVADOR GEOMÉTRICO — la geometría del trabajo existe aunque el paso
+    // lo haga un proveedor: el guard del bucle exige la derivación, los pasos
+    // siguientes heredan sus outputs (pintura_m2, cenefa_m2…) y el visor 3D
+    // dibuja la estructura cotizada. Mismo bloque que la rama interna.
+    if (familia?.derivador) {
+      let materialDerivador: {
+        atributosVarianteJson?: Record<string, unknown> | null;
+      } | null = null;
+      if (familia.derivador.materialSlot) {
+        const slotDeclarado =
+          paso.slots.find(
+            (sl) => sl.slotCodigo === familia.derivador?.materialSlot,
+          ) ?? null;
+        materialDerivador = slotDeclarado
+          ? await this.resolverMaterialSlot(
+              tenantId,
+              slotDeclarado,
+              jobContext,
+              paso,
+            )
+          : null;
+      }
+      derivacionesDelJobContext(jobContext)[paso.configPasoId] = runDerivador(
+        familia.derivador.codigo,
+        jobContext,
+        this.paramsEfectivosDelPaso(paso, jobContext),
+        materialDerivador?.atributosVarianteJson ?? null,
+      );
+    }
     const seleccionMatriz =
       ((jobContext as Record<string, unknown>)[
         `tercerizado_${paso.configPasoId}`
@@ -2115,10 +2154,9 @@ export class MotorUniversalService {
     // MATERIALES PROPIOS — el proveedor pone la mano de obra pero el material
     // sale de NUESTRO inventario (config.materialesPropios): los slots del
     // paso se resuelven como en un paso interno y viajan en `materiales`.
-    // El bucket lo separa el compositor: `materialesTotal` suma los materiales
-    // de TODOS los pasos y `tercerizadoTotal` suma el costoTotal de los
-    // tercerizados — por eso `costoTotal` acá es SÓLO el costo del proveedor
-    // (sumar los materiales lo duplicaría).
+    // El costoTotal del paso SUMA proveedor + materiales (es lo que cuesta el
+    // paso completo); el compositor evita el doble conteo restando los
+    // materiales al armar el bucket `tercerizadoTotal`.
     let materiales: PasoEjecutado['materiales'];
     if (config.materialesPropios === true && paso.slots.length > 0) {
       materiales = await this.calcularMateriales(
@@ -2131,11 +2169,36 @@ export class MotorUniversalService {
       );
     }
 
+    // OUTPUTS CANÓNICOS — el paso publica sus drivers geométricos igual que
+    // uno interno (ml_estructura, cenefa_m2, pintura_m2…): los pasos
+    // siguientes heredan de ahí sin importar quién lo fabrica.
+    const cantidadEfectiva = this.resolverCantidad(paso, jobContext, null, null);
+    const outputsCanonicos = calcularOutputsCanonicos(familia, {
+      paso,
+      jobContext,
+      materiales,
+      nestingDispatch: null,
+      cantidadEfectiva,
+    });
+    const capacidades = capacidadesEmitidas({
+      outputsCanonicos,
+      cantidadEfectiva,
+    });
+    const estructuraBastidor = derivacionesDelJobContext(jobContext)[
+      paso.configPasoId
+    ]?.traza?.estructura as EstructuraBastidorEjecutada | undefined;
+
+    const materialesCosto =
+      materiales?.reduce((acc, mat) => acc + mat.costoTotal, 0) ?? 0;
+
     return {
       ...base,
       ...(materiales?.length ? { materiales } : {}),
-      costoTotal: resultado.costo,
+      costoTotal: resultado.costo + materialesCosto,
       tercerizadoDetalle: resultado.detalle,
+      outputsCanonicos,
+      capacidades,
+      estructuraBastidor,
     };
   }
 
