@@ -235,12 +235,16 @@ export function calcularEstructuraBastidor(
       : 0;
 
   // Los ml salen de los largos de corte reales (= suma del despiece).
+  // Regla del taller para el cajón: el refuerzo va SOLO en el contramarco
+  // (el frente queda libre — ahí apoya la lona) y cada refuerzo se vincula
+  // al marco frontal con DOS conectores cortos (uno por extremo).
   const mlPerimetro = esDoble
     ? 4 * W + 4 * hInterior + 4 * dInterior
     : 2 * W + 2 * hInterior;
-  const mlRefuerzos =
-    (refuerzosV * hInterior + refuerzosH * wInterior) * (esDoble ? 2 : 1);
-  const mlConectores = esDoble ? (refuerzosV + refuerzosH) * dInterior : 0;
+  const mlRefuerzos = refuerzosV * hInterior + refuerzosH * wInterior;
+  const mlConectores = esDoble
+    ? 2 * (refuerzosV + refuerzosH) * dInterior
+    : 0;
   const mlTotal = mlPerimetro + mlRefuerzos + mlConectores;
 
   const puntosSoldadura =
@@ -273,9 +277,9 @@ export function calcularEstructuraBastidor(
     push(W, 4); // largueros de frente y contra
     push(hInterior, 4); // parantes entre largueros
     push(dInterior, 4); // conectores de esquina entre marcos
-    push(hInterior, refuerzosV * 2);
-    push(wInterior, refuerzosH * 2);
-    push(dInterior, refuerzosV + refuerzosH);
+    push(hInterior, refuerzosV); // refuerzos SOLO en el contramarco
+    push(wInterior, refuerzosH);
+    push(dInterior, 2 * (refuerzosV + refuerzosH)); // 2 conectores por refuerzo
   } else {
     push(W, 2);
     push(hInterior, 2);

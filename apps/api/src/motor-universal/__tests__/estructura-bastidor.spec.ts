@@ -36,11 +36,11 @@ describe('Estructura de bastidor (F1 cartelería)', () => {
     //   largueros 4×2,4 + parantes 4×(1,2−0,08) + conectores 4×(0,18−0,08)
     //   = 9,6 + 4,48 + 0,4 = 14,48
     expect(r.mlPerimetro).toBeCloseTo(14.48, 2);
-    // refuerzos = 2 barras × 1,12 (entre largueros) × 2 marcos = 4,48
-    expect(r.mlRefuerzos).toBeCloseTo(4.48, 2);
-    // conectores de refuerzo = 2 × 0,10 = 0,20
-    expect(r.mlConectores).toBeCloseTo(0.2, 2);
-    expect(r.mlTotal).toBeCloseTo(19.16, 2);
+    // refuerzos SOLO en el contramarco (el frente lleva la lona): 2 × 1,12
+    expect(r.mlRefuerzos).toBeCloseTo(2.24, 2);
+    // 2 conectores por refuerzo: 2·2 × 0,10 = 0,40
+    expect(r.mlConectores).toBeCloseTo(0.4, 2);
+    expect(r.mlTotal).toBeCloseTo(17.12, 2);
     // soldadura = 8 vértices + 2·2 refuerzos + 2·2 conectores = 16
     expect(r.puntosSoldadura).toBe(16);
   });
@@ -55,7 +55,8 @@ describe('Estructura de bastidor (F1 cartelería)', () => {
     expect(simple.despieceMm.sort((a, b) => b - a)).toEqual([1000, 1000, 760, 760]);
 
     // Backlight de 10 cm de profundidad: 4×100, 4×76 y conectores de 6 cm
-    // (10 − 2×2). Con un refuerzo vertical: +2 barras de 76 y su conector.
+    // (10 − 2×2). El refuerzo va SOLO atrás (adelante apoya la lona) y se
+    // vincula al frente con 2 conectores.
     const doble = calcularEstructuraBastidor(
       ctx(1000, 800, 100),
       parsearParamsEstructuraBastidor({ tipoBastidor: 'doble', sepRefuerzoVcm: 50 }),
@@ -65,8 +66,8 @@ describe('Estructura de bastidor (F1 cartelería)', () => {
     const conteo = new Map<number, number>();
     for (const mm of doble.despieceMm) conteo.set(mm, (conteo.get(mm) ?? 0) + 1);
     expect(conteo.get(1000)).toBe(4); // largueros
-    expect(conteo.get(760)).toBe(4 + 2); // parantes + refuerzo en ambos marcos
-    expect(conteo.get(60)).toBe(4 + 1); // conectores de esquina + del refuerzo
+    expect(conteo.get(760)).toBe(4 + 1); // parantes + refuerzo del contramarco
+    expect(conteo.get(60)).toBe(4 + 2); // esquinas + 2 conectores del refuerzo
   });
 
   it('el lado del caño sale de la variante (seccion "20×20 mm")', () => {
@@ -208,8 +209,10 @@ describe('Barras enteras (compra real, no ml teóricos)', () => {
     const r = calcularEstructuraBastidor(ctx(2400, 1200, 180), paramsRef)!;
     const sumaDespiece = r.despieceMm.reduce((a: number, b: number) => a + b, 0) / 1000;
     expect(sumaDespiece).toBeCloseTo(r.mlTotal, 2);
-    // En barras de 6 m: despiece [2,4×4 + 1,2×4(marcos) + 1,2×4(refuerzos) + 0,18×6]
+    // Despiece real: 4×2400 + (4 parantes + 2 refuerzos)×1120 + 8×100.
+    // En barras de 6 m el packing cierra en 3 (menos caño que antes: los
+    // refuerzos ya no se duplican en el frente).
     const barras = calcularBarrasNecesarias(r.despieceMm, 6000)!;
-    expect(barras.barras).toBe(4);
+    expect(barras.barras).toBe(3);
   });
 });

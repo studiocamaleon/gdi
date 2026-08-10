@@ -164,12 +164,17 @@ function buildSign(
         b1.position.set(0, y, 0);
         g.add(b1);
       } else {
+        // sólo al dorso — el frente va libre para no marcar la lona — y dos
+        // conectores cortos a los extremos, igual que los verticales.
         const b1 = beam(W, "x", reinforceCol);
-        b1.position.set(0, y, D / 2);
+        b1.position.set(0, y, -D / 2);
         g.add(b1);
-        const b2 = beam(W, "x", reinforceCol);
-        b2.position.set(0, y, -D / 2);
-        g.add(b2);
+        const c1 = beam(D, "z", reinforceCol);
+        c1.position.set(-W / 2, y, 0);
+        g.add(c1);
+        const c2 = beam(D, "z", reinforceCol);
+        c2.position.set(W / 2, y, 0);
+        g.add(c2);
       }
     }
   }

@@ -56,9 +56,16 @@ export function derivarMetricas(v: CarteleriaVista): MetricasCartel {
       ? Math.max(0, Math.floor((H * 100 - 1) / v.sepRefuerzoHcm))
       : 0;
 
-  const mlPerimetro = esDoble ? 2 * (2 * (W + H)) + 4 * D : 2 * (W + H);
-  const mlRefuerzos = (refuerzosV * H + refuerzosH * W) * (esDoble ? 2 : 1);
-  const mlConectores = esDoble ? (refuerzosV + refuerzosH) * D : 0;
+  // Espejo de calcularEstructuraBastidor (motor): largos de CORTE reales —
+  // las barras interiores descuentan el lado del caño, el refuerzo va sólo
+  // en el contramarco y cada refuerzo lleva 2 conectores al frente.
+  const L = Math.max(0, v.perfilLadoM);
+  const hInt = Math.max(0, H - 2 * L);
+  const wInt = Math.max(0, W - 2 * L);
+  const dInt = Math.max(0, D - 2 * L);
+  const mlPerimetro = esDoble ? 4 * W + 4 * hInt + 4 * dInt : 2 * W + 2 * hInt;
+  const mlRefuerzos = refuerzosV * hInt + refuerzosH * wInt;
+  const mlConectores = esDoble ? 2 * (refuerzosV + refuerzosH) * dInt : 0;
 
   const puntosSoldadura =
     (esDoble ? 8 : 4) +
