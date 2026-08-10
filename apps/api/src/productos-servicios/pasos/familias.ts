@@ -149,7 +149,16 @@ const MP = {
     ],
   },
   sustratoMontaje: {
-    familiasMateriaPrima: ['SUSTRATO', 'MAGNETICO_FIJACION', 'POP_EXHIBIDOR'],
+    // METAL_ESTRUCTURA/CHAPA_METALICA: la chapa trasera de un cartel se
+    // monta igual que un rígido — se corta de la hoja (1220×2440) con el
+    // nesting según material. Sin esto, "Chapa para cenefa" en el slot de
+    // montaje protestaba compatibilidad.
+    familiasMateriaPrima: [
+      'SUSTRATO',
+      'MAGNETICO_FIJACION',
+      'POP_EXHIBIDOR',
+      'METAL_ESTRUCTURA',
+    ],
     subfamiliasMateriaPrima: [
       'SUSTRATO_RIGIDO',
       'SUSTRATO_ROLLO_FLEXIBLE',
@@ -157,6 +166,7 @@ const MP = {
       'IMAN_CERAMICO_FLEXIBLE',
       'SEMIELABORADO_POP',
       'ACCESORIO_MONTAJE_POP',
+      'CHAPA_METALICA',
     ],
   },
   soldadura: {

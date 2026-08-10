@@ -2941,6 +2941,19 @@ export function ConfigPasosEditorView({
     // slotsMateriales hidratados por el detalle. Sin recorrer los extras, sus
     // candidatos guardados no encontraban su materia prima y el editor mostraba
     // el UUID crudo + "Variante no disponible".
+    // Las variantes se FUSIONAN con lo que ya haya en el mapa: la misma
+    // materia prima puede ser candidata en DOS slots con variantes distintas
+    // (la chapa: hoja 1220×2440 en Chapa trasera, tarifa por m² en Cenefas).
+    // Pisar la entrada dejaba al otro slot con chips ajenos y su
+    // predeterminada como "Valor no disponible".
+    const mergeVariantes = (
+      previas: MateriaPrimaBusquedaItem["variantes"] | undefined,
+      nuevas: MateriaPrimaBusquedaItem["variantes"],
+    ) => {
+      const porId = new Map((previas ?? []).map((v) => [v.id, v]));
+      for (const v of nuevas) if (!porId.has(v.id)) porId.set(v.id, v);
+      return [...porId.values()];
+    };
     const hidratarSlots = (
       slotsMateriales: (typeof rutaAlternativa.configPasos)[number]["slotsMateriales"],
     ) => {
@@ -2954,14 +2967,17 @@ export function ConfigPasosEditorView({
             subfamilia: candidate.materiaPrima.subfamilia,
             tipoTecnico: "",
             templateId: candidate.materiaPrima.templateId,
-            variantes: candidate.variantes.map((item) => item.variante),
+            variantes: mergeVariantes(
+              map[candidate.materiaPrimaId]?.variantes,
+              candidate.variantes.map((item) => item.variante),
+            ),
           };
         }
         // Slot HARDCODED: el material fijo viene en `materialVariante`, no en
         // candidatos. Sin esto, el resumen del guiado no puede nombrarlo y
         // cae al opaco "Material definido" (H17 del relevamiento del editor).
         const fijo = slot.materialVariante;
-        if (fijo?.materiaPrima && !map[fijo.materiaPrima.id]) {
+        if (fijo?.materiaPrima) {
           map[fijo.materiaPrima.id] = {
             id: fijo.materiaPrima.id,
             codigo: fijo.materiaPrima.codigo,
@@ -2970,7 +2986,10 @@ export function ConfigPasosEditorView({
             subfamilia: fijo.materiaPrima.subfamilia,
             tipoTecnico: "",
             templateId: fijo.materiaPrima.templateId,
-            variantes: fijo.materiaPrima.variantes ?? [],
+            variantes: mergeVariantes(
+              map[fijo.materiaPrima.id]?.variantes,
+              fijo.materiaPrima.variantes ?? [],
+            ),
           };
         }
       }
