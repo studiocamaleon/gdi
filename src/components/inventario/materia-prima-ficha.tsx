@@ -37,7 +37,12 @@ import {
   getReplacementComponentOptionsForTemplates,
 } from "@/lib/materia-prima-templates";
 import { getPlantillaMaquinariaLabel } from "@/lib/maquinaria-templates";
-import { areUnitsCompatible, convertUnitPrice, getUnitDefinition } from "@/lib/unidades";
+import {
+  areUnitsCompatible,
+  convertUnitPrice,
+  getUnitDefinition,
+  type UnitCode,
+} from "@/lib/unidades";
 import { convertFlexibleRollUnitPrice } from "@/lib/unidades-derivadas";
 import type { ProveedorDetalle } from "@/lib/proveedores";
 import { Button } from "@/components/ui/button";
@@ -207,6 +212,31 @@ type InventarioVarianteResumen = {
   ultimoMovimiento: MovimientoStockMateriaPrima | null;
 };
 
+/**
+ * Factor para MOSTRAR un campo numérico en su `preferredDisplayUnit`
+ * (paso en cm) mientras el atributo se GUARDA en la unidad canónica de la
+ * plantilla (mm, lo que lee el motor). null = sin conversión.
+ * display = raw × factor · raw = display ÷ factor.
+ */
+function displayUnitFactor(
+  field:
+    | { type: "text" | "number" | "boolean"; unit?: UnitCode; preferredDisplayUnit?: UnitCode }
+    | undefined,
+): { factor: number; symbol: string } | null {
+  if (!field || field.type !== "number") return null;
+  if (!field.unit || !field.preferredDisplayUnit) return null;
+  if (field.unit === field.preferredDisplayUnit) return null;
+  const canonica = getUnitDefinition(field.unit);
+  const preferida = getUnitDefinition(field.preferredDisplayUnit);
+  if (!canonica || !preferida || canonica.dimension !== preferida.dimension) {
+    return null;
+  }
+  return {
+    factor: canonica.factorToBase / preferida.factorToBase,
+    symbol: preferida.symbol,
+  };
+}
+
 function parseJsonField(text: string, fallback: Record<string, unknown>) {
   try {
     const parsed = JSON.parse(text);
@@ -309,6 +339,16 @@ function normalizeVarianteAtributos(
   } else if (normalizedTemplateId === "iman_redondo_v1") {
     setNumberIfMissing(normalized, "diametro", normalized.diametroMm);
     setNumberIfMissing(normalized, "espesor", normalized.espesorMm);
+  } else if (normalizedTemplateId === "fuente_alimentacion_led_v1") {
+    // La fuente se carga por CORRIENTE (así se compra); la capacidad en W —
+    // el atributo que usa el selector del motor — se deriva: A × V.
+    const amperes = readFiniteNumber(normalized.corriente);
+    const volts = readFiniteNumber(
+      String(normalized.tension ?? "").replace(/v$/i, ""),
+    );
+    if (amperes !== null && amperes > 0 && volts !== null && volts > 0) {
+      normalized.capacidad = Math.round(amperes * volts * 100) / 100;
+    }
   }
 
   const aliasMap: Record<string, string> = {
@@ -1216,9 +1256,12 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                           <TableHead key={key}>
                             {(() => {
                               const field = templateFieldByKey.get(key);
-                              const unit = getUnitDefinition(
-                                field?.unit as unknown as Parameters<typeof getUnitDefinition>[0],
-                              );
+                              const conversion = displayUnitFactor(field);
+                              const unit = conversion
+                                ? { symbol: conversion.symbol }
+                                : getUnitDefinition(
+                                    field?.unit as unknown as Parameters<typeof getUnitDefinition>[0],
+                                  );
                               const label = field?.label ?? formatFieldLabel(key);
                               const tooltipText =
                                 key === "vidaUtilReferencia"
@@ -1472,17 +1515,42 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                   })()
                                 )
                               ) : (
-                                <Input
-                                  type="text"
-                                  inputMode={
-                                    templateFieldByKey.get(key)?.type === "number" ? "decimal" : undefined
-                                  }
-                                  value={getVarianteAtributo(variante, key)}
-                                  disabled={isSustratoHojaDimensionLocked(variante, key)}
-                                  onChange={(event) =>
-                                    setVarianteAtributo(variante.id, key, event.target.value)
-                                  }
-                                />
+                                (() => {
+                                  const conversion = displayUnitFactor(
+                                    templateFieldByKey.get(key),
+                                  );
+                                  const raw = getVarianteAtributo(variante, key);
+                                  const shown =
+                                    conversion && raw.trim() !== "" && Number.isFinite(Number(raw))
+                                      ? String(Number(raw) * conversion.factor)
+                                      : raw;
+                                  return (
+                                    <Input
+                                      type="text"
+                                      inputMode={
+                                        templateFieldByKey.get(key)?.type === "number"
+                                          ? "decimal"
+                                          : undefined
+                                      }
+                                      value={shown}
+                                      disabled={isSustratoHojaDimensionLocked(variante, key)}
+                                      onChange={(event) => {
+                                        const texto = event.target.value;
+                                        const numero = Number(texto.replace(",", "."));
+                                        // Con unidad de display, lo tipeado se convierte a la
+                                        // canónica al guardar (cm → mm); texto no numérico pasa
+                                        // crudo para no comerse el tipeo.
+                                        setVarianteAtributo(
+                                          variante.id,
+                                          key,
+                                          conversion && texto.trim() !== "" && Number.isFinite(numero)
+                                            ? String(numero / conversion.factor)
+                                            : texto,
+                                        );
+                                      }}
+                                    />
+                                  );
+                                })()
                               )}
                             </TableCell>
                           ))}

@@ -57,10 +57,21 @@ function formatFieldValue(
   value: unknown,
   type: "text" | "number" | "boolean",
   unit?: UnitCode,
+  preferredDisplayUnit?: UnitCode,
 ) {
   if (type === "number") {
     const num = asFiniteNumber(value);
     if (num === null) return "";
+    // Unidad de display preferida (paso en cm, guardado en mm): se convierte
+    // sólo si es de la misma dimensión que la canónica.
+    if (preferredDisplayUnit && unit && preferredDisplayUnit !== unit) {
+      const canonica = getUnitDefinition(unit);
+      const preferida = getUnitDefinition(preferredDisplayUnit);
+      if (canonica && preferida && canonica.dimension === preferida.dimension) {
+        const convertido = (num * canonica.factorToBase) / preferida.factorToBase;
+        return `${numberFormatter.format(convertido)} ${preferida.symbol}`;
+      }
+    }
     const suffix = unit ? ` ${getUnitDefinition(unit)?.symbol ?? unit}` : "";
     return `${numberFormatter.format(num)}${suffix}`;
   }
@@ -100,7 +111,7 @@ export function getVarianteDisplayName(
     const rawValue = attrs[key];
     const field = fieldByKey.get(key);
     const value = field
-      ? formatFieldValue(key, rawValue, field.type, field.unit)
+      ? formatFieldValue(key, rawValue, field.type, field.unit, field.preferredDisplayUnit)
       : asText(rawValue);
 
     if (!value) continue;
@@ -140,7 +151,7 @@ export function getVarianteOptionChips(
     const rawValue = attrs[key];
     const field = fieldByKey.get(key);
     const value = field
-      ? formatFieldValue(key, rawValue, field.type, field.unit)
+      ? formatFieldValue(key, rawValue, field.type, field.unit, field.preferredDisplayUnit)
       : asText(rawValue);
     if (!value) {
       continue;

@@ -1226,7 +1226,7 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       // arma la grilla ceil(ancho/paso)×ceil(alto/paso); en recorrido, el
       // espaciado sobre el trazo. `cobertura` (m²/módulo) quedó como atributo
       // legacy que el motor acepta de fallback pero ya no se edita acá.
-      { key: "paso", label: "Paso entre módulos", type: "number", unit: "mm", required: true },
+      { key: "paso", label: "Paso entre módulos", type: "number", unit: "mm", preferredDisplayUnit: "cm", required: true },
       { key: "temperaturaColor", label: "Temperatura de color", type: "text", options: ["Cálido", "Neutro", "Frío"], required: false },
     ],
     dimensionesVariante: ["modelo", "potencia", "tension", "paso", "temperaturaColor"],
@@ -1249,16 +1249,22 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     unidadStock: "unidad",
     unidadCompra: "unidad",
     camposTecnicos: [
-      { key: "capacidad", label: "Capacidad", type: "number", unit: "w", required: true },
+      // Las fuentes se COMPRAN por amperes; la capacidad en W (que usa el
+      // selector MENOR_CAPACIDAD del motor contra los watts derivados) se
+      // calcula sola al guardar: capacidad = corriente × tensión
+      // (normalizeVarianteAtributos de la ficha). `capacidad` sigue viva
+      // como atributo pero ya no se edita a mano.
+      { key: "corriente", label: "Corriente", type: "number", unit: "a", required: true },
       { key: "tension", label: "Tensión de salida", type: "text", options: ["12V", "24V"], required: true },
       { key: "proteccion", label: "Protección", type: "text", options: ["IP20", "IP65", "IP67"], required: false },
     ],
-    dimensionesVariante: ["capacidad", "tension", "proteccion"],
-    requiredAtributos: ["capacidad", "tension"],
+    dimensionesVariante: ["corriente", "tension", "proteccion"],
+    requiredAtributos: ["corriente", "tension"],
     atributosIniciales: {
-      capacidad: 150,
+      corriente: 12.5,
       tension: "12V",
       proteccion: "IP67",
+      capacidad: 150,
     },
   },
   {
