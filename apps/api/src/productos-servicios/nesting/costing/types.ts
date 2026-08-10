@@ -19,6 +19,7 @@
 import type { NestingResult } from '../types';
 
 export type CostingStrategyKind =
+  | 'simple'
   | 'm2-exact'
   | 'consumed-length'
   | 'plate-segments';

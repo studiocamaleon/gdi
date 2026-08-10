@@ -218,8 +218,18 @@ function unidadEfectivaDeFormula(
   }
 }
 
+/** Marca interna del JobContext duplicado por caras (ver
+ *  duplicarJobContextPorCaras): las cantidades del contexto son PASADAS,
+ *  no unidades físicas. */
+const KEY_CARAS_DUPLICADAS = '__carasDuplicadas';
+
 function isNestingCostingStrategy(value: string): value is CostingStrategyKind {
+  // 'simple' ("materia prima completa") también es una estrategia de nesting:
+  // unidades enteras que tocó el trabajo. Antes se salteaba y el costo caía a
+  // la fórmula del slot — en montaje eso contaba PIEZAS y un cartel de 2
+  // hojas cobraba 1.
   return (
+    value === 'simple' ||
     value === 'm2-exact' ||
     value === 'consumed-length' ||
     value === 'plate-segments'
@@ -4098,9 +4108,33 @@ export class MotorUniversalService {
         paso,
       );
       if (costeoNesting && precioUnitario > 0) {
-        cantidad = costeoNesting.totalCost / precioUnitario;
+        // 'simple' consume unidades ENTERAS: la cantidad es el conteo exacto
+        // (dividir el costo redondeado metía 250.0000008 hojas en la línea).
+        cantidad =
+          costeoNesting.strategy === 'simple'
+            ? costeoNesting.breakdown.fullUnits
+            : costeoNesting.totalCost / precioUnitario;
       }
       const costoTotal = costeoNesting?.totalCost ?? cantidad * precioUnitario;
+
+      // Cuando el costeo del nesting contó unidades ENTERAS del sustrato
+      // (materia prima completa / por tramos / largo utilizado), `cantidad`
+      // quedó expresada en hojas/placas — etiquetarla con la unidad de stock
+      // mentía: "1 m²" para una hoja de 2,98 m². La unidad honesta sale de la
+      // presentación de la variante (hoja) o de la unidad del nesting. La
+      // estrategia m2-exact sí deja la cantidad en m² y conserva su unidad.
+      const presentacionVariante =
+        materialResuelto.atributosVarianteJson &&
+        typeof materialResuelto.atributosVarianteJson.presentacion === 'string'
+          ? materialResuelto.atributosVarianteJson.presentacion
+              .trim()
+              .toLowerCase()
+          : '';
+      const unidadLinea =
+        costeoNesting && costeoNesting.strategy !== 'm2-exact'
+          ? presentacionVariante ||
+            (nestingDispatch?.unidad === 'pliegos' ? 'pliego' : unidadConsumo)
+          : unidadConsumo;
 
       ejecutados.push({
         slotCodigo: slot.slotCodigo,
@@ -4121,8 +4155,9 @@ export class MotorUniversalService {
         // fórmulas con dimensión implícita (`por_m2`, `por_metro_lineal`)
         // usamos esa unidad. Para `fijo`, `por_pieza`, `por_unidad_productiva`
         // heredamos la unidad de stock de la materia prima (PLIEGO, ROLLO,
-        // METRO_LINEAL, UNIDAD, etc.) en minúsculas.
-        unidad: unidadConsumo,
+        // METRO_LINEAL, UNIDAD, etc.) en minúsculas. Con costeo de nesting
+        // por unidades enteras, la unidad es la del sustrato (hoja/pliego).
+        unidad: unidadLinea,
         precioUnitario,
         costoTotal,
         estrategiaCosto:
@@ -4265,7 +4300,15 @@ export class MotorUniversalService {
   ): JobContext {
     if (caras <= 1) return jobContext;
     const jc = jobContext as Record<string, unknown>;
-    const dup: Record<string, unknown> = { ...jc, caras: 1 };
+    const dup: Record<string, unknown> = {
+      ...jc,
+      caras: 1,
+      // Marca interna: el contexto quedó duplicado por caras. El costeo
+      // 'simple' del nesting la usa para NO contar hojas físicas de más
+      // (500 pasadas doble faz = 250 hojas; esa conversión vive en el
+      // camino de fórmula + gancho compraSustrato).
+      [KEY_CARAS_DUPLICADAS]: caras,
+    };
     // Neutralizar también los overrides por paso (`caras_<configPasoId>`):
     // las cantidades ya quedaron duplicadas, un override en 2 contaría doble.
     for (const key of Object.keys(dup)) {
@@ -4380,6 +4423,24 @@ export class MotorUniversalService {
     if (!nestingDispatch || precioUnitario <= 0) return null;
     if (!isNestingCostingStrategy(estrategiaCosto)) return null;
     if (nestingDispatch.substrates[0]?.kind !== 'sheet') return null;
+    // 'simple' vía nesting sólo cuando la unidad NESTEADA es la unidad
+    // COMPRADA (placa, chapa, sustrato de montaje). Donde la familia declara
+    // el gancho `compraSustrato` (impresión por hoja: los pliegos de
+    // impresión se convierten a hojas compradas), o el contexto quedó
+    // duplicado por caras (las "hojas" del nesting son pasadas), el camino
+    // correcto sigue siendo la fórmula del slot, que ya hace esas
+    // conversiones. Las otras 3 estrategias mantienen su comportamiento
+    // histórico sin este gate.
+    if (estrategiaCosto === 'simple') {
+      const tieneConversionCompra = Boolean(
+        primitivasDeFamilia(paso.familiaCodigo)?.compraSustrato,
+      );
+      const carasDuplicadas =
+        Number(
+          (jobContext as Record<string, unknown>)[KEY_CARAS_DUPLICADAS] ?? 1,
+        ) > 1;
+      if (tieneConversionCompra || carasDuplicadas) return null;
+    }
 
     const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
     const nestingConfig =

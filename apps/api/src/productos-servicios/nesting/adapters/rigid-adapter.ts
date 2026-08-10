@@ -141,8 +141,10 @@ const LEGACY_TO_UNIVERSAL_STRATEGY: Record<
   segmentos_placa: 'plate-segments',
 };
 
+// 'simple' (materia prima completa) no existe en el legacy de rígidos: por
+// esta vía sólo entran las 3 estrategias históricas, así que se excluye.
 const UNIVERSAL_TO_LEGACY_STRATEGY: Record<
-  CostingStrategyKind,
+  Exclude<CostingStrategyKind, 'simple'>,
   LegacyCosteoInput['estrategia']
 > = {
   'm2-exact': 'm2_exacto',
@@ -197,6 +199,9 @@ function toUniversalCostingInput(legacy: LegacyCosteoInput): CostingInput {
 function fromUniversalCostingResult(
   universal: ReturnType<typeof applyCostingStrategy>,
 ): LegacyCosteoResult {
+  if (universal.strategy === 'simple') {
+    throw new Error('El costeo legacy de rígidos no soporta la estrategia simple.');
+  }
   return {
     estrategia: UNIVERSAL_TO_LEGACY_STRATEGY[universal.strategy],
     costoTotal: universal.totalCost,
