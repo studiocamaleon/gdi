@@ -31,6 +31,7 @@ import { ProduccionModule } from './produccion/produccion.module';
 import { ProductosServiciosModule } from './productos-servicios/productos-servicios.module';
 import { MotorUniversalModule } from './motor-universal/motor.module';
 import { McpModule } from './mcp/mcp.module';
+import { WebhooksWhatsappModule } from './webhooks-whatsapp/webhooks-whatsapp.module';
 import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
 import { PresupuestosModule } from './presupuestos/presupuestos.module';
 import { CuponesModule } from './cupones/cupones.module';
@@ -100,6 +101,7 @@ import { CentroCopiadoModule } from './centro-copiado/centro-copiado.module';
     ProductosServiciosModule,
     MotorUniversalModule,
     McpModule,
+    WebhooksWhatsappModule,
     OrdenesTrabajoModule,
     PresupuestosModule,
     CuponesModule,

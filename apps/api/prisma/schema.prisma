@@ -391,6 +391,9 @@ enum ProveedorIntegracion {
   WATI
   AFIP
   MERCADOPAGO
+  /// WhatsApp propio del tenant vía Meta Cloud API (nosotros Tech Provider).
+  /// Ver docs/whatsapp-tech-provider-diseno.md
+  META_WHATSAPP
 }
 
 enum EstadoIntegracion {
@@ -4311,6 +4314,35 @@ model Suscripcion {
   @@index([planId])
   /// El cron que vence las pruebas barre por esta fecha todas las noches.
   @@index([trialHasta])
+}
+
+/// Webhook de WhatsApp (Meta Cloud API) persistido CRUDO antes de procesar.
+///
+/// Meta NO reenvía history/echoes/state_sync perdidos: lo que no se guarda al
+/// llegar se pierde para siempre (y el history del onboarding es el oro del
+/// inbox futuro). Por eso la regla es persistir primero, procesar después.
+///
+/// `tenantId` nullable: el webhook llega sin contexto (ruteo best-effort por
+/// phone_number_id contra IntegracionTenant). Exento del tenant-guard por lo
+/// mismo que EventoCobro. Ver docs/whatsapp-tech-provider-diseno.md §3.4
+model WebhookWhatsappCrudo {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String?  @db.Uuid
+  /// messages | statuses | history | smb_app_state_sync | smb_message_echoes
+  /// | message_template_status_update | account_update | ...
+  tipo       String
+  /// wamid del mensaje cuando aplica (idempotencia de statuses/mensajes).
+  wamid      String?
+  /// phone_number_id del value.metadata: la clave de ruteo a tenant.
+  phoneNumberId String?
+  /// El `value` crudo del webhook, tal como llegó.
+  payload    Json
+  procesado  Boolean  @default(false)
+  recibidoEl DateTime @default(now())
+
+  @@index([tenantId, tipo])
+  @@index([wamid])
+  @@index([procesado, recibidoEl])
 }
 
 /// Eventos de cobro recibidos de una pasarela (webhooks). Existe para dos

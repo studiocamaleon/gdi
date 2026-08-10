@@ -13,6 +13,9 @@ const MODELOS_EXENTOS = new Set<string>([
   'PlataformaEvento',
   // Webhooks de las pasarelas de cobro: llegan sin contexto de tenant.
   'EventoCobro',
+  // Webhooks de WhatsApp (Meta): llegan sin contexto; el tenant se resuelve
+  // después por phone_number_id. Ver docs/whatsapp-tech-provider-diseno.md
+  'WebhookWhatsappCrudo',
   'User',
   'AuthSession',
   'Membership',
