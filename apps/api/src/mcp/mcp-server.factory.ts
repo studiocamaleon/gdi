@@ -133,15 +133,33 @@ export class McpServerFactory {
           'No persiste nada: se puede llamar las veces que haga falta. Requiere ' +
           'haber llamado antes a formulario_cotizacion: `respuestas` se arma con ' +
           'las claves (`jobContextKey`) que declaró el formulario. Las medidas ' +
-          'van SIEMPRE en milímetros. Si falla, el error dice exactamente qué ' +
-          'falta o qué corregir.',
+          'van SIEMPRE en milímetros. IMPORTANTE: un trabajo con VARIAS medidas ' +
+          'del mismo material (vinilos, ploteos, lonas) va en UNA sola llamada ' +
+          'usando `piezas` — el motor las consolida en el mismo material y ' +
+          'acomodo, igual que el sistema. Cotizarlas como llamadas separadas ' +
+          'paga un setup y un mínimo POR MEDIDA y da un precio MÁS CARO que el ' +
+          'real. Si falla, el error dice exactamente qué falta o qué corregir.',
         inputSchema: {
           productoId: z.string().uuid(),
           rutaAlternativaId: z.string().uuid().optional(),
-          cantidad: z.number().int().min(1),
+          cantidad: z.number().int().min(1).optional()
+            .describe('Cantidad del trabajo. Con `piezas` se ignora: manda la suma.'),
           anchoMm: z.number().positive().optional()
-            .describe('Ancho en mm (productos con medida libre)'),
+            .describe('Ancho en mm (productos con medida libre, UNA sola medida)'),
           altoMm: z.number().positive().optional(),
+          piezas: z
+            .array(
+              z.object({
+                cantidad: z.number().int().min(1),
+                anchoMm: z.number().positive(),
+                altoMm: z.number().positive(),
+              }),
+            )
+            .min(1)
+            .optional()
+            .describe(
+              'Varias medidas de UN MISMO trabajo (mm). Usar SIEMPRE que el pedido tenga más de una medida del mismo producto: se cotizan consolidadas.',
+            ),
           medidaPredefinidaId: z.string().optional()
             .describe('ID de una medida predefinida del formulario'),
           respuestas: z.record(z.string(), z.unknown()).optional()

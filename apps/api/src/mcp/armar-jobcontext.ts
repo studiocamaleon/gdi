@@ -48,11 +48,23 @@ export interface FormularioParaJobContext {
   personalizaciones: Array<Record<string, unknown>>;
 }
 
-export interface CotizarInputMcp {
+export interface PiezaInputMcp {
   cantidad: number;
+  anchoMm: number;
+  altoMm: number;
+}
+
+export interface CotizarInputMcp {
+  /** Requerida salvo que venga `piezas` (ahí manda la suma). */
+  cantidad?: number;
   anchoMm?: number;
   altoMm?: number;
   medidaPredefinidaId?: string;
+  /** Un TRABAJO con varias medidas (cartelería de vinilos, ploteos): todas
+   *  las piezas juntas — se consolidan en el mismo material/nesting, igual
+   *  que el sheet. Cotizarlas como llamadas separadas paga un setup y un
+   *  mínimo POR MEDIDA y da un precio más caro que el sistema. */
+  piezas?: PiezaInputMcp[];
   /** Respuestas keyed por el jobContextKey que declaró el formulario. */
   respuestas?: Record<string, unknown>;
   /** IDs de adicionales a activar (del bloque `adicionales` del formulario). */
@@ -76,28 +88,59 @@ export function armarJobContext(
   const respuestas = { ...(input.respuestas ?? {}) };
 
   // ── Cantidad ─────────────────────────────────────────────────────────
-  if (!Number.isInteger(input.cantidad) || input.cantidad <= 0) {
+  // Con `piezas`, la cantidad del trabajo es la SUMA de las piezas y el
+  // campo `cantidad` suelto no participa.
+  if (
+    !input.piezas?.length &&
+    (!Number.isInteger(input.cantidad) || (input.cantidad ?? 0) <= 0)
+  ) {
     fail('`cantidad` debe ser un entero mayor a 0.');
   }
+  const cantidadTrabajo = input.piezas?.length
+    ? input.piezas.reduce((acc, p) => acc + (Number(p.cantidad) || 0), 0)
+    : (input.cantidad as number);
   const minimo = formulario.cantidad.minimo;
   if (
     minimo?.politica === 'BLOQUEAR' &&
     minimo.cantidad != null &&
     minimo.base !== 'pliegos_impresos' &&
-    input.cantidad < minimo.cantidad
+    cantidadTrabajo < minimo.cantidad
   ) {
     fail(
       `"${formulario.producto.nombre}" tiene un mínimo de ${minimo.cantidad}: ` +
         `cotizá al menos esa cantidad.`,
     );
   }
-  jobContext.cantidad = input.cantidad;
+  jobContext.cantidad = cantidadTrabajo;
 
   // ── Medidas (guard anti-OOM: jamás una pieza sin medida positiva) ────
-  const medida = resolverMedida(formulario, input);
-  if (medida) {
+  // Con `piezas` (varias medidas en UN trabajo) mandan las piezas: la
+  // cantidad del trabajo es la suma y anchoMm/altoMm sueltos no aplican —
+  // espejo de buildJobContext del sheet (cotizaConPiezas).
+  const piezas = resolverPiezas(formulario, input);
+  const medida = piezas ? null : resolverMedida(formulario, input);
+  if (piezas) {
+    jobContext.cantidad = piezas.reduce((acc, p) => acc + p.cantidad, 0);
+    jobContext.piezas = piezas;
+    if (piezas.length === 1) {
+      jobContext.medidaCustomMm = {
+        anchoMm: piezas[0].anchoMm,
+        altoMm: piezas[0].altoMm,
+      };
+    }
+    jobContext.piezaAnchoMaxMm = Math.max(...piezas.map((p) => p.anchoMm));
+    jobContext.piezaAltoMaxMm = Math.max(...piezas.map((p) => p.altoMm));
+    jobContext.piezaAreaTotalM2 = piezas.reduce(
+      (acc, p) => acc + (p.anchoMm * p.altoMm * p.cantidad) / 1_000_000,
+      0,
+    );
+    jobContext.piezaPerimetroTotalM = piezas.reduce(
+      (acc, p) => acc + ((2 * (p.anchoMm + p.altoMm)) / 1000) * p.cantidad,
+      0,
+    );
+  } else if (medida) {
     jobContext.piezas = [
-      { cantidad: input.cantidad, anchoMm: medida.anchoMm, altoMm: medida.altoMm },
+      { cantidad: cantidadTrabajo, anchoMm: medida.anchoMm, altoMm: medida.altoMm },
     ];
     jobContext.medidaCustomMm = {
       anchoMm: medida.anchoMm,
@@ -106,9 +149,9 @@ export function armarJobContext(
     const areaM2 = (medida.anchoMm * medida.altoMm) / 1_000_000;
     jobContext.piezaAnchoMaxMm = medida.anchoMm;
     jobContext.piezaAltoMaxMm = medida.altoMm;
-    jobContext.piezaAreaTotalM2 = areaM2 * input.cantidad;
+    jobContext.piezaAreaTotalM2 = areaM2 * cantidadTrabajo;
     jobContext.piezaPerimetroTotalM =
-      ((2 * (medida.anchoMm + medida.altoMm)) / 1000) * input.cantidad;
+      ((2 * (medida.anchoMm + medida.altoMm)) / 1000) * cantidadTrabajo;
   }
 
   // ── Índice de preguntas por jobContextKey ────────────────────────────
@@ -150,7 +193,7 @@ export function armarJobContext(
     jobContext,
     formulario,
     respuestas,
-    input.cantidad,
+    cantidadTrabajo,
     // Medida propia: la que respondió el usuario, o la default que el motor
     // sintetiza solo. Sólo sin NINGUNA de las dos las piezas salen de las
     // estampas (taza/remera), igual que la cascada del sheet.
@@ -169,7 +212,7 @@ export function armarJobContext(
   for (const [key, valor] of Object.entries(jobContext)) {
     if (key.startsWith('tercerizado_') && typeof valor === 'object' && valor) {
       const grupo = valor as Record<string, unknown>;
-      if (grupo.cantidad === undefined) grupo.cantidad = input.cantidad;
+      if (grupo.cantidad === undefined) grupo.cantidad = cantidadTrabajo;
     }
   }
 
@@ -196,6 +239,44 @@ export function armarJobContext(
   }
 
   return jobContext;
+}
+
+/** Valida y normaliza `piezas` (varias medidas de un mismo trabajo). */
+function resolverPiezas(
+  formulario: FormularioParaJobContext,
+  input: CotizarInputMcp,
+): PiezaInputMcp[] | null {
+  if (!input.piezas || input.piezas.length === 0) return null;
+  const { instruccion } = formulario.medidas;
+  if (instruccion === 'no_preguntar') {
+    fail(
+      'Este producto no se cotiza por medida: no acepta `piezas`. Mandá sólo `cantidad`.',
+    );
+  }
+  if (instruccion === 'elegir_predefinida') {
+    fail(
+      'Este producto no acepta medida libre: elegí una predefinida con `medidaPredefinidaId` (no acepta `piezas`).',
+    );
+  }
+  if (input.anchoMm !== undefined || input.altoMm !== undefined) {
+    fail(
+      'Mandá la medida de UNA forma: `piezas` (varias medidas) o `anchoMm`/`altoMm` (una sola), no ambas.',
+    );
+  }
+  return input.piezas.map((p, i) => {
+    const cantidad = asNumber(p.cantidad);
+    const anchoMm = asNumber(p.anchoMm);
+    const altoMm = asNumber(p.altoMm);
+    if (cantidad === null || !Number.isInteger(cantidad) || cantidad <= 0) {
+      fail(`piezas[${i}].cantidad debe ser un entero mayor a 0.`);
+    }
+    if (anchoMm === null || altoMm === null || anchoMm <= 0 || altoMm <= 0) {
+      fail(
+        `piezas[${i}]: anchoMm y altoMm deben ser números mayores a 0 (en milímetros).`,
+      );
+    }
+    return { cantidad, anchoMm, altoMm };
+  });
 }
 
 function resolverMedida(

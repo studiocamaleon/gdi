@@ -65,6 +65,61 @@ describe('armarJobContext', () => {
     expect(jc.caras).toBe(1);
   });
 
+  it('piezas: varias medidas de UN trabajo se consolidan (el caso vinilos)', () => {
+    const jc = armarJobContext(formularioBase(), {
+      piezas: [
+        { cantidad: 1, anchoMm: 3500, altoMm: 600 },
+        { cantidad: 6, anchoMm: 1000, altoMm: 80 },
+      ],
+    });
+    // cantidad = suma de piezas (como cotizaConPiezas del sheet)
+    expect(jc.cantidad).toBe(7);
+    expect(jc.piezas).toEqual([
+      { cantidad: 1, anchoMm: 3500, altoMm: 600 },
+      { cantidad: 6, anchoMm: 1000, altoMm: 80 },
+    ]);
+    // Con más de una medida no hay medidaCustomMm única.
+    expect(jc.medidaCustomMm).toBeUndefined();
+    expect(jc.piezaAnchoMaxMm).toBe(3500);
+    expect(jc.piezaAreaTotalM2).toBeCloseTo(2.1 + 0.48);
+  });
+
+  it('piezas + anchoMm sueltos es ambiguo y se rechaza', () => {
+    expect(() =>
+      armarJobContext(formularioBase(), {
+        piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+        anchoMm: 2000,
+      }),
+    ).toThrow(/UNA forma/);
+  });
+
+  it('piezas con medida 0 se rechaza (mismo guard anti-OOM)', () => {
+    expect(() =>
+      armarJobContext(formularioBase(), {
+        piezas: [{ cantidad: 1, anchoMm: 0, altoMm: 500 }],
+      }),
+    ).toThrow(/piezas\[0\]/);
+  });
+
+  it('el mínimo BLOQUEAR valida contra la SUMA de piezas', () => {
+    const form = formularioBase();
+    form.cantidad = {
+      minimo: { politica: 'BLOQUEAR', cantidad: 5, base: null },
+    };
+    expect(() =>
+      armarJobContext(form, {
+        piezas: [{ cantidad: 2, anchoMm: 1000, altoMm: 500 }],
+      }),
+    ).toThrow(/mínimo de 5/);
+    const jc = armarJobContext(form, {
+      piezas: [
+        { cantidad: 3, anchoMm: 1000, altoMm: 500 },
+        { cantidad: 2, anchoMm: 800, altoMm: 400 },
+      ],
+    });
+    expect(jc.cantidad).toBe(5);
+  });
+
   it('medida en 0 se rechaza ANTES del motor (guard anti-OOM)', () => {
     expect(() =>
       armarJobContext(formularioBase(), { cantidad: 1, anchoMm: 0, altoMm: 1500 }),
