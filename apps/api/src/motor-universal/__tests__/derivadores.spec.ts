@@ -65,6 +65,44 @@ describe('catálogo de derivadores', () => {
   });
 });
 
+
+describe('unidades del trabajo: dos carteles idénticos duplican los consumos', () => {
+  const JOB_X2 = {
+    cantidad: 2,
+    piezas: [{ cantidad: 2, anchoMm: 2400, altoMm: 1200 }],
+    profundidadMm: 180,
+  } as unknown as JobContext;
+
+  it('bastidor: magnitudes ×2, despiece repetido, traza por cartel', () => {
+    const x1 = runDerivador('bastidor_rectangular', JOB_BACKLIGHT, {})!;
+    const x2 = runDerivador('bastidor_rectangular', JOB_X2, {})!;
+    expect(x2.magnitudes.mlTotal).toBeCloseTo(x1.magnitudes.mlTotal * 2, 6);
+    expect(x2.magnitudes.puntosSoldadura).toBe(x1.magnitudes.puntosSoldadura * 2);
+    expect(x2.magnitudes.cenefaM2).toBeCloseTo(x1.magnitudes.cenefaM2 * 2, 6);
+    expect(x2.despieces!.perfil_estructural.length).toBe(
+      x1.despieces!.perfil_estructural.length * 2,
+    );
+    // La traza dibuja UN cartel (el 3D no cambia) y anota las unidades.
+    expect(x2.traza!.unidades).toBe(2);
+    expect((x2.traza!.estructura as { despieceMm: number[] }).despieceMm.length).toBe(
+      x1.despieces!.perfil_estructural.length,
+    );
+  });
+
+  it('sembrado LED: módulos/cable ×2, watts de la FUENTE por cartel', () => {
+    const modulo = { paso: 250, potencia: 0.72 };
+    const x1 = runDerivador('sembrado_led', JOB_BACKLIGHT, {}, modulo)!;
+    const x2 = runDerivador('sembrado_led', JOB_X2, {}, modulo)!;
+    expect(x2.magnitudes.modulos).toBe(x1.magnitudes.modulos * 2);
+    expect(x2.magnitudes.cableMl).toBeCloseTo(x1.magnitudes.cableMl * 2, 6);
+    // Cada cartel lleva SU fuente: el driver de selección no se duplica.
+    expect(x2.magnitudes.wattsRequeridos).toBeCloseTo(
+      x1.magnitudes.wattsRequeridos,
+      6,
+    );
+  });
+});
+
 describe('bastidor_rectangular', () => {
   it('deriva el caso validado del prototipo: 20,28 ml y 16 soldaduras', () => {
     const r = runDerivador('bastidor_rectangular', JOB_BACKLIGHT, {

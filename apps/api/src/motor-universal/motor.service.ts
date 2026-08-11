@@ -5778,7 +5778,12 @@ export class MotorUniversalService {
       (s) => s.codigo === slot.slotCodigo,
     );
     if (!decl) return null;
-    if (decl.cantidadFija !== undefined) return decl.cantidadFija;
+    if (decl.cantidadFija !== undefined) {
+      // `cantidadFija` es POR CARTEL, no por trabajo: dos backlights llevan
+      // dos fuentes (cada uno la suya, elegida por SUS watts), no una.
+      const unidades = Math.max(1, Math.round(Number(jobContext.cantidad) || 1));
+      return decl.cantidadFija * unidades;
+    }
     if (!decl.magnitudDerivada) return null;
 
     const derivacion =
