@@ -8,11 +8,23 @@
 
 ## 1. La respuesta corta
 
-La "cantidad" de un paso (lo que multiplica su tiempo y alimenta sus
-materiales) sale de **UNO de cuatro mecanismos**, que el paso declara en
-`mecanismoCantidad`. El **nesting** y los **derivadores** no compiten: son
-dos proveedores distintos del mismo mecanismo (`CALCULADO_POR_PASO`) — el
-nesting acomoda piezas en un sustrato; el derivador calcula geometría.
+La "cantidad" de un paso sale de **UNO de cuatro mecanismos**, que el paso
+declara en `mecanismoCantidad`. El **nesting** y los **derivadores** no
+compiten: son dos proveedores distintos del mismo mecanismo
+(`CALCULADO_POR_PASO`) — el nesting acomoda piezas en un sustrato; el
+derivador calcula geometría.
+
+**Precisión importante** (pregunta del usuario, 2026-08-11): esa cantidad es
+el **ANCLA default** del paso, no la única magnitud. El TIEMPO puede elegir
+otra (la cantidad operativa del ritmo, las `magnitudesTiempo` del derivador,
+una primitiva como la de guillotina, o el perfil T-3) y **cada slot de
+material** elige la suya (fórmula, base × factor, magnitud derivada,
+cantidad fija). Ejemplos reales del desacople: la chapa trasera consume
+1 HOJA pero su tiempo corre por 2 PIEZAS MONTADAS; el bastidor cotiza ml,
+compra BARRAS y puede medir tiempo por CORTES o por SOLDADURAS; la
+impresión por hoja produce PLIEGOS, compra HOJAS (÷2), gasta tinta por
+M²×COBERTURA y clicks por PASADAS (×caras). Tiempo y materiales dependen de
+la cantidad sólo cuando nadie declara algo mejor.
 
 ## 2. Los cuatro mecanismos
 
