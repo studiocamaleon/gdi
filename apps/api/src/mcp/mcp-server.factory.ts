@@ -148,14 +148,27 @@ export class McpServerFactory {
             .describe('Ancho en mm (productos con medida libre, UNA sola medida)'),
           altoMm: z.number().positive().optional(),
           piezas: z
-            .array(
-              z.object({
-                cantidad: z.number().int().min(1),
-                anchoMm: z.number().positive(),
-                altoMm: z.number().positive(),
-              }),
+            .preprocess(
+              // Tolerancia a clientes con el schema viejo cacheado (o modelos
+              // que serializan): el array puede llegar como string JSON.
+              (valor) => {
+                if (typeof valor !== 'string') return valor;
+                try {
+                  return JSON.parse(valor);
+                } catch {
+                  return valor;
+                }
+              },
+              z
+                .array(
+                  z.object({
+                    cantidad: z.number().int().min(1),
+                    anchoMm: z.number().positive(),
+                    altoMm: z.number().positive(),
+                  }),
+                )
+                .min(1),
             )
-            .min(1)
             .optional()
             .describe(
               'Varias medidas de UN MISMO trabajo (mm). Usar SIEMPRE que el pedido tenga más de una medida del mismo producto: se cotizan consolidadas.',
