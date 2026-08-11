@@ -1093,8 +1093,11 @@ const pintura_superficial: DefinicionFamilia = {
   nombre: 'Pintura superficial',
   categoria: 'terminaciones',
   descripcion: 'Pintura, laca o barniz protector sobre piezas rígidas.',
-  relacionMaquinaSoportada: ['M-0', 'M-1'],
-  modosTiempoSoportados: ['T-2', 'T-3'],
+  // M-0 puro (decisión 2026-08-11): pintar es oficio de taller — soplete o
+  // rodillo, sin máquina que exigir ni perfil que resolver. T-3 se va con
+  // la máquina (era letra muerta: cero configs lo usaban).
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: [
     'DIRECT_FROM_JOBCONTEXT',
     'HEREDAR_DEL_OUTPUT_CANONICO',
@@ -1627,8 +1630,10 @@ const montaje_sobre_sustrato: DefinicionFamilia = {
   },
   descripcion:
     'Monta una salida impresa o cortada sobre otro sustrato, calculando el consumo del material de montaje con nesting propio.',
-  relacionMaquinaSoportada: ['M-0', 'M-1'],
-  modosTiempoSoportados: ['T-2', 'T-3'],
+  // M-0 puro (decisión 2026-08-11): montar/colocar es manual — la mesa no
+  // es una máquina con tarifa propia. T-3 se va con la máquina (cero uso).
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'],
   modoActivacionDefault: 'OPCIONAL',
