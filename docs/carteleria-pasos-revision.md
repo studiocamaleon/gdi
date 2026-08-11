@@ -105,3 +105,63 @@ resuelven gratis; hacerlo al provisionar es un paso del empaquetado.
    se retoca a algo como "Corte y montaje de material en hoja" mientras tanto?
 3. ¿La cenefa por hojas entra como próxima etapa de derivadores o queda en
    backlog?
+
+## 7. "Cómo se calcula el consumo" — el bloque de descuento de materiales (2026-08-11)
+
+Disparador: el bloque se llamaba "Cuánto se descuenta" y en el slot del
+perfil mostraba un select de fórmula que el motor ignoraba. Análisis + fixes.
+
+### 7.1 La mecánica real (motor)
+
+La cantidad que un slot consume por OT se resuelve en CASCADA — gana el
+primero que aplica:
+
+1. **Slot derivado** (la familia declara `cantidadFija` o `magnitudDerivada`):
+   la geometría decide. `cantidadFija` es POR CARTEL (2 backlights → 2
+   fuentes, cada una elegida por los watts de SU cartel). `magnitudDerivada`
+   toma la magnitud del derivador (perfil = mlTotal, cable = cableMl…); si el
+   derivador publica despiece y la variante declara `largoBarra`, se compran
+   BARRAS ENTERAS (packing 1D, el sobrante se paga y los cortes de todos los
+   carteles se combinan). **La fórmula configurada no participa.**
+2. **Base × factor** (`cantidadBase` guardada): consumo = base
+   (cantidad pedida / cantidad efectiva del paso / pliegos impresos / pilas
+   de talonario) × `cantidadFactor`. Es el idioma de los INSUMOS
+   ("2 broches por talonario").
+3. **Fórmula** (el select): `por_unidad_productiva` (cantidad efectiva del
+   paso), `por_pieza`, `por_m2` (con desperdicio del nesting), `por_metro_lineal`,
+   `fijo` (1 por cotización). Encima puede aplicar el costeo del nesting
+   (materia prima completa / m² exactos / largo / tramos) para sustratos en
+   hoja/placa, y el multiplicador de caras si la familia lo soporta.
+
+### 7.2 El censo del guiado (qué pregunta aparece cuándo)
+
+| Pregunta | Aparece | Notas |
+|---|---|---|
+| Cómo se calcula el consumo (fórmula) | siempre que hay slot | en slots DERIVADOS ya no es un select: panel "lo decide la geometría" con ejemplo calculado |
+| Costeo (estrategias de nesting) | sustrato no-nesteado por el Acomodado, nunca INSUMO | para el sustrato del paso que acomoda vive en "Ajustes del trabajo" |
+| ¿Por cada cuántos se gasta uno? (base × factor) | sólo INSUMO_PASO / slots adicionales, no derivados (H20) | componente `base-consumo` |
+| ¿La doble faz gasta doble? | sólo familias con multiplicador `caras` (H9) | |
+
+Conclusión del censo: **no faltaban perillas** — faltaba honestidad en el
+slot derivado (una perilla visible que no decidía) y nombres más claros.
+
+### 7.3 El bug de unidades (2026-08-11, CORREGIDO)
+
+Cotizar `cantidad 2` de un backlight cobraba UNA estructura y UNA
+iluminación: los derivadores calculan UN cartel y nadie multiplicaba.
+Fix en la capa de derivadores: magnitudes y despieces × unidades (la traza
+y el 3D siguen dibujando un cartel, con `unidades` anotado);
+`wattsRequeridos` queda POR CARTEL (cada cartel su fuente) y `cantidadFija`
+escala. E2E: ×2 = 13,92 ml · 16 soldaduras · 3 barras (sobrante compartido)
+· 32 módulos · 2 fuentes. El golden genérico confirmó el alcance: los casos
+CARTEL-FRONTLIGHT en cantidades masivas cobraban un marco para todos
+(re-baselineado).
+
+### 7.4 Cambios de UI aplicados
+
+- Bloque renombrado: "Cuánto se descuenta" → **"Cómo se calcula el consumo"**.
+- Slot derivado: el select se reemplaza por el panel **"Lo decide la
+  geometría — no hay fórmula que configurar"**, con el detalle por slot y un
+  **ejemplo vivo** para el perfil (derivarMetricas del front espejando al
+  motor, con los params reales del paso: "un cartel de 1,00×0,80×0,10 en
+  caño 40×40 → 6,9 ml · 8 soldaduras — dos carteles, el doble").

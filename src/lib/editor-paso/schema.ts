@@ -208,6 +208,7 @@ export type ControlOpcion =
         | "material-fijo-detallado"
         | "candidatos-slot-detallado"
         | "base-consumo"
+        | "consumo-formula"
         | "tercerizado-panel"
         | "acomodado-detallado"
         | "params-familia"
@@ -1772,11 +1773,11 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "materiales.consumo",
     seccion: "materiales",
     grupo: "descuento",
-    // Sin etiqueta: el título del bloque ("Cuánto se descuenta") ya lo dice.
+    // Sin etiqueta: el título del bloque ("Cómo se calcula el consumo") ya lo dice.
     etiqueta: " ",
     pregunta: "¿Cómo se calcula el consumo?",
     ayuda:
-      "La fórmula del motor para saber cuánto material gasta: por pieza, por m², por metro lineal…",
+      "La fórmula del motor para saber cuánto material gasta: por pieza, por m², por metro lineal… En slots derivados no hay fórmula: la geometría del paso decide.",
     visible: (ctx) => Boolean(ctx.slot),
     resumen: (ctx) => {
       // Slot derivado (E2): el consumo no sale de la fórmula — lo deriva la
@@ -1800,20 +1801,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : ctx.slot?.payload.formula
           ? "config"
           : "default-paso",
-    control: {
-      tipo: "select",
-      opciones: () =>
-        FORMULA_OPTIONS.map((o) => ({
-          value: o.value,
-          label: o.label,
-          descripcion: o.description,
-        })),
-      valor: (ctx) => ctx.slot?.payload.formula ?? "por_unidad_productiva",
-      aplicar: (_ctx, v) => ({
-        tipo: "slot",
-        patch: { formula: v || "por_unidad_productiva" },
-      }),
-    },
+    // Componente: en un slot normal es el select de fórmula de siempre; en
+    // uno DERIVADO muestra qué decide la geometría (con ejemplo calculado)
+    // en vez de una perilla que el motor ignora.
+    control: { tipo: "componente", id: "consumo-formula" },
   },
   {
     clave: "materiales.costeo",
@@ -2340,8 +2331,9 @@ export const GRUPOS_MATERIAL: GrupoEje[] = [
   },
   {
     id: "descuento",
-    titulo: "Cuánto se descuenta",
-    ayuda: "Cómo se calcula el material que consume el paso en cada OT.",
+    titulo: "Cómo se calcula el consumo",
+    ayuda:
+      "La regla con la que el motor descuenta este material en cada OT — y cómo se cobra lo que sobra.",
     estilo: "campos",
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
     encabezado: "arriba",

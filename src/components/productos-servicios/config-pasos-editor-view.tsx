@@ -139,6 +139,7 @@ import {
   validateRuleGroup,
 } from "@/lib/rule-builder";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
+import { derivarMetricas } from "@/components/carteleria/geometria";
 import {
   NIVELES_COBERTURA,
   NIVEL_COBERTURA_LABELS,
@@ -9056,6 +9057,148 @@ function BaseConsumoGuiado({
   );
 }
 
+/**
+ * "Cómo se calcula el consumo" del slot. En un slot NORMAL es el select de
+ * fórmula de siempre. En un slot DERIVADO (la familia declara
+ * `magnitudDerivada` o `cantidadFija`) la fórmula no decide nada: acá se
+ * muestra QUÉ decide en su lugar — con un ejemplo calculado en vivo para el
+ * perfil del bastidor — en vez de una perilla que el motor ignora.
+ */
+function ConsumoFormulaGuiado({
+  slot,
+  decl,
+  paramsPaso,
+  onSlotPatch,
+}: {
+  slot: UpsertSlotMaterialPayload;
+  decl:
+    | {
+        codigo: string;
+        nombre?: string;
+        magnitudDerivada?: string;
+        cantidadFija?: number;
+      }
+    | null
+    | undefined;
+  paramsPaso: Record<string, unknown>;
+  onSlotPatch: (patch: Partial<UpsertSlotMaterialPayload>) => void;
+}) {
+  const derivado = Boolean(
+    decl && (decl.magnitudDerivada || decl.cantidadFija !== undefined),
+  );
+
+  if (!derivado) {
+    return (
+      <HumanSelect
+        value={slot.formula ?? "por_unidad_productiva"}
+        onValueChange={(v) =>
+          onSlotPatch({ formula: v || "por_unidad_productiva" })
+        }
+        options={FORMULA_OPTIONS}
+        placeholder="Fórmula de consumo"
+      />
+    );
+  }
+
+  let detalle: React.ReactNode = null;
+  if (decl?.cantidadFija !== undefined) {
+    detalle = (
+      <>
+        <b>
+          {decl.cantidadFija} por cartel
+        </b>{" "}
+        — con varios carteles idénticos se multiplica: 2 carteles llevan 2
+        fuentes, cada una elegida por los watts de SU cartel.
+      </>
+    );
+  } else if (decl?.codigo === "perfil_estructural") {
+    const params = paramsPaso ?? {};
+    const tipoBastidor =
+      String(params.tipoBastidor ?? "doble").toLowerCase() === "simple"
+        ? "frontlight"
+        : "backlight";
+    const profundidadM =
+      (Number(params.profundidadMm) || 100) / 1000;
+    const m = derivarMetricas({
+      tipoCartel: tipoBastidor,
+      width: 1,
+      height: 0.8,
+      depth: profundidadM,
+      sepRefuerzoVcm: Number(params.sepRefuerzoVcm ?? 100) || 0,
+      sepRefuerzoHcm: Number(params.sepRefuerzoHcm ?? 0) || 0,
+      cenefa: false,
+      solapaCenefaCm: Number(params.solapaCenefaCm ?? 2) || 0,
+      pintura: false,
+      fondo: false,
+      perfilLadoM: 0.04,
+      densidadLed: 1,
+      coberturaLedM2: 0.0625,
+    });
+    detalle = (
+      <>
+        Los <b>metros de perfil del bastidor</b>, comprados en{" "}
+        <b>barras enteras</b> cuando la variante declara su largo (el sobrante
+        se paga; los cortes de todos los carteles se combinan). Ej. con esta
+        config: un cartel de 1,00 × 0,80{" "}
+        {tipoBastidor === "backlight"
+          ? `× ${profundidadM.toFixed(2).replace(".", ",")} `
+          : ""}
+        m en caño 40×40 → <b>{m.mlTotal.toFixed(1).replace(".", ",")} ml</b> ·{" "}
+        {m.puntosSoldadura} soldaduras — dos carteles, el doble.
+      </>
+    );
+  } else if (decl?.codigo === "modulos_led") {
+    detalle = (
+      <>
+        El <b>sembrado</b>: un módulo cada <i>paso</i> (atributo de la
+        variante) en grilla sobre la medida del cartel, × la densidad del
+        paso. Dos carteles siembran el doble.
+      </>
+    );
+  } else if (decl?.codigo === "cableado") {
+    detalle = (
+      <>
+        <b>Perímetro × 1,4 + 12 cm por módulo</b>, multiplicado por los
+        carteles del trabajo.
+      </>
+    );
+  } else {
+    detalle = (
+      <>
+        La magnitud <b>{decl?.magnitudDerivada}</b> que publica la geometría
+        del paso.
+      </>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        border: "1px dashed var(--hairline-strong, #c8c4ba)",
+        borderRadius: 8,
+        padding: "9px 11px",
+        fontSize: 12.5,
+        color: "var(--fg-2, #2c2c33)",
+        lineHeight: 1.5,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+          color: "var(--muted-text-2, #92929b)",
+          marginBottom: 3,
+        }}
+      >
+        Lo decide la geometría — no hay fórmula que configurar
+      </div>
+      {detalle}
+    </div>
+  );
+}
+
 /** Handlers y caches del editor que necesitan los componentes de
  *  materiales extraídos cuando se renderizan dentro del asistente. */
 interface MaterialesApiAsistente {
@@ -12652,6 +12795,22 @@ function SeccionesEsquemaPaso({
                         <BaseConsumoGuiado
                           slot={slot}
                           esAdicional={!decl}
+                          onSlotPatch={(patch) =>
+                            materialesApi.updateSlot(
+                              pasoActual.id,
+                              slotIdx,
+                              patch,
+                            )
+                          }
+                        />
+                      );
+                    }
+                    if (id === "consumo-formula") {
+                      return (
+                        <ConsumoFormulaGuiado
+                          slot={slot}
+                          decl={decl}
+                          paramsPaso={asRecord(cfg.paramsPasoJson)}
                           onSlotPatch={(patch) =>
                             materialesApi.updateSlot(
                               pasoActual.id,
