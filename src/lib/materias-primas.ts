@@ -177,7 +177,10 @@ export const familiaMateriaPrimaItems: Array<{
   { value: "aditiva_3d", label: "Aditiva 3D" },
   { value: "electronica_carteleria", label: "Electronica carteleria" },
   { value: "neon_luminaria", label: "Neon y luminaria" },
-  { value: "metal_estructura", label: "Metal y estructura" },
+  // Material-agnóstico a propósito: los listones de madera de un bastidor
+  // entelado viven acá (misma plantilla de perfil, mismo motor de barras);
+  // separar MADERA_ESTRUCTURA exige migración de enum — pendiente declarado.
+  { value: "metal_estructura", label: "Estructura (metal y madera)" },
   { value: "pintura_recubrimiento", label: "Pintura y recubrimiento" },
   { value: "terminacion_editorial", label: "Terminacion editorial" },
   { value: "magnetico_fijacion", label: "Magnetico y fijacion" },

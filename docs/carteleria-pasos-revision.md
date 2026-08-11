@@ -165,3 +165,56 @@ CARTEL-FRONTLIGHT en cantidades masivas cobraban un marco para todos
   **ejemplo vivo** para el perfil (derivarMetricas del front espejando al
   motor, con los params reales del paso: "un cartel de 1,00×0,80×0,10 en
   caño 40×40 → 6,9 ml · 8 soldaduras — dos carteles, el doble").
+
+## 8. El ejercicio del presupuestista — journey natural vs sistema (2026-08-11)
+
+Método: narrar cómo una persona cotiza el trabajo y contrastar cada frase
+contra lo que el sistema hace. Tres casos: backlight, frontlight, y el
+stress-test bastidor de madera + canvas.
+
+### 8.1 Hallazgos del ejercicio
+
+| La persona dice | El sistema hacía | Estado |
+|---|---|---|
+| "17 ml, 3 barras de 6, corto y sueldo" | idéntico (despiece, barras enteras, sobrante compartido) | ✅ |
+| "los anclajes los decido YO: por pared, por m²" | `máx(2,⌈W/0,8⌉)×2` cableado sin perilla | ✔ CORREGIDO (reglas 1+2) |
+| "pintura: desarrollo +10% de pérdida" | `MARGEN_PINTURA=0.1` constante | ✔ param `margenPinturaPct` |
+| "cenefa: +8% de desperdicio del plegado" | `DESPERDICIO_CENEFA=0.08` constante | ✔ param `desperdicioCenefaPct` |
+| "fuente con 30% de colchón" | `MARGEN_FUENTE=0.3` constante | ✔ param `margenFuentePct` |
+| "cable: perímetro y las bajadas" | `×1,4 + 12cm/mód` constantes | ✔ params `factorCablePerimetro` / `cablePorModuloCm` |
+| "el listón de madera va igual que el caño" | compat/plantilla decían sólo metal | ✔ plantilla acepta Madera; familia MP "Estructura (metal y madera)"; enum propio = migración pendiente |
+| "en madera son grampas, no soldaduras" | output `puntos_soldadura` | ✔ alias `uniones_estructura` (mismo driver; el viejo queda por compat de herencias) |
+| "una grampa cada 5 cm de perímetro" | no existía base perimetral en base×factor | ✔ base nueva `perimetro_piezas_m` |
+| `fondo_m2 = W×H×1,1` | output que nadie hereda (la chapa va por nesting) | 🕳️ vestigial — retirar o documentar (pendiente) |
+
+### 8.2 Las dos reglas implementadas
+
+1. **Criterio de taller = parámetro declarado, nunca constante.** Los seis
+   coeficientes pasaron a `paramsPasoSchema` de su familia con el valor
+   histórico como default → golden cartelería y genérico idénticos al
+   centavo (sólo aparece el output alias `uniones_estructura` en la huella,
+   re-baselineado).
+2. **La magnitud derivada es el DEFAULT del slot, no un candado.** Genérico
+   en la cascada de cantidad: si el slot tiene `cantidadBase` configurada,
+   gana la regla del modelador. UI: el panel "Default: lo decide la
+   geometría" ofrece "…o definí tu propia regla (base × factor)" y el camino
+   de vuelta. E2E: anclajes con `0,5 × metro de perímetro` → 2,2 unidades;
+   revertido → 4 (geometría).
+
+Cumplimiento de la regla de oro: cero ifs de rubro en el motor — los dos
+únicos toques al motor son mecanismos genéricos activados por declaración
+(la precedencia de `cantidadBase` y la base `perimetro_piezas_m`, hermana de
+`pliegos_impresos`).
+
+### 8.3 Journey resultante (resumen)
+
+- **Backlight**: paso estructura concentra los criterios del taller como
+  params (refuerzos, anclajes, pérdidas); slots derivados muestran el panel
+  de geometría con ejemplo vivo y el override opcional.
+- **Frontlight**: una decisión (`tipoBastidor: simple`) — sin profundidad,
+  sin conectores, sin cenefa. Cero huecos.
+- **Madera + canvas**: listón bajo la plantilla de perfil (material Madera,
+  sección/largo de barra iguales), armado hereda `uniones_estructura`,
+  grampas como insumo `20 × metro de perímetro`, barniz = pintura
+  superficial. Pendiente de fondo: familia MP MADERA propia (migración de
+  enum, aditiva).

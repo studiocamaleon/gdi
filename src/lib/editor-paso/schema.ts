@@ -1784,8 +1784,18 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       // geometría del paso (ml de cable, pares de anclaje). El perfil además
       // se compra en BARRAS enteras cuando la variante declara su largo
       // (packing del despiece) — el editor lo dice, no lo esconde (H5).
+      // Regla 2: si el modelador definió su propia regla, esa manda y el
+      // resumen la muestra.
       const decl = ctx.slot?.decl;
-      if (decl?.magnitudDerivada) {
+      if (decl?.magnitudDerivada || decl?.cantidadFija !== undefined) {
+        const base = ctx.slot?.payload.cantidadBase;
+        if (base) {
+          const factor = ctx.slot?.payload.cantidadFactor ?? 1;
+          return `Regla propia: ${factor} por ${labelDe(
+            CANTIDAD_BASE_SLOT_OPTIONS,
+            base,
+          ).toLowerCase()}`;
+        }
         return decl.codigo === "perfil_estructural"
           ? "Derivado de la geometría · barras enteras si la variante declara largo de barra"
           : "Derivado de la geometría del paso";

@@ -145,6 +145,12 @@ export const SLOT_ROL_OPTIONS: OpcionMaterialCatalogo[] = [
 export const CANTIDAD_BASE_SLOT_OPTIONS: OpcionMaterialCatalogo[] = [
   { value: "cantidad_pedida", label: "Cantidad pedida" },
   { value: "cantidad_efectiva_paso", label: "Cantidad efectiva del paso" },
+  {
+    value: "perimetro_piezas_m",
+    label: "Metro de perímetro",
+    description:
+      "El perímetro total de las piezas del trabajo. Una grampa cada 5 cm = factor 20.",
+  },
   { value: "pliegos_impresos", label: "Pliegos impresos" },
   {
     value: "talonario_pilas",

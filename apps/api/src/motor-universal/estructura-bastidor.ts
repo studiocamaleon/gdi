@@ -79,6 +79,15 @@ export interface ParamsEstructuraBastidor {
   fondo: boolean;
   /** Profundidad del cajón si el paso la fija (el JobContext tiene prioridad). */
   profundidadMm?: number;
+  /** Criterios de taller (regla 1 del ejercicio): antes constantes del
+   *  código, ahora params declarados de la familia con el histórico como
+   *  default. */
+  /** Un par de anclajes cada N cm de ancho (mínimo 2 pares). */
+  sepAnclajeCm: number;
+  /** Pérdida de pintura sobre el desarrollo del perfil, en %. */
+  margenPinturaPct: number;
+  /** Desperdicio del plegado de cenefa, en %. */
+  desperdicioCenefaPct: number;
 }
 
 export interface ResultadoEstructuraBastidor {
@@ -171,6 +180,12 @@ export function parsearParamsEstructuraBastidor(
     pintura: params.pintura !== false && params.pintura !== 'false',
     fondo: params.fondo === true || params.fondo === 'true',
     profundidadMm: num(params.profundidadMm, 0) || undefined,
+    sepAnclajeCm: num(params.sepAnclajeCm, 80) || 80,
+    margenPinturaPct: num(params.margenPinturaPct, MARGEN_PINTURA * 100),
+    desperdicioCenefaPct: num(
+      params.desperdicioCenefaPct,
+      DESPERDICIO_CENEFA * 100,
+    ),
   };
 }
 
@@ -261,7 +276,7 @@ export function calcularEstructuraBastidor(
   if (D > 0) {
     const desarrolloM = D + (2 * params.solapaCenefaCm) / 100;
     cenefaDesarrolloCm = desarrolloM * 100;
-    cenefaM2 = 2 * (W + H) * desarrolloM * (1 + DESPERDICIO_CENEFA);
+    cenefaM2 = 2 * (W + H) * desarrolloM * (1 + params.desperdicioCenefaPct / 100);
   }
 
   // Despiece: cada barra que la herrería corta, con su largo REAL de corte.
@@ -301,9 +316,9 @@ export function calcularEstructuraBastidor(
     puntosSoldadura,
     cenefaM2,
     cenefaDesarrolloCm,
-    pinturaM2: mlTotal * perfil.desarrolloM * (1 + MARGEN_PINTURA),
+    pinturaM2: mlTotal * perfil.desarrolloM * (1 + params.margenPinturaPct / 100),
     fondoM2: W * H * 1.1,
-    anclajes: Math.max(2, Math.ceil(W / 0.8)) * 2,
+    anclajes: Math.max(2, Math.ceil(W / (params.sepAnclajeCm / 100))) * 2,
     despieceMm,
   };
 }

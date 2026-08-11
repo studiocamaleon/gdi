@@ -5773,6 +5773,12 @@ export class MotorUniversalService {
       atributosVarianteJson?: Record<string, unknown> | null;
     } | null,
   ): number | null {
+    // Regla 2 del ejercicio (carteleria-pasos-revision.md §8): la magnitud
+    // derivada es el DEFAULT del slot, no un candado. Si el modelador
+    // configuró su propia regla (base × factor: "3 anclajes por m²"), gana
+    // su configuración y se sigue el camino normal. Genérico: sin nombres
+    // de familia ni de slot.
+    if (slot.cantidadBase) return null;
     const familia = resolverFamilia(paso.familiaCodigo);
     const decl = familia?.slotsRequeridos.find(
       (s) => s.codigo === slot.slotCodigo,
@@ -5847,6 +5853,23 @@ export class MotorUniversalService {
           nestingDispatch?.talonarioGrouping?.pilas ??
           0,
       );
+    } else if (slot.cantidadBase === 'perimetro_piezas_m') {
+      // Perímetro total de las piezas VISIBLES del trabajo, en metros — la
+      // base natural de grampas, ojales manuales, burletes y cintas de borde
+      // ("una grampa cada 5 cm" = factor 20). Cae a recalcular desde las
+      // piezas si el override no viajó.
+      const ctx = jobContext as Record<string, unknown>;
+      const override = Number(ctx.piezaPerimetroTotalM ?? 0);
+      base =
+        override > 0
+          ? override
+          : (jobContext.piezasVisibles ?? jobContext.piezas ?? []).reduce(
+              (acc, p) =>
+                acc +
+                ((2 * (Number(p.anchoMm) + Number(p.altoMm))) / 1000) *
+                  (Number(p.cantidad) || 1),
+              0,
+            );
     } else {
       return null;
     }

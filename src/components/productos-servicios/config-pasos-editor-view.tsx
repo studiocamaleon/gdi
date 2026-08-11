@@ -9171,6 +9171,11 @@ function ConsumoFormulaGuiado({
     );
   }
 
+  // Regla 2 del ejercicio: la geometría es el DEFAULT, no un candado. Si el
+  // modelador define base × factor acá ("3 anclajes por m²"), su regla gana
+  // en el motor y este panel lo muestra en modo "regla propia".
+  const reglaPropia = Boolean(slot.cantidadBase);
+
   return (
     <div
       style={{
@@ -9192,9 +9197,83 @@ function ConsumoFormulaGuiado({
           marginBottom: 3,
         }}
       >
-        Lo decide la geometría — no hay fórmula que configurar
+        {reglaPropia
+          ? "Regla propia del paso — pisa el default de la geometría"
+          : "Default: lo decide la geometría"}
       </div>
-      {detalle}
+      {reglaPropia ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            <Input
+              type="number"
+              min={0}
+              step={0.0001}
+              value={slot.cantidadFactor ?? 1}
+              onChange={(event) =>
+                onSlotPatch({
+                  cantidadFactor:
+                    event.target.value === ""
+                      ? null
+                      : Number(event.target.value),
+                })
+              }
+              style={{ maxWidth: 110 }}
+            />
+            <span style={{ fontSize: 12.5, color: "var(--muted-text, #6e6e76)" }}>
+              por
+            </span>
+            <div style={{ minWidth: 220, flex: 1 }}>
+              <HumanSelect
+                value={slot.cantidadBase ?? "cantidad_pedida"}
+                onValueChange={(v) =>
+                  onSlotPatch({ cantidadBase: v || "cantidad_pedida" })
+                }
+                options={CANTIDAD_BASE_SLOT_OPTIONS}
+                placeholder="Base"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              onSlotPatch({ cantidadBase: null, cantidadFactor: null })
+            }
+            style={{
+              alignSelf: "flex-start",
+              border: 0,
+              background: "none",
+              padding: 0,
+              fontSize: 12,
+              color: "var(--muted-text, #6e6e76)",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
+          >
+            Volver al default de la geometría
+          </button>
+        </div>
+      ) : (
+        <>
+          {detalle}
+          <button
+            type="button"
+            onClick={() => onSlotPatch({ cantidadBase: "cantidad_pedida" })}
+            style={{
+              display: "block",
+              marginTop: 6,
+              border: 0,
+              background: "none",
+              padding: 0,
+              fontSize: 12,
+              color: "var(--muted-text, #6e6e76)",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
+          >
+            …o definí tu propia regla (base × factor)
+          </button>
+        </>
+      )}
     </div>
   );
 }

@@ -1359,6 +1359,10 @@ const estructura_bastidor: DefinicionFamilia = {
   outputsCanonicos: [
     'ml_estructura',
     'puntos_soldadura',
+    // Alias material-agnóstico del mismo driver: en madera las uniones son
+    // grampas/escuadras, no soldaduras. `puntos_soldadura` queda por compat
+    // con las herencias guardadas (regla: alias de lectura, no migración).
+    'uniones_estructura',
     'cenefa_m2',
     'pintura_m2',
     'fondo_m2',
@@ -1372,11 +1376,12 @@ const estructura_bastidor: DefinicionFamilia = {
     materialSlot: 'perfil_estructural',
     magnitudesTiempo: [
       { magnitud: 'cortes', etiqueta: 'cortes de hierro' },
-      { magnitud: 'puntosSoldadura', etiqueta: 'puntos de soldadura' },
+      { magnitud: 'puntosSoldadura', etiqueta: 'uniones (soldadura/grampas)' },
     ],
     outputs: {
       ml_estructura: 'mlTotal',
       puntos_soldadura: 'puntosSoldadura',
+      uniones_estructura: 'puntosSoldadura',
       cenefa_m2: 'cenefaM2',
       pintura_m2: 'pinturaM2',
       fondo_m2: 'fondoM2',
@@ -1431,6 +1436,36 @@ const estructura_bastidor: DefinicionFamilia = {
       requerido: false,
       descripcion:
         'Si el producto tiene profundidad fija. Si el comercial la carga al cotizar, manda la del trabajo.',
+    },
+    // Criterios de TALLER que antes eran constantes del código (regla 1 del
+    // ejercicio, carteleria-pasos-revision.md §8): el default conserva el
+    // valor histórico — nada se mueve de precio hasta que un taller lo toque.
+    {
+      campo: 'sepAnclajeCm',
+      etiqueta: 'Anclajes: un par cada (cm de ancho)',
+      tipo: 'number',
+      default: 80,
+      requerido: false,
+      descripcion:
+        'Criterio de instalación: cada cuántos cm de ancho va un par de anclajes (mínimo 2 pares). El slot Anclajes puede pisarlo con su propia regla.',
+    },
+    {
+      campo: 'margenPinturaPct',
+      etiqueta: 'Pérdida de pintura (%)',
+      tipo: 'number',
+      default: 10,
+      requerido: false,
+      descripcion:
+        'Se suma a los m² de desarrollo del perfil que hereda el paso de pintura.',
+    },
+    {
+      campo: 'desperdicioCenefaPct',
+      etiqueta: 'Desperdicio de cenefa (%)',
+      tipo: 'number',
+      default: 8,
+      requerido: false,
+      descripcion:
+        'Se suma a los m² del desarrollo de la cenefa (plegado y recortes).',
     },
   ],
   productosTipicos: [
@@ -1539,6 +1574,34 @@ const iluminacion_led: DefinicionFamilia = {
       descripcion:
         '1 = densidad recomendada del módulo. 1,5 = 50% más módulos (más brillo).',
       expuestoAlComercial: true,
+    },
+    // Criterios de TALLER que antes eran constantes del código (regla 1 del
+    // ejercicio, carteleria-pasos-revision.md §8). Defaults = valor histórico.
+    {
+      campo: 'margenFuentePct',
+      etiqueta: 'Margen de la fuente (%)',
+      tipo: 'number',
+      default: 30,
+      requerido: false,
+      descripcion:
+        'Colchón sobre los watts sembrados para elegir la fuente: 16 módulos de 0,72 W = 11,5 W → con 30% la fuente debe cumplir 15 W.',
+    },
+    {
+      campo: 'factorCablePerimetro',
+      etiqueta: 'Cable: factor sobre el perímetro',
+      tipo: 'number',
+      default: 1.4,
+      requerido: false,
+      descripcion:
+        'Metros de cable = perímetro × este factor + los cm por módulo.',
+    },
+    {
+      campo: 'cablePorModuloCm',
+      etiqueta: 'Cable por módulo (cm)',
+      tipo: 'number',
+      default: 12,
+      requerido: false,
+      descripcion: 'Chicote de conexión de cada módulo.',
     },
   ],
   productosTipicos: [

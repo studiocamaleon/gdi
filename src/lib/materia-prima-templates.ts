@@ -1290,7 +1290,8 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
   {
     id: "perfil_estructural_v1",
     nombre: "Perfil / caño estructural",
-    descripcion: "Caño o perfil metálico para bastidores de cartelería",
+    descripcion:
+      "Caño, perfil o listón para bastidores de cartelería (metal o madera)",
     familia: "metal_estructura",
     subfamilia: "perfil_estructural",
     tipoTecnico: "perfil_estructural",
@@ -1299,7 +1300,7 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     camposTecnicos: [
       { key: "seccion", label: "Sección", type: "text", required: true },
       { key: "espesor", label: "Espesor de pared", type: "number", unit: "mm", required: false },
-      { key: "material", label: "Material", type: "text", options: ["Acero", "Aluminio", "Galvanizado"], required: true },
+      { key: "material", label: "Material", type: "text", options: ["Acero", "Aluminio", "Galvanizado", "Madera"], required: true },
       { key: "desarrolloSeccion", label: "Desarrollo de la sección (m²/ml, para pintura)", type: "number", unit: "m2", required: false },
       { key: "largoBarra", label: "Largo de la barra comercial (se cobran barras enteras)", type: "number", unit: "m", required: false },
     ],

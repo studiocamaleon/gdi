@@ -30,6 +30,13 @@ export interface ParamsIluminacionLed {
   modoSembrado: 'area' | 'recorrido';
   /** Multiplicador sobre la densidad recomendada del módulo (1 = normal). */
   densidad: number;
+  /** Criterios de taller (regla 1): antes constantes, ahora params con el
+   *  histórico como default. */
+  /** Colchón sobre los watts para elegir la fuente, en %. */
+  margenFuentePct: number;
+  /** Metros de cable = perímetro × este factor + cm por módulo. */
+  factorCablePerimetro: number;
+  cablePorModuloCm: number;
 }
 
 export interface AtributosModuloLed {
@@ -55,9 +62,16 @@ export function parsearParamsIluminacionLed(
 ): ParamsIluminacionLed {
   const modo = String(params.modoSembrado ?? 'area').toLowerCase();
   const densidad = Number(params.densidad);
+  const num = (v: unknown, def: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : def;
+  };
   return {
     modoSembrado: modo === 'recorrido' ? 'recorrido' : 'area',
     densidad: Number.isFinite(densidad) && densidad > 0 ? densidad : 1,
+    margenFuentePct: num(params.margenFuentePct, MARGEN_FUENTE * 100),
+    factorCablePerimetro: num(params.factorCablePerimetro, 1.4),
+    cablePorModuloCm: num(params.cablePorModuloCm, 12),
   };
 }
 
@@ -157,7 +171,9 @@ export function calcularIluminacionLed(
   return {
     modulos,
     watts,
-    wattsRequeridos: watts * (1 + MARGEN_FUENTE),
-    cableMl: geo.perimetroM * 1.4 + modulos * 0.12,
+    wattsRequeridos: watts * (1 + params.margenFuentePct / 100),
+    cableMl:
+      geo.perimetroM * params.factorCablePerimetro +
+      modulos * (params.cablePorModuloCm / 100),
   };
 }
