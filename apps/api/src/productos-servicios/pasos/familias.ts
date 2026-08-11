@@ -234,10 +234,9 @@ const pre_prensa: DefinicionFamilia = {
   categoria: 'pre_prensa',
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-1'],
-  mecanismosCantidadSoportados: [
-    'DIRECT_FROM_JOBCONTEXT',
-    'CALCULADO_POR_PASO',
-  ],
+  // Sólo DIRECTO (2026-08-11): CALCULADO era del look-ahead retirado (la
+  // imposición vive en el paso que imprime). Cero configs lo usaban.
+  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'],
   modoActivacionDefault: 'OBLIGATORIO',
   multiplicadoresSoportados: [],

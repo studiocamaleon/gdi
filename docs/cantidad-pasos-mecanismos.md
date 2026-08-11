@@ -79,7 +79,7 @@ factor (regla 2, carteleria-pasos-revision.md §8).
 
 | Familia | Mecanismos | Nesting | Derivador | Hereda por default |
 |---|---|---|---|---|
-| Pre-prensa | DIRECTO+CALCULA | — | — | — |
+| Pre-prensa | DIRECTO | — | — | — |
 | Impresión por hoja | HEREDA+CALCULA | pliego_digital | — | pliegos_calculados |
 | Impresión por área | CALCULA | segun_material | — | — |
 | Impresión por pieza | DIRECTO+HEREDA | — | — | — |
@@ -114,7 +114,12 @@ señalar origen; el modelador puede apuntar a otro con `campoOutput`.)
 1. Impresión por hoja → CALCULA con `pliego_digital`: 24 poses por SRA3 →
    21 pliegos; publica `pliegos_impresos`.
 2. Laminado → HEREDA los 21 pliegos, nesting de film por encima.
-3. Guillotina → HEREDA los 21 pliegos (su tiempo es por tandas de pila).
+3. Guillotina → HEREDA los 21 pliegos, pero su tiempo NO es una
+   productividad: es la primitiva del guillotinero —
+   `tandas × cortes por tanda × segundos por corte + recargas`, donde las
+   **tandas** = pliegos ÷ pliegosMaxPorTanda (del perfil, por escalón de
+   gramaje) y los **cortes por tanda** vienen del plan de imposición
+   (`cortes_calculados`, que publicó la impresión junto con los pliegos).
 
 **Vinilo impreso, 6 medidas distintas (gran formato)**
 1. Impresión por área → CALCULA con `segun_material`: el material elegido es
@@ -138,3 +143,39 @@ señalar origen; el modelador puede apuntar a otro con `campoOutput`.)
 El mismo producto usa los tres proveedores de CALCULA (derivador en 1 y 6,
 nesting en 4 y 5) más HEREDA y DIRECTO — esa es la gracia del modelo: cada
 paso elige su idioma y el motor los compone.
+
+
+## 8. Tres aclaraciones (2026-08-11, preguntas del usuario)
+
+**¿El mecanismo se define por familia o por paso?** POR PASO: `mecanismoCantidad`
+vive en la config del paso y el modelador lo elige. La familia sólo declara el
+MENÚ (`mecanismosCantidadSoportados`) — qué opciones tienen sentido para ese
+oficio. El guiado no lo quitó: lo fusionó en **"¿Sobre cuántas piezas
+trabaja?"** (eje Cuánto tarda, componente cantidad-unificada), y cuando el
+ritmo es productividad se muestra inline junto al ritmo ("6 puntos de
+soldadura por hora"). Sólo se oculta si la familia soporta un único mecanismo
+(no hay nada que elegir).
+
+**La guillotina de verdad** (primitiva `guillotina_por_cortes`): no usa
+productividad. `tandas = ⌈pliegos ÷ pliegosMaxPorTanda⌉` (el perfil por
+escalón de gramaje decide cuántos pliegos entran por bajada) ·
+`tiempo = tandas × cortesPorTanda × segundosPorCorte + (tandas−1) × recarga`.
+Los pliegos los HEREDA de la impresión; los cortes por tanda salen del plan
+de imposición (`cortes_calculados`). Cantidad de cortes Y cantidad de tandas,
+como corta el guillotinero.
+
+**`pliegos_calculados` vs `pliegos_impresos`**: hoy casi siempre valen lo
+mismo, pero tienen roles distintos. *Calculados* = el PLAN de la imposición
+(cuántos pliegos dice el nesting que hacen falta; null si el nesting no
+corrió — eso alimenta el guard "guillotina sin plan"). *Impresos* = lo que el
+paso de impresión declara haber PRODUCIDO (su cantidad efectiva — que puede
+venir de su propio nesting, y entonces coincide, o de una herencia). Los
+pasos siguientes heredan IMPRESOS; calculados queda como plan + fallback.
+El doble nombre es herencia de cuando pre-prensa publicaba el plan y la
+impresión el hecho; hoy ambos viven en `impresion_por_hoja`. Consolidarlos
+en uno es posible pero exige alias de lectura (herencias guardadas los
+referencian) — anotado como limpieza futura, no urgente.
+
+**Pre-prensa quedó DIRECTO puro**: `CALCULADO_POR_PASO` en sus soportados era
+letra muerta del look-ahead retirado (la imposición vive en el paso que
+imprime). Cero configs lo usaban; se quitó del menú.
