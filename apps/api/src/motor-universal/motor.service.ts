@@ -6543,9 +6543,17 @@ export class MotorUniversalService {
               this.elegirPorEscalonDeGramaje(cands, gramaje),
             numeroPositivo: (value) => this.numeroPositivo(value),
           })
-        : // Sin primitiva: desempate genérico por escalón de gramaje y
-          // primer candidato (comportamiento histórico del modo color).
+        : // Sin primitiva: si el perfil DEFAULT del paso es compatible con
+          // el modo elegido, gana el default — es la decisión del modelador
+          // (elegir "CMYK" con default "CMYK - 4 pass" no debe saltar a
+          // OTRO perfil CMYK por orden de carga, que además no es estable).
+          // Recién sin default compatible se desempata por escalón de
+          // gramaje y primer candidato (comportamiento histórico).
           (() => {
+            const defaultCompatible = candidatos.find(
+              (perfil) => perfil.id === paso.perfilM1Id,
+            );
+            if (defaultCompatible) return defaultCompatible;
             const gramaje = this.numeroPositivo(
               ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje,
             );
