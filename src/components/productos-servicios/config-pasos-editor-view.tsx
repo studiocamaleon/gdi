@@ -3106,8 +3106,11 @@ export function ConfigPasosEditorView({
   // el estado inicial hacía divergir SSR y cliente (hydration mismatch).
   React.useEffect(() => {
     try {
-      if (window.localStorage.getItem("editorPasoVista") === "guiado") {
-        setVistaEditorState("guiado");
+      const guardada = window.localStorage.getItem("editorPasoVista");
+      // Honrar AMBAS vistas guardadas (antes sólo restauraba "guiado" y la
+      // elección "detallado" se perdía en cada recarga).
+      if (guardada === "guiado" || guardada === "detallado") {
+        setVistaEditorState(guardada);
       }
     } catch {
       // sin storage: queda el default
@@ -4836,39 +4839,40 @@ export function ConfigPasosEditorView({
                             </div>
                           ) : null}
                         </div>
-                        {/* Deshabilitado 2026-07-31: la ficha usa SÓLO la
-                            vista Guiada (paridad completa — reusa los mismos
-                            sub-editores). Detallado y Asistente quedan en el
-                            código, ocultos con `false &&`, para revertir sin
-                            reescribir nada. Borrado quirúrgico = paso 2. */}
-                        {false && (
-                          <div className="pill-row">
-                            <button
-                              className="btn"
-                              type="button"
-                              aria-pressed={vistaEditor === "detallado"}
-                              style={
-                                vistaEditor === "detallado"
-                                  ? { fontWeight: 650 }
-                                  : { opacity: 0.6 }
-                              }
-                              onClick={() => setVistaEditor("detallado")}
-                            >
-                              Detallado
-                            </button>
-                            <button
-                              className="btn"
-                              type="button"
-                              aria-pressed={vistaEditor === "guiado"}
-                              style={
-                                vistaEditor === "guiado"
-                                  ? { fontWeight: 650 }
-                                  : { opacity: 0.6 }
-                              }
-                              onClick={() => setVistaEditor("guiado")}
-                            >
-                              Guiado
-                            </button>
+                        {/* Re-habilitado 2026-08-11 (pedido del usuario):
+                            el toggle Detallado/Guiado vuelve para comparar
+                            vistas. OJO: el detallado está CONGELADO — las
+                            mejoras nuevas (panel de geometría, criterios
+                            como params, tercerizado manual) viven sólo en
+                            el guiado. El Asistente flotante sigue oculto. */}
+                        <div className="pill-row">
+                          <button
+                            className="btn"
+                            type="button"
+                            aria-pressed={vistaEditor === "detallado"}
+                            style={
+                              vistaEditor === "detallado"
+                                ? { fontWeight: 650 }
+                                : { opacity: 0.6 }
+                            }
+                            onClick={() => setVistaEditor("detallado")}
+                          >
+                            Detallado
+                          </button>
+                          <button
+                            className="btn"
+                            type="button"
+                            aria-pressed={vistaEditor === "guiado"}
+                            style={
+                              vistaEditor === "guiado"
+                                ? { fontWeight: 650 }
+                                : { opacity: 0.6 }
+                            }
+                            onClick={() => setVistaEditor("guiado")}
+                          >
+                            Guiado
+                          </button>
+                          {false && (
                             <button
                               className="btn"
                               type="button"
@@ -4876,8 +4880,8 @@ export function ConfigPasosEditorView({
                             >
                               Asistente guiado
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
 
                       <div className="config-step-content pasos-sections">
