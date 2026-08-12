@@ -1507,15 +1507,48 @@ type TiempoManualComercial = {
   modoActivacion: string | null;
   obligatorio: boolean;
   unidadInput: "min" | "h";
+  /**
+   * Lo que el campo propone antes de que el comercial toque nada: **el tiempo
+   * que el modelador configuró en el paso** (con el nivel elegido aplicado),
+   * y sólo si el paso no declara ninguno, el `defaultMin` de las ayudas. Dos
+   * declaraciones del mismo hecho no pueden competir: si el paso dice 30 min,
+   * el campo arranca en 30.
+   */
   defaultMin: number | null;
   minMin: number | null;
   maxMin: number | null;
   etiqueta: string | null;
 };
 
+/**
+ * Tiempo FIJO que el paso declara, en minutos, con el nivel elegido aplicado.
+ * Null cuando el paso se calcula por ritmo: ahí los minutos dependen de la
+ * cantidad y el sheet no puede saberlos sin cotizar.
+ */
+function getTiempoFijoDeclaradoMin(
+  config: ConfigPasoDetalle,
+  seleccionNivel: Record<string, string>,
+): number | null {
+  const niveles = leerNivelesPaso(config.paramsPasoJson);
+  if (niveles) {
+    const nivel = nivelEfectivo(niveles, seleccionNivel[config.id]);
+    if (nivel.overrides.tiempoFijoMin != null) {
+      return nivel.overrides.tiempoFijoMin > 0
+        ? nivel.overrides.tiempoFijoMin
+        : null;
+    }
+  }
+  const override = Number(config.tiempoFijoOverrideMin);
+  if (Number.isFinite(override) && override > 0) return override;
+  const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+  const horas = Number(params.horasEstimadas);
+  return Number.isFinite(horas) && horas > 0 ? horas * 60 : null;
+}
+
 function getTiemposManualesComercial(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+  seleccionNivel: Record<string, string> = {},
 ) {
   const positiveOrNull = (value: unknown) => {
     const parsed = Number(value);
@@ -1544,7 +1577,10 @@ function getTiemposManualesComercial(
           modoActivacion: config.modoActivacion,
           obligatorio: tiempoManual.obligatorio === true,
           unidadInput: tiempoManual.unidadInput === "h" ? "h" : "min",
-          defaultMin: positiveOrNull(tiempoManual.defaultMin),
+          // El tiempo del paso manda sobre la sugerencia de las ayudas.
+          defaultMin:
+            getTiempoFijoDeclaradoMin(config, seleccionNivel) ??
+            positiveOrNull(tiempoManual.defaultMin),
           minMin: positiveOrNull(tiempoManual.minMin),
           maxMin: positiveOrNull(tiempoManual.maxMin),
           etiqueta:
@@ -1604,7 +1640,11 @@ function getTiempoManualBloqueo(
   includeConfig: (config: ConfigPasoDetalle) => boolean,
   config: MotorConfigState,
 ) {
-  for (const item of getTiemposManualesComercial(ruta, includeConfig)) {
+  for (const item of getTiemposManualesComercial(
+    ruta,
+    includeConfig,
+    config.seleccionNivel,
+  )) {
     const error = getTiempoManualError(item, config);
     if (error) return error;
   }
@@ -2856,6 +2896,7 @@ function buildJobContext(
   const tiemposManuales = getTiemposManualesComercial(
     rutaSel,
     includeConfig,
+    config.seleccionNivel,
   ).filter(
     (item) =>
       item.modoActivacion !== "OPCIONAL" ||
@@ -3994,8 +4035,13 @@ function ApConfigStep({
   );
   // Pasos con tiempo estimado por el comercial (visibles según ruta/opcionales).
   const tiemposManualesComercial = React.useMemo(
-    () => getTiemposManualesComercial(rutaSel, includeVisibleConfig),
-    [rutaSel, includeVisibleConfig],
+    () =>
+      getTiemposManualesComercial(
+        rutaSel,
+        includeVisibleConfig,
+        motorConfig.seleccionNivel,
+      ),
+    [rutaSel, includeVisibleConfig, motorConfig.seleccionNivel],
   );
   const tiemposManualesPorConfigPaso = React.useMemo(
     () =>

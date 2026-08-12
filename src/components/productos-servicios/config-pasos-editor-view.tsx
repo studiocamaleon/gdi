@@ -3651,32 +3651,56 @@ export function ConfigPasosEditorView({
     updateNestingPliegoImpresion(rutaPasoId, { candidatos });
   };
 
+  /**
+   * Escribe los params del paso en el estado Y en el textarea del detallado.
+   *
+   * Los dos tienen que moverse juntos porque `guardarPaso` los MEZCLA
+   * (`{...textarea, ...estado}`): si sólo se toca el estado, una clave BORRADA
+   * desde el guiado —apagar "el comercial puede ajustar el tiempo", quitar los
+   * niveles— reaparece desde el texto viejo al guardar y el cambio no persiste
+   * nunca. Las claves que se agregan o cambian sí funcionaban; sólo el borrado
+   * se perdía, que es lo que lo hacía difícil de ver.
+   */
+  const aplicarParamsPaso = (
+    rutaPasoId: string,
+    params: Record<string, unknown> | null,
+  ) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [rutaPasoId]: { ...prev[rutaPasoId], paramsPasoJson: params },
+    }));
+    setJsonTexts((prev) => ({
+      ...prev,
+      [rutaPasoId]: {
+        ...prev[rutaPasoId],
+        params: jsonToText(stripNestingConfig(params)),
+      },
+    }));
+  };
+
   const updateStepParams = (
     rutaPasoId: string,
     patch: Record<string, unknown>,
   ) => {
-    setConfigs((prev) => {
-      const cfg = prev[rutaPasoId];
-      const params = { ...asRecord(cfg.paramsPasoJson), ...patch };
-      for (const key of Object.keys(params)) {
-        const value = params[key];
-        if (
-          value === "" ||
-          value === null ||
-          value === undefined ||
-          (typeof value === "number" && !Number.isFinite(value))
-        ) {
-          delete params[key];
-        }
+    const params = {
+      ...asRecord(configs[rutaPasoId]?.paramsPasoJson),
+      ...patch,
+    };
+    for (const key of Object.keys(params)) {
+      const value = params[key];
+      if (
+        value === "" ||
+        value === null ||
+        value === undefined ||
+        (typeof value === "number" && !Number.isFinite(value))
+      ) {
+        delete params[key];
       }
-      return {
-        ...prev,
-        [rutaPasoId]: {
-          ...cfg,
-          paramsPasoJson: Object.keys(params).length > 0 ? params : null,
-        },
-      };
-    });
+    }
+    aplicarParamsPaso(
+      rutaPasoId,
+      Object.keys(params).length > 0 ? params : null,
+    );
   };
 
   const updateModoColorConfig = (
@@ -3715,37 +3739,30 @@ export function ConfigPasosEditorView({
     rutaPasoId: string,
     patch: Record<string, unknown>,
   ) => {
-    setConfigs((prev) => {
-      const cfg = prev[rutaPasoId];
-      const params = asRecord(cfg.paramsPasoJson);
-      const current = getTiempoManualConfig(params);
-      const nextConfig = { ...current, ...patch };
-      for (const key of Object.keys(nextConfig)) {
-        const value = nextConfig[key];
-        if (
-          value === "" ||
-          value === null ||
-          value === undefined ||
-          (typeof value === "number" && !Number.isFinite(value))
-        ) {
-          delete nextConfig[key];
-        }
+    const params = asRecord(configs[rutaPasoId]?.paramsPasoJson);
+    const current = getTiempoManualConfig(params);
+    const nextConfig = { ...current, ...patch };
+    for (const key of Object.keys(nextConfig)) {
+      const value = nextConfig[key];
+      if (
+        value === "" ||
+        value === null ||
+        value === undefined ||
+        (typeof value === "number" && !Number.isFinite(value))
+      ) {
+        delete nextConfig[key];
       }
-      const nextParams =
-        nextConfig.habilitado === true
-          ? { ...params, tiempoManual: nextConfig }
-          : Object.fromEntries(
-              Object.entries(params).filter(([key]) => key !== "tiempoManual"),
-            );
-      return {
-        ...prev,
-        [rutaPasoId]: {
-          ...cfg,
-          paramsPasoJson:
-            Object.keys(nextParams).length > 0 ? nextParams : null,
-        },
-      };
-    });
+    }
+    const nextParams =
+      nextConfig.habilitado === true
+        ? { ...params, tiempoManual: nextConfig }
+        : Object.fromEntries(
+            Object.entries(params).filter(([key]) => key !== "tiempoManual"),
+          );
+    aplicarParamsPaso(
+      rutaPasoId,
+      Object.keys(nextParams).length > 0 ? nextParams : null,
+    );
   };
 
   const updateSlot = (
