@@ -23,6 +23,17 @@ import {
   opcionalesActivadosEfectivos,
 } from "@/lib/arrastre-opcionales";
 import { esConfigPasoEjecutable } from "@/lib/config-paso-activacion";
+import { getLabel, modoCalculoCargoLabels } from "@/lib/labels-humanos";
+import {
+  type BaseDelPaso,
+  type NivelesPasoConfig,
+  NIVEL_PERSONALIZADO,
+  describirNivel,
+  leerNivelesPaso,
+  nivelEfectivo,
+  nivelPasoKey,
+  nombreNivel,
+} from "@/lib/niveles-paso";
 import { etiquetaValorParam } from "@/lib/params-familia";
 import { ProductoSheetHeaderConstelacion } from "./producto-sheet-header";
 import {
@@ -120,6 +131,8 @@ type CatalogAdicional = {
   descripcion?: string;
   origen?: "paso" | "cargo";
   configPasoId?: string;
+  /** Sólo cargos: 'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT'. */
+  modoCalculo?: string;
 };
 
 type CatalogProduct = {
@@ -255,6 +268,11 @@ type MotorConfigState = {
   seleccionMaquina: Record<string, string>;
   seleccionPerfil: Record<string, string>;
   seleccionModoColor: Record<string, string>;
+  /**
+   * Nivel elegido por paso (zona de colocación, dificultad de diseño). Viaja al
+   * motor como `nivelPaso_<configPasoId>`. Ver src/lib/niveles-paso.ts.
+   */
+  seleccionNivel: Record<string, string>;
   /** Valores de eje elegidos por paso tercerizado con matriz (`tercerizado_<configPasoId>`). */
   seleccionTercerizado: Record<string, Record<string, string>>;
   /**
@@ -453,6 +471,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionMaquina: {},
   seleccionPerfil: {},
   seleccionModoColor: {},
+  seleccionNivel: {},
   seleccionTercerizado: {},
   tercerizadoCostoManual: {},
   paramsComercial: {},
@@ -1247,6 +1266,33 @@ function getActiveCandidateForConfig(
   return selected ?? getPreferredCandidate(candidates);
 }
 
+// Los modos se listan de menos a más tinta: sin impresión → 1 tinta → CMYK →
+// CMYK con cada refuerzo → CMYK completo. El orden natural (el de los perfiles
+// de la máquina) dejaba CMYK+Blanco antes que CMYK, que se lee al revés.
+const MODO_COLOR_ORDEN = [
+  "SIN_IMPRESION",
+  "BN",
+  "CMYK",
+  "CMYK+blanco",
+  "CMYK+barniz",
+  "CMYK+blanco+barniz",
+];
+
+function ordenarModosColor<T extends { value: string }>(options: T[]): T[] {
+  const rango = (option: T) => {
+    const index = MODO_COLOR_ORDEN.indexOf(
+      normalizeModoColor(option.value) ?? option.value,
+    );
+    // Modos que no están en la escala (custom del tenant) van al final, en su
+    // orden original.
+    return index === -1 ? MODO_COLOR_ORDEN.length : index;
+  };
+  return options
+    .map((option, index) => ({ option, index }))
+    .sort((a, b) => rango(a.option) - rango(b.option) || a.index - b.index)
+    .map((item) => item.option);
+}
+
 function getModoColorOptionsForConfig(
   config: ConfigPasoDetalle,
   motorConfig?: Pick<MotorConfigState, "seleccionMaquina">,
@@ -1294,19 +1340,19 @@ function getModoColorOptionsForConfig(
         });
       }
     }
-    if (union.size > 0) return Array.from(union.values());
+    if (union.size > 0) return ordenarModosColor(Array.from(union.values()));
   }
   const activeCandidate = motorConfig
     ? getActiveCandidateForConfig(config, motorConfig)
     : null;
   if (activeCandidate) {
     const derivedOptions = buildModoColorOptionsFromCandidate(activeCandidate);
-    if (derivedOptions.length) return derivedOptions;
+    if (derivedOptions.length) return ordenarModosColor(derivedOptions);
     if (activeCandidate.modoColorOptions?.length) {
-      return activeCandidate.modoColorOptions;
+      return ordenarModosColor(activeCandidate.modoColorOptions);
     }
   }
-  return config.modoColorOptions ?? [];
+  return ordenarModosColor(config.modoColorOptions ?? []);
 }
 
 /**
@@ -1415,6 +1461,86 @@ function getModosColorComercial(
 }
 
 /**
+ * Pasos de la ruta con NIVELES: un paso, varias variantes que elige el
+ * comercial (zona de colocación, dificultad de diseño). Es una decisión
+ * excluyente, como el modo de color. Ver docs/cargos-por-paso-analisis-y-plan.md §8.
+ */
+type NivelComercial = {
+  configPasoId: string;
+  nombreVisible: string | null;
+  familiaCodigo: string;
+  modoActivacion: string | null;
+  config: NivelesPasoConfig;
+  /** Lo que vale el paso cuando el nivel no pisa nada (para el resumen). */
+  base: BaseDelPaso;
+};
+
+/** ¿El paso deja que el comercial ajuste el tiempo al cotizar? */
+function tienePasoTiempoManual(config: ConfigPasoDetalle): boolean {
+  const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+  const tiempoManual = params.tiempoManual as Record<string, unknown> | null;
+  return Boolean(tiempoManual && tiempoManual.habilitado === true);
+}
+
+function getNivelesComercial(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+): NivelComercial[] {
+  return (
+    ruta?.configPasos
+      .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
+      .map((config) => {
+        const niveles = leerNivelesPaso(config.paramsPasoJson);
+        if (!niveles) return null;
+        const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+        const bloques = Array.isArray(params.tiemposExtra)
+          ? params.tiemposExtra
+          : [];
+        // Paso con niveles Y con tiempo ajustable: el nivel "Personalizado"
+        // hace explícito el camino que antes convivía suelto (elegí un nivel /
+        // escribí un tiempo, sin decir cuál gana).
+        const opciones = tienePasoTiempoManual(config)
+          ? [
+              ...niveles.opciones,
+              {
+                codigo: NIVEL_PERSONALIZADO,
+                nombre: "Personalizado",
+                esDefault: false,
+                overrides: {},
+              },
+            ]
+          : niveles.opciones;
+        const item: NivelComercial = {
+          configPasoId: config.id,
+          nombreVisible: config.nombreVisible ?? null,
+          familiaCodigo: config.rutaPaso.familiaCodigo,
+          modoActivacion: config.modoActivacion,
+          config: { ...niveles, opciones },
+          base: {
+            // Sin nivel aplicado: es el punto de partida contra el que cada
+            // nivel se compara.
+            tiempoFijoMin: getTiempoFijoDeclaradoMin(config, {}),
+            bloques: bloques.map((bloque, indice) => {
+              const item = (bloque ?? {}) as Record<string, unknown>;
+              const min = Number(item.minutos);
+              return {
+                id:
+                  typeof item.id === "string" && item.id.trim()
+                    ? item.id.trim()
+                    : `extra_${indice}`,
+                minutos: Number.isFinite(min) && min > 0 ? min : 0,
+              };
+            }),
+          },
+        };
+        return item;
+      })
+      .filter((item): item is NivelComercial => item !== null) ?? []
+  );
+}
+
+/**
  * Pasos de la ruta que piden tiempo estimado por el comercial
  * (`paramsPasoJson.tiempoManual`, docs/tiempo-manual-por-paso-diseno.md).
  * El valor viaja al motor como `tiempoManualMin_<configPasoId>` (minutos).
@@ -1426,15 +1552,49 @@ type TiempoManualComercial = {
   modoActivacion: string | null;
   obligatorio: boolean;
   unidadInput: "min" | "h";
+  /**
+   * Lo que el campo propone antes de que el comercial toque nada: **el tiempo
+   * que el modelador configuró en el paso** (con el nivel elegido aplicado),
+   * y sólo si el paso no declara ninguno, el `defaultMin` de las ayudas. Dos
+   * declaraciones del mismo hecho no pueden competir: si el paso dice 30 min,
+   * el campo arranca en 30.
+   */
   defaultMin: number | null;
   minMin: number | null;
   maxMin: number | null;
   etiqueta: string | null;
 };
 
+/**
+ * Tiempo FIJO que el paso declara, en minutos, con el nivel elegido aplicado.
+ * Null cuando el paso se calcula por ritmo: ahí los minutos dependen de la
+ * cantidad y el sheet no puede saberlos sin cotizar.
+ */
+function getTiempoFijoDeclaradoMin(
+  config: ConfigPasoDetalle,
+  seleccionNivel: Record<string, string>,
+): number | null {
+  const niveles = leerNivelesPaso(config.paramsPasoJson);
+  // En "Personalizado" no corre ningún nivel: la sugerencia sale de la base.
+  if (niveles && seleccionNivel[config.id] !== NIVEL_PERSONALIZADO) {
+    const nivel = nivelEfectivo(niveles, seleccionNivel[config.id]);
+    if (nivel.overrides.tiempoFijoMin != null) {
+      return nivel.overrides.tiempoFijoMin > 0
+        ? nivel.overrides.tiempoFijoMin
+        : null;
+    }
+  }
+  const override = Number(config.tiempoFijoOverrideMin);
+  if (Number.isFinite(override) && override > 0) return override;
+  const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+  const horas = Number(params.horasEstimadas);
+  return Number.isFinite(horas) && horas > 0 ? horas * 60 : null;
+}
+
 function getTiemposManualesComercial(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+  seleccionNivel: Record<string, string> = {},
 ) {
   const positiveOrNull = (value: unknown) => {
     const parsed = Number(value);
@@ -1456,6 +1616,15 @@ function getTiemposManualesComercial(
         ) {
           return null;
         }
+        // Con niveles, el tiempo a mano SÓLO se pide en "Personalizado": los
+        // demás niveles ya declaran cuánto lleva, y ofrecer las dos cosas a la
+        // vez dejaba al comercial sin saber cuál manda.
+        if (
+          leerNivelesPaso(config.paramsPasoJson) &&
+          seleccionNivel[config.id] !== NIVEL_PERSONALIZADO
+        ) {
+          return null;
+        }
         const item: TiempoManualComercial = {
           configPasoId: config.id,
           familiaCodigo: config.rutaPaso.familiaCodigo,
@@ -1463,7 +1632,10 @@ function getTiemposManualesComercial(
           modoActivacion: config.modoActivacion,
           obligatorio: tiempoManual.obligatorio === true,
           unidadInput: tiempoManual.unidadInput === "h" ? "h" : "min",
-          defaultMin: positiveOrNull(tiempoManual.defaultMin),
+          // El tiempo del paso manda sobre la sugerencia de las ayudas.
+          defaultMin:
+            getTiempoFijoDeclaradoMin(config, seleccionNivel) ??
+            positiveOrNull(tiempoManual.defaultMin),
           minMin: positiveOrNull(tiempoManual.minMin),
           maxMin: positiveOrNull(tiempoManual.maxMin),
           etiqueta:
@@ -1523,7 +1695,11 @@ function getTiempoManualBloqueo(
   includeConfig: (config: ConfigPasoDetalle) => boolean,
   config: MotorConfigState,
 ) {
-  for (const item of getTiemposManualesComercial(ruta, includeConfig)) {
+  for (const item of getTiemposManualesComercial(
+    ruta,
+    includeConfig,
+    config.seleccionNivel,
+  )) {
     const error = getTiempoManualError(item, config);
     if (error) return error;
   }
@@ -1835,6 +2011,7 @@ function MaterialSelectorCompacto({
   onSelect,
   alerta,
   hint,
+  sinTarjeta,
 }: {
   etiquetaSlot: string;
   grupos: VariantGrupoCompacto[];
@@ -1842,6 +2019,9 @@ function MaterialSelectorCompacto({
   onSelect: (variantId: string) => void;
   alerta?: string | null;
   hint?: string | null;
+  /** Dentro de la tarjeta de un opcional: sin caja ni barra negra propias —
+   *  esa barra ya la usa el nombre del paso. */
+  sinTarjeta?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const opciones = grupos.flatMap((grupo) => grupo.opciones);
@@ -1862,8 +2042,12 @@ function MaterialSelectorCompacto({
     </svg>
   );
   return (
-    <div className={matS.group}>
-      <div className={matS.gh}>{etiquetaSlot}</div>
+    <div className={sinTarjeta ? undefined : matS.group}>
+      {sinTarjeta ? (
+        <span className={seC.sub}>{etiquetaSlot}</span>
+      ) : (
+        <div className={matS.gh}>{etiquetaSlot}</div>
+      )}
       <button
         type="button"
         className={matS.selrow}
@@ -2079,8 +2263,11 @@ function getOpcionales(
       opcionales.set(cargo.id, {
         code: cargo.id,
         name: cargo.cargoDirectoCatalogo.nombre,
-        descripcion: "Cargo directo opcional de la cotización.",
+        descripcion:
+          cargo.cargoDirectoCatalogo.descripcion?.trim() ||
+          "Cargo directo opcional de la cotización.",
         origen: "cargo",
+        modoCalculo: cargo.cargoDirectoCatalogo.modoCalculo,
       });
     }
   }
@@ -2122,9 +2309,12 @@ function getOpcionales(
           opcionales.set(cargo.id, {
             code: cargo.id,
             name: cargo.cargoDirectoCatalogo.nombre,
-            descripcion: "Cargo directo opcional del paso.",
+            descripcion:
+              cargo.cargoDirectoCatalogo.descripcion?.trim() ||
+              "Cargo directo opcional del paso.",
             origen: "cargo",
             configPasoId: config.id,
+            modoCalculo: cargo.cargoDirectoCatalogo.modoCalculo,
           });
         }
       }
@@ -2747,12 +2937,29 @@ function buildJobContext(
     ctx.disenoSello = config.disenoSello;
   }
 
+  // Nivel del paso (zona de colocación, dificultad de diseño): la clave viaja
+  // SIEMPRE que el paso corra, aunque el comercial no haya tocado nada — el
+  // motor cae en el nivel por defecto y así lo cotizado y lo mostrado coinciden.
+  const nivelesComercial = getNivelesComercial(rutaSel, includeConfig).filter(
+    (item) =>
+      item.modoActivacion !== "OPCIONAL" ||
+      Boolean(config.opcionalesActivados[item.configPasoId]),
+  );
+  for (const item of nivelesComercial) {
+    const elegido = nivelEfectivo(
+      item.config,
+      config.seleccionNivel[item.configPasoId],
+    );
+    ctx[nivelPasoKey(item.configPasoId)] = elegido.codigo;
+  }
+
   // Tiempo estimado por el comercial (docs/tiempo-manual-por-paso-diseno.md):
   // minutos por paso. Sin valor efectivo no se manda la clave y el motor
   // calcula el paso como siempre.
   const tiemposManuales = getTiemposManualesComercial(
     rutaSel,
     includeConfig,
+    config.seleccionNivel,
   ).filter(
     (item) =>
       item.modoActivacion !== "OPCIONAL" ||
@@ -3421,6 +3628,14 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         value as string,
       ]),
   );
+  const seleccionNivel = Object.fromEntries(
+    Object.entries(ctx)
+      .filter(
+        ([key, value]) =>
+          key.startsWith("nivelPaso_") && typeof value === "string",
+      )
+      .map(([key, value]) => [key.replace("nivelPaso_", ""), value as string]),
+  );
   const tiempoManualPorPaso = Object.fromEntries(
     Object.entries(ctx)
       .filter(
@@ -3507,6 +3722,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     seleccionMaquina,
     seleccionPerfil,
     seleccionModoColor,
+    seleccionNivel,
     modoCotizacionLineal:
       typeof ctx.modoCotizacionLineal === "string" &&
       ctx.modoCotizacionLineal === "directo"
@@ -3828,6 +4044,17 @@ function ApConfigStep({
         : product.adicionales,
     [motorConfig, product, productoDetalle, rutaSel, ruleContext],
   );
+  // Un opcional de paso agrega producción; un cargo directo sólo suma plata a la
+  // cotización. Son dos decisiones distintas para el comercial, así que se
+  // muestran en secciones separadas (los del catálogo demo no traen `origen`).
+  const opcionalesPasos = React.useMemo(
+    () => opcionalesRuta.filter((opcional) => opcional.origen !== "cargo"),
+    [opcionalesRuta],
+  );
+  const cargosOpcionales = React.useMemo(
+    () => opcionalesRuta.filter((opcional) => opcional.origen === "cargo"),
+    [opcionalesRuta],
+  );
   const slotsComercialElige = React.useMemo(
     () => getSlotsComercialElige(rutaSel, includeVisibleConfig),
     [includeVisibleConfig, rutaSel],
@@ -3871,8 +4098,13 @@ function ApConfigStep({
   );
   // Pasos con tiempo estimado por el comercial (visibles según ruta/opcionales).
   const tiemposManualesComercial = React.useMemo(
-    () => getTiemposManualesComercial(rutaSel, includeVisibleConfig),
-    [rutaSel, includeVisibleConfig],
+    () =>
+      getTiemposManualesComercial(
+        rutaSel,
+        includeVisibleConfig,
+        motorConfig.seleccionNivel,
+      ),
+    [rutaSel, includeVisibleConfig, motorConfig.seleccionNivel],
   );
   const tiemposManualesPorConfigPaso = React.useMemo(
     () =>
@@ -3884,6 +4116,20 @@ function ApConfigStep({
   // Los inputs de tiempo de pasos NO opcionales van con los datos del producto;
   // los de pasos opcionales se configuran en la card del opcional activado.
   const tiemposManualesPrincipales = tiemposManualesComercial.filter(
+    (item) => item.modoActivacion !== "OPCIONAL",
+  );
+  // Niveles del paso: misma regla que el tiempo manual — los de pasos que
+  // corren siempre van con los datos del producto; los de pasos opcionales,
+  // dentro de la card del opcional activado.
+  const nivelesComercialRuta = React.useMemo(
+    () => getNivelesComercial(rutaSel, includeVisibleConfig),
+    [rutaSel, includeVisibleConfig],
+  );
+  const nivelesPorConfigPaso = React.useMemo(
+    () => new Map(nivelesComercialRuta.map((item) => [item.configPasoId, item])),
+    [nivelesComercialRuta],
+  );
+  const nivelesPrincipales = nivelesComercialRuta.filter(
     (item) => item.modoActivacion !== "OPCIONAL",
   );
   // Catálogo de familias: hace falta el `paramsPasoSchema` para renderizar los
@@ -3946,9 +4192,11 @@ function ApConfigStep({
     [rutaSel, motorConfig.opcionalesActivados],
   );
 
+  // Sólo los pasos se configuran: un cargo de paso comparte el `configPasoId`
+  // del padre y, si entrara acá, duplicaría la card con su tiempo y sus params.
   const opcionalesConfigurables = React.useMemo(
     () =>
-      opcionalesRuta
+      opcionalesPasos
         .map((opcional) => ({
           opcional,
           slots: slotsMaterialesOpcionalesPorPaso.get(opcional.code) ?? [],
@@ -3957,6 +4205,9 @@ function ApConfigStep({
             : null,
           paramsComercial: opcional.configPasoId
             ? (paramsComercialPorConfigPaso.get(opcional.configPasoId) ?? null)
+            : null,
+          nivel: opcional.configPasoId
+            ? (nivelesPorConfigPaso.get(opcional.configPasoId) ?? null)
             : null,
         }))
         .filter(
@@ -3968,12 +4219,14 @@ function ApConfigStep({
                 : false)) &&
             (item.slots.length > 0 ||
               item.tiempoManual !== null ||
-              item.paramsComercial !== null),
+              item.paramsComercial !== null ||
+              item.nivel !== null),
         ),
     [
       adi,
+      nivelesPorConfigPaso,
       opcionalesEfectivosSheet,
-      opcionalesRuta,
+      opcionalesPasos,
       paramsComercialPorConfigPaso,
       product.real,
       slotsMaterialesOpcionalesPorPaso,
@@ -4577,7 +4830,11 @@ function ApConfigStep({
 
   const renderMaterialSelect = (
     slot: SlotComercialElige,
-    options?: { showHint?: boolean; collapseSingleCandidate?: boolean },
+    options?: {
+      showHint?: boolean;
+      collapseSingleCandidate?: boolean;
+      sinTarjeta?: boolean;
+    },
   ) => {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
     // Con dos pasos pidiendo el MISMO slot (revista: tapa e interior piden los
@@ -4641,8 +4898,12 @@ function ApConfigStep({
 
     if (slot.candidatos.length === 0) {
       return (
-        <div className={matS.group} key={key}>
-          <div className={matS.gh}>{etiquetaSlot}</div>
+        <div className={options?.sinTarjeta ? undefined : matS.group} key={key}>
+          {options?.sinTarjeta ? (
+            <span className={seC.sub}>{etiquetaSlot}</span>
+          ) : (
+            <div className={matS.gh}>{etiquetaSlot}</div>
+          )}
           <div className={matS.empty}>Sin materiales candidatos</div>
         </div>
       );
@@ -4667,6 +4928,7 @@ function ApConfigStep({
         onSelect={(variantId) => setMaterial(key, variantId)}
         alerta={alerta}
         hint={hint}
+        sinTarjeta={options?.sinTarjeta}
       />
     );
   };
@@ -5007,7 +5269,15 @@ function ApConfigStep({
     </div>
   );
 
-  const renderTiempoManualField = (tiempoPaso: TiempoManualComercial) => {
+  /**
+   * `sinTarjeta`: dentro de la tarjeta de un opcional va con rótulo liviano
+   * (la barra negra ya la usa el nombre del paso); suelto en la grilla de
+   * specs va como un campo más de la grilla.
+   */
+  const renderTiempoManualField = (
+    tiempoPaso: TiempoManualComercial,
+    opts?: { sinTarjeta?: boolean },
+  ) => {
     const nombrePaso =
       tiempoPaso.nombreVisible?.trim() ||
       humanizeCodigo(tiempoPaso.familiaCodigo);
@@ -5021,6 +5291,40 @@ function ApConfigStep({
           ? efectivoMin / 60
           : efectivoMin;
     const error = getTiempoManualError(tiempoPaso, motorConfig);
+    if (opts?.sinTarjeta) {
+      // El nombre del paso ya está en la barra negra del opcional: repetirlo
+      // acá ("DISEÑO GRÁFICO · TIEMPO ESTIMADO") es decirlo dos veces.
+      const corto = tiempoPaso.etiqueta || "Tiempo estimado";
+      return (
+        <div key={`tiempo-${tiempoPaso.configPasoId}`}>
+          <span className={seC.sub}>
+            {corto} ({unidadLabel})
+          </span>
+          <div className="ap-spec">
+            <input
+              type="number"
+              min={0}
+              step={tiempoPaso.unidadInput === "h" ? 0.25 : 1}
+              value={displayValue}
+              placeholder={tiempoPaso.obligatorio ? "Requerido" : "Automático"}
+              onChange={(event) =>
+                setTiempoManualPaso(
+                  tiempoPaso.configPasoId,
+                  event.target.value,
+                  tiempoPaso.unidadInput,
+                )
+              }
+            />
+            {error ? (
+              <div className="ap-minimum-alert is-blocked">
+                <CircleAlertIcon />
+                <span>{error}</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="ap-spec" key={`tiempo-${tiempoPaso.configPasoId}`}>
         <label>
@@ -5046,6 +5350,64 @@ function ApConfigStep({
             <span>{error}</span>
           </div>
         ) : null}
+      </div>
+    );
+  };
+  /**
+   * Nivel del paso: opciones excluyentes, como el modo de color — y con la
+   * MISMA tarjeta de encabezado negro que el resto del sheet
+   * (`cotizador-seccion.module.css`: "que TODO el sheet sea una pila de
+   * tarjetas parejas"). Ver docs/cargos-por-paso-analisis-y-plan.md §8.
+   */
+  const renderNivelField = (
+    item: NivelComercial,
+    opts?: { sinTarjeta?: boolean },
+  ) => {
+    const nombrePaso =
+      item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
+    const elegido = nivelEfectivo(
+      item.config,
+      motorConfig.seleccionNivel[item.configPasoId],
+    );
+    // El fallback vive acá y no en el lector: si el lector normalizara, el
+    // editor no dejaría escribir un espacio (ver src/lib/niveles-paso.ts).
+    const etiqueta = item.config.etiqueta.trim() || "¿Qué nivel?";
+    const control = renderChoiceCards(
+      etiqueta,
+      elegido.codigo,
+      item.config.opciones.map((opcion) => ({
+        value: opcion.codigo,
+        label: nombreNivel(opcion),
+        desc:
+          opcion.codigo === NIVEL_PERSONALIZADO
+            ? "el tiempo lo cargás vos"
+            : (describirNivel(opcion, item.base) ?? undefined),
+      })),
+      (codigo) =>
+        setMotorConfig((current) => ({
+          ...current,
+          seleccionNivel: {
+            ...current.seleccionNivel,
+            [item.configPasoId]: codigo,
+          },
+        })),
+    );
+    if (opts?.sinTarjeta) {
+      return (
+        <div key={`nivel-${item.configPasoId}`}>
+          <span className={seC.sub} title={nombrePaso}>
+            {etiqueta}
+          </span>
+          {control}
+        </div>
+      );
+    }
+    return (
+      <div className={seC.card} key={`nivel-${item.configPasoId}`}>
+        <div className={seC.gh} title={nombrePaso}>
+          {etiqueta}
+        </div>
+        <div className={seC.body}>{control}</div>
       </div>
     );
   };
@@ -5656,6 +6018,7 @@ function ApConfigStep({
                       seleccionMaterial: {},
                       seleccionMaquina: {},
                       seleccionModoColor: {},
+                      seleccionNivel: {},
                     })),
                 )}
               </div>
@@ -6315,6 +6678,8 @@ function ApConfigStep({
               );
             })}
 
+            {nivelesPrincipales.map((item) => renderNivelField(item))}
+
             {tiemposManualesPrincipales.map((tiempoPaso) =>
               renderTiempoManualField(tiempoPaso),
             )}
@@ -6419,12 +6784,12 @@ function ApConfigStep({
         <div className="ap-cs-head">
           <div className="ttl">Opcionales</div>
           <div className="sub">
-            Pasos o cargos que el comercial puede activar para este producto.
+            Pasos de producción que el comercial puede activar para este producto.
           </div>
         </div>
-        {opcionalesRuta.length > 0 ? (
+        {opcionalesPasos.length > 0 ? (
           <div className="ap-adicionales">
-            {opcionalesRuta.map((adicional) => {
+            {opcionalesPasos.map((adicional) => {
               const selected = adi.includes(adicional.code);
               return (
                 <div key={adicional.code}>
@@ -6454,7 +6819,7 @@ function ApConfigStep({
           <div className="ap-empty">
             <div className="ttl">Sin opcionales configurados</div>
             <div className="sub">
-              Este producto no tiene pasos o cargos opcionales disponibles para activar.
+              Este producto no tiene pasos opcionales disponibles para activar.
             </div>
           </div>
         )}
@@ -6462,59 +6827,63 @@ function ApConfigStep({
           <div className="ap-optional-configs">
             <div className="ap-optional-config-head">
               <div className="ttl">Configurar opcionales activados</div>
-              <div className="sub">
-                Completá los datos necesarios para cotizar los opcionales seleccionados.
-              </div>
             </div>
             <div className="ap-optional-config-grid">
               {opcionalesConfigurables.map(
-                ({ opcional, slots, tiempoManual, paramsComercial }) => {
+                ({ opcional, slots, tiempoManual, paramsComercial, nivel }) => {
                   const arrastrado = opcional.configPasoId
                     ? arrastradosSheet.has(opcional.configPasoId)
                     : false;
-                const resumen = slots
-                  .map((slot) => describeSlotSelection(slot, motorConfig))
-                  .filter((item): item is string => Boolean(item));
                 const tiempoPendiente = Boolean(
                   tiempoManual && getTiempoManualError(tiempoManual, motorConfig),
                 );
                 return (
-                  <div className="ap-optional-config-card" key={opcional.code}>
-                    <div className="ap-optional-config-title">
-                      <span className="ttl">{opcional.name}</span>
-                      <span className="state">
-                        <span className="d" aria-hidden="true" />
-                        {tiempoPendiente ? "Falta el tiempo" : "Configurado"}
-                      </span>
+                  // UNA tarjeta por opcional: el nombre del paso VA en la barra
+                  // negra, con la × al lado. Adentro los bloques llevan rótulo
+                  // liviano — dos barras negras anidadas no jerarquizan nada.
+                  <div className={seC.card} key={opcional.code}>
+                    <div className={`${seC.gh} ${seC.ghRow}`}>
+                      <span>{opcional.name}</span>
+                      {/* El estado sólo habla cuando algo falta: un "Configurado"
+                          permanente ocupa lugar para decir lo que ya se ve. */}
+                      {tiempoPendiente ? (
+                        <span className={seC.ghNota}>falta el tiempo</span>
+                      ) : null}
                       {arrastrado ? (
                         // Lo encendió otro paso que lo necesita: quitarlo acá
                         // dejaría la cotización inconsistente.
-                        <span className="quit is-locked">
-                          Lo exige otro paso
-                        </span>
+                        <span className={seC.ghNota}>lo exige otro paso</span>
                       ) : (
                         <button
                           type="button"
-                          className="quit"
+                          className={seC.ghQuit}
                           onClick={() => setOpcional(opcional.code, false)}
+                          title={`Quitar ${opcional.name}`}
+                          aria-label={`Quitar ${opcional.name}`}
                         >
-                          Quitar opcional
+                          <XIcon aria-hidden="true" />
                         </button>
                       )}
                     </div>
-                    <div className="ap-optional-config-fields">
+                    <div className={`${seC.body} ap-optional-config-fields`}>
+                      {nivel
+                        ? renderNivelField(nivel, { sinTarjeta: true })
+                        : null}
                       {slots.length > 0 ? (
                         <div className={matS.list}>
                           {slots.map((slot) =>
                             renderMaterialSelect(slot, {
                               showHint: false,
                               collapseSingleCandidate: true,
+                              sinTarjeta: true,
                             }),
                           )}
                         </div>
                       ) : null}
                       {tiempoManual
-                        ? renderTiempoManualField(tiempoManual)
+                        ? renderTiempoManualField(tiempoManual, {
+                            sinTarjeta: true,
+                          })
                         : null}
                       {paramsComercial?.campos.map((campo) =>
                         renderParamComercialField(paramsComercial, campo, {
@@ -6522,17 +6891,8 @@ function ApConfigStep({
                         }),
                       )}
                     </div>
-                    {resumen.length > 0 ? (
-                      <div className="ap-optional-config-summary">
-                        <span className="lbl">Seleccionado:</span>
-                        {resumen.map((item, index) => (
-                          <React.Fragment key={item}>
-                            {index > 0 ? <span className="sep">/</span> : null}
-                            <span className="mono">{item}</span>
-                          </React.Fragment>
-                        ))}
-                      </div>
-                    ) : null}
+                    {/* Sin pie "Seleccionado: …": repetía lo que la tarjeta del
+                        material ya muestra en su propia fila. */}
                   </div>
                 );
               })}
@@ -6540,6 +6900,50 @@ function ApConfigStep({
           </div>
         ) : null}
       </div>
+
+      {cargosOpcionales.length > 0 ? (
+        <div className="ap-config-section">
+          <div className="ap-cs-head">
+            <div className="ttl">Cargos</div>
+            <div className="sub">
+              Importes extra que se suman al precio. No generan pasos de
+              producción.
+            </div>
+          </div>
+          <div className="ap-adicionales">
+            {cargosOpcionales.map((cargo) => {
+              const selected = adi.includes(cargo.code);
+              const modo = cargo.modoCalculo
+                ? getLabel(modoCalculoCargoLabels, cargo.modoCalculo)
+                : null;
+              return (
+                <div key={cargo.code}>
+                  <button
+                    type="button"
+                    className={`ap-adi ${selected ? "on" : ""}`}
+                    onClick={() =>
+                      product.real
+                        ? setOpcional(cargo.code, !selected)
+                        : toggleAdi(cargo.code)
+                    }
+                    title={cargo.descripcion}
+                  >
+                    <span className="cb" />
+                    <span className="lb">{cargo.name}</span>
+                    {product.real ? (
+                      modo ? (
+                        <span className="mt">{modo.label}</span>
+                      ) : null
+                    ) : (
+                      <span className="mt mono">+ {fmt(cargo.monto ?? 0)}</span>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <div className="ap-config-section">
         <div className="ap-cs-head">

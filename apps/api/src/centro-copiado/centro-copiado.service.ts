@@ -2017,6 +2017,9 @@ export class CentroCopiadoService {
       tiempoTotal:
         validos.reduce((a, s) => a + s.cot.costos.tiempoTotal, 0) +
         (anilladoCot?.costos.tiempoTotal ?? 0),
+      tiempoExtraTotal:
+        validos.reduce((a, s) => a + (s.cot.costos.tiempoExtraTotal ?? 0), 0) +
+        (anilladoCot?.costos.tiempoExtraTotal ?? 0),
       materialesTotal:
         validos.reduce((a, s) => a + s.cot.costos.materialesTotal, 0) +
         (anilladoCot?.costos.materialesTotal ?? 0),

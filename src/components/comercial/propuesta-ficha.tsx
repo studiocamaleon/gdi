@@ -140,6 +140,7 @@ import {
   getCostoTiempoPaso,
   getVisibleCostSteps,
   sumCargosPaso,
+  sumCargosYTiempoExtraPaso,
   sumMaterialesPaso,
 } from "@/lib/costos-orden";
 import { type Moneda } from "@/lib/moneda";
@@ -281,16 +282,6 @@ function getCotizacionImpuestos(cotizacion: CotizacionExitosa) {
     : 0;
 }
 
-function getCotizacionCantidadPrecio(
-  cotizacion: CotizacionExitosa,
-  itemCantidad: number,
-) {
-  return (
-    cotizacion.cantidadComercialPricing ??
-    cotizacion.cantidadEfectiva ??
-    itemCantidad
-  );
-}
 
 export function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
@@ -1801,6 +1792,43 @@ function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
   );
 }
 
+/**
+ * Bloques de tiempo extra del paso (preparación, traslado) con la cuenta a la
+ * vista: de dónde sale el número es la mitad del valor de mostrarlo.
+ */
+function TiemposExtraPasoList({
+  bloques,
+}: {
+  bloques: NonNullable<NonNullable<PasoCosteo["tiempo"]>["tiemposExtra"]>;
+}) {
+  const { moneda } = useConfigRegional();
+  const visibles = bloques.filter((bloque) => bloque.minutos > 0);
+  if (visibles.length === 0) return null;
+
+  return (
+    <div className="cost-charges">
+      {visibles.map((bloque) => {
+        const horas = bloque.minutos / 60;
+        const personas =
+          bloque.dotacionOperarios > 1
+            ? ` × ${bloque.dotacionOperarios} pers`
+            : "";
+        return (
+          <div className="cost-charge" key={bloque.id}>
+            <span>{bloque.etiqueta}</span>
+            <small>
+              {formatDecimal(horas, 2)} h{personas} ×{" "}
+              {formatCurrency(bloque.tarifaHora, moneda)}/h
+              {bloque.centroCostoNombre ? ` · ${bloque.centroCostoNombre}` : ""}
+            </small>
+            <strong>{formatCurrency(bloque.costo, moneda)}</strong>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Clave del tab del visor 3D del bastidor dentro de "Disposición de piezas". */
 const TAB_BASTIDOR_3D = "__bastidor3d__";
 
@@ -2323,363 +2351,10 @@ function formatDecimal(value: number, maximumFractionDigits = 2) {
   }).format(value);
 }
 
-type PricePieceRow = {
-  key: string;
-  label: string;
-  cantidad: number;
-  baseLabel: string;
-  netoAsignado: number;
-  brutoAsignado: number;
-  netoUnitario: number;
-};
 
-type CommercialPriceDetail = {
-  precioNeto: number;
-  precioBruto: number;
-  impuestos: number;
-  cantidadPrecio: number;
-  precioPromedioNeto: number;
-  precioPromedioBruto: number;
-  unidadLabel: string;
-  pieceRows: PricePieceRow[];
-  asignacionLabel: string;
-  materiales: Array<{
-    key: string;
-    nombre: string;
-    cantidad: number;
-    unidad: string;
-    costo: number;
-  }>;
-  cargos: Array<{ key: string; nombre: string; monto: number; origen: string }>;
-};
 
-function getCommercialPieceRows(
-  item: PropuestaItem,
-  precioNeto: number,
-  precioBruto: number,
-): { rows: PricePieceRow[]; asignacionLabel: string } {
-  const piezas = Array.isArray(item.jobContext?.piezas)
-    ? (item.jobContext.piezas as Array<{
-        cantidad?: unknown;
-        anchoMm?: unknown;
-        altoMm?: unknown;
-      }>)
-    : [];
-  const normalized = piezas
-    .map((pieza, index) => {
-      const cantidad = Math.max(1, Number(pieza.cantidad ?? 0) || 0);
-      const anchoMm = Number(pieza.anchoMm ?? 0);
-      const altoMm = Number(pieza.altoMm ?? 0);
-      const areaM2 =
-        anchoMm > 0 && altoMm > 0
-          ? (cantidad * anchoMm * altoMm) / 1_000_000
-          : 0;
-      const metrosLineales = altoMm > 0 ? (cantidad * altoMm) / 1000 : 0;
-      return { index, cantidad, anchoMm, altoMm, areaM2, metrosLineales };
-    })
-    .filter((pieza) => pieza.cantidad > 0);
 
-  if (normalized.length === 0) {
-    return { rows: [], asignacionLabel: "Promedio comercial" };
-  }
 
-  const totalArea = normalized.reduce((acc, pieza) => acc + pieza.areaM2, 0);
-  const totalMl = normalized.reduce(
-    (acc, pieza) => acc + pieza.metrosLineales,
-    0,
-  );
-  const totalCantidad = normalized.reduce(
-    (acc, pieza) => acc + pieza.cantidad,
-    0,
-  );
-  const allocationMode =
-    item.unidadMedida === "metro_lineal" && totalMl > 0
-      ? "ml"
-      : totalArea > 0
-        ? "area"
-        : "cantidad";
-  const totalBase =
-    allocationMode === "ml"
-      ? totalMl
-      : allocationMode === "area"
-        ? totalArea
-        : totalCantidad;
-  const asignacionLabel =
-    allocationMode === "ml"
-      ? "Proporcional por metro lineal"
-      : allocationMode === "area"
-        ? "Proporcional por superficie"
-        : "Proporcional por cantidad";
-
-  return {
-    asignacionLabel,
-    rows: normalized.map((pieza) => {
-      const base =
-        allocationMode === "ml"
-          ? pieza.metrosLineales
-          : allocationMode === "area"
-            ? pieza.areaM2
-            : pieza.cantidad;
-      const weight = totalBase > 0 ? base / totalBase : 0;
-      const netoAsignado = precioNeto * weight;
-      const brutoAsignado = precioBruto * weight;
-      const baseLabel =
-        allocationMode === "ml"
-          ? `${formatDecimal(base)} ml`
-          : allocationMode === "area"
-            ? `${formatDecimal(base)} m²`
-            : `${formatDecimal(base, 0)} u.`;
-      const medidaLabel =
-        pieza.anchoMm > 0 && pieza.altoMm > 0
-          ? `${formatMmAsCm(pieza.anchoMm)} × ${formatMmAsCm(pieza.altoMm)} cm`
-          : "Medida sin definir";
-
-      return {
-        key: `piece-price-${pieza.index}`,
-        label: medidaLabel,
-        cantidad: pieza.cantidad,
-        baseLabel,
-        netoAsignado,
-        brutoAsignado,
-        netoUnitario: pieza.cantidad > 0 ? netoAsignado / pieza.cantidad : 0,
-      };
-    }),
-  };
-}
-
-function buildCommercialPriceDetail(
-  item: PropuestaItem,
-): CommercialPriceDetail {
-  const precioNeto = item.subtotal;
-  const precioBruto = getCotizacionTotal(item.cotizacion);
-  const impuestos = getCotizacionImpuestos(item.cotizacion);
-  const cantidadPrecio = getCotizacionCantidadPrecio(
-    item.cotizacion,
-    item.cantidad,
-  );
-  const { rows: pieceRows, asignacionLabel } = getCommercialPieceRows(
-    item,
-    precioNeto,
-    precioBruto,
-  );
-  const cargosPaso = item.cotizacion.pasos.flatMap((paso) =>
-    (paso.cargosDirectosPaso ?? [])
-      .filter((cargo) => cargo.monto > 0)
-      .map((cargo) => ({
-        key: `paso-${paso.configPasoId}-${cargo.cargoCodigo}`,
-        nombre: cargo.cargoNombre,
-        monto: cargo.monto,
-        origen:
-          paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo),
-      })),
-  );
-  const cargosCotizacion = item.cotizacion.cargosDirectosCotizacion
-    .filter((cargo) => cargo.monto > 0)
-    .map((cargo) => ({
-      key: `cotizacion-${cargo.cargoCodigo}`,
-      nombre: cargo.cargoNombre,
-      monto: cargo.monto,
-      origen: "Cotización",
-    }));
-  const materialesMap = new Map<
-    string,
-    {
-      key: string;
-      nombre: string;
-      cantidad: number;
-      unidad: string;
-      costo: number;
-    }
-  >();
-  for (const material of item.cotizacion.pasos.flatMap(
-    (paso) => paso.materiales ?? [],
-  )) {
-    if (material.costoTotal <= 0) continue;
-    const nombre = getMaterialCosteoLabel(material) || "Material";
-    const key = `${nombre}-${material.unidad}`;
-    const current = materialesMap.get(key) ?? {
-      key,
-      nombre,
-      cantidad: 0,
-      unidad: material.unidad,
-      costo: 0,
-    };
-    current.cantidad += material.cantidad;
-    current.costo += material.costoTotal;
-    materialesMap.set(key, current);
-  }
-
-  return {
-    precioNeto,
-    precioBruto,
-    impuestos,
-    cantidadPrecio,
-    precioPromedioNeto: cantidadPrecio > 0 ? precioNeto / cantidadPrecio : 0,
-    precioPromedioBruto: cantidadPrecio > 0 ? precioBruto / cantidadPrecio : 0,
-    unidadLabel: formatUnidad(item.unidadMedida),
-    pieceRows,
-    asignacionLabel,
-    materiales: Array.from(materialesMap.values()).sort(
-      (a, b) => b.costo - a.costo,
-    ),
-    cargos: [...cargosPaso, ...cargosCotizacion],
-  };
-}
-
-function CommercialPriceDetailPanel({
-  item,
-  detail,
-}: {
-  item: PropuestaItem;
-  detail: CommercialPriceDetail;
-}) {
-  const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatCurrency(v, moneda);
-  return (
-    <div className="op-price-detail">
-      <div className="op-price-detail-head">
-        <div>
-          <div className="op-price-title">Detalle comercial del precio</div>
-          <div className="op-price-sub">
-            {detail.asignacionLabel}. El motor calcula el precio a nivel ítem.
-          </div>
-        </div>
-        <span className="op-price-badge">Estimado proporcional</span>
-      </div>
-
-      <div className="op-price-kpis">
-        <div className="op-price-kpi">
-          <span>Precio neto</span>
-          <strong>{fmt(detail.precioNeto)}</strong>
-        </div>
-        <div className="op-price-kpi">
-          <span>Impuestos</span>
-          <strong>{fmt(detail.impuestos)}</strong>
-        </div>
-        <div className="op-price-kpi">
-          <span>Total con impuestos</span>
-          <strong>{fmt(detail.precioBruto)}</strong>
-        </div>
-        <div className="op-price-kpi">
-          <span>Promedio por {detail.unidadLabel}</span>
-          <strong>{fmt(detail.precioPromedioBruto)}</strong>
-        </div>
-      </div>
-
-      {item.cotizacion.desglosePrecio?.descuento?.aplicado ? (
-        <div className="op-price-note">
-          Precio de lista{" "}
-          <strong>
-            {fmt(item.cotizacion.desglosePrecio.descuento.netoListaTotal)}
-          </strong>{" "}
-          · descuento{" "}
-          <strong>
-            −{fmt(item.cotizacion.desglosePrecio.descuento.montoTotal)}
-          </strong>{" "}
-          → neto {fmt(detail.precioNeto)}.
-        </div>
-      ) : null}
-
-      {detail.pieceRows.length > 0 ? (
-        <div className="op-price-table-wrap">
-          <table className="op-price-table">
-            <thead>
-              <tr>
-                <th>Pieza</th>
-                <th className="num">Cant.</th>
-                <th className="num">Base</th>
-                <th className="num">Neto asignado</th>
-                <th className="num">Neto por pieza</th>
-                <th className="num">Total c/imp.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {detail.pieceRows.map((row) => (
-                <tr key={row.key}>
-                  <td>{row.label}</td>
-                  <td className="num">{formatDecimal(row.cantidad, 0)}</td>
-                  <td className="num">{row.baseLabel}</td>
-                  <td className="num">{fmt(row.netoAsignado)}</td>
-                  <td className="num">{fmt(row.netoUnitario)}</td>
-                  <td className="num">{fmt(row.brutoAsignado)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="op-price-note">
-          No hay piezas con medidas para distribuir el precio. Se muestra el
-          promedio por {detail.unidadLabel}.
-        </div>
-      )}
-
-      {detail.materiales.length > 0 ? (
-        <div className="op-price-materials">
-          <div className="op-price-list-title">Materiales costeados</div>
-          <div className="op-price-material-grid">
-            {detail.materiales.map((material) => (
-              <div className="op-price-material" key={material.key}>
-                <span>{material.nombre}</span>
-                <small>
-                  {formatDecimal(material.cantidad)}{" "}
-                  {formatUnidadCosto(material.unidad, material.cantidad)}
-                </small>
-                <strong>{fmt(material.costo)}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="op-price-lists">
-        <div>
-          <div className="op-price-list-title">Opcionales activados</div>
-          <div className="op-chips">
-            {item.adicionales.length > 0 ? (
-              item.adicionales.map((adicional) => {
-                const details = getOptionalMaterialDetails(item, adicional);
-                return (
-                  <span key={adicional} className="adi-chip-detail neutral">
-                    <span className="adi-chip">{adicional}</span>
-                    {details.length > 0 ? (
-                      <span className="adi-chip-variant">
-                        {details.join(" · ")}
-                      </span>
-                    ) : null}
-                  </span>
-                );
-              })
-            ) : (
-              <span className="adi-chip neutral">Sin opcionales activados</span>
-            )}
-          </div>
-        </div>
-        <div>
-          <div className="op-price-list-title">Cargos con monto explícito</div>
-          {detail.cargos.length > 0 ? (
-            <div className="op-price-charge-list">
-              {detail.cargos.map((cargo) => (
-                <div className="op-price-charge" key={cargo.key}>
-                  <span>
-                    {cargo.nombre}
-                    <small>{cargo.origen}</small>
-                  </span>
-                  <strong>{fmt(cargo.monto)}</strong>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="op-price-note compact">
-              No hay cargos separados en el snapshot. Los opcionales productivos
-              quedan incluidos dentro del precio del ítem.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Detalle de un paso `modificacion_pre`: explica por qué el material mide más
@@ -2723,6 +2398,7 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
   const materiales = paso.materiales ?? [];
   const cargos = paso.cargosDirectosPaso ?? [];
   const cargosTotal = sumCargosPaso(paso);
+  const tiemposExtra = paso.tiempo?.tiemposExtra ?? [];
 
   return (
     <div className="cost-step-expanded">
@@ -2737,6 +2413,15 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
           nesting={paso.nestingResult}
         />
       </div>
+
+      {tiemposExtra.length > 0 ? (
+        <div className="cost-detail-block">
+          <div className="cost-detail-title">
+            Tiempo extra del paso (no depende de la cantidad)
+          </div>
+          <TiemposExtraPasoList bloques={tiemposExtra} />
+        </div>
+      ) : null}
 
       {cargosTotal > 0 ? (
         <div className="cost-detail-block">
@@ -2928,12 +2613,16 @@ function CostosItemView({
               {visibleCostSteps.map((paso, visibleIndex) => {
                 const stepKey = `${paso.rutaPasoOrden}-${paso.familiaCodigo}`;
                 const materialesTotal = sumMaterialesPaso(paso);
-                const cargosTotal = sumCargosPaso(paso);
+                // La columna Cargos junta los cargos monetarios y el costo de
+                // los bloques de tiempo extra: así se distingue del tiempo de
+                // TRABAJO del paso, que es la columna Tiempo.
+                const cargosTotal = sumCargosYTiempoExtraPaso(paso);
                 const puedeExpandir =
                   paso.activado &&
                   (Boolean(paso.tiempo) ||
                     Boolean(paso.mutacionAplicada) ||
                     (paso.materiales?.length ?? 0) > 0 ||
+                    (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
                     (paso.cargosDirectosPaso?.length ?? 0) > 0);
                 const expanded = expandedCostSteps.has(stepKey);
                 return (
@@ -3040,6 +2729,9 @@ function CostosItemView({
         </div>
       </div>
 
+      {/* Sin los bloques de tiempo extra: viven en el detalle del paso, junto
+          al tiempo y los materiales que los explican. Acá quedan los cargos en
+          PESOS —lo que sale por la puerta—, que es de lo que habla el título. */}
       {cargosPaso.length > 0 || cargosCotizacion.length > 0 ? (
         <div className="cost-section">
           <div className="cost-title">Opcionales y cargos</div>
@@ -3348,7 +3040,6 @@ export function ProductRow({
 }) {
   const { moneda, zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
-  const [priceDetailOpen, setPriceDetailOpen] = React.useState(false);
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
   const costo = calcularCostoTotal(item);
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
@@ -3357,10 +3048,6 @@ export function ProductRow({
   );
   const visibleAmounts = React.useMemo(
     () => getItemOrderVisibleAmounts(item),
-    [item],
-  );
-  const commercialPriceDetail = React.useMemo(
-    () => buildCommercialPriceDetail(item),
     [item],
   );
   const optionalMaterialDetails = React.useMemo(
@@ -3595,37 +3282,13 @@ export function ProductRow({
                   const isEstampasSpec = spec.lbl.toLowerCase() === "estampas";
                   return (
                     <div
-                      className={`spec ${isMedidasSpec ? "with-action" : ""} ${
+                      className={`spec ${
                         isModoColorSpec ? "color-mode-spec" : ""
                       } ${esLarga(spec) ? "spec-long" : ""}`}
                       key={`${spec.lbl}-${idx}`}
                     >
                       <div className="spec-head">
                         <div className="lbl">{spec.lbl}</div>
-                        {isMedidasSpec ? (
-                          <button
-                            type="button"
-                            className={`op-price-detail-trigger ${
-                              priceDetailOpen ? "on" : ""
-                            }`}
-                            onClick={() =>
-                              setPriceDetailOpen((current) => !current)
-                            }
-                            disabled={calculoPendiente}
-                            aria-label={
-                              priceDetailOpen
-                                ? "Ocultar detalle de precio"
-                                : "Ver detalle de precio"
-                            }
-                            title={
-                              priceDetailOpen
-                                ? "Ocultar detalle de precio"
-                                : "Ver detalle de precio"
-                            }
-                          >
-                            <CircleDollarSignIcon />
-                          </button>
-                        ) : null}
                       </div>
                       <div
                         className={`val ${
@@ -3660,13 +3323,6 @@ export function ProductRow({
                   </div>
                 );
               })()}
-
-              {priceDetailOpen && !calculoPendiente ? (
-                <CommercialPriceDetailPanel
-                  item={item}
-                  detail={commercialPriceDetail}
-                />
-              ) : null}
 
               <div className="op-extras">
                 <div className="op-adicionales">

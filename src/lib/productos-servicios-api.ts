@@ -994,6 +994,11 @@ export interface CotizarResponse {
     } | null;
     costos: {
       tiempoTotal: number;
+      /**
+       * Bloques de tiempo extra de los pasos (preparación, traslados). Opcional:
+       * los snapshots anteriores a la feature no lo traen.
+       */
+      tiempoExtraTotal?: number;
       materialesTotal: number;
       cargosDirectosTotal: number;
       /** Costo de pasos tercerizados (lo que se paga al proveedor). */
@@ -1110,13 +1115,32 @@ export interface CotizarResponse {
         esquinasSiempre: boolean;
       } | null;
       tiempo?: {
+        /** Incluye los minutos de `tiemposExtra` (la ETA los cuenta). */
         totalMin: number;
         centroCostoId?: string | null;
         centroCostoNombre?: string | null;
         tarifaHora: number;
+        /** Sólo el TRABAJO del paso; los bloques extra tienen su propio costo. */
         costo: number;
         /** "manual_comercial" cuando el comercial estimó el tiempo al cotizar. */
         origenTiempo?: "manual_comercial" | "calculado";
+        /** Minutos de los bloques de tiempo extra (dentro de `totalMin`). */
+        extraMin?: number;
+        /**
+         * Preparación, traslado: tiempo que no depende de la cantidad y puede
+         * tarifarse en otro centro. Se muestra en la columna "Cargos" del paso.
+         * Ver docs/cargos-por-paso-analisis-y-plan.md §7.
+         */
+        tiemposExtra?: Array<{
+          id: string;
+          etiqueta: string;
+          minutos: number;
+          centroCostoId?: string | null;
+          centroCostoNombre?: string | null;
+          tarifaHora: number;
+          dotacionOperarios: number;
+          costo: number;
+        }>;
       };
       materiales?: Array<{
         slotCodigo: string;

@@ -241,6 +241,13 @@ export interface CotizacionResultado {
   /** Costos por bucket (a-g del molde). */
   costos: {
     tiempoTotal: number;
+    /**
+     * Bloques de tiempo extra de los pasos (preparación, traslado). Bucket
+     * propio: se MUESTRA junto a los cargos —no es tiempo de trabajo— pero
+     * las métricas por centro de costo lo leen como lo que es, horas de un
+     * centro. Ver docs/cargos-por-paso-analisis-y-plan.md §7.3.
+     */
+    tiempoExtraTotal: number;
     materialesTotal: number;
     cargosDirectosTotal: number;
     /** Costo de pasos tercerizados (lo que se paga al proveedor). */
@@ -360,6 +367,13 @@ export interface PasoEjecutado {
     runMin: number;
     cleanupMin: number;
     tiempoFijoMin: number;
+    /** Minutos de los bloques de tiempo extra (van dentro de `totalMin`). */
+    extraMin?: number;
+    /**
+     * Detalle de los bloques de tiempo extra (preparación, traslado), cada uno
+     * con su centro y su dotación. El desglose los muestra bajo "Cargos".
+     */
+    tiemposExtra?: TiempoExtraEjecutado[];
     totalMin: number;
     /** Centro de costo usado para tarifar este tiempo. */
     centroCostoId?: string | null;
@@ -386,6 +400,12 @@ export interface PasoEjecutado {
   materiales?: MaterialEjecutado[];
   /** Cargos directos a nivel paso (si activado). */
   cargosDirectosPaso?: CargoDirectoEjecutado[];
+  /**
+   * Nivel del paso que corrió (zona de colocación, dificultad de diseño). Se
+   * congela acá para que la OT, el PDF y el tablero muestren cuál se cotizó,
+   * aunque el producto cambie después. Ver `niveles-paso.ts`.
+   */
+  nivelAplicado?: { codigo: string; nombre: string } | null;
   /** El paso lo compró un proveedor (no consume máquina ni tiempo interno). */
   tercerizado?: boolean;
   proveedorId?: string | null;
@@ -655,6 +675,23 @@ export interface MaterialEjecutado {
     | 'MOTOR_ELIGE_AUTO'
     | 'MAQUINA_CONSUMIBLE'
     | 'MAQUINA_DESGASTE';
+}
+
+/**
+ * Un bloque de tiempo del paso que no depende de la cantidad (preparación,
+ * traslado). Sus MINUTOS suman al tiempo del paso —la ETA los cuenta— y sus
+ * PESOS se reportan aparte del costo de trabajo, en su propio centro.
+ * Ver `tiempo-extra.ts` y docs/cargos-por-paso-analisis-y-plan.md §7.
+ */
+export interface TiempoExtraEjecutado {
+  id: string;
+  etiqueta: string;
+  minutos: number;
+  centroCostoId: string | null;
+  centroCostoNombre: string | null;
+  tarifaHora: number;
+  dotacionOperarios: number;
+  costo: number;
 }
 
 export interface CargoDirectoEjecutado {

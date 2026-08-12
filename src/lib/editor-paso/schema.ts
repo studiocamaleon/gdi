@@ -72,6 +72,8 @@ import {
   CANTIDAD_BASE_SLOT_OPTIONS,
 } from "./catalogo-materiales";
 import { mecanismoCantidadLabels } from "../labels-humanos";
+import { leerNivelesPaso } from "../niveles-paso";
+import { resumirTiemposExtra } from "../tiempos-extra-paso";
 
 // "ajustes" (escape hatches) se eliminó como sección: los dos escapes
 // genuinos (algoritmo y layout manual de paneles) viven dentro del card
@@ -231,7 +233,9 @@ export type ControlOpcion =
         | "tiempo-comercial-ayudas"
         | "centro-productivo"
         | "cantidad-unificada"
-        | "efectos-paso";
+        | "efectos-paso"
+        | "tiempos-extra-paso"
+        | "niveles-paso";
     };
 
 /**
@@ -1293,6 +1297,56 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "default-paso";
     },
     control: { tipo: "componente", id: "tiempo-comercial-ayudas" },
+  },
+  {
+    // El "fijo + variable" del oficio: la preparación y el traslado no escalan
+    // con la cantidad, pueden ir a otro centro y con otra dotación, y sus
+    // minutos entran igual al tiempo del paso (la ETA los cuenta).
+    // Ver docs/cargos-por-paso-analisis-y-plan.md §7.
+    clave: "tiempo.extra",
+    seccion: "tiempo",
+    eje: "tiempo",
+    grupo: "extra",
+    anchoCompleto: true,
+    // El título del grupo y su ayuda ya lo dicen; el control abre directo con
+    // la lista o con el botón de agregar (mismo criterio que `tiempo.niveles`).
+    etiqueta: "",
+    pregunta: "¿Hay tiempo que no depende de la cantidad?",
+    ayuda:
+      "Preparar el trabajo, trasladarse. Se cobra una vez por trabajo; puede tarifarse en otro centro de costo y con otra dotación.",
+    visible: () => true,
+    resumen: (ctx) =>
+      resumirTiemposExtra(ctx.cfg.paramsPasoJson) ??
+      "Sólo el tiempo del trabajo",
+    origenValor: (ctx) =>
+      resumirTiemposExtra(ctx.cfg.paramsPasoJson) ? "config" : "default-paso",
+    control: { tipo: "componente", id: "tiempos-extra-paso" },
+  },
+  {
+    // Un paso, varias variantes que elige el comercial (zona de colocación,
+    // dificultad de diseño). Evita modelar un paso por caso.
+    // Ver docs/cargos-por-paso-analisis-y-plan.md §8.
+    clave: "tiempo.niveles",
+    seccion: "tiempo",
+    eje: "tiempo",
+    grupo: "niveles",
+    anchoCompleto: true,
+    // El título del grupo ya dice "Niveles" y el control abre con su propia
+    // pregunta: rotularlo arriba sería decir tres veces lo mismo (mismo
+    // criterio que `activacion.cuando`).
+    etiqueta: "",
+    pregunta: "¿Este paso viene en niveles que elige el comercial?",
+    ayuda:
+      "Un mismo paso que se cobra distinto según dónde o con qué dificultad se haga. El comercial elige uno al cotizar; el nivel pisa el tiempo, el ritmo, la dotación o los minutos del tiempo extra.",
+    visible: () => true,
+    resumen: (ctx) => {
+      const niveles = leerNivelesPaso(ctx.cfg.paramsPasoJson);
+      if (!niveles) return "Sin niveles: corre siempre igual";
+      return `${niveles.opciones.length} niveles — "${niveles.etiqueta}"`;
+    },
+    origenValor: (ctx) =>
+      leerNivelesPaso(ctx.cfg.paramsPasoJson) ? "config" : "default-paso",
+    control: { tipo: "componente", id: "niveles-paso" },
   },
   {
     clave: "tiempo.centro",
@@ -2524,6 +2578,27 @@ const GRUPOS_TIEMPO: GrupoEje[] = [
       "Minutos fijos antes y después del trabajo, si difieren del perfil de la máquina.",
     estilo: "campos",
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
+  },
+  {
+    // Bloque propio: no es la preparación de la MÁQUINA (eso es `prep`), es
+    // trabajo del paso que no escala con la cantidad y puede tarifarse en otro
+    // centro. Ver docs/cargos-por-paso-analisis-y-plan.md §7.
+    id: "extra",
+    titulo: "Tiempo extra",
+    ayuda:
+      "Trabajo que lleva el paso pero no depende de la cantidad: preparar, trasladarse, etc.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+  },
+  {
+    // El mismo paso cobrado distinto según dónde o con qué dificultad se haga.
+    // Va después del tiempo extra porque un nivel pisa sus minutos.
+    id: "niveles",
+    titulo: "Niveles",
+    ayuda:
+      "Variantes del mismo paso entre las que elige el comercial al cotizar. Evita modelar un paso por zona o por dificultad.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
   },
   {
     // Último a propósito: la capa comercial se APOYA sobre el tiempo base

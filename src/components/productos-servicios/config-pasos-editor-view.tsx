@@ -125,6 +125,8 @@ import {
 import { PasoExtraEditor } from "@/components/productos-servicios/paso-extra-editor";
 import { ParamsFamiliaFields } from "@/components/productos-servicios/params-familia-fields";
 import { EfectosPasoFields } from "@/components/productos-servicios/efectos-paso-fields";
+import { TiemposExtraPasoFields } from "@/components/productos-servicios/tiempos-extra-paso-fields";
+import { NivelesPasoFields } from "@/components/productos-servicios/niveles-paso-fields";
 import {
   getLabel,
   mecanismoCantidadLabels,
@@ -3649,13 +3651,52 @@ export function ConfigPasosEditorView({
     updateNestingPliegoImpresion(rutaPasoId, { candidatos });
   };
 
+  /**
+   * Escribe los params del paso en el estado Y en el textarea del detallado.
+   *
+   * Los dos tienen que moverse juntos porque `guardarPaso` los MEZCLA
+   * (`{...textarea, ...estado}`): si sólo se toca el estado, una clave BORRADA
+   * desde el guiado —apagar "el comercial puede ajustar el tiempo", quitar los
+   * niveles— reaparece desde el texto viejo al guardar y el cambio no persiste
+   * nunca. Las claves que se agregan o cambian sí funcionaban; sólo el borrado
+   * se perdía, que es lo que lo hacía difícil de ver.
+   */
+  const aplicarParamsPaso = (
+    rutaPasoId: string,
+    recalcular: (
+      params: Record<string, unknown>,
+    ) => Record<string, unknown> | null,
+  ) => {
+    // Actualización FUNCIONAL a propósito: leer `configs` del closure hacía que
+    // dos cambios en el mismo tick (o un handler con estado viejo) pisaran lo
+    // que el otro había escrito — y en params eso es perder config del paso.
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      if (!cfg) return prev;
+      const siguiente = recalcular(asRecord(cfg.paramsPasoJson));
+      // El texto se sincroniza acá, con el MISMO valor que va al estado. Es un
+      // setState dentro de otro updater: se ejecuta más de una vez en dev, pero
+      // siempre con el mismo resultado, así que es idempotente.
+      setJsonTexts((textos) => ({
+        ...textos,
+        [rutaPasoId]: {
+          ...textos[rutaPasoId],
+          params: jsonToText(stripNestingConfig(siguiente)),
+        },
+      }));
+      return {
+        ...prev,
+        [rutaPasoId]: { ...cfg, paramsPasoJson: siguiente },
+      };
+    });
+  };
+
   const updateStepParams = (
     rutaPasoId: string,
     patch: Record<string, unknown>,
   ) => {
-    setConfigs((prev) => {
-      const cfg = prev[rutaPasoId];
-      const params = { ...asRecord(cfg.paramsPasoJson), ...patch };
+    aplicarParamsPaso(rutaPasoId, (previos) => {
+      const params = { ...previos, ...patch };
       for (const key of Object.keys(params)) {
         const value = params[key];
         if (
@@ -3667,13 +3708,7 @@ export function ConfigPasosEditorView({
           delete params[key];
         }
       }
-      return {
-        ...prev,
-        [rutaPasoId]: {
-          ...cfg,
-          paramsPasoJson: Object.keys(params).length > 0 ? params : null,
-        },
-      };
+      return Object.keys(params).length > 0 ? params : null;
     });
   };
 
@@ -3713,9 +3748,7 @@ export function ConfigPasosEditorView({
     rutaPasoId: string,
     patch: Record<string, unknown>,
   ) => {
-    setConfigs((prev) => {
-      const cfg = prev[rutaPasoId];
-      const params = asRecord(cfg.paramsPasoJson);
+    aplicarParamsPaso(rutaPasoId, (params) => {
       const current = getTiempoManualConfig(params);
       const nextConfig = { ...current, ...patch };
       for (const key of Object.keys(nextConfig)) {
@@ -3735,14 +3768,7 @@ export function ConfigPasosEditorView({
           : Object.fromEntries(
               Object.entries(params).filter(([key]) => key !== "tiempoManual"),
             );
-      return {
-        ...prev,
-        [rutaPasoId]: {
-          ...cfg,
-          paramsPasoJson:
-            Object.keys(nextParams).length > 0 ? nextParams : null,
-        },
-      };
+      return Object.keys(nextParams).length > 0 ? nextParams : null;
     });
   };
 
@@ -12988,6 +13014,39 @@ function SeccionesEsquemaPaso({
                 onChange={(patch) => onParams(pasoActual.id, patch)}
               />
             ) : null;
+          }
+          if (id === "tiempos-extra-paso") {
+            // Preparación y traslados: minutos que no dependen de la cantidad,
+            // con su propio centro y su propia dotación. Escribe en
+            // paramsPasoJson, como los efectos y los params de familia.
+            return (
+              <TiemposExtraPasoFields
+                params={asRecord(cfg.paramsPasoJson)}
+                centros={lookups.centrosCosto.map((c) => ({
+                  id: c.id,
+                  nombre: c.nombre,
+                }))}
+                centroDelPaso={
+                  cfg.maquinaM1Id
+                    ? (maquinaSel?.centroCostoPrincipal?.nombre ?? null)
+                    : (lookups.centrosCosto.find(
+                        (c) => c.id === cfg.centroCostoId,
+                      )?.nombre ?? null)
+                }
+                dotacionDelPaso={cfg.dotacionOperarios ?? 1}
+                onChange={(patch) => onParams(pasoActual.id, patch)}
+              />
+            );
+          }
+          if (id === "niveles-paso") {
+            // Un paso, varias variantes que elige el comercial.
+            return (
+              <NivelesPasoFields
+                params={asRecord(cfg.paramsPasoJson)}
+                dotacionDelPaso={cfg.dotacionOperarios ?? 1}
+                onChange={(patch) => onParams(pasoActual.id, patch)}
+              />
+            );
           }
           if (id === "efectos-paso") {
             // [Efectos] Lo que el paso le exige al trabajo. Escribe en
