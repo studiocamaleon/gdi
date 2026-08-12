@@ -2004,6 +2004,7 @@ function MaterialSelectorCompacto({
   onSelect,
   alerta,
   hint,
+  sinTarjeta,
 }: {
   etiquetaSlot: string;
   grupos: VariantGrupoCompacto[];
@@ -2011,6 +2012,9 @@ function MaterialSelectorCompacto({
   onSelect: (variantId: string) => void;
   alerta?: string | null;
   hint?: string | null;
+  /** Dentro de la tarjeta de un opcional: sin caja ni barra negra propias —
+   *  esa barra ya la usa el nombre del paso. */
+  sinTarjeta?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const opciones = grupos.flatMap((grupo) => grupo.opciones);
@@ -2031,8 +2035,12 @@ function MaterialSelectorCompacto({
     </svg>
   );
   return (
-    <div className={matS.group}>
-      <div className={matS.gh}>{etiquetaSlot}</div>
+    <div className={sinTarjeta ? undefined : matS.group}>
+      {sinTarjeta ? (
+        <span className={seC.sub}>{etiquetaSlot}</span>
+      ) : (
+        <div className={matS.gh}>{etiquetaSlot}</div>
+      )}
       <button
         type="button"
         className={matS.selrow}
@@ -4815,7 +4823,11 @@ function ApConfigStep({
 
   const renderMaterialSelect = (
     slot: SlotComercialElige,
-    options?: { showHint?: boolean; collapseSingleCandidate?: boolean },
+    options?: {
+      showHint?: boolean;
+      collapseSingleCandidate?: boolean;
+      sinTarjeta?: boolean;
+    },
   ) => {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
     // Con dos pasos pidiendo el MISMO slot (revista: tapa e interior piden los
@@ -4879,8 +4891,12 @@ function ApConfigStep({
 
     if (slot.candidatos.length === 0) {
       return (
-        <div className={matS.group} key={key}>
-          <div className={matS.gh}>{etiquetaSlot}</div>
+        <div className={options?.sinTarjeta ? undefined : matS.group} key={key}>
+          {options?.sinTarjeta ? (
+            <span className={seC.sub}>{etiquetaSlot}</span>
+          ) : (
+            <div className={matS.gh}>{etiquetaSlot}</div>
+          )}
           <div className={matS.empty}>Sin materiales candidatos</div>
         </div>
       );
@@ -4905,6 +4921,7 @@ function ApConfigStep({
         onSelect={(variantId) => setMaterial(key, variantId)}
         alerta={alerta}
         hint={hint}
+        sinTarjeta={options?.sinTarjeta}
       />
     );
   };
@@ -5246,13 +5263,13 @@ function ApConfigStep({
   );
 
   /**
-   * `enTarjeta`: dentro de la card de un opcional el campo va con la misma
-   * tarjeta de encabezado negro que los materiales y los niveles; suelto en la
-   * grilla de specs va como un campo más de la grilla.
+   * `sinTarjeta`: dentro de la tarjeta de un opcional va con rótulo liviano
+   * (la barra negra ya la usa el nombre del paso); suelto en la grilla de
+   * specs va como un campo más de la grilla.
    */
   const renderTiempoManualField = (
     tiempoPaso: TiempoManualComercial,
-    opts?: { enTarjeta?: boolean },
+    opts?: { sinTarjeta?: boolean },
   ) => {
     const nombrePaso =
       tiempoPaso.nombreVisible?.trim() ||
@@ -5267,16 +5284,16 @@ function ApConfigStep({
           ? efectivoMin / 60
           : efectivoMin;
     const error = getTiempoManualError(tiempoPaso, motorConfig);
-    if (opts?.enTarjeta) {
-      // El nombre del paso ya es el rótulo del grupo: repetirlo en la barra
-      // negra ("DISEÑO GRÁFICO · TIEMPO ESTIMADO") es decirlo dos veces.
-      const enTarjetaLabel = tiempoPaso.etiqueta || "Tiempo estimado";
+    if (opts?.sinTarjeta) {
+      // El nombre del paso ya está en la barra negra del opcional: repetirlo
+      // acá ("DISEÑO GRÁFICO · TIEMPO ESTIMADO") es decirlo dos veces.
+      const corto = tiempoPaso.etiqueta || "Tiempo estimado";
       return (
-        <div className={seC.card} key={`tiempo-${tiempoPaso.configPasoId}`}>
-          <div className={seC.gh}>
-            {enTarjetaLabel} ({unidadLabel})
-          </div>
-          <div className={`${seC.body} ap-spec`}>
+        <div key={`tiempo-${tiempoPaso.configPasoId}`}>
+          <span className={seC.sub}>
+            {corto} ({unidadLabel})
+          </span>
+          <div className="ap-spec">
             <input
               type="number"
               min={0}
@@ -5335,7 +5352,10 @@ function ApConfigStep({
    * (`cotizador-seccion.module.css`: "que TODO el sheet sea una pila de
    * tarjetas parejas"). Ver docs/cargos-por-paso-analisis-y-plan.md §8.
    */
-  const renderNivelField = (item: NivelComercial) => {
+  const renderNivelField = (
+    item: NivelComercial,
+    opts?: { sinTarjeta?: boolean },
+  ) => {
     const nombrePaso =
       item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
     const elegido = nivelEfectivo(
@@ -5345,33 +5365,42 @@ function ApConfigStep({
     // El fallback vive acá y no en el lector: si el lector normalizara, el
     // editor no dejaría escribir un espacio (ver src/lib/niveles-paso.ts).
     const etiqueta = item.config.etiqueta.trim() || "¿Qué nivel?";
+    const control = renderChoiceCards(
+      etiqueta,
+      elegido.codigo,
+      item.config.opciones.map((opcion) => ({
+        value: opcion.codigo,
+        label: nombreNivel(opcion),
+        desc:
+          opcion.codigo === NIVEL_PERSONALIZADO
+            ? "el tiempo lo cargás vos"
+            : (describirNivel(opcion, item.base) ?? undefined),
+      })),
+      (codigo) =>
+        setMotorConfig((current) => ({
+          ...current,
+          seleccionNivel: {
+            ...current.seleccionNivel,
+            [item.configPasoId]: codigo,
+          },
+        })),
+    );
+    if (opts?.sinTarjeta) {
+      return (
+        <div key={`nivel-${item.configPasoId}`}>
+          <span className={seC.sub} title={nombrePaso}>
+            {etiqueta}
+          </span>
+          {control}
+        </div>
+      );
+    }
     return (
       <div className={seC.card} key={`nivel-${item.configPasoId}`}>
         <div className={seC.gh} title={nombrePaso}>
           {etiqueta}
         </div>
-        <div className={seC.body}>
-        {renderChoiceCards(
-          etiqueta,
-          elegido.codigo,
-          item.config.opciones.map((opcion) => ({
-            value: opcion.codigo,
-            label: nombreNivel(opcion),
-            desc:
-              opcion.codigo === NIVEL_PERSONALIZADO
-                ? "el tiempo lo cargás vos"
-                : (describirNivel(opcion, item.base) ?? undefined),
-          })),
-          (codigo) =>
-            setMotorConfig((current) => ({
-              ...current,
-              seleccionNivel: {
-                ...current.seleccionNivel,
-                [item.configPasoId]: codigo,
-              },
-            })),
-        )}
-        </div>
+        <div className={seC.body}>{control}</div>
       </div>
     );
   };
@@ -6802,28 +6831,25 @@ function ApConfigStep({
                   tiempoManual && getTiempoManualError(tiempoManual, motorConfig),
                 );
                 return (
-                  <div className="ap-optional-config-card" key={opcional.code}>
-                    <div className="ap-optional-config-title">
-                      <span className="ttl">{opcional.name}</span>
+                  // UNA tarjeta por opcional: el nombre del paso VA en la barra
+                  // negra, con la × al lado. Adentro los bloques llevan rótulo
+                  // liviano — dos barras negras anidadas no jerarquizan nada.
+                  <div className={seC.card} key={opcional.code}>
+                    <div className={`${seC.gh} ${seC.ghRow}`}>
+                      <span>{opcional.name}</span>
                       {/* El estado sólo habla cuando algo falta: un "Configurado"
-                          verde permanente ocupa lugar para decir lo que ya se
-                          ve (el opcional está tildado y sin errores). */}
+                          permanente ocupa lugar para decir lo que ya se ve. */}
                       {tiempoPendiente ? (
-                        <span className="state is-pendiente">
-                          <span className="d" aria-hidden="true" />
-                          Falta el tiempo
-                        </span>
+                        <span className={seC.ghNota}>falta el tiempo</span>
                       ) : null}
                       {arrastrado ? (
                         // Lo encendió otro paso que lo necesita: quitarlo acá
                         // dejaría la cotización inconsistente.
-                        <span className="quit is-locked">
-                          Lo exige otro paso
-                        </span>
+                        <span className={seC.ghNota}>lo exige otro paso</span>
                       ) : (
                         <button
                           type="button"
-                          className="quit is-icon"
+                          className={seC.ghQuit}
                           onClick={() => setOpcional(opcional.code, false)}
                           title={`Quitar ${opcional.name}`}
                           aria-label={`Quitar ${opcional.name}`}
@@ -6832,21 +6858,24 @@ function ApConfigStep({
                         </button>
                       )}
                     </div>
-                    <div className="ap-optional-config-fields">
-                      {nivel ? renderNivelField(nivel) : null}
+                    <div className={`${seC.body} ap-optional-config-fields`}>
+                      {nivel
+                        ? renderNivelField(nivel, { sinTarjeta: true })
+                        : null}
                       {slots.length > 0 ? (
                         <div className={matS.list}>
                           {slots.map((slot) =>
                             renderMaterialSelect(slot, {
                               showHint: false,
                               collapseSingleCandidate: true,
+                              sinTarjeta: true,
                             }),
                           )}
                         </div>
                       ) : null}
                       {tiempoManual
                         ? renderTiempoManualField(tiempoManual, {
-                            enTarjeta: true,
+                            sinTarjeta: true,
                           })
                         : null}
                       {paramsComercial?.campos.map((campo) =>

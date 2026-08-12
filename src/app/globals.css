@@ -13267,104 +13267,11 @@ body {
     gap: 18px;
   }
 
-  /* Sin caja: adentro ya van tarjetas con encabezado negro, y una card
-     conteniendo cards es un nivel de anidado que no informa nada. El nombre
-     del opcional queda como rótulo del grupo —con dos opcionales activos,
-     "FILM" solo no dice de quién es— y como percha de la ×. */
-  .ot-v1 .ap-optional-config-card {
-    display: grid;
-    gap: 8px;
-  }
-
-  .ot-v1 .ap-optional-config-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 2px;
-  }
-
-  .ot-v1 .ap-optional-config-title .ttl {
-    color: var(--ink);
-    font-size: 12.5px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
-  }
-
-  /* Sólo aparece cuando falta algo, así que va en tono de alerta: el verde
-     "todo bien" era decoración con costo de altura. */
-  .ot-v1 .ap-optional-config-title .state {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 1px 8px 1px 6px;
-    color: var(--warn, #92400e);
-    font-size: 10.5px;
-    font-weight: 650;
-    background: var(--warn-bg, #fef3c7);
-    border: 1px solid #fcd9a4;
-    border-radius: 999px;
-  }
-
-  .ot-v1 .ap-optional-config-title .state .d {
-    width: 5px;
-    height: 5px;
-    background: currentcolor;
-    border-radius: 50%;
-  }
-
-  .ot-v1 .ap-optional-config-title .quit {
-    margin-left: auto;
-    padding: 4px 8px;
-    color: var(--muted);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    background: transparent;
-    border: none;
-    border-radius: var(--r-1);
-    transition:
-      color 0.12s ease,
-      background 0.12s ease;
-  }
-
-  /* Quitar = una × al borde, no una frase: el texto competía con el nombre
-     del opcional, que es lo único que hay que leer en esa línea. */
-  .ot-v1 .ap-optional-config-title .quit.is-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-  }
-
-  .ot-v1 .ap-optional-config-title .quit.is-icon svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  .ot-v1 .ap-optional-config-title .quit:hover {
-    color: var(--ink);
-    background: var(--surface-2);
-  }
-
-  /* El opcional lo encendió otro paso que lo necesita: no se puede quitar
-     desde acá, y hay que decir por qué en vez de dejar un botón muerto. */
-  .ot-v1 .ap-optional-config-title .quit.is-locked {
-    cursor: default;
-    font-style: italic;
-    opacity: 0.75;
-    white-space: nowrap;
-  }
-
-  .ot-v1 .ap-optional-config-title .quit.is-locked:hover {
-    color: var(--muted);
-    background: transparent;
-  }
-
+  /* Cada opcional es UNA tarjeta (seC) cuya barra negra lleva el nombre del
+     paso; acá adentro sólo va el aire entre bloques. */
   .ot-v1 .ap-optional-config-fields {
     display: grid;
-    gap: 8px;
+    gap: 0;
   }
 
   /* Dentro de la card del opcional el selector va compacto: es una decisión
