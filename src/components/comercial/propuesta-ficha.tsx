@@ -2459,18 +2459,6 @@ function CostosItemView({
   const cargosPaso = item.cotizacion.pasos
     .flatMap((paso) => paso.cargosDirectosPaso ?? [])
     .filter((cargo) => cargo.monto > 0);
-  // Los bloques de tiempo extra viven en la misma lista: para el comercial son
-  // lo mismo que un cargo (plata que no sale del ritmo del trabajo), con la
-  // diferencia de que se puede ver de qué horas salen.
-  const tiemposExtraItem = item.cotizacion.pasos
-    .flatMap((paso) =>
-      (paso.tiempo?.tiemposExtra ?? []).map((bloque) => ({
-        ...bloque,
-        pasoNombre:
-          paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo),
-      })),
-    )
-    .filter((bloque) => bloque.costo > 0);
   const cargosCotizacion = item.cotizacion.cargosDirectosCotizacion.filter(
     (cargo) => cargo.monto > 0,
   );
@@ -2741,27 +2729,13 @@ function CostosItemView({
         </div>
       </div>
 
-      {cargosPaso.length > 0 ||
-      cargosCotizacion.length > 0 ||
-      tiemposExtraItem.length > 0 ? (
+      {/* Sin los bloques de tiempo extra: viven en el detalle del paso, junto
+          al tiempo y los materiales que los explican. Acá quedan los cargos en
+          PESOS —lo que sale por la puerta—, que es de lo que habla el título. */}
+      {cargosPaso.length > 0 || cargosCotizacion.length > 0 ? (
         <div className="cost-section">
           <div className="cost-title">Opcionales y cargos</div>
           <div className="cost-charges">
-            {tiemposExtraItem.map((bloque) => (
-              <div
-                className="cost-charge"
-                key={`extra-${bloque.pasoNombre}-${bloque.id}`}
-              >
-                <span>{bloque.etiqueta}</span>
-                <small>
-                  {bloque.pasoNombre} · {formatDecimal(bloque.minutos / 60, 2)} h
-                  {bloque.dotacionOperarios > 1
-                    ? ` × ${bloque.dotacionOperarios} pers`
-                    : ""}
-                </small>
-                <strong>{fmt(bloque.costo)}</strong>
-              </div>
-            ))}
             {cargosPaso.map((cargo) => (
               <div className="cost-charge" key={`paso-${cargo.cargoCodigo}`}>
                 <span>{cargo.cargoNombre}</span>
