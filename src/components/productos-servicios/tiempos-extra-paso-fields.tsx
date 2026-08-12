@@ -41,8 +41,10 @@ export function TiemposExtraPasoFields({
   const bloques = leerTiemposExtra(params);
   const [editando, setEditando] = React.useState<string | null>(null);
 
+  // `params` va también para que borrar un bloque limpie los overrides que los
+  // niveles tenían apuntados a él (si no, quedan huérfanos sumando de mentira).
   const guardar = (siguientes: TiempoExtraPaso[]) =>
-    onChange(patchTiemposExtra(siguientes));
+    onChange(patchTiemposExtra(siguientes, params));
 
   const actualizar = (indice: number, parcial: Partial<TiempoExtraPaso>) =>
     guardar(

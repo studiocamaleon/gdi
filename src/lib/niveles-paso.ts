@@ -140,8 +140,13 @@ export function nivelEfectivo(
 export interface BaseDelPaso {
   /** Minutos de trabajo declarados por el paso (T-1 / horas estimadas). */
   tiempoFijoMin?: number | null;
-  /** Minutos de tiempo extra que el paso trae de base. */
-  tiempoExtraMin?: number | null;
+  /**
+   * Los bloques de tiempo extra que el paso declara HOY, con sus minutos base.
+   * Va la lista y no el total porque el nivel pisa bloque por bloque: sumar el
+   * mapa de overrides contaba de más los huérfanos —overrides de bloques ya
+   * borrados, que el motor ignora— y de menos los bloques que el nivel no pisa.
+   */
+  bloques?: Array<{ id: string; minutos: number }>;
 }
 
 /**
@@ -158,14 +163,15 @@ export function describirNivel(
   const partes: string[] = [];
   const { overrides } = nivel;
 
-  const extraMin =
-    overrides.tiemposExtraMin != null
-      ? Object.values(overrides.tiemposExtraMin).reduce(
-          (acc, min) => acc + min,
-          0,
-        )
-      : (base.tiempoExtraMin ?? null);
-  if (extraMin != null && extraMin > 0) {
+  // Efectivo BLOQUE POR BLOQUE, como lo hace el motor: el override si el nivel
+  // lo declara, si no los minutos del bloque. Un override de un bloque que ya
+  // no existe no suma nada, porque no hay bloque que ejecutar.
+  const extraMin = (base.bloques ?? []).reduce(
+    (acc, bloque) =>
+      acc + (overrides.tiemposExtraMin?.[bloque.id] ?? bloque.minutos),
+    0,
+  );
+  if (extraMin > 0) {
     const horas = extraMin / 60;
     partes.push(
       horas >= 1

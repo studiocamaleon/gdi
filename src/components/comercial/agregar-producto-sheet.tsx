@@ -1521,10 +1521,17 @@ function getNivelesComercial(
             // Sin nivel aplicado: es el punto de partida contra el que cada
             // nivel se compara.
             tiempoFijoMin: getTiempoFijoDeclaradoMin(config, {}),
-            tiempoExtraMin: bloques.reduce((acc: number, bloque) => {
-              const min = Number((bloque as Record<string, unknown>)?.minutos);
-              return acc + (Number.isFinite(min) && min > 0 ? min : 0);
-            }, 0),
+            bloques: bloques.map((bloque, indice) => {
+              const item = (bloque ?? {}) as Record<string, unknown>;
+              const min = Number(item.minutos);
+              return {
+                id:
+                  typeof item.id === "string" && item.id.trim()
+                    ? item.id.trim()
+                    : `extra_${indice}`,
+                minutos: Number.isFinite(min) && min > 0 ? min : 0,
+              };
+            }),
           },
         };
         return item;
