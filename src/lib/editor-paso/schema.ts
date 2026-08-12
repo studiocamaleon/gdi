@@ -1329,7 +1329,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     eje: "tiempo",
     grupo: "niveles",
     anchoCompleto: true,
-    etiqueta: "¿Viene en niveles?",
+    // El título del grupo ya dice "Niveles" y el control abre con su propia
+    // pregunta: rotularlo arriba sería decir tres veces lo mismo (mismo
+    // criterio que `activacion.cuando`).
+    etiqueta: "",
     pregunta: "¿Este paso viene en niveles que elige el comercial?",
     ayuda:
       "Un mismo paso que se cobra distinto según dónde o con qué dificultad se haga. El comercial elige uno al cotizar; el nivel pisa el tiempo, el ritmo, la dotación o los minutos del tiempo extra.",
