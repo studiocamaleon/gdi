@@ -1,12 +1,10 @@
 "use client";
 
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import * as React from "react";
+import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
-import {
-  type NivelPasoOpcion,
-  leerNivelesPaso,
-} from "@/lib/niveles-paso";
+import { type NivelPasoOpcion, leerNivelesPaso } from "@/lib/niveles-paso";
 import { leerTiemposExtra } from "@/lib/tiempos-extra-paso";
 
 /**
@@ -15,18 +13,25 @@ import { leerTiemposExtra } from "@/lib/tiempos-extra-paso";
  * "Colocación a domicilio" no son tres pasos (taller / zona 1 / zona 2): es UNO
  * con tres niveles. Lo mismo "Diseño gráfico" (básico / intermedio /
  * profesional). El nivel es un DELTA sobre la base del paso: sólo pisa lo que
- * declara. Ver docs/cargos-por-paso-analisis-y-plan.md §8.
+ * declara.
+ *
+ * La lista muestra cada nivel RESUELTO en una línea —el radio marca cuál viene
+ * elegido, el resumen dice en qué se diferencia— y se edita de a uno.
+ * Ver docs/cargos-por-paso-analisis-y-plan.md §8.
  */
 export function NivelesPasoFields({
   params,
+  dotacionDelPaso,
   onChange,
 }: {
   params: Record<string, unknown>;
+  dotacionDelPaso: number;
   /** Patch shallow sobre `paramsPasoJson`. */
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   const config = leerNivelesPaso(params);
   const bloques = leerTiemposExtra(params).filter((b) => b.minutos > 0);
+  const [editando, setEditando] = React.useState<string | null>(null);
 
   const guardar = (etiqueta: string, opciones: NivelPasoOpcion[]) =>
     onChange({
@@ -46,8 +51,18 @@ export function NivelesPasoFields({
           className="btn btn-outline btn-sm w-fit"
           onClick={() =>
             guardar("¿Qué nivel?", [
-              { codigo: "nivel_1", nombre: "Nivel 1", esDefault: true, overrides: {} },
-              { codigo: "nivel_2", nombre: "Nivel 2", esDefault: false, overrides: {} },
+              {
+                codigo: "nivel_1",
+                nombre: "Nivel 1",
+                esDefault: true,
+                overrides: {},
+              },
+              {
+                codigo: "nivel_2",
+                nombre: "Nivel 2",
+                esDefault: false,
+                overrides: {},
+              },
             ])
           }
         >
@@ -59,6 +74,7 @@ export function NivelesPasoFields({
   }
 
   const { etiqueta, opciones } = config;
+  const ritmoDelPaso = Number(params.productivityValue);
 
   const actualizarOpcion = (
     indice: number,
@@ -99,6 +115,29 @@ export function NivelesPasoFields({
       opciones.map((opcion, i) => ({ ...opcion, esDefault: i === indice })),
     );
 
+  /**
+   * El resumen muestra los valores EFECTIVOS, no los overrides: el modelador
+   * compara niveles entre sí, y "vacío = el del paso" no se compara con nada.
+   */
+  const describir = (nivel: NivelPasoOpcion) => {
+    const partes: string[] = [];
+    const { overrides } = nivel;
+    if (overrides.tiempoFijoMin != null) {
+      partes.push(`${overrides.tiempoFijoMin} min`);
+    } else if (Number.isFinite(ritmoDelPaso) && ritmoDelPaso > 0) {
+      partes.push(`ritmo ${overrides.productividadHora ?? ritmoDelPaso}/h`);
+    }
+    const extraMin = bloques.reduce(
+      (acc, bloque) =>
+        acc + (overrides.tiemposExtraMin?.[bloque.id] ?? bloque.minutos),
+      0,
+    );
+    if (bloques.length > 0) partes.push(`extra ${extraMin} min`);
+    const dotacion = overrides.dotacion ?? dotacionDelPaso;
+    partes.push(dotacion === 1 ? "1 persona" : `${dotacion} personas`);
+    return partes.join(" · ");
+  };
+
   return (
     <div className="pasos-sections">
       <div className="flex flex-col gap-1">
@@ -112,118 +151,143 @@ export function NivelesPasoFields({
         />
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="divide-y rounded-md border">
         {opciones.map((opcion, indice) => (
-          <div
-            key={opcion.codigo}
-            className="flex flex-col gap-3 rounded-md border p-3"
-          >
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex min-w-[180px] flex-1 flex-col gap-1">
-                <label className="text-muted-foreground text-xs">Nombre</label>
-                <Input
-                  value={opcion.nombre}
-                  placeholder="Zona 1"
-                  onChange={(e) =>
-                    actualizarOpcion(indice, { nombre: e.target.value })
-                  }
-                />
+          <div key={opcion.codigo} className="p-3">
+            <div className="flex items-start gap-2">
+              <input
+                type="radio"
+                name="nivel-default"
+                className="mt-1 shrink-0"
+                checked={opcion.esDefault}
+                onChange={() => marcarDefault(indice)}
+                aria-label={`${opcion.nombre} viene marcado por defecto`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">{opcion.nombre}</div>
+                <div className="text-muted-foreground text-xs">
+                  {describir(opcion)}
+                </div>
               </div>
-              <label className="flex items-center gap-2 pb-2 text-xs">
-                <input
-                  type="radio"
-                  name="nivel-default"
-                  checked={opcion.esDefault}
-                  onChange={() => marcarDefault(indice)}
-                />
-                Viene marcado
-              </label>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm shrink-0"
+                onClick={() =>
+                  setEditando(editando === opcion.codigo ? null : opcion.codigo)
+                }
+                aria-label={`Editar ${opcion.nombre}`}
+                aria-expanded={editando === opcion.codigo}
+              >
+                <PencilIcon className="size-3.5" />
+              </button>
               {opciones.length > 2 ? (
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm text-red-600"
-                  onClick={() =>
+                  className="btn btn-ghost btn-sm shrink-0 text-red-600"
+                  onClick={() => {
+                    setEditando(null);
                     guardar(
                       etiqueta,
                       opciones.filter((_, i) => i !== indice),
-                    )
-                  }
-                  aria-label="Quitar nivel"
+                    );
+                  }}
+                  aria-label={`Quitar ${opcion.nombre}`}
                 >
-                  <Trash2Icon className="size-4" />
+                  <Trash2Icon className="size-3.5" />
                 </button>
               ) : null}
             </div>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex w-[130px] flex-col gap-1">
-                <label className="text-muted-foreground text-xs">
-                  Trabajo (min)
-                </label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={opcion.overrides.tiempoFijoMin ?? ""}
-                  placeholder="el del paso"
-                  onChange={(e) =>
-                    setOverride(indice, "tiempoFijoMin", e.target.value)
-                  }
-                />
-              </div>
-              <div className="flex w-[130px] flex-col gap-1">
-                <label className="text-muted-foreground text-xs">
-                  Ritmo (por hora)
-                </label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  value={opcion.overrides.productividadHora ?? ""}
-                  placeholder="el del paso"
-                  onChange={(e) =>
-                    setOverride(indice, "productividadHora", e.target.value)
-                  }
-                />
-              </div>
-              <div className="flex w-[110px] flex-col gap-1">
-                <label className="text-muted-foreground text-xs">Personas</label>
-                <Input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={opcion.overrides.dotacion ?? ""}
-                  placeholder="las del paso"
-                  onChange={(e) =>
-                    setOverride(indice, "dotacion", e.target.value)
-                  }
-                />
-              </div>
-              {bloques.map((bloque) => (
-                <div key={bloque.id} className="flex w-[150px] flex-col gap-1">
-                  <label
-                    className="text-muted-foreground truncate text-xs"
-                    title={bloque.etiqueta}
-                  >
-                    {bloque.etiqueta} (min)
+            {editando === opcion.codigo ? (
+              <div className="mt-3 flex flex-col gap-2 border-t pt-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-muted-foreground text-xs">
+                    Nombre
                   </label>
                   <Input
-                    type="number"
-                    min={0}
-                    step={5}
-                    value={opcion.overrides.tiemposExtraMin?.[bloque.id] ?? ""}
-                    placeholder={String(bloque.minutos)}
+                    value={opcion.nombre}
+                    placeholder="Zona 1"
                     onChange={(e) =>
-                      setMinutosBloque(indice, bloque.id, e.target.value)
+                      actualizarOpcion(indice, { nombre: e.target.value })
                     }
                   />
                 </div>
-              ))}
-            </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-muted-foreground text-xs">
+                      Trabajo (min)
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={opcion.overrides.tiempoFijoMin ?? ""}
+                      placeholder="el del paso"
+                      onChange={(e) =>
+                        setOverride(indice, "tiempoFijoMin", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-muted-foreground text-xs">
+                      Ritmo (por hora)
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={opcion.overrides.productividadHora ?? ""}
+                      placeholder="el del paso"
+                      onChange={(e) =>
+                        setOverride(indice, "productividadHora", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-muted-foreground text-xs">
+                      Personas
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={opcion.overrides.dotacion ?? ""}
+                      placeholder="las del paso"
+                      onChange={(e) =>
+                        setOverride(indice, "dotacion", e.target.value)
+                      }
+                    />
+                  </div>
+                  {bloques.map((bloque) => (
+                    <div key={bloque.id} className="flex flex-col gap-1">
+                      <label
+                        className="text-muted-foreground truncate text-xs"
+                        title={bloque.etiqueta}
+                      >
+                        {bloque.etiqueta} (min)
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={5}
+                        value={opcion.overrides.tiemposExtraMin?.[bloque.id] ?? ""}
+                        placeholder={String(bloque.minutos)}
+                        onChange={(e) =>
+                          setMinutosBloque(indice, bloque.id, e.target.value)
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+                <span className="text-muted-foreground text-xs">
+                  Vacío = usa lo del paso. El nivel sólo pisa lo que declara.
+                </span>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           className="btn btn-outline btn-sm w-fit"
@@ -242,23 +306,24 @@ export function NivelesPasoFields({
                 overrides: {},
               },
             ]);
+            setEditando(`nivel_${n}`);
           }}
         >
           <PlusIcon className="mr-1 size-4" />
           Agregar nivel
         </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm w-fit text-red-600"
-          onClick={() => onChange({ niveles: null })}
-        >
-          Quitar los niveles
-        </button>
+        <span className="text-muted-foreground text-xs">
+          ● = el que viene marcado por defecto
+        </span>
       </div>
 
-      <p className="text-muted-foreground text-sm">
-        Vacío = usa lo del paso. El nivel sólo pisa lo que declara.
-      </p>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm w-fit text-red-600"
+        onClick={() => onChange({ niveles: null })}
+      >
+        Quitar los niveles
+      </button>
     </div>
   );
 }

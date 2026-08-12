@@ -13019,6 +13019,7 @@ function SeccionesEsquemaPaso({
             return (
               <NivelesPasoFields
                 params={asRecord(cfg.paramsPasoJson)}
+                dotacionDelPaso={cfg.dotacionOperarios ?? 1}
                 onChange={(patch) => onParams(pasoActual.id, patch)}
               />
             );

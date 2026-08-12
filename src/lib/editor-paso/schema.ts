@@ -1306,9 +1306,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "tiempo.extra",
     seccion: "tiempo",
     eje: "tiempo",
-    grupo: "prep",
+    grupo: "extra",
     anchoCompleto: true,
-    etiqueta: "Tiempo extra",
+    etiqueta: "¿Qué tiempo no depende de la cantidad?",
     pregunta: "¿Hay tiempo que no depende de la cantidad?",
     ayuda:
       "Preparar el trabajo, trasladarse. Se cobra una vez por trabajo; puede tarifarse en otro centro de costo y con otra dotación.",
@@ -1327,9 +1327,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "tiempo.niveles",
     seccion: "tiempo",
     eje: "tiempo",
-    grupo: "prep",
+    grupo: "niveles",
     anchoCompleto: true,
-    etiqueta: "Niveles",
+    etiqueta: "¿Viene en niveles?",
     pregunta: "¿Este paso viene en niveles que elige el comercial?",
     ayuda:
       "Un mismo paso que se cobra distinto según dónde o con qué dificultad se haga. El comercial elige uno al cotizar; el nivel pisa el tiempo, el ritmo, la dotación o los minutos del tiempo extra.",
@@ -2573,6 +2573,27 @@ const GRUPOS_TIEMPO: GrupoEje[] = [
       "Minutos fijos antes y después del trabajo, si difieren del perfil de la máquina.",
     estilo: "campos",
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
+  },
+  {
+    // Bloque propio: no es la preparación de la MÁQUINA (eso es `prep`), es
+    // trabajo del paso que no escala con la cantidad y puede tarifarse en otro
+    // centro. Ver docs/cargos-por-paso-analisis-y-plan.md §7.
+    id: "extra",
+    titulo: "Tiempo extra",
+    ayuda:
+      "Trabajo que lleva el paso pero no depende de la cantidad: preparar, trasladarse. Suma al tiempo del paso —la fecha de entrega lo cuenta— y se muestra aparte en el desglose.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+  },
+  {
+    // El mismo paso cobrado distinto según dónde o con qué dificultad se haga.
+    // Va después del tiempo extra porque un nivel pisa sus minutos.
+    id: "niveles",
+    titulo: "Niveles",
+    ayuda:
+      "Variantes del mismo paso entre las que elige el comercial al cotizar. Evita modelar un paso por zona o por dificultad.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
   },
   {
     // Último a propósito: la capa comercial se APOYA sobre el tiempo base

@@ -5204,36 +5204,26 @@ function ApConfigStep({
       item.config,
       motorConfig.seleccionNivel[item.configPasoId],
     );
-    const resumen = describirNivel(elegido);
     return (
       <div className="ap-spec" key={`nivel-${item.configPasoId}`}>
         <label title={nombrePaso}>{item.config.etiqueta}</label>
-        <div className="ap-adicionales">
-          {item.config.opciones.map((opcion) => (
-            <div key={opcion.codigo}>
-              <button
-                type="button"
-                className={`ap-adi ${
-                  opcion.codigo === elegido.codigo ? "on" : ""
-                }`}
-                onClick={() =>
-                  setMotorConfig((current) => ({
-                    ...current,
-                    seleccionNivel: {
-                      ...current.seleccionNivel,
-                      [item.configPasoId]: opcion.codigo,
-                    },
-                  }))
-                }
-                title={describirNivel(opcion) ?? opcion.nombre}
-              >
-                <span className="cb" />
-                <span className="lb">{opcion.nombre}</span>
-              </button>
-            </div>
-          ))}
-        </div>
-        {resumen ? <div className="ap-hint">{resumen}</div> : null}
+        {renderChoiceCards(
+          item.config.etiqueta,
+          elegido.codigo,
+          item.config.opciones.map((opcion) => ({
+            value: opcion.codigo,
+            label: opcion.nombre,
+            desc: describirNivel(opcion) ?? undefined,
+          })),
+          (codigo) =>
+            setMotorConfig((current) => ({
+              ...current,
+              seleccionNivel: {
+                ...current.seleccionNivel,
+                [item.configPasoId]: codigo,
+              },
+            })),
+        )}
       </div>
     );
   };
