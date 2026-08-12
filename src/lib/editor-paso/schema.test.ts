@@ -57,6 +57,10 @@ const CENSO: Record<string, string[]> = {
     "tiempo.piezas_montar",
     "tiempo.comercial",
     "tiempo.comercial_ayudas",
+    // El "fijo + variable" del oficio y las variantes del mismo paso
+    // (docs/cargos-por-paso-analisis-y-plan.md §7 y §8).
+    "tiempo.extra",
+    "tiempo.niveles",
   ],
   // Sub-fase B — Máquina y perfil: candidatas y modo de color usan LA UI
   // del detallado extraída como componentes. "Modo de color del producto"

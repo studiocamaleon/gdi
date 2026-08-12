@@ -125,6 +125,8 @@ import {
 import { PasoExtraEditor } from "@/components/productos-servicios/paso-extra-editor";
 import { ParamsFamiliaFields } from "@/components/productos-servicios/params-familia-fields";
 import { EfectosPasoFields } from "@/components/productos-servicios/efectos-paso-fields";
+import { TiemposExtraPasoFields } from "@/components/productos-servicios/tiempos-extra-paso-fields";
+import { NivelesPasoFields } from "@/components/productos-servicios/niveles-paso-fields";
 import {
   getLabel,
   mecanismoCantidadLabels,
@@ -12988,6 +12990,38 @@ function SeccionesEsquemaPaso({
                 onChange={(patch) => onParams(pasoActual.id, patch)}
               />
             ) : null;
+          }
+          if (id === "tiempos-extra-paso") {
+            // Preparación y traslados: minutos que no dependen de la cantidad,
+            // con su propio centro y su propia dotación. Escribe en
+            // paramsPasoJson, como los efectos y los params de familia.
+            return (
+              <TiemposExtraPasoFields
+                params={asRecord(cfg.paramsPasoJson)}
+                centros={lookups.centrosCosto.map((c) => ({
+                  id: c.id,
+                  nombre: c.nombre,
+                }))}
+                centroDelPaso={
+                  cfg.maquinaM1Id
+                    ? (maquinaSel?.centroCostoPrincipal?.nombre ?? null)
+                    : (lookups.centrosCosto.find(
+                        (c) => c.id === cfg.centroCostoId,
+                      )?.nombre ?? null)
+                }
+                dotacionDelPaso={cfg.dotacionOperarios ?? 1}
+                onChange={(patch) => onParams(pasoActual.id, patch)}
+              />
+            );
+          }
+          if (id === "niveles-paso") {
+            // Un paso, varias variantes que elige el comercial.
+            return (
+              <NivelesPasoFields
+                params={asRecord(cfg.paramsPasoJson)}
+                onChange={(patch) => onParams(pasoActual.id, patch)}
+              />
+            );
           }
           if (id === "efectos-paso") {
             // [Efectos] Lo que el paso le exige al trabajo. Escribe en

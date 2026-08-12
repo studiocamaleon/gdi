@@ -59,6 +59,26 @@ export function sumCargosPaso(paso: PasoCosteo) {
   );
 }
 
+/**
+ * Bloques de tiempo extra del paso (preparación, traslado): tiempo que no
+ * depende de la cantidad y puede tarifarse en otro centro. Sus minutos ya están
+ * dentro de `tiempo.totalMin`; su costo va SEPARADO del tiempo de trabajo y se
+ * muestra en la columna "Cargos" del paso.
+ * Ver docs/cargos-por-paso-analisis-y-plan.md §7.
+ */
+export function sumTiempoExtraPaso(paso: PasoCosteo) {
+  return (paso.tiempo?.tiemposExtra ?? []).reduce(
+    (acc, bloque) => acc + bloque.costo,
+    0,
+  );
+}
+
+/** Lo que se muestra en la columna "Cargos" del paso: cargos monetarios + el
+ *  costo de los bloques de tiempo extra. */
+export function sumCargosYTiempoExtraPaso(paso: PasoCosteo) {
+  return sumCargosPaso(paso) + sumTiempoExtraPaso(paso);
+}
+
 export function getVisibleCostSteps(pasos: PasoCosteo[]) {
   return pasos.filter((paso) => {
     if (paso.costoTotal > 0) return true;
@@ -103,6 +123,8 @@ export type CostoItemDesglose = {
   materialesTotal: number;
   /** Lo que costó el tiempo: la tarifa de cada centro por lo que lo ocupó. */
   tiempoTotal: number;
+  /** Lo que costaron los bloques de tiempo extra (preparación, traslados). */
+  tiempoExtraTotal: number;
   tercerizadoTotal: number;
   cargosTotal: number;
   /** Filas que componen el precio neto (suman 100%). */
@@ -143,6 +165,10 @@ export function calcularCostoItem(
   const materialesTotal = item.cotizacion.costos.materialesTotal;
   const tercerizadoTotal = item.cotizacion.costos.tercerizadoTotal ?? 0;
   const cargosTotal = item.cotizacion.costos.cargosDirectosTotal;
+  // Tiempo extra (preparación, traslados): son horas de un centro, no un
+  // desembolso. Por eso tiene fila propia y NO entra en los costos variables:
+  // la contribución tiene que cubrirlo, igual que al resto del tiempo.
+  const tiempoExtraTotal = item.cotizacion.costos.tiempoExtraTotal ?? 0;
 
   // ── Cascada del precio: cada fila suma hacia abajo hasta el precio de venta.
   //    costo (materiales + centro de costo + cargos) + impuestos internos +
@@ -203,6 +229,13 @@ export function calcularCostoItem(
       label: "Centro de costo",
       tipo: "Centro de costo",
       monto: item.cotizacion.costos.tiempoTotal,
+    },
+    {
+      key: "tiempo-extra",
+      label: "Tiempo extra",
+      hint: "preparación y traslados: no dependen de la cantidad",
+      tipo: "Centro de costo",
+      monto: tiempoExtraTotal,
     },
     {
       key: "tercerizado",
@@ -278,6 +311,7 @@ export function calcularCostoItem(
     contribucionPct,
     materialesTotal,
     tiempoTotal: item.cotizacion.costos.tiempoTotal,
+    tiempoExtraTotal,
     tercerizadoTotal,
     cargosTotal,
     filasNeto,
@@ -383,7 +417,9 @@ export function consolidarCostosOrden(
   const comisionesPasarelaTotal = suma((d) => d.comisionesPasarelaTotal);
   const costosInternosTotal = suma((d) => d.costosInternosTotal);
   const materialesTotal = suma((d) => d.materialesTotal);
-  const centroCostoTotal = suma((d) => d.tiempoTotal);
+  // El tiempo extra son horas de un centro: entra al total de centros aunque el
+  // desglose lo muestre aparte (docs/cargos-por-paso-analisis-y-plan.md §7.3).
+  const centroCostoTotal = suma((d) => d.tiempoTotal + d.tiempoExtraTotal);
   const tercerizadoTotal = suma((d) => d.tercerizadoTotal);
   const cargosItems = suma((d) => d.cargosTotal);
   const cargosTotal = cargosItems + cargosOrdenTotal;
@@ -428,25 +464,53 @@ export function consolidarCostosOrden(
   // es del proveedor, no de un centro nuestro.
   const centrosPorId = new Map<string, CentroCostoConsolidado>();
   let minutosCotizados = 0;
+  const acumularCentro = (
+    centroCostoId: string | null,
+    nombreCentro: string | null,
+    minutos: number,
+    costo: number,
+    sumaUnPaso: boolean,
+  ) => {
+    const nombre = nombreCentro ?? "Sin centro asignado";
+    const clave = centroCostoId ?? `sin-centro:${nombre}`;
+    const actual = centrosPorId.get(clave) ?? {
+      centroCostoId,
+      nombre,
+      pasos: 0,
+      minutosCotizados: 0,
+      costoTotal: 0,
+    };
+    if (sumaUnPaso) actual.pasos += 1;
+    actual.minutosCotizados += minutos;
+    actual.costoTotal += costo;
+    centrosPorId.set(clave, actual);
+    minutosCotizados += minutos;
+  };
   for (const item of items) {
     if (itemSinCostear(item)) continue;
     for (const paso of item.cotizacion.pasos) {
       if (!paso.activado || !paso.tiempo) continue;
-      const centroCostoId = paso.tiempo.centroCostoId ?? null;
-      const nombre = paso.tiempo.centroCostoNombre ?? "Sin centro asignado";
-      const clave = centroCostoId ?? `sin-centro:${nombre}`;
-      const actual = centrosPorId.get(clave) ?? {
-        centroCostoId,
-        nombre,
-        pasos: 0,
-        minutosCotizados: 0,
-        costoTotal: 0,
-      };
-      actual.pasos += 1;
-      actual.minutosCotizados += paso.tiempo.totalMin;
-      actual.costoTotal += getCostoTiempoPaso(paso);
-      centrosPorId.set(clave, actual);
-      minutosCotizados += paso.tiempo.totalMin;
+      // Los bloques de tiempo extra pueden vivir en OTRO centro que el paso
+      // (el traslado en Instalación, el trabajo en Taller): se atribuyen al
+      // suyo, o el centro que hizo las horas no las ve.
+      const bloques = paso.tiempo.tiemposExtra ?? [];
+      const extraMin = bloques.reduce((acc, b) => acc + b.minutos, 0);
+      acumularCentro(
+        paso.tiempo.centroCostoId ?? null,
+        paso.tiempo.centroCostoNombre ?? null,
+        Math.max(0, paso.tiempo.totalMin - extraMin),
+        getCostoTiempoPaso(paso),
+        true,
+      );
+      for (const bloque of bloques) {
+        acumularCentro(
+          bloque.centroCostoId ?? null,
+          bloque.centroCostoNombre ?? paso.tiempo.centroCostoNombre ?? null,
+          bloque.minutos,
+          bloque.costo,
+          false,
+        );
+      }
     }
   }
 

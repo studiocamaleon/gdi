@@ -23,6 +23,14 @@ import {
   opcionalesActivadosEfectivos,
 } from "@/lib/arrastre-opcionales";
 import { esConfigPasoEjecutable } from "@/lib/config-paso-activacion";
+import { getLabel, modoCalculoCargoLabels } from "@/lib/labels-humanos";
+import {
+  type NivelesPasoConfig,
+  describirNivel,
+  leerNivelesPaso,
+  nivelEfectivo,
+  nivelPasoKey,
+} from "@/lib/niveles-paso";
 import { etiquetaValorParam } from "@/lib/params-familia";
 import { ProductoSheetHeaderConstelacion } from "./producto-sheet-header";
 import {
@@ -120,6 +128,8 @@ type CatalogAdicional = {
   descripcion?: string;
   origen?: "paso" | "cargo";
   configPasoId?: string;
+  /** Sólo cargos: 'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT'. */
+  modoCalculo?: string;
 };
 
 type CatalogProduct = {
@@ -255,6 +265,11 @@ type MotorConfigState = {
   seleccionMaquina: Record<string, string>;
   seleccionPerfil: Record<string, string>;
   seleccionModoColor: Record<string, string>;
+  /**
+   * Nivel elegido por paso (zona de colocación, dificultad de diseño). Viaja al
+   * motor como `nivelPaso_<configPasoId>`. Ver src/lib/niveles-paso.ts.
+   */
+  seleccionNivel: Record<string, string>;
   /** Valores de eje elegidos por paso tercerizado con matriz (`tercerizado_<configPasoId>`). */
   seleccionTercerizado: Record<string, Record<string, string>>;
   /**
@@ -453,6 +468,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionMaquina: {},
   seleccionPerfil: {},
   seleccionModoColor: {},
+  seleccionNivel: {},
   seleccionTercerizado: {},
   tercerizadoCostoManual: {},
   paramsComercial: {},
@@ -1247,6 +1263,33 @@ function getActiveCandidateForConfig(
   return selected ?? getPreferredCandidate(candidates);
 }
 
+// Los modos se listan de menos a más tinta: sin impresión → 1 tinta → CMYK →
+// CMYK con cada refuerzo → CMYK completo. El orden natural (el de los perfiles
+// de la máquina) dejaba CMYK+Blanco antes que CMYK, que se lee al revés.
+const MODO_COLOR_ORDEN = [
+  "SIN_IMPRESION",
+  "BN",
+  "CMYK",
+  "CMYK+blanco",
+  "CMYK+barniz",
+  "CMYK+blanco+barniz",
+];
+
+function ordenarModosColor<T extends { value: string }>(options: T[]): T[] {
+  const rango = (option: T) => {
+    const index = MODO_COLOR_ORDEN.indexOf(
+      normalizeModoColor(option.value) ?? option.value,
+    );
+    // Modos que no están en la escala (custom del tenant) van al final, en su
+    // orden original.
+    return index === -1 ? MODO_COLOR_ORDEN.length : index;
+  };
+  return options
+    .map((option, index) => ({ option, index }))
+    .sort((a, b) => rango(a.option) - rango(b.option) || a.index - b.index)
+    .map((item) => item.option);
+}
+
 function getModoColorOptionsForConfig(
   config: ConfigPasoDetalle,
   motorConfig?: Pick<MotorConfigState, "seleccionMaquina">,
@@ -1294,19 +1337,19 @@ function getModoColorOptionsForConfig(
         });
       }
     }
-    if (union.size > 0) return Array.from(union.values());
+    if (union.size > 0) return ordenarModosColor(Array.from(union.values()));
   }
   const activeCandidate = motorConfig
     ? getActiveCandidateForConfig(config, motorConfig)
     : null;
   if (activeCandidate) {
     const derivedOptions = buildModoColorOptionsFromCandidate(activeCandidate);
-    if (derivedOptions.length) return derivedOptions;
+    if (derivedOptions.length) return ordenarModosColor(derivedOptions);
     if (activeCandidate.modoColorOptions?.length) {
-      return activeCandidate.modoColorOptions;
+      return ordenarModosColor(activeCandidate.modoColorOptions);
     }
   }
-  return config.modoColorOptions ?? [];
+  return ordenarModosColor(config.modoColorOptions ?? []);
 }
 
 /**
@@ -1411,6 +1454,43 @@ function getModosColorComercial(
         return modo;
       })
       .filter((modo): modo is ModoColorComercial => modo !== null) ?? []
+  );
+}
+
+/**
+ * Pasos de la ruta con NIVELES: un paso, varias variantes que elige el
+ * comercial (zona de colocación, dificultad de diseño). Es una decisión
+ * excluyente, como el modo de color. Ver docs/cargos-por-paso-analisis-y-plan.md §8.
+ */
+type NivelComercial = {
+  configPasoId: string;
+  nombreVisible: string | null;
+  familiaCodigo: string;
+  modoActivacion: string | null;
+  config: NivelesPasoConfig;
+};
+
+function getNivelesComercial(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+): NivelComercial[] {
+  return (
+    ruta?.configPasos
+      .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
+      .map((config) => {
+        const niveles = leerNivelesPaso(config.paramsPasoJson);
+        if (!niveles) return null;
+        const item: NivelComercial = {
+          configPasoId: config.id,
+          nombreVisible: config.nombreVisible ?? null,
+          familiaCodigo: config.rutaPaso.familiaCodigo,
+          modoActivacion: config.modoActivacion,
+          config: niveles,
+        };
+        return item;
+      })
+      .filter((item): item is NivelComercial => item !== null) ?? []
   );
 }
 
@@ -2079,8 +2159,11 @@ function getOpcionales(
       opcionales.set(cargo.id, {
         code: cargo.id,
         name: cargo.cargoDirectoCatalogo.nombre,
-        descripcion: "Cargo directo opcional de la cotización.",
+        descripcion:
+          cargo.cargoDirectoCatalogo.descripcion?.trim() ||
+          "Cargo directo opcional de la cotización.",
         origen: "cargo",
+        modoCalculo: cargo.cargoDirectoCatalogo.modoCalculo,
       });
     }
   }
@@ -2122,9 +2205,12 @@ function getOpcionales(
           opcionales.set(cargo.id, {
             code: cargo.id,
             name: cargo.cargoDirectoCatalogo.nombre,
-            descripcion: "Cargo directo opcional del paso.",
+            descripcion:
+              cargo.cargoDirectoCatalogo.descripcion?.trim() ||
+              "Cargo directo opcional del paso.",
             origen: "cargo",
             configPasoId: config.id,
+            modoCalculo: cargo.cargoDirectoCatalogo.modoCalculo,
           });
         }
       }
@@ -2745,6 +2831,22 @@ function buildJobContext(
   // costeo. Se refleja también en especificaciones para la ficha/OT.
   if (config.disenoSello) {
     ctx.disenoSello = config.disenoSello;
+  }
+
+  // Nivel del paso (zona de colocación, dificultad de diseño): la clave viaja
+  // SIEMPRE que el paso corra, aunque el comercial no haya tocado nada — el
+  // motor cae en el nivel por defecto y así lo cotizado y lo mostrado coinciden.
+  const nivelesComercial = getNivelesComercial(rutaSel, includeConfig).filter(
+    (item) =>
+      item.modoActivacion !== "OPCIONAL" ||
+      Boolean(config.opcionalesActivados[item.configPasoId]),
+  );
+  for (const item of nivelesComercial) {
+    const elegido = nivelEfectivo(
+      item.config,
+      config.seleccionNivel[item.configPasoId],
+    );
+    ctx[nivelPasoKey(item.configPasoId)] = elegido.codigo;
   }
 
   // Tiempo estimado por el comercial (docs/tiempo-manual-por-paso-diseno.md):
@@ -3421,6 +3523,14 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         value as string,
       ]),
   );
+  const seleccionNivel = Object.fromEntries(
+    Object.entries(ctx)
+      .filter(
+        ([key, value]) =>
+          key.startsWith("nivelPaso_") && typeof value === "string",
+      )
+      .map(([key, value]) => [key.replace("nivelPaso_", ""), value as string]),
+  );
   const tiempoManualPorPaso = Object.fromEntries(
     Object.entries(ctx)
       .filter(
@@ -3507,6 +3617,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     seleccionMaquina,
     seleccionPerfil,
     seleccionModoColor,
+    seleccionNivel,
     modoCotizacionLineal:
       typeof ctx.modoCotizacionLineal === "string" &&
       ctx.modoCotizacionLineal === "directo"
@@ -3828,6 +3939,17 @@ function ApConfigStep({
         : product.adicionales,
     [motorConfig, product, productoDetalle, rutaSel, ruleContext],
   );
+  // Un opcional de paso agrega producción; un cargo directo sólo suma plata a la
+  // cotización. Son dos decisiones distintas para el comercial, así que se
+  // muestran en secciones separadas (los del catálogo demo no traen `origen`).
+  const opcionalesPasos = React.useMemo(
+    () => opcionalesRuta.filter((opcional) => opcional.origen !== "cargo"),
+    [opcionalesRuta],
+  );
+  const cargosOpcionales = React.useMemo(
+    () => opcionalesRuta.filter((opcional) => opcional.origen === "cargo"),
+    [opcionalesRuta],
+  );
   const slotsComercialElige = React.useMemo(
     () => getSlotsComercialElige(rutaSel, includeVisibleConfig),
     [includeVisibleConfig, rutaSel],
@@ -3884,6 +4006,20 @@ function ApConfigStep({
   // Los inputs de tiempo de pasos NO opcionales van con los datos del producto;
   // los de pasos opcionales se configuran en la card del opcional activado.
   const tiemposManualesPrincipales = tiemposManualesComercial.filter(
+    (item) => item.modoActivacion !== "OPCIONAL",
+  );
+  // Niveles del paso: misma regla que el tiempo manual — los de pasos que
+  // corren siempre van con los datos del producto; los de pasos opcionales,
+  // dentro de la card del opcional activado.
+  const nivelesComercialRuta = React.useMemo(
+    () => getNivelesComercial(rutaSel, includeVisibleConfig),
+    [rutaSel, includeVisibleConfig],
+  );
+  const nivelesPorConfigPaso = React.useMemo(
+    () => new Map(nivelesComercialRuta.map((item) => [item.configPasoId, item])),
+    [nivelesComercialRuta],
+  );
+  const nivelesPrincipales = nivelesComercialRuta.filter(
     (item) => item.modoActivacion !== "OPCIONAL",
   );
   // Catálogo de familias: hace falta el `paramsPasoSchema` para renderizar los
@@ -3946,9 +4082,11 @@ function ApConfigStep({
     [rutaSel, motorConfig.opcionalesActivados],
   );
 
+  // Sólo los pasos se configuran: un cargo de paso comparte el `configPasoId`
+  // del padre y, si entrara acá, duplicaría la card con su tiempo y sus params.
   const opcionalesConfigurables = React.useMemo(
     () =>
-      opcionalesRuta
+      opcionalesPasos
         .map((opcional) => ({
           opcional,
           slots: slotsMaterialesOpcionalesPorPaso.get(opcional.code) ?? [],
@@ -3957,6 +4095,9 @@ function ApConfigStep({
             : null,
           paramsComercial: opcional.configPasoId
             ? (paramsComercialPorConfigPaso.get(opcional.configPasoId) ?? null)
+            : null,
+          nivel: opcional.configPasoId
+            ? (nivelesPorConfigPaso.get(opcional.configPasoId) ?? null)
             : null,
         }))
         .filter(
@@ -3968,12 +4109,14 @@ function ApConfigStep({
                 : false)) &&
             (item.slots.length > 0 ||
               item.tiempoManual !== null ||
-              item.paramsComercial !== null),
+              item.paramsComercial !== null ||
+              item.nivel !== null),
         ),
     [
       adi,
+      nivelesPorConfigPaso,
       opcionalesEfectivosSheet,
-      opcionalesRuta,
+      opcionalesPasos,
       paramsComercialPorConfigPaso,
       product.real,
       slotsMaterialesOpcionalesPorPaso,
@@ -5049,6 +5192,51 @@ function ApConfigStep({
       </div>
     );
   };
+  /**
+   * Nivel del paso: pills excluyentes, como el modo de color. Es UNA decisión
+   * (no tres opcionales que se pueden tildar a la vez), y por eso no puede ser
+   * un checkbox. Ver docs/cargos-por-paso-analisis-y-plan.md §8.
+   */
+  const renderNivelField = (item: NivelComercial) => {
+    const nombrePaso =
+      item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
+    const elegido = nivelEfectivo(
+      item.config,
+      motorConfig.seleccionNivel[item.configPasoId],
+    );
+    const resumen = describirNivel(elegido);
+    return (
+      <div className="ap-spec" key={`nivel-${item.configPasoId}`}>
+        <label title={nombrePaso}>{item.config.etiqueta}</label>
+        <div className="ap-adicionales">
+          {item.config.opciones.map((opcion) => (
+            <div key={opcion.codigo}>
+              <button
+                type="button"
+                className={`ap-adi ${
+                  opcion.codigo === elegido.codigo ? "on" : ""
+                }`}
+                onClick={() =>
+                  setMotorConfig((current) => ({
+                    ...current,
+                    seleccionNivel: {
+                      ...current.seleccionNivel,
+                      [item.configPasoId]: opcion.codigo,
+                    },
+                  }))
+                }
+                title={describirNivel(opcion) ?? opcion.nombre}
+              >
+                <span className="cb" />
+                <span className="lb">{opcion.nombre}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+        {resumen ? <div className="ap-hint">{resumen}</div> : null}
+      </div>
+    );
+  };
   // El bloque de copias (tipo de copia + hojas por talonario) se muestra si el
   // producto es de subcategoría "talonarios" O si su ruta realmente usa
   // `tipoCopia` (algún talonario está en otra subcategoría, ej. papelería).
@@ -5656,6 +5844,7 @@ function ApConfigStep({
                       seleccionMaterial: {},
                       seleccionMaquina: {},
                       seleccionModoColor: {},
+                      seleccionNivel: {},
                     })),
                 )}
               </div>
@@ -6315,6 +6504,8 @@ function ApConfigStep({
               );
             })}
 
+            {nivelesPrincipales.map((item) => renderNivelField(item))}
+
             {tiemposManualesPrincipales.map((tiempoPaso) =>
               renderTiempoManualField(tiempoPaso),
             )}
@@ -6419,12 +6610,12 @@ function ApConfigStep({
         <div className="ap-cs-head">
           <div className="ttl">Opcionales</div>
           <div className="sub">
-            Pasos o cargos que el comercial puede activar para este producto.
+            Pasos de producción que el comercial puede activar para este producto.
           </div>
         </div>
-        {opcionalesRuta.length > 0 ? (
+        {opcionalesPasos.length > 0 ? (
           <div className="ap-adicionales">
-            {opcionalesRuta.map((adicional) => {
+            {opcionalesPasos.map((adicional) => {
               const selected = adi.includes(adicional.code);
               return (
                 <div key={adicional.code}>
@@ -6454,7 +6645,7 @@ function ApConfigStep({
           <div className="ap-empty">
             <div className="ttl">Sin opcionales configurados</div>
             <div className="sub">
-              Este producto no tiene pasos o cargos opcionales disponibles para activar.
+              Este producto no tiene pasos opcionales disponibles para activar.
             </div>
           </div>
         )}
@@ -6468,7 +6659,7 @@ function ApConfigStep({
             </div>
             <div className="ap-optional-config-grid">
               {opcionalesConfigurables.map(
-                ({ opcional, slots, tiempoManual, paramsComercial }) => {
+                ({ opcional, slots, tiempoManual, paramsComercial, nivel }) => {
                   const arrastrado = opcional.configPasoId
                     ? arrastradosSheet.has(opcional.configPasoId)
                     : false;
@@ -6503,6 +6694,7 @@ function ApConfigStep({
                       )}
                     </div>
                     <div className="ap-optional-config-fields">
+                      {nivel ? renderNivelField(nivel) : null}
                       {slots.length > 0 ? (
                         <div className={matS.list}>
                           {slots.map((slot) =>
@@ -6540,6 +6732,50 @@ function ApConfigStep({
           </div>
         ) : null}
       </div>
+
+      {cargosOpcionales.length > 0 ? (
+        <div className="ap-config-section">
+          <div className="ap-cs-head">
+            <div className="ttl">Cargos</div>
+            <div className="sub">
+              Importes extra que se suman al precio. No generan pasos de
+              producción.
+            </div>
+          </div>
+          <div className="ap-adicionales">
+            {cargosOpcionales.map((cargo) => {
+              const selected = adi.includes(cargo.code);
+              const modo = cargo.modoCalculo
+                ? getLabel(modoCalculoCargoLabels, cargo.modoCalculo)
+                : null;
+              return (
+                <div key={cargo.code}>
+                  <button
+                    type="button"
+                    className={`ap-adi ${selected ? "on" : ""}`}
+                    onClick={() =>
+                      product.real
+                        ? setOpcional(cargo.code, !selected)
+                        : toggleAdi(cargo.code)
+                    }
+                    title={cargo.descripcion}
+                  >
+                    <span className="cb" />
+                    <span className="lb">{cargo.name}</span>
+                    {product.real ? (
+                      modo ? (
+                        <span className="mt">{modo.label}</span>
+                      ) : null
+                    ) : (
+                      <span className="mt mono">+ {fmt(cargo.monto ?? 0)}</span>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <div className="ap-config-section">
         <div className="ap-cs-head">

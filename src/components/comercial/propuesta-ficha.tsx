@@ -140,6 +140,7 @@ import {
   getCostoTiempoPaso,
   getVisibleCostSteps,
   sumCargosPaso,
+  sumCargosYTiempoExtraPaso,
   sumMaterialesPaso,
 } from "@/lib/costos-orden";
 import { type Moneda } from "@/lib/moneda";
@@ -1801,6 +1802,43 @@ function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
   );
 }
 
+/**
+ * Bloques de tiempo extra del paso (preparación, traslado) con la cuenta a la
+ * vista: de dónde sale el número es la mitad del valor de mostrarlo.
+ */
+function TiemposExtraPasoList({
+  bloques,
+}: {
+  bloques: NonNullable<NonNullable<PasoCosteo["tiempo"]>["tiemposExtra"]>;
+}) {
+  const { moneda } = useConfigRegional();
+  const visibles = bloques.filter((bloque) => bloque.minutos > 0);
+  if (visibles.length === 0) return null;
+
+  return (
+    <div className="cost-charges">
+      {visibles.map((bloque) => {
+        const horas = bloque.minutos / 60;
+        const personas =
+          bloque.dotacionOperarios > 1
+            ? ` × ${bloque.dotacionOperarios} pers`
+            : "";
+        return (
+          <div className="cost-charge" key={bloque.id}>
+            <span>{bloque.etiqueta}</span>
+            <small>
+              {formatDecimal(horas, 2)} h{personas} ×{" "}
+              {formatCurrency(bloque.tarifaHora, moneda)}/h
+              {bloque.centroCostoNombre ? ` · ${bloque.centroCostoNombre}` : ""}
+            </small>
+            <strong>{formatCurrency(bloque.costo, moneda)}</strong>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Clave del tab del visor 3D del bastidor dentro de "Disposición de piezas". */
 const TAB_BASTIDOR_3D = "__bastidor3d__";
 
@@ -2723,6 +2761,7 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
   const materiales = paso.materiales ?? [];
   const cargos = paso.cargosDirectosPaso ?? [];
   const cargosTotal = sumCargosPaso(paso);
+  const tiemposExtra = paso.tiempo?.tiemposExtra ?? [];
 
   return (
     <div className="cost-step-expanded">
@@ -2737,6 +2776,15 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
           nesting={paso.nestingResult}
         />
       </div>
+
+      {tiemposExtra.length > 0 ? (
+        <div className="cost-detail-block">
+          <div className="cost-detail-title">
+            Tiempo extra del paso (no depende de la cantidad)
+          </div>
+          <TiemposExtraPasoList bloques={tiemposExtra} />
+        </div>
+      ) : null}
 
       {cargosTotal > 0 ? (
         <div className="cost-detail-block">
@@ -2774,6 +2822,18 @@ function CostosItemView({
   const cargosPaso = item.cotizacion.pasos
     .flatMap((paso) => paso.cargosDirectosPaso ?? [])
     .filter((cargo) => cargo.monto > 0);
+  // Los bloques de tiempo extra viven en la misma lista: para el comercial son
+  // lo mismo que un cargo (plata que no sale del ritmo del trabajo), con la
+  // diferencia de que se puede ver de qué horas salen.
+  const tiemposExtraItem = item.cotizacion.pasos
+    .flatMap((paso) =>
+      (paso.tiempo?.tiemposExtra ?? []).map((bloque) => ({
+        ...bloque,
+        pasoNombre:
+          paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo),
+      })),
+    )
+    .filter((bloque) => bloque.costo > 0);
   const cargosCotizacion = item.cotizacion.cargosDirectosCotizacion.filter(
     (cargo) => cargo.monto > 0,
   );
@@ -2928,12 +2988,16 @@ function CostosItemView({
               {visibleCostSteps.map((paso, visibleIndex) => {
                 const stepKey = `${paso.rutaPasoOrden}-${paso.familiaCodigo}`;
                 const materialesTotal = sumMaterialesPaso(paso);
-                const cargosTotal = sumCargosPaso(paso);
+                // La columna Cargos junta los cargos monetarios y el costo de
+                // los bloques de tiempo extra: así se distingue del tiempo de
+                // TRABAJO del paso, que es la columna Tiempo.
+                const cargosTotal = sumCargosYTiempoExtraPaso(paso);
                 const puedeExpandir =
                   paso.activado &&
                   (Boolean(paso.tiempo) ||
                     Boolean(paso.mutacionAplicada) ||
                     (paso.materiales?.length ?? 0) > 0 ||
+                    (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
                     (paso.cargosDirectosPaso?.length ?? 0) > 0);
                 const expanded = expandedCostSteps.has(stepKey);
                 return (
@@ -3040,10 +3104,27 @@ function CostosItemView({
         </div>
       </div>
 
-      {cargosPaso.length > 0 || cargosCotizacion.length > 0 ? (
+      {cargosPaso.length > 0 ||
+      cargosCotizacion.length > 0 ||
+      tiemposExtraItem.length > 0 ? (
         <div className="cost-section">
           <div className="cost-title">Opcionales y cargos</div>
           <div className="cost-charges">
+            {tiemposExtraItem.map((bloque) => (
+              <div
+                className="cost-charge"
+                key={`extra-${bloque.pasoNombre}-${bloque.id}`}
+              >
+                <span>{bloque.etiqueta}</span>
+                <small>
+                  {bloque.pasoNombre} · {formatDecimal(bloque.minutos / 60, 2)} h
+                  {bloque.dotacionOperarios > 1
+                    ? ` × ${bloque.dotacionOperarios} pers`
+                    : ""}
+                </small>
+                <strong>{fmt(bloque.costo)}</strong>
+              </div>
+            ))}
             {cargosPaso.map((cargo) => (
               <div className="cost-charge" key={`paso-${cargo.cargoCodigo}`}>
                 <span>{cargo.cargoNombre}</span>

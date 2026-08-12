@@ -13371,6 +13371,15 @@ body {
     color: var(--muted-2);
   }
 
+  /* Pie de un campo del sheet: qué implica lo elegido (ej. el nivel del paso
+     y su tiempo extra). Va debajo del control, en gris chico. */
+  .ot-v1 .ap-hint {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+
   .ot-v1 .ap-notas {
     width: 100%;
     min-height: 72px;

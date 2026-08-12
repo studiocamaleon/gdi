@@ -27,6 +27,8 @@ import type {
   GuardSinLayoutNesting,
 } from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
+import { centrosDeTiemposExtra, leerTiemposExtra } from './tiempo-extra';
+import { aplicarNivelAlPaso, resolverNivelPaso } from './niveles-paso';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
 import { calcularPrecio, type PrecioConfig } from './calculador-precio';
 import { resolverCostoTercerizado } from './tercerizado-costo';
@@ -57,6 +59,7 @@ import type {
   MutacionAplicada,
   ComponenteDesgasteCargado,
   DefaultsFamiliaPaso,
+  TiempoExtraEjecutado,
 } from './tipos';
 import {
   esSustratoRollo,
@@ -564,6 +567,10 @@ export class MotorUniversalService {
             ...(p.maquinasCandidatas ?? []).map(
               (mc) => mc.maquina?.centroCostoPrincipalId ?? null,
             ),
+            // Los bloques de tiempo extra pueden tarifarse en OTRO centro
+            // (el traslado en Instalación, el paso en Taller). Sin esto el
+            // bloque saldría a tarifa 0 y nadie se enteraría.
+            ...centrosDeTiemposExtra(p.paramsPasoJson),
           ])
           .filter((id): id is string => Boolean(id)),
       ),
@@ -795,6 +802,15 @@ export class MotorUniversalService {
         acc + (p.materiales?.reduce((m, mat) => m + mat.costoTotal, 0) ?? 0),
       0,
     );
+    // Los bloques de tiempo extra tienen bucket propio: se MUESTRAN junto a los
+    // cargos (no son tiempo de trabajo) pero las métricas por centro de costo
+    // los leen como lo que son, horas de un centro.
+    // Ver docs/cargos-por-paso-analisis-y-plan.md §7.3.
+    const tiempoExtraTotal = pasosEjecutados.reduce(
+      (acc, p) =>
+        acc + (p.tiempo?.tiemposExtra?.reduce((t, b) => t + b.costo, 0) ?? 0),
+      0,
+    );
     const cargosDirectosPasoTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc + (p.cargosDirectosPaso?.reduce((c, cd) => c + cd.monto, 0) ?? 0),
@@ -821,7 +837,11 @@ export class MotorUniversalService {
       0,
     );
     const total =
-      tiempoTotal + materialesTotal + cargosDirectosTotal + tercerizadoTotal;
+      tiempoTotal +
+      tiempoExtraTotal +
+      materialesTotal +
+      cargosDirectosTotal +
+      tercerizadoTotal;
     const cantidadEfectiva = jobContext.cantidad ?? 1;
     const cantidadComercialReal = this.resolverCantidadComercialBase(
       producto,
@@ -877,6 +897,7 @@ export class MotorUniversalService {
       ),
       costos: {
         tiempoTotal,
+        tiempoExtraTotal,
         materialesTotal,
         cargosDirectosTotal,
         tercerizadoTotal,
@@ -2215,14 +2236,31 @@ export class MotorUniversalService {
 
   private async ejecutarPaso(
     tenantId: string,
-    paso: PasoCargado,
+    pasoBase: PasoCargado,
     jobContext: JobContext,
     errores: ErrorMotor[],
     tarifasMap: Map<string, unknown>,
     periodo: string,
     outputsAcumulados: Set<string> = new Set(),
   ): Promise<PasoEjecutado> {
-    const familia = resolverFamilia(paso.familiaCodigo);
+    const familia = resolverFamilia(pasoBase.familiaCodigo);
+
+    // a.0) NIVEL DEL PASO — "Colocación a domicilio · Zona 2" es UN paso con
+    //      niveles, no tres pasos. El nivel elegido por el comercial pisa el
+    //      reloj, la dotación y los minutos de los bloques de tiempo extra
+    //      ANTES de cualquier cálculo, para que el resto del motor vea un solo
+    //      origen de verdad (mismo criterio que `aplicarCentroDefault`).
+    //      Ver docs/cargos-por-paso-analisis-y-plan.md §8.
+    const nivelPaso = resolverNivelPaso(
+      pasoBase.paramsPasoJson,
+      pasoBase.configPasoId,
+      jobContext as unknown as Record<string, unknown>,
+    );
+    // eslint-disable-next-line prefer-const -- se reasigna al resolver la M-2
+    let paso = aplicarNivelAlPaso(
+      pasoBase,
+      jobContext as unknown as Record<string, unknown>,
+    );
 
     // a) ACTIVACIÓN (D.1)
     const activacion = this.evaluarActivacion(paso, jobContext);
@@ -2599,9 +2637,20 @@ export class MotorUniversalService {
       0,
     );
 
+    // f.2) TIEMPO EXTRA DEL PASO (preparación, traslado): los minutos ya están
+    //      en `tiempo.totalMin` (los cuenta la ETA); acá sólo se totaliza su
+    //      costo, que va separado del tiempo de trabajo.
+    const tiemposExtra = sinImpresion ? [] : (tiempo.tiemposExtra ?? []);
+    const tiempoExtraCosto = tiemposExtra.reduce(
+      (acc, bloque) => acc + bloque.costo,
+      0,
+    );
+
     // g) CARGOS DIRECTOS A NIVEL PASO (G-M3 / D.6)
-    //    Base de PORCENTAJE_SOBRE_BASE = subtotal del PASO (tiempo + materiales).
-    const subtotalPaso = tiempo.costo + materialesCosto;
+    //    Base de PORCENTAJE_SOBRE_BASE = subtotal del PASO (tiempo de trabajo +
+    //    tiempo extra + materiales): un recargo sobre el paso se cobra sobre
+    //    todo lo que el paso cuesta.
+    const subtotalPaso = tiempo.costo + tiempoExtraCosto + materialesCosto;
     const cargosDirectosPaso = sinImpresion
       ? []
       : this.aplicarCargosPaso(
@@ -2681,6 +2730,9 @@ export class MotorUniversalService {
       tiempo,
       materiales,
       cargosDirectosPaso,
+      nivelAplicado: nivelPaso
+        ? { codigo: nivelPaso.codigo, nombre: nivelPaso.nombre }
+        : null,
       costoTotal: subtotalPaso + cargosPasoTotal,
       outputsCanonicos,
       capacidades,
@@ -2818,10 +2870,20 @@ export class MotorUniversalService {
     // [Etapa C] El nombre real de la familia va antes que humanizar el
     // código: para una familia tenant el código es un UUID y "humanizarlo"
     // es mostrarle el UUID al comercial (bug encontrado en el E2E).
-    const base =
+    const nombreDeclarado =
       paso.nombreVisible?.trim() ||
       resolverFamilia(paso.familiaCodigo)?.nombre ||
       this.humanizarCodigo(paso.familiaCodigo);
+    // El nivel va en el nombre: para el operario no es lo mismo ir a Zona 2
+    // que quedarse en el taller, y el tablero sólo muestra el nombre.
+    const nivel = resolverNivelPaso(
+      paso.paramsPasoJson,
+      paso.configPasoId,
+      jobContext as unknown as Record<string, unknown>,
+    );
+    const base = nivel
+      ? `${nombreDeclarado} · ${nivel.nombre}`
+      : nombreDeclarado;
     if (!this.esPasoImpresion(paso)) return base;
 
     const modoColor = this.resolverModoColorComercial(paso, jobContext);
@@ -3112,7 +3174,7 @@ export class MotorUniversalService {
     // el setup/cleanup configurable del módulo.
     const totalCrudoMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
     const ctxTiempo = jobContext as Record<string, unknown>;
-    const totalMin =
+    const trabajoMin =
       ctxTiempo.tiempoReal === true ? totalCrudoMin : Math.ceil(totalCrudoMin);
 
     // F.2.10 — Tarifa horaria. Prioridad:
@@ -3129,7 +3191,7 @@ export class MotorUniversalService {
       }
     }
 
-    if (totalMin > 0 && !centroCosto.id) {
+    if (trabajoMin > 0 && !centroCosto.id) {
       errores.push({
         codigo: 'centro_costo_paso_faltante',
         severidad: 'ERROR',
@@ -3142,7 +3204,7 @@ export class MotorUniversalService {
           'Asigná una máquina con centro de costo principal o elegí un centro de costo horario en la configuración del paso.',
       });
     } else if (
-      totalMin > 0 &&
+      trabajoMin > 0 &&
       centroCosto.id &&
       !tarifasMap.has(centroCosto.id)
     ) {
@@ -3184,14 +3246,31 @@ export class MotorUniversalService {
       Math.round(paso.dotacionOperarios ?? 1),
     );
     const costo =
-      (totalMin / 60) * tarifaHora * (tieneMaquina ? 1 : dotacionOperarios);
+      (trabajoMin / 60) * tarifaHora * (tieneMaquina ? 1 : dotacionOperarios);
+
+    // Bloques de tiempo extra: preparación, traslado. Van DESPUÉS del trabajo
+    // porque heredan de él (centro y dotación) cuando no declaran los suyos.
+    // Sus minutos entran a `totalMin` —la ETA los cuenta— y su costo sale
+    // aparte: el desglose los muestra bajo "Cargos".
+    const tiemposExtra = this.calcularTiemposExtra(
+      paso,
+      { centroCosto, tarifaHora, dotacionOperarios, tieneMaquina },
+      tarifasMap,
+      periodo,
+      errores,
+    );
+    const extraMin = tiemposExtra.reduce(
+      (acc, bloque) => acc + bloque.minutos,
+      0,
+    );
 
     return {
       setupMin,
       runMin,
       cleanupMin,
       tiempoFijoMin,
-      totalMin,
+      extraMin,
+      totalMin: trabajoMin + extraMin,
       centroCostoId: centroCosto.id,
       centroCostoNombre: centroCosto.nombre,
       // Máquina que ejecutó el paso: base del ruteo a estaciones por máquina/
@@ -3200,10 +3279,94 @@ export class MotorUniversalService {
       tarifaHora,
       dotacionOperarios,
       costo,
+      tiemposExtra,
       ...(tiempoManualMin != null
         ? { origenTiempo: 'manual_comercial' as const }
         : {}),
     };
+  }
+
+  /**
+   * Calcula los bloques de tiempo extra del paso (`tiempo-extra.ts`).
+   *
+   * Cada bloque puede declarar su propio centro de costo y su propia dotación;
+   * si no lo hace, hereda los del paso. La dotación del bloque **siempre**
+   * multiplica: un traslado o una preparación son trabajo humano, no runtime
+   * de máquina (por eso no se aplica la excepción de `tieneMaquina`).
+   */
+  private calcularTiemposExtra(
+    paso: PasoCargado,
+    base: {
+      centroCosto: { id: string | null; nombre: string | null };
+      tarifaHora: number;
+      dotacionOperarios: number;
+      tieneMaquina: boolean;
+    },
+    tarifasMap: Map<string, unknown>,
+    periodo: string,
+    errores: ErrorMotor[],
+  ): TiempoExtraEjecutado[] {
+    const bloques = leerTiemposExtra(paso.paramsPasoJson);
+    if (bloques.length === 0) return [];
+    return bloques.map((bloque) => {
+      const centroId = bloque.centroCostoId ?? base.centroCosto.id;
+      let tarifaHora = 0;
+      let centroNombre: string | null = null;
+      if (centroId && centroId === base.centroCosto.id) {
+        tarifaHora = base.tarifaHora;
+        centroNombre = base.centroCosto.nombre;
+      } else if (centroId) {
+        const tarifaCentro = tarifasMap.get(centroId) as
+          | { tarifa: unknown; nombre?: string | null }
+          | undefined;
+        if (tarifaCentro != null) {
+          tarifaHora = Number(tarifaCentro.tarifa);
+          centroNombre = tarifaCentro.nombre ?? null;
+        }
+      }
+      if (!centroId) {
+        errores.push({
+          codigo: 'tiempo_extra_sin_centro_costo',
+          severidad: 'ERROR',
+          mensaje: `El tiempo extra "${bloque.etiqueta}" no tiene centro de costo para tarifarse.`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          sugerencia:
+            'Elegí un centro horario en el bloque, o asignale uno al paso.',
+        });
+      } else if (!tarifasMap.has(centroId)) {
+        // Nunca $0 en silencio: un bloque sin tarifa corta la cotización igual
+        // que un paso sin tarifa.
+        errores.push({
+          codigo: 'centro_costo_sin_tarifa_publicada',
+          severidad: 'ERROR',
+          mensaje: `El centro de costo del tiempo extra "${bloque.etiqueta}" no tiene tarifa publicada para ${periodo}.`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          contexto: { centroCostoId: centroId },
+          sugerencia:
+            'Calculá y publicá la tarifa del centro de costo para el período antes de cotizar.',
+        });
+      }
+      const dotacion = Math.max(
+        1,
+        Math.round(
+          bloque.dotacion ?? (base.tieneMaquina ? 1 : base.dotacionOperarios),
+        ),
+      );
+      return {
+        id: bloque.id,
+        etiqueta: bloque.etiqueta,
+        minutos: bloque.minutos,
+        centroCostoId: centroId,
+        centroCostoNombre: centroNombre,
+        tarifaHora,
+        dotacionOperarios: dotacion,
+        costo: (bloque.minutos / 60) * tarifaHora * dotacion,
+      };
+    });
   }
 
   /**
