@@ -1308,7 +1308,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     eje: "tiempo",
     grupo: "extra",
     anchoCompleto: true,
-    etiqueta: "¿Qué tiempo no depende de la cantidad?",
+    // El título del grupo y su ayuda ya lo dicen; el control abre directo con
+    // la lista o con el botón de agregar (mismo criterio que `tiempo.niveles`).
+    etiqueta: "",
     pregunta: "¿Hay tiempo que no depende de la cantidad?",
     ayuda:
       "Preparar el trabajo, trasladarse. Se cobra una vez por trabajo; puede tarifarse en otro centro de costo y con otra dotación.",
@@ -2584,7 +2586,7 @@ const GRUPOS_TIEMPO: GrupoEje[] = [
     id: "extra",
     titulo: "Tiempo extra",
     ayuda:
-      "Trabajo que lleva el paso pero no depende de la cantidad: preparar, trasladarse. Suma al tiempo del paso —la fecha de entrega lo cuenta— y se muestra aparte en el desglose.",
+      "Trabajo que lleva el paso pero no depende de la cantidad: preparar, trasladarse, etc.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
   },

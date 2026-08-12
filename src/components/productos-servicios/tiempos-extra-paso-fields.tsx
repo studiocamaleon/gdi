@@ -91,11 +91,8 @@ export function TiemposExtraPasoFields({
     // `pasos-sections` es `display:block` sin gap: el flex-col es lo que separa
     // la lista del botón de agregar (si no, queda pegado al borde de la card).
     <div className="pasos-sections flex flex-col gap-3">
-      {bloques.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          Sin tiempo extra: el paso cobra sólo lo que tarda el trabajo.
-        </p>
-      ) : (
+      {/* Sin bloques no va leyenda: el botón de agregar ya dice que no hay. */}
+      {bloques.length === 0 ? null : (
         <div className="divide-y overflow-hidden rounded-md border">
           {bloques.map((bloque, indice) => (
             <div
