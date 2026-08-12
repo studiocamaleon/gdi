@@ -13260,25 +13260,27 @@ body {
     line-height: 1.35;
   }
 
+  /* Aire entre grupos: sin cajas, la separación es lo único que dice dónde
+     termina un opcional y empieza el otro. */
   .ot-v1 .ap-optional-config-grid {
     display: grid;
-    gap: 10px;
+    gap: 18px;
   }
 
+  /* Sin caja: adentro ya van tarjetas con encabezado negro, y una card
+     conteniendo cards es un nivel de anidado que no informa nada. El nombre
+     del opcional queda como rótulo del grupo —con dos opcionales activos,
+     "FILM" solo no dice de quién es— y como percha de la ×. */
   .ot-v1 .ap-optional-config-card {
-    overflow: hidden;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r-3);
-    box-shadow: var(--shadow-sm);
+    display: grid;
+    gap: 8px;
   }
 
   .ot-v1 .ap-optional-config-title {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 8px 7px 12px;
-    border-bottom: 1px solid var(--hairline);
+    padding: 0 2px;
   }
 
   .ot-v1 .ap-optional-config-title .ttl {
@@ -13362,8 +13364,7 @@ body {
 
   .ot-v1 .ap-optional-config-fields {
     display: grid;
-    gap: 10px;
-    padding: 10px 12px 12px;
+    gap: 8px;
   }
 
   /* Dentro de la card del opcional el selector va compacto: es una decisión
@@ -13380,16 +13381,16 @@ body {
     margin-bottom: 4px;
   }
 
+  /* Sin la caja del opcional el pie deja de ser una franja: va como nota al
+     pie del grupo, alineada con el resto. */
   .ot-v1 .ap-optional-config-summary {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 6px;
-    padding: 10px 14px;
+    padding: 0 2px;
     color: var(--muted);
-    font-size: 12px;
-    background: var(--surface-2);
-    border-top: 1px solid var(--hairline);
+    font-size: 11.5px;
   }
 
   .ot-v1 .ap-optional-config-summary .mono {

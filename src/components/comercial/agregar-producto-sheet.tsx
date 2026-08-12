@@ -5236,10 +5236,13 @@ function ApConfigStep({
           : efectivoMin;
     const error = getTiempoManualError(tiempoPaso, motorConfig);
     if (opts?.enTarjeta) {
+      // El nombre del paso ya es el rótulo del grupo: repetirlo en la barra
+      // negra ("DISEÑO GRÁFICO · TIEMPO ESTIMADO") es decirlo dos veces.
+      const enTarjetaLabel = tiempoPaso.etiqueta || "Tiempo estimado";
       return (
         <div className={seC.card} key={`tiempo-${tiempoPaso.configPasoId}`}>
           <div className={seC.gh}>
-            {label} ({unidadLabel})
+            {enTarjetaLabel} ({unidadLabel})
           </div>
           <div className={`${seC.body} ap-spec`}>
             <input
