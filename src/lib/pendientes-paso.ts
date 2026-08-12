@@ -236,7 +236,14 @@ export function pendientesDePaso(
       typeof params.timeCalculationMode === "string"
         ? params.timeCalculationMode
         : "productivity";
-    const tiempoManual = asRecord(params.tiempoManual).habilitado === true;
+    // La capa comercial cubre el ritmo sólo si es obligatoria (Debe: el
+    // motor corta si falta) o trae sugerencia. "Puede" sin ningún número
+    // — ni base ni sugerido — cotizaba $0 en silencio (árbol de tiempo ⑤).
+    const tiempoManualCfg = asRecord(params.tiempoManual);
+    const tiempoManual =
+      tiempoManualCfg.habilitado === true &&
+      (tiempoManualCfg.obligatorio === true ||
+        num(tiempoManualCfg.defaultMin) !== null);
     const cubierto =
       tiempoManual ||
       num(params.horasEstimadas) !== null ||

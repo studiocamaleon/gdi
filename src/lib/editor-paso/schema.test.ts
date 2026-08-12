@@ -37,13 +37,15 @@ const CENSO: Record<string, string[]> = {
     "activacion.coejecucion",
     "activacion.multiplicadores",
   ],
-  // Sub-fase B — Tiempo y costo: el tiempo del comercial va PRIMERO y
-  // suprime ritmo/tanda/tiempo fijo/calcular-según (corrección usuario).
+  // Árbol de tiempo (docs/tiempo-pasos-analisis-y-plan.md §4): ① origen →
+  // ② forma (fijo/ritmo) → ③ ritmo_modo + magnitud; la capa comercial
+  // (No/Puede/Debe) al FINAL — se apoya sobre el base, sólo "Debe" lo
+  // suprime.
   tiempo: [
-    "tiempo.comercial",
-    // Las ayudas al comercial, separadas para caer al final del eje.
-    "tiempo.comercial_ayudas",
-    "tiempo.modo",
+    "tiempo.origen",
+    "tiempo.maquina_panel",
+    "tiempo.forma",
+    "tiempo.fijo_valor",
     "tiempo.centro",
     "tiempo.dotacion",
     "tiempo.ritmo_modo",
@@ -53,7 +55,8 @@ const CENSO: Record<string, string[]> = {
     "tiempo.herencia",
     "tiempo.calcular_segun",
     "tiempo.piezas_montar",
-    "tiempo.tiempo_fijo",
+    "tiempo.comercial",
+    "tiempo.comercial_ayudas",
   ],
   // Sub-fase B — Máquina y perfil: candidatas y modo de color usan LA UI
   // del detallado extraída como componentes. "Modo de color del producto"
@@ -111,7 +114,7 @@ const SECCIONES_PENDIENTES: string[] = [];
 function ctxBase(extra?: {
   cfg?: Partial<UpsertConfigPasoPayload>;
   familia?: Partial<FamiliaListItem>;
-  otros?: Array<{ id: string; nombre: string }>;
+  otros?: Array<{ id: string; nombre: string; modoActivacion?: string | null }>;
   lookups?: Partial<LookupsConfigPaso>;
   slot?: SlotEnContexto;
 }): ContextoOpcion {
@@ -215,7 +218,7 @@ describe("sección Activación", () => {
       familia: { modosActivacionSoportados: ["OBLIGATORIO"] },
     });
     const cuando = ESQUEMA_PASO.find((op) => op.clave === "activacion.cuando")!;
-    expect(cuando.resumen(ctx)).toBe("Siempre — fijado por el paso");
+    expect(cuando.resumen(ctx)).toBe("Obligatorio — fijado por el paso");
     // El control es propio (segmented + la consecuencia del modo elegido);
     // lo que sigue siendo del esquema es QUÉ modos se ofrecen.
     expect(cuando.control.tipo).toBe("componente");
@@ -236,10 +239,11 @@ describe("sección Activación", () => {
     }
   });
 
-  it("el arrastre se ofrece TAMBIÉN en pasos obligatorios: ahí también arrastra", () => {
-    // `resolverArrastreOpcionales` trata al obligatorio como activo, así que
-    // arrastra — y vuelve obligatorio de hecho al arrastrado. Esconder la
-    // pregunta acá (lo que se hizo primero) borraba una capacidad real.
+  it("el arrastre sólo se ofrece con activación condicional; obligatorio con selecciones legacy sigue visible para limpiar", () => {
+    // Decisión del usuario (2026-08-11, revierte H-7): en un paso que corre
+    // SIEMPRE, arrastrar equivale a configurar los destinos como "Siempre" —
+    // la sección era ruido. El motor sí arrastra desde obligatorios, así que
+    // las selecciones guardadas se muestran para poder destildarlas.
     const co = ESQUEMA_PASO.find(
       (op) => op.clave === "activacion.coejecucion",
     )!;
@@ -248,16 +252,49 @@ describe("sección Activación", () => {
       co.visible(
         ctxBase({ ...conVecinos, cfg: { modoActivacion: "OBLIGATORIO" } }),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       co.visible(
         ctxBase({ ...conVecinos, cfg: { modoActivacion: "OPCIONAL" } }),
       ),
     ).toBe(true);
-    // Salvo apagado: si el paso no corre, no arrastra a nadie.
+    expect(
+      co.visible(
+        ctxBase({ ...conVecinos, cfg: { modoActivacion: "CONDICIONAL" } }),
+      ),
+    ).toBe(true);
+    // Legacy: obligatorio con selecciones guardadas → visible para limpiar.
+    expect(
+      co.visible(
+        ctxBase({
+          ...conVecinos,
+          cfg: {
+            modoActivacion: "OBLIGATORIO",
+            requiereRutaPasoIds: ["otro"],
+          },
+        }),
+      ),
+    ).toBe(true);
+    // Apagado: si el paso no corre, no arrastra a nadie.
     expect(
       co.visible(
         ctxBase({ ...conVecinos, cfg: { modoActivacion: "NO_EJECUTAR" } }),
+      ),
+    ).toBe(false);
+    // Destinos: un vecino OBLIGATORIO no es arrastrable — sin candidatos,
+    // la sección se oculta aunque este paso sea opcional.
+    expect(
+      co.visible(
+        ctxBase({
+          otros: [
+            {
+              id: "otro",
+              nombre: "Impresión",
+              modoActivacion: "OBLIGATORIO",
+            },
+          ],
+          cfg: { modoActivacion: "OPCIONAL" },
+        }),
       ),
     ).toBe(false);
   });
@@ -312,37 +349,54 @@ describe("sección Activación", () => {
 });
 
 describe("sección Tiempo y costo", () => {
-  it("el tiempo del comercial va PRIMERO y suprime las preguntas de ritmo", () => {
-    const claves = opcionesDeSeccion("tiempo", ctxBase()).map(
-      (op) => op.clave,
-    );
-    expect(claves[0]).toBe("tiempo.comercial");
-
-    // Con el comercial estimando, las preguntas de cálculo desaparecen.
-    const ctxComercial = ctxBase({
+  it("capa comercial: 'Puede' deja visible el base; sólo 'Debe' suprime las preguntas de ritmo", () => {
+    // "Puede" (habilitado sin obligatorio): el tiempo base sigue visible —
+    // es la sugerencia/fallback (el bug de los dos defaults era esconderlo).
+    const ctxPuede = ctxBase({
       cfg: {
         modoTiempo: "T-2",
         paramsPasoJson: { tiempoManual: { habilitado: true, defaultMin: 30 } },
       },
     });
-    const suprimidas = opcionesDeSeccion("tiempo", ctxComercial).map(
+    const clavesPuede = opcionesDeSeccion("tiempo", ctxPuede).map(
+      (op) => op.clave,
+    );
+    expect(clavesPuede).toContain("tiempo.forma");
+    expect(clavesPuede).toContain("tiempo.productividad");
+
+    // "Debe" (obligatorio): el comercial SIEMPRE pisa el base → se suprime.
+    const ctxDebe = ctxBase({
+      cfg: {
+        modoTiempo: "T-2",
+        paramsPasoJson: {
+          tiempoManual: { habilitado: true, obligatorio: true },
+        },
+      },
+    });
+    const suprimidas = opcionesDeSeccion("tiempo", ctxDebe).map(
       (op) => op.clave,
     );
     for (const clave of [
-      "tiempo.modo",
+      "tiempo.origen",
+      "tiempo.forma",
       "tiempo.ritmo_modo",
       "tiempo.productividad",
       "tiempo.batch",
       "tiempo.calcular_segun",
-      "tiempo.tiempo_fijo",
+      "tiempo.fijo_valor",
     ]) {
       expect(suprimidas).not.toContain(clave);
     }
     const comercial = ESQUEMA_PASO.find(
       (op) => op.clave === "tiempo.comercial",
     )!;
-    expect(comercial.resumen(ctxComercial)).toBe(
-      "Sí — lo carga al cotizar (sugerido 30 min)",
+    expect(comercial.resumen(ctxDebe)).toBe(
+      "Debe cargarlo — sin su tiempo no cotiza",
+    );
+    // Legacy T-4 (etiqueta sin rama en el motor) se lee como "Debe".
+    const ctxT4 = ctxBase({ cfg: { modoTiempo: "T-4" } });
+    expect(comercial.resumen(ctxT4)).toBe(
+      "Debe cargarlo — sin su tiempo no cotiza",
     );
   });
 
@@ -392,30 +446,42 @@ describe("sección Tiempo y costo", () => {
     expect(centro.origenValor(ctxMaq)).toBe("default-maquina");
   });
 
-  it("ritmo: productividad y tanda se excluyen según cómo se mide", () => {
+  it("la regla del tiempo variable es UNA pregunta para productividad y tanda", () => {
+    // Feedback del usuario: "Tipo de ritmo" sobra — la oración
+    // "[N] [magnitud] cada [T] [min|h]" expresa ambos; la diferencia real
+    // (la tanda redondea) es el interruptor "tandas enteras" del control.
     const ctxProd = ctxBase({ cfg: { modoTiempo: "T-2" } });
     const clavesProd = opcionesDeSeccion("tiempo", ctxProd).map(
       (op) => op.clave,
     );
     expect(clavesProd).toContain("tiempo.productividad");
     expect(clavesProd).not.toContain("tiempo.batch");
+    expect(clavesProd).not.toContain("tiempo.ritmo_modo");
 
     const ctxBatch = ctxBase({
       cfg: {
         modoTiempo: "T-2",
-        paramsPasoJson: { timeCalculationMode: "batch_time" },
+        paramsPasoJson: {
+          timeCalculationMode: "batch_time",
+          batchSize: 3,
+          batchTimeMin: 1,
+        },
       },
     });
     const clavesBatch = opcionesDeSeccion("tiempo", ctxBatch).map(
       (op) => op.clave,
     );
-    expect(clavesBatch).toContain("tiempo.batch");
-    expect(clavesBatch).not.toContain("tiempo.productividad");
+    expect(clavesBatch).toContain("tiempo.productividad");
+    expect(clavesBatch).not.toContain("tiempo.batch");
+    expect(clavesBatch).not.toContain("tiempo.ritmo_modo");
 
-    // El ritmo declarado por el paso se usa como default vivo.
+    // El resumen de la regla dice la tanda (y el redondeo) cuando aplica.
     const prod = ESQUEMA_PASO.find(
       (op) => op.clave === "tiempo.productividad",
     )!;
+    expect(prod.resumen(ctxBatch)).toContain("cada 1 min");
+
+    // El ritmo declarado por el paso se usa como default vivo.
     const ctxDefault = ctxBase({
       cfg: { modoTiempo: "T-2" },
       familia: {
@@ -426,18 +492,54 @@ describe("sección Tiempo y costo", () => {
     expect(prod.origenValor(ctxDefault)).toBe("default-paso");
   });
 
-  it("el tiempo fijo sólo aparece en T-1 sin máquina y resume el default", () => {
-    const fijo = ESQUEMA_PASO.find((op) => op.clave === "tiempo.tiempo_fijo")!;
+  it("el valor del fijo aparece con forma=fijo y unifica los dos storages (T-1 min / T-2 horas)", () => {
+    const fijo = ESQUEMA_PASO.find((op) => op.clave === "tiempo.fijo_valor")!;
     const ctxT1 = ctxBase({
       cfg: { modoTiempo: "T-1" },
       familia: { defaults: { tiempoFijoMin: 15 } } as Partial<FamiliaListItem>,
     });
     expect(fijo.visible(ctxT1)).toBe(true);
     expect(fijo.resumen(ctxT1)).toBe("Usando el del paso: 15 min");
+    // T-2 puro (ritmo) no muestra el fijo…
     expect(fijo.visible(ctxBase({ cfg: { modoTiempo: "T-2" } }))).toBe(false);
-    expect(
-      fijo.visible(ctxBase({ cfg: { modoTiempo: "T-1", maquinaM1Id: "mq" } })),
-    ).toBe(false);
+    // …pero T-2 con horas cargadas ES fijo (el storage histórico de horas):
+    // se muestra y resume en horas.
+    const ctxT2Horas = ctxBase({
+      cfg: { modoTiempo: "T-2", paramsPasoJson: { horasEstimadas: 2 } },
+    });
+    expect(fijo.visible(ctxT2Horas)).toBe(true);
+    expect(fijo.resumen(ctxT2Horas)).toBe("2 h");
+    // ① = máquina no ofrece fijo: el reloj lo define el perfil.
+    expect(fijo.visible(ctxBase({ cfg: { modoTiempo: "T-3" } }))).toBe(false);
+  });
+
+  it("la bifurcación ①: origen máquina muestra el panel y esconde las perillas del taller", () => {
+    const claves = opcionesDeSeccion(
+      "tiempo",
+      ctxBase({
+        cfg: { modoTiempo: "T-3" },
+        familia: {
+          modosTiempoSoportados: ["T-2", "T-3"],
+        } as Partial<FamiliaListItem>,
+      }),
+    ).map((op) => op.clave);
+    expect(claves).toContain("tiempo.origen");
+    expect(claves).toContain("tiempo.maquina_panel");
+    expect(claves).not.toContain("tiempo.forma");
+    expect(claves).not.toContain("tiempo.ritmo_modo");
+    expect(claves).not.toContain("tiempo.productividad");
+    // Y al revés: taller con T-2 ofrece la forma, no el panel.
+    const clavesTaller = opcionesDeSeccion(
+      "tiempo",
+      ctxBase({
+        cfg: { modoTiempo: "T-2" },
+        familia: {
+          modosTiempoSoportados: ["T-2", "T-3"],
+        } as Partial<FamiliaListItem>,
+      }),
+    ).map((op) => op.clave);
+    expect(clavesTaller).toContain("tiempo.forma");
+    expect(clavesTaller).not.toContain("tiempo.maquina_panel");
   });
 
   it("talonario ya no es opción propia: se fusionó con la imposición del pliego (ni en oficio ni aun declarando el param); piezas a montar sólo en montaje", () => {
@@ -820,7 +922,7 @@ describe("sección Quién lo hace (tercerización)", () => {
       familia: { defaults: { tercerizado: true } } as Partial<FamiliaListItem>,
     });
     expect(quien.resumen(ctx)).toBe(
-      "Lo hace un proveedor — declarado en el paso",
+      "Sí — declarado en el paso",
     );
     expect(quien.origenValor(ctx)).toBe("default-paso");
     // Internalizarlo pese a la declaración es una decisión propia.

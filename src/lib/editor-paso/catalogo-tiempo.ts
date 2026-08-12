@@ -93,6 +93,82 @@ export const T2_TIME_CALCULATION_MODE_OPTIONS = [
   },
 ];
 
+/** Pregunta ① del árbol de tiempo: ¿de dónde sale el tiempo base?
+ *  (docs/tiempo-pasos-analisis-y-plan.md §4). "Máquina" agrupa T-3 (perfil
+ *  y primitivas); "taller" agrupa T-1/T-2 (fijo o ritmo propio). */
+export const TIEMPO_ORIGEN_OPTIONS = [
+  {
+    value: "taller",
+    label: "Lo definís vos (el taller)",
+    description:
+      "Un tiempo fijo o un ritmo propio del paso, declarado acá.",
+  },
+  {
+    value: "maquina",
+    label: "Lo dice la máquina",
+    description:
+      "La velocidad sale del perfil operativo de la máquina elegida (o de su plan de trabajo, como el de corte de la guillotina).",
+  },
+];
+
+/** Pregunta ② del árbol: ¿tiempo dicho o calculado por regla? */
+export const TIEMPO_FORMA_OPTIONS = [
+  {
+    value: "fijo",
+    label: "Tiempo fijo",
+    description: "Tarda lo mismo sin importar la cantidad. Ej: 2 horas.",
+  },
+  {
+    value: "ritmo",
+    label: "Tiempo variable",
+    description:
+      "Depende de cuánto se produce: definí la regla. Ej: 3 piezas cada 1 min, 40 m² por hora.",
+  },
+];
+
+/** Capa ⑤ del árbol: el comercial sobre el tiempo base. No es un modo — se
+ *  apoya sobre cualquiera (guarda `paramsPasoJson.tiempoManual`). */
+export const TIEMPO_COMERCIAL_NIVEL_OPTIONS = [
+  {
+    value: "no",
+    label: "No",
+    description: "El tiempo se calcula solo con lo definido acá.",
+  },
+  {
+    value: "puede",
+    label: "Sí, puede",
+    description:
+      "El cotizador sugiere el tiempo base y el comercial lo puede pisar (si no lo toca, vale el base).",
+  },
+  {
+    value: "debe",
+    label: "Debe cargarlo",
+    description:
+      "Sin el tiempo del comercial no se cotiza (típico: minutos de láser según el RIP).",
+  },
+];
+
+/** Las dos formas de RITMO de la pregunta ③. "Tiempo fijo" ya no es una de
+ *  ellas: subió a la pregunta ② (era un modo escondido dentro del ritmo). */
+export const T2_RITMO_OPTIONS = T2_TIME_CALCULATION_MODE_OPTIONS.filter(
+  (o) => o.value !== "tiempo_fijo",
+);
+
+/** Equivalencia honesta del pseudo-batch (F0.5): una tanda de tamaño 1 es un
+ *  ritmo disfrazado. Devuelve las unidades/hora equivalentes, o null si la
+ *  tanda es genuina (tamaño > 1) o faltan datos. La equivalencia no es
+ *  exacta al centavo: la tanda redondea la cantidad hacia arriba. */
+export function ritmoEquivalenteDeBatch(
+  batchSize: number | null | undefined,
+  batchTimeMin: number | null | undefined,
+): number | null {
+  const size = Number(batchSize ?? NaN);
+  const min = Number(batchTimeMin ?? NaN);
+  if (!Number.isFinite(size) || !Number.isFinite(min)) return null;
+  if (size !== 1 || min <= 0) return null;
+  return Math.round((60 / min) * 100) / 100;
+}
+
 export const TIEMPO_MANUAL_UNIDAD_OPTIONS = [
   {
     value: "min",

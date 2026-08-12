@@ -54,12 +54,12 @@ import {
 } from "@/lib/pendientes-paso";
 import {
   GRUPOS_EJE,
+  GRUPOS_DONDE,
   opcionesDeEje,
   opcionesDeMaterial,
   GRUPOS_MATERIAL,
   modosActivacionOfrecidos,
   MODO_ACTIVACION_LABELS,
-  MODO_ACTIVACION_CONSECUENCIA,
   type EjePaso,
   type ContextoOpcion,
   type OpcionPaso,
@@ -522,6 +522,7 @@ function normalizeMaquinasCandidatas(
     {
       maquinaId: string;
       perfilDefaultId?: string | null;
+      perfilDefaultPorModo?: Record<string, string> | null;
       modoColorAllowedModes?: string[];
       esPreferida?: boolean;
       orden?: number;
@@ -532,6 +533,20 @@ function normalizeMaquinasCandidatas(
     unique.set(candidata.maquinaId, {
       maquinaId: candidata.maquinaId,
       perfilDefaultId: candidata.perfilDefaultId ?? null,
+      // Claves del mapa por-modo normalizadas (mismos códigos que el motor);
+      // entradas vacías → null.
+      perfilDefaultPorModo: (() => {
+        const mapa = candidata.perfilDefaultPorModo;
+        if (!mapa || typeof mapa !== "object") return null;
+        const saneado: Record<string, string> = {};
+        for (const [modo, perfilId] of Object.entries(mapa)) {
+          const clave = normalizeModoColor(modo);
+          if (clave && typeof perfilId === "string" && perfilId) {
+            saneado[clave] = perfilId;
+          }
+        }
+        return Object.keys(saneado).length > 0 ? saneado : null;
+      })(),
       modoColorAllowedModes: Array.isArray(candidata.modoColorAllowedModes)
         ? Array.from(
             new Set(
@@ -555,6 +570,7 @@ function normalizeMaquinasCandidatas(
   return values.map((candidata, index) => ({
     maquinaId: candidata.maquinaId,
     perfilDefaultId: candidata.perfilDefaultId ?? null,
+    perfilDefaultPorModo: candidata.perfilDefaultPorModo ?? null,
     modoColorAllowedModes: candidata.modoColorAllowedModes ?? [],
     esPreferida: candidata.maquinaId === preferredId,
     orden: index,
@@ -2854,6 +2870,13 @@ export function ConfigPasosEditorView({
             maquinaId: candidata.maquinaId,
             perfilDefaultId:
               candidata.perfilDefaultId ?? candidata.perfilDefault?.id ?? null,
+            perfilDefaultPorModo:
+              ((
+                candidata as {
+                  perfilDefaultPorModoJson?: Record<string, string> | null;
+                }
+              ).perfilDefaultPorModoJson as Record<string, string> | null) ??
+              null,
             modoColorAllowedModes: candidata.modoColorAllowedModes ?? [],
             esPreferida: candidata.esPreferida,
             orden: candidata.orden ?? index,
@@ -3292,6 +3315,35 @@ export function ConfigPasosEditorView({
             : {}),
           maquinasCandidatas: next,
         },
+      };
+    });
+  };
+
+  const setMaquinaCandidataPerfilPorModo = (
+    rutaPasoId: string,
+    maquinaId: string,
+    modo: string,
+    perfilId: string | null,
+  ) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const current = cfg.maquinasCandidatas ?? [];
+      const next = normalizeMaquinasCandidatas(
+        current.map((candidata) => {
+          if (candidata.maquinaId !== maquinaId) return candidata;
+          const mapa = { ...(candidata.perfilDefaultPorModo ?? {}) };
+          if (perfilId) mapa[modo] = perfilId;
+          else delete mapa[modo];
+          return {
+            ...candidata,
+            perfilDefaultPorModo:
+              Object.keys(mapa).length > 0 ? mapa : null,
+          };
+        }),
+      );
+      return {
+        ...prev,
+        [rutaPasoId]: { ...cfg, maquinasCandidatas: next },
       };
     });
   };
@@ -4234,6 +4286,10 @@ export function ConfigPasosEditorView({
         humanizeCode(familiaCodigo),
       esExtra: Boolean(extra),
       orden: base?.orden ?? null,
+      modoActivacion:
+        configs[id]?.modoActivacion ??
+        familiasMap.get(familiaCodigo)?.modoActivacionDefault ??
+        "OBLIGATORIO",
     };
   });
   // Props compartidos por las dos presentaciones del esquema (asistente
@@ -4812,33 +4868,14 @@ export function ConfigPasosEditorView({
                           viven en el sidebar; el centro de costo ya se lee ahí.
                           Los botones Siguiente/Guardar flotan al pie del scroll
                           (barra sticky al final del paso). */}
+                      {/* Header sin badge de activación (vive en "Cuándo se
+                          ejecuta"), sin nombre (vive resaltado en el sidebar)
+                          y sin "Perfil: X" (es un default — el motor suele
+                          elegir otro compatible; nombrarlo lo hacía parecer
+                          fijo). Queda sólo el toggle de vista (feedback del
+                          usuario, 2026-08-11). */}
                       <div className="step-head">
-                        <div style={{ flex: 1 }}>
-                          <div className="pill-row">
-                            <span className="tag muted">
-                              {cfg.modoActivacion
-                                ? getLabel(
-                                    modoActivacionLabels,
-                                    cfg.modoActivacion,
-                                  ).label
-                                : "Sin activación"}
-                            </span>
-                          </div>
-                          <h1>{pasoLabel}</h1>
-                          {maquinaGuardada && perfilGuardado ? (
-                            <div className="sub">
-                              Perfil:{" "}
-                              <strong
-                                style={{
-                                  color: "var(--ink)",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                {perfilGuardado.nombre}
-                              </strong>
-                            </div>
-                          ) : null}
-                        </div>
+                        <div style={{ flex: 1 }} />
                         {/* Re-habilitado 2026-08-11 (pedido del usuario):
                             el toggle Detallado/Guiado vuelve para comparar
                             vistas. OJO: el detallado está CONGELADO — las
@@ -4926,6 +4963,9 @@ export function ConfigPasosEditorView({
                               setMaquinaCandidataPerfilDefault={setMaquinaCandidataPerfilDefault}
                               setMaquinaCandidataModoColorAllowed={
                                 setMaquinaCandidataModoColorAllowed
+                              }
+                              setMaquinaCandidataPerfilPorModo={
+                                setMaquinaCandidataPerfilPorModo
                               }
                               setCoberturaPaso={setCoberturaPaso}
                               materialesApi={materialesApiEsquema}
@@ -5896,6 +5936,7 @@ export function ConfigPasosEditorView({
                                           setMaquinaCandidataPreferida={setMaquinaCandidataPreferida}
                                           setMaquinaCandidataPerfilDefault={setMaquinaCandidataPerfilDefault}
                                           setMaquinaCandidataModoColorAllowed={setMaquinaCandidataModoColorAllowed}
+                                          setMaquinaCandidataPerfilPorModo={setMaquinaCandidataPerfilPorModo}
                                         />
                                       ) : null}
                                       {mostrarModoColor &&
@@ -6715,6 +6756,7 @@ export function ConfigPasosEditorView({
           setMaquinaCandidataModoColorAllowed={
             setMaquinaCandidataModoColorAllowed
           }
+          setMaquinaCandidataPerfilPorModo={setMaquinaCandidataPerfilPorModo}
           setCoberturaPaso={setCoberturaPaso}
           materialesApi={materialesApiEsquema}
           nestingApi={nestingApiEsquema}
@@ -9368,15 +9410,57 @@ function RitmoGuiado({
   // derivada elegida ("cortes de hierro") le gana a la magnitud principal.
   const unidadCantidad =
     etiquetaFuenteDerivada(familia, fuente) ?? unidadCantidadDe(cfg, familia);
-  const [ritmoTexto, setRitmoTexto] = React.useState(
-    params.productivityValue != null ? String(params.productivityValue) : "",
-  );
-  const [loteTiempoTexto, setLoteTiempoTexto] = React.useState(
-    params.batchTimeMin != null ? String(params.batchTimeMin) : "",
-  );
-  const [loteTamTexto, setLoteTamTexto] = React.useState(
-    params.batchSize != null ? String(params.batchSize) : "",
-  );
+  // ── La regla ÚNICA del tiempo variable (feedback del usuario): la misma
+  // oración "[N] [magnitud] cada [T] [min|h]" expresa productividad
+  // ("120 pliegos cada 1 hora") y tanda ("3 piezas cada 1 min"). La única
+  // diferencia semántica —la tanda REDONDEA hacia arriba— es el interruptor
+  // "tandas enteras". Storage: ON → batchSize/batchTimeMin (batch_time);
+  // OFF → productivityValue = N×60÷Tmin (lineal, se re-expresa por hora).
+  const esTandaEntera =
+    (typeof params.timeCalculationMode === "string"
+      ? params.timeCalculationMode
+      : getDefaultT2TimeCalculationMode(familia)) === "batch_time";
+  const [reglaN, setReglaN] = React.useState(() => {
+    if (esTandaEntera) {
+      return params.batchSize != null ? String(params.batchSize) : "";
+    }
+    return params.productivityValue != null
+      ? String(params.productivityValue)
+      : "";
+  });
+  const [reglaUnidadT, setReglaUnidadT] = React.useState<"min" | "h">(() => {
+    if (!esTandaEntera) return "h";
+    const t = Number(params.batchTimeMin);
+    return Number.isFinite(t) && t >= 60 && t % 30 === 0 ? "h" : "min";
+  });
+  const [reglaT, setReglaT] = React.useState(() => {
+    if (!esTandaEntera) return params.productivityValue != null ? "1" : "";
+    const t = Number(params.batchTimeMin);
+    if (!Number.isFinite(t) || params.batchTimeMin == null) return "";
+    return t >= 60 && t % 30 === 0 ? String(t / 60) : String(t);
+  });
+  /** Persiste la regla. SIEMPRE proporcional exacto (decisión del usuario:
+   *  nada de bloques/tandas) → storage `productivity` con el ritmo por hora
+   *  equivalente. Las configs viejas en `batch_time` se leen tal cual y se
+   *  normalizan a proporcional al primer edit. */
+  const escribirRegla = (
+    nTexto: string,
+    tTexto: string,
+    unidadT: "min" | "h",
+  ) => {
+    const n = numOrNull(nTexto);
+    const t = numOrNull(tTexto);
+    const tMin = t == null ? null : unidadT === "h" ? t * 60 : t;
+    onParams(pasoId, {
+      timeCalculationMode: "productivity",
+      productivityValue:
+        n == null || tMin == null || tMin <= 0
+          ? null
+          : Math.round(((n * 60) / tMin) * 10000) / 10000,
+      batchSize: null,
+      batchTimeMin: null,
+    });
+  };
   const [horasTexto, setHorasTexto] = React.useState(
     params.horasEstimadas != null ? String(params.horasEstimadas) : "",
   );
@@ -9405,15 +9489,79 @@ function RitmoGuiado({
     params,
     unidadCantidadNeutra,
   );
-  const magnitudActual = `${unidad}|${fuente}`;
-  // Cuando el paso tiene sección de cantidad (hereda / la calcula / la pedida),
-  // esa magnitud ES la del ritmo. En productividad la mostramos INLINE aquí
-  // ("6 puntos de soldadura por hora") en vez de un selector de magnitud
-  // redundante + una sección aparte abajo.
-  const inlineCantidad =
-    variante === "productividad" &&
+  // ── Selector UNIFICADO de magnitud (feedback del usuario: "El ritmo
+  // cuenta" y "El ritmo se multiplica por" mostrados juntos eran confusos
+  // y en parte duplicados). UNA lista para la oración del ritmo:
+  //  · elegir "la cantidad pedida / pliegos impresos / la calcula el paso"
+  //    resuelve el mecanismo de cantidad Y pone el reloj a contar cantidad;
+  //  · elegir "m² / metros de perímetro / borde" pone el reloj a contar esa
+  //    magnitud (el mecanismo queda aparte, para materiales y herencias).
+  // Vale para productividad Y tanda — la tanda tenía la magnitud suelta.
+  const puedeElegirMecanismo =
     requiereMecanismoCantidad(cfg, familia) &&
     (familia?.mecanismosCantidadSoportados?.length ?? 4) > 1;
+  const cantidadSel = opcionesCantidadUnificada(
+    pasoId,
+    pasos,
+    familia,
+    familiasMap,
+    jsonTexts,
+    cfg,
+  );
+  const opcionesMagnitud: {
+    value: string;
+    label: string;
+    description?: string;
+  }[] = [];
+  if (puedeElegirMecanismo) {
+    opcionesMagnitud.push(...cantidadSel.options);
+  } else {
+    const cantidadOp = magnitudes.find((m) => m.fuente === "cantidad");
+    if (cantidadOp) {
+      opcionesMagnitud.push({
+        value: `q:${cantidadOp.value}`,
+        label: cantidadOp.label,
+      });
+    }
+  }
+  for (const m of magnitudes) {
+    if (m.fuente === "cantidad") continue;
+    opcionesMagnitud.push({ value: `q:${m.value}`, label: m.label });
+  }
+  const valorMagnitud =
+    fuente !== "cantidad"
+      ? `q:${unidad}|${fuente}`
+      : puedeElegirMecanismo
+        ? cantidadSel.valor
+        : `q:${magnitudes.find((m) => m.fuente === "cantidad")?.value ?? `${unidad}|cantidad`}`;
+  const elegirMagnitud = (v: string) => {
+    if (v.startsWith("q:")) {
+      const elegida = magnitudes.find((m) => `q:${m.value}` === v);
+      if (!elegida) return;
+      onParams(pasoId, {
+        productivityUnit: elegida.unidad,
+        productivityQuantitySource: elegida.fuente,
+      });
+      return;
+    }
+    // Opción de cantidad (mecanismo/herencia): además de resolver el
+    // mecanismo, el reloj pasa a contar la cantidad del paso.
+    aplicarCantidadUnificada(v, pasoId, onPatch, onHerencia);
+    onParams(pasoId, {
+      productivityUnit: "unidades_h",
+      productivityQuantitySource: "cantidad",
+    });
+  };
+  const selectorMagnitud = (
+    <div style={{ minWidth: 200 }}>
+      <HumanSelect
+        value={valorMagnitud}
+        onValueChange={(v) => v && elegirMagnitud(v)}
+        options={opcionesMagnitud}
+        placeholder="Elegir magnitud"
+      />
+    </div>
+  );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {variante === "fijo" ? (
@@ -9438,87 +9586,65 @@ function RitmoGuiado({
           />
           <span style={notaStyle}>h por orden, sin importar la cantidad</span>
         </div>
-      ) : variante === "productividad" ? (
-        // Una sola oración: "30 metros de borde por hora". La magnitud trae
-        // su unidad puesta, así no hay que acertar la combinación.
-        <div style={filaStyle}>
-          <Input
-            value={ritmoTexto}
-            onChange={(e) => {
-              setRitmoTexto(e.target.value);
-              onParams(pasoId, {
-                productivityValue: numOrNull(e.target.value),
-              });
-            }}
-            placeholder={
-              familia?.defaults?.productividadHora
-                ? `${familia.defaults.productividadHora}`
-                : "Ej: 60"
-            }
-            inputMode="decimal"
-            style={{ maxWidth: 92, textAlign: "right" }}
-          />
-          <div style={{ minWidth: 200 }}>
-            {inlineCantidad ? (
-              // La magnitud sale del control de cantidad (hereda puntos de
-              // soldadura, m² a pintar…): se elige acá, una sola vez.
-              <CantidadUnificadaGuiada
-                pasoId={pasoId}
-                pasos={pasos}
-                familia={familia}
-                familiasMap={familiasMap}
-                jsonTexts={jsonTexts}
-                cfg={cfg}
-                onPatch={onPatch}
-                onHerencia={onHerencia}
-              />
-            ) : (
-              <HumanSelect
-                value={magnitudActual}
-                onValueChange={(value) => {
-                  const elegida = magnitudes.find((m) => m.value === value);
-                  if (!elegida) return;
-                  onParams(pasoId, {
-                    productivityUnit: elegida.unidad,
-                    productivityQuantitySource: elegida.fuente,
-                  });
-                }}
-                options={magnitudes.map((m) => ({
-                  value: m.value,
-                  label: m.label,
-                }))}
-                placeholder="Elegir magnitud"
-              />
-            )}
-          </div>
-          <span style={notaStyle}>por hora</span>
-        </div>
       ) : (
-        <div style={filaStyle}>
-          <Input
-            value={loteTamTexto}
-            onChange={(e) => {
-              setLoteTamTexto(e.target.value);
-              onParams(pasoId, { batchSize: numOrNull(e.target.value) });
-            }}
-            placeholder="Ej: 2"
-            inputMode="decimal"
-            style={{ maxWidth: 110 }}
-          />
-          <span style={notaStyle}>
-            {getT2BatchUnitSuffix(unidad, fuente, unidadCantidad)} cada
-          </span>
-          <Input
-            value={loteTiempoTexto}
-            onChange={(e) => {
-              setLoteTiempoTexto(e.target.value);
-              onParams(pasoId, { batchTimeMin: numOrNull(e.target.value) });
-            }}
-            placeholder="Ej: 1"
-            inputMode="decimal"
-            style={{ maxWidth: 110 }}
-          />
-          <span style={notaStyle}>min</span>
+        // LA regla del tiempo variable, como oración horizontal (estilo
+        // regla condicional): "[120] [pliegos ▾] cada [1] [hora ▾]" o
+        // "[3] [piezas ▾] cada [1] [min ▾]". "Productividad por hora" y
+        // "Tiempo por lote" eran la MISMA oración con distinto redondeo:
+        // el interruptor de abajo es la única diferencia real.
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={filaStyle}>
+            <Input
+              value={reglaN}
+              onChange={(e) => {
+                setReglaN(e.target.value);
+                escribirRegla(e.target.value, reglaT, reglaUnidadT);
+              }}
+              placeholder={
+                familia?.defaults?.productividadHora
+                  ? `${familia.defaults.productividadHora}`
+                  : "Ej: 60"
+              }
+              inputMode="decimal"
+              style={{ maxWidth: 92, textAlign: "right" }}
+            />
+            {selectorMagnitud}
+            <span style={notaStyle}>cada</span>
+            <Input
+              value={reglaT}
+              onChange={(e) => {
+                setReglaT(e.target.value);
+                escribirRegla(reglaN, e.target.value, reglaUnidadT);
+              }}
+              placeholder="1"
+              inputMode="decimal"
+              style={{ maxWidth: 72, textAlign: "right" }}
+            />
+            <div style={{ width: 110, flexShrink: 0 }}>
+              <HumanSelect
+                value={reglaUnidadT}
+                onValueChange={(v) => {
+                  const nueva = v === "h" ? "h" : "min";
+                  if (nueva === reglaUnidadT) return;
+                  setReglaUnidadT(nueva);
+                  // El tiempo no cambia: se re-expresa en la unidad nueva.
+                  const t = Number(reglaT);
+                  if (reglaT.trim() !== "" && Number.isFinite(t)) {
+                    const convertido = nueva === "h" ? t / 60 : t * 60;
+                    setReglaT(String(convertido));
+                    escribirRegla(reglaN, String(convertido), nueva);
+                  }
+                }}
+                options={[
+                  { value: "min", label: "min" },
+                  { value: "h", label: "horas" },
+                ]}
+                placeholder="unidad"
+              />
+            </div>
+          </div>
+          {/* Sin nota de ejemplo: la regla escala proporcional exacto y se
+              sobreentiende (feedback del usuario). */}
         </div>
       )}
       {/* Antes había un "Equivale a X · el sistema lo guarda como Y": la
@@ -9913,25 +10039,22 @@ const CANTIDAD_METODO_DESC: Record<string, string> = {
 // que confundían: la magnitud ya se nombra arriba en el ritmo, y elegir "de
 // qué paso" por separado sobraba. Acá se elige directo QUÉ número multiplica
 // al ritmo.
-function CantidadUnificadaGuiada({
-  pasoId,
-  pasos,
-  familia,
-  familiasMap,
-  jsonTexts,
-  cfg,
-  onPatch,
-  onHerencia,
-}: {
-  pasoId: string;
-  pasos: PasoAsistente[];
-  familia: FamiliaListItem | undefined;
-  familiasMap: Map<string, FamiliaListItem>;
-  jsonTexts: Record<string, { params: string; mecanismo: string }>;
-  cfg: UpsertConfigPasoPayload;
-  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
-  onHerencia: (pasoId: string, sel: SeleccionHerencia | null) => void;
-}) {
+/** Opciones + valor actual del selector de cantidad fusionado (mecanismo +
+ *  magnitudes heredables). Compartido entre la sección "Sobre qué cantidad"
+ *  y la ORACIÓN del ritmo (selector unificado de magnitud). Codificación:
+ *  "m:<mecanismo>" métodos directos · "h:<campoOutput>" heredar una
+ *  magnitud · "h:" heredar automático. */
+function opcionesCantidadUnificada(
+  pasoId: string,
+  pasos: PasoAsistente[],
+  familia: FamiliaListItem | undefined,
+  familiasMap: Map<string, FamiliaListItem>,
+  jsonTexts: Record<string, { params: string; mecanismo: string }>,
+  cfg: UpsertConfigPasoPayload,
+): {
+  valor: string;
+  options: { value: string; label: string; description?: string }[];
+} {
   const mecanismos = familia?.mecanismosCantidadSoportados ?? [
     "DIRECT_FROM_JOBCONTEXT",
     "HEREDAR_DEL_OUTPUT_CANONICO",
@@ -9960,8 +10083,6 @@ function CantidadUnificadaGuiada({
 
   const heredaSoportado = mecanismos.includes("HEREDAR_DEL_OUTPUT_CANONICO");
 
-  // Valor actual codificado: "m:<mecanismo>" para los métodos directos,
-  // "h:<campoOutput>" para heredar una magnitud, "h:" para heredar automático.
   const valor =
     mecanismoActual === "HEREDAR_DEL_OUTPUT_CANONICO"
       ? `h:${campoActual ?? ""}`
@@ -9997,22 +10118,60 @@ function CantidadUnificadaGuiada({
     });
   }
 
-  const aplicar = (v: string) => {
-    if (v.startsWith("h:")) {
-      const key = v.slice(2);
-      onPatch(pasoId, { mecanismoCantidad: "HEREDAR_DEL_OUTPUT_CANONICO" });
-      onHerencia(pasoId, key ? { campoOutput: key } : null);
-      return;
-    }
-    const mecanismo = v.slice(2);
-    onPatch(pasoId, { mecanismoCantidad: mecanismo || null });
-    onHerencia(pasoId, null);
-  };
+  return { valor, options };
+}
 
+/** Aplica una opción "m:"/"h:" del selector de cantidad fusionado. */
+function aplicarCantidadUnificada(
+  v: string,
+  pasoId: string,
+  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void,
+  onHerencia: (pasoId: string, sel: SeleccionHerencia | null) => void,
+) {
+  if (v.startsWith("h:")) {
+    const key = v.slice(2);
+    onPatch(pasoId, { mecanismoCantidad: "HEREDAR_DEL_OUTPUT_CANONICO" });
+    onHerencia(pasoId, key ? { campoOutput: key } : null);
+    return;
+  }
+  const mecanismo = v.slice(2);
+  onPatch(pasoId, { mecanismoCantidad: mecanismo || null });
+  onHerencia(pasoId, null);
+}
+
+function CantidadUnificadaGuiada({
+  pasoId,
+  pasos,
+  familia,
+  familiasMap,
+  jsonTexts,
+  cfg,
+  onPatch,
+  onHerencia,
+}: {
+  pasoId: string;
+  pasos: PasoAsistente[];
+  familia: FamiliaListItem | undefined;
+  familiasMap: Map<string, FamiliaListItem>;
+  jsonTexts: Record<string, { params: string; mecanismo: string }>;
+  cfg: UpsertConfigPasoPayload;
+  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
+  onHerencia: (pasoId: string, sel: SeleccionHerencia | null) => void;
+}) {
+  const { valor, options } = opcionesCantidadUnificada(
+    pasoId,
+    pasos,
+    familia,
+    familiasMap,
+    jsonTexts,
+    cfg,
+  );
   return (
     <HumanSelect
       value={valor}
-      onValueChange={(v) => v && aplicar(v)}
+      onValueChange={(v) =>
+        v && aplicarCantidadUnificada(v, pasoId, onPatch, onHerencia)
+      }
       options={options}
       placeholder="Elegir"
     />
@@ -10243,6 +10402,48 @@ function TiempoComercialDetalladoEditor({
 
   const ayudas = (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* La pregunta y su unidad viven acá desde el árbol de tiempo: la
+          decisión (No/Puede/Debe) son pills del esquema; esto es el detalle
+          fino de CÓMO se le pregunta al comercial. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) 168px",
+          gap: 12,
+          alignItems: "end",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={labelStyle}>Pregunta</label>
+          <Input
+            type="text"
+            value={
+              typeof tiempoManualConfig.etiqueta === "string"
+                ? tiempoManualConfig.etiqueta
+                : ""
+            }
+            onChange={(e) =>
+              updateTiempoManualConfig(pasoId, {
+                etiqueta: e.target.value || null,
+              })
+            }
+            placeholder={`Ej. "Tiempo estimado de ${(cfg.nombreVisible?.trim() || familia?.nombre || "trabajo").toLowerCase()}"`}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={labelStyle}>Carga el tiempo en</label>
+          <HumanSelect
+            value={tiempoManualUnidad}
+            onValueChange={(value) =>
+              updateTiempoManualConfig(pasoId, {
+                unidadInput: value === "h" ? "h" : "min",
+              })
+            }
+            options={TIEMPO_MANUAL_UNIDAD_OPTIONS}
+            placeholder="Elegir unidad"
+          />
+        </div>
+      </div>
       <div
         style={{
           display: "flex",
@@ -10268,6 +10469,14 @@ function TiempoComercialDetalladoEditor({
           </div>
         </div>
       </div>
+      {tiempoManualConfig.obligatorio === true &&
+      tiempoManualDefaultMin == null ? (
+        <div style={{ fontSize: 11.5, color: "#b7791f" }}>
+          Sin valor sugerido, la cotización queda bloqueada hasta que el
+          comercial cargue el tiempo. Es lo esperable en pasos tipo láser —
+          confirmá que es lo que querés.
+        </div>
+      ) : null}
     </div>
   );
 
@@ -10289,6 +10498,190 @@ function TiempoComercialDetalladoEditor({
         </div>
         {ayudas}
       </div>
+    </div>
+  );
+}
+
+// ─── Árbol de tiempo: el valor del tiempo FIJO (pregunta ②) ─────────────
+// Un solo concepto para los dos storages históricos: T-1 guarda minutos en
+// config; las familias sin T-1 en el menú guardan horas en params (F0.3:
+// las escrituras nuevas prefieren T-1 cuando el menú lo permite).
+
+function TiempoFijoValorEditor({
+  pasoId,
+  cfg,
+  familia,
+  onPatch,
+  onParams,
+}: {
+  pasoId: string;
+  cfg: UpsertConfigPasoPayload;
+  familia: FamiliaListItem | undefined;
+  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
+  onParams: (pasoId: string, patch: Record<string, unknown>) => void;
+}) {
+  const params = asRecord(cfg.paramsPasoJson);
+  const soportaT1 = (familia?.modosTiempoSoportados ?? []).includes("T-1");
+  const modoEfectivo =
+    cfg.modoTiempo ?? familia?.modosTiempoSoportados?.[0] ?? null;
+  const horas = readOptionalNumber(params.horasEstimadas);
+  const minutos =
+    modoEfectivo === "T-1"
+      ? readOptionalNumber(cfg.tiempoFijoOverrideMin)
+      : horas != null
+        ? horas * 60
+        : null;
+  const [unidad, setUnidad] = React.useState<"min" | "h">(() =>
+    minutos != null && minutos >= 60 && minutos % 30 === 0 ? "h" : "min",
+  );
+  const valorMostrado =
+    minutos == null ? "" : unidad === "h" ? minutos / 60 : minutos;
+  const defaultFamiliaMin = readOptionalNumber(
+    familia?.defaults?.tiempoFijoMin,
+  );
+
+  const escribirMin = (min: number | null) => {
+    if (soportaT1) {
+      // Camino nuevo: T-1 + minutos en config; se limpian los relojes del
+      // storage viejo (horas de T-2) para no apilar.
+      onPatch(pasoId, { modoTiempo: "T-1", tiempoFijoOverrideMin: min });
+      onParams(pasoId, { horasEstimadas: null, timeCalculationMode: null });
+    } else {
+      // Familia sin T-1 en el menú (pintura, montaje): el fijo vive en T-2.
+      onParams(pasoId, {
+        horasEstimadas: min == null ? null : min / 60,
+        timeCalculationMode: "tiempo_fijo",
+      });
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ ...CAJA_EJE, width: 132 }}>
+        <input
+          value={valorMostrado}
+          inputMode="decimal"
+          placeholder={
+            defaultFamiliaMin != null
+              ? `Usando el del paso: ${
+                  unidad === "h" ? defaultFamiliaMin / 60 : defaultFamiliaMin
+                }`
+              : unidad === "h"
+                ? "Ej. 2"
+                : "Ej. 15"
+          }
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === "") return escribirMin(null);
+            const v = Number(raw.replace(",", "."));
+            if (!Number.isFinite(v)) return;
+            escribirMin(unidad === "h" ? v * 60 : v);
+          }}
+          style={{
+            border: 0,
+            outline: 0,
+            background: "transparent",
+            width: "100%",
+            minWidth: 0,
+            fontSize: 13,
+            textAlign: "right",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        />
+      </div>
+      <HumanSelect
+        value={unidad}
+        onValueChange={(value) => setUnidad(value === "h" ? "h" : "min")}
+        options={[
+          { value: "min", label: "minutos" },
+          { value: "h", label: "horas" },
+        ]}
+        placeholder="unidad"
+      />
+    </div>
+  );
+}
+
+// ─── Árbol de tiempo: panel "Lo dice la máquina" (① = máquina) ──────────
+// Explica de dónde sale el reloj —perfil o primitiva del oficio— sin
+// perillas: donde decide la máquina, el panel narra (mismo patrón que
+// "Lo decide la geometría" en materiales).
+
+function TiempoMaquinaPanel({
+  familia,
+  maquina,
+}: {
+  cfg: UpsertConfigPasoPayload;
+  familia: FamiliaListItem | undefined;
+  maquina: LookupsConfigPaso["maquinas"][number] | null;
+}) {
+  const primitiva = familia?.primitivaTiempo ?? null;
+
+  // Sin nombrar el perfil ni su velocidad (feedback del usuario): el perfil
+  // del paso es un DEFAULT — el motor muchas veces elige otro compatible
+  // según el material o el modo de color, y mostrar "perfil X · 45 PPM"
+  // hacía parecer que es fijo.
+  let titulo: string;
+  let detalle: string;
+  if (primitiva === "guillotina_por_cortes") {
+    titulo = "Lo define el plan de corte";
+    detalle =
+      "Tandas (pliegos ÷ cuántos entran por bajada, según gramaje) × cortes del plan de imposición × segundos por corte, más la recarga entre tandas. Los valores viven en el perfil de la guillotina.";
+  } else if (primitiva) {
+    titulo = "Lo define el plan de trabajo del oficio";
+    detalle =
+      "Esta familia calcula el tiempo con un algoritmo propio; el perfil operativo de la máquina aporta sus parámetros.";
+  } else if (maquina) {
+    titulo = "Lo define el perfil operativo de la máquina";
+    detalle =
+      "El tiempo sale de la velocidad del perfil que la máquina use en cada trabajo.";
+  } else {
+    titulo = "Lo define el perfil operativo de la máquina";
+    detalle =
+      "Elegí la máquina en «Máquina que utiliza»: la velocidad de su perfil operativo define este tiempo. Acá no hay nada que configurar.";
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "flex-start",
+        padding: "10px 12px",
+        borderRadius: 10,
+        border: "1px dashed var(--hairline-strong, #c9c2b8)",
+        background: "var(--surface-2, #fafaf9)",
+        maxWidth: "72ch",
+      }}
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        style={{ marginTop: 2, flexShrink: 0, opacity: 0.55 }}
+        aria-hidden
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4M12 8h.01" />
+      </svg>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 12.5, fontWeight: 600 }}>
+          {titulo}
+        </span>
+        <span
+          style={{
+            display: "block",
+            fontSize: 11.5,
+            color: "var(--muted-text, #6e6e76)",
+            marginTop: 2,
+          }}
+        >
+          {detalle}
+        </span>
+      </span>
     </div>
   );
 }
@@ -10554,6 +10947,7 @@ function CandidatasDetalladoEditor({
   setMaquinaCandidataPreferida,
   setMaquinaCandidataPerfilDefault,
   setMaquinaCandidataModoColorAllowed,
+  setMaquinaCandidataPerfilPorModo,
 }: {
   pasoId: string;
   cfg: UpsertConfigPasoPayload;
@@ -10565,6 +10959,12 @@ function CandidatasDetalladoEditor({
   setMaquinaCandidataPreferida: (pasoId: string, maquinaId: string) => void;
   setMaquinaCandidataPerfilDefault: (pasoId: string, maquinaId: string, perfilId: string | null) => void;
   setMaquinaCandidataModoColorAllowed: (pasoId: string, maquinaId: string, modes: string[]) => void;
+  setMaquinaCandidataPerfilPorModo: (
+    pasoId: string,
+    maquinaId: string,
+    modo: string,
+    perfilId: string | null,
+  ) => void;
 }) {
   const candidatasCfg = cfg.maquinasCandidatas ?? [];
   const candidatasSeleccionadas = new Set(
@@ -10796,6 +11196,76 @@ function CandidatasDetalladoEditor({
                         </span>
                       ) : null}
                     </div>
+                    {/* Perfil POR MODO (hallazgo del usuario 2026-08-11):
+                        con varios modos habilitados, un solo default no
+                        alcanza — el modo no-default caía al primer perfil
+                        por orden de carga. Sólo piden desempate los modos
+                        con MÁS de un perfil compatible. */}
+                    {mostrarModoColor
+                      ? (() => {
+                          const perfilesDelModo = (modo: string) =>
+                            maquina.perfilesOperativos.filter((perfil) =>
+                              modosColorFromPerfil(perfil).includes(modo),
+                            );
+                          const habilitadosConPerfil =
+                            candidateModoOptions.filter(
+                              (option) =>
+                                candidateAllowed.includes(option.value) &&
+                                perfilesDelModo(option.value).length > 0,
+                            );
+                          if (habilitadosConPerfil.length < 2) return null;
+                          const ambiguos = habilitadosConPerfil.filter(
+                            (option) =>
+                              perfilesDelModo(option.value).length > 1,
+                          );
+                          if (ambiguos.length === 0) return null;
+                          const mapa = cfgCand?.perfilDefaultPorModo ?? {};
+                          return (
+                            <div className={maq.frow}>
+                              {ambiguos.map((option) => (
+                                <span className={maq.fl} key={option.value}>
+                                  <span className={maq.k}>
+                                    Perfil para {option.label}
+                                  </span>
+                                  <span
+                                    className={`${maq.ctl} ${maq.sel}`}
+                                    style={{ minWidth: 210 }}
+                                  >
+                                    <select
+                                      value={mapa[option.value] ?? ""}
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                      onChange={(event) =>
+                                        setMaquinaCandidataPerfilPorModo(
+                                          pasoId,
+                                          maquina.id,
+                                          option.value,
+                                          event.target.value || null,
+                                        )
+                                      }
+                                    >
+                                      <option value="">
+                                        Automático (default general)
+                                      </option>
+                                      {perfilesDelModo(option.value).map(
+                                        (perfil) => (
+                                          <option
+                                            key={perfil.id}
+                                            value={perfil.id}
+                                          >
+                                            {perfil.nombre}
+                                          </option>
+                                        ),
+                                      )}
+                                    </select>
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()
+                      : null}
                     {mostrarModoColor &&
                     candidateModoOptions.length > 0 &&
                     candidateAllowed.length === 0 ? (
@@ -10812,27 +11282,10 @@ function CandidatasDetalladoEditor({
         </div>
       )}
 
-      <div className={maq.foot}>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 11v5M12 8h.01" />
-        </svg>
-        <span>
-          La preferida es la que toma la OT por defecto; las demás quedan
-          disponibles si está ocupada o en mantenimiento. Si una máquina queda
-          con más de un modo de color habilitado, el comercial elige cuál usar
-          al agregar el producto.
-        </span>
-      </div>
+      {/* Sin pie explicativo: decía que las demás candidatas "quedan
+          disponibles si la preferida está ocupada o en mantenimiento" — es
+          FALSO (la preferida es sólo el default) y de paso era texto de más
+          (feedback del usuario, 2026-08-11). */}
     </div>
   );
 }
@@ -11317,7 +11770,9 @@ function EjeGuiado({
                         maxWidth: 560,
                       }}
                     >
-                      {opcion.ayuda}
+                      {typeof opcion.ayuda === "function"
+                        ? opcion.ayuda(ctx)
+                        : opcion.ayuda}
                     </div>
                   ) : null}
                   <ControlGuiado
@@ -11461,7 +11916,13 @@ function OpcionGuiadaFila({
       </div>
       {abierta ? (
         <>
-          {opcion.ayuda ? <div style={notaStyle}>{opcion.ayuda}</div> : null}
+          {opcion.ayuda ? (
+            <div style={notaStyle}>
+              {typeof opcion.ayuda === "function"
+                ? opcion.ayuda(ctx)
+                : opcion.ayuda}
+            </div>
+          ) : null}
           <ControlGuiado
             opcion={opcion}
             ctx={ctx}
@@ -11842,6 +12303,9 @@ interface PasoAsistente {
   familiaCodigo: string;
   esExtra: boolean;
   orden: number | null;
+  /** Modo de activación efectivo (config → default de familia). Lo usa el
+   *  arrastre para no ofrecer obligatorios/no-ejecutar como destinos. */
+  modoActivacion?: string | null;
 }
 
 /** Las secciones-pregunta del ESQUEMA para UN paso, con su tarjeta de
@@ -11868,6 +12332,7 @@ function SeccionesEsquemaPaso({
   setMaquinaCandidataPreferida,
   setMaquinaCandidataPerfilDefault,
   setMaquinaCandidataModoColorAllowed,
+  setMaquinaCandidataPerfilPorModo,
   setCoberturaPaso,
   materialesApi,
   nestingApi,
@@ -11915,6 +12380,12 @@ function SeccionesEsquemaPaso({
     maquinaId: string,
     modes: string[],
   ) => void;
+  setMaquinaCandidataPerfilPorModo: (
+    pasoId: string,
+    maquinaId: string,
+    modo: string,
+    perfilId: string | null,
+  ) => void;
   setCoberturaPaso: (pasoId: string, nivel: string) => void;
   materialesApi: MaterialesApiAsistente;
   nestingApi: NestingApi;
@@ -11948,7 +12419,11 @@ function SeccionesEsquemaPaso({
           paramsPaso: asRecord(cfg.paramsPasoJson),
           otrosPasos: pasos
             .filter((p) => p.id !== pasoActual.id)
-            .map((p) => ({ id: p.id, nombre: p.nombre })),
+            .map((p) => ({
+              id: p.id,
+              nombre: p.nombre,
+              modoActivacion: p.modoActivacion ?? null,
+            })),
           // Los lookups del API traen `materiasPrimas` VACÍO (la búsqueda es
           // on-demand): los resúmenes del esquema no podían NOMBRAR el
           // material fijo y caían al opaco "Material definido" (H17). Se
@@ -11961,7 +12436,12 @@ function SeccionesEsquemaPaso({
         const pendientesVivos = new Set(vivos.map((pend) => pend.tipo));
         const onAplicar = (patch: PatchOpcion) => {
           if (patch.tipo === "config") onPatch(pasoActual.id, patch.patch);
-          else onParams(pasoActual.id, patch.patch);
+          else if (patch.tipo === "config-y-params") {
+            // Atómico para la UI: ambos handlers usan setState funcional,
+            // así que componen sin pisarse (bifurcación Fijo↔Ritmo).
+            onPatch(pasoActual.id, patch.config);
+            onParams(pasoActual.id, patch.params);
+          } else onParams(pasoActual.id, patch.patch);
         };
         const maquinasCompatibles = lookups.maquinas.filter((m) =>
           maquinaCompatibleConFamilia(
@@ -12135,21 +12615,26 @@ function SeccionesEsquemaPaso({
                   ) : null}
                   {apaga ? botonModo("NO_EJECUTAR", true) : null}
                 </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: "var(--muted-text, #6e6e76)",
-                    maxWidth: "70ch",
-                  }}
-                >
-                  {MODO_ACTIVACION_CONSECUENCIA[modo]}
-                </div>
+                {/* Sin frase-consecuencia debajo: con las etiquetas nuevas
+                    (Siempre/Opcional/Condicional/Omitir) los botones se
+                    explican solos (feedback del usuario). */}
               </div>
             );
           }
           if (id === "co-ejecucion") {
             const requeridos = cfg.requiereRutaPasoIds ?? [];
-            const otros = pasos.filter((p) => p.id !== pasoActual.id);
+            // Sólo destinos que el arrastre puede encender de verdad:
+            // un OBLIGATORIO corre igual se lo tilde o no, y un NO_EJECUTAR
+            // nunca corre (feedback del usuario). Las selecciones legacy
+            // sobre pasos hoy-obligatorios se muestran para poder destildar.
+            const otros = pasos.filter(
+              (p) =>
+                p.id !== pasoActual.id &&
+                (requeridos.includes(p.id) ||
+                  p.modoActivacion == null ||
+                  (p.modoActivacion !== "OBLIGATORIO" &&
+                    p.modoActivacion !== "NO_EJECUTAR")),
+            );
             const corresSiempre =
               (cfg.modoActivacion ?? "OBLIGATORIO") === "OBLIGATORIO";
             return (
@@ -12188,18 +12673,20 @@ function SeccionesEsquemaPaso({
                         : "Cuando este paso se activa, prende los que elijas — aunque sean opcionales."}
                     </div>
                   </div>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "var(--muted-text-2, #92929b)",
-                      whiteSpace: "nowrap",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {requeridos.length > 0
-                      ? `${requeridos.length} de ${otros.length}`
-                      : "ninguno"}
-                  </span>
+                  {/* Sin seleccionados no hay contador ni "ninguno": la
+                      palabra quedaba colgada en la UI (feedback usuario). */}
+                  {requeridos.length > 0 ? (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "var(--muted-text-2, #92929b)",
+                        whiteSpace: "nowrap",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {`${requeridos.length} de ${otros.length}`}
+                    </span>
+                  ) : null}
                   {requeridos.length > 0 ? (
                     <button
                       type="button"
@@ -12278,131 +12765,36 @@ function SeccionesEsquemaPaso({
               </div>
             );
           }
-          if (id === "tiempo-comercial") {
-            // Pills Sí/No como el resto de las preguntas (feedback del
-            // usuario: el checkbox desentonaba); la configuración fina del
-            // detallado aparece sólo al activarlo.
-            const estimaComercial =
-              getTiempoManualConfig(cfg.paramsPasoJson).habilitado === true;
+          if (id === "tiempo-fijo-valor") {
+            // El VALOR del tiempo fijo — un solo concepto para los dos
+            // storages históricos (árbol de tiempo, F0.3).
             return (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 8 }}
-              >
-                {/* La bifurcación que apaga el resto del eje se muestra
-                    como decisión —dos tarjetas con su explicación— y no como
-                    dos pills más en la lista. */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fit, minmax(230px, 1fr))",
-                    gap: 8,
-                  }}
-                >
-                  {[
-                    {
-                      valor: false,
-                      titulo: "Se calcula solo",
-                      detalle:
-                        "El sistema saca los minutos del ritmo y la cantidad del paso.",
-                    },
-                    {
-                      valor: true,
-                      titulo: "Lo estima el comercial",
-                      detalle:
-                        "Quien cotiza carga los minutos a mano en cada presupuesto.",
-                    },
-                  ].map((op) => {
-                    const activa = estimaComercial === op.valor;
-                    return (
-                      <button
-                        key={op.titulo}
-                        type="button"
-                        onClick={() =>
-                          updateTiempoManualConfig(pasoActual.id, {
-                            habilitado: op.valor,
-                          })
-                        }
-                        style={{
-                          textAlign: "left",
-                          borderRadius: 10,
-                          padding: "10px 12px",
-                          background: "var(--surface-1, #fff)",
-                          border: activa
-                            ? "1.5px solid var(--fg, #1c1a17)"
-                            : "1px solid var(--hairline, #e6e2dc)",
-                          cursor: "pointer",
-                          display: "flex",
-                          gap: 9,
-                          alignItems: "flex-start",
-                        }}
-                      >
-                        <span
-                          aria-hidden
-                          style={{
-                            marginTop: 2,
-                            width: 14,
-                            height: 14,
-                            borderRadius: "50%",
-                            flexShrink: 0,
-                            border: activa
-                              ? "4px solid var(--fg, #1c1a17)"
-                              : "1px solid var(--hairline-strong, #c9c2b8)",
-                          }}
-                        />
-                        <span style={{ minWidth: 0 }}>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: 13.5,
-                              fontWeight: 600,
-                            }}
-                          >
-                            {op.titulo}
-                          </span>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: 12,
-                              color: "var(--muted-text, #6e6e76)",
-                              marginTop: 2,
-                            }}
-                          >
-                            {op.detalle}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {estimaComercial ? (
-                  <TiempoComercialDetalladoEditor
-                    pasoId={pasoActual.id}
-                    cfg={cfg}
-                    familia={familia}
-                    parte="pregunta"
-                    updateTiempoManualConfig={updateTiempoManualConfig}
-                  />
-                ) : null}
-              </div>
+              <TiempoFijoValorEditor
+                pasoId={pasoActual.id}
+                cfg={cfg}
+                familia={familia}
+                onPatch={onPatch}
+                onParams={onParams}
+              />
+            );
+          }
+          if (id === "tiempo-maquina-panel") {
+            // ① = máquina → panel que explica (perfil o primitiva), cero
+            // perillas. Patrón "Lo decide la geometría" de materiales.
+            return (
+              <TiempoMaquinaPanel
+                cfg={cfg}
+                familia={familia}
+                maquina={maquinaSel}
+              />
             );
           }
           if (id === "ritmo-productividad" || id === "ritmo-batch") {
-            const horasCargadas = Number(
-              asRecord(cfg.paramsPasoJson).horasEstimadas ?? NaN,
-            );
+            // El "fijo" ya no vive acá: subió a tiempo-fijo-valor (la
+            // pregunta ② del árbol) — estas preguntas sólo aparecen en RITMO.
             return (
               <RitmoGuiado
-                variante={
-                  id === "ritmo-batch"
-                    ? "batch"
-                    : Number.isFinite(horasCargadas) && horasCargadas > 0
-                      ? "fijo"
-                      : asRecord(cfg.paramsPasoJson).timeCalculationMode ===
-                          "tiempo_fijo"
-                        ? "fijo"
-                        : "productividad"
-                }
+                variante={id === "ritmo-batch" ? "batch" : "productividad"}
                 pasoId={pasoActual.id}
                 cfg={cfg}
                 familia={familia}
@@ -12501,6 +12893,9 @@ function SeccionesEsquemaPaso({
                 setMaquinaCandidataPreferida={setMaquinaCandidataPreferida}
                 setMaquinaCandidataPerfilDefault={
                   setMaquinaCandidataPerfilDefault
+                }
+                setMaquinaCandidataPerfilPorModo={
+                  setMaquinaCandidataPerfilPorModo
                 }
                 setMaquinaCandidataModoColorAllowed={
                   setMaquinaCandidataModoColorAllowed
@@ -12666,7 +13061,7 @@ function SeccionesEsquemaPaso({
             {/* Sub-fase D: la bifurcación tercerizado va PRIMERA
                 (E.2); si la familia la declara aparece colapsada. */}
             <EjeGuiado
-              titulo="Qué paso es"
+              titulo="Información básica"
               subtitulo="Cómo se llama acá y quién lo hace."
               opciones={opcionesDeEje("identidad", ctx).filter(
                 (o) => o.clave !== "quien.proveedor",
@@ -12697,7 +13092,7 @@ function SeccionesEsquemaPaso({
               renderComponente={renderComponente}
             />
             <EjeGuiado
-              titulo="Cuándo se ejecuta"
+              titulo="Ejecución de este paso"
               subtitulo="Si corre siempre, si es opcional o si depende de una condición del pedido."
               opciones={opcionesDeEje("activacion", ctx)}
               grupos={GRUPOS_EJE.activacion}
@@ -12720,8 +13115,8 @@ function SeccionesEsquemaPaso({
               <>
                 {!cfg.tercerizado ? (
                   <EjeGuiado
-                    titulo="En qué máquina"
-                    subtitulo="El fierro que ejecuta el paso. Marcá todas las que puedan hacerlo y elegí cuál se usa por defecto."
+                    titulo="Máquina que utiliza"
+                    subtitulo="Marcá las máquinas que pueden hacer este paso y elegí cuál se usa por defecto."
                     opciones={opcionesDeEje("maquina", ctx)}
                     grupos={GRUPOS_EJE.maquina}
                     fijo
@@ -12750,6 +13145,20 @@ function SeccionesEsquemaPaso({
                       return !(d && isConsumibleMaquinaSlot(d));
                     },
                   );
+                  // Sólo si el paso PUEDE consumir materiales (feedback del
+                  // usuario): la familia declara slots propios, permite
+                  // agregarlos, o hay slots ya configurados. Diseño o
+                  // pre-prensa no pueden agregar nada — la card era ruido.
+                  const familiaDeclaraMateriales = (
+                    familia?.slotsRequeridos ?? []
+                  ).some((sr) => !isConsumibleMaquinaSlot(sr));
+                  if (
+                    !familiaDeclaraMateriales &&
+                    familia?.permiteSlotsAdicionales !== true &&
+                    slotsVisibles.length === 0
+                  ) {
+                    return null;
+                  }
                   const materialesFaltan = vivos.some(
                     (pnd) => pnd.slotCodigo != null,
                   );
@@ -13058,24 +13467,59 @@ function SeccionesEsquemaPaso({
                 )}
 
                 {!cfg.tercerizado ? (
-                  <EjeGuiado
-                    titulo="Cuánto tarda"
-                    subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
-                    opciones={opcionesDeEje("tiempo", ctx)}
-                    grupos={GRUPOS_EJE.tiempo}
-                    fijo
-                    resumenPrincipal={[
-                      "tiempo.productividad",
-                      "tiempo.batch",
-                      "tiempo.tiempo_fijo",
-                      "tiempo.cantidad_operativa",
-                      "tiempo.dotacion",
-                    ]}
-                    ctx={ctx}
-                    pendientesVivos={pendientesVivos}
-                    onAplicar={onAplicar}
-                    renderComponente={renderComponente}
-                  />
+                  <>
+                    {/* "Dónde se hace" como card propia: el centro y los
+                        operarios definen quién/dónde ejecuta (y la tarifa),
+                        no el reloj. Con máquina la card entera DESAPARECE
+                        (feedback del usuario): el centro lo pone la máquina
+                        y los operarios no aplican — nada que configurar,
+                        nada que mostrar. */}
+                    {!cfg.maquinaM1Id &&
+                    (cfg.maquinasCandidatas?.length ?? 0) === 0 ? (
+                      <EjeGuiado
+                        titulo="Dónde se hace"
+                        subtitulo="El centro que pone la tarifa por hora y los operarios que ejecutan el paso."
+                        opciones={opcionesDeEje("tiempo", ctx).filter((o) =>
+                          ["tiempo.centro", "tiempo.dotacion"].includes(
+                            o.clave,
+                          ),
+                        )}
+                        grupos={GRUPOS_DONDE}
+                        fijo
+                        resumenPrincipal={["tiempo.centro", "tiempo.dotacion"]}
+                        ctx={ctx}
+                        pendientesVivos={pendientesVivos}
+                        onAplicar={onAplicar}
+                        renderComponente={renderComponente}
+                      />
+                    ) : null}
+                    <EjeGuiado
+                      titulo="Tiempo que consume"
+                      subtitulo={
+                        (cfg.modoTiempo ??
+                          familia?.modosTiempoSoportados?.[0]) === "T-3"
+                          ? "El tiempo lo define la máquina con el perfil operativo que use en cada trabajo."
+                          : "Cómo se calcula el tiempo de este paso, y si el comercial puede ajustarlo al cotizar."
+                      }
+                      opciones={opcionesDeEje("tiempo", ctx).filter(
+                        (o) =>
+                          !["tiempo.centro", "tiempo.dotacion"].includes(
+                            o.clave,
+                          ),
+                      )}
+                      grupos={GRUPOS_EJE.tiempo}
+                      fijo
+                      resumenPrincipal={[
+                        "tiempo.productividad",
+                        "tiempo.fijo_valor",
+                        "tiempo.cantidad_operativa",
+                      ]}
+                      ctx={ctx}
+                      pendientesVivos={pendientesVivos}
+                      onAplicar={onAplicar}
+                      renderComponente={renderComponente}
+                    />
+                  </>
                 ) : null}
               </>
             ) : null}
@@ -13083,25 +13527,11 @@ function SeccionesEsquemaPaso({
         );
       })()}
 
-      {vivos.filter((pend) => pend.bloqueante).length === 0 ? (
-        <div style={cardStyle}>
-          <div style={{ fontSize: 17, fontWeight: 650, color: "#2e7d32" }}>
-            ✓ Listo para cotizar
-          </div>
-          {vivos.length > 0 ? (
-            // Avisos NO bloqueantes: cotiza igual con la regla automática —
-            // es una sugerencia de precisión, no un faltante (H13).
-            <div style={{ ...notaStyle, color: "#64748b" }}>
-              {resumenPendientes(vivos)}
-            </div>
-          ) : null}
-          <div style={notaStyle}>
-            Todo sale de lo que el paso ya declara (defaults, estación,
-            activación). Cualquier ajuste fino queda arriba, en sus
-            secciones.
-          </div>
-        </div>
-      ) : (
+      {/* Sin card de cierre "✓ Listo para cotizar" (feedback del usuario):
+          el estado ya vive en el sidebar por paso, y el texto no agregaba
+          nada configurable. La card de FALTANTES sí queda — apunta a las
+          preguntas en ámbar cuando hay bloqueantes. */}
+      {vivos.filter((pend) => pend.bloqueante).length > 0 ? (
         <div style={cardStyle}>
           <div style={{ fontSize: 15, fontWeight: 650, color: "#8a6d3b" }}>
             {resumenPendientes(vivos)}
@@ -13110,7 +13540,7 @@ function SeccionesEsquemaPaso({
             Las preguntas marcadas en ámbar arriba son las que faltan.
           </div>
         </div>
-      )}
+      ) : null}
     </>
   );
 }
@@ -13136,6 +13566,7 @@ function AsistenteGuiado({
   setMaquinaCandidataPreferida,
   setMaquinaCandidataPerfilDefault,
   setMaquinaCandidataModoColorAllowed,
+  setMaquinaCandidataPerfilPorModo,
   setCoberturaPaso,
   materialesApi,
   nestingApi,
@@ -13183,6 +13614,12 @@ function AsistenteGuiado({
     pasoId: string,
     maquinaId: string,
     modes: string[],
+  ) => void;
+  setMaquinaCandidataPerfilPorModo: (
+    pasoId: string,
+    maquinaId: string,
+    modo: string,
+    perfilId: string | null,
   ) => void;
   setCoberturaPaso: (pasoId: string, nivel: string) => void;
   materialesApi: MaterialesApiAsistente;
@@ -13334,6 +13771,7 @@ function AsistenteGuiado({
             setMaquinaCandidataModoColorAllowed={
               setMaquinaCandidataModoColorAllowed
             }
+            setMaquinaCandidataPerfilPorModo={setMaquinaCandidataPerfilPorModo}
             setCoberturaPaso={setCoberturaPaso}
             materialesApi={materialesApi}
             nestingApi={nestingApi}

@@ -340,6 +340,9 @@ function serializarFamilia(
           magnitudesTiempo: f.derivador.magnitudesTiempo ?? [],
         }
       : null,
+    // [Árbol de tiempo] El editor explica la primitiva en vez de mostrar
+    // perillas de ritmo (la guillotina corta por plan, no por velocidad).
+    primitivaTiempo: f.primitivas?.tiempoRun ?? null,
     permiteSlotsAdicionales: f.permiteSlotsAdicionales,
     plantillasCompatibles: f.plantillasCompatibles,
     inputsRequeridos: f.inputsRequeridos,

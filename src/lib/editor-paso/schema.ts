@@ -42,6 +42,11 @@ import {
 import {
   MONTAJE_SOURCE_OPTIONS,
   T2_TIME_CALCULATION_MODE_OPTIONS,
+  T2_RITMO_OPTIONS,
+  TIEMPO_ORIGEN_OPTIONS,
+  TIEMPO_FORMA_OPTIONS,
+  TIEMPO_COMERCIAL_NIVEL_OPTIONS,
+  ritmoEquivalenteDeBatch,
   getT2ProductivityUnitSuffix,
   getT2BatchUnitSuffix,
   normalizeT2ProductivityUnit,
@@ -66,10 +71,7 @@ import {
   costingStrategyOptions,
   CANTIDAD_BASE_SLOT_OPTIONS,
 } from "./catalogo-materiales";
-import {
-  modoTiempoLabels,
-  mecanismoCantidadLabels,
-} from "../labels-humanos";
+import { mecanismoCantidadLabels } from "../labels-humanos";
 
 // "ajustes" (escape hatches) se eliminó como sección: los dos escapes
 // genuinos (algoritmo y layout manual de paneles) viven dentro del card
@@ -101,6 +103,10 @@ export type SeccionPaso =
 export interface PasoVecino {
   id: string;
   nombre: string;
+  /** Modo de activación EFECTIVO del vecino (config → default de familia).
+   *  Lo usa el arrastre: un OBLIGATORIO corre igual — tildarlo no cambia
+   *  nada — y un NO_EJECUTAR no corre nunca; ninguno de los dos se ofrece. */
+  modoActivacion?: string | null;
 }
 
 /** Declaración del slot en la familia (subset de slotsRequeridos). */
@@ -139,6 +145,14 @@ export interface ContextoOpcion {
 export type PatchOpcion =
   | { tipo: "config"; patch: Partial<UpsertConfigPasoPayload> }
   | { tipo: "params"; patch: Record<string, unknown> }
+  /** Patch atómico sobre config Y params: la bifurcación Fijo↔Ritmo cambia
+   *  `modoTiempo` (config) y a la vez limpia los relojes del camino que se
+   *  abandona (params) — la regla "no apilar relojes" del plan de tiempo. */
+  | {
+      tipo: "config-y-params";
+      config: Partial<UpsertConfigPasoPayload>;
+      params: Record<string, unknown>;
+    }
   /** Patch sobre el slot del contexto (materiales.*): el renderer lo
    *  aplica al slot de cfg.slotsMateriales con ese slotCodigo. */
   | { tipo: "slot"; patch: Partial<UpsertSlotMaterialPayload> };
@@ -195,7 +209,8 @@ export type ControlOpcion =
       id:
         | "regla-condicional"
         | "co-ejecucion"
-        | "tiempo-comercial"
+        | "tiempo-fijo-valor"
+        | "tiempo-maquina-panel"
         | "ritmo-productividad"
         | "ritmo-batch"
         | "herencia-origen"
@@ -277,7 +292,7 @@ export interface OpcionPaso {
   /** Orden dentro de su grupo (menor primero). Sin declarar, sigue el orden
    *  de declaración en ESQUEMA_PASO. */
   orden?: number;
-  ayuda?: string;
+  ayuda?: string | ((ctx: ContextoOpcion) => string);
   visible: (ctx: ContextoOpcion) => boolean;
   resumen: (ctx: ContextoOpcion) => string;
   origenValor: (ctx: ContextoOpcion) => OrigenValor;
@@ -292,10 +307,10 @@ export interface OpcionPaso {
 // ─────────────────────────────────────────────────────────────────────
 
 const MODO_ACTIVACION_LABELS: Record<string, string> = {
-  OBLIGATORIO: "Siempre",
-  OPCIONAL: "Lo activa el comercial",
-  CONDICIONAL: "Según una regla",
-  NO_EJECUTAR: "No se usa acá",
+  OBLIGATORIO: "Obligatorio",
+  OPCIONAL: "Opcional",
+  CONDICIONAL: "Condicional",
+  NO_EJECUTAR: "Omitir en este producto",
 };
 
 /** Qué implica el modo elegido, en una frase. Va debajo del control: elegir
@@ -361,10 +376,82 @@ function modoTiempoEfectivo(ctx: ContextoOpcion): string | null {
   );
 }
 
-/** ¿El comercial estima el tiempo al cotizar? Suprime las preguntas de
- *  ritmo/tanda/tiempo fijo/calcular-según (corrección del usuario). */
+/** Capa comercial del árbol de tiempo (⑤): no / puede / debe.
+ *  `tiempoManual.habilitado` + `obligatorio` mapean a los tres estados;
+ *  el legacy `modoTiempo: 'T-4'` (etiqueta sin rama en el motor) se lee
+ *  como "debe". docs/tiempo-pasos-analisis-y-plan.md §3-§4. */
+function comercialNivelEfectivo(ctx: ContextoOpcion): "no" | "puede" | "debe" {
+  const config = getTiempoManualConfig(ctx.cfg.paramsPasoJson);
+  if (config.habilitado === true) {
+    return config.obligatorio === true ? "debe" : "puede";
+  }
+  return ctx.cfg.modoTiempo === "T-4" ? "debe" : "no";
+}
+
+/** Con "debe", el tiempo base no participa (el comercial SIEMPRE lo pisa):
+ *  las preguntas de fijo/ritmo se suprimen. Con "puede" quedan visibles —
+ *  el base es la sugerencia/fallback (F0.2/F0.4: un solo número; esconderlo
+ *  era el bug de los dos defaults de Diseño de Tarjetas). */
 function comercialEstimaTiempo(ctx: ContextoOpcion): boolean {
-  return getTiempoManualConfig(ctx.cfg.paramsPasoJson).habilitado === true;
+  return comercialNivelEfectivo(ctx) === "debe";
+}
+
+/** Pregunta ① del árbol: máquina agrupa T-3; taller agrupa T-1/T-2. */
+function origenTiempoEfectivo(ctx: ContextoOpcion): "taller" | "maquina" {
+  return modoTiempoEfectivo(ctx) === "T-3" ? "maquina" : "taller";
+}
+
+function familiaSoportaOrigenMaquina(ctx: ContextoOpcion): boolean {
+  return (ctx.familia?.modosTiempoSoportados ?? []).includes("T-3");
+}
+
+function familiaSoportaOrigenTaller(ctx: ContextoOpcion): boolean {
+  const modos = ctx.familia?.modosTiempoSoportados ?? [];
+  return modos.includes("T-1") || modos.includes("T-2");
+}
+
+/** Pregunta ② del árbol: fijo si el modo es T-1, o si es T-2 con horas
+ *  cargadas / intención tiempo_fijo (el "fijo escondido" — F0.3). */
+function formaTiempoEfectiva(ctx: ContextoOpcion): "fijo" | "ritmo" {
+  const modo = modoTiempoEfectivo(ctx);
+  if (modo === "T-1") return "fijo";
+  if (modo === "T-2" && ritmoModoEfectivo(ctx) === "tiempo_fijo") return "fijo";
+  return "ritmo";
+}
+
+/** Vecinos que el arrastre puede encender de verdad: opcionales o
+ *  condicionales. Un OBLIGATORIO corre igual y un NO_EJECUTAR nunca —
+ *  ofrecerlos era ruido (feedback del usuario). Vecinos sin modo conocido
+ *  (legacy) se ofrecen por las dudas. */
+export function pasosArrastrables(ctx: ContextoOpcion): PasoVecino[] {
+  return ctx.otrosPasos.filter(
+    (p) =>
+      p.modoActivacion == null ||
+      (p.modoActivacion !== "OBLIGATORIO" &&
+        p.modoActivacion !== "NO_EJECUTAR"),
+  );
+}
+
+/** El valor del tiempo fijo, unificando los dos storages históricos:
+ *  T-1 guarda minutos en config; T-2 guarda horas en params. */
+function tiempoFijoEfectivoMin(ctx: ContextoOpcion): {
+  min: number | null;
+  origen: OrigenValor;
+} {
+  if (modoTiempoEfectivo(ctx) === "T-1") {
+    if (ctx.cfg.tiempoFijoOverrideMin != null) {
+      return { min: Number(ctx.cfg.tiempoFijoOverrideMin), origen: "config" };
+    }
+    const delPaso = ctx.familia?.defaults?.tiempoFijoMin;
+    return delPaso != null
+      ? { min: Number(delPaso), origen: "default-paso" }
+      : { min: null, origen: "sin-definir" };
+  }
+  const horas = Number(ctx.paramsPaso.horasEstimadas ?? NaN);
+  if (Number.isFinite(horas) && horas > 0) {
+    return { min: horas * 60, origen: "config" };
+  }
+  return { min: null, origen: "sin-definir" };
 }
 
 function unidadRitmoEfectiva(ctx: ContextoOpcion): string {
@@ -463,15 +550,15 @@ function esT2(ctx: ContextoOpcion): boolean {
   return modoTiempoEfectivo(ctx) === "T-2";
 }
 
-/** El ritmo activo es "productividad por hora" (no tanda, no tiempo fijo). En
- *  ese modo el control de cantidad se muestra INLINE junto al ritmo
- *  ("6 puntos de soldadura por hora"), no como sección aparte. */
-function esRitmoProductividad(ctx: ContextoOpcion): boolean {
+/** El ritmo se muestra como ORACIÓN con la magnitud inline ("6 puntos de
+ *  soldadura por hora" / "3 pliegos cada 1 min") — vale para productividad
+ *  Y tanda (feedback del usuario: la tanda tenía la magnitud suelta abajo,
+ *  duplicada con la cantidad del paso). */
+function esRitmoConOracionInline(ctx: ContextoOpcion): boolean {
   return (
     esT2(ctx) &&
     !comercialEstimaTiempo(ctx) &&
-    ritmoModoEfectivo(ctx) !== "batch_time" &&
-    ritmoModoEfectivo(ctx) !== "tiempo_fijo"
+    formaTiempoEfectiva(ctx) === "ritmo"
   );
 }
 
@@ -694,17 +781,17 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // A la derecha: el nombre del paso va primero (izquierda), quién lo hace
     // después (derecha) — pedido del usuario.
     orden: 1,
-    etiqueta: "Quién lo hace",
+    etiqueta: "Es tercerizado",
     seccion: "quien",
-    pregunta: "¿Quién hace este paso?",
+    pregunta: "¿Es un paso tercerizado a otro proveedor?",
     ayuda:
       "Interno lo produce el taller; tercerizado se compra hecho y el costo lo define el proveedor.",
     visible: () => true,
     resumen: (ctx) => {
-      if (!ctx.cfg.tercerizado) return "Lo produce la empresa";
+      if (!ctx.cfg.tercerizado) return "No — lo produce la empresa";
       return familiaDeclaraTercerizado(ctx)
-        ? "Lo hace un proveedor — declarado en el paso"
-        : "Lo hace un proveedor";
+        ? "Sí — declarado en el paso"
+        : "Sí — lo hace un proveedor";
     },
     origenValor: (ctx) => {
       const declarado = familiaDeclaraTercerizado(ctx);
@@ -714,8 +801,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     control: {
       tipo: "pills",
       opciones: () => [
-        { value: "empresa", label: "La produce la empresa" },
-        { value: "proveedor", label: "La hace un proveedor" },
+        { value: "empresa", label: "No" },
+        { value: "proveedor", label: "Sí" },
       ],
       valor: (ctx) => (ctx.cfg.tercerizado ? "proveedor" : "empresa"),
       aplicar: (_ctx, v) => ({
@@ -852,13 +939,29 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Arrastra otros pasos al activarse?",
     ayuda:
       "Al activarse este paso, enciende también los que marques aunque sean opcionales (los ojales arrastran el refuerzo).",
-    // [H-7, corregido] Se había escondido en pasos OBLIGATORIOS "porque
-    // arrastrar no cambia nada". Es falso: `resolverArrastreOpcionales` trata
-    // al obligatorio como ACTIVO, así que arrastra — y vuelve obligatorio de
-    // hecho a un opcional. Se muestra siempre; lo que faltaba era avisar la
-    // consecuencia, y eso lo dice el control.
-    visible: (ctx) =>
-      ctx.otrosPasos.length > 0 && ctx.cfg.modoActivacion !== "NO_EJECUTAR",
+    // [Decisión del usuario, 2026-08-11 — revierte H-7] El arrastre sólo se
+    // ofrece cuando la activación de ESTE paso es condicional ("Lo activa el
+    // comercial" o "Según una regla"): en un paso que corre SIEMPRE,
+    // arrastrar equivale a configurar los destinos como "Siempre" — la
+    // sección era ruido. (El motor sí arrastra desde obligatorios: configs
+    // legacy con selecciones guardadas siguen visibles para limpiarlas.)
+    // Los DESTINOS también se filtran: un obligatorio corre igual y un
+    // NO_EJECUTAR nunca — sólo se ofrecen opcionales/condicionales. Sin
+    // candidatos, la sección entera se oculta.
+    visible: (ctx) => {
+      const seleccionados = ctx.cfg.requiereRutaPasoIds?.length ?? 0;
+      if (seleccionados > 0 && ctx.cfg.modoActivacion !== "NO_EJECUTAR") {
+        return true;
+      }
+      const modo =
+        ctx.cfg.modoActivacion ??
+        ctx.familia?.modoActivacionDefault ??
+        "OBLIGATORIO";
+      return (
+        (modo === "OPCIONAL" || modo === "CONDICIONAL") &&
+        pasosArrastrables(ctx).length > 0
+      );
+    },
     resumen: (ctx) => {
       const ids = new Set(ctx.cfg.requiereRutaPasoIds ?? []);
       if (ids.size === 0) return "No arrastra otros pasos";
@@ -909,31 +1012,249 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
 
   // ───────────────────────────────────────────────────────────────────
-  // Sección TIEMPO Y COSTO (sub-fase B). El tiempo del comercial va
-  // PRIMERO y suprime ritmo/tanda/tiempo fijo/calcular-según
-  // (corrección del usuario).
+  // Sección TIEMPO Y COSTO — el árbol de tiempo
+  // (docs/tiempo-pasos-analisis-y-plan.md §4):
+  //   ① ¿de dónde sale el tiempo? → ② ¿fijo o ritmo? → ③ ¿unidad o tanda?
+  //   ⑤ capa comercial (No/Puede/Debe) al final — no es un modo, se apoya
+  //   sobre el base. Sólo "Debe" suprime el base (con "Puede" el base ES
+  //   la sugerencia: esconderlo era el bug de los dos defaults).
   // ───────────────────────────────────────────────────────────────────
   {
-    clave: "tiempo.comercial",
+    clave: "tiempo.origen",
     seccion: "tiempo",
     eje: "tiempo",
     grupo: "raiz",
-    pregunta: "¿El tiempo lo estima el comercial al cotizar?",
+    pregunta: "¿De dónde sale el tiempo de este paso?",
     ayuda:
-      "Para trabajos donde el tiempo lo sabe el vendedor (diseño, minutos de láser según el RIP). El valor cargado reemplaza el cálculo; setup y limpieza de máquina se suman igual.",
-    visible: () => true,
+      "Quién define el reloj: un tiempo o ritmo que declarás acá (el taller), o la velocidad del perfil de la máquina.",
+    visible: (ctx) =>
+      familiaSoportaOrigenMaquina(ctx) &&
+      familiaSoportaOrigenTaller(ctx) &&
+      !comercialEstimaTiempo(ctx),
+    resumen: (ctx) =>
+      TIEMPO_ORIGEN_OPTIONS.find((o) => o.value === origenTiempoEfectivo(ctx))
+        ?.label ?? origenTiempoEfectivo(ctx),
+    origenValor: (ctx) => (ctx.cfg.modoTiempo ? "config" : "default-paso"),
+    control: {
+      tipo: "pills",
+      opciones: () =>
+        TIEMPO_ORIGEN_OPTIONS.map((o) => ({
+          value: o.value,
+          label: o.label,
+          descripcion: o.description,
+        })),
+      valor: (ctx) => origenTiempoEfectivo(ctx),
+      aplicar: (ctx, v) => ({
+        tipo: "config",
+        patch: {
+          modoTiempo:
+            v === "maquina"
+              ? "T-3"
+              : (ctx.familia?.modosTiempoSoportados ?? []).includes("T-2")
+                ? "T-2"
+                : "T-1",
+        },
+      }),
+    },
+  },
+  {
+    // ① = máquina → panel que EXPLICA, cero perillas: el reloj lo definen
+    // el perfil (y la primitiva del oficio si la familia declara una, como
+    // el plan de corte de la guillotina). Patrón "la perilla sólo donde
+    // decide el modelador" (mismo que geometría en materiales).
+    clave: "tiempo.maquina_panel",
+    seccion: "tiempo",
+    eje: "tiempo",
+    anchoCompleto: true,
+    grupo: "ritmo",
+    etiqueta: " ",
+    pregunta: "Cómo calcula la máquina",
+    visible: (ctx) =>
+      origenTiempoEfectivo(ctx) === "maquina" && !comercialEstimaTiempo(ctx),
+    resumen: (ctx) =>
+      ctx.familia?.primitivaTiempo
+        ? "Lo define su plan de trabajo"
+        : "Lo define el perfil operativo que use la máquina",
+    origenValor: () => "default-maquina",
+    control: { tipo: "componente", id: "tiempo-maquina-panel" },
+  },
+  {
+    clave: "tiempo.forma",
+    seccion: "tiempo",
+    eje: "tiempo",
+    grupo: "ritmo",
+    // Sin etiqueta: las dos pills YA dicen "Tiempo fijo / Tiempo variable" —
+    // repetirlo arriba era ruido (feedback del usuario).
+    etiqueta: " ",
+    pregunta: "¿Tiempo fijo o variable?",
+    ayuda:
+      "Fijo: tarda lo mismo sin importar la cantidad (diseño, preparación). Variable: depende de cuánto se produce — definís la regla.",
+    visible: (ctx) =>
+      origenTiempoEfectivo(ctx) === "taller" &&
+      !comercialEstimaTiempo(ctx) &&
+      // Sin T-2 en el menú no hay ritmo posible: la forma queda fija y la
+      // pregunta sobra (diseño gráfico, pre-prensa).
+      (ctx.familia?.modosTiempoSoportados ?? []).includes("T-2"),
+    resumen: (ctx) =>
+      TIEMPO_FORMA_OPTIONS.find((o) => o.value === formaTiempoEfectiva(ctx))
+        ?.label ?? formaTiempoEfectiva(ctx),
+    origenValor: (ctx) =>
+      ctx.cfg.modoTiempo ||
+      typeof ctx.paramsPaso.timeCalculationMode === "string" ||
+      numOpcional(ctx.paramsPaso.horasEstimadas) != null
+        ? "config"
+        : "default-paso",
+    control: {
+      tipo: "pills",
+      opciones: () =>
+        TIEMPO_FORMA_OPTIONS.map((o) => ({
+          value: o.value,
+          label: o.label,
+          descripcion: o.description,
+        })),
+      valor: (ctx) => formaTiempoEfectiva(ctx),
+      aplicar: (ctx, v) => {
+        const soportaT1 = (ctx.familia?.modosTiempoSoportados ?? []).includes(
+          "T-1",
+        );
+        if (v === "fijo") {
+          if (soportaT1) {
+            // F0.3: el fijo nuevo se escribe como T-1 (minutos en config);
+            // si venía de T-2 con horas, el valor se conserva convertido.
+            const horas = numOpcional(ctx.paramsPaso.horasEstimadas);
+            return {
+              tipo: "config-y-params",
+              config: {
+                modoTiempo: "T-1",
+                ...(ctx.cfg.tiempoFijoOverrideMin == null && horas != null
+                  ? { tiempoFijoOverrideMin: horas * 60 }
+                  : {}),
+              },
+              params: { horasEstimadas: null, timeCalculationMode: null },
+            };
+          }
+          // Familia sin T-1 en el menú (pintura, montaje): el fijo vive en
+          // T-2 como siempre (horasEstimadas + intención tiempo_fijo).
+          return {
+            tipo: "params",
+            patch: { timeCalculationMode: "tiempo_fijo" },
+          };
+        }
+        // Ritmo: limpiar los relojes del camino abandonado. horasEstimadas
+        // porque el motor la prefiere sobre el ritmo; tiempoFijoOverrideMin
+        // porque es ADITIVO en todos los modos y contaría doble.
+        const teniaBatch =
+          numOpcional(ctx.paramsPaso.batchTimeMin) != null &&
+          numOpcional(ctx.paramsPaso.batchSize) != null;
+        return {
+          tipo: "config-y-params",
+          config: { modoTiempo: "T-2", tiempoFijoOverrideMin: null },
+          params: {
+            horasEstimadas: null,
+            timeCalculationMode: teniaBatch ? "batch_time" : null,
+          },
+        };
+      },
+    },
+  },
+  {
+    // El VALOR del tiempo fijo, unificando los dos storages históricos
+    // (T-1 minutos en config / T-2 horas en params — el componente decide
+    // dónde escribir según el menú de la familia, F0.3).
+    clave: "tiempo.fijo_valor",
+    seccion: "tiempo",
+    eje: "tiempo",
+    grupo: "ritmo",
+    etiqueta: "Cuánto lleva",
+    pregunta: "¿Cuánto lleva?",
+    ayuda:
+      "El tiempo del paso, independiente de la cantidad. Si el paso ya declara uno, se usa ese.",
+    visible: (ctx) =>
+      origenTiempoEfectivo(ctx) === "taller" &&
+      formaTiempoEfectiva(ctx) === "fijo" &&
+      !comercialEstimaTiempo(ctx),
     resumen: (ctx) => {
-      if (!comercialEstimaTiempo(ctx)) return "No — se calcula solo";
-      const sugerido = numOpcional(
-        getTiempoManualConfig(ctx.cfg.paramsPasoJson).defaultMin,
-      );
-      return sugerido != null
-        ? `Sí — lo carga al cotizar (sugerido ${sugerido} min)`
-        : "Sí — lo carga al cotizar";
+      const { min, origen } = tiempoFijoEfectivoMin(ctx);
+      if (min == null) return "Sin definir";
+      const texto =
+        min >= 60 && min % 30 === 0 ? `${min / 60} h` : `${min} min`;
+      return origen === "default-paso" ? `Usando el del paso: ${texto}` : texto;
+    },
+    origenValor: (ctx) => tiempoFijoEfectivoMin(ctx).origen,
+    pendiente: "tiempo_fijo",
+    control: { tipo: "componente", id: "tiempo-fijo-valor" },
+  },
+  {
+    // Capa ⑤ del árbol: se apoya sobre el tiempo base, no lo reemplaza como
+    // pregunta. "Puede" deja visible el base (es la sugerencia/fallback);
+    // sólo "Debe" suprime las preguntas de fijo/ritmo.
+    clave: "tiempo.comercial",
+    seccion: "tiempo",
+    eje: "tiempo",
+    grupo: "ayudas",
+    etiqueta: "¿Puede ajustar el tiempo?",
+    pregunta: "¿El comercial puede ajustar el tiempo al cotizar?",
+    ayuda:
+      "Para trabajos donde el tiempo lo sabe el vendedor (diseño, trabajo manual difícil de estimar). Lo que cargue reemplaza el cálculo; setup y limpieza se suman igual.",
+    // Comandado por máquina, el tiempo lo define ella — la capa comercial
+    // no se ofrece (feedback del usuario). Configs legacy con tiempoManual
+    // en pasos T-3 siguen visibles para poder apagarlas.
+    visible: (ctx) =>
+      origenTiempoEfectivo(ctx) !== "maquina" ||
+      comercialNivelEfectivo(ctx) !== "no",
+    resumen: (ctx) => {
+      const nivel = comercialNivelEfectivo(ctx);
+      if (nivel === "no") return "No — se calcula solo";
+      if (nivel === "debe") return "Debe cargarlo — sin su tiempo no cotiza";
+      const { min } = tiempoFijoEfectivoMin(ctx);
+      return min != null
+        ? `Puede ajustarlo (sugerencia: ${min} min)`
+        : "Puede ajustarlo";
     },
     origenValor: (ctx) =>
-      comercialEstimaTiempo(ctx) ? "config" : "default-paso",
-    control: { tipo: "componente", id: "tiempo-comercial" },
+      comercialNivelEfectivo(ctx) !== "no" ? "config" : "default-paso",
+    control: {
+      tipo: "pills",
+      opciones: () =>
+        TIEMPO_COMERCIAL_NIVEL_OPTIONS.map((o) => ({
+          value: o.value,
+          label: o.label,
+          descripcion: o.description,
+        })),
+      valor: (ctx) => comercialNivelEfectivo(ctx),
+      aplicar: (ctx, v) => {
+        if (v === "no") {
+          // Borrar la capa; el legacy T-4 (etiqueta sin rama) también se
+          // normaliza al salir — vuelve al modo base del menú.
+          const patchParams = { tiempoManual: null };
+          if (ctx.cfg.modoTiempo === "T-4") {
+            return {
+              tipo: "config-y-params",
+              config: {
+                modoTiempo: (ctx.familia?.modosTiempoSoportados ?? []).includes(
+                  "T-2",
+                )
+                  ? "T-2"
+                  : "T-1",
+              },
+              params: patchParams,
+            };
+          }
+          return { tipo: "params", patch: patchParams };
+        }
+        const config = getTiempoManualConfig(ctx.cfg.paramsPasoJson);
+        return {
+          tipo: "params",
+          patch: {
+            tiempoManual: {
+              ...config,
+              habilitado: true,
+              obligatorio: v === "debe",
+            },
+          },
+        };
+      },
+    },
   },
   {
     // Las ayudas al comercial se separan de la pregunta para poder caer al
@@ -947,8 +1268,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     etiqueta: " ",
     pregunta: "¿Qué ayudas le damos al comercial para estimar?",
     ayuda:
-      "Un valor sugerido y un rango aceptado evitan que dos comerciales coticen el mismo trabajo con tiempos muy distintos.",
-    visible: (ctx) => comercialEstimaTiempo(ctx),
+      "Un rango aceptado evita que dos comerciales coticen el mismo trabajo con tiempos muy distintos.",
+    visible: (ctx) => comercialNivelEfectivo(ctx) !== "no",
     resumen: (ctx) => {
       const config = getTiempoManualConfig(ctx.cfg.paramsPasoJson);
       const partes: string[] = [];
@@ -972,42 +1293,6 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "default-paso";
     },
     control: { tipo: "componente", id: "tiempo-comercial-ayudas" },
-  },
-  {
-    clave: "tiempo.modo",
-    seccion: "tiempo",
-    eje: "tiempo",
-    grupo: "ritmo",
-    etiqueta: "Cómo se mide",
-    pregunta: "¿Cómo se mide el tiempo acá?",
-    ayuda:
-      "La base del cálculo: tiempo fijo, ritmo propio del paso, o la velocidad de la máquina.",
-    visible: (ctx) =>
-      !comercialEstimaTiempo(ctx) &&
-      (ctx.familia?.modosTiempoSoportados?.length ?? 4) > 1,
-    resumen: (ctx) => {
-      const modo = modoTiempoEfectivo(ctx);
-      return modo
-        ? (modoTiempoLabels[modo]?.label ?? modo)
-        : "Sin definir";
-    },
-    origenValor: (ctx) => (ctx.cfg.modoTiempo ? "config" : "default-paso"),
-    control: {
-      tipo: "pills",
-      opciones: (ctx) =>
-        (ctx.familia?.modosTiempoSoportados ?? ["T-1", "T-2", "T-3", "T-4"]).map(
-          (m) => ({
-            value: m,
-            label: modoTiempoLabels[m]?.label ?? m,
-            descripcion: modoTiempoLabels[m]?.descripcion,
-          }),
-        ),
-      valor: (ctx) => modoTiempoEfectivo(ctx) ?? "",
-      aplicar: (_ctx, v) => ({
-        tipo: "config",
-        patch: { modoTiempo: v || null },
-      }),
-    },
   },
   {
     clave: "tiempo.centro",
@@ -1061,11 +1346,16 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     seccion: "tiempo",
     eje: "tiempo",
     grupo: "donde",
-    etiqueta: "Personas en simultáneo",
+    etiqueta: "Operarios",
     pregunta: "¿Cuántas personas trabajan?",
     ayuda:
       "Multiplica sólo la mano de obra (2 personas = doble de horas-hombre); la máquina no cambia.",
-    visible: () => true,
+    // Con máquina la perilla es INERTE en el motor (el costo multiplica
+    // dotación SÓLO sin máquina — la MO no se cobra sobre su runtime):
+    // mostrarla en pasos dominados por máquina era inconsistente (feedback
+    // del usuario).
+    visible: (ctx) =>
+      !ctx.cfg.maquinaM1Id && (ctx.cfg.maquinasCandidatas?.length ?? 0) === 0,
     resumen: (ctx) => {
       const n = ctx.cfg.dotacionOperarios ?? 1;
       return n === 1 ? "1 persona" : `${n} personas`;
@@ -1092,15 +1382,19 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     anchoCompleto: true,
     grupo: "ritmo",
     etiqueta: "Tipo de ritmo",
-    pregunta: "¿Cómo medís el ritmo?",
+    pregunta: "¿Por unidad o por tanda?",
     ayuda:
       "Por hora (120 pliegos/h) o por tanda (2 pliegos cada 1 minuto) — lo que sea natural contar en el taller.",
-    visible: (ctx) => esT2(ctx) && !comercialEstimaTiempo(ctx),
+    // FUSIONADA en la regla del tiempo variable (feedback del usuario: con la
+    // oración "[N] [magnitud] cada [T] [min|h]" el tipo de ritmo sobra —
+    // productividad ES "cada 1 hora"). La diferencia real entre los modos
+    // (la tanda redondea hacia arriba) vive como interruptor "tandas
+    // enteras" dentro de la propia regla.
+    visible: () => false,
     resumen: (ctx) => {
       const modo = ritmoModoEfectivo(ctx);
       return (
-        T2_TIME_CALCULATION_MODE_OPTIONS.find((o) => o.value === modo)
-          ?.label ?? modo
+        T2_RITMO_OPTIONS.find((o) => o.value === modo)?.label ?? modo
       );
     },
     origenValor: (ctx) =>
@@ -1110,7 +1404,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     control: {
       tipo: "pills",
       opciones: () =>
-        T2_TIME_CALCULATION_MODE_OPTIONS.map((o) => ({
+        T2_RITMO_OPTIONS.map((o) => ({
           value: o.value,
           label: o.label,
           descripcion: o.description,
@@ -1118,33 +1412,45 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       valor: (ctx) => ritmoModoEfectivo(ctx),
       aplicar: (_ctx, v) => ({
         tipo: "params",
-        // Salir de tiempo fijo tiene que BORRAR las horas: si quedan, el
-        // motor las sigue prefiriendo y el ritmo elegido no se usaría.
-        patch:
-          v === "tiempo_fijo"
-            ? { timeCalculationMode: v }
-            : { timeCalculationMode: v, horasEstimadas: null },
+        // Las horas estimadas no pueden quedar: el motor las prefiere sobre
+        // el ritmo elegido (regla "no apilar relojes").
+        patch: { timeCalculationMode: v, horasEstimadas: null },
       }),
     },
   },
   {
+    // LA regla del tiempo variable — una sola oración para lo que antes eran
+    // "Productividad por hora" y "Tiempo por lote" (feedback del usuario):
+    // "[N] [magnitud ▾] cada [T] [min|h ▾]" + interruptor "tandas enteras"
+    // (la única diferencia real entre los dos modos: la tanda redondea).
     clave: "tiempo.productividad",
     seccion: "tiempo",
     eje: "tiempo",
     anchoCompleto: true,
     grupo: "ritmo",
-    // En tiempo fijo el campo son horas por orden, no un ritmo: la etiqueta
-    // sigue al modo elegido.
-    etiqueta: (ctx) =>
-      ritmoModoEfectivo(ctx) === "tiempo_fijo" ? "Horas por orden" : "Ritmo",
+    etiqueta: "La regla",
     pregunta: "¿A qué ritmo?",
     ayuda:
-      "Cuánto produce el paso por hora. No es por persona: sumar gente no lo acelera (ver Dónde se hace). Si el paso ya declara un ritmo, se usa ese.",
+      "Cuánto produce el paso y en cuánto tiempo. No es por persona: sumar gente no lo acelera (ver Dónde se hace). Si el paso ya declara un ritmo, se usa ese.",
     visible: (ctx) =>
       esT2(ctx) &&
-      !comercialEstimaTiempo(ctx) &&
-      ritmoModoEfectivo(ctx) !== "batch_time",
+      formaTiempoEfectiva(ctx) === "ritmo" &&
+      !comercialEstimaTiempo(ctx),
     resumen: (ctx) => {
+      if (ritmoModoEfectivo(ctx) === "batch_time") {
+        const tiempo = numOpcional(ctx.paramsPaso.batchTimeMin);
+        const tamano = numOpcional(ctx.paramsPaso.batchSize);
+        if (tiempo != null && tamano != null) {
+          const base = `${tamano} ${getT2BatchUnitSuffix(
+            unidadRitmoEfectiva(ctx),
+            fuenteRitmoEfectiva(ctx),
+            unidadRitmoNombrada(ctx),
+          )} cada ${tiempo} min`;
+          const equivalente = ritmoEquivalenteDeBatch(tamano, tiempo);
+          return equivalente != null ? `${base} (≈ ${equivalente}/h)` : base;
+        }
+        return "Sin definir todavía";
+      }
       const valor = numOpcional(ctx.paramsPaso.productivityValue);
       if (valor != null) {
         return `${valor} ${getT2ProductivityUnitSuffix(
@@ -1159,11 +1465,16 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "Sin ritmo cargado";
     },
     origenValor: (ctx) =>
-      numOpcional(ctx.paramsPaso.productivityValue) != null
-        ? "config"
-        : ctx.familia?.defaults?.productividadHora != null
-          ? "default-paso"
-          : "sin-definir",
+      ritmoModoEfectivo(ctx) === "batch_time"
+        ? numOpcional(ctx.paramsPaso.batchTimeMin) != null &&
+          numOpcional(ctx.paramsPaso.batchSize) != null
+          ? "config"
+          : "sin-definir"
+        : numOpcional(ctx.paramsPaso.productivityValue) != null
+          ? "config"
+          : ctx.familia?.defaults?.productividadHora != null
+            ? "default-paso"
+            : "sin-definir",
     pendiente: "ritmo",
     control: { tipo: "componente", id: "ritmo-productividad" },
   },
@@ -1177,19 +1488,23 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Cuánto tarda una tanda y de cuántas?",
     ayuda:
       "Ejemplo: 2 pliegos cada 1 minuto. El motor convierte la tanda a ritmo por hora.",
-    visible: (ctx) =>
-      esT2(ctx) &&
-      !comercialEstimaTiempo(ctx) &&
-      ritmoModoEfectivo(ctx) === "batch_time",
+    // FUSIONADA en tiempo.productividad (la regla única del tiempo
+    // variable). La definición queda por el censo y el detallado congelado.
+    visible: () => false,
     resumen: (ctx) => {
       const tiempo = numOpcional(ctx.paramsPaso.batchTimeMin);
       const tamano = numOpcional(ctx.paramsPaso.batchSize);
       if (tiempo != null && tamano != null) {
-        return `${tamano} ${getT2BatchUnitSuffix(
+        const base = `${tamano} ${getT2BatchUnitSuffix(
           unidadRitmoEfectiva(ctx),
           fuenteRitmoEfectiva(ctx),
           unidadRitmoNombrada(ctx),
         )} cada ${tiempo} min`;
+        // F0.5 — pseudo-batch honesto: una tanda de 1 es un ritmo disfrazado;
+        // el resumen lo dice (la conversión real queda a un click, no en
+        // silencio: la tanda redondea hacia arriba y el ritmo no).
+        const equivalente = ritmoEquivalenteDeBatch(tamano, tiempo);
+        return equivalente != null ? `${base} (≈ ${equivalente}/h)` : base;
       }
       return "Sin definir todavía";
     },
@@ -1207,16 +1522,34 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     eje: "tiempo",
     anchoCompleto: true,
     grupo: "cantidad",
-    etiqueta: "El ritmo se multiplica por",
+    // Cuando el reloj cuenta OTRA magnitud (perímetro, m²), esta sección no
+    // multiplica al ritmo: define la cantidad del paso para materiales y
+    // herencias — la etiqueta no debe mentir (feedback del usuario: "¿'El
+    // ritmo cuenta' y 'se multiplica por' no es lo mismo?").
+    etiqueta: (ctx) =>
+      esRitmoConOracionInline(ctx) &&
+      fuenteRitmoEfectiva(ctx) !== "cantidad"
+        ? "La cantidad del paso"
+        : "El ritmo se multiplica por",
     pregunta: "¿Sobre cuántas piezas trabaja?",
-    ayuda:
-      "El número que multiplica al ritmo cuando entra una orden: la cantidad pedida, la que calcula el paso, o una magnitud que dejó un paso anterior (puntos de soldadura, m² a pintar…).",
+    ayuda: (ctx) =>
+      esRitmoConOracionInline(ctx) && fuenteRitmoEfectiva(ctx) !== "cantidad"
+        ? "El reloj ya cuenta otra magnitud (está en la oración del ritmo). Esta cantidad alimenta los materiales del paso y lo que heredan los siguientes."
+        : "El número que multiplica al ritmo cuando entra una orden: la cantidad pedida, la que calcula el paso, o una magnitud que dejó un paso anterior (puntos de soldadura, m² a pintar…).",
     visible: (ctx) =>
       requiereMecanismoCantidad(ctx.cfg, ctx.familia) &&
       (ctx.familia?.mecanismosCantidadSoportados?.length ?? 4) > 1 &&
-      // En productividad por hora el control se muestra INLINE junto al ritmo
-      // ("6 puntos de soldadura por hora"), así que la sección aparte se oculta.
-      !esRitmoProductividad(ctx),
+      // Comandado por máquina, la cantidad la definen la máquina y el
+      // acomodado — nada que preguntar acá (feedback del usuario; el
+      // detallado sigue ofreciendo el mecanismo para casos finos).
+      origenTiempoEfectivo(ctx) !== "maquina" &&
+      // Con la oración del ritmo (productividad Y tanda), la magnitud —y el
+      // mecanismo cuando cuenta "cantidad"— se eligen INLINE ahí: repetir la
+      // sección era la duplicación que marcó el usuario. Sólo reaparece si
+      // el reloj cuenta otra magnitud (ahí la cantidad sigue importando para
+      // materiales/herencias, y NO está en la oración).
+      (!esRitmoConOracionInline(ctx) ||
+        fuenteRitmoEfectiva(ctx) !== "cantidad"),
     // Resumen ÚNICO: fusiona el mecanismo y la magnitud heredada (antes eran
     // dos filas — "Base de cantidad" + "Hereda de"). Si hereda por output,
     // nombra la magnitud; si no, el método.
@@ -1298,10 +1631,11 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // lo mismo. En tanda y tiempo fijo no hay oración, así que sigue.
     ayuda:
       "Qué magnitud cronometra la productividad: cantidad, área, metros lineales o perímetro.",
-    visible: (ctx) =>
-      esT2(ctx) &&
-      !comercialEstimaTiempo(ctx) &&
-      ritmoModoEfectivo(ctx) === "batch_time",
+    // Fusionada en la ORACIÓN del ritmo (productividad y tanda usan el mismo
+    // selector unificado de magnitud): "El ritmo cuenta" como fila aparte era
+    // la mitad de la duplicación que marcó el usuario. La definición queda
+    // por el resumen y el detallado congelado.
+    visible: () => false,
     resumen: (ctx) => {
       const fuente = fuenteRitmoEfectiva(ctx);
       const base =
@@ -1382,51 +1716,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       }),
     },
   },
-  {
-    clave: "tiempo.tiempo_fijo",
-    seccion: "tiempo",
-    eje: "tiempo",
-    grupo: "ritmo",
-    etiqueta: "Minutos por trabajo",
-    pregunta: "¿Cuántos minutos lleva?",
-    ayuda:
-      "El tiempo fijo del paso, independiente de la cantidad. Si el paso ya declara uno, se usa ese.",
-    visible: (ctx) =>
-      modoTiempoEfectivo(ctx) === "T-1" &&
-      !ctx.cfg.maquinaM1Id &&
-      !comercialEstimaTiempo(ctx),
-    resumen: (ctx) => {
-      if (ctx.cfg.tiempoFijoOverrideMin != null) {
-        return `${ctx.cfg.tiempoFijoOverrideMin} min`;
-      }
-      const delPaso = ctx.familia?.defaults?.tiempoFijoMin;
-      return delPaso != null
-        ? `Usando el del paso: ${delPaso} min`
-        : "Sin definir";
-    },
-    origenValor: (ctx) =>
-      ctx.cfg.tiempoFijoOverrideMin != null
-        ? "config"
-        : ctx.familia?.defaults?.tiempoFijoMin != null
-          ? "default-paso"
-          : "sin-definir",
-    pendiente: "tiempo_fijo",
-    control: {
-      tipo: "numero",
-      min: 0,
-      step: 0.5,
-      sufijo: () => "min",
-      placeholder: (ctx) => {
-        const delPaso = ctx.familia?.defaults?.tiempoFijoMin;
-        return delPaso != null ? `Usando el del paso: ${delPaso}` : "Ej. 15";
-      },
-      valor: (ctx) => ctx.cfg.tiempoFijoOverrideMin ?? null,
-      aplicar: (_ctx, v) => ({
-        tipo: "config",
-        patch: { tiempoFijoOverrideMin: v },
-      }),
-    },
-  },
+  // (tiempo.tiempo_fijo se fusionó en tiempo.fijo_valor: un solo concepto
+  //  "Fijo" para los dos storages históricos — árbol de tiempo, F0.3.)
 
   // ───────────────────────────────────────────────────────────────────
   // Sección MÁQUINA Y PERFIL (sub-fase B). Candidatas y modo de color
@@ -2190,22 +2481,27 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
  * sin máquina, donde la capacidad se mide en horas-hombre). Ver
  * `calcularTiempoYCosto` en motor.service.ts.
  */
-const GRUPOS_TIEMPO: GrupoEje[] = [
-  { id: "raiz", estilo: "bifurcacion" },
+/** "Dónde se hace" es su propia CARD (feedback del usuario: el centro y los
+ *  operarios definen quién/dónde ejecuta y la tarifa — no el reloj; no
+ *  pertenecen a "Tiempo que consume"). El grupo no repite título: lo pone
+ *  la card. */
+export const GRUPOS_DONDE: GrupoEje[] = [
   {
     id: "donde",
-    titulo: "Dónde se hace",
-    ayuda: (ctx) =>
-      comercialEstimaTiempo(ctx)
-        ? "El centro define el costo por hora que se aplica al tiempo que carga el comercial."
-        : "El centro define la tarifa por hora.",
     estilo: "campos",
     columnas: "minmax(0, 1fr) 168px",
   },
+];
+
+const GRUPOS_TIEMPO: GrupoEje[] = [
+  { id: "raiz", estilo: "bifurcacion" },
   {
     id: "ritmo",
-    titulo: "Ritmo de trabajo",
-    ayuda: "Es lo único que cambia los minutos por ítem.",
+    titulo: "Cómo se calcula",
+    ayuda: (ctx) =>
+      origenTiempoEfectivo(ctx) === "maquina"
+        ? "El reloj lo define la máquina; acá no hay perillas."
+        : "Es lo único que cambia los minutos por ítem.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
   },
@@ -2230,13 +2526,13 @@ const GRUPOS_TIEMPO: GrupoEje[] = [
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
   },
   {
-    // Último a propósito: es lo único opcional del eje. Primero se define
-    // cómo se calcula el tiempo y dónde; las ayudas al comercial vienen
-    // después, si el modelador las quiere.
+    // Último a propósito: la capa comercial se APOYA sobre el tiempo base
+    // (árbol de tiempo, ⑤) — primero se define el base, después si el
+    // comercial puede pisarlo.
     id: "ayudas",
-    titulo: "Ayudas y validación",
+    titulo: "El comercial al cotizar",
     ayuda:
-      "Opcional. Evita que dos comerciales coticen el mismo trabajo muy distinto.",
+      "Define si el tiempo de este paso puede ser modificado por el comercial.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
   },

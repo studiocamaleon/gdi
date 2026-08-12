@@ -522,6 +522,11 @@ export interface FamiliaListItem {
      *  hierro") — el menú las muestra como `derivada:<magnitud>`. */
     magnitudesTiempo?: Array<{ magnitud: string; etiqueta: string }>;
   } | null;
+  /** [Árbol de tiempo] La familia calcula el run con una primitiva propia
+   *  (código del catálogo del motor, ej. guillotina_por_cortes) que
+   *  REEMPLAZA la fórmula del perfil — el editor la explica, no la
+   *  pregunta. */
+  primitivaTiempo?: string | null;
   /** E.1 — defaults declarados del paso (null = sin defaults). */
   defaults?: DefaultsFamiliaPaso | null;
   validaciones: Array<{
