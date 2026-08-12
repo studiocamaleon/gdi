@@ -5213,7 +5213,15 @@ function ApConfigStep({
     </div>
   );
 
-  const renderTiempoManualField = (tiempoPaso: TiempoManualComercial) => {
+  /**
+   * `enTarjeta`: dentro de la card de un opcional el campo va con la misma
+   * tarjeta de encabezado negro que los materiales y los niveles; suelto en la
+   * grilla de specs va como un campo más de la grilla.
+   */
+  const renderTiempoManualField = (
+    tiempoPaso: TiempoManualComercial,
+    opts?: { enTarjeta?: boolean },
+  ) => {
     const nombrePaso =
       tiempoPaso.nombreVisible?.trim() ||
       humanizeCodigo(tiempoPaso.familiaCodigo);
@@ -5227,6 +5235,37 @@ function ApConfigStep({
           ? efectivoMin / 60
           : efectivoMin;
     const error = getTiempoManualError(tiempoPaso, motorConfig);
+    if (opts?.enTarjeta) {
+      return (
+        <div className={seC.card} key={`tiempo-${tiempoPaso.configPasoId}`}>
+          <div className={seC.gh}>
+            {label} ({unidadLabel})
+          </div>
+          <div className={`${seC.body} ap-spec`}>
+            <input
+              type="number"
+              min={0}
+              step={tiempoPaso.unidadInput === "h" ? 0.25 : 1}
+              value={displayValue}
+              placeholder={tiempoPaso.obligatorio ? "Requerido" : "Automático"}
+              onChange={(event) =>
+                setTiempoManualPaso(
+                  tiempoPaso.configPasoId,
+                  event.target.value,
+                  tiempoPaso.unidadInput,
+                )
+              }
+            />
+            {error ? (
+              <div className="ap-minimum-alert is-blocked">
+                <CircleAlertIcon />
+                <span>{error}</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="ap-spec" key={`tiempo-${tiempoPaso.configPasoId}`}>
         <label>
@@ -5256,9 +5295,10 @@ function ApConfigStep({
     );
   };
   /**
-   * Nivel del paso: pills excluyentes, como el modo de color. Es UNA decisión
-   * (no tres opcionales que se pueden tildar a la vez), y por eso no puede ser
-   * un checkbox. Ver docs/cargos-por-paso-analisis-y-plan.md §8.
+   * Nivel del paso: opciones excluyentes, como el modo de color — y con la
+   * MISMA tarjeta de encabezado negro que el resto del sheet
+   * (`cotizador-seccion.module.css`: "que TODO el sheet sea una pila de
+   * tarjetas parejas"). Ver docs/cargos-por-paso-analisis-y-plan.md §8.
    */
   const renderNivelField = (item: NivelComercial) => {
     const nombrePaso =
@@ -5271,8 +5311,11 @@ function ApConfigStep({
     // editor no dejaría escribir un espacio (ver src/lib/niveles-paso.ts).
     const etiqueta = item.config.etiqueta.trim() || "¿Qué nivel?";
     return (
-      <div className="ap-spec" key={`nivel-${item.configPasoId}`}>
-        <label title={nombrePaso}>{etiqueta}</label>
+      <div className={seC.card} key={`nivel-${item.configPasoId}`}>
+        <div className={seC.gh} title={nombrePaso}>
+          {etiqueta}
+        </div>
+        <div className={seC.body}>
         {renderChoiceCards(
           etiqueta,
           elegido.codigo,
@@ -5290,6 +5333,7 @@ function ApConfigStep({
               },
             })),
         )}
+        </div>
       </div>
     );
   };
@@ -6766,7 +6810,9 @@ function ApConfigStep({
                         </div>
                       ) : null}
                       {tiempoManual
-                        ? renderTiempoManualField(tiempoManual)
+                        ? renderTiempoManualField(tiempoManual, {
+                            enTarjeta: true,
+                          })
                         : null}
                       {paramsComercial?.campos.map((campo) =>
                         renderParamComercialField(paramsComercial, campo, {
