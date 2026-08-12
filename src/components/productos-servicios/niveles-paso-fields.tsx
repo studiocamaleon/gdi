@@ -4,7 +4,11 @@ import * as React from "react";
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
-import { type NivelPasoOpcion, leerNivelesPaso } from "@/lib/niveles-paso";
+import {
+  type NivelPasoOpcion,
+  leerNivelesPaso,
+  nombreNivel,
+} from "@/lib/niveles-paso";
 import { leerTiemposExtra } from "@/lib/tiempos-extra-paso";
 
 /**
@@ -30,7 +34,9 @@ export function NivelesPasoFields({
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   const config = leerNivelesPaso(params);
-  const bloques = leerTiemposExtra(params).filter((b) => b.minutos > 0);
+  // Sin filtrar por minutos: si no, la columna del bloque desaparecía mientras
+  // se vaciaba su campo en la card de arriba.
+  const bloques = leerTiemposExtra(params);
   const [editando, setEditando] = React.useState<string | null>(null);
 
   const guardar = (etiqueta: string, opciones: NivelPasoOpcion[]) =>
@@ -170,10 +176,12 @@ export function NivelesPasoFields({
                 className="mt-1 shrink-0"
                 checked={opcion.esDefault}
                 onChange={() => marcarDefault(indice)}
-                aria-label={`${opcion.nombre} viene marcado por defecto`}
+                aria-label={`${nombreNivel(opcion)} viene marcado por defecto`}
               />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">{opcion.nombre}</div>
+                <div className="text-sm font-medium">
+                  {nombreNivel(opcion)}
+                </div>
                 <div className="text-muted-foreground mt-0.5 text-xs">
                   {describir(opcion)}
                 </div>
@@ -184,7 +192,7 @@ export function NivelesPasoFields({
                 onClick={() =>
                   setEditando(editando === opcion.codigo ? null : opcion.codigo)
                 }
-                aria-label={`Editar ${opcion.nombre}`}
+                aria-label={`Editar ${nombreNivel(opcion)}`}
                 aria-expanded={editando === opcion.codigo}
               >
                 <PencilIcon className="size-3.5" />
@@ -200,7 +208,7 @@ export function NivelesPasoFields({
                       opciones.filter((_, i) => i !== indice),
                     );
                   }}
-                  aria-label={`Quitar ${opcion.nombre}`}
+                  aria-label={`Quitar ${nombreNivel(opcion)}`}
                 >
                   <Trash2Icon className="size-3.5" />
                 </button>

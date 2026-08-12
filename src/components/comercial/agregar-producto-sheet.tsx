@@ -30,6 +30,7 @@ import {
   leerNivelesPaso,
   nivelEfectivo,
   nivelPasoKey,
+  nombreNivel,
 } from "@/lib/niveles-paso";
 import { etiquetaValorParam } from "@/lib/params-familia";
 import { ProductoSheetHeaderConstelacion } from "./producto-sheet-header";
@@ -5204,15 +5205,18 @@ function ApConfigStep({
       item.config,
       motorConfig.seleccionNivel[item.configPasoId],
     );
+    // El fallback vive acá y no en el lector: si el lector normalizara, el
+    // editor no dejaría escribir un espacio (ver src/lib/niveles-paso.ts).
+    const etiqueta = item.config.etiqueta.trim() || "¿Qué nivel?";
     return (
       <div className="ap-spec" key={`nivel-${item.configPasoId}`}>
-        <label title={nombrePaso}>{item.config.etiqueta}</label>
+        <label title={nombrePaso}>{etiqueta}</label>
         {renderChoiceCards(
-          item.config.etiqueta,
+          etiqueta,
           elegido.codigo,
           item.config.opciones.map((opcion) => ({
             value: opcion.codigo,
-            label: opcion.nombre,
+            label: nombreNivel(opcion),
             desc: describirNivel(opcion) ?? undefined,
           })),
           (codigo) =>

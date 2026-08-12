@@ -67,7 +67,16 @@ function leerOverrides(raw: unknown): NivelPasoOverrides {
   return overrides;
 }
 
-/** null si no hay al menos dos opciones: un solo nivel no es una decisión. */
+/**
+ * null si no hay al menos dos opciones: un solo nivel no es una decisión.
+ *
+ * **Los textos salen tal cual están guardados.** Este lector alimenta los
+ * inputs del editor en cada tecla: si acá se hiciera `trim()`, escribir un
+ * espacio sería imposible (se borra antes de que llegue la letra siguiente:
+ * "Profesional a" → "Profesionala"), y vaciar el campo lo repoblaría con el
+ * código ("nivel_1"). Normalizar es tarea de quien MUESTRA —el cotizador cae
+ * al código si el nombre quedó vacío— y del motor, que sí es tolerante.
+ */
 export function leerNivelesPaso(
   paramsPasoJson: unknown,
 ): NivelesPasoConfig | null {
@@ -81,24 +90,25 @@ export function leerNivelesPaso(
       typeof opcion.codigo === "string" && opcion.codigo.trim()
         ? opcion.codigo.trim()
         : `nivel_${indice}`;
-    const nombre =
-      typeof opcion.nombre === "string" && opcion.nombre.trim()
-        ? opcion.nombre.trim()
-        : codigo;
     if (opciones.some((previa) => previa.codigo === codigo)) return;
     opciones.push({
       codigo,
-      nombre,
+      nombre: typeof opcion.nombre === "string" ? opcion.nombre : codigo,
       esDefault: opcion.esDefault === true,
       overrides: leerOverrides(opcion.overrides),
     });
   });
   if (opciones.length < 2) return null;
-  const etiqueta =
-    typeof bruto.etiqueta === "string" && bruto.etiqueta.trim()
-      ? bruto.etiqueta.trim()
-      : "¿Qué nivel?";
-  return { etiqueta, opciones };
+  return {
+    etiqueta:
+      typeof bruto.etiqueta === "string" ? bruto.etiqueta : "¿Qué nivel?",
+    opciones,
+  };
+}
+
+/** Cómo se muestra un nivel: su nombre, o el código si quedó sin nombre. */
+export function nombreNivel(nivel: NivelPasoOpcion): string {
+  return nivel.nombre.trim() || nivel.codigo;
 }
 
 /** El nivel que corre: el elegido, el marcado por defecto, o el primero. */

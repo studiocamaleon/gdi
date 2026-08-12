@@ -50,12 +50,18 @@ export function leerTiemposExtra(
   });
 }
 
-/** Patch shallow sobre `paramsPasoJson`. Lista vacía = borrar la clave. */
+/**
+ * Patch shallow sobre `paramsPasoJson`. Lista vacía = borrar la clave.
+ *
+ * NO filtra por minutos: el editor guarda en cada tecla, y filtrar acá hacía
+ * desaparecer el bloque al vaciar el campo para escribir otro número. Un
+ * bloque en 0 es config válida y el motor lo ignora al cotizar; para sacarlo
+ * está el tacho.
+ */
 export function patchTiemposExtra(
   bloques: TiempoExtraPaso[],
 ): Record<string, unknown> {
-  const utiles = bloques.filter((bloque) => bloque.minutos > 0);
-  return { tiemposExtra: utiles.length > 0 ? utiles : null };
+  return { tiemposExtra: bloques.length > 0 ? bloques : null };
 }
 
 /** Resumen de una línea para la card cerrada del editor. */
