@@ -139,7 +139,9 @@ export function NivelesPasoFields({
   };
 
   return (
-    <div className="pasos-sections">
+    // `pasos-sections` es `display:block` sin gap: el flex-col separa la
+    // pregunta, la lista y el pie (si no, el botón queda pegado a la lista).
+    <div className="pasos-sections flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <label className="text-muted-foreground text-xs">
           ¿Cómo le preguntamos al comercial?
@@ -151,9 +153,16 @@ export function NivelesPasoFields({
         />
       </div>
 
-      <div className="divide-y rounded-md border">
+      <div className="divide-y overflow-hidden rounded-md border">
         {opciones.map((opcion, indice) => (
-          <div key={opcion.codigo} className="p-3">
+          <div
+            key={opcion.codigo}
+            className={
+              editando === opcion.codigo
+                ? "bg-muted/20 p-3"
+                : "hover:bg-muted/20 p-3 transition-colors"
+            }
+          >
             <div className="flex items-start gap-2">
               <input
                 type="radio"
@@ -165,13 +174,13 @@ export function NivelesPasoFields({
               />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{opcion.nombre}</div>
-                <div className="text-muted-foreground text-xs">
+                <div className="text-muted-foreground mt-0.5 text-xs">
                   {describir(opcion)}
                 </div>
               </div>
               <button
                 type="button"
-                className="btn btn-ghost btn-sm shrink-0"
+                className="btn btn-ghost btn-sm text-muted-foreground hover:text-foreground shrink-0"
                 onClick={() =>
                   setEditando(editando === opcion.codigo ? null : opcion.codigo)
                 }
@@ -183,7 +192,7 @@ export function NivelesPasoFields({
               {opciones.length > 2 ? (
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm shrink-0 text-red-600"
+                  className="btn btn-ghost btn-sm text-muted-foreground shrink-0 hover:text-red-600"
                   onClick={() => {
                     setEditando(null);
                     guardar(
@@ -199,7 +208,7 @@ export function NivelesPasoFields({
             </div>
 
             {editando === opcion.codigo ? (
-              <div className="mt-3 flex flex-col gap-2 border-t pt-3">
+              <div className="border-border/70 mt-3 flex flex-col gap-2.5 border-t pt-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-muted-foreground text-xs">
                     Nombre
@@ -278,9 +287,18 @@ export function NivelesPasoFields({
                     </div>
                   ))}
                 </div>
-                <span className="text-muted-foreground text-xs">
-                  Vacío = usa lo del paso. El nivel sólo pisa lo que declara.
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground text-xs leading-snug">
+                    Vacío = usa lo del paso.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm shrink-0"
+                    onClick={() => setEditando(null)}
+                  >
+                    Listo
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
@@ -312,18 +330,23 @@ export function NivelesPasoFields({
           <PlusIcon className="mr-1 size-4" />
           Agregar nivel
         </button>
-        <span className="text-muted-foreground text-xs">
-          ● = el que viene marcado por defecto
-        </span>
+        {/* Destructivo y poco frecuente: al costado del alta y en gris, no
+            como un tercer botón rojo suelto debajo de todo. */}
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm text-muted-foreground shrink-0 hover:text-red-600"
+          onClick={() => {
+            setEditando(null);
+            onChange({ niveles: null });
+          }}
+        >
+          Quitar los niveles
+        </button>
       </div>
 
-      <button
-        type="button"
-        className="btn btn-ghost btn-sm w-fit text-red-600"
-        onClick={() => onChange({ niveles: null })}
-      >
-        Quitar los niveles
-      </button>
+      <span className="text-muted-foreground text-xs">
+        El nivel marcado es el que el comercial encuentra elegido al cotizar.
+      </span>
     </div>
   );
 }

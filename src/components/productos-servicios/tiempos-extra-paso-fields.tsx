@@ -88,16 +88,23 @@ export function TiemposExtraPasoFields({
   };
 
   return (
-    <div className="pasos-sections">
+    // `pasos-sections` es `display:block` sin gap: el flex-col es lo que separa
+    // la lista del botón de agregar (si no, queda pegado al borde de la card).
+    <div className="pasos-sections flex flex-col gap-3">
       {bloques.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           Sin tiempo extra: el paso cobra sólo lo que tarda el trabajo.
         </p>
       ) : (
-        <div className="divide-y rounded-md border">
+        <div className="divide-y overflow-hidden rounded-md border">
           {bloques.map((bloque, indice) => (
-            <div key={bloque.id} className="p-3">
-              <div className="flex items-start gap-2">
+            <div
+              key={bloque.id}
+              className={
+                editando === bloque.id ? "bg-muted/20 p-3" : "hover:bg-muted/20 p-3 transition-colors"
+              }
+            >
+              <div className="flex items-start gap-1">
                 <div className="min-w-0 flex-1">
                   {/* Sin `truncate`: en la columna angosta del editor un
                       "Traslado ida y vuelta" quedaba en "Tra…". Envuelve. */}
@@ -105,17 +112,19 @@ export function TiemposExtraPasoFields({
                     <span className="text-sm font-medium">
                       {bloque.etiqueta}
                     </span>
-                    <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                    <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] leading-4">
                       {bloque.minutos} min
                     </span>
                   </div>
-                  <div className="text-muted-foreground text-xs">
+                  <div className="text-muted-foreground mt-0.5 text-xs">
                     {describir(bloque)}
                   </div>
                 </div>
+                {/* Neutros en reposo: el rojo permanente de un tacho por fila
+                    grita más fuerte que el dato. */}
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm shrink-0"
+                  className="btn btn-ghost btn-sm text-muted-foreground hover:text-foreground shrink-0"
                   onClick={() =>
                     setEditando(editando === bloque.id ? null : bloque.id)
                   }
@@ -126,7 +135,7 @@ export function TiemposExtraPasoFields({
                 </button>
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm shrink-0 text-red-600"
+                  className="btn btn-ghost btn-sm text-muted-foreground shrink-0 hover:text-red-600"
                   onClick={() => {
                     setEditando(null);
                     guardar(bloques.filter((_, i) => i !== indice));
@@ -138,7 +147,7 @@ export function TiemposExtraPasoFields({
               </div>
 
               {editando === bloque.id ? (
-                <div className="mt-3 flex flex-col gap-2 border-t pt-3">
+                <div className="border-border/70 mt-3 flex flex-col gap-2.5 border-t pt-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-muted-foreground text-xs">
                       Nombre
@@ -211,11 +220,18 @@ export function TiemposExtraPasoFields({
                           : "El del paso"
                       }
                     />
-                    <span className="text-muted-foreground text-xs">
+                    <span className="text-muted-foreground text-xs leading-snug">
                       Puede ser otro: el traslado lo hace la cuadrilla aunque el
                       trabajo se cobre en el taller.
                     </span>
                   </div>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm w-fit self-end"
+                    onClick={() => setEditando(null)}
+                  >
+                    Listo
+                  </button>
                 </div>
               ) : null}
             </div>
