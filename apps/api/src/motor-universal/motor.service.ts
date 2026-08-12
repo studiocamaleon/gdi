@@ -178,6 +178,7 @@ interface PasoExtraCargoJson {
 interface PasoExtraCandidataJson {
   maquinaId: string;
   perfilDefaultId?: string | null;
+  perfilDefaultPorModo?: Record<string, string> | null;
   modoColorAllowedModes?: string[];
   esPreferida?: boolean;
   orden?: number;
@@ -6255,6 +6256,9 @@ export class MotorUniversalService {
       ...paso,
       maquinaM1Id: elegida.maquinaId,
       maquina: elegida.maquina,
+      // El desempate por modo de color viaja con la máquina ACTIVA: cada
+      // candidata trae el suyo (sus perfiles son distintos).
+      perfilDefaultPorModo: elegida.perfilDefaultPorModo ?? null,
       perfilesDisponibles: perfilesElegibles.map((p) => ({
         id: p.id,
         nombre: p.nombre,
@@ -6571,13 +6575,26 @@ export class MotorUniversalService {
               this.elegirPorEscalonDeGramaje(cands, gramaje),
             numeroPositivo: (value) => this.numeroPositivo(value),
           })
-        : // Sin primitiva: si el perfil DEFAULT del paso es compatible con
-          // el modo elegido, gana el default — es la decisión del modelador
-          // (elegir "CMYK" con default "CMYK - 4 pass" no debe saltar a
-          // OTRO perfil CMYK por orden de carga, que además no es estable).
-          // Recién sin default compatible se desempata por escalón de
-          // gramaje y primer candidato (comportamiento histórico).
+        : // Sin primitiva: el desempate declarado gana, en este orden:
+          //  1. `perfilDefaultPorModo[modo]` — el default POR MODO de la
+          //     candidata activa. Un default global no alcanza con varios
+          //     modos habilitados: el modo no-default caía a candidatos[0]
+          //     (orden de carga, inestable) — hallazgo del usuario 2026-08-11.
+          //  2. El perfil DEFAULT global del paso, si es compatible con el
+          //     modo elegido (fix CMYK del 2026-08-10).
+          //  3. Escalón de gramaje y primer candidato (histórico).
           (() => {
+            const porModoId = modoColor
+              ? (paso.perfilDefaultPorModo?.[modoColor] ?? null)
+              : null;
+            if (porModoId) {
+              const defaultDelModo = candidatos.find(
+                (perfil) => perfil.id === porModoId,
+              );
+              if (defaultDelModo) return defaultDelModo;
+              // Mapa apuntando a un perfil incompatible/inactivo: se ignora
+              // y sigue la cadena (no se rompe la cotización por config vieja).
+            }
             const defaultCompatible = candidatos.find(
               (perfil) => perfil.id === paso.perfilM1Id,
             );
@@ -7280,6 +7297,9 @@ export class MotorUniversalService {
           id: mc.id,
           maquinaId: mc.maquinaId,
           perfilDefaultId: mc.perfilDefaultId,
+          perfilDefaultPorModo:
+            (mc.perfilDefaultPorModoJson as Record<string, string> | null) ??
+            null,
           esPreferida: mc.esPreferida,
           orden: mc.orden,
           maquina: {
@@ -7954,6 +7974,7 @@ export class MotorUniversalService {
             id: `${pasoExtraId}:cand:${i}`,
             maquinaId: c.maquinaId,
             perfilDefaultId: c.perfilDefaultId ?? null,
+            perfilDefaultPorModo: c.perfilDefaultPorModo ?? null,
             esPreferida: c.esPreferida ?? false,
             orden: c.orden ?? i,
             maquina: {

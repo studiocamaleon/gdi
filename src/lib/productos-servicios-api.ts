@@ -365,6 +365,10 @@ export interface UpsertSlotMaterialPayload {
 export interface UpsertMaquinaCandidataPayload {
   maquinaId: string;
   perfilDefaultId?: string | null;
+  /** Desempate del perfil POR MODO de color habilitado
+   *  ({ "CMYK+blanco": perfilId }). Con varios modos, el default global
+   *  sólo cubre su modo — el resto necesita el suyo. Claves normalizadas. */
+  perfilDefaultPorModo?: Record<string, string> | null;
   modoColorAllowedModes?: string[];
   esPreferida?: boolean;
   orden?: number;

@@ -484,6 +484,8 @@ export class ProductosService {
                   productoConfigPasoId: configDuplicada.id,
                   maquinaId: maquina.maquinaId,
                   perfilDefaultId: maquina.perfilDefaultId,
+                  perfilDefaultPorModoJson:
+                    maquina.perfilDefaultPorModoJson ?? Prisma.JsonNull,
                   modoColorAllowedModes: maquina.modoColorAllowedModes,
                   esPreferida: maquina.esPreferida,
                   orden: maquina.orden,

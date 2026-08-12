@@ -106,6 +106,12 @@ export class UpsertMaquinaCandidataDto {
   @IsUUID()
   perfilDefaultId?: string | null;
 
+  /** Desempate del perfil POR MODO de color: { "CMYK+blanco": perfilId }.
+   *  Claves = códigos normalizados de modo-color-comercial.ts. */
+  @IsOptional()
+  @IsObject()
+  perfilDefaultPorModo?: Record<string, string> | null;
+
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -539,6 +545,11 @@ export class PasoExtraMaquinaCandidataDto {
   @IsOptional()
   @IsUUID()
   perfilDefaultId?: string | null;
+
+  /** Espejo de UpsertMaquinaCandidataDto.perfilDefaultPorModo. */
+  @IsOptional()
+  @IsObject()
+  perfilDefaultPorModo?: Record<string, string> | null;
 
   @IsOptional()
   @IsArray()

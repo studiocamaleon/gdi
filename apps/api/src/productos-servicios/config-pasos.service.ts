@@ -298,6 +298,8 @@ export class ConfigPasosService {
               productoConfigPasoId: configPaso.id,
               maquinaId: maquina.maquinaId,
               perfilDefaultId: maquina.perfilDefaultId ?? null,
+              perfilDefaultPorModoJson:
+                maquina.perfilDefaultPorModo ?? Prisma.JsonNull,
               modoColorAllowedModes: maquina.modoColorAllowedModes ?? [],
               esPreferida: maquina.esPreferida,
               orden: maquina.orden ?? index,
@@ -369,6 +371,7 @@ export class ConfigPasosService {
       {
         maquinaId: string;
         perfilDefaultId?: string | null;
+        perfilDefaultPorModo?: Record<string, string> | null;
         modoColorAllowedModes?: string[];
         esPreferida?: boolean;
         orden?: number;
@@ -379,6 +382,7 @@ export class ConfigPasosService {
         unique.set(candidate.maquinaId, {
           maquinaId: candidate.maquinaId,
           perfilDefaultId: candidate.perfilDefaultId ?? null,
+          perfilDefaultPorModo: candidate.perfilDefaultPorModo ?? null,
           modoColorAllowedModes: candidate.modoColorAllowedModes ?? [],
           esPreferida: candidate.esPreferida,
           orden: candidate.orden ?? index,
@@ -476,6 +480,24 @@ export class ConfigPasosService {
     return candidates.map((candidate, index) => ({
       maquinaId: candidate.maquinaId,
       perfilDefaultId: candidate.perfilDefaultId ?? null,
+      // Saneo del mapa por-modo: sólo entradas cuyo perfil pertenece a la
+      // máquina (activo). Entradas inválidas se DESCARTAN en silencio en vez
+      // de romper el guardado: el motor igual las ignoraría.
+      perfilDefaultPorModo: (() => {
+        const mapa = candidate.perfilDefaultPorModo;
+        if (!mapa || typeof mapa !== 'object') return null;
+        const maquina = maquinasById.get(candidate.maquinaId);
+        const perfilesValidos = new Set(
+          (maquina?.perfilesOperativos ?? []).map((perfil) => perfil.id),
+        );
+        const saneado = Object.fromEntries(
+          Object.entries(mapa).filter(
+            ([, perfilId]) =>
+              typeof perfilId === 'string' && perfilesValidos.has(perfilId),
+          ),
+        );
+        return Object.keys(saneado).length > 0 ? saneado : null;
+      })(),
       modoColorAllowedModes: candidate.modoColorAllowedModes ?? [],
       esPreferida: candidate.maquinaId === preferredId,
       orden: candidate.orden ?? index,

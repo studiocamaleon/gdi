@@ -2523,6 +2523,11 @@ model ProductoConfigPasoMaquinaCandidata {
   productoConfigPasoId  String                  @db.Uuid
   maquinaId             String                  @db.Uuid
   perfilDefaultId       String?                 @db.Uuid
+  /// Desempate del perfil POR MODO de color: { "CMYK": perfilId, "CMYK+blanco": perfilId }.
+  /// Con varios modos habilitados, un solo default no alcanza — el modo no-default
+  /// caía a candidatos[0] (orden de carga). Claves = códigos normalizados de
+  /// modo-color-comercial.ts. null = sólo el default global (comportamiento previo).
+  perfilDefaultPorModoJson Json?
   modoColorAllowedModes String[]                @default([])
   esPreferida           Boolean                 @default(false)
   orden                 Int                     @default(0)

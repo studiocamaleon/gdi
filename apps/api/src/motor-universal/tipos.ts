@@ -755,6 +755,10 @@ export interface PasoCargado {
   paramsPasoJson: unknown;
   maquinaM1Id: string | null;
   perfilM1Id: string | null;
+  /** Desempate del perfil por modo de color de la MÁQUINA ACTIVA (lo setea
+   *  resolverMaquinaM2 desde la candidata elegida). Gana sobre el default
+   *  global en resolverPerfil; sin mapa, comportamiento previo intacto. */
+  perfilDefaultPorModo?: Record<string, string> | null;
   centroCostoId: string | null;
   setupOverrideMin: number | null;
   cleanupOverrideMin: number | null;
@@ -824,6 +828,11 @@ export interface PasoCargado {
     id: string;
     maquinaId: string;
     perfilDefaultId?: string | null;
+    /** Desempate del perfil POR MODO de color elegido al cotizar
+     *  ({ "CMYK+blanco": perfilId }) — un default global no alcanza cuando
+     *  hay varios modos habilitados. Claves normalizadas
+     *  (modo-color-comercial.ts). */
+    perfilDefaultPorModo?: Record<string, string> | null;
     esPreferida: boolean;
     orden: number;
     maquina: {
