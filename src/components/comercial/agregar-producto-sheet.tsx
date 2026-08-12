@@ -25,6 +25,7 @@ import {
 import { esConfigPasoEjecutable } from "@/lib/config-paso-activacion";
 import { getLabel, modoCalculoCargoLabels } from "@/lib/labels-humanos";
 import {
+  type BaseDelPaso,
   type NivelesPasoConfig,
   describirNivel,
   leerNivelesPaso,
@@ -1469,6 +1470,8 @@ type NivelComercial = {
   familiaCodigo: string;
   modoActivacion: string | null;
   config: NivelesPasoConfig;
+  /** Lo que vale el paso cuando el nivel no pisa nada (para el resumen). */
+  base: BaseDelPaso;
 };
 
 function getNivelesComercial(
@@ -1482,12 +1485,25 @@ function getNivelesComercial(
       .map((config) => {
         const niveles = leerNivelesPaso(config.paramsPasoJson);
         if (!niveles) return null;
+        const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+        const bloques = Array.isArray(params.tiemposExtra)
+          ? params.tiemposExtra
+          : [];
         const item: NivelComercial = {
           configPasoId: config.id,
           nombreVisible: config.nombreVisible ?? null,
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion,
           config: niveles,
+          base: {
+            // Sin nivel aplicado: es el punto de partida contra el que cada
+            // nivel se compara.
+            tiempoFijoMin: getTiempoFijoDeclaradoMin(config, {}),
+            tiempoExtraMin: bloques.reduce((acc: number, bloque) => {
+              const min = Number((bloque as Record<string, unknown>)?.minutos);
+              return acc + (Number.isFinite(min) && min > 0 ? min : 0);
+            }, 0),
+          },
         };
         return item;
       })
@@ -5263,7 +5279,7 @@ function ApConfigStep({
           item.config.opciones.map((opcion) => ({
             value: opcion.codigo,
             label: nombreNivel(opcion),
-            desc: describirNivel(opcion) ?? undefined,
+            desc: describirNivel(opcion, item.base) ?? undefined,
           })),
           (codigo) =>
             setMotorConfig((current) => ({
@@ -6693,9 +6709,6 @@ function ApConfigStep({
           <div className="ap-optional-configs">
             <div className="ap-optional-config-head">
               <div className="ttl">Configurar opcionales activados</div>
-              <div className="sub">
-                Completá los datos necesarios para cotizar los opcionales seleccionados.
-              </div>
             </div>
             <div className="ap-optional-config-grid">
               {opcionalesConfigurables.map(
@@ -6713,10 +6726,15 @@ function ApConfigStep({
                   <div className="ap-optional-config-card" key={opcional.code}>
                     <div className="ap-optional-config-title">
                       <span className="ttl">{opcional.name}</span>
-                      <span className="state">
-                        <span className="d" aria-hidden="true" />
-                        {tiempoPendiente ? "Falta el tiempo" : "Configurado"}
-                      </span>
+                      {/* El estado sólo habla cuando algo falta: un "Configurado"
+                          verde permanente ocupa lugar para decir lo que ya se
+                          ve (el opcional está tildado y sin errores). */}
+                      {tiempoPendiente ? (
+                        <span className="state is-pendiente">
+                          <span className="d" aria-hidden="true" />
+                          Falta el tiempo
+                        </span>
+                      ) : null}
                       {arrastrado ? (
                         // Lo encendió otro paso que lo necesita: quitarlo acá
                         // dejaría la cotización inconsistente.
@@ -6726,10 +6744,12 @@ function ApConfigStep({
                       ) : (
                         <button
                           type="button"
-                          className="quit"
+                          className="quit is-icon"
                           onClick={() => setOpcional(opcional.code, false)}
+                          title={`Quitar ${opcional.name}`}
+                          aria-label={`Quitar ${opcional.name}`}
                         >
-                          Quitar opcional
+                          <XIcon aria-hidden="true" />
                         </button>
                       )}
                     </div>

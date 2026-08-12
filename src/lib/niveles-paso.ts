@@ -124,29 +124,47 @@ export function nivelEfectivo(
   );
 }
 
+/** Lo que el paso vale cuando el nivel no pisa nada. */
+export interface BaseDelPaso {
+  /** Minutos de trabajo declarados por el paso (T-1 / horas estimadas). */
+  tiempoFijoMin?: number | null;
+  /** Minutos de tiempo extra que el paso trae de base. */
+  tiempoExtraMin?: number | null;
+}
+
 /**
- * Resumen de una línea para el pie de la card: qué cambia este nivel. Sin esto
- * el comercial elige a ciegas entre tres nombres.
+ * Resumen de una línea para el pie de la card: cuánto cuesta ESTE nivel.
+ *
+ * Muestra el valor EFECTIVO, no el override: un nivel que no pisa nada —"lo
+ * mismo que el paso"— igual tiene que decir cuánto lleva, o al lado de uno que
+ * sí declara ("60 min de trabajo") parece que no cuesta nada.
  */
-export function describirNivel(nivel: NivelPasoOpcion): string | null {
+export function describirNivel(
+  nivel: NivelPasoOpcion,
+  base: BaseDelPaso = {},
+): string | null {
   const partes: string[] = [];
   const { overrides } = nivel;
-  if (overrides.tiemposExtraMin) {
-    const totalMin = Object.values(overrides.tiemposExtraMin).reduce(
-      (acc, min) => acc + min,
-      0,
+
+  const extraMin =
+    overrides.tiemposExtraMin != null
+      ? Object.values(overrides.tiemposExtraMin).reduce(
+          (acc, min) => acc + min,
+          0,
+        )
+      : (base.tiempoExtraMin ?? null);
+  if (extraMin != null && extraMin > 0) {
+    const horas = extraMin / 60;
+    partes.push(
+      horas >= 1
+        ? `+${horas.toFixed(horas % 1 === 0 ? 0 : 1)} h de tiempo extra`
+        : `+${extraMin} min de tiempo extra`,
     );
-    if (totalMin > 0) {
-      const horas = totalMin / 60;
-      partes.push(
-        horas >= 1
-          ? `+${horas.toFixed(horas % 1 === 0 ? 0 : 1)} h de tiempo extra`
-          : `+${totalMin} min de tiempo extra`,
-      );
-    }
   }
-  if (overrides.tiempoFijoMin != null) {
-    partes.push(`${overrides.tiempoFijoMin} min de trabajo`);
+
+  const trabajoMin = overrides.tiempoFijoMin ?? base.tiempoFijoMin ?? null;
+  if (trabajoMin != null && trabajoMin > 0) {
+    partes.push(`${trabajoMin} min de trabajo`);
   }
   if (overrides.productividadHora != null) {
     partes.push(`${overrides.productividadHora}/h`);

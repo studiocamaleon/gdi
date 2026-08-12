@@ -3663,44 +3663,53 @@ export function ConfigPasosEditorView({
    */
   const aplicarParamsPaso = (
     rutaPasoId: string,
-    params: Record<string, unknown> | null,
+    recalcular: (
+      params: Record<string, unknown>,
+    ) => Record<string, unknown> | null,
   ) => {
-    setConfigs((prev) => ({
-      ...prev,
-      [rutaPasoId]: { ...prev[rutaPasoId], paramsPasoJson: params },
-    }));
-    setJsonTexts((prev) => ({
-      ...prev,
-      [rutaPasoId]: {
-        ...prev[rutaPasoId],
-        params: jsonToText(stripNestingConfig(params)),
-      },
-    }));
+    // Actualización FUNCIONAL a propósito: leer `configs` del closure hacía que
+    // dos cambios en el mismo tick (o un handler con estado viejo) pisaran lo
+    // que el otro había escrito — y en params eso es perder config del paso.
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      if (!cfg) return prev;
+      const siguiente = recalcular(asRecord(cfg.paramsPasoJson));
+      // El texto se sincroniza acá, con el MISMO valor que va al estado. Es un
+      // setState dentro de otro updater: se ejecuta más de una vez en dev, pero
+      // siempre con el mismo resultado, así que es idempotente.
+      setJsonTexts((textos) => ({
+        ...textos,
+        [rutaPasoId]: {
+          ...textos[rutaPasoId],
+          params: jsonToText(stripNestingConfig(siguiente)),
+        },
+      }));
+      return {
+        ...prev,
+        [rutaPasoId]: { ...cfg, paramsPasoJson: siguiente },
+      };
+    });
   };
 
   const updateStepParams = (
     rutaPasoId: string,
     patch: Record<string, unknown>,
   ) => {
-    const params = {
-      ...asRecord(configs[rutaPasoId]?.paramsPasoJson),
-      ...patch,
-    };
-    for (const key of Object.keys(params)) {
-      const value = params[key];
-      if (
-        value === "" ||
-        value === null ||
-        value === undefined ||
-        (typeof value === "number" && !Number.isFinite(value))
-      ) {
-        delete params[key];
+    aplicarParamsPaso(rutaPasoId, (previos) => {
+      const params = { ...previos, ...patch };
+      for (const key of Object.keys(params)) {
+        const value = params[key];
+        if (
+          value === "" ||
+          value === null ||
+          value === undefined ||
+          (typeof value === "number" && !Number.isFinite(value))
+        ) {
+          delete params[key];
+        }
       }
-    }
-    aplicarParamsPaso(
-      rutaPasoId,
-      Object.keys(params).length > 0 ? params : null,
-    );
+      return Object.keys(params).length > 0 ? params : null;
+    });
   };
 
   const updateModoColorConfig = (
@@ -3739,30 +3748,28 @@ export function ConfigPasosEditorView({
     rutaPasoId: string,
     patch: Record<string, unknown>,
   ) => {
-    const params = asRecord(configs[rutaPasoId]?.paramsPasoJson);
-    const current = getTiempoManualConfig(params);
-    const nextConfig = { ...current, ...patch };
-    for (const key of Object.keys(nextConfig)) {
-      const value = nextConfig[key];
-      if (
-        value === "" ||
-        value === null ||
-        value === undefined ||
-        (typeof value === "number" && !Number.isFinite(value))
-      ) {
-        delete nextConfig[key];
+    aplicarParamsPaso(rutaPasoId, (params) => {
+      const current = getTiempoManualConfig(params);
+      const nextConfig = { ...current, ...patch };
+      for (const key of Object.keys(nextConfig)) {
+        const value = nextConfig[key];
+        if (
+          value === "" ||
+          value === null ||
+          value === undefined ||
+          (typeof value === "number" && !Number.isFinite(value))
+        ) {
+          delete nextConfig[key];
+        }
       }
-    }
-    const nextParams =
-      nextConfig.habilitado === true
-        ? { ...params, tiempoManual: nextConfig }
-        : Object.fromEntries(
-            Object.entries(params).filter(([key]) => key !== "tiempoManual"),
-          );
-    aplicarParamsPaso(
-      rutaPasoId,
-      Object.keys(nextParams).length > 0 ? nextParams : null,
-    );
+      const nextParams =
+        nextConfig.habilitado === true
+          ? { ...params, tiempoManual: nextConfig }
+          : Object.fromEntries(
+              Object.entries(params).filter(([key]) => key !== "tiempoManual"),
+            );
+      return Object.keys(nextParams).length > 0 ? nextParams : null;
+    });
   };
 
   const updateSlot = (
