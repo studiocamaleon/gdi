@@ -33,6 +33,18 @@ export function nivelPasoKey(configPasoId: string): string {
   return `nivelPaso_${configPasoId}`;
 }
 
+/**
+ * Nivel SINTÉTICO: "el comercial pone el tiempo a mano".
+ *
+ * No se declara ni se guarda en el paso — lo agrega el cotizador cuando el
+ * paso tiene niveles Y además deja que el comercial ajuste el tiempo. Sin él,
+ * la pantalla ofrecía los dos caminos a la vez (elegí un nivel / escribí un
+ * tiempo) sin decir cuál gana; y gana siempre el tiempo escrito, porque en el
+ * motor el tiempo manual pisa cualquier reloj. Elegirlo significa: sin
+ * overrides de nivel, el tiempo lo dice el comercial.
+ */
+export const NIVEL_PERSONALIZADO = "__personalizado__";
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)

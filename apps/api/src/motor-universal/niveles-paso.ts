@@ -22,6 +22,13 @@ export function nivelPasoKey(configPasoId: string): string {
   return `${NIVEL_PASO_KEY_PREFIX}${configPasoId}`;
 }
 
+/**
+ * Nivel SINTÉTICO que emite el cotizador: "el comercial pone el tiempo a
+ * mano". No existe en la config del paso, así que acá significa **sin nivel**:
+ * ningún override, y el reloj lo pisa `tiempoManualMin_<paso>` como siempre.
+ */
+export const NIVEL_PERSONALIZADO = '__personalizado__';
+
 export interface NivelPasoOverrides {
   /** Ritmo propio del paso (unidades/hora) para este nivel. */
   productividadHora?: number;
@@ -132,6 +139,9 @@ export function resolverNivelPaso(
   if (!config) return null;
   const elegido = jobContext?.[nivelPasoKey(configPasoId)];
   if (typeof elegido === 'string' && elegido.trim()) {
+    // "Personalizado" = el comercial cargó el tiempo a mano: el paso corre sin
+    // overrides de nivel, no con los del que estaba marcado por defecto.
+    if (elegido.trim() === NIVEL_PERSONALIZADO) return null;
     const match = config.opciones.find(
       (opcion) => opcion.codigo === elegido.trim(),
     );

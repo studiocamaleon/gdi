@@ -27,6 +27,7 @@ import { getLabel, modoCalculoCargoLabels } from "@/lib/labels-humanos";
 import {
   type BaseDelPaso,
   type NivelesPasoConfig,
+  NIVEL_PERSONALIZADO,
   describirNivel,
   leerNivelesPaso,
   nivelEfectivo,
@@ -1474,6 +1475,13 @@ type NivelComercial = {
   base: BaseDelPaso;
 };
 
+/** ¿El paso deja que el comercial ajuste el tiempo al cotizar? */
+function tienePasoTiempoManual(config: ConfigPasoDetalle): boolean {
+  const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+  const tiempoManual = params.tiempoManual as Record<string, unknown> | null;
+  return Boolean(tiempoManual && tiempoManual.habilitado === true);
+}
+
 function getNivelesComercial(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
@@ -1489,12 +1497,26 @@ function getNivelesComercial(
         const bloques = Array.isArray(params.tiemposExtra)
           ? params.tiemposExtra
           : [];
+        // Paso con niveles Y con tiempo ajustable: el nivel "Personalizado"
+        // hace explícito el camino que antes convivía suelto (elegí un nivel /
+        // escribí un tiempo, sin decir cuál gana).
+        const opciones = tienePasoTiempoManual(config)
+          ? [
+              ...niveles.opciones,
+              {
+                codigo: NIVEL_PERSONALIZADO,
+                nombre: "Personalizado",
+                esDefault: false,
+                overrides: {},
+              },
+            ]
+          : niveles.opciones;
         const item: NivelComercial = {
           configPasoId: config.id,
           nombreVisible: config.nombreVisible ?? null,
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion,
-          config: niveles,
+          config: { ...niveles, opciones },
           base: {
             // Sin nivel aplicado: es el punto de partida contra el que cada
             // nivel se compara.
@@ -1546,7 +1568,8 @@ function getTiempoFijoDeclaradoMin(
   seleccionNivel: Record<string, string>,
 ): number | null {
   const niveles = leerNivelesPaso(config.paramsPasoJson);
-  if (niveles) {
+  // En "Personalizado" no corre ningún nivel: la sugerencia sale de la base.
+  if (niveles && seleccionNivel[config.id] !== NIVEL_PERSONALIZADO) {
     const nivel = nivelEfectivo(niveles, seleccionNivel[config.id]);
     if (nivel.overrides.tiempoFijoMin != null) {
       return nivel.overrides.tiempoFijoMin > 0
@@ -1583,6 +1606,15 @@ function getTiemposManualesComercial(
           !tiempoManual ||
           typeof tiempoManual !== "object" ||
           tiempoManual.habilitado !== true
+        ) {
+          return null;
+        }
+        // Con niveles, el tiempo a mano SÓLO se pide en "Personalizado": los
+        // demás niveles ya declaran cuánto lleva, y ofrecer las dos cosas a la
+        // vez dejaba al comercial sin saber cuál manda.
+        if (
+          leerNivelesPaso(config.paramsPasoJson) &&
+          seleccionNivel[config.id] !== NIVEL_PERSONALIZADO
         ) {
           return null;
         }
@@ -5325,7 +5357,10 @@ function ApConfigStep({
           item.config.opciones.map((opcion) => ({
             value: opcion.codigo,
             label: nombreNivel(opcion),
-            desc: describirNivel(opcion, item.base) ?? undefined,
+            desc:
+              opcion.codigo === NIVEL_PERSONALIZADO
+                ? "el tiempo lo cargás vos"
+                : (describirNivel(opcion, item.base) ?? undefined),
           })),
           (codigo) =>
             setMotorConfig((current) => ({
@@ -6763,9 +6798,6 @@ function ApConfigStep({
                   const arrastrado = opcional.configPasoId
                     ? arrastradosSheet.has(opcional.configPasoId)
                     : false;
-                const resumen = slots
-                  .map((slot) => describeSlotSelection(slot, motorConfig))
-                  .filter((item): item is string => Boolean(item));
                 const tiempoPendiente = Boolean(
                   tiempoManual && getTiempoManualError(tiempoManual, motorConfig),
                 );
@@ -6823,17 +6855,8 @@ function ApConfigStep({
                         }),
                       )}
                     </div>
-                    {resumen.length > 0 ? (
-                      <div className="ap-optional-config-summary">
-                        <span className="lbl">Seleccionado:</span>
-                        {resumen.map((item, index) => (
-                          <React.Fragment key={item}>
-                            {index > 0 ? <span className="sep">/</span> : null}
-                            <span className="mono">{item}</span>
-                          </React.Fragment>
-                        ))}
-                      </div>
-                    ) : null}
+                    {/* Sin pie "Seleccionado: …": repetía lo que la tarjeta del
+                        material ya muestra en su propia fila. */}
                   </div>
                 );
               })}
