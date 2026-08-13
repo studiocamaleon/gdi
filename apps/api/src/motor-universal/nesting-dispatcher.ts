@@ -542,6 +542,32 @@ function conLonaBrutaSiExiste(jobContext: JobContext): JobContext {
   };
 }
 
+/**
+ * Normaliza un output geométrico del JobContext a piezas de nesting. Acepta un
+ * rectángulo `{anchoMm, altoMm}` o una lista. Una TIRA `{largoMm, anchoMm}` se
+ * lee con el largo como ancho de la pieza y el ancho de la tira como alto.
+ * docs/fuente-de-medida-de-consumo-diseno.md §4.
+ */
+function normalizarPiezasDeOutput(
+  valor: unknown,
+): Array<{ cantidad: number; anchoMm: number; altoMm: number }> {
+  if (!valor || typeof valor !== 'object') return [];
+  const items = Array.isArray(valor) ? valor : [valor];
+  const piezas: Array<{ cantidad: number; anchoMm: number; altoMm: number }> = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const it = item as Record<string, unknown>;
+    const esTira = it.largoMm != null;
+    const anchoMm = Number(esTira ? it.largoMm : it.anchoMm);
+    const altoMm = Number(esTira ? it.anchoMm : it.altoMm);
+    const cantidad = Number(it.cantidad ?? 1);
+    if (anchoMm > 0 && altoMm > 0 && cantidad > 0) {
+      piezas.push({ cantidad, anchoMm, altoMm });
+    }
+  }
+  return piezas;
+}
+
 function buildJobContextPiezas(
   paso: PasoCargado,
   jobContext: JobContext,
@@ -565,6 +591,24 @@ function buildJobContextPiezas(
     return {
       ...jobContext,
       cantidad: piezas.reduce((acc, pieza) => acc + pieza.cantidad, 0),
+      piezas,
+    };
+  }
+
+  // Fuente de medida genérica: `output:<clave>` mide sobre una geometría que un
+  // paso anterior publicó al JobContext (el bastidor: `fondoMm`, `cenefaTirasMm`,
+  // `lonaBrutaMm`…). Es el núcleo del modelo de fuente de medida: cualquier paso
+  // de nesting/montaje puede medir sobre un output previo, sin cablear por
+  // familia. docs/fuente-de-medida-de-consumo-diseno.md §3.
+  if (typeof seleccion === 'string' && seleccion.startsWith('output:')) {
+    const clave = seleccion.slice('output:'.length);
+    const piezas = normalizarPiezasDeOutput(
+      (jobContext as Record<string, unknown>)[clave],
+    );
+    if (piezas.length === 0) return null;
+    return {
+      ...jobContext,
+      cantidad: piezas.reduce((acc, p) => acc + p.cantidad, 0),
       piezas,
     };
   }

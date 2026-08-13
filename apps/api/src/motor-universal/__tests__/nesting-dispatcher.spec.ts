@@ -684,3 +684,49 @@ describe('lona bruta (efecto POST del bastidor)', () => {
     expect(a!.cantidadCalculada).toBe(b!.cantidadCalculada);
   });
 });
+
+describe('fuente de medida output:<clave> (modelo unificado)', () => {
+  const chapaRollo = {
+    id: 'chapa-1220',
+    atributosVarianteJson: { anchoMm: 1220, largoRolloMm: 50_000 },
+  };
+
+  it('paneliza una LISTA de tiras publicada por un paso anterior (cenefaTirasMm)', async () => {
+    const result = await runNestingForPaso(
+      buildPasoMontaje('shelf-rollo', 'output:cenefaTirasMm') as never,
+      {
+        cantidad: 1,
+        cenefaTirasMm: [
+          { largoMm: 1000, anchoMm: 220 },
+          { largoMm: 1000, anchoMm: 220 },
+          { largoMm: 500, anchoMm: 220 },
+          { largoMm: 500, anchoMm: 220 },
+        ],
+      },
+      chapaRollo,
+    );
+    expect(result).not.toBeNull();
+    // Las 4 tiras se acomodan como piezas (largo × desarrollo).
+    expect(result!.piezasAcomodadas).toBe(4);
+    expect(result!.consumedLengthMm).toBeGreaterThan(0);
+  });
+
+  it('paneliza un RECTÁNGULO publicado (fondoMm)', async () => {
+    const result = await runNestingForPaso(
+      buildPasoMontaje('shelf-rollo', 'output:fondoMm') as never,
+      { cantidad: 1, fondoMm: { anchoMm: 900, altoMm: 700 } },
+      chapaRollo,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.piezasAcomodadas).toBe(1);
+  });
+
+  it('sin el output publicado, no acomoda (null)', async () => {
+    const result = await runNestingForPaso(
+      buildPasoMontaje('shelf-rollo', 'output:cenefaTirasMm') as never,
+      { cantidad: 1 },
+      chapaRollo,
+    );
+    expect(result).toBeNull();
+  });
+});

@@ -1394,6 +1394,10 @@ const estructura_bastidor: DefinicionFamilia = {
     publicaCanon: {
       interiorMm: 'interior',
       lonaBrutaMm: 'lonaBruta',
+      // Para que un paso posterior (chapa, cenefa) los elija como fuente de
+      // medida y panelice sobre su chapa. docs/fuente-de-medida-de-consumo-diseno.md
+      fondoMm: 'fondo',
+      cenefaTirasMm: 'cenefaTiras',
     },
     mensajeSinDatos:
       'es un bastidor DOBLE (cajón) pero no tiene profundidad: sin ella no se pueden derivar los metros de perfil.',

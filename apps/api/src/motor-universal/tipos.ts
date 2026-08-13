@@ -102,6 +102,11 @@ export interface JobContext {
    */
   interiorMm?: { anchoMm: number; altoMm: number };
   lonaBrutaMm?: { anchoMm: number; altoMm: number };
+  /** Rectángulo de la chapa de fondo (= medida del cartel), para panelizar. */
+  fondoMm?: { anchoMm: number; altoMm: number };
+  /** Tiras de cenefa a cortar (1 por lado): largo × desarrollo del pliegue.
+   *  Un paso posterior las elige como fuente y las paneliza sobre su chapa. */
+  cenefaTirasMm?: Array<{ largoMm: number; anchoMm: number }>;
   /** INMUTABLE. Contraparte multi-pieza de `medidaVisibleMm`. */
   piezasVisibles?: Array<{
     cantidad: number;
