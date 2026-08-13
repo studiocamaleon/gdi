@@ -7,7 +7,9 @@
 > dirección que el sistema resuelve por la posición en la ruta**. No hay código
 > planificado todavía: primero se cierra el modelo.
 >
-> Hermanos: [estructura-bastidor-outputs-diseno.md](estructura-bastidor-outputs-diseno.md)
+> Hermanos: [fuente-de-medida-de-consumo-diseno.md](fuente-de-medida-de-consumo-diseno.md)
+> (la **cara consumidora**: cómo un paso ELIGE qué output absorber) ·
+> [estructura-bastidor-outputs-diseno.md](estructura-bastidor-outputs-diseno.md)
 > (el disparador: la lona del bastidor) ·
 > [modificaciones-fisicas-lona-diseno.md](modificaciones-fisicas-lona-diseno.md)
 > (la "regla de oro" y la demasía de tensado) ·
