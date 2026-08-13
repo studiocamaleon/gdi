@@ -194,6 +194,25 @@ El dobladillo/ojales (terminación) NO entra acá: sigue en su paso. **Doble faz
 el bastidor emite **2 lonas** (frente + contra), cada una con su bruta — salda
 la deuda anotada (hoy duplica sólo la tinta).
 
+> **⚠️ Bloqueante de orden (hallazgo 2026-08-13, al implementar la Ola #2).** La
+> demasía de tensado es un efecto `modificacion_pre` que crece las `piezas` en la
+> fase **PRE**, ANTES de que corra el paso del bastidor — así que el bastidor
+> **no puede** alimentar `lonaBrutaMm` por el canon (todavía no existe cuando la
+> lona se agranda). Conectar la lona exige o (a) que el bastidor derive en la
+> fase PRE, o (b) que la impresión lea `lonaBrutaMm` y se retire la demasía del
+> paso Tensado. Además hoy el valor ya fluye correcto (visible + 10cm en Tensado)
+> → conectarlo es semántico (fuente única) sin mover precios para el backlight;
+> el valor real está en el **canvas** (envuelve `D`) y en el **doble faz**. Queda
+> como rebanada aparte, pendiente de decidir (a) vs (b). La cenefa/chapa NO tienen
+> este problema (corren después del bastidor).
+>
+> **Resuelto conceptualmente** en
+> [efectos-entre-pasos-diseno.md](efectos-entre-pasos-diseno.md): el "bloqueante"
+> era un artefacto de que la demasía la declara el paso Tensado (posterior). Si
+> la declara el **bastidor** (anterior a impresión), es un **efecto POST
+> secuencial** y el PRE desaparece. La lona-POST del backlight es la primera
+> aplicación de ese modelo.
+
 > La "regla de oro" se respeta: la **estructura** (hierros) sigue midiendo la
 > medida VISIBLE; la **lona bruta** es un output aparte que el paso de lona
 > consume como su pieza. Es el mismo dualismo `piezas` / `piezasVisibles` de hoy,
