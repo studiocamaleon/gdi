@@ -82,6 +82,25 @@ const bastidor_rectangular: Derivador = (jobContext, params, materialPrincipal) 
       refuerzosH: resultado.refuerzosH,
       profundidadM: resultado.profundidadM,
       cenefaDesarrolloCm: resultado.cenefaDesarrolloCm,
+      // Geometría derivada para los pasos siguientes (Ola #1, docs §6). POR
+      // CARTEL, en mm. Aditivo: hoy nadie la consume — la conexión a LED/lona/
+      // chapa es la Ola #2. No toca magnitudes ni despieces → no mueve precios.
+      interior: {
+        anchoMm: Math.round(resultado.interiorAnchoM * 1000),
+        altoMm: Math.round(resultado.interiorAltoM * 1000),
+      },
+      fondo: {
+        anchoMm: Math.round(resultado.fondoAnchoM * 1000),
+        altoMm: Math.round(resultado.fondoAltoM * 1000),
+      },
+      cenefaTiras: resultado.cenefaTiras.map((t) => ({
+        largoMm: Math.round(t.largoM * 1000),
+        anchoMm: Math.round(t.anchoM * 1000),
+      })),
+      lonaBruta: {
+        anchoMm: Math.round(resultado.lonaBrutaAnchoM * 1000),
+        altoMm: Math.round(resultado.lonaBrutaAltoM * 1000),
+      },
       // Estructura autosuficiente para el visor 3D de Producción. Se arma con
       // los params EFECTIVOS (`paramsEfectivos` ya trae los overrides del
       // sheet), así el dibujo es el bastidor cotizado y no el default de la

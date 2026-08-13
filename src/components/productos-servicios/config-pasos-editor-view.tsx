@@ -10158,9 +10158,17 @@ function opcionesCantidadUnificada(
   }[] = [];
   for (const m of mecanismos) {
     if (m === "HEREDAR_DEL_OUTPUT_CANONICO") continue;
+    // Cuando el paso CALCULA su cantidad y la familia declara qué unidad es
+    // (derivador.unidadPrincipal: "ml de perfil"), el label la DICE en vez del
+    // genérico "La que calcula el paso". Transversal: cualquier familia con
+    // derivador se beneficia (pedido del usuario 2026-08-13).
+    const unidadCalculada =
+      m === "CALCULADO_POR_PASO"
+        ? (familia?.derivador?.unidadPrincipal ?? null)
+        : null;
     options.push({
       value: `m:${m}`,
-      label: CANTIDAD_METODO_LABEL[m] ?? m,
+      label: unidadCalculada ? cap(unidadCalculada) : (CANTIDAD_METODO_LABEL[m] ?? m),
       description: CANTIDAD_METODO_DESC[m],
     });
   }

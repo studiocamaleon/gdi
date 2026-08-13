@@ -216,3 +216,69 @@ describe('Barras enteras (compra real, no ml teóricos)', () => {
     expect(barras.barras).toBe(3);
   });
 });
+
+describe('Estructura de bastidor — geometría derivada (Ola #1)', () => {
+  it('interior útil = medida menos el caño de cada lado (100×80 en 20×20 → 96×76)', () => {
+    const perfil20 = { ladoM: 0.02, desarrolloM: 0.08 };
+    const r = calcularEstructuraBastidor(
+      ctx(1000, 800),
+      parsearParamsEstructuraBastidor({ tipoBastidor: 'simple', sepRefuerzoVcm: 0 }),
+      perfil20,
+    )!;
+    expect(r.interiorAnchoM).toBeCloseTo(0.96, 3);
+    expect(r.interiorAltoM).toBeCloseTo(0.76, 3);
+  });
+
+  it('rectángulo de fondo = medida del cartel', () => {
+    const r = calcularEstructuraBastidor(
+      ctx(2400, 1200, 180),
+      parsearParamsEstructuraBastidor({ tipoBastidor: 'doble' }),
+    )!;
+    expect(r.fondoAnchoM).toBeCloseTo(2.4, 3);
+    expect(r.fondoAltoM).toBeCloseTo(1.2, 3);
+  });
+
+  it('cenefa: una tira por lado, largo = lado, ancho = desarrollo (D + 2·solapa)', () => {
+    const r = calcularEstructuraBastidor(
+      ctx(1000, 500, 180),
+      parsearParamsEstructuraBastidor({ tipoBastidor: 'doble', solapaCenefaCm: 2 }),
+    )!;
+    expect(r.cenefaTiras).toHaveLength(4);
+    const largos = r.cenefaTiras.map((t) => t.largoM).sort((a, b) => b - a);
+    expect(largos).toEqual([1, 1, 0.5, 0.5]);
+    // desarrollo = 0,18 + 2×0,02 = 0,22
+    r.cenefaTiras.forEach((t) => expect(t.anchoM).toBeCloseTo(0.22, 3));
+  });
+
+  it('sin cajón (simple) no hay tiras de cenefa', () => {
+    const r = calcularEstructuraBastidor(
+      ctx(1000, 500),
+      parsearParamsEstructuraBastidor({ tipoBastidor: 'simple' }),
+    )!;
+    expect(r.cenefaTiras).toEqual([]);
+  });
+
+  it('lona bruta perimetral = visible + demasía de agarre por lado (default 10 cm)', () => {
+    const r = calcularEstructuraBastidor(
+      ctx(1000, 500, 180),
+      parsearParamsEstructuraBastidor({ tipoBastidor: 'doble' }),
+    )!;
+    // 1,0 + 2×0,10 = 1,20 · 0,5 + 0,20 = 0,70. La profundidad NO entra.
+    expect(r.lonaBrutaAnchoM).toBeCloseTo(1.2, 3);
+    expect(r.lonaBrutaAltoM).toBeCloseTo(0.7, 3);
+  });
+
+  it('lona bruta contramarco (canvas) suma la profundidad además del agarre', () => {
+    const r = calcularEstructuraBastidor(
+      ctx(1000, 500, 180),
+      parsearParamsEstructuraBastidor({
+        tipoBastidor: 'doble',
+        montajeLona: 'contramarco',
+        demasiaAgarreCm: 10,
+      }),
+    )!;
+    // extra = D + agarre = 0,18 + 0,10 = 0,28 por lado
+    expect(r.lonaBrutaAnchoM).toBeCloseTo(1.56, 3);
+    expect(r.lonaBrutaAltoM).toBeCloseTo(1.06, 3);
+  });
+});

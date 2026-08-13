@@ -1469,6 +1469,28 @@ const estructura_bastidor: DefinicionFamilia = {
       descripcion:
         'Se suma a los m² del desarrollo de la cenefa (plegado y recortes).',
     },
+    // Lona bruta (Ola #1, docs/estructura-bastidor-outputs-diseno.md §7.1). Hoy
+    // sólo alimentan la geometría de la traza; la conexión al paso de lona es la
+    // Ola #2. Aditivos con default histórico → no mueven precios.
+    {
+      campo: 'montajeLona',
+      etiqueta: 'Montaje de la lona',
+      tipo: 'enum',
+      valoresPermitidos: ['perimetral', 'contramarco'],
+      default: 'perimetral',
+      requerido: false,
+      descripcion:
+        'Perimetral: tensada al ras con tornillos (backlight). Contramarco: envuelve la profundidad y se engrampa atrás (tela canvas).',
+    },
+    {
+      campo: 'demasiaAgarreCm',
+      etiqueta: 'Demasía de agarre de la lona (cm por lado)',
+      tipo: 'number',
+      default: 10,
+      requerido: false,
+      descripcion:
+        'Lona extra por lado para pinzar y tensar. El corte final al ras del hierro es merma, no material.',
+    },
   ],
   productosTipicos: [
     'Cartel backlight',

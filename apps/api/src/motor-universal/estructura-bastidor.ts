@@ -88,6 +88,14 @@ export interface ParamsEstructuraBastidor {
   margenPinturaPct: number;
   /** Desperdicio del plegado de cenefa, en %. */
   desperdicioCenefaPct: number;
+  /** Cómo se monta la lona (define la demasía bruta — docs §7.1):
+   *  'perimetral' = tensada al ras con tornillos (backlight); la lona bruta es
+   *  la visible + demasía de agarre. 'contramarco' = envuelve la profundidad y
+   *  se engrampa atrás (tela canvas); suma también la profundidad. */
+  montajeLona: 'perimetral' | 'contramarco';
+  /** Demasía por lado para pinzar y tensar la lona, en cm. El corte final al
+   *  ras del hierro es merma; el material es la bruta con esta demasía. */
+  demasiaAgarreCm: number;
 }
 
 export interface ResultadoEstructuraBastidor {
@@ -118,6 +126,25 @@ export interface ResultadoEstructuraBastidor {
   /** Despiece: el largo de cada barra a cortar, en mm (para comprar barras
    *  ENTERAS con packing real, no ceil sobre los ml). */
   despieceMm: number[];
+
+  // ── Geometría derivada para los pasos siguientes (Ola #1, docs §6) ──
+  // Aditivo: hoy nadie la consume (va sólo en la traza), no mueve precios.
+  /** Espacio interno útil, donde se montan los LEDs: la medida menos el caño de
+   *  cada lado (100 cm de ancho con caño de 2 → 96 de interior). */
+  interiorAnchoM: number;
+  interiorAltoM: number;
+  /** Rectángulo de la chapa de fondo (= medida del cartel). El recorte/merma va
+   *  por la panelización de la chapa, no acá. */
+  fondoAnchoM: number;
+  fondoAltoM: number;
+  /** Tiras de cenefa a cortar: UNA por lado (§7.4), largo = el lado, ancho = el
+   *  desarrollo del pliegue. Vacío si no es cajón (D=0). Para panelizar sobre la
+   *  chapa igual que un paño de lona. */
+  cenefaTiras: Array<{ largoM: number; anchoM: number }>;
+  /** Lona "bruta" (material real a cortar): la visible + la demasía de agarre
+   *  (§7.1). El corte final al ras del hierro es merma, no material. */
+  lonaBrutaAnchoM: number;
+  lonaBrutaAltoM: number;
 }
 
 /**
@@ -167,12 +194,15 @@ export function parsearParamsEstructuraBastidor(
   params: Record<string, unknown>,
 ): ParamsEstructuraBastidor {
   const tipo = String(params.tipoBastidor ?? 'doble').toLowerCase();
+  const montaje = String(params.montajeLona ?? 'perimetral').toLowerCase();
   const num = (v: unknown, def: number) => {
     const n = Number(v);
     return Number.isFinite(n) && n >= 0 ? n : def;
   };
   return {
     tipoBastidor: tipo === 'simple' ? 'simple' : 'doble',
+    montajeLona: montaje === 'contramarco' ? 'contramarco' : 'perimetral',
+    demasiaAgarreCm: num(params.demasiaAgarreCm, 10),
     sepRefuerzoVcm: num(params.sepRefuerzoVcm, 100),
     sepRefuerzoHcm: num(params.sepRefuerzoHcm, 0),
     cenefa: params.cenefa === true || params.cenefa === 'true',
@@ -302,6 +332,27 @@ export function calcularEstructuraBastidor(
     push(wInterior, refuerzosH);
   }
 
+  // ── Geometría derivada para los pasos siguientes (Ola #1, aditivo) ──
+  // Tiras de cenefa: una por lado, largo = el lado, ancho = el desarrollo del
+  // pliegue. Sólo en cajón (D>0). §7.4.
+  const cenefaTiras: Array<{ largoM: number; anchoM: number }> = [];
+  if (D > 0) {
+    const anchoTiraM = cenefaDesarrolloCm / 100;
+    cenefaTiras.push(
+      { largoM: W, anchoM: anchoTiraM },
+      { largoM: W, anchoM: anchoTiraM },
+      { largoM: H, anchoM: anchoTiraM },
+      { largoM: H, anchoM: anchoTiraM },
+    );
+  }
+
+  // Lona bruta: la visible + la demasía de agarre por lado. Si la lona envuelve
+  // al contramarco (tela engrampada) suma también la profundidad. §7.1.
+  const agarreM = Math.max(0, params.demasiaAgarreCm) / 100;
+  const extraLonaM = params.montajeLona === 'contramarco' ? D + agarreM : agarreM;
+  const lonaBrutaAnchoM = W + 2 * extraLonaM;
+  const lonaBrutaAltoM = H + 2 * extraLonaM;
+
   return {
     anchoM: W,
     altoM: H,
@@ -320,5 +371,12 @@ export function calcularEstructuraBastidor(
     fondoM2: W * H * 1.1,
     anclajes: Math.max(2, Math.ceil(W / (params.sepAnclajeCm / 100))) * 2,
     despieceMm,
+    interiorAnchoM: wInterior,
+    interiorAltoM: hInterior,
+    fondoAnchoM: W,
+    fondoAltoM: H,
+    cenefaTiras,
+    lonaBrutaAnchoM,
+    lonaBrutaAltoM,
   };
 }
