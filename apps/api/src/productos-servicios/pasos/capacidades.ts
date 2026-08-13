@@ -349,6 +349,28 @@ export function outputsPublicablesDeFamilia(
   return out;
 }
 
+/** Etiquetas humanas de la geometría que un paso publica al JobContext
+ *  (`derivador.publicaCanon`), para ofrecerla como FUENTE DE MEDIDA a los pasos
+ *  siguientes. docs/fuente-de-medida-de-consumo-diseno.md */
+const ETIQUETAS_GEOMETRIA: Record<string, string> = {
+  interiorMm: 'Interior del bastidor',
+  fondoMm: 'Chapa de fondo',
+  cenefaTirasMm: 'Tiras de cenefa',
+  lonaBrutaMm: 'Lona bruta',
+};
+
+/** Los outputs GEOMÉTRICOS que publica una familia (rectángulos/tiras que un
+ *  paso posterior puede elegir como su fuente de medida y panelizar), con
+ *  etiqueta humana. Distintos de los outputs canónicos (magnitudes). */
+export function outputsGeometricosDeFamilia(
+  publicaCanon: Record<string, string> | undefined,
+): OutputPublicable[] {
+  return Object.keys(publicaCanon ?? {}).map((clave) => ({
+    key: clave,
+    etiqueta: ETIQUETAS_GEOMETRIA[clave] ?? clave,
+  }));
+}
+
 /** Una capacidad emitida por un paso ejecutado, para la trazabilidad. */
 export interface CapacidadEmitida {
   capacidad: CapacidadKey;

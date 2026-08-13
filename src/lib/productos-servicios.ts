@@ -478,6 +478,10 @@ export interface FamiliaListItem {
    *  pintar"… A diferencia de `capacidades`, conserva la identidad de los
    *  outputs derivados en vez de colapsarlos en "unidades procesadas". */
   outputsPublicables?: Array<{ key: string; etiqueta: string }>;
+  /** Outputs GEOMÉTRICOS (rectángulos/tiras) que un paso posterior puede elegir
+   *  como su FUENTE DE MEDIDA y panelizar. Distintos de outputsPublicables
+   *  (magnitudes). docs/fuente-de-medida-de-consumo-diseno.md */
+  outputsGeometricos?: Array<{ key: string; etiqueta: string }>;
   /** Derivadores: lo mínimo para que el editor NOMBRE la cantidad del paso
    *  ("6 ml de perfil/h" en vez de "6 unid./h" — H1 del relevamiento). */
   /** [Efectos] Qué le puede exigir al trabajo un paso de esta familia

@@ -12,6 +12,7 @@ import { proyectarPasoTenant } from './pasos/paso-tenant';
 import {
   resumenCapacidades,
   outputsPublicablesDeFamilia,
+  outputsGeometricosDeFamilia,
 } from './pasos/capacidades';
 
 import { outputsReferenciadosPorRegla } from './pasos/validacion-pre-pasada';
@@ -349,6 +350,9 @@ function serializarFamilia(
     outputsCanonicos: f.outputsCanonicos,
     capacidades: resumenCapacidades(f.outputsCanonicos),
     outputsPublicables: outputsPublicablesDeFamilia(f.outputsCanonicos),
+    // Outputs GEOMÉTRICOS (rectángulos/tiras) que un paso posterior puede elegir
+    // como fuente de medida — docs/fuente-de-medida-de-consumo-diseno.md.
+    outputsGeometricos: outputsGeometricosDeFamilia(f.derivador?.publicaCanon),
     defaults: defaultsPorFamilia.get(f.codigo as string) ?? null,
     validaciones: f.validaciones,
     paramsPasoSchema: f.paramsPasoSchema,
