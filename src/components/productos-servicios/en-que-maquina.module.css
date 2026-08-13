@@ -56,6 +56,8 @@
   border: 1px solid var(--c-border);
   border-radius: 9px;
   overflow: hidden;
+  /* Aire entre el selector "Agregar máquina" y las máquinas ya agregadas. */
+  margin-top: 12px;
 }
 .mrow {
   display: flex;
@@ -169,6 +171,29 @@
   color: var(--c-ink-2);
 }
 .pref svg {
+  flex: none;
+}
+/* Quitar la máquina agregada del paso. Discreto (sólo el ícono) hasta el hover,
+   que lo tiñe de peligro — es una acción destructiva de la config del paso. */
+.quitar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  width: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--c-muted);
+  cursor: pointer;
+  flex: none;
+}
+.quitar:hover {
+  border-color: var(--c-danger, #dc2626);
+  color: var(--c-danger, #dc2626);
+  background: var(--c-danger-soft, rgba(220, 38, 38, 0.08));
+}
+.quitar svg {
   flex: none;
 }
 .badge {
@@ -351,6 +376,8 @@
   font-size: 12px;
   color: var(--c-muted);
   padding: 2px 0;
+  /* Aire respecto del selector "Agregar máquina" cuando aún no hay agregadas. */
+  margin-top: 12px;
 }
 
 @media (max-width: 760px) {

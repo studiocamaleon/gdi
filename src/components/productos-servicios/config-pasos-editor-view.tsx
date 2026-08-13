@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/sheet";
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-tercerizado-panel";
+import { SelectBuscable } from "@/components/ui/select-buscable";
 import maq from "@/components/productos-servicios/en-que-maquina.module.css";
 import trab from "@/components/productos-servicios/el-trabajo.module.css";
 import {
@@ -1023,6 +1024,33 @@ function normalizeModoColor(value: unknown) {
   return value.trim();
 }
 
+// Orden canónico de los modos: de menos a más tinta (sin impresión → 1 tinta →
+// CMYK → refuerzos → completo). El orden natural (carga de perfiles) dejaba
+// "CMYK + Blanco" antes que "CMYK", que se lee al revés. Debe coincidir con el
+// del sheet de Agregar producto (MODO_COLOR_ORDEN en agregar-producto-sheet).
+const MODO_COLOR_ORDEN = [
+  "SIN_IMPRESION",
+  "BN",
+  "CMYK",
+  "CMYK+blanco",
+  "CMYK+barniz",
+  "CMYK+blanco+barniz",
+];
+
+function ordenarModosColor<T extends { value: string }>(options: T[]): T[] {
+  const rango = (option: T) => {
+    const index = MODO_COLOR_ORDEN.indexOf(
+      normalizeModoColor(option.value) ?? option.value,
+    );
+    // Modos fuera de la escala (custom del tenant) al final, en su orden.
+    return index === -1 ? MODO_COLOR_ORDEN.length : index;
+  };
+  return options
+    .map((option, index) => ({ option, index }))
+    .sort((a, b) => rango(a.option) - rango(b.option) || a.index - b.index)
+    .map((item) => item.option);
+}
+
 function modosColorFromPerfil(
   perfil: { detalleJson?: Record<string, unknown> | null } | null | undefined,
 ) {
@@ -1074,7 +1102,7 @@ function buildModoColorOptions(
         ? "sin perfil"
         : `${count} perfil${count === 1 ? "" : "es"}`,
   }));
-  if (localOptions.length > 0) return localOptions;
+  if (localOptions.length > 0) return ordenarModosColor(localOptions);
   const backendOptions = configExistente?.modoColorOptions ?? [];
   const options = backendOptions.map((option) => ({
     value: option.value,
@@ -1091,7 +1119,7 @@ function buildModoColorOptions(
       code: "sin perfil",
     });
   }
-  return options;
+  return ordenarModosColor(options);
 }
 
 function resolveModoColorAllowedModes(
@@ -8257,7 +8285,14 @@ function AcomodadoDetalladoEditor({
                                     </div>
                                     </div>
 
-                                    <div className={trab.root}>
+                                    {/* Bloque propio: su primer .sec pierde el
+                                        padding-top por .sec:first-child y quedaba
+                                        pegado a la línea de arriba. Se separa con
+                                        un margen (pedido del usuario 2026-08-13). */}
+                                    <div
+                                      className={trab.root}
+                                      style={{ marginTop: 16 }}
+                                    >
                                       <div
                                         className={`${trab.sec} ${trab.secLast}`}
                                       >
@@ -10998,45 +11033,53 @@ function CandidatasDetalladoEditor({
   );
   const candidataPreferidaId =
     candidatasCfg.find((candidata) => candidata.esPreferida)?.maquinaId ?? null;
-  const [q, setQ] = React.useState("");
-  const term = q.trim().toLowerCase();
-  const maquinasFiltradas = maquinasCandidatasCompatibles.filter((m) => {
-    if (!term) return true;
-    return `${m.nombre} ${machineTechnologyLabel(m)} ${m.codigo}`
-      .toLowerCase()
-      .includes(term);
-  });
   void lookups;
+  // Sólo se muestran las máquinas AGREGADAS a esta ruta; el resto se buscan y
+  // se agregan desde el selector de arriba (pedido del usuario 2026-08-13). Así
+  // una ruta que usa 2 máquinas no arrastra el catálogo entero destildado.
+  const maquinasSeleccionadas = maquinasCandidatasCompatibles.filter((m) =>
+    candidatasSeleccionadas.has(m.id),
+  );
+  const opcionesAgregar = maquinasCandidatasCompatibles
+    .filter((m) => !candidatasSeleccionadas.has(m.id))
+    .map((m) => ({
+      value: m.id,
+      label: m.nombre,
+      grupo: machineTechnologyLabel(m),
+      detalle: m.codigo,
+    }));
 
   return (
     <div className={maq.sec}>
-      <div className={maq.search}>
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3-3" />
-        </svg>
-        <input
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          placeholder="Buscar máquina o tecnología…"
-        />
-      </div>
-
       {maquinasCandidatasCompatibles.length === 0 ? (
         <p className={maq.empty}>
           No hay máquinas compatibles con perfiles activos para esta familia.
         </p>
       ) : (
-        <div className={maq.list}>
-          {maquinasFiltradas.map((maquina) => {
+        <>
+          <SelectBuscable
+            value=""
+            onChange={(id) => toggleMaquinaCandidata(pasoId, id, true)}
+            opciones={opcionesAgregar}
+            placeholder={
+              opcionesAgregar.length === 0
+                ? "Todas las máquinas compatibles ya están agregadas"
+                : "Agregar máquina…"
+            }
+            placeholderBusqueda="Buscar máquina o tecnología…"
+            vacio="No hay máquinas que coincidan."
+            ariaLabel="Agregar máquina al paso"
+            disabled={opcionesAgregar.length === 0}
+            minimoParaBuscar={0}
+          />
+          {maquinasSeleccionadas.length === 0 ? (
+            <p className={maq.empty}>
+              Todavía no agregaste máquinas. Buscá arriba y agregá las que hacen
+              este paso.
+            </p>
+          ) : (
+            <div className={maq.list}>
+              {maquinasSeleccionadas.map((maquina) => {
             const selected = candidatasSeleccionadas.has(maquina.id);
             const isPreferida =
               selected && candidataPreferidaId === maquina.id;
@@ -11056,34 +11099,7 @@ function CandidatasDetalladoEditor({
             );
             return (
               <React.Fragment key={maquina.id}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className={`${maq.mrow} ${selected ? maq.on : ""}`}
-                  onClick={() =>
-                    toggleMaquinaCandidata(pasoId, maquina.id, !selected)
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      toggleMaquinaCandidata(pasoId, maquina.id, !selected);
-                    }
-                  }}
-                >
-                  <span className={maq.bx}>
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5 12l4 4 10-10" />
-                    </svg>
-                  </span>
+                <div className={`${maq.mrow} ${maq.on}`}>
                   <span className={maq.av}>{chip.ini}</span>
                   <span className={maq.nm}>
                     <span className={maq.a}>
@@ -11131,37 +11147,58 @@ function CandidatasDetalladoEditor({
                       Preferir
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    className={maq.quitar}
+                    onClick={() =>
+                      toggleMaquinaCandidata(pasoId, maquina.id, false)
+                    }
+                    aria-label={`Quitar ${maquina.nombre} del paso`}
+                    title="Quitar del paso"
+                  >
+                    <XIcon size={14} />
+                  </button>
                 </div>
 
                 {selected ? (
                   <div className={maq.det}>
                     <div className={maq.frow}>
-                      <span className={maq.fl}>
-                        <span className={maq.k}>Perfil por defecto</span>
-                        <span
-                          className={`${maq.ctl} ${maq.sel}`}
-                          style={{ minWidth: 210 }}
-                        >
-                          <select
-                            value={cfgCand?.perfilDefaultId ?? ""}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={(event) =>
-                              setMaquinaCandidataPerfilDefault(
-                                pasoId,
-                                maquina.id,
-                                event.target.value || null,
-                              )
-                            }
+                      {/* El "Perfil por defecto" general es el único control de
+                          perfil cuando el paso NO tiene modos de color. Con
+                          modos, cada modo lleva su propio "Perfil para <modo>"
+                          (abajo) y este default general se maneja solo — sin un
+                          título "por defecto" que no dice a qué modo pertenece
+                          (pedido del usuario 2026-08-13). */}
+                      {!(
+                        mostrarModoColor && candidateModoOptions.length > 0
+                      ) ? (
+                        <span className={maq.fl}>
+                          <span className={maq.k}>Perfil por defecto</span>
+                          <span
+                            className={`${maq.ctl} ${maq.sel}`}
+                            style={{ minWidth: 210 }}
                           >
-                            <option value="">Primer perfil compatible</option>
-                            {perfilesCompatibles.map((perfil) => (
-                              <option key={perfil.id} value={perfil.id}>
-                                {perfil.nombre}
-                              </option>
-                            ))}
-                          </select>
+                            <select
+                              value={cfgCand?.perfilDefaultId ?? ""}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={(event) =>
+                                setMaquinaCandidataPerfilDefault(
+                                  pasoId,
+                                  maquina.id,
+                                  event.target.value || null,
+                                )
+                              }
+                            >
+                              <option value="">Primer perfil compatible</option>
+                              {perfilesCompatibles.map((perfil) => (
+                                <option key={perfil.id} value={perfil.id}>
+                                  {perfil.nombre}
+                                </option>
+                              ))}
+                            </select>
+                          </span>
                         </span>
-                      </span>
+                      ) : null}
                       {mostrarModoColor && candidateModoOptions.length > 0 ? (
                         <span
                           className={maq.fl}
@@ -11222,40 +11259,44 @@ function CandidatasDetalladoEditor({
                         </span>
                       ) : null}
                     </div>
-                    {/* Perfil POR MODO (hallazgo del usuario 2026-08-11):
-                        con varios modos habilitados, un solo default no
-                        alcanza — el modo no-default caía al primer perfil
-                        por orden de carga. Sólo piden desempate los modos
-                        con MÁS de un perfil compatible. */}
+                    {/* Perfil POR MODO: cada modo habilitado que imprime lleva
+                        su propio "Perfil para <modo>", apilados y en el orden de
+                        los modos (rediseño 2026-08-13). Reemplaza al viejo
+                        "default general + desempate sólo para ambiguos", que
+                        dejaba un título "por defecto" sin decir a qué modo
+                        servía. La opción "Automático" cae al fallback interno
+                        del motor (default general → primer perfil compatible).
+                        "Sin impresión" no aparece: no tiene perfil. */}
                     {mostrarModoColor
                       ? (() => {
                           const perfilesDelModo = (modo: string) =>
                             maquina.perfilesOperativos.filter((perfil) =>
                               modosColorFromPerfil(perfil).includes(modo),
                             );
-                          const habilitadosConPerfil =
-                            candidateModoOptions.filter(
-                              (option) =>
-                                candidateAllowed.includes(option.value) &&
-                                perfilesDelModo(option.value).length > 0,
-                            );
-                          if (habilitadosConPerfil.length < 2) return null;
-                          const ambiguos = habilitadosConPerfil.filter(
+                          const modosConPerfil = candidateModoOptions.filter(
                             (option) =>
-                              perfilesDelModo(option.value).length > 1,
+                              candidateAllowed.includes(option.value) &&
+                              perfilesDelModo(option.value).length > 0,
                           );
-                          if (ambiguos.length === 0) return null;
+                          if (modosConPerfil.length === 0) return null;
                           const mapa = cfgCand?.perfilDefaultPorModo ?? {};
                           return (
-                            <div className={maq.frow}>
-                              {ambiguos.map((option) => (
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns:
+                                  "repeat(auto-fit, minmax(210px, 260px))",
+                                gap: "10px 12px",
+                              }}
+                            >
+                              {modosConPerfil.map((option) => (
                                 <span className={maq.fl} key={option.value}>
                                   <span className={maq.k}>
                                     Perfil para {option.label}
                                   </span>
                                   <span
                                     className={`${maq.ctl} ${maq.sel}`}
-                                    style={{ minWidth: 210 }}
+                                    style={{ minWidth: 0 }}
                                   >
                                     <select
                                       value={mapa[option.value] ?? ""}
@@ -11271,9 +11312,7 @@ function CandidatasDetalladoEditor({
                                         )
                                       }
                                     >
-                                      <option value="">
-                                        Automático (default general)
-                                      </option>
+                                      <option value="">Automático</option>
                                       {perfilesDelModo(option.value).map(
                                         (perfil) => (
                                           <option
@@ -11304,8 +11343,10 @@ function CandidatasDetalladoEditor({
                 ) : null}
               </React.Fragment>
             );
-          })}
-        </div>
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Sin pie explicativo: decía que las demás candidatas "quedan
