@@ -41,6 +41,13 @@ export type PropuestaItem = {
   impuestoMonto: number;
   total: number;
   fechaEntrega?: string;
+  /**
+   * TRANSITORIO (no se serializa ni se guarda): los PDF que se adjuntaron al
+   * medir con el lector de planos. Se suben como Archivos del ítem al guardar
+   * la orden (ver docs/planos-persistir-diseno.md). Vacío al rehidratar una
+   * orden guardada — el PDF ya vive en R2.
+   */
+  planosPendientes?: File[];
   especificaciones: Record<string, string>;
   cotizacion: CotizacionPropuestaSnapshot;
   pasos: PasoProduccionPropuesta[];

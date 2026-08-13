@@ -78,6 +78,7 @@ import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
+import { publicarPlanos, type PlanosDeItem } from "@/lib/planos-persistir";
 import {
   subirArchivo,
   listarArchivos,
@@ -5570,6 +5571,40 @@ export function PropuestaFicha({
     [],
   );
 
+  // Los PDF medidos (transitorios en item.planosPendientes) se suben a los
+  // Archivos del ítem persistido. Se matchea staging→persistido por
+  // cotizacionItemId (el id del item no sobrevive; el server genera uno nuevo),
+  // con el índice como fallback. Ver docs/planos-persistir-diseno.md.
+  const publicarPlanosDeOrden = React.useCallback(
+    async (
+      itemsConSnapshot: Array<{
+        item: PropuestaItem;
+        cotizacionItemId?: string;
+      }>,
+      productos: OrdenTrabajoProducto[],
+    ) => {
+      const porCotiz = new Map<string, string>();
+      productos.forEach((p) => {
+        if (p.cotizacionItemId && p.id) porCotiz.set(p.cotizacionItemId, p.id);
+      });
+      const objetivo: PlanosDeItem[] = [];
+      itemsConSnapshot.forEach(({ item, cotizacionItemId }, i) => {
+        const planos = item.planosPendientes;
+        if (!planos?.length) return;
+        const ordenItemId =
+          (cotizacionItemId ? porCotiz.get(cotizacionItemId) : undefined) ??
+          productos[i]?.id;
+        if (ordenItemId) objetivo.push({ ordenItemId, planos });
+      });
+      if (objetivo.length === 0) return;
+      const { errores } = await publicarPlanos(objetivo);
+      if (errores.length > 0) {
+        toast.error(`Algunos planos no se subieron: ${errores.join(" · ")}`);
+      }
+    },
+    [],
+  );
+
   /**
    * Sube a R2 los PDF originales del centro de copiado, colgándolos del ítem de
    * la OT (scope ORDEN_ITEM), igual que los sellos suben sus artes. Los archivos
@@ -5704,8 +5739,24 @@ export function PropuestaFicha({
         tocado,
         mapaArchivosCC([{ item, cotizacionItemId }]),
       );
+      // Los PDF medidos del ítem (si se adjuntaron en el sheet) → Archivos del
+      // ítem recién persistido.
+      if (item.planosPendientes?.length && tocado[0]?.id) {
+        const { errores } = await publicarPlanos([
+          { ordenItemId: tocado[0].id, planos: item.planosPendientes },
+        ]);
+        if (errores.length > 0) {
+          toast.error(`Algunos planos no se subieron: ${errores.join(" · ")}`);
+        }
+      }
     },
-    [orden, clienteId, publicarArtes, subirArchivosCentroCopiado, mapaArchivosCC],
+    [
+      orden,
+      clienteId,
+      publicarArtes,
+      subirArchivosCentroCopiado,
+      mapaArchivosCC,
+    ],
   );
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
@@ -6234,6 +6285,7 @@ export function PropuestaFicha({
         orden.productos,
         mapaArchivosCC(itemsConSnapshot),
       );
+      await publicarPlanosDeOrden(itemsConSnapshot, orden.productos);
 
       setEmisionNumero(orden.numero);
     } catch (error) {
@@ -6255,6 +6307,7 @@ export function PropuestaFicha({
     publicarArtes,
     subirArchivosCentroCopiado,
     mapaArchivosCC,
+    publicarPlanosDeOrden,
   ]);
 
   const finalizarEmision = React.useCallback(() => {
@@ -6299,6 +6352,7 @@ export function PropuestaFicha({
         orden.productos,
         mapaArchivosCC(itemsConSnapshot),
       );
+      await publicarPlanosDeOrden(itemsConSnapshot, orden.productos);
       toast.success(
         `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
       );
@@ -6322,6 +6376,7 @@ export function PropuestaFicha({
     publicarArtes,
     subirArchivosCentroCopiado,
     mapaArchivosCC,
+    publicarPlanosDeOrden,
     router,
   ]);
 
