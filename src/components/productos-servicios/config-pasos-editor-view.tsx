@@ -9540,6 +9540,16 @@ function RitmoGuiado({
    *  nada de bloques/tandas) → storage `productivity` con el ritmo por hora
    *  equivalente. Las configs viejas en `batch_time` se leen tal cual y se
    *  normalizan a proporcional al primer edit. */
+  // El "tiempo variable" (regla n/hora) ES T-2. La UI hacía `cfg.modoTiempo ??
+  // modosTiempoSoportados[0]` sólo para MOSTRAR, pero nunca lo persistía; el
+  // motor hace `paso.modoTiempo ?? 'T-1'` (fallback distinto) e IGNORABA la
+  // regla — el ritmo quedaba muerto (el corte del bastidor cobraba 0). Al
+  // escribir la regla persistimos el modo para que UI y motor coincidan.
+  const modoTiempoVariable = (
+    familia?.modosTiempoSoportados?.includes("T-2")
+      ? "T-2"
+      : (familia?.modosTiempoSoportados?.[0] ?? "T-2")
+  ) as UpsertConfigPasoPayload["modoTiempo"];
   const escribirRegla = (
     nTexto: string,
     tTexto: string,
@@ -9548,6 +9558,7 @@ function RitmoGuiado({
     const n = numOrNull(nTexto);
     const t = numOrNull(tTexto);
     const tMin = t == null ? null : unidadT === "h" ? t * 60 : t;
+    onPatch(pasoId, { modoTiempo: modoTiempoVariable });
     onParams(pasoId, {
       timeCalculationMode: "productivity",
       productivityValue:
@@ -10653,6 +10664,12 @@ function TiempoFijoValorEditor({
       onParams(pasoId, { horasEstimadas: null, timeCalculationMode: null });
     } else {
       // Familia sin T-1 en el menú (pintura, montaje): el fijo vive en T-2.
+      // Persistimos el modo: sin esto modoTiempo quedaba null y el motor caía a
+      // T-1 (ignorando el tiempo_fijo de T-2). Mismo bug que el tiempo variable.
+      onPatch(pasoId, {
+        modoTiempo: (modoEfectivo ??
+          "T-2") as UpsertConfigPasoPayload["modoTiempo"],
+      });
       onParams(pasoId, {
         horasEstimadas: min == null ? null : min / 60,
         timeCalculationMode: "tiempo_fijo",
