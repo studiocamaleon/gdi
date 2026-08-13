@@ -2873,6 +2873,15 @@ model OrdenTrabajo {
   /// facturada y sin cobrar/parcial/cobrada) se calculan de acá.
   facturadoTotal          Decimal                @default(0) @db.Decimal(14, 2)
   cobradoTotal            Decimal                @default(0) @db.Decimal(14, 2)
+  /// Tratamiento fiscal de la orden: 'FISCAL' (default, lleva IVA y comprobante
+  /// electrónico) | 'SIN_COMPROBANTE' (el desglose oculta el IVA, `total` = neto,
+  /// y la orden queda FUERA de la cola de facturar — no se factura por error).
+  /// Los snapshots de cada ítem NO se tocan: guardan el desglose fiscal completo
+  /// como traza; esto sólo cambia los denormalizados y qué se presenta.
+  /// El sistema NO modela la evasión: registra un hecho neutro ("no llevó
+  /// comprobante"); declarar o no ese ingreso vive fuera del sistema.
+  /// Ver docs/margen-y-decisiones-de-precio.md §6.
+  tratamientoFiscal       String                 @default("FISCAL")
   /// === Cancelación ===
   /// Cuándo se canceló. Es el "está cancelada" real: `estado` lo dice también,
   /// pero esta fecha es la que ordena y la que permite contar cancelaciones

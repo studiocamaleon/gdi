@@ -52,6 +52,8 @@ export type CrearOrdenTrabajoPayload = {
   canalVenta?: string;
   observaciones?: string;
   cargosDirectos?: number;
+  /** Sin comprobante fiscal desde el vamos (§6 cuaderno de margen). */
+  tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
   items: CrearOrdenTrabajoItemPayload[];
 };
 
@@ -117,6 +119,21 @@ export async function editarOrdenTrabajo(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+/** Enciende/apaga el tratamiento SIN comprobante fiscal de la orden (§6 del
+ *  cuaderno de margen). Devuelve la orden con los totales recalculados. */
+export async function setTratamientoFiscalOrden(
+  id: string,
+  tratamientoFiscal: "FISCAL" | "SIN_COMPROBANTE",
+): Promise<OrdenTrabajoDetalle> {
+  return apiRequest<OrdenTrabajoDetalle>(
+    `/ordenes-trabajo/${id}/tratamiento-fiscal`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ tratamientoFiscal }),
+    },
+  );
 }
 
 export async function agregarOrdenItem(

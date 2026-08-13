@@ -61,11 +61,14 @@ export function CostosOrdenTab({
   items,
   cargosOrden,
   ordenId,
+  sinComprobante = false,
 }: {
   items: PropuestaItem[];
   cargosOrden: PropuestaCargoDirecto[];
   /** Ausente mientras la propuesta no se emitió: no hay pasos reales todavía. */
   ordenId?: string;
+  /** Orden sin comprobante: el consolidado oculta el IVA y cierra en el neto. */
+  sinComprobante?: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatCurrency(v, moneda);
@@ -149,7 +152,11 @@ export function CostosOrdenTab({
 
   return (
     <div className="otc">
-      <TirasKpi consolidado={consolidado} fmt={fmt} />
+      <TirasKpi
+        consolidado={consolidado}
+        fmt={fmt}
+        sinComprobante={sinComprobante}
+      />
 
       {consolidado.itemsSinCostear > 0 ? (
         <div className="otc-aviso">
@@ -159,7 +166,7 @@ export function CostosOrdenTab({
         </div>
       ) : null}
 
-      <Cascada consolidado={consolidado} fmt={fmt} />
+      <Cascada consolidado={consolidado} fmt={fmt} sinComprobante={sinComprobante} />
       <Composicion consolidado={consolidado} fmt={fmt} />
       <TablaProductos consolidado={consolidado} fmt={fmt} />
       <Centros consolidado={consolidado} real={real} fmt={fmt} />
@@ -273,9 +280,11 @@ function ComisionPasarelaSeccion({
 function TirasKpi({
   consolidado,
   fmt,
+  sinComprobante = false,
 }: {
   consolidado: CostosOrdenConsolidado;
   fmt: (v: number) => string;
+  sinComprobante?: boolean;
 }) {
   const margenBajo = consolidado.margenPct < MARGEN_ALERTA_PCT;
   return (
@@ -293,7 +302,9 @@ function TirasKpi({
         <span className="otc-kpi-lbl">Ventas (sin IVA)</span>
         <span className="otc-kpi-val">{fmt(consolidado.precioNeto)}</span>
         <span className="otc-kpi-hint">
-          {fmt(consolidado.precioBruto)} con impuestos
+          {sinComprobante
+            ? "sin comprobante fiscal"
+            : `${fmt(consolidado.precioBruto)} con impuestos`}
         </span>
       </div>
       <div className={`otc-kpi ${margenBajo ? "mal" : "bien"}`}>
@@ -321,9 +332,11 @@ function TirasKpi({
 function Cascada({
   consolidado,
   fmt,
+  sinComprobante = false,
 }: {
   consolidado: CostosOrdenConsolidado;
   fmt: (v: number) => string;
+  sinComprobante?: boolean;
 }) {
   const neto = consolidado.precioNeto;
   const pctDelNeto = (monto: number) =>
@@ -417,7 +430,7 @@ function Cascada({
           <span className="cw-pct">100%</span>
           <span className="cw-amount">{fmt(neto)}</span>
         </div>
-        {consolidado.ivaTotal > 0 ? (
+        {consolidado.ivaTotal > 0 && !sinComprobante ? (
           <div className="cw-row">
             <span className="cw-label">
               Impuestos al cliente
@@ -429,10 +442,15 @@ function Cascada({
           </div>
         ) : null}
         <div className="cw-row cw-total">
-          <span className="cw-label">Precio de venta</span>
+          <span className="cw-label">
+            Precio de venta
+            {sinComprobante ? <small>sin comprobante fiscal</small> : null}
+          </span>
           <span className="cw-tipo" />
           <span className="cw-pct" />
-          <span className="cw-amount">{fmt(consolidado.precioBruto)}</span>
+          <span className="cw-amount">
+            {fmt(sinComprobante ? neto : consolidado.precioBruto)}
+          </span>
         </div>
       </div>
     </section>

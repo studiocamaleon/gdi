@@ -240,6 +240,10 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   canalVenta: string | null;
   /** Cargos directos a nivel orden (viático, flete…). */
   cargosDirectos: number;
+  /** Tratamiento fiscal: 'FISCAL' (con IVA y comprobante) | 'SIN_COMPROBANTE'
+   *  (IVA oculto, `total` = neto, fuera de la cola de facturar). §6 del
+   *  cuaderno docs/margen-y-decisiones-de-precio.md. */
+  tratamientoFiscal: "FISCAL" | "SIN_COMPROBANTE";
   /** Token del link público de seguimiento del cliente (/track/<token>). */
   publicToken: string | null;
   /** Eje fiscal: cuánto de la orden pasó por factura (las NC restan). */
@@ -349,6 +353,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
       observaciones: null,
       canalVenta: null,
       cargosDirectos: 0,
+      tratamientoFiscal: "FISCAL",
       publicToken: null,
       facturadoTotal: 0,
       cobradoTotal: 0,
@@ -364,6 +369,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
     observaciones: null,
     canalVenta: "mostrador",
     cargosDirectos: 8500,
+    tratamientoFiscal: "FISCAL",
     publicToken: null,
     facturadoTotal: 0,
     cobradoTotal: 0,

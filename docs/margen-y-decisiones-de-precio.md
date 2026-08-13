@@ -150,9 +150,137 @@ Se van sumando a medida que aparecen.
   los cobros reales (comisiones Fase B). Falta entender qué pasa cuando el
   descuento se dio *asumiendo* efectivo y el cliente termina pagando con
   tarjeta.
+- **Reversibilidad de una orden sin comprobante** (§6). Si se marca
+  `SIN_COMPROBANTE`, se cobra, y después el cliente pide factura: hay que
+  poder "re-fiscalizar" (recalcular con IVA, subir la deuda, habilitar la
+  emisión) sin romper los cobros ya imputados. Sin resolver.
+- **Permiso del flag fiscal** (§6). ¿Lo activa cualquiera que edita la OT o
+  pide un permiso fiscal (`administracion.gestionar`)? Debería ser lo segundo.
 
-## 6. Bitácora
+## 6. Vender sin comprobante fiscal
+
+### El planteo
+
+En Arg y en buena parte de LATAM se vende seguido "sin IVA" —sin factura—.
+El sistema hoy no permite "apagar" el IVA de una OT puntual, y la pregunta es
+cómo modelarlo sin que el software quede diseñado para ocultar.
+
+**La línea que se trazó:** el sistema NO modela la evasión. No hay campo
+`enNegro` ni atajo secreto. Lo que registra es un hecho **neutro y verificable**
+—*"esta orden no llevó comprobante fiscal"*—, lo muestra de frente, y la
+decisión de declarar o no ese ingreso vive **fuera del sistema**, en el
+operador. Un atajo oculto no borra la evidencia (el cobro, el recibo, el
+cruce cobros-vs-comprobantes quedan igual): sólo suma la prueba del ardid, que
+es lo único que la ley castiga de verdad. "No facturado" no es "evadido" — son
+dos ejes independientes, y el segundo ocurre en el Libro IVA / la DDJJ, no acá.
+
+### La cuenta — es un descuento financiado con el IVA
+
+Vender sin IVA es, en las cuentas, un descuento pagado con el impuesto que no
+se ingresa. Hay dos modos con efectos **opuestos** sobre el margen:
+
+| Modo | Qué cobrás | Margen |
+|---|---|---|
+| **A — descontás el IVA** ("21% menos si es sin factura") | el **neto** | **igual** — caso sin pérdida de margen |
+| **B — te guardás el IVA** (mismo precio con IVA, no lo ingresás) | el **bruto** | **sube** todo el IVA |
+
+En el modo A el descuento sobre el precio final **no es 21%**: si el cliente
+paga el neto en vez del bruto,
+
+```
+descuento = IVA / (1 + IVA) = 21% / 1,21 = 17,35% del total
+```
+
+El diseño asume **modo A** (el cliente paga menos, tu margen no se mueve). En
+modo B el `total` seguiría con IVA y el desglose mentiría sobre qué es ese
+excedente; por eso se descarta como default.
+
+### Por qué un descuento común no sirve
+
+Tres razones, todas verificadas contra el pipeline:
+
+1. El descuento se aplica sobre el **neto**, no sobre el total.
+2. Aunque se descuente, el IVA se **recalcula** sobre el neto ya descontado.
+3. El sistema cree que se cedió margen, cuando en realidad ese IVA va al
+   bolsillo. No hay forma de que lo distinga.
+
+La herramienta correcta no es un descuento: es un **tratamiento fiscal
+explícito** de la orden.
+
+### El mecanismo — un flag en la OT
+
+```
+OrdenTrabajo.tratamientoFiscal  FISCAL | SIN_COMPROBANTE   @default("FISCAL")
+```
+
+- **Nivel orden, no ítem.** "Sin IVA" es una decisión de toda la operación; no
+  hay media orden fiscal. El descuento sí vive en el ítem, esto no.
+- **Los snapshots de ítem no se tocan** — siguen con el desglose fiscal completo
+  (neto + IVA) como traza. El flag sólo cambia qué se presenta y qué `total` se
+  denormaliza.
+- **UI:** botón-toggle (ícono `FileX`) en la barra de resumen financiero al pie
+  de la ficha, junto a Descuento; chip "Sin comprobante" en el encabezado.
+  Editable en `borrador` / `pendiente`, con evento en el timeline. El texto
+  visible habla del **estado en el sistema** ("sin comprobante fiscal en el
+  sistema"), nunca del IVA ni de "no facturar": el sistema no narra la
+  intención fiscal.
+- **Candado de ciclo de vida:** no se puede activar si la orden ya tiene un
+  `Comprobante` emitido (no se des-factura).
+
+### Qué cambia al recalcular los denormalizados
+
+| Campo de `OrdenTrabajo` | FISCAL | SIN_COMPROBANTE |
+|---|---|---|
+| `subtotal` (neto) | Σ ítems neto | igual |
+| `impuestos` | Σ IVA | **0** |
+| `total` | neto + IVA | **= neto** |
+
+Como todo aguas abajo lee `total`, esto resuelve solo lo que se buscaba:
+
+- **Deuda / cuenta corriente**: nace de `total` = neto → no cuelga un IVA
+  adeudado.
+- **Desglose en pantalla y PDF**: con `impuestos = 0` la línea de IVA no se
+  dibuja; total = neto.
+- **Panel de ventas**: ya cuenta `SUM(subtotal)` sin IVA (ventas = neto; lo
+  fiscal vive en Administración) → la venta entra igual, sin distorsión.
+
+### El candado de facturación — dos capas
+
+Para que la orden **no se pueda facturar por error**:
+
+1. **La cola.** `FacturacionOrdenesService.pendientesFacturacion` filtra
+   `estado ∈ {finalizada, entregada}, total > 0`. Se le suma
+   `tratamientoFiscal: 'FISCAL'` al `where` → la orden sin comprobante nunca
+   aparece en la vista Facturación.
+   (`apps/api/src/administracion/facturacion-ordenes.service.ts`)
+2. **El endpoint.** `facturarOrden` / `facturarLote`: guard duro en el service
+   —si la orden es `SIN_COMPROBANTE` → `BadRequestException`—. Aunque venga de
+   un lote o de un POST directo, no emite. La precondición vive en el backend,
+   no en esconder el botón.
+   (`apps/api/src/administracion/administracion.controller.ts`)
+
+Contracara honesta: esa misma condición la **excluye del Libro IVA** cuando se
+construya (Egresos F4).
+
+### Estado
+
+**Implementado y verificado en navegador (2026-08-13).** Campo
+`OrdenTrabajo.tratamientoFiscal` + migración; recálculo neto en `crear` y
+`recalcularTotales`; endpoint `PATCH :id/tratamiento-fiscal`
+(`comercial.gestionar`, sólo borrador/pendiente, bloquea si hay comprobante
+emitido); guards en la cola y en `facturarOrden`/`facturarLote`. UI: toggle
+`FileX` en la barra al pie + **atajo de teclado `X`** + chip en el encabezado.
+Todas las superficies de precio muestran el neto cuando el flag está activo:
+barra de total, tabla de ítems (oculta la columna Imp., Total/Unitario en neto),
+Pagos/deuda, y los dos desgloses de **Costos** (ítem y orden: sin línea IVA,
+"Precio de venta" = neto). El snapshot fiscal de cada ítem queda intacto por
+debajo. Permiso resuelto (`comercial.gestionar`, misma llave que el descuento).
+Queda abierta la reversibilidad post-cobro (§5).
+
+## 7. Bitácora
 
 | Fecha | Qué se analizó |
 |---|---|
 | 2026-08-12 | Estructura del precio (§2) y descuento por pago en efectivo (§3). |
+| 2026-08-13 | Vender sin comprobante fiscal (§6): flag `SIN_COMPROBANTE`, cuenta del 17,35% (modo A), candado de facturación, y la línea de no modelar la evasión. |
+| 2026-08-13 | §6 **implementado** end-to-end (backend + UI + atajo `X`), verificado en navegador; texto visible neutralizado ("sin comprobante fiscal en el sistema"); Pagos/deuda en neto. |

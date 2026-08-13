@@ -348,6 +348,9 @@ export class FacturacionOrdenesService {
         tenantId,
         estado: { in: ['finalizada', 'entregada'] },
         total: { gt: 0 },
+        // Las órdenes sin comprobante fiscal quedan FUERA de la cola: no se
+        // facturan por error. Ver docs/margen-y-decisiones-de-precio.md §6.
+        tratamientoFiscal: 'FISCAL',
       },
       select: {
         id: true,

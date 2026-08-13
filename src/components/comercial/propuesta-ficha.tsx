@@ -18,6 +18,7 @@ import {
   ExpandIcon,
   FactoryIcon,
   FileIcon,
+  FileXIcon,
   EyeIcon,
   FolderIcon,
   HistoryIcon,
@@ -60,6 +61,7 @@ import {
   getOrdenTrabajo,
   getTableroProduccion,
   quitarOrdenItem,
+  setTratamientoFiscalOrden,
 } from "@/lib/ordenes-trabajo-api";
 import {
   emitirPresupuesto,
@@ -2438,10 +2440,13 @@ function CostosItemView({
   item,
   costo,
   calculoPendiente,
+  sinComprobante = false,
 }: {
   item: PropuestaItem;
   costo: number;
   calculoPendiente: boolean;
+  /** Orden sin comprobante: el waterfall oculta el IVA y cierra en el neto. */
+  sinComprobante?: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatCurrency(v, moneda);
@@ -2518,7 +2523,7 @@ function CostosItemView({
           <span className="cw-pct">100%</span>
           <span className="cw-amount">{fmt(precioNeto)}</span>
         </div>
-        {ivaTotal > 0 ? (
+        {ivaTotal > 0 && !sinComprobante ? (
           <div className="cw-row">
             <span className="cw-label">
               {impuestosPorFueraNombres || "IVA"}
@@ -2530,10 +2535,15 @@ function CostosItemView({
           </div>
         ) : null}
         <div className="cw-row cw-total">
-          <span className="cw-label">Precio de venta</span>
+          <span className="cw-label">
+            Precio de venta
+            {sinComprobante ? <small>sin comprobante fiscal</small> : null}
+          </span>
           <span className="cw-tipo" />
           <span className="cw-pct" />
-          <span className="cw-amount">{fmt(precioBruto)}</span>
+          <span className="cw-amount">
+            {fmt(sinComprobante ? precioNeto : precioBruto)}
+          </span>
         </div>
       </div>
 
@@ -3001,6 +3011,12 @@ function fechaRecomendadaEta(
   return claveFechaEta(fecha);
 }
 
+/** Columnas de la fila/encabezado de productos SIN la columna Imp. (se saca el
+ *  110px del IVA). Se aplica inline cuando la orden es sin comprobante, para no
+ *  agregar una clase global nueva (rompe css:guard). §6 cuaderno de margen. */
+const ORDEN_COLS_SIN_IMP =
+  "36px 22px minmax(220px, 1fr) 110px 130px 140px 130px 36px";
+
 export function ProductRow({
   item,
   index,
@@ -3017,6 +3033,7 @@ export function ProductRow({
   onChangeFechaEntrega,
   fechaEstimada,
   readOnly = false,
+  sinComprobante = false,
 }: {
   item: PropuestaItem;
   index: number;
@@ -3038,6 +3055,8 @@ export function ProductRow({
   onChangeFechaEntrega?: (fechaEntrega: string) => void;
   fechaEstimada: string;
   readOnly?: boolean;
+  /** Orden sin comprobante fiscal: la fila oculta Imp. y muestra Total neto. */
+  sinComprobante?: boolean;
 }) {
   const { moneda, zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
@@ -3070,9 +3089,24 @@ export function ProductRow({
   // exactamente estas mismas filas.
   const specs = React.useMemo(() => buildOrdenItemSpecs(item), [item]);
 
+  // Neto por ítem cuando la orden es sin comprobante: Total = subtotal (sin
+  // IVA) y el unitario se recalcula sobre el neto. El snapshot no se toca.
+  const totalItemVisible = sinComprobante
+    ? visibleAmounts.subtotal
+    : visibleAmounts.total;
+
   return (
     <div className={`oprow ${expanded ? "open" : ""}`}>
-      <button type="button" className="oprow-head" onClick={onToggle}>
+      <button
+        type="button"
+        className="oprow-head"
+        onClick={onToggle}
+        style={
+          sinComprobante
+            ? { gridTemplateColumns: ORDEN_COLS_SIN_IMP }
+            : undefined
+        }
+      >
         <span className="ix">{index + 1}</span>
         <span className="chev">
           <ChevronRightIcon
@@ -3157,11 +3191,13 @@ export function ProductRow({
             formatCurrency(visibleAmounts.subtotal, moneda)
           )}
         </div>
-        <div className="num">
-          {calculoPendiente
-            ? "-"
-            : formatCurrency(visibleAmounts.impuestos, moneda)}
-        </div>
+        {sinComprobante ? null : (
+          <div className="num">
+            {calculoPendiente
+              ? "-"
+              : formatCurrency(visibleAmounts.impuestos, moneda)}
+          </div>
+        )}
         {/* Precio por unidad de la magnitud cotizada (m², ml, u., hoja): el
             total dividido por la cantidad. Le da al comercial "¿cuánto sale el
             m²/cada folleto?" sin sacar la cuenta a mano. Usa el total visible,
@@ -3169,12 +3205,12 @@ export function ProductRow({
         <div className="num">
           {calculoPendiente || item.cantidad <= 0
             ? "—"
-            : `${formatUnitPrice(visibleAmounts.total / item.cantidad, moneda)} / ${formatUnidad(item.unidadMedida)}`}
+            : `${formatUnitPrice(totalItemVisible / item.cantidad, moneda)} / ${formatUnidad(item.unidadMedida)}`}
         </div>
         <div className={`num total${tienePrecioEspecial ? " especial" : ""}`}>
           {calculoPendiente
             ? "Pendiente"
-            : formatCurrency(visibleAmounts.total, moneda)}
+            : formatCurrency(totalItemVisible, moneda)}
         </div>
         {!onRemove ? (
           <span className="x" aria-hidden="true" />
@@ -3419,6 +3455,7 @@ export function ProductRow({
               item={item}
               costo={costo}
               calculoPendiente={calculoPendiente}
+              sinComprobante={sinComprobante}
             />
           ) : null}
 
@@ -3775,6 +3812,30 @@ function EmitOverlay({
   );
 }
 
+/** Chip honesto del encabezado: la orden no lleva comprobante fiscal. §6 del
+ *  cuaderno de margen — nada oculto, se ve de frente. */
+function ChipSinComprobante() {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        fontSize: 12,
+        fontWeight: 600,
+        padding: "2px 10px",
+        borderRadius: 999,
+        background: "#fff7ed",
+        color: "#c2410c",
+        border: "1px solid #fed7aa",
+      }}
+      title="Orden sin comprobante fiscal en el sistema."
+    >
+      <FileXIcon size={13} /> Sin comprobante
+    </span>
+  );
+}
+
 export function ResumenBar({
   items,
   cargosOrden,
@@ -3786,6 +3847,9 @@ export function ResumenBar({
   guardandoBorrador = false,
   onDescuentoOrden,
   onCuponOrden,
+  sinComprobante = false,
+  onToggleTratamientoFiscal,
+  togglingFiscal = false,
   readOnly = false,
   accionesOrden,
 }: {
@@ -3803,6 +3867,13 @@ export function ResumenBar({
   onDescuentoOrden?: () => void;
   /** Abre el modal directo en modo escaneo de cupón (F4). */
   onCuponOrden?: () => void;
+  /** Orden marcada SIN comprobante fiscal: el desglose oculta el IVA y el
+   *  total baja al neto. §6 del cuaderno de margen. */
+  sinComprobante?: boolean;
+  /** Alterna el tratamiento fiscal (FISCAL ↔ SIN_COMPROBANTE). Ausente cuando
+   *  la orden ya no admite el cambio (facturada / no editable). */
+  onToggleTratamientoFiscal?: () => void;
+  togglingFiscal?: boolean;
   readOnly?: boolean;
   /** Acciones de la OT emitida (Editar / Cancelar): van acá, no en el header,
    *  para ganar alto. Sólo en modo lectura. */
@@ -3839,12 +3910,44 @@ export function ResumenBar({
     (acc, item) => acc + descuentoMontoDeItem(item),
     0,
   );
+  // Sin comprobante: se oculta el IVA y el total cae al neto (§6 del cuaderno
+  // de margen). El neto es `subtotal` directo (products+cargos sin IVA) — no
+  // `total − IVA`, que arrastra el redondeo del IVA y descuadra 1 peso. Se
+  // cumple la identidad totalConCargos = subtotal + impuestosVisibles, y este
+  // neto coincide con el `total` que persiste el backend.
+  const impuestosMostrados = sinComprobante ? 0 : impuestosVisibles;
+  const totalMostrado = sinComprobante ? subtotal : totalConCargos;
   const brk = [
     { k: "Subtotal", v: subtotal },
     { k: "Descuento", v: -descuentoTotal },
-    { k: "Impuestos", v: impuestosVisibles },
+    { k: "Impuestos", v: impuestosMostrados },
     { k: "Cargos", v: cargos },
   ];
+
+  // Toggle "sin comprobante fiscal" (FileX). Estado, no acción de una vez:
+  // aria-pressed + relleno naranja cuando está activo. §6 cuaderno de margen.
+  const toggleFiscalBtn = onToggleTratamientoFiscal ? (
+    <button
+      type="button"
+      className="btn"
+      onClick={onToggleTratamientoFiscal}
+      disabled={togglingFiscal || items.length === 0}
+      aria-pressed={sinComprobante}
+      aria-label="Sin comprobante fiscal en el sistema"
+      title={
+        sinComprobante
+          ? "Sin comprobante fiscal en el sistema — click o tecla X para volver a fiscal"
+          : "Marcar la orden sin comprobante fiscal en el sistema (tecla X)"
+      }
+      style={
+        sinComprobante
+          ? { color: "#fff", background: "#c2410c", borderColor: "#c2410c" }
+          : { color: "#c2410c" }
+      }
+    >
+      <FileXIcon />
+    </button>
+  ) : null;
 
   // Modelo C del diseño: barra anclada al fondo del scroll, con el papel y la
   // constelación del encabezado. La lista de productos corre por detrás y el
@@ -3862,8 +3965,10 @@ export function ResumenBar({
       <span className={resumenBar.veil} />
       <div className={resumenBar.in}>
         <span className={resumenBar.tot}>
-          <span className={resumenBar.totK}>Total</span>
-          <span className={resumenBar.totV}>{fmt(totalConCargos)}</span>
+          <span className={resumenBar.totK}>
+            Total{sinComprobante ? " (sin comprobante)" : ""}
+          </span>
+          <span className={resumenBar.totV}>{fmt(totalMostrado)}</span>
         </span>
         <span className={resumenBar.brk}>
           {brk.map((c) => (
@@ -3877,11 +3982,15 @@ export function ResumenBar({
           ))}
         </span>
         {readOnly ? (
-          accionesOrden ? (
-            <span className={resumenBar.acts}>{accionesOrden}</span>
+          accionesOrden || toggleFiscalBtn ? (
+            <span className={resumenBar.acts}>
+              {toggleFiscalBtn}
+              {accionesOrden}
+            </span>
           ) : null
         ) : (
           <span className={resumenBar.acts}>
+            {toggleFiscalBtn}
             {onDescuentoOrden ? (
               <button
                 type="button"
@@ -5113,6 +5222,64 @@ export function PropuestaFicha({
       .catch(() => {});
   }, [ordenProp?.id]);
   const modoOrden = Boolean(orden);
+  // Sin comprobante fiscal (§6 cuaderno de margen). En creación es estado de
+  // cliente que viaja en el payload de crear; en una OT persistida se sincroniza
+  // desde el flag y se alterna vía endpoint.
+  const [sinComprobante, setSinComprobante] = React.useState(
+    ordenProp?.tratamientoFiscal === "SIN_COMPROBANTE",
+  );
+  React.useEffect(() => {
+    if (orden) setSinComprobante(orden.tratamientoFiscal === "SIN_COMPROBANTE");
+  }, [orden]);
+  const [togglingFiscal, setTogglingFiscal] = React.useState(false);
+  const toggleTratamientoFiscal = React.useCallback(async () => {
+    const siguiente = sinComprobante ? "FISCAL" : "SIN_COMPROBANTE";
+    if (orden?.id) {
+      setTogglingFiscal(true);
+      try {
+        const actualizada = await setTratamientoFiscalOrden(orden.id, siguiente);
+        setOrden(actualizada);
+        setSinComprobante(siguiente === "SIN_COMPROBANTE");
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo cambiar el tratamiento fiscal.",
+        );
+      } finally {
+        setTogglingFiscal(false);
+      }
+    } else {
+      setSinComprobante((v) => !v);
+    }
+  }, [orden?.id, sinComprobante]);
+  const puedeToggleFiscal =
+    !modoOrden ||
+    (orden ? ["borrador", "pendiente"].includes(orden.estado) : false);
+  // Atajo de teclado: X alterna sin comprobante, para quien prefiere no ir al
+  // botón. Se ignora mientras se escribe (input/textarea/select/editable) y con
+  // modificadoras (no pisar Ctrl/Cmd+X).
+  React.useEffect(() => {
+    if (!puedeToggleFiscal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "x" && e.key !== "X") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        el?.isContentEditable
+      )
+        return;
+      if (togglingFiscal) return;
+      e.preventDefault();
+      void toggleTratamientoFiscal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [puedeToggleFiscal, togglingFiscal, toggleTratamientoFiscal]);
   // null hasta que el tab de Archivos se abre y los cuenta: la pestaña no
   // muestra badge mientras no sepa el número real.
   const [archivosCount, setArchivosCount] = React.useState<number | null>(null);
@@ -5179,10 +5346,12 @@ export function PropuestaFicha({
           ]
         : [],
   );
-  const totalPropuesta = React.useMemo(
-    () => calcularResumenOrden(items, cargosOrden).total,
-    [items, cargosOrden],
-  );
+  const totalPropuesta = React.useMemo(() => {
+    const r = calcularResumenOrden(items, cargosOrden);
+    // Sin comprobante: el saldo a cobrar es el neto, sin IVA (§6 cuaderno de
+    // margen) — así los Pagos no muestran una deuda inflada con impuestos.
+    return sinComprobante ? r.total - r.impuestos : r.total;
+  }, [items, cargosOrden, sinComprobante]);
   const [addOpen, setAddOpen] = React.useState(false);
   const [copiadoOpen, setCopiadoOpen] = React.useState(false);
   // Módulo activo (config del tenant): esconde el botón/atajo si está pausado.
@@ -6243,6 +6412,7 @@ export function PropuestaFicha({
         fechaEntrega,
         canalVenta,
         cargosDirectos: resumen.cargosTotal,
+        tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),
         ),
@@ -6343,6 +6513,7 @@ export function PropuestaFicha({
         fechaEntrega: fechaEntrega || undefined,
         canalVenta,
         cargosDirectos: resumen.cargosTotal,
+        tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),
         ),
@@ -7024,6 +7195,7 @@ export function PropuestaFicha({
                 {orden.numero}
               </span>
               <EstadoOtBadge estado={orden.estado} />
+              {sinComprobante ? <ChipSinComprobante /> : null}
               {mostrarRecienEmitida ? (
                 <span className="otd-new-tag-lg">RECIÉN EMITIDA</span>
               ) : null}
@@ -7035,6 +7207,7 @@ export function PropuestaFicha({
                 <span className="d" />
                 Borrador
               </span>
+              {sinComprobante ? <ChipSinComprobante /> : null}
             </h1>
           )}
           {/* En una OT emitida el cliente ya está en su card y el producto en
@@ -7294,13 +7467,20 @@ export function PropuestaFicha({
         <div className={resumenBar.scroll}>
         {tab === "productos" ? (
           <div className="orden-table">
-            <div className="ohead">
+            <div
+              className="ohead"
+              style={
+                sinComprobante
+                  ? { gridTemplateColumns: ORDEN_COLS_SIN_IMP }
+                  : undefined
+              }
+            >
               <span className="ix">#</span>
               <span className="chev" />
               <span className="prod">Producto</span>
               <span className="num qty">Cantidad</span>
               <span className="num">Subtotal</span>
-              <span className="num">Imp.</span>
+              {sinComprobante ? null : <span className="num">Imp.</span>}
               <span className="num">Unitario</span>
               <span className="num">Total</span>
               <span className="x" />
@@ -7342,6 +7522,7 @@ export function PropuestaFicha({
                   <ProductRow
                     item={item}
                     index={index}
+                    sinComprobante={sinComprobante}
                     expanded={openIds.has(item.id)}
                     etaSistema={demoraPorItem?.get(item.id) ?? null}
                     margenEtaDias={margenEtaDias}
@@ -7498,12 +7679,14 @@ export function PropuestaFicha({
                 total={orden.total}
                 ordenId={orden.id}
                 puedeCobrar={orden.estado !== "borrador"}
+                sinComprobante={orden.tratamientoFiscal === "SIN_COMPROBANTE"}
               />
             </div>
           ) : (
             <div className="otd-page" style={{ padding: 0 }}>
               <PagosStagingTab
                 total={totalPropuesta}
+                sinComprobante={sinComprobante}
                 cobros={cobrosStaged}
                 onAgregar={(draft) =>
                   setCobrosStaged((prev) => [...prev, draft])
@@ -7551,6 +7734,7 @@ export function PropuestaFicha({
             items={items}
             cargosOrden={cargosOrden}
             ordenId={orden?.id}
+            sinComprobante={sinComprobante}
           />
         ) : null}
         {tab === "historial" && orden ? (
@@ -7619,6 +7803,11 @@ export function PropuestaFicha({
                       cupon: true,
                     })
             }
+            sinComprobante={sinComprobante}
+            onToggleTratamientoFiscal={
+              puedeToggleFiscal ? toggleTratamientoFiscal : undefined
+            }
+            togglingFiscal={togglingFiscal}
             readOnly={modoOrden}
             accionesOrden={
               modoOrden &&

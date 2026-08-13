@@ -303,6 +303,7 @@ export function PagosTab({
   total,
   ordenId,
   puedeCobrar = true,
+  sinComprobante = false,
 }: {
   pago: OrdenTrabajoPago | null;
   total: number;
@@ -310,6 +311,8 @@ export function PagosTab({
   ordenId?: string | null;
   /** false en borradores: un borrador no puede recibir plata (se emite primero). */
   puedeCobrar?: boolean;
+  /** Orden sin comprobante fiscal: el total es neto (§6). */
+  sinComprobante?: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
@@ -387,7 +390,9 @@ export function PagosTab({
           <div className="pk">
             <span className="pk-l">Total de la orden</span>
             <span className="pk-v">{formatMonedaOrden(total, moneda)}</span>
-            <span className="pk-s">c/ impuestos</span>
+            <span className="pk-s">
+              {sinComprobante ? "sin comprobante" : "c/ impuestos"}
+            </span>
           </div>
           <div className="pk pk-ok">
             <span className="pk-l">Cobrado</span>
@@ -613,7 +618,9 @@ export function PagosTab({
         <div className="pk">
           <span className="pk-l">Total de la orden</span>
           <span className="pk-v">{formatMonedaOrden(total, moneda)}</span>
-          <span className="pk-s">c/ impuestos</span>
+          <span className="pk-s">
+            {sinComprobante ? "sin comprobante" : "c/ impuestos"}
+          </span>
         </div>
         <div className="pk pk-ok">
           <span className="pk-l">Cobrado</span>
@@ -934,7 +941,11 @@ export function OrdenTrabajoDetalleView({
         </div>
 
         {tab === "pagos" ? (
-          <PagosTab pago={orden.pago} total={total} />
+          <PagosTab
+            pago={orden.pago}
+            total={total}
+            sinComprobante={orden.tratamientoFiscal === "SIN_COMPROBANTE"}
+          />
         ) : (
           <div className="otd-grid">
             <div className="otd-main">

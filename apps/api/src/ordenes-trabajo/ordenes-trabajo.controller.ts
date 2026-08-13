@@ -21,6 +21,7 @@ import {
   CrearOrdenTrabajoDto,
   CrearOrdenTrabajoItemDto,
   EditarOrdenTrabajoDto,
+  TratamientoFiscalDto,
 } from './dto/crear-orden-trabajo.dto';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import {
@@ -232,6 +233,25 @@ export class OrdenesTrabajoController {
     @Body() payload: EditarOrdenTrabajoDto,
   ) {
     return this.ordenesTrabajoService.editar(auth, id, payload);
+  }
+
+  /**
+   * Enciende/apaga el tratamiento SIN comprobante fiscal de la orden. Es una
+   * decisión de precio (misma llave que el descuento), por eso
+   * `comercial.gestionar`. Ver docs/margen-y-decisiones-de-precio.md §6.
+   */
+  @Permiso('comercial.gestionar')
+  @Patch(':id/tratamiento-fiscal')
+  setTratamientoFiscal(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: TratamientoFiscalDto,
+  ) {
+    return this.ordenesTrabajoService.setTratamientoFiscal(
+      auth,
+      id,
+      payload.tratamientoFiscal,
+    );
   }
 
   @Permiso('comercial.gestionar')

@@ -770,7 +770,7 @@ export class OrdenesTrabajoService {
     }
 
     const subtotal = payload.items.reduce((s, i) => s + i.subtotal, 0);
-    const impuestos = payload.items.reduce((s, i) => s + i.impuestos, 0);
+    const impuestosItems = payload.items.reduce((s, i) => s + i.impuestos, 0);
     const cargosDirectos = payload.cargosDirectos ?? 0;
     // Denormalizado para el listado. El descuento YA está dentro de `subtotal`
     // de cada item (el neto persistido es el descontado), no se resta de nuevo.
@@ -778,6 +778,11 @@ export class OrdenesTrabajoService {
       (s, i) => s + (i.descuentoMonto ?? 0),
       0,
     );
+    // Sin comprobante: el desglose oculta el IVA y `total` = neto + cargos.
+    // Ver docs/margen-y-decisiones-de-precio.md §6.
+    const tratamientoFiscal = payload.tratamientoFiscal ?? 'FISCAL';
+    const impuestos =
+      tratamientoFiscal === 'SIN_COMPROBANTE' ? 0 : impuestosItems;
     const total = subtotal + impuestos + cargosDirectos;
     const vendedorEmpleadoId = payload.vendedorEmpleadoId ?? emisor?.id ?? null;
     const usuarioNombre = firmaActor(
@@ -818,6 +823,7 @@ export class OrdenesTrabajoService {
           cargosDirectos,
           descuentoTotal,
           total,
+          tratamientoFiscal,
           items: {
             create: payload.items.map((item, indice) => ({
               tenantId: auth.tenantId,
@@ -1152,6 +1158,87 @@ export class OrdenesTrabajoService {
     };
   }
 
+  /**
+   * Cambia el tratamiento fiscal de la orden (FISCAL ↔ SIN_COMPROBANTE) y
+   * recalcula sus denormalizados. SIN_COMPROBANTE oculta el IVA del desglose,
+   * deja `total` = neto y saca la orden de la cola de facturar.
+   *
+   * Candado de ciclo de vida: sólo en borrador/pendiente y si la orden NO
+   * tiene facturación emitida — no se des-factura marcando "sin comprobante".
+   * Ver docs/margen-y-decisiones-de-precio.md §6.
+   */
+  async setTratamientoFiscal(
+    auth: CurrentAuth,
+    id: string,
+    tratamientoFiscal: 'FISCAL' | 'SIN_COMPROBANTE',
+  ) {
+    const [orden, actor] = await Promise.all([
+      this.prisma.ordenTrabajo.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        select: {
+          id: true,
+          estado: true,
+          tratamientoFiscal: true,
+          cargosDirectos: true,
+          facturadoTotal: true,
+        },
+      }),
+      this.prisma.empleado.findFirst({
+        where: { tenantId: auth.tenantId, userId: auth.userId },
+        select: { nombreCompleto: true },
+      }),
+    ]);
+    if (!orden) {
+      throw new NotFoundException('No se encontró la orden de trabajo.');
+    }
+    if (orden.tratamientoFiscal === tratamientoFiscal) {
+      return this.findOne(auth, id);
+    }
+    if (!['borrador', 'pendiente'].includes(orden.estado)) {
+      throw new BadRequestException(
+        'El tratamiento fiscal sólo se cambia con la orden en borrador o pendiente.',
+      );
+    }
+    if (
+      tratamientoFiscal === 'SIN_COMPROBANTE' &&
+      Number(orden.facturadoTotal) > 0.01
+    ) {
+      throw new BadRequestException(
+        'La orden ya tiene facturación emitida: no se puede marcar sin comprobante. Anulá la factura con una nota de crédito primero.',
+      );
+    }
+
+    const usuarioNombre = firmaActor(auth, actor?.nombreCompleto ?? auth.email);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ordenTrabajo.update({
+        where: { id },
+        data: { tratamientoFiscal },
+      });
+      // Recalcula total/impuestos leyendo el flag recién guardado.
+      await this.recalcularTotales(
+        tx,
+        id,
+        Number(orden.cargosDirectos ?? 0),
+      );
+      await tx.ordenTrabajoEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          ordenId: id,
+          tipo: 'tratamiento_fiscal',
+          descripcion:
+            tratamientoFiscal === 'SIN_COMPROBANTE'
+              ? 'Marcada sin comprobante fiscal en el sistema'
+              : 'Marcada con comprobante fiscal (tratamiento fiscal normal)',
+          usuarioNombre,
+          usuarioId: auth.userId,
+          origen: 'usuario',
+          datosJson: { tratamientoFiscal },
+        },
+      });
+    });
+    return this.findOne(auth, id);
+  }
+
   /** Recalcula los denormalizados de la orden a partir de sus items. */
   private async recalcularTotales(
     tx: Prisma.TransactionClient,
@@ -1163,15 +1250,20 @@ export class OrdenesTrabajoService {
       _sum: { subtotal: true, impuestos: true, descuentoMonto: true },
     });
     const subtotal = Number(agregado._sum.subtotal ?? 0);
-    const impuestos = Number(agregado._sum.impuestos ?? 0);
+    const impuestosItems = Number(agregado._sum.impuestos ?? 0);
     const descuentoTotal = Number(agregado._sum.descuentoMonto ?? 0);
-    const total = subtotal + impuestos + cargosDirectos;
     // El total no puede quedar por debajo de lo ya FACTURADO: antes hay
     // que anular la factura o emitir una nota de crédito.
     const actual = await tx.ordenTrabajo.findUniqueOrThrow({
       where: { id: ordenId },
-      select: { facturadoTotal: true, tenantId: true },
+      select: { facturadoTotal: true, tenantId: true, tratamientoFiscal: true },
     });
+    // Sin comprobante: el desglose oculta el IVA y `total` = neto + cargos.
+    // Los snapshots de ítem no se tocan (impuestosItems sigue siendo su IVA);
+    // sólo cae el denormalizado de la orden. Ver §6 del cuaderno de margen.
+    const sinComprobante = actual.tratamientoFiscal === 'SIN_COMPROBANTE';
+    const impuestos = sinComprobante ? 0 : impuestosItems;
+    const total = subtotal + impuestos + cargosDirectos;
     if (total < Number(actual.facturadoTotal) - 0.01) {
       const { moneda } = await regionalDelTenant(this.prisma, actual.tenantId);
       const dinero = (n: number) =>
@@ -3420,6 +3512,10 @@ export class OrdenesTrabajoService {
       observaciones: orden.observaciones,
       canalVenta: (orden as { canalVenta?: string | null }).canalVenta ?? null,
       cargosDirectos: Number(orden.cargosDirectos ?? 0),
+      // Tratamiento fiscal: FISCAL | SIN_COMPROBANTE (§6 cuaderno de margen).
+      tratamientoFiscal:
+        (orden as { tratamientoFiscal?: string | null }).tratamientoFiscal ??
+        'FISCAL',
       // Token del link público de seguimiento (para "Compartir" desde el staff).
       publicToken:
         (orden as { publicToken?: string | null }).publicToken ?? null,

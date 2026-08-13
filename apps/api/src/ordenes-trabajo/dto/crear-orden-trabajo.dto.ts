@@ -158,6 +158,12 @@ export class CrearOrdenTrabajoDto {
   @Min(0)
   cargosDirectos?: number;
 
+  /** Sin comprobante fiscal desde el vamos (mostrador). Default FISCAL.
+   *  Ver docs/margen-y-decisiones-de-precio.md §6. */
+  @IsOptional()
+  @IsIn(['FISCAL', 'SIN_COMPROBANTE'])
+  tratamientoFiscal?: 'FISCAL' | 'SIN_COMPROBANTE';
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CrearOrdenTrabajoItemDto)
@@ -228,4 +234,9 @@ export class CambiarEstadoOrdenTrabajoDto {
   @Min(0)
   @Max(100)
   progresoPct?: number;
+}
+
+export class TratamientoFiscalDto {
+  @IsIn(['FISCAL', 'SIN_COMPROBANTE'])
+  tratamientoFiscal: 'FISCAL' | 'SIN_COMPROBANTE';
 }

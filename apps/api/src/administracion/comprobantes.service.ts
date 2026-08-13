@@ -799,6 +799,7 @@ export class ComprobantesService {
         total: true,
         facturadoTotal: true,
         descuentoTotal: true,
+        tratamientoFiscal: true,
         items: {
           orderBy: { ordenIndice: 'asc' },
           select: {
@@ -812,6 +813,14 @@ export class ComprobantesService {
       },
     });
     if (!orden) throw new NotFoundException('La orden no existe.');
+    // Candado: una orden marcada sin comprobante no se factura, aunque el
+    // pedido venga de un lote o de un POST directo (la cola ya la filtra).
+    // Ver docs/margen-y-decisiones-de-precio.md §6.
+    if (orden.tratamientoFiscal === 'SIN_COMPROBANTE') {
+      throw new BadRequestException(
+        'La orden está marcada sin comprobante fiscal en el sistema. Quitá esa marca desde la ficha para poder emitirle factura.',
+      );
+    }
     if (orden.estado === 'borrador') {
       throw new BadRequestException(
         'No se puede facturar una orden en borrador: emitila primero.',
@@ -1004,12 +1013,25 @@ export class ComprobantesService {
         clienteId: true,
         total: true,
         facturadoTotal: true,
+        tratamientoFiscal: true,
       },
     });
     const porId = new Map(ordenes.map((o) => [o.id, o]));
     const faltantes = payload.ordenIds.filter((id) => !porId.has(id));
     if (faltantes.length > 0) {
       throw new BadRequestException('Hay órdenes que no existen en el lote.');
+    }
+    // Candado (también acá porque la 'agrupada' no pasa por facturarOrden).
+    // Ver docs/margen-y-decisiones-de-precio.md §6.
+    const sinComprobante = ordenes.filter(
+      (o) => o.tratamientoFiscal === 'SIN_COMPROBANTE',
+    );
+    if (sinComprobante.length > 0) {
+      throw new BadRequestException(
+        `Hay órdenes sin comprobante fiscal en el lote (${sinComprobante
+          .map((o) => o.numero)
+          .join(', ')}): no se pueden facturar.`,
+      );
     }
 
     if (payload.modo === 'agrupada') {

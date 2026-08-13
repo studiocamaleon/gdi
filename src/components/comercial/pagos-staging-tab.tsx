@@ -23,11 +23,14 @@ export function PagosStagingTab({
   cobros,
   onAgregar,
   onQuitar,
+  sinComprobante = false,
 }: {
   total: number;
   cobros: CobroDraft[];
   onAgregar: (draft: CobroDraft) => void;
   onQuitar: (index: number) => void;
+  /** Orden sin comprobante fiscal: el total mostrado es neto (§6). */
+  sinComprobante?: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const [metodos, setMetodos] = React.useState<MetodoPago[] | null>(null);
@@ -72,7 +75,9 @@ export function PagosStagingTab({
         <div className="pk">
           <span className="pk-l">Total propuesta</span>
           <span className="pk-v">{formatMonedaOrden(total, moneda)}</span>
-          <span className="pk-s">c/ impuestos</span>
+          <span className="pk-s">
+            {sinComprobante ? "sin comprobante" : "c/ impuestos"}
+          </span>
         </div>
         <div className={`pk ${cobros.length > 0 ? "pk-ok" : ""}`}>
           <span className="pk-l">A registrar al emitir</span>
