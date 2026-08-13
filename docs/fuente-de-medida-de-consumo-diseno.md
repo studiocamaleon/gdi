@@ -128,13 +128,29 @@ Reemplaza a: el `fuentePiezasMontaje` (sólo montaje), la herencia cableada
 
 ## 8. Decisiones abiertas
 
-- **¿Por paso o por slot?** Un paso puede consumir varios materiales con medidas
-  distintas (la cenefa: chapa por tiras; la impresión: lona por pieza). Propuesta:
-  fuente **a nivel slot**, con un default a nivel paso para el caso común.
-- **¿La fuente alimenta también el TIEMPO?** Muchas veces sí (la cenefa: las
-  tiras dan el consumo Y las uniones/cortes). Hay que decidir si "fuente de
-  medida" es una sola o si consumo y tiempo pueden tener fuentes distintas
-  (hoy `productivityQuantitySource` es aparte — ver `perimetro_visible`).
+- ~~**¿Por paso o por slot?**~~ **CERRADO (2026-08-13): por slot, con default a
+  nivel paso.** No alcanza "sólo por paso": un paso puede tener slots con medidas
+  distintas, y **ya pasa** — el bastidor declara `magnitudDerivada: 'mlTotal'` en
+  `perfil_estructural` y `'anclajes'` en `anclaje` (`familias.ts`). Tampoco "sólo
+  por slot": sería verboso cuando los slots comparten medida (lona + tintas miden
+  sobre el área impresa). Resolución: el **paso declara su medida principal**
+  (`magnitudPrincipal` = la "cantidad del paso", el default que heredan los
+  slots) y **cada slot puede override** cuando necesita otra. Calza con lo que ya
+  existe (`magnitudPrincipal` a nivel paso, `magnitudDerivada` a nivel slot):
+  formaliza la granularidad que el sistema ya usa a medias, no inventa una nueva.
+- ~~**¿La fuente alimenta también el TIEMPO?**~~ **CERRADO (2026-08-13):
+  comparten la FUENTE, extraen magnitudes DISTINTAS.** No es un valor único para
+  los dos (la cenefa consume ÁREA de chapa pero su tiempo va por PERÍMETRO/
+  uniones; el bastidor consume `mlTotal` pero su tiempo va por `cortes`/
+  `puntosSoldadura`) ni son fuentes independientes (ambas salen de la misma
+  geometría). Un mismo source, dos formas. **Ya es así** en las familias con
+  derivador: el slot declara `magnitudDerivada` (consumo) y el paso ofrece
+  `magnitudesTiempo` (tiempo), ambas del mismo derivador. Resolución: la fuente
+  de medida es **una** (elegida a nivel paso, +override por slot para el
+  consumo); el **tiempo mantiene su driver** (`productivityQuantitySource`) pero
+  por default extrae una magnitud de esa misma fuente, y sus opciones se arman de
+  ahí. **Excepción:** slots de **cantidad fija** (fuente sin medida, ej. la
+  fuente LED = 1) — ahí consumo y tiempo divergen legítimamente.
 - **Nombres humanos de los outputs**: el selector necesita etiquetas legibles
   por output ("Interior del bastidor", no `interiorMm`).
 - **Compatibilidad por forma**: cómo se declara qué forma consume cada familia y
