@@ -151,8 +151,18 @@ La prueba de fuego y primer PR del modelo:
 
 Si eso cierra limpio, valida el modelo antes de generalizar la declaración.
 
+**Estado: IMPLEMENTADO (2026-08-13).** `conLonaBrutaSiExiste` en el dispatch de
+rollo (`nesting-dispatcher.ts`): si un bastidor publicó `lonaBrutaMm`, la
+impresión imprime esa pieza sin mutar el `piezas` global. Enganchado (spec
+end-to-end: con `lonaBrutaMm` la impresión consume más rollo) y **price-safe**
+(golden master IDÉNTICO: la lona bruta del backlight = la demasía de tensado
+vieja, ambas visible+10cm). **Pendiente (cleanup, price-neutral):** retirar la
+demasía del paso Tensado —hoy sigue creciendo `piezas` que la impresión ya no
+lee—; es config de ruta (DB), no código.
+
 ## 9. Bitácora
 
 | Fecha | Qué se analizó |
 |---|---|
 | 2026-08-13 | Modelo inicial: efecto entre pasos con dirección (post/pre) resuelta por posición en la ruta; mapeo de los 3 mecanismos actuales como instancias; el matiz POST-no-muta-`piezas`; casos de referencia; primera aplicación = lona POST del backlight. Sin código. |
+| 2026-08-13 | Lona-POST IMPLEMENTADA: `conLonaBrutaSiExiste` en el dispatch de rollo. Enganchado (spec) + price-safe (golden idéntico). Falta retirar la demasía redundante del Tensado (config de ruta). |

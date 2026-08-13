@@ -640,3 +640,47 @@ describe('runNestingForPaso montaje sobre sustrato', () => {
     expect(result!.piezasAcomodadas).toBe(4);
   });
 });
+
+describe('lona bruta (efecto POST del bastidor)', () => {
+  // La impresión de un cartel con bastidor debe imprimir la LONA BRUTA que el
+  // bastidor publicó (visible + demasía de agarre), no la pieza visible.
+  // docs/efectos-entre-pasos-diseno.md §8.
+  const piezaVisible = [{ anchoMm: 500, altoMm: 500, cantidad: 1 }];
+
+  it('imprime la lonaBrutaMm publicada, no la pieza visible', async () => {
+    const sinBruta = await runNestingForPaso(
+      buildPaso('shelf-rollo') as never,
+      { cantidad: 1, piezas: piezaVisible },
+      material,
+    );
+    const conBruta = await runNestingForPaso(
+      buildPaso('shelf-rollo') as never,
+      {
+        cantidad: 1,
+        piezas: piezaVisible,
+        lonaBrutaMm: { anchoMm: 1000, altoMm: 1000 },
+      },
+      material,
+    );
+    expect(sinBruta).not.toBeNull();
+    expect(conBruta).not.toBeNull();
+    // 1000×1000 consume más rollo que 500×500: el efecto POST está enganchado.
+    expect(conBruta!.cantidadCalculada).toBeGreaterThan(
+      sinBruta!.cantidadCalculada,
+    );
+  });
+
+  it('sin lonaBrutaMm publicada, imprime la pieza de siempre (no-op)', async () => {
+    const a = await runNestingForPaso(
+      buildPaso('shelf-rollo') as never,
+      { cantidad: 1, piezas: piezaVisible },
+      material,
+    );
+    const b = await runNestingForPaso(
+      buildPaso('shelf-rollo') as never,
+      { cantidad: 1, piezas: piezaVisible },
+      material,
+    );
+    expect(a!.cantidadCalculada).toBe(b!.cantidadCalculada);
+  });
+});

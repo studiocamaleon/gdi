@@ -259,7 +259,12 @@ async function despacharNesting(
       ? resolverSuperficieDinamica(config, materialResuelto)
       : declaracion.superficie;
   if (superficie === 'rollo') {
-    return runShelfRollo(paso, jobContext, materialResuelto, config);
+    return runShelfRollo(
+      paso,
+      conLonaBrutaSiExiste(jobContext),
+      materialResuelto,
+      config,
+    );
   }
   // Hoja/placa finita: la medida sale del material del slot (o de la mesa de
   // la máquina) vía resolveNestingConfig. Piezas uniformes caen solas a
@@ -513,6 +518,30 @@ export function partirPiezasEnPanosDeHoja(
  * [Etapa A: eran dos tablas de claves cableadas, una acá y otra en
  * runLaminadoRollo, que hacían lo mismo]
  */
+/**
+ * Efecto POST de la lona: si un bastidor aguas arriba publicó `lonaBrutaMm`
+ * (la lona con la demasía de agarre — docs/efectos-entre-pasos-diseno.md §8), la
+ * impresión imprime ESA pieza, no la medida visible ni las `piezas` que la
+ * demasía de tensado agrandó. Reemplaza las dimensiones conservando la cantidad
+ * de carteles y **no muta el jobContext global** (regla de oro): las demás
+ * piezas siguen midiendo lo visible. Sin bastidor que la publique → no-op.
+ */
+function conLonaBrutaSiExiste(jobContext: JobContext): JobContext {
+  const bruta = jobContext.lonaBrutaMm;
+  const piezas = jobContext.piezas ?? [];
+  if (!bruta || !(bruta.anchoMm > 0) || !(bruta.altoMm > 0) || piezas.length === 0) {
+    return jobContext;
+  }
+  return {
+    ...jobContext,
+    piezas: piezas.map((p) => ({
+      ...p,
+      anchoMm: bruta.anchoMm,
+      altoMm: bruta.altoMm,
+    })),
+  };
+}
+
 function buildJobContextPiezas(
   paso: PasoCargado,
   jobContext: JobContext,
