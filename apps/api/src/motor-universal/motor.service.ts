@@ -6263,6 +6263,27 @@ export class MotorUniversalService {
       );
     }
 
+    // Perímetro VISIBLE completo (los 4 lados) como driver del tiempo, SIN
+    // depender de un efecto de demasía. Lo usa el Tensado tras el cleanup: la
+    // demasía de la lona pasó al bastidor (efecto POST), y el tensado se cobra
+    // por el perímetro que se tensa —la medida terminada—, no por la demasía.
+    // docs/efectos-entre-pasos-diseno.md §8.
+    if (source === 'perimetro_visible') {
+      return (
+        this.numeroPositivo(
+          calcularMetrosLinealesUnion(jobContext, {
+            lados: ['superior', 'inferior', 'izquierdo', 'derecho'],
+          }),
+        ) ??
+        this.resolverCantidad(
+          paso,
+          jobContext,
+          nestingDispatch,
+          materialResuelto,
+        )
+      );
+    }
+
     // Impresión 3D: la magnitud son los GRAMOS de material, no el área ni la
     // caja de la pieza (dos piezas iguales por fuera consumen muy distinto
     // según relleno y paredes). Los gramos por pieza los declara el paso y

@@ -113,3 +113,17 @@ describe('fuente de cantidad perimetro_lados_efecto', () => {
     expect(cantidad).toBe(7);
   });
 });
+
+describe('fuente de cantidad perimetro_visible (cleanup del Tensado)', () => {
+  it('mide el perímetro VISIBLE completo SIN depender de un efecto de demasía', () => {
+    const cantidad = createService().resolverCantidadProductividadPropia(
+      // Sin `efectos`: el Tensado ya no declara la demasía (la posee el
+      // bastidor). El tiempo sale del perímetro que se tensa = el visible.
+      paso({ productivityQuantitySource: 'perimetro_visible' }),
+      lona(),
+    );
+    // 2 × (2,00 + 1,00) = 6,00 m visibles — el mismo valor que daba
+    // perimetro_lados_efecto con los 4 lados, así el cleanup no mueve precios.
+    expect(cantidad).toBeCloseTo(6, 6);
+  });
+});

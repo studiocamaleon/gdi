@@ -156,9 +156,19 @@ rollo (`nesting-dispatcher.ts`): si un bastidor publicó `lonaBrutaMm`, la
 impresión imprime esa pieza sin mutar el `piezas` global. Enganchado (spec
 end-to-end: con `lonaBrutaMm` la impresión consume más rollo) y **price-safe**
 (golden master IDÉNTICO: la lona bruta del backlight = la demasía de tensado
-vieja, ambas visible+10cm). **Pendiente (cleanup, price-neutral):** retirar la
-demasía del paso Tensado —hoy sigue creciendo `piezas` que la impresión ya no
-lee—; es config de ruta (DB), no código.
+vieja, ambas visible+10cm).
+
+**Cleanup del Tensado HECHO (2026-08-13).** Hallazgo: la demasía del Tensado NO
+era pura redundancia — su `mm` crecía la lona (ahora inerte), pero sus `lados`
+alimentaban el TIEMPO del propio Tensado (`productivityQuantitySource:
+perimetro_lados_efecto`, que lee el efecto). Cleanup limpio: se agregó la fuente
+`perimetro_visible` (perímetro visible completo, sin leer ningún efecto —
+motor.service.ts), se cambió el Tensado a esa fuente y se **retiró la demasía**.
+Golden master **IDÉNTICO** (el perímetro visible = el de los 4 lados). Ahora la
+demasía de la lona tiene **una sola fuente** (el bastidor). **Deploy:** la
+reconfig del paso Tensado es data de ruta — en dev ya está; otros entornos
+necesitan la misma (fuente `perimetro_visible` + sin `efectos.demasiaMedida`),
+idealmente por migración/seed.
 
 ## 9. Bitácora
 
