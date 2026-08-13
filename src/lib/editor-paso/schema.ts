@@ -109,6 +109,13 @@ export interface PasoVecino {
    *  Lo usa el arrastre: un OBLIGATORIO corre igual — tildarlo no cambia
    *  nada — y un NO_EJECUTAR no corre nunca; ninguno de los dos se ofrece. */
   modoActivacion?: string | null;
+  /** Orden del vecino en la ruta (para distinguir aguas arriba/abajo). */
+  orden?: number | null;
+  /** Outputs GEOMÉTRICOS que publica el vecino (bastidor → tiras de cenefa,
+   *  chapa de fondo…). Se puebla SÓLO para pasos anteriores; es la fuente de
+   *  medida que un paso de montaje puede consumir. Paridad con el detallado.
+   *  Ver docs/fuente-de-medida-de-consumo-diseno.md §6. */
+  outputsGeometricos?: Array<{ key: string; etiqueta: string }>;
 }
 
 /** Declaración del slot en la familia (subset de slotsRequeridos). */
@@ -434,6 +441,29 @@ export function pasosArrastrables(ctx: ContextoOpcion): PasoVecino[] {
       (p.modoActivacion !== "OBLIGATORIO" &&
         p.modoActivacion !== "NO_EJECUTAR"),
   );
+}
+
+/** Fuentes de "Qué monta" para un paso de montaje: las fijas
+ *  (MONTAJE_SOURCE_OPTIONS) MÁS los outputs GEOMÉTRICOS que publican los pasos
+ *  anteriores (bastidor → tiras de cenefa, chapa de fondo…). Paridad Guiado ↔
+ *  Detallado. docs/fuente-de-medida-de-consumo-diseno.md §6. */
+export function opcionesPiezasMontar(
+  ctx: ContextoOpcion,
+): Array<{ value: string; label: string; descripcion?: string }> {
+  return [
+    ...MONTAJE_SOURCE_OPTIONS.map((o) => ({
+      value: o.value,
+      label: o.label,
+      descripcion: o.description,
+    })),
+    ...ctx.otrosPasos.flatMap((p) =>
+      (p.outputsGeometricos ?? []).map((o) => ({
+        value: `output:${o.key}`,
+        label: `${o.etiqueta} · ${p.nombre}`,
+        descripcion: `Mide sobre "${o.etiqueta}" que publica el paso "${p.nombre}".`,
+      })),
+    ),
+  ];
 }
 
 /** El valor del tiempo fijo, unificando los dos storages históricos:
@@ -1746,9 +1776,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       const valor = String(
         ctx.paramsPaso.fuentePiezasMontaje ?? "piezas_jobcontext",
       );
-      return (
-        MONTAJE_SOURCE_OPTIONS.find((o) => o.value === valor)?.label ?? valor
-      );
+      return opcionesPiezasMontar(ctx).find((o) => o.value === valor)?.label ??
+        valor;
     },
     origenValor: (ctx) =>
       typeof ctx.paramsPaso.fuentePiezasMontaje === "string"
@@ -1756,12 +1785,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "default-paso",
     control: {
       tipo: "pills",
-      opciones: () =>
-        MONTAJE_SOURCE_OPTIONS.map((o) => ({
-          value: o.value,
-          label: o.label,
-          descripcion: o.description,
-        })),
+      opciones: (ctx) => opcionesPiezasMontar(ctx),
       valor: (ctx) =>
         String(ctx.paramsPaso.fuentePiezasMontaje ?? "piezas_jobcontext"),
       aplicar: (_ctx, v) => ({

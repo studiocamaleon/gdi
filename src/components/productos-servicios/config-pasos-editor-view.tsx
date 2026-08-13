@@ -12551,6 +12551,16 @@ function SeccionesEsquemaPaso({
               id: p.id,
               nombre: p.nombre,
               modoActivacion: p.modoActivacion ?? null,
+              orden: p.orden,
+              // Outputs geométricos SÓLO de pasos anteriores (aguas arriba): la
+              // fuente de medida del montaje mide algo ya publicado. Paridad
+              // con el detallado (docs/fuente-de-medida-de-consumo-diseno.md §6).
+              outputsGeometricos:
+                p.orden != null &&
+                pasoActual.orden != null &&
+                p.orden < pasoActual.orden
+                  ? (familiasMap.get(p.familiaCodigo)?.outputsGeometricos ?? [])
+                  : [],
             })),
           // Los lookups del API traen `materiasPrimas` VACÍO (la búsqueda es
           // on-demand): los resúmenes del esquema no podían NOMBRAR el
