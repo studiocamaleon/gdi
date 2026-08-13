@@ -1,0 +1,816 @@
+/* ───────────────────────────────────────────────────────────────────────
+   Administración · Comprobante (emisión + detalle) — port 1:1 del diseño
+   Grafo V2 (admin/Comprobante.html). Prefijo acd-. Ojo: .frow3 acá es
+   1fr 1fr 1fr, distinto del de Registrar cobro (1.2fr 1fr 1fr) — por eso
+   el bloque no reusa las clases arc-.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.page {
+  --info: #1d4ed8;
+  --info-bg: #eef2ff;
+  --warn: #a16207;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+  font-size: 13.5px;
+  letter-spacing: -0.005em;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.page :global(.btn) svg {
+  width: 15px;
+  height: 15px;
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.crumb svg {
+  width: 15px;
+  height: 15px;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.head h1 {
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.head :global(.sub) {
+  color: var(--muted-text);
+  font-size: 13.5px;
+  margin-top: 3px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  overflow: hidden;
+}
+
+.cardSec {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.cardSec:last-child {
+  border-bottom: none;
+}
+
+.secT {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secT :global(.n) {
+  margin-left: auto;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  color: var(--muted-text-2);
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field > label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--ink-2);
+}
+
+.frow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.frow3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.autoNote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted-text);
+  margin-bottom: 12px;
+}
+
+.autoNote svg {
+  width: 13px;
+  height: 13px;
+  color: var(--info);
+  flex-shrink: 0;
+}
+
+/* letra sugerida */
+.letraBox {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--info-bg);
+  border: 1px solid #dbe4fb;
+  border-radius: var(--r-3);
+  padding: 13px 15px;
+}
+
+.letraBig {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--info);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.letraBox :global(.txt) {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.letraBox :global(.txt) :global(.cond) {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted-text);
+  margin-top: 2px;
+}
+
+/* items */
+.itemsT {
+  width: 100%;
+}
+
+.itTh,
+.itR {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 60px 96px 96px;
+  gap: 10px;
+  align-items: center;
+}
+
+.itTh:global(.con-quitar),
+.itR:global(.editable) {
+  grid-template-columns: minmax(0, 1fr) 60px 96px 96px 32px;
+}
+
+.itTh {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-text-2);
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+  grid-template-columns: minmax(0, 1fr) 60px 96px 96px 32px;
+}
+
+.itTh :global(.r),
+.itR :global(.r) {
+  text-align: right;
+}
+
+.itR {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.itR input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+}
+
+.itR input:hover {
+  border-color: var(--border);
+}
+
+.itR input:focus {
+  outline: none;
+  border-color: var(--ink-2);
+  background: var(--surface);
+}
+
+.itR :global(.r) input {
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+.itR :global(.desc) {
+  font-weight: 500;
+}
+
+.itRm {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted-text-2);
+  cursor: pointer;
+}
+
+.itRm:hover {
+  border-color: var(--border);
+  color: var(--danger);
+  background: var(--surface-2);
+}
+
+.itRm svg {
+  width: 14px;
+  height: 14px;
+}
+
+.itAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--info);
+  font-weight: 500;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.itAdd svg {
+  width: 14px;
+  height: 14px;
+}
+
+.fromOt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-3);
+  padding: 11px 13px;
+  margin-bottom: 14px;
+}
+
+.fromOt svg {
+  width: 16px;
+  height: 16px;
+  color: var(--info);
+  flex-shrink: 0;
+}
+
+.fromOt select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 12.5px;
+  background: var(--surface);
+}
+
+.fromOt :global(.sp) {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--muted-text);
+}
+
+/* aside totales */
+.aside {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.totCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  overflow: hidden;
+}
+
+.totCard :global(.h) {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.totCard :global(.h) :global(.lt) {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  background: var(--info-bg);
+  color: var(--info);
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.totBody {
+  padding: 12px 18px;
+}
+
+.totRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.totRow :global(.l) {
+  color: var(--muted-text);
+}
+
+.totRow :global(.v) {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.totRow:global(.iva) :global(.l) {
+  padding-left: 12px;
+  color: var(--muted-text-2);
+  font-size: 12px;
+}
+
+.totRow:global(.grand) {
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 11px;
+}
+
+.totRow:global(.grand) :global(.l) {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.totRow:global(.grand) :global(.v) {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.curLine {
+  padding: 10px 18px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.curLine select,
+.curLine input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 7px;
+  font: inherit;
+  font-size: 12px;
+  background: var(--surface);
+}
+
+.curLine input {
+  width: 70px;
+  font-family: var(--font-mono);
+}
+
+.asideActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.asideActions :global(.btn) {
+  justify-content: center;
+  padding: 11px;
+  height: auto;
+}
+
+.notaEmision {
+  font-size: 11.5px;
+  color: var(--muted-text-2);
+  padding: 0 2px;
+  line-height: 1.5;
+}
+
+/* CAE */
+.caeCard {
+  background: linear-gradient(180deg, #0d3b2e, #0a2f24);
+  border-radius: var(--r-4);
+  overflow: hidden;
+  color: #eafaf2;
+}
+
+.caeCard :global(.h) {
+  padding: 14px 18px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8fd3b6;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.caeCard :global(.h) svg {
+  width: 15px;
+  height: 15px;
+}
+
+.caeBody {
+  padding: 16px 18px;
+}
+
+.caeBody :global(.l) {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8fd3b6;
+  font-weight: 600;
+}
+
+.caeNum {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.caeVenc {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.caeVenc :global(.v) {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* CAE pendiente (provider manual) */
+.caePend {
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-4);
+  padding: 16px 18px;
+}
+
+.caePend :global(.h) {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.caePend p {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--muted-text);
+  line-height: 1.5;
+}
+
+/* detalle */
+.detailHead {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.tipoBadge {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  background: var(--info-bg);
+  color: var(--info);
+  border: 1px solid #dbe4fb;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.tipoBadge:global(.nc) {
+  background: var(--signal-bg);
+  color: var(--signal);
+  border-color: #f7ddce;
+}
+
+.tipoBadge:global(.nd) {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: #f0e0a0;
+}
+
+.detailHead :global(.num) {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 20px;
+}
+
+.detailHead :global(.meta) {
+  font-size: 13px;
+  color: var(--muted-text);
+  margin-top: 2px;
+}
+
+.detailHead :global(.meta) a {
+  color: var(--info);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.estado {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.estado :global(.d) {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.estado:global(.cae) {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.estado:global(.rech) {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.estado:global(.pend) {
+  background: var(--surface-2);
+  color: var(--muted-text);
+  border: 1px solid var(--border);
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+
+.infoGrid :global(.c) {
+  padding: 12px 15px;
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.infoGrid :global(.c):nth-child(2n) {
+  border-right: none;
+}
+
+.infoGrid :global(.c) :global(.l) {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+}
+
+.infoGrid :global(.c) :global(.v) {
+  font-weight: 500;
+  margin-top: 3px;
+}
+
+.infoGrid :global(.c) :global(.v):global(.mono) {
+  font-family: var(--font-mono);
+}
+
+.leyenda {
+  margin-top: 12px;
+  padding: 9px 12px;
+  background: var(--warn-bg);
+  border: 1px solid #f0e0a0;
+  border-radius: var(--r-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #846312;
+}
+
+/* cobros imputados */
+.cobRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.cobRow:last-of-type {
+  border-bottom: none;
+}
+
+.cobBadge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  width: 26px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted-text);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.cobRow :global(.c) {
+  font-size: 13px;
+}
+
+.cobRow :global(.c) :global(.d) {
+  font-size: 11.5px;
+  color: var(--muted-text);
+}
+
+.cobRow :global(.m) {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.saldoBox {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  margin-top: 14px;
+}
+
+.saldoBox :global(.l) {
+  font-weight: 600;
+}
+
+.saldoBox :global(.v) {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--signal);
+}
+
+.saldoBox :global(.v):global(.ok) {
+  color: var(--ok);
+}
+
+.cobradoNota {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--muted-text-2);
+  text-align: right;
+}
+
+.vacio {
+  padding: 20px 0;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 12.5px;
+}
+
+/* rechazo */
+.rechBox {
+  background: var(--danger-bg);
+  border: 1px solid #f4c9c9;
+  border-radius: var(--r-3);
+  padding: 15px 17px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.rechBox svg {
+  width: 20px;
+  height: 20px;
+  color: var(--danger);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.rechBox :global(.t) {
+  font-weight: 600;
+  color: var(--danger);
+  margin-bottom: 3px;
+}
+
+.rechBox :global(.m) {
+  font-size: 12.5px;
+  color: #7f1d1d;
+  line-height: 1.5;
+}

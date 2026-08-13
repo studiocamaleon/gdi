@@ -14,6 +14,16 @@ import {
 } from "@/lib/administracion";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { formatearMoneda } from "@/lib/moneda";
+import s from "./comprobantes.module.css";
+
+// estadoVisual().clave se vuelve clase en runtime: el lookup tiene que ser explícito
+const CLASE_ESTADO: Record<string, string> = {
+  cae: s.eCae,
+  emitido: s.eEmitido,
+  borrador: s.eBorrador,
+  rechazado: s.eRechazado,
+  anulado: s.eAnulado,
+};
 
 const CHIPS_ESTADO: Array<[string, string]> = [
   ["todos", "Todos"],
@@ -116,7 +126,7 @@ export function ComprobantesView({
 
   return (
     <div
-      className="acp-page"
+      className={s.page}
       style={{
         flex: 1,
         minHeight: 0,
@@ -124,8 +134,8 @@ export function ComprobantesView({
         padding: "32px 28px 90px",
       }}
     >
-      <div className="acp-wrap">
-        <div className="acp-head">
+      <div className={s.wrap}>
+        <div className={s.head}>
           <div>
             <h1>Comprobantes</h1>
             <div className="sub">
@@ -145,23 +155,23 @@ export function ComprobantesView({
           </div>
         </div>
 
-        <div className="acp-kpis">
-          <div className="acp-kpi info">
+        <div className={s.kpis}>
+          <div className={`${s.kpi} info`}>
             <div className="l">Emitidos del mes</div>
             <div className="v">{emitidas}</div>
             <div className="s">Facturas A/B/C/E</div>
           </div>
-          <div className="acp-kpi">
+          <div className={s.kpi}>
             <div className="l">Monto facturado</div>
             <div className="v">{fmt(facturado)}</div>
             <div className="s">Neto de anulados</div>
           </div>
-          <div className="acp-kpi warn">
+          <div className={`${s.kpi} warn`}>
             <div className="l">Pendiente de cobro</div>
             <div className="v">{fmt(pendiente)}</div>
             <div className="s">Saldo en comprobantes</div>
           </div>
-          <div className="acp-kpi">
+          <div className={s.kpi}>
             <div className="l">Notas de crédito</div>
             <div className="v">{ncCount}</div>
             <div className="s">Emitidas este mes</div>
@@ -169,7 +179,7 @@ export function ComprobantesView({
         </div>
 
         {data.length === 0 ? (
-          <div className="acp-empty">
+          <div className={s.empty}>
             <div className="ico">
               <FileTextIcon />
             </div>
@@ -189,13 +199,13 @@ export function ComprobantesView({
           </div>
         ) : (
           <>
-            <div className="acp-toolbar">
-              <div className="acp-chips">
+            <div className={s.toolbar}>
+              <div className={s.chips}>
                 {CHIPS_ESTADO.map(([k, l]) => (
                   <button
                     key={k}
                     type="button"
-                    className={`acp-chip ${est === k ? "on" : ""}`}
+                    className={`${s.chip} ${est === k ? "on" : ""}`}
                     onClick={() => setEst(k)}
                   >
                     {l}
@@ -203,7 +213,7 @@ export function ComprobantesView({
                   </button>
                 ))}
               </div>
-              <div className="acp-search">
+              <div className={s.search}>
                 <SearchIcon />
                 <input
                   placeholder="Cliente, CUIT, Nº, orden…"
@@ -213,25 +223,25 @@ export function ComprobantesView({
               </div>
             </div>
 
-            <div className="acp-subfilter">
+            <div className={s.subfilter}>
               <span className="lbl">Tipo</span>
               {CHIPS_TIPO.map(([k, l]) => (
                 <button
                   key={k}
                   type="button"
-                  className={`acp-tipchip ${tip === k ? "on" : ""}`}
+                  className={`${s.tipchip} ${tip === k ? "on" : ""}`}
                   onClick={() => setTip(k)}
                 >
                   {l}
                 </button>
               ))}
-              <span className="acp-tcount" style={{ marginLeft: "auto" }}>
+              <span className={s.tcount} style={{ marginLeft: "auto" }}>
                 {list.length} de {data.length} comprobantes
               </span>
             </div>
 
-            <div className="acp-tbl">
-              <div className="acp-tr acp-th">
+            <div className={s.tbl}>
+              <div className={`${s.tr} ${s.th}`}>
                 <span>Comprobante</span>
                 <span>Cliente</span>
                 <span>Orden</span>
@@ -246,19 +256,19 @@ export function ComprobantesView({
                 return (
                   <div
                     key={c.id}
-                    className="acp-tr acp-row"
+                    className={`${s.tr} ${s.row}`}
                     onClick={() =>
                       router.push(`/administracion/comprobantes/${c.id}`)
                     }
                   >
-                    <span className="acp-cmp-id">
+                    <span className={s.cmpId}>
                       {/* La LETRA, no la sigla del tipo: es lo que define el
                           tratamiento de IVA y lo primero que se busca al
                           escanear la lista. El tipo lo sigue diciendo el color
                           —y, en texto, la línea de abajo—. Mismo criterio que
                           la ficha del comprobante. */}
                       <span
-                        className={`acp-tipo-badge ${sigla.toLowerCase()}`}
+                        className={`${s.tipoBadge} ${sigla.toLowerCase()}`}
                         title={`${COMPROBANTE_TIPO_LABELS[c.tipo]} ${c.letra}`}
                       >
                         {c.letra}
@@ -270,7 +280,7 @@ export function ComprobantesView({
                         </span>
                       </span>
                     </span>
-                    <span className="acp-cli">
+                    <span className={s.cli}>
                       <span className="nm">{c.clienteNombre}</span>
                       <span className="cuit">
                         {formatCuitODash(c.clienteCuit)}
@@ -279,18 +289,18 @@ export function ComprobantesView({
                     <span>
                       {c.ordenNumero ? (
                         <Link
-                          className="acp-link"
+                          className={s.link}
                           href={`/produccion/ordenes/${c.ordenId}`}
                           onClick={(e) => e.stopPropagation()}
                         >
                           {c.ordenNumero}
                         </Link>
                       ) : (
-                        <span className="acp-fecha">—</span>
+                        <span className={s.fecha}>—</span>
                       )}
                     </span>
-                    <span className="acp-fecha">{c.fecha}</span>
-                    <span className="acp-montos">
+                    <span className={s.fecha}>{c.fecha}</span>
+                    <span className={s.montos}>
                       <span className="tot">{fmt(c.total)}</span>
                       <span className="disc">
                         Neto {fmt(c.netoGravado)} · IVA {fmt(c.ivaTotal)}
@@ -300,13 +310,13 @@ export function ComprobantesView({
                       ) : null}
                     </span>
                     <span>
-                      <span className={`acp-estado acp-e-${ev.clave}`}>
+                      <span className={`${s.estado} ${CLASE_ESTADO[ev.clave] ?? ""}`}>
                         {c.estado !== "anulado" ? <span className="d" /> : null}
                         {ev.label}
                       </span>
                     </span>
                     <span
-                      className={`acp-saldo-cell ${c.saldoPendiente > 0 ? "pend" : "ok"}`}
+                      className={`${s.saldoCell} ${c.saldoPendiente > 0 ? "pend" : "ok"}`}
                     >
                       {c.total < 0
                         ? "—"
@@ -321,7 +331,7 @@ export function ComprobantesView({
                 );
               })}
               {list.length === 0 ? (
-                <div className="acp-sin-resultados">
+                <div className={s.sinResultados}>
                   Ningún comprobante coincide con el filtro.
                 </div>
               ) : null}

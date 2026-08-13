@@ -28,6 +28,7 @@ import {
   type CondicionFiscal,
 } from "@/lib/clientes";
 import { formatearMoneda, monedaDe } from "@/lib/moneda";
+import s from "./comprobante.module.css";
 
 export type ClienteOpcion = {
   id: string;
@@ -191,7 +192,7 @@ export function ComprobanteEmisionView({
 
   return (
     <div
-      className="acd-page"
+      className={s.page}
       style={{
         flex: 1,
         minHeight: 0,
@@ -199,12 +200,12 @@ export function ComprobanteEmisionView({
         padding: "26px 28px 90px",
       }}
     >
-      <div className="acd-wrap">
-        <Link className="acd-crumb" href="/administracion/comprobantes">
+      <div className={s.wrap}>
+        <Link className={s.crumb} href="/administracion/comprobantes">
           <ArrowLeftIcon />
           Comprobantes
         </Link>
-        <div className="acd-head">
+        <div className={s.head}>
           <div>
             <h1>Emitir comprobante</h1>
             <div className="sub">
@@ -214,12 +215,12 @@ export function ComprobanteEmisionView({
           </div>
         </div>
 
-        <div className="acd-grid">
-          <div className="acd-card">
-            <div className="acd-card-sec">
-              <div className="acd-sec-t">Receptor</div>
+        <div className={s.grid}>
+          <div className={s.card}>
+            <div className={s.cardSec}>
+              <div className={s.secT}>Receptor</div>
               {origen ? (
-                <div className="acd-auto-note">
+                <div className={s.autoNote}>
                   <InfoIcon />
                   Corrige a <b style={{ margin: "0 4px" }}>
                     {origen.numeroCompleto}
@@ -227,7 +228,7 @@ export function ComprobanteEmisionView({
                   · {origen.clienteNombre}
                 </div>
               ) : null}
-              <div className="acd-field">
+              <div className={s.field}>
                 <label>Cliente</label>
                 <select
                   value={clienteId}
@@ -241,8 +242,8 @@ export function ComprobanteEmisionView({
                   ))}
                 </select>
               </div>
-              <div className="acd-letra-box">
-                <div className="acd-letra-big">{r.letra}</div>
+              <div className={s.letraBox}>
+                <div className={s.letraBig}>{r.letra}</div>
                 <div className="txt">
                   {r.motivo}
                   <span className="cond">
@@ -253,7 +254,7 @@ export function ComprobanteEmisionView({
                 </div>
               </div>
               {faltaCuit ? (
-                <div className="acd-rech-box" style={{ marginTop: 12 }}>
+                <div className={s.rechBox} style={{ marginTop: 12 }}>
                   <InfoIcon />
                   <div>
                     <div className="t">Falta el CUIT del receptor</div>
@@ -266,9 +267,9 @@ export function ComprobanteEmisionView({
               ) : null}
             </div>
 
-            <div className="acd-card-sec">
-              <div className="acd-frow3">
-                <div className="acd-field">
+            <div className={s.cardSec}>
+              <div className={s.frow3}>
+                <div className={s.field}>
                   <label>Punto de venta</label>
                   <select
                     value={puntoVentaId}
@@ -281,7 +282,7 @@ export function ComprobanteEmisionView({
                     ))}
                   </select>
                 </div>
-                <div className="acd-field">
+                <div className={s.field}>
                   <label>Fecha</label>
                   <input
                     type="date"
@@ -289,7 +290,7 @@ export function ComprobanteEmisionView({
                     onChange={(e) => setFecha(e.target.value)}
                   />
                 </div>
-                <div className="acd-field">
+                <div className={s.field}>
                   <label>Tipo</label>
                   <select
                     value={tipo}
@@ -302,7 +303,7 @@ export function ComprobanteEmisionView({
                   </select>
                 </div>
               </div>
-              <div className="acd-field" style={{ marginBottom: 0 }}>
+              <div className={s.field} style={{ marginBottom: 0 }}>
                 <label>Condición de venta</label>
                 <select
                   value={condicionVenta}
@@ -317,11 +318,11 @@ export function ComprobanteEmisionView({
               </div>
             </div>
 
-            <div className="acd-card-sec">
-              <div className="acd-sec-t">
+            <div className={s.cardSec}>
+              <div className={s.secT}>
                 Ítems <span className="n">traídos de una orden o libres</span>
               </div>
-              <div className="acd-from-ot">
+              <div className={s.fromOt}>
                 <LinkIcon />
                 <span style={{ fontSize: 12.5, fontWeight: 500 }}>
                   Traer ítems de
@@ -351,15 +352,15 @@ export function ComprobanteEmisionView({
               </div>
 
               {desdeOrden ? (
-                <div className="acd-auto-note" style={{ marginBottom: 0 }}>
+                <div className={s.autoNote} style={{ marginBottom: 0 }}>
                   <InfoIcon />
                   Los ítems se arman desde la orden al crear el comprobante, con
                   el precio neto de cada producto.
                 </div>
               ) : (
                 <>
-                  <div className="acd-items-t">
-                    <div className="acd-it-th">
+                  <div className={s.itemsT}>
+                    <div className={s.itTh}>
                       <span>Descripción</span>
                       <span className="r">Cant.</span>
                       <span className="r">Precio unit.</span>
@@ -367,7 +368,7 @@ export function ComprobanteEmisionView({
                       <span />
                     </div>
                     {items.map((it, i) => (
-                      <div key={i} className="acd-it-r editable">
+                      <div key={i} className={`${s.itR} editable`}>
                         <input
                           className="desc"
                           value={it.descripcion}
@@ -401,7 +402,7 @@ export function ComprobanteEmisionView({
                         </span>
                         <button
                           type="button"
-                          className="acd-it-rm"
+                          className={s.itRm}
                           onClick={() =>
                             setItems((p) => p.filter((_, j) => j !== i))
                           }
@@ -414,7 +415,7 @@ export function ComprobanteEmisionView({
                   </div>
                   <button
                     type="button"
-                    className="acd-it-add"
+                    className={s.itAdd}
                     onClick={() => setItems((p) => [...p, itemVacio()])}
                   >
                     <PlusIcon />
@@ -425,13 +426,13 @@ export function ComprobanteEmisionView({
             </div>
           </div>
 
-          <div className="acd-aside">
-            <div className="acd-tot-card">
+          <div className={s.aside}>
+            <div className={s.totCard}>
               <div className="h">
                 Totales <span className="lt">{r.letra}</span>
               </div>
-              <div className="acd-tot-body">
-                <div className="acd-tot-row">
+              <div className={s.totBody}>
+                <div className={s.totRow}>
                   <span className="l">Neto gravado</span>
                   <span className="v">{fmt(neto)}</span>
                 </div>
@@ -439,30 +440,30 @@ export function ComprobanteEmisionView({
                   [...ivaPorAlicuota.entries()]
                     .sort((a, b) => a[0] - b[0])
                     .map(([ali, monto]) => (
-                      <div key={ali} className="acd-tot-row iva">
+                      <div key={ali} className={`${s.totRow} iva`}>
                         <span className="l">IVA {ali}%</span>
                         <span className="v">{fmt(monto)}</span>
                       </div>
                     ))
                 ) : r.letra === "B" ? (
-                  <div className="acd-tot-row iva">
+                  <div className={`${s.totRow} iva`}>
                     <span className="l">IVA incluido</span>
                     <span className="v">{fmt(ivaTotal)}</span>
                   </div>
                 ) : (
-                  <div className="acd-tot-row iva">
+                  <div className={`${s.totRow} iva`}>
                     <span className="l">IVA</span>
                     <span className="v">
                       {r.exenta ? "Exento" : "No corresponde"}
                     </span>
                   </div>
                 )}
-                <div className="acd-tot-row grand">
+                <div className={`${s.totRow} grand`}>
                   <span className="l">Total</span>
                   <span className="v">{fmt(total)}</span>
                 </div>
               </div>
-              <div className="acd-cur-line">
+              <div className={s.curLine}>
                 Moneda
                 <select
                   value={moneda}
@@ -484,7 +485,7 @@ export function ComprobanteEmisionView({
               </div>
             </div>
 
-            <div className="acd-aside-actions">
+            <div className={s.asideActions}>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -498,7 +499,7 @@ export function ComprobanteEmisionView({
                 Cancelar
               </Link>
             </div>
-            <div className="acd-nota-emision">
+            <div className={s.notaEmision}>
               Se crea como borrador: el número correlativo se asigna recién al
               emitirlo.
             </div>
