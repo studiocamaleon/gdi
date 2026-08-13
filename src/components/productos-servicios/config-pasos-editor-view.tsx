@@ -5842,61 +5842,6 @@ export function ConfigPasosEditorView({
                                       />
                                     </div>
                                   )}
-                                  {familia?.codigo ===
-                                    "montaje_sobre_sustrato" &&
-                                    (() => {
-                                      // Fuente de medida: además de las opciones
-                                      // fijas, ofrecer los outputs GEOMÉTRICOS que
-                                      // publican los pasos ANTERIORES (el bastidor:
-                                      // tiras de cenefa, chapa de fondo…). docs/
-                                      // fuente-de-medida-de-consumo-diseno.md §6.
-                                      const nombreDe = (p: {
-                                        id: string;
-                                        familiaCodigo: string;
-                                      }) =>
-                                        configs[p.id]?.nombreVisible?.trim() ||
-                                        familiasMap.get(p.familiaCodigo)
-                                          ?.nombre ||
-                                        humanizeCode(p.familiaCodigo);
-                                      const fuentesGeometricas =
-                                        rutaAlternativa.ruta.pasos
-                                          .filter((p) => p.orden < paso.orden)
-                                          .flatMap((p) =>
-                                            (
-                                              familiasMap.get(p.familiaCodigo)
-                                                ?.outputsGeometricos ?? []
-                                            ).map((o) => ({
-                                              value: `output:${o.key}`,
-                                              label: `${o.etiqueta} · ${nombreDe(p)}`,
-                                              description: `Mide sobre "${o.etiqueta}" que publica el paso "${nombreDe(p)}".`,
-                                            })),
-                                          );
-                                      return (
-                                        <div className="field">
-                                          <LabelConTooltip
-                                            label="Piezas a montar"
-                                            tooltip="Define qué medidas usa el paso para calcular el nesting del material de montaje."
-                                          />
-                                          <HumanSelect
-                                            value={String(
-                                              paramsPaso.fuentePiezasMontaje ??
-                                                "piezas_jobcontext",
-                                            )}
-                                            onValueChange={(value) =>
-                                              updateStepParams(paso.id, {
-                                                fuentePiezasMontaje:
-                                                  value || "piezas_jobcontext",
-                                              })
-                                            }
-                                            options={[
-                                              ...MONTAJE_SOURCE_OPTIONS,
-                                              ...fuentesGeometricas,
-                                            ]}
-                                            placeholder="Elegir origen"
-                                          />
-                                        </div>
-                                      );
-                                    })()}
                                   {familia?.codigo === "pre_prensa" && (
                                     <div className="field">
                                       <LabelConTooltip
@@ -6709,6 +6654,65 @@ export function ConfigPasosEditorView({
                                     </div>
                                   )}
 
+                                  {familia?.codigo ===
+                                    "montaje_sobre_sustrato" &&
+                                    (() => {
+                                      // Fuente de medida del CONSUMO de material:
+                                      // qué piezas nestea el montaje. Es material,
+                                      // no tiempo — por eso vive acá, junto al
+                                      // nesting, y NO dentro de la rama de tiempo
+                                      // (antes se ocultaba al elegir "por lote").
+                                      // Además de las opciones fijas ofrece los
+                                      // outputs GEOMÉTRICOS de los pasos anteriores
+                                      // (el bastidor: tiras de cenefa, chapa…).
+                                      // docs/fuente-de-medida-de-consumo-diseno.md §6.
+                                      const nombreDe = (p: {
+                                        id: string;
+                                        familiaCodigo: string;
+                                      }) =>
+                                        configs[p.id]?.nombreVisible?.trim() ||
+                                        familiasMap.get(p.familiaCodigo)
+                                          ?.nombre ||
+                                        humanizeCode(p.familiaCodigo);
+                                      const fuentesGeometricas =
+                                        rutaAlternativa.ruta.pasos
+                                          .filter((p) => p.orden < paso.orden)
+                                          .flatMap((p) =>
+                                            (
+                                              familiasMap.get(p.familiaCodigo)
+                                                ?.outputsGeometricos ?? []
+                                            ).map((o) => ({
+                                              value: `output:${o.key}`,
+                                              label: `${o.etiqueta} · ${nombreDe(p)}`,
+                                              description: `Mide sobre "${o.etiqueta}" que publica el paso "${nombreDe(p)}".`,
+                                            })),
+                                          );
+                                      return (
+                                        <div className="field">
+                                          <LabelConTooltip
+                                            label="Piezas a montar"
+                                            tooltip="Define qué medidas usa el paso para calcular el nesting del material de montaje."
+                                          />
+                                          <HumanSelect
+                                            value={String(
+                                              paramsPaso.fuentePiezasMontaje ??
+                                                "piezas_jobcontext",
+                                            )}
+                                            onValueChange={(value) =>
+                                              updateStepParams(paso.id, {
+                                                fuentePiezasMontaje:
+                                                  value || "piezas_jobcontext",
+                                              })
+                                            }
+                                            options={[
+                                              ...MONTAJE_SOURCE_OPTIONS,
+                                              ...fuentesGeometricas,
+                                            ]}
+                                            placeholder="Elegir origen"
+                                          />
+                                        </div>
+                                      );
+                                    })()}
                                   {mostrarNesting && (
                                     <AcomodadoDetalladoEditor
                                       pasoId={paso.id}
