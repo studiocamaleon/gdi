@@ -1388,6 +1388,13 @@ const estructura_bastidor: DefinicionFamilia = {
       pintura_m2: 'pinturaM2',
       fondo_m2: 'fondoM2',
     },
+    // Geometría que publica al JobContext para los pasos siguientes (Ola #2):
+    // el interior útil (para que el LED siembre sobre 96, no 100) y la lona
+    // bruta. Los siguientes la leen con prioridad sobre la medida exterior.
+    publicaCanon: {
+      interiorMm: 'interior',
+      lonaBrutaMm: 'lonaBruta',
+    },
     mensajeSinDatos:
       'es un bastidor DOBLE (cajón) pero no tiene profundidad: sin ella no se pueden derivar los metros de perfil.',
     sugerenciaSinDatos:

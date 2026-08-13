@@ -677,6 +677,15 @@ export interface DefinicionFamilia {
      */
     outputs?: Record<string, string>;
     /**
+     * Geometría que el derivador PUBLICA al JobContext para que los pasos
+     * siguientes la lean (mismo patrón que `piezasVisibles`). Mapea
+     * claveJobContext ← clave de la `traza` del derivador. Ej. el bastidor
+     * publica `{ interiorMm: 'interior', lonaBrutaMm: 'lonaBruta' }` y el
+     * derivador de LED lee `jobContext.interiorMm` en vez de la medida exterior.
+     * Ola #2, docs/estructura-bastidor-outputs-diseno.md §4/§7.5.
+     */
+    publicaCanon?: Record<string, string>;
+    /**
      * Slot cuyo material alimenta al derivador (los atributos de la variante:
      * coberturaM2/pasoMm del módulo LED). El motor lo resuelve ANTES de correr
      * el derivador — declarado acá, no un if por familia.

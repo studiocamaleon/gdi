@@ -118,6 +118,10 @@ function geometriaCartel(jobContext: JobContext): {
     ? 0
     : Number(jobContext.piezaPerimetroTotalM ?? 0);
   const pieza =
+    // Ola #2: si un bastidor aguas arriba publicó el interior útil, los LEDs se
+    // siembran AHÍ (96×… no 100×…: van en el hueco del marco, no sobre la cara
+    // completa). Sin bastidor cae a la medida visible de siempre.
+    jobContext.interiorMm ??
     jobContext.medidaVisibleMm ??
     jobContext.piezasVisibles?.[0] ??
     jobContext.medidaCustomMm ??

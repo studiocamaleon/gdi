@@ -145,3 +145,30 @@ describe('Regla de oro: los LEDs se siembran sobre el cartel terminado', () => {
     expect(r.modulos).toBe(50);
   });
 });
+
+describe('Iluminación LED — siembra sobre el interior del bastidor (Ola #2)', () => {
+  it('usa el interior útil publicado, no la medida exterior', () => {
+    const jc = ctx({
+      piezas: [{ anchoMm: 2510, altoMm: 1260 }], // exterior → 11×6 = 66
+      interiorMm: { anchoMm: 2490, altoMm: 1240 }, // interior → 10×5 = 50
+    });
+    const r = calcularIluminacionLed(
+      jc,
+      parsearParamsIluminacionLed({ modoSembrado: 'area' }),
+      MODULO,
+    )!;
+    // Los LEDs van en el hueco del marco: cuentan sobre el interior (50), no
+    // sobre la cara completa (66).
+    expect(r.modulos).toBe(50);
+  });
+
+  it('sin interior publicado, cae a la medida exterior (fallback)', () => {
+    const r = calcularIluminacionLed(
+      ctx({ piezas: [{ anchoMm: 2510, altoMm: 1260 }] }),
+      parsearParamsIluminacionLed({ modoSembrado: 'area' }),
+      MODULO,
+    )!;
+    // Sin bastidor que publique interior: 11×6 = 66.
+    expect(r.modulos).toBe(66);
+  });
+});

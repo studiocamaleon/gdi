@@ -92,6 +92,16 @@ export interface JobContext {
    * Ver `docs/modificaciones-fisicas-lona-diseno.md` §3.
    */
   medidaVisibleMm?: { anchoMm: number; altoMm: number };
+  /**
+   * Canon geométrico que PUBLICA un derivador de estructura para los pasos
+   * siguientes (Ola #2, docs/estructura-bastidor-outputs-diseno.md §4). Igual
+   * que `medidaVisibleMm`: quien lo lee lo prefiere sobre la medida exterior.
+   * `interiorMm` = espacio interno útil del bastidor (medida − caño): los LEDs
+   * se siembran ahí, no sobre la cara completa. `lonaBrutaMm` = lona a cortar
+   * con la demasía de agarre.
+   */
+  interiorMm?: { anchoMm: number; altoMm: number };
+  lonaBrutaMm?: { anchoMm: number; altoMm: number };
   /** INMUTABLE. Contraparte multi-pieza de `medidaVisibleMm`. */
   piezasVisibles?: Array<{
     cantidad: number;

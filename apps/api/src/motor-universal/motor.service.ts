@@ -2085,6 +2085,26 @@ export class MotorUniversalService {
     return filas;
   }
 
+  /**
+   * Promueve al JobContext la geometría que el derivador declara en
+   * `publicaCanon` (claveJobContext ← clave de la `traza`), para que los pasos
+   * siguientes la lean con prioridad sobre la medida exterior — mismo patrón
+   * que `piezasVisibles`. Ola #2, docs/estructura-bastidor-outputs-diseno.md §4.
+   */
+  private promoverCanonDerivador(
+    jobContext: JobContext,
+    derivadorDecl: { publicaCanon?: Record<string, string> } | undefined,
+    derivacion: ResultadoDerivador | null,
+  ): void {
+    const mapa = derivadorDecl?.publicaCanon;
+    if (!mapa || !derivacion?.traza) return;
+    const ctx = jobContext as Record<string, unknown>;
+    for (const [claveCtx, claveTraza] of Object.entries(mapa)) {
+      const valor = derivacion.traza[claveTraza];
+      if (valor !== undefined && valor !== null) ctx[claveCtx] = valor;
+    }
+  }
+
   private async ejecutarPasoTercerizado(
     tenantId: string,
     paso: PasoCargado,
@@ -2119,12 +2139,14 @@ export class MotorUniversalService {
             )
           : null;
       }
-      derivacionesDelJobContext(jobContext)[paso.configPasoId] = runDerivador(
+      const derivacionPaso = runDerivador(
         familia.derivador.codigo,
         jobContext,
         this.paramsEfectivosDelPaso(paso, jobContext),
         materialDerivador?.atributosVarianteJson ?? null,
       );
+      derivacionesDelJobContext(jobContext)[paso.configPasoId] = derivacionPaso;
+      this.promoverCanonDerivador(jobContext, familia.derivador, derivacionPaso);
     }
     const seleccionMatriz =
       ((jobContext as Record<string, unknown>)[
@@ -2411,12 +2433,14 @@ export class MotorUniversalService {
               )
           : null;
       }
-      derivacionesDelJobContext(jobContext)[paso.configPasoId] = runDerivador(
+      const derivacionPaso = runDerivador(
         familia.derivador.codigo,
         jobContext,
         this.paramsEfectivosDelPaso(paso, jobContext),
         materialDerivador?.atributosVarianteJson ?? null,
       );
+      derivacionesDelJobContext(jobContext)[paso.configPasoId] = derivacionPaso;
+      this.promoverCanonDerivador(jobContext, familia.derivador, derivacionPaso);
     }
 
     // d) NESTING (G-M1 — F.2.13): si el paso usa CALCULADO_POR_PASO y la familia
