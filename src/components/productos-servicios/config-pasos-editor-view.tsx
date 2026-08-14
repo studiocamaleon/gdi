@@ -1678,7 +1678,6 @@ function MaterialSearchSelect({
               ]
                 .filter(Boolean)
                 .join(" · ");
-              const specs = materialRowSpecChips(item);
               return (
                 <React.Fragment key={item.id}>
                   <div
@@ -1721,13 +1720,9 @@ function MaterialSearchSelect({
                       </span>
                       <span className="ps-mat-meta block truncate">{meta}</span>
                     </span>
-                    <span className="hidden items-center gap-1.5 sm:flex">
-                      {specs.map((spec) => (
-                        <span key={spec} className="ps-spec-chip">
-                          {spec}
-                        </span>
-                      ))}
-                    </span>
+                    {/* Sin chips de medida/“N variantes” acá: la fila ya elegida
+                        muestra su detalle (variante + medidas) abajo; repetirlo
+                        en el encabezado era ruido (feedback del usuario). */}
                     {onDeselect ? (
                       <button
                         type="button"
