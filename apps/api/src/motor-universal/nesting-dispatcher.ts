@@ -544,8 +544,14 @@ function conLonaBrutaSiExiste(jobContext: JobContext): JobContext {
 
 /**
  * Normaliza un output geométrico del JobContext a piezas de nesting. Acepta un
- * rectángulo `{anchoMm, altoMm}` o una lista. Una TIRA `{largoMm, anchoMm}` se
- * lee con el largo como ancho de la pieza y el ancho de la tira como alto.
+ * rectángulo `{anchoMm, altoMm}` o una lista.
+ *
+ * Una TIRA `{largoMm, anchoMm}` se ACUESTA A LO LARGO del material: su LARGO va
+ * al eje MAYOR de la pieza (`altoMm` → alto de la hoja / largo del rollo) y su
+ * ancho al eje MENOR (`anchoMm` → ancho del material), para que las copias
+ * tilen a lo ancho (1220/220 = 5 por fila) en vez de una por fila.
+ * Antes el largo iba a `anchoMm` (el eje CORTO) → las tiras se paraban de canto
+ * y empaquetaban pésimo (feedback: cenefas verticales, 3 chapas).
  * docs/fuente-de-medida-de-consumo-diseno.md §4.
  */
 function normalizarPiezasDeOutput(
@@ -558,8 +564,8 @@ function normalizarPiezasDeOutput(
     if (!item || typeof item !== 'object') continue;
     const it = item as Record<string, unknown>;
     const esTira = it.largoMm != null;
-    const anchoMm = Number(esTira ? it.largoMm : it.anchoMm);
-    const altoMm = Number(esTira ? it.anchoMm : it.altoMm);
+    const anchoMm = Number(it.anchoMm);
+    const altoMm = Number(esTira ? it.largoMm : it.altoMm);
     const cantidad = Number(it.cantidad ?? 1);
     if (anchoMm > 0 && altoMm > 0 && cantidad > 0) {
       piezas.push({ cantidad, anchoMm, altoMm });
