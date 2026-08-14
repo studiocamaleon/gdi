@@ -9252,9 +9252,10 @@ function magnitudProducePaso(
 ): string | null {
   const declarada = unidadCantidadDe(cfg, familia);
   if (declarada) return declarada;
-  if (nestingAplica(familia, cfg)) {
-    return familia?.codigo === "impresion_por_hoja" ? "pliegos" : "placas";
-  }
+  // Sólo el pliego de impresión por hoja se nombra con confianza. Placa
+  // rígida, rollo (vinilo, lona) y demás varían demasiado para adivinar el
+  // sustantivo — y "los placas" en un rollo era doblemente falso. Genérico.
+  if (familia?.codigo === "impresion_por_hoja") return "pliegos";
   return null;
 }
 
