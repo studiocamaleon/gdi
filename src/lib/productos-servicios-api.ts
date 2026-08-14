@@ -359,6 +359,10 @@ export interface UpsertSlotMaterialPayload {
   formula?: string;
   cantidadFactor?: number | null;
   cantidadBase?: string | null;
+  /** Fuente de medida del consumo de este slot (override del default a nivel
+   *  paso): 'piezas_visibles' | 'piezas_jobcontext' | 'output:<clave>'.
+   *  docs/fuente-de-medida-de-consumo-diseno.md §8. */
+  fuenteMedida?: string | null;
   aplicaMultiCaras?: boolean;
 }
 

@@ -2139,6 +2139,50 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     },
   },
   {
+    // Fuente de medida POR SLOT (docs/fuente-de-medida-de-consumo-diseno.md §6/§8):
+    // de dónde sale la medida que ESTE material consume. Override del default a
+    // nivel paso. Se muestra sólo en slots SUSTRATO y sólo cuando hay una fuente
+    // real para elegir (un paso anterior publica outputs geométricos).
+    clave: "materiales.fuente_medida",
+    seccion: "materiales",
+    grupo: "cual",
+    anchoCompleto: true,
+    etiqueta: "¿Sobre qué mide?",
+    pregunta: "¿Sobre qué mide este material?",
+    ayuda:
+      "De dónde sale la medida que este material consume: las piezas del trabajo, la medida visible terminada, o un output que publica un paso anterior (el bastidor: tiras de cenefa, chapa de fondo…).",
+    visible: (ctx) => {
+      const esSustrato =
+        ctx.slot?.decl?.tipo === "SUSTRATO" ||
+        ctx.slot?.payload.slotRol === "SUSTRATO";
+      return (
+        Boolean(ctx.slot) &&
+        esSustrato &&
+        opcionesPiezasMontar(ctx).length > MONTAJE_SOURCE_OPTIONS.length
+      );
+    },
+    resumen: (ctx) => {
+      const valor = String(
+        ctx.slot?.payload.fuenteMedida ?? "piezas_jobcontext",
+      );
+      return (
+        opcionesPiezasMontar(ctx).find((o) => o.value === valor)?.label ?? valor
+      );
+    },
+    origenValor: (ctx) =>
+      ctx.slot?.payload.fuenteMedida ? "config" : "default-paso",
+    control: {
+      tipo: "pills",
+      opciones: (ctx) => opcionesPiezasMontar(ctx),
+      valor: (ctx) =>
+        String(ctx.slot?.payload.fuenteMedida ?? "piezas_jobcontext"),
+      aplicar: (_ctx, v) => ({
+        tipo: "slot",
+        patch: { fuenteMedida: v || null },
+      }),
+    },
+  },
+  {
     clave: "materiales.consumo",
     seccion: "materiales",
     grupo: "descuento",
