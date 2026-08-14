@@ -1627,12 +1627,13 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       // acomodado — nada que preguntar acá (feedback del usuario; el
       // detallado sigue ofreciendo el mecanismo para casos finos).
       origenTiempoEfectivo(ctx) !== "maquina" &&
-      // Con la oración del ritmo, TODO va inline: la magnitud, y la fuente/
-      // cantidad como "… de [la cantidad del paso] …" (aun cuando el reloj
-      // cuenta otra magnitud). Repetir la sección era la duplicación que marcó
-      // el usuario. Sólo reaparece si NO hay oración inline (ej. comandado por
-      // máquina).
-      !esRitmoConOracionInline(ctx),
+      // Con la oración del ritmo (productividad Y tanda), la magnitud —y el
+      // mecanismo cuando cuenta "cantidad"— se eligen INLINE ahí: repetir la
+      // sección era la duplicación que marcó el usuario. Sólo reaparece si
+      // el reloj cuenta otra magnitud (ahí la cantidad sigue importando para
+      // materiales/herencias, y NO está en la oración).
+      (!esRitmoConOracionInline(ctx) ||
+        fuenteRitmoEfectiva(ctx) !== "cantidad"),
     // Resumen ÚNICO: fusiona el mecanismo y la magnitud heredada (antes eran
     // dos filas — "Base de cantidad" + "Hereda de"). Si hereda por output,
     // nombra la magnitud; si no, el método.
