@@ -2118,9 +2118,13 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // real para elegir (un paso anterior publica outputs geométricos).
     clave: "materiales.fuente_medida",
     seccion: "materiales",
-    grupo: "cual",
+    // Va con "Cómo se calcula el consumo" (grupo descuento), no con la
+    // selección del material: las dos preguntas del consumo —SOBRE QUÉ mide y
+    // CON QUÉ fórmula— juntas y en orden se entienden; separadas confundían
+    // (feedback del usuario).
+    grupo: "descuento",
     anchoCompleto: true,
-    etiqueta: "¿Sobre qué mide?",
+    etiqueta: "Sobre qué mide",
     pregunta: "¿Sobre qué mide este material?",
     ayuda:
       "De dónde sale la medida que este material consume: las piezas del trabajo, la medida visible terminada, o un output que publica un paso anterior (el bastidor: tiras de cenefa, chapa de fondo…).",
@@ -2159,8 +2163,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "materiales.consumo",
     seccion: "materiales",
     grupo: "descuento",
-    // Sin etiqueta: el título del bloque ("Cómo se calcula el consumo") ya lo dice.
-    etiqueta: " ",
+    // Ahora que "Sobre qué mide" vive en el mismo bloque, la fórmula lleva su
+    // propia etiqueta para distinguirlas (antes se apoyaba en el título).
+    etiqueta: "Con qué fórmula",
     pregunta: "¿Cómo se calcula el consumo?",
     ayuda:
       "La fórmula del motor para saber cuánto material gasta: por pieza, por m², por metro lineal… En slots derivados no hay fórmula: la geometría del paso decide.",
@@ -2755,13 +2760,11 @@ export const GRUPOS_MATERIAL: GrupoEje[] = [
     id: "descuento",
     titulo: "Cómo se calcula el consumo",
     ayuda:
-      "La regla con la que el motor descuenta este material en cada OT — y cómo se cobra lo que sobra.",
+      "Dos cosas: SOBRE QUÉ mide (la medida de la que sale el consumo) y CON QUÉ fórmula lo descuenta el motor en cada OT — más cómo se cobra lo que sobra.",
     estilo: "campos",
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
     encabezado: "arriba",
-    // El consumo va sin etiqueta y "Doble faz" con etiqueta: alineo por la base
-    // para que el select y el segmentado queden a la misma altura.
-    alinearItems: "end",
+    alinearItems: "start",
   },
 ];
 
