@@ -487,7 +487,7 @@ export function DatosEmpresaView({
                   />
                 </div>
               </div>
-              <div className="arc-variant-note" style={{ marginTop: 4 }}>
+              <div className="arc-variant-note" style={{ marginTop: 12 }}>
                 <InfoIcon />
                 <span>
                   En Google Maps: tu ficha de negocio → Pedir reseñas → copiar

@@ -11790,15 +11790,16 @@ function EjeGuiado({
                 // muestra que son consecuencia de la bifurcación de arriba.
                 ...(grupo.encabezado === "arriba"
                   ? {
-                      padding: "15px 0",
+                      // Longhand a propósito: mezclar `padding` (shorthand) con
+                      // paddingTop/Bottom condicionales hacía que React avisara
+                      // "removing a style property during rerender".
+                      paddingTop: idx === 0 ? 2 : 15,
+                      paddingBottom:
+                        idx === gruposConOpciones.length - 1 ? 2 : 15,
                       borderBottom:
                         idx < gruposConOpciones.length - 1
                           ? "1px solid var(--hairline, #eee7de)"
                           : undefined,
-                      ...(idx === 0 ? { paddingTop: 2 } : {}),
-                      ...(idx === gruposConOpciones.length - 1
-                        ? { paddingBottom: 2 }
-                        : {}),
                     }
                   : grupo.estilo === "campos"
                     ? {
