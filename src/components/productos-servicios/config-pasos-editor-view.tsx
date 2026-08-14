@@ -13369,6 +13369,27 @@ function SeccionesEsquemaPaso({
               (cfg.tercerizadoConfigJson as { materialesPropios?: boolean } | null)
                 ?.materialesPropios === true) ? (
               <>
+                {/* Dónde se hace: justo después de "Ejecución de este paso"
+                    (feedback del usuario). Sólo interno y sin máquina: con
+                    máquina el centro lo pone ella y los operarios no aplican. */}
+                {!cfg.tercerizado &&
+                !cfg.maquinaM1Id &&
+                (cfg.maquinasCandidatas?.length ?? 0) === 0 ? (
+                  <EjeGuiado
+                    titulo="Dónde se hace"
+                    subtitulo="El centro que pone la tarifa por hora y los operarios que ejecutan el paso."
+                    opciones={opcionesDeEje("tiempo", ctx).filter((o) =>
+                      ["tiempo.centro", "tiempo.dotacion"].includes(o.clave),
+                    )}
+                    grupos={GRUPOS_DONDE}
+                    fijo
+                    resumenPrincipal={["tiempo.centro", "tiempo.dotacion"]}
+                    ctx={ctx}
+                    pendientesVivos={pendientesVivos}
+                    onAplicar={onAplicar}
+                    renderComponente={renderComponente}
+                  />
+                ) : null}
                 {!cfg.tercerizado ? (
                   <EjeGuiado
                     titulo="Máquina que utiliza"
@@ -13628,6 +13649,34 @@ function SeccionesEsquemaPaso({
                     </div>
                   );
                 })()}
+                {/* Tiempo que consume: siempre DESPUÉS de Materiales
+                    (feedback del usuario). */}
+                {!cfg.tercerizado ? (
+                  <EjeGuiado
+                    titulo="Tiempo que consume"
+                    subtitulo={
+                      (cfg.modoTiempo ??
+                        familia?.modosTiempoSoportados?.[0]) === "T-3"
+                        ? "El tiempo lo define la máquina con el perfil operativo que use en cada trabajo."
+                        : "Cómo se calcula el tiempo de este paso, y si el comercial puede ajustarlo al cotizar."
+                    }
+                    opciones={opcionesDeEje("tiempo", ctx).filter(
+                      (o) =>
+                        !["tiempo.centro", "tiempo.dotacion"].includes(o.clave),
+                    )}
+                    grupos={GRUPOS_EJE.tiempo}
+                    fijo
+                    resumenPrincipal={[
+                      "tiempo.productividad",
+                      "tiempo.fijo_valor",
+                      "tiempo.cantidad_operativa",
+                    ]}
+                    ctx={ctx}
+                    pendientesVivos={pendientesVivos}
+                    onAplicar={onAplicar}
+                    renderComponente={renderComponente}
+                  />
+                ) : null}
                 {/* El trabajo: acomodado + parámetros del oficio. Si el paso no
                     configura nada propio, el caso vacío del diseño en vez de
                     esconder la sección (El trabajo.html · c-vacio). */}
@@ -13730,61 +13779,6 @@ function SeccionesEsquemaPaso({
                   </div>
                 )}
 
-                {!cfg.tercerizado ? (
-                  <>
-                    {/* "Dónde se hace" como card propia: el centro y los
-                        operarios definen quién/dónde ejecuta (y la tarifa),
-                        no el reloj. Con máquina la card entera DESAPARECE
-                        (feedback del usuario): el centro lo pone la máquina
-                        y los operarios no aplican — nada que configurar,
-                        nada que mostrar. */}
-                    {!cfg.maquinaM1Id &&
-                    (cfg.maquinasCandidatas?.length ?? 0) === 0 ? (
-                      <EjeGuiado
-                        titulo="Dónde se hace"
-                        subtitulo="El centro que pone la tarifa por hora y los operarios que ejecutan el paso."
-                        opciones={opcionesDeEje("tiempo", ctx).filter((o) =>
-                          ["tiempo.centro", "tiempo.dotacion"].includes(
-                            o.clave,
-                          ),
-                        )}
-                        grupos={GRUPOS_DONDE}
-                        fijo
-                        resumenPrincipal={["tiempo.centro", "tiempo.dotacion"]}
-                        ctx={ctx}
-                        pendientesVivos={pendientesVivos}
-                        onAplicar={onAplicar}
-                        renderComponente={renderComponente}
-                      />
-                    ) : null}
-                    <EjeGuiado
-                      titulo="Tiempo que consume"
-                      subtitulo={
-                        (cfg.modoTiempo ??
-                          familia?.modosTiempoSoportados?.[0]) === "T-3"
-                          ? "El tiempo lo define la máquina con el perfil operativo que use en cada trabajo."
-                          : "Cómo se calcula el tiempo de este paso, y si el comercial puede ajustarlo al cotizar."
-                      }
-                      opciones={opcionesDeEje("tiempo", ctx).filter(
-                        (o) =>
-                          !["tiempo.centro", "tiempo.dotacion"].includes(
-                            o.clave,
-                          ),
-                      )}
-                      grupos={GRUPOS_EJE.tiempo}
-                      fijo
-                      resumenPrincipal={[
-                        "tiempo.productividad",
-                        "tiempo.fijo_valor",
-                        "tiempo.cantidad_operativa",
-                      ]}
-                      ctx={ctx}
-                      pendientesVivos={pendientesVivos}
-                      onAplicar={onAplicar}
-                      renderComponente={renderComponente}
-                    />
-                  </>
-                ) : null}
               </>
             ) : null}
           </>
