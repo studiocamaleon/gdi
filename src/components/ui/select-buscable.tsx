@@ -128,6 +128,10 @@ export function SelectBuscable({
   className,
   /** Debajo de cuántas opciones la búsqueda estorba más de lo que ayuda. */
   minimoParaBuscar = 7,
+  /** Avisa lo tipeado para que el padre recargue opciones async (ej. materias
+   *  primas por servidor). Sin esto, la búsqueda es sólo client-side sobre
+   *  `opciones`. Se llama "" al abrir/cerrar/limpiar para volver al set base. */
+  onBuscar,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -140,6 +144,7 @@ export function SelectBuscable({
   ariaLabel?: string;
   className?: string;
   minimoParaBuscar?: number;
+  onBuscar?: (query: string) => void;
 }) {
   const raizRef = React.useRef<HTMLDivElement | null>(null);
   const popRef = React.useRef<HTMLDivElement | null>(null);
@@ -169,7 +174,8 @@ export function SelectBuscable({
     setAbierto(false);
     setQuery("");
     setCaja(null);
-  }, []);
+    onBuscar?.("");
+  }, [onBuscar]);
 
   const abrir = React.useCallback(() => {
     const disparador = raizRef.current?.querySelector<HTMLElement>(".selb-trigger");
@@ -316,7 +322,10 @@ export function SelectBuscable({
               <input
                 ref={inputRef}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  onBuscar?.(e.target.value);
+                }}
                 placeholder={placeholderBusqueda}
                 aria-label={placeholderBusqueda}
               />
@@ -326,6 +335,7 @@ export function SelectBuscable({
                   className="selb-limpiar"
                   onClick={() => {
                     setQuery("");
+                    onBuscar?.("");
                     inputRef.current?.focus();
                   }}
                   aria-label="Limpiar búsqueda"

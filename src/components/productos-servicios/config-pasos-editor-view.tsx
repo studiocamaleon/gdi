@@ -1614,53 +1614,58 @@ function MaterialSearchSelect({
   if (renderDetail) {
     const pinned = pinnedItems ?? [];
     const pinnedIds = new Set(pinned.map((it) => it.id));
-    // Como el buscador de máquinas (pedido del usuario): NO mostrar toda la
-    // lista de compatibles siempre. Los elegidos quedan fijos; los resultados
-    // sólo aparecen cuando hay búsqueda. Así la card no arrastra 20 materias.
-    const hayBusqueda = query.trim() !== "";
-    const filas = [
-      ...pinned,
-      ...(hayBusqueda ? items.filter((it) => !pinnedIds.has(it.id)) : []),
-    ];
+    // Tal cual el buscador de máquinas (pedido del usuario): un SelectBuscable
+    // con dropdown que abre al click (sin listar todo inline), y los materiales
+    // ELEGIDOS como filas abajo con su detalle y "Quitar". La búsqueda recarga
+    // async (onBuscar → setQuery) para no perder el server-side.
+    const opcionesAgregar = items
+      .filter((it) => !pinnedIds.has(it.id))
+      .map((it) => ({
+        value: it.id,
+        label: it.nombre,
+        grupo: humanizeEnumLabel(it.familia) || null,
+        detalle:
+          [humanizeEnumLabel(it.subfamilia), ...materialRowSpecChips(it)]
+            .filter(Boolean)
+            .join(" · ") || null,
+      }));
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div className="ps-search" style={{ maxWidth: 340 }}>
-          <SearchIcon className="size-[15px]" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={placeholder}
-          />
-        </div>
-        <div
-          style={{
-            border: "1px solid var(--hairline, #e5e2db)",
-            borderRadius: 9,
-            overflow: "hidden",
-            // Cuando hay muchas materias, tope de alto + scroll para que la
-            // lista no empuje toda la card hacia abajo. ~7 filas a la vista;
-            // las elegidas viven arriba (pinned), así que quedan siempre visibles.
-            maxHeight: 300,
-            overflowY: "auto",
+        <SelectBuscable
+          value=""
+          onChange={(id) => {
+            const mat = items.find((it) => it.id === id);
+            if (mat) onSelect(mat);
           }}
-        >
-          {filas.length === 0 ? (
-            <div
-              style={{
-                padding: "10px 12px",
-                fontSize: 12,
-                color: "var(--muted-text, #6e6e76)",
-              }}
-            >
-              {loading
-              ? "Buscando…"
-              : hayBusqueda
-                ? "Sin materias primas que coincidan."
-                : "Buscá arriba y agregá las materias que usa este paso."}
-            </div>
-          ) : (
-            filas.map((item, i) => {
-              const selected = selectedSet.has(item.id);
+          onBuscar={(q) => setQuery(q)}
+          opciones={opcionesAgregar}
+          placeholder={
+            loading && items.length === 0
+              ? "Cargando materias compatibles…"
+              : opcionesAgregar.length === 0 && pinned.length > 0
+                ? "Todas las compatibles ya están agregadas"
+                : "Agregar materia prima…"
+          }
+          placeholderBusqueda={placeholder}
+          vacio={loading ? "Buscando…" : "Sin materias primas que coincidan."}
+          ariaLabel="Agregar materia prima al paso"
+          minimoParaBuscar={0}
+          disabled={loading && items.length === 0}
+        />
+        {pinned.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--muted-text, #6e6e76)" }}>
+            Todavía no agregaste materiales. Buscá arriba y agregá los que usa
+            este paso.
+          </p>
+        ) : (
+          <div
+            style={{
+              border: "1px solid var(--hairline, #e5e2db)",
+              borderRadius: 9,
+              overflow: "hidden",
+            }}
+          >
+            {pinned.map((item, i) => {
               const chip = matChipStyle(item.nombre, item.familia);
               const meta = [
                 humanizeEnumLabel(item.familia),
@@ -1671,55 +1676,18 @@ function MaterialSearchSelect({
               const specs = materialRowSpecChips(item);
               return (
                 <React.Fragment key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      selected
-                        ? onDeselect?.(item.id)
-                        : onSelect(item)
-                    }
+                  <div
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
-                      width: "100%",
-                      padding: "7px 12px",
-                      background: selected
-                        ? "var(--surface-2, #fafaf9)"
-                        : "var(--surface, #fff)",
-                      border: 0,
+                      padding: "8px 12px",
                       borderTop:
                         i > 0
                           ? "1px solid var(--hairline, #eeebe4)"
                           : undefined,
-                      cursor: "pointer",
-                      textAlign: "left",
                     }}
                   >
-                    <span
-                      aria-hidden
-                      style={{
-                        width: 15,
-                        height: 15,
-                        borderRadius: 4,
-                        flexShrink: 0,
-                        display: "grid",
-                        placeItems: "center",
-                        border: selected
-                          ? "1.5px solid var(--fg, #14141a)"
-                          : "1.5px solid var(--hairline-strong, #c8c4ba)",
-                        background: selected
-                          ? "var(--fg, #14141a)"
-                          : "transparent",
-                        color: "#fff",
-                      }}
-                    >
-                      {selected ? (
-                        <CheckIcon className="size-2.5" strokeWidth={3.4} />
-                      ) : null}
-                    </span>
-                    {/* Avatar como el diseño: chico, gris si no está elegido,
-                        negro si sí (no el color por material). */}
                     <span
                       aria-hidden
                       style={{
@@ -1733,21 +1701,20 @@ function MaterialSearchSelect({
                         fontSize: 10,
                         fontWeight: 500,
                         letterSpacing: "0.02em",
-                        background: selected
-                          ? "var(--fg, #14141a)"
-                          : "#e9e6df",
-                        color: selected ? "#fff" : "var(--muted-text, #6e6e76)",
+                        background: "var(--fg, #14141a)",
+                        color: "#fff",
                       }}
                     >
                       {chip.ini}
                     </span>
-                    <span className="ps-mat-info" style={{ flex: 1 }}>
+                    <span
+                      className="ps-mat-info"
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
                       <span className="ps-mat-nm block truncate">
                         {item.nombre}
                       </span>
-                      <span className="ps-mat-meta block truncate">
-                        {meta}
-                      </span>
+                      <span className="ps-mat-meta block truncate">{meta}</span>
                     </span>
                     <span className="hidden items-center gap-1.5 sm:flex">
                       {specs.map((spec) => (
@@ -1756,23 +1723,31 @@ function MaterialSearchSelect({
                         </span>
                       ))}
                     </span>
-                  </button>
-                  {selected ? (
-                    <div
-                      style={{
-                        padding: "10px 12px 12px 48px",
-                        background: "var(--surface-2, #fafaf9)",
-                        borderTop: "1px solid var(--hairline, #eeebe4)",
-                      }}
-                    >
-                      {renderDetail(item)}
-                    </div>
-                  ) : null}
+                    {onDeselect ? (
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ fontSize: 12, flexShrink: 0 }}
+                        onClick={() => onDeselect(item.id)}
+                      >
+                        Quitar
+                      </button>
+                    ) : null}
+                  </div>
+                  <div
+                    style={{
+                      padding: "10px 12px 12px 48px",
+                      background: "var(--surface-2, #fafaf9)",
+                      borderTop: "1px solid var(--hairline, #eeebe4)",
+                    }}
+                  >
+                    {renderDetail(item)}
+                  </div>
                 </React.Fragment>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </div>
     );
   }
