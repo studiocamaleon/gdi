@@ -11,6 +11,8 @@ import {
   ClockIcon,
   DropletIcon,
   Grid2X2Icon,
+  LockIcon,
+  LockOpenIcon,
   PackageIcon,
   PlusIcon,
   SaveIcon,
@@ -4428,9 +4430,32 @@ export function ConfigPasosEditorView({
               <ArrowLeftIcon className="size-4" />
               Volver a rutas
             </Link>
-            <div className="route">
-              <span>{rutaAlternativa.esPreferida ? "★" : "☆"}</span>
-              {rutaAlternativa.nombre}
+            <div
+              className="route"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <span>{rutaAlternativa.nombre}</span>
+              {rutaAlternativa.esPreferida ? (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: 6,
+                    background: "var(--surface-2, #f1efe8)",
+                    color: "var(--muted-text, #6e6e76)",
+                    border: "1px solid var(--hairline, #e5e2db)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Ruta predeterminada
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="side-progress">
@@ -4463,6 +4488,13 @@ export function ConfigPasosEditorView({
                 configs[paso.id]?.nombreVisible?.trim() ||
                 summary.familia?.nombre ||
                 paso.familiaCodigo;
+              // Completitud del paso: verde si tiene todo para cotizar, ámbar
+              // si le faltan datos (errores o pendientes bloqueantes).
+              const completo =
+                summary.totalErrores === 0 &&
+                nivelPendientes(
+                  pendientesDePaso(summary.cfg, summary.familia),
+                ) !== "faltan";
               return (
                 <button
                   type="button"
@@ -4473,13 +4505,29 @@ export function ConfigPasosEditorView({
                     setEditingExtra(null);
                   }}
                 >
-                  <span className="ix">
+                  <span
+                    className="ix"
+                    style={
+                      summary.skipped
+                        ? undefined
+                        : {
+                            background: completo ? "#22a06b" : "#e0a11b",
+                            borderColor: completo ? "#22a06b" : "#e0a11b",
+                            color: "#fff",
+                          }
+                    }
+                  >
                     {summary.skipped ? (
                       "—"
-                    ) : summary.status === "done" ? (
+                    ) : completo ? (
                       <CheckIcon className="size-3" />
                     ) : (
-                      idx + 1
+                      <span
+                        aria-hidden
+                        style={{ fontWeight: 800, fontSize: 12, lineHeight: 1 }}
+                      >
+                        !
+                      </span>
                     )}
                   </span>
                   <span className="body">
@@ -4541,16 +4589,25 @@ export function ConfigPasosEditorView({
                         })()
                       : null}
                   </span>
-                  <span className="status">
-                    {summary.skipped
-                      ? "No ejecutar"
-                      : summary.status === "done"
-                        ? "✓"
-                        : summary.status === "warning"
-                          ? "!"
-                          : summary.optional
-                            ? "Opt"
-                            : "·"}
+                  <span
+                    className="status"
+                    title={
+                      !summary.optional && !summary.skipped
+                        ? "Paso obligatorio"
+                        : "Paso opcional"
+                    }
+                  >
+                    {!summary.optional && !summary.skipped ? (
+                      <LockIcon
+                        className="size-3.5"
+                        aria-label="Paso obligatorio"
+                      />
+                    ) : (
+                      <LockOpenIcon
+                        className="size-3.5"
+                        aria-label="Paso opcional"
+                      />
+                    )}
                   </span>
                 </button>
               );
