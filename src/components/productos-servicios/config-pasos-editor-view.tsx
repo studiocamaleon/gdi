@@ -10262,13 +10262,29 @@ function opcionesCantidadUnificada(
   const previos = pasos.filter(
     (_, i) => i < pasos.findIndex((x) => x.id === pasoId),
   );
-  const magnitudes: { key: string; etiqueta: string; pasoNombre: string }[] = [];
+  const magnitudes: {
+    key: string;
+    etiqueta: string;
+    pasoNombre: string;
+    opcional: boolean;
+  }[] = [];
   const vistas = new Set<string>();
   for (const p of previos) {
+    // Herencia de un paso OPCIONAL/CONDICIONAL: si ese paso no corre, el output
+    // no se publica y la cantidad queda ambigua (feedback del usuario sobre
+    // "Piezas laminadas" cuando el Laminado es opcional). Lo marcamos para
+    // avisar en el selector.
+    const opcional =
+      p.modoActivacion === "OPCIONAL" || p.modoActivacion === "CONDICIONAL";
     for (const o of familiasMap.get(p.familiaCodigo)?.outputsPublicables ?? []) {
       if (vistas.has(o.key)) continue;
       vistas.add(o.key);
-      magnitudes.push({ key: o.key, etiqueta: o.etiqueta, pasoNombre: p.nombre });
+      magnitudes.push({
+        key: o.key,
+        etiqueta: o.etiqueta,
+        pasoNombre: p.nombre,
+        opcional,
+      });
     }
   }
 
@@ -10307,7 +10323,9 @@ function opcionesCantidadUnificada(
       options.push({
         value: `h:${mg.key}`,
         label: cap(mg.etiqueta),
-        description: `Emitida por el paso: ${mg.pasoNombre}`,
+        description: mg.opcional
+          ? `Depende de "${mg.pasoNombre}" (OPCIONAL): si ese paso no corre, esta cantidad no existe. Para algo firme usá "La cantidad pedida".`
+          : `Emitida por el paso: ${mg.pasoNombre}`,
       });
     }
     options.push({
