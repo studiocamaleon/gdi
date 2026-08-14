@@ -9242,6 +9242,29 @@ const FORMULA_MIDE_FRASE: Record<string, string> = {
   fijo: "una sola unidad, fija por trabajo",
 };
 
+// Opción A: nombrar la magnitud concreta que produce el paso, en vez del
+// genérico "lo que produce el paso". Sale de lo que el paso ya declara (mismo
+// dato que Tiempo). Para un paso que acomoda un sustrato la magnitud es el
+// pliego/placa; con derivador/herencia, su unidad principal. null → genérico.
+function magnitudProducePaso(
+  cfg: UpsertConfigPasoPayload,
+  familia: Parameters<typeof unidadCantidadDe>[1],
+): string | null {
+  const declarada = unidadCantidadDe(cfg, familia);
+  if (declarada) return declarada;
+  if (nestingAplica(familia, cfg)) {
+    return familia?.codigo === "impresion_por_hoja" ? "pliegos" : "placas";
+  }
+  return null;
+}
+
+// La frase de "por_unidad_productiva" con la magnitud concreta si se conoce.
+function fraseUnidadProductiva(magnitud: string | null): string {
+  return magnitud
+    ? `los ${magnitud} que produce el paso`
+    : FORMULA_MIDE_FRASE.por_unidad_productiva;
+}
+
 const FORMA_TINTS = {
   mide: { bg: "#e6f1fb", fg: "#185fa5" },
   regla: { bg: "#eeedfe", fg: "#534ab7" },
@@ -9341,6 +9364,7 @@ function ConsumoReglaGuiado({
   paramsPaso,
   esAdicional,
   materialLabel,
+  magnitudProduceLabel,
   fuenteLabel,
   onSlotPatch,
 }: {
@@ -9361,6 +9385,8 @@ function ConsumoReglaGuiado({
   esAdicional: boolean;
   /** Sustantivo del material para la frase ("broche", "módulo"); null si no. */
   materialLabel: string | null;
+  /** Magnitud concreta que produce el paso ("pliegos", "m²"); null → genérico. */
+  magnitudProduceLabel: string | null;
   /** Fuente heredada de "Sobre qué mide" para el "de …" inline; null si no. */
   fuenteLabel: string | null;
   onSlotPatch: (patch: Partial<UpsertSlotMaterialPayload>) => void;
@@ -9559,8 +9585,10 @@ function ConsumoReglaGuiado({
         {forzada ? (
           <>
             <span style={{ fontSize: 13, fontWeight: 500 }}>
-              {FORMULA_MIDE_FRASE[decl?.formulaForzada ?? ""] ??
-                decl?.formulaForzada}
+              {decl?.formulaForzada === "por_unidad_productiva"
+                ? fraseUnidadProductiva(magnitudProduceLabel)
+                : (FORMULA_MIDE_FRASE[decl?.formulaForzada ?? ""] ??
+                  decl?.formulaForzada)}
             </span>
             <span style={fraseConectorStyle}>— lo fija el paso</span>
           </>
@@ -9573,7 +9601,10 @@ function ConsumoReglaGuiado({
               }
               options={FORMULA_OPTIONS.map((o) => ({
                 value: o.value,
-                label: FORMULA_MIDE_FRASE[o.value] ?? o.label,
+                label:
+                  o.value === "por_unidad_productiva"
+                    ? fraseUnidadProductiva(magnitudProduceLabel)
+                    : (FORMULA_MIDE_FRASE[o.value] ?? o.label),
               }))}
               placeholder="Qué mide"
             />
@@ -13775,11 +13806,17 @@ function SeccionesEsquemaPaso({
                       return null;
                     }
                     if (id === "consumo-formula") {
-                      const fuenteLabel = slot.fuenteMedida
-                        ? (opcionesPiezasMontar(ctxSlot).find(
-                            (o) => o.value === slot.fuenteMedida,
-                          )?.label ?? null)
-                        : null;
+                      // Opción B: mostrar la fuente inline sólo cuando NO es la
+                      // default ("las piezas del trabajo"): en un sustrato común
+                      // agregar "de las piezas…" es ruido; en cenefa/bastidor
+                      // (fuente = output geométrico) sí aporta.
+                      const fuenteLabel =
+                        slot.fuenteMedida &&
+                        slot.fuenteMedida !== "piezas_jobcontext"
+                          ? (opcionesPiezasMontar(ctxSlot).find(
+                              (o) => o.value === slot.fuenteMedida,
+                            )?.label ?? null)
+                          : null;
                       return (
                         <ConsumoReglaGuiado
                           slot={slot}
@@ -13788,6 +13825,10 @@ function SeccionesEsquemaPaso({
                           paramsPaso={asRecord(cfg.paramsPasoJson)}
                           esAdicional={!decl}
                           materialLabel={null}
+                          magnitudProduceLabel={magnitudProducePaso(
+                            cfg,
+                            familia,
+                          )}
                           fuenteLabel={fuenteLabel}
                           onSlotPatch={(patch) =>
                             materialesApi.updateSlot(
