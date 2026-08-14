@@ -13334,17 +13334,25 @@ function SeccionesEsquemaPaso({
                     (pnd) => pnd.slotCodigo != null,
                   );
                   return (
-                    <EncabezadoGrupo
-                      titulo="Materiales que consume"
-                      conteo={
-                        slotsVisibles.length === 1
-                          ? "1 componente"
-                          : `${slotsVisibles.length} componentes`
-                      }
-                      descripcion="Un componente por cada tipo de material que gasta el paso: sustrato, tinta, perfilería, chapa. Cada uno define qué se usa, quién lo elige y cuánto se descuenta."
-                      resuelto={slotsVisibles.length > 0 && !materialesFaltan}
-                      derecha={renderComponente("agregar-slot")}
-                    />
+                    <>
+                      <EncabezadoGrupo
+                        titulo="Materiales que consume"
+                        conteo={
+                          slotsVisibles.length === 1
+                            ? "1 componente"
+                            : `${slotsVisibles.length} componentes`
+                        }
+                        descripcion="Un componente por cada tipo de material que gasta el paso: sustrato, tinta, perfilería, chapa. Cada uno define qué se usa, quién lo elige y cuánto se descuenta."
+                        resuelto={slotsVisibles.length > 0 && !materialesFaltan}
+                      />
+                      {/* Los botones para agregar material van FULL-WIDTH debajo
+                          del encabezado: como `derecha` (flexShrink:0) aplastaban
+                          el título a 1 palabra cuando la familia tiene varios
+                          slots (LED). Ya envuelven solos. */}
+                      <div style={{ padding: "0 2px 2px" }}>
+                        {renderComponente("agregar-slot")}
+                      </div>
+                    </>
                   );
                 })()}
                 {(() => {
