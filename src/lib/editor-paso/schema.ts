@@ -1757,43 +1757,11 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       }),
     },
   },
-  {
-    clave: "tiempo.piezas_montar",
-    seccion: "tiempo",
-    eje: "tiempo",
-    grupo: "cantidad",
-    etiqueta: "Qué monta",
-    pregunta: "¿Qué monta: piezas del pedido o pliegos impresos?",
-    ayuda:
-      "Define qué medidas usa el paso para acomodar sobre el material de montaje.",
-    // [Tanda B] La pregunta aparece cuando la ficha declara fuentes de
-    // piezas heredadas Y el default es el implícito (el modelador ELIGE);
-    // laminado declara fuente pero con default forzado → no pregunta.
-    visible: (ctx) =>
-      (ctx.familia?.fuentesPiezasNesting?.length ?? 0) > 0 &&
-      ctx.familia?.fuentePiezasDefault === "piezas_jobcontext",
-    resumen: (ctx) => {
-      const valor = String(
-        ctx.paramsPaso.fuentePiezasMontaje ?? "piezas_jobcontext",
-      );
-      return opcionesPiezasMontar(ctx).find((o) => o.value === valor)?.label ??
-        valor;
-    },
-    origenValor: (ctx) =>
-      typeof ctx.paramsPaso.fuentePiezasMontaje === "string"
-        ? "config"
-        : "default-paso",
-    control: {
-      tipo: "pills",
-      opciones: (ctx) => opcionesPiezasMontar(ctx),
-      valor: (ctx) =>
-        String(ctx.paramsPaso.fuentePiezasMontaje ?? "piezas_jobcontext"),
-      aplicar: (_ctx, v) => ({
-        tipo: "params",
-        patch: { fuentePiezasMontaje: v || "piezas_jobcontext" },
-      }),
-    },
-  },
+  // "Qué monta" (fuentePiezasMontaje) se retiró como bloque separado: la fuente
+  // del tiempo ahora va INLINE en la frase de "La regla" ("… de [Tiras de
+  // cenefa] …"), heredada del material con override. Ver
+  // project_tiempo_frase_natural y el componente de La regla en
+  // config-pasos-editor-view.tsx.
   // (tiempo.tiempo_fijo se fusionó en tiempo.fijo_valor: un solo concepto
   //  "Fijo" para los dos storages históricos — árbol de tiempo, F0.3.)
 

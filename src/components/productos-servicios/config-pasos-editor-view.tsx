@@ -9670,6 +9670,56 @@ function RitmoGuiado({
       />
     </div>
   );
+  // ── Fuente INLINE de la frase ("… de [Tiras de cenefa] …"), reemplaza al
+  // bloque "Qué monta". Sólo en pasos que montan sobre un material. Hereda por
+  // default la fuente del material (Materiales → ¿Sobre qué mide? = fuenteMedida
+  // del slot SUSTRATO), con override. Ver project_tiempo_frase_natural.
+  const pasoMontaFuente = (familia?.fuentesPiezasNesting?.length ?? 0) > 0;
+  const ordenActualTiempo =
+    pasos.find((p) => p.id === pasoId)?.orden ?? null;
+  const fuenteHeredadaTiempo =
+    (cfg.slotsMateriales ?? []).find(
+      (s) =>
+        s.slotRol === "SUSTRATO" &&
+        typeof s.fuenteMedida === "string" &&
+        s.fuenteMedida,
+    )?.fuenteMedida ?? null;
+  const opcionesFuenteTiempo = [
+    ...MONTAJE_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    ...pasos
+      .filter(
+        (p) =>
+          p.orden != null &&
+          ordenActualTiempo != null &&
+          p.orden < ordenActualTiempo,
+      )
+      .flatMap((p) =>
+        (familiasMap.get(p.familiaCodigo)?.outputsGeometricos ?? []).map(
+          (o) => ({ value: `output:${o.key}`, label: `${o.etiqueta} · ${p.nombre}` }),
+        ),
+      ),
+  ];
+  const valorFuenteTiempo = String(
+    params.fuentePiezasMontaje ?? fuenteHeredadaTiempo ?? "piezas_jobcontext",
+  );
+  const fuenteTiempoEsHeredada =
+    typeof params.fuentePiezasMontaje !== "string" ||
+    params.fuentePiezasMontaje === fuenteHeredadaTiempo;
+  const selectorFuenteTiempo = pasoMontaFuente ? (
+    <>
+      <span style={notaStyle}>de</span>
+      <div style={{ minWidth: 170 }}>
+        <HumanSelect
+          value={valorFuenteTiempo}
+          onValueChange={(v) =>
+            v && onParams(pasoId, { fuentePiezasMontaje: v })
+          }
+          options={opcionesFuenteTiempo}
+          placeholder="Elegir fuente"
+        />
+      </div>
+    </>
+  ) : null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {variante === "fijo" ? (
@@ -9717,6 +9767,7 @@ function RitmoGuiado({
               style={{ maxWidth: 92, textAlign: "right" }}
             />
             {selectorMagnitud}
+            {selectorFuenteTiempo}
             <span style={notaStyle}>cada</span>
             <Input
               value={reglaT}
@@ -9751,6 +9802,23 @@ function RitmoGuiado({
               />
             </div>
           </div>
+          {pasoMontaFuente ? (
+            <div
+              style={{
+                fontSize: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                color: fuenteTiempoEsHeredada
+                  ? "var(--muted-text, #6e6e76)"
+                  : "#8a6d3b",
+              }}
+            >
+              {fuenteTiempoEsHeredada
+                ? "Mide sobre la misma fuente que el material (heredado de ¿Sobre qué mide?)."
+                : "El tiempo mide sobre otra fuente que el consumo del material."}
+            </div>
+          ) : null}
           {/* Sin nota de ejemplo: la regla escala proporcional exacto y se
               sobreentiende (feedback del usuario). */}
         </div>
