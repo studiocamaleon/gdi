@@ -1924,12 +1924,14 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     seccion: "maquina",
     pregunta: "¿Se imprime a color o en negro?",
     ayuda:
-      "Limita los modos de color que se pueden cotizar en este producto. Con candidatas, los modos se definen por máquina dentro de la pregunta anterior.",
+      "Limita los modos de color que se pueden cotizar en este producto. En familias con candidatas, los modos se definen por máquina dentro de la tarjeta de cada una.",
+    // En M-2 el modo de color se define SIEMPRE por máquina (tarjeta de la
+    // candidata), nunca como control suelto a nivel producto: antes aparecía
+    // con CERO máquinas y un rótulo "…de esta máquina" sin máquina — al quitar
+    // la última candidata saltaba de la nada (feedback del usuario).
     visible: (ctx) =>
       modoColorAplica(ctx.familia, ctx.cfg) &&
-      ((ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-2")
-        ? (ctx.cfg.maquinasCandidatas?.length ?? 0) === 0
-        : true),
+      !(ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-2"),
     resumen: (ctx) => {
       const config = getModoColorConfig(ctx.cfg.paramsPasoJson);
       if (config.enabled !== true) {
