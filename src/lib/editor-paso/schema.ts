@@ -1811,15 +1811,14 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿En qué máquina se hace?",
     ayuda:
       "La máquina fija de este paso: pone su centro de costo y, si el tiempo es por máquina, su velocidad.",
-    // Con candidatas elegidas la máquina (y su perfil) se definen POR
-    // CANDIDATA en esa pregunta: repetirlas acá confundía (feedback del
-    // usuario).
-    visible: (ctx) =>
-      (ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-1") &&
-      !(
-        (ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-2") &&
-        (ctx.cfg.maquinasCandidatas?.length ?? 0) > 0
-      ),
+    // En familias M-2 (comercial elige) la máquina —y su perfil— se definen
+    // SIEMPRE en las TARJETAS de candidatas (el diseño único: agregar máquina →
+    // marcar preferida setea el maquinaM1Id). El dropdown fijo sólo aplica a
+    // familias M-1 PURAS; si no, convivían dos diseños (feedback del usuario).
+    visible: (ctx) => {
+      const rel = ctx.familia?.relacionMaquinaSoportada ?? [];
+      return rel.includes("M-1") && !rel.includes("M-2");
+    },
     resumen: (ctx) => {
       const maquina = maquinaElegida(ctx);
       if (maquina) return maquina.nombre;
@@ -1845,12 +1844,16 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Con qué perfil?",
     ayuda:
       "El perfil operativo define velocidad y modos de color de la máquina para este paso.",
-    visible: (ctx) =>
-      Boolean(ctx.cfg.maquinaM1Id) &&
-      !(
-        (ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-2") &&
-        (ctx.cfg.maquinasCandidatas?.length ?? 0) > 0
-      ),
+    // Igual que la máquina fija: en M-2 el perfil vive en la tarjeta de la
+    // candidata. Acá sólo para familias M-1 puras.
+    visible: (ctx) => {
+      const rel = ctx.familia?.relacionMaquinaSoportada ?? [];
+      return (
+        Boolean(ctx.cfg.maquinaM1Id) &&
+        rel.includes("M-1") &&
+        !rel.includes("M-2")
+      );
+    },
     resumen: (ctx) => {
       const perfil = maquinaElegida(ctx)?.perfilesOperativos.find(
         (p) => p.id === ctx.cfg.perfilM1Id,
