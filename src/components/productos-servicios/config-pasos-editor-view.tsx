@@ -9735,6 +9735,28 @@ function RitmoGuiado({
       </div>
     </>
   ) : null;
+  // Fuente inline para pasos NO-montaje (trabajo manual, pintura…): cuando el
+  // reloj cuenta OTRA magnitud (perímetro, m²), la "cantidad del paso" (la del
+  // pedido, o una magnitud heredada como "piezas laminadas") va INLINE en la
+  // frase — "2 metros de perímetro DE las piezas laminadas cada 5 min" — en vez
+  // del bloque separado "Sobre qué cantidad se aplica". Reusa el selector de
+  // cantidad unificado. project_tiempo_frase_natural.
+  const selectorCantidadTiempo =
+    !pasoMontaFuente && puedeElegirMecanismo && fuente !== "cantidad" ? (
+      <>
+        <span style={notaStyle}>de</span>
+        <div style={{ minWidth: 180 }}>
+          <HumanSelect
+            value={cantidadSel.valor}
+            onValueChange={(v) =>
+              v && aplicarCantidadUnificada(v, pasoId, onPatch, onHerencia)
+            }
+            options={cantidadSel.options}
+            placeholder="la cantidad del paso"
+          />
+        </div>
+      </>
+    ) : null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {variante === "fijo" ? (
@@ -9783,6 +9805,7 @@ function RitmoGuiado({
             />
             {selectorMagnitud}
             {selectorFuenteTiempo}
+            {selectorCantidadTiempo}
             <span style={notaStyle}>cada</span>
             <Input
               value={reglaT}
