@@ -597,11 +597,13 @@ function materialVariantOption(
   variante: VarianteLookup,
 ): HumanSelectOption {
   const variantDetails = getMaterialVariantAttributeDetails(mp, variante);
+  // El trigger del select usa este label y lo TRUNCA en una línea. Con el
+  // "Etiqueta: valor · …" completo se leía como un volcado de datos (parecía un
+  // <select> nativo). Dejamos sólo los valores → un resumen corto que trunca
+  // con gracia; el dropdown sigue mostrando los atributos como chips (details).
   const variantLabel =
     variantDetails.length > 0
-      ? variantDetails
-          .map((detail) => `${detail.label}: ${detail.value}`)
-          .join(" · ")
+      ? variantDetails.map((detail) => detail.value).join(" · ")
       : (variante.nombreVariante ?? variante.sku);
 
   return {
