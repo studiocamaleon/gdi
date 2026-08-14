@@ -102,6 +102,14 @@ export function HumanSelect({
   const selected = normalizedOptions.find((option) => option.value === normalizedValue);
   const groupedOptions = React.useMemo(() => groupOptions(normalizedOptions), [normalizedOptions]);
 
+  // Cuando el valor elegido se pinta como chips (variantes de material), el
+  // trigger deja de ser una sola línea fija: afloja el line-clamp, el alto y
+  // el nowrap para que los chips envuelvan como las "opciones" del inventario.
+  const triggerConChips =
+    !!selected?.hideLabelInItem &&
+    !!selected?.details &&
+    selected.details.length > 0;
+
   return (
     <Select
       value={normalizedValue}
@@ -112,7 +120,16 @@ export function HumanSelect({
     >
       <SelectTrigger
         id={id}
-        className={cn("h-9 w-full py-1.5", triggerClassName)}
+        className={cn(
+          "w-full py-1.5",
+          // Con chips el trigger deja de ser una línea fija: sin `h-9` que
+          // compita, alto automático (anulando también la variante de tamaño
+          // `data-[size]:h-8`) y el select-value envuelve en vez de recortar.
+          triggerConChips
+            ? "h-auto min-h-9 items-start py-2 whitespace-normal data-[size=default]:h-auto *:data-[slot=select-value]:flex-wrap *:data-[slot=select-value]:items-start *:data-[slot=select-value]:line-clamp-none"
+            : "h-9",
+          triggerClassName,
+        )}
       >
         <HumanSelectTriggerValue option={selected} placeholder={placeholder} />
       </SelectTrigger>
@@ -152,6 +169,30 @@ function HumanSelectTriggerValue({
         className="text-muted-foreground flex min-w-0 flex-1 text-left"
       >
         {placeholder}
+      </span>
+    );
+  }
+
+  // Variantes de material: el ítem del dropdown esconde el label crudo y pinta
+  // los atributos como chips ("Ancho: …", "Acabado: …") — como las "opciones"
+  // de un material en Inventario. El trigger hace lo mismo: los MISMOS chips,
+  // envueltos, en vez del nombre plano. (El trigger deja crecer su alto: ver
+  // HumanSelect, que afloja line-clamp/alto cuando hay chips.)
+  if (option.hideLabelInItem && option.details && option.details.length > 0) {
+    return (
+      <span
+        data-slot="select-value"
+        className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-left"
+      >
+        {option.details.map((detail) => (
+          <span
+            key={`${detail.label}:${detail.value}`}
+            className="shrink-0 rounded border bg-muted px-2 py-1 text-[11.5px] leading-none text-muted-foreground"
+          >
+            <span className="font-medium text-foreground">{detail.label}:</span>{" "}
+            {detail.value}
+          </span>
+        ))}
       </span>
     );
   }
