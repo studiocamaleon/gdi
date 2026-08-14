@@ -2465,6 +2465,12 @@ model ProductoConfigPasoSlotMaterial {
   cantidadFactor        Decimal?                                  @default(1) @db.Decimal(12, 4)
   /// Base operativa para aplicar cantidadFactor.
   cantidadBase          String?
+  /// Fuente de medida del consumo de ESTE slot (override por-material del
+  /// default a nivel paso): 'las_del_trabajo' | 'piezas_visibles' |
+  /// 'output:<clave>' (un output geométrico de un paso anterior, ej.
+  /// 'output:cenefaTirasMm'). null = hereda el default del paso.
+  /// Ver docs/fuente-de-medida-de-consumo-diseno.md §6/§8.
+  fuenteMedida          String?
   aplicaMultiCaras      Boolean                                   @default(false)
   activo                Boolean                                   @default(true)
   createdAt             DateTime                                  @default(now())

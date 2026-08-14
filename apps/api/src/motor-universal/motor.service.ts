@@ -63,6 +63,7 @@ import type {
 } from './tipos';
 import {
   esSustratoRollo,
+  fuenteMedidaEfectiva,
   getImposicionCaballeteConfig,
   runNestingForPaso,
   type NestingDispatchResult,
@@ -168,6 +169,7 @@ interface PasoExtraSlotJson {
   formula?: string;
   cantidadFactor?: number | string | null;
   cantidadBase?: string | null;
+  fuenteMedida?: string | null;
   aplicaMultiCaras?: boolean;
 }
 
@@ -6314,11 +6316,9 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): number {
-    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-    const fuente =
-      typeof params.fuentePiezasMontaje === 'string'
-        ? params.fuentePiezasMontaje
-        : 'piezas_jobcontext';
+    // Consumo y tiempo COMPARTEN la fuente (§8): el override por-slot gana sobre
+    // el param del paso, igual que en buildJobContextPiezas.
+    const fuente = fuenteMedidaEfectiva(paso) ?? 'piezas_jobcontext';
 
     if (fuente === 'pliegos_impresos') {
       return (
@@ -7605,6 +7605,7 @@ export class MotorUniversalService {
               ? null
               : Number(s.cantidadFactor),
           cantidadBase: s.cantidadBase,
+          fuenteMedida: s.fuenteMedida,
           aplicaMultiCaras: s.aplicaMultiCaras,
           materialVariante: s.materialVariante
             ? {
@@ -8285,6 +8286,7 @@ export class MotorUniversalService {
           cantidadFactor:
             s.cantidadFactor === undefined ? null : s.cantidadFactor,
           cantidadBase: s.cantidadBase ?? null,
+          fuenteMedida: s.fuenteMedida ?? null,
           aplicaMultiCaras: s.aplicaMultiCaras ?? false,
           materialVariante,
         };

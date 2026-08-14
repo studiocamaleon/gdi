@@ -1,4 +1,4 @@
-import { runNestingForPaso } from '../nesting-dispatcher';
+import { fuenteMedidaEfectiva, runNestingForPaso } from '../nesting-dispatcher';
 
 function buildPaso(algorithm: 'auto' | 'shelf-rollo' | 'maxrects-rollo') {
   return {
@@ -728,5 +728,57 @@ describe('fuente de medida output:<clave> (modelo unificado)', () => {
       chapaRollo,
     );
     expect(result).toBeNull();
+  });
+});
+
+describe('fuenteMedidaEfectiva — override por slot vs param del paso (§8)', () => {
+  const mkPaso = (opts: {
+    fuentePiezasMontaje?: string;
+    slots?: Array<{ slotRol?: string; fuenteMedida?: string | null }>;
+  }) =>
+    ({
+      paramsPasoJson: opts.fuentePiezasMontaje
+        ? { fuentePiezasMontaje: opts.fuentePiezasMontaje }
+        : {},
+      slots: opts.slots ?? [],
+    }) as never;
+
+  it('sin fuenteMedida en los slots → cae al param del paso (neutral)', () => {
+    expect(
+      fuenteMedidaEfectiva(
+        mkPaso({
+          fuentePiezasMontaje: 'piezas_visibles',
+          slots: [{ slotRol: 'SUSTRATO' }],
+        }),
+      ),
+    ).toBe('piezas_visibles');
+  });
+
+  it('slot SUSTRATO con fuenteMedida → overridea el param del paso', () => {
+    expect(
+      fuenteMedidaEfectiva(
+        mkPaso({
+          fuentePiezasMontaje: 'piezas_jobcontext',
+          slots: [
+            { slotRol: 'SUSTRATO', fuenteMedida: 'output:cenefaTirasMm' },
+          ],
+        }),
+      ),
+    ).toBe('output:cenefaTirasMm');
+  });
+
+  it('fuenteMedida en un slot NO sustrato se ignora', () => {
+    expect(
+      fuenteMedidaEfectiva(
+        mkPaso({
+          fuentePiezasMontaje: 'piezas_visibles',
+          slots: [{ slotRol: 'COMPONENTE', fuenteMedida: 'output:fondoMm' }],
+        }),
+      ),
+    ).toBe('piezas_visibles');
+  });
+
+  it('sin fuente por ningún lado → null', () => {
+    expect(fuenteMedidaEfectiva(mkPaso({}))).toBeNull();
   });
 });

@@ -1015,6 +1015,11 @@ export interface SlotCargado {
   formula: string;
   cantidadFactor?: number | string | null;
   cantidadBase?: string | null;
+  /** Fuente de medida del consumo de ESTE slot (override por-material del
+   *  default a nivel paso). Mismo vocabulario que fuentePiezasMontaje:
+   *  'piezas_visibles' | 'piezas_jobcontext' | 'output:<clave>'. null = hereda
+   *  el default del paso. docs/fuente-de-medida-de-consumo-diseno.md §8. */
+  fuenteMedida?: string | null;
   aplicaMultiCaras: boolean;
   /** Material concreto si HARDCODED (o el resuelto en runtime). */
   materialVariante?: {

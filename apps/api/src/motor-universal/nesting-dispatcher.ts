@@ -568,17 +568,37 @@ function normalizarPiezasDeOutput(
   return piezas;
 }
 
+/**
+ * Fuente de medida EFECTIVA de un paso: el override por-SLOT (source-of-truth
+ * nuevo, `slot.fuenteMedida` del slot SUSTRATO) gana sobre el param del paso
+ * (`fuentePiezas`/`fuentePiezasMontaje`, legacy default). Fase 1: un solo
+ * dispatch por paso — toma la del slot sustrato principal. El re-dispatch
+ * per-slot (varios sustratos midiendo fuentes distintas) queda para fase 2.
+ * docs/fuente-de-medida-de-consumo-diseno.md §8.
+ */
+export function fuenteMedidaEfectiva(paso: PasoCargado): string | null {
+  const slotFuente = paso.slots?.find(
+    (s) =>
+      s.slotRol === 'SUSTRATO' &&
+      typeof s.fuenteMedida === 'string' &&
+      s.fuenteMedida.length > 0,
+  )?.fuenteMedida;
+  if (typeof slotFuente === 'string' && slotFuente.length > 0) {
+    return slotFuente;
+  }
+  const params = asRecord(paso.paramsPasoJson);
+  if (typeof params.fuentePiezas === 'string') return params.fuentePiezas;
+  if (typeof params.fuentePiezasMontaje === 'string') {
+    return params.fuentePiezasMontaje;
+  }
+  return null;
+}
+
 function buildJobContextPiezas(
   paso: PasoCargado,
   jobContext: JobContext,
 ): JobContext | null {
-  const params = asRecord(paso.paramsPasoJson);
-  const seleccion =
-    typeof params.fuentePiezas === 'string'
-      ? params.fuentePiezas
-      : typeof params.fuentePiezasMontaje === 'string'
-        ? params.fuentePiezasMontaje
-        : null;
+  const seleccion = fuenteMedidaEfectiva(paso);
   // Fuente builtin `piezas_visibles`: el paso trabaja sobre la MEDIDA
   // TERMINADA — la chapa trasera se corta al marco del cartel, no a la lona
   // que la demasía de tensado agrandó. Hermana de `piezas_jobcontext` (que
