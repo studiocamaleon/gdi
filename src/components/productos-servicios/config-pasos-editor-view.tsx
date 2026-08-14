@@ -4590,10 +4590,6 @@ export function ConfigPasosEditorView({
                   </span>
                   <span
                     className="status"
-                    // Color NEUTRO fijo: el candado es obligatorio/opcional, no
-                    // el estado del paso. Sin esto heredaba el verde/rojo de
-                    // `.status` y confundía con el check de completitud.
-                    style={{ color: "var(--muted-text, #8a857b)" }}
                     title={
                       !summary.optional && !summary.skipped
                         ? "Paso obligatorio"
@@ -4601,13 +4597,18 @@ export function ConfigPasosEditorView({
                     }
                   >
                     {!summary.optional && !summary.skipped ? (
+                      // Cerrado (OBLIGATORIO) en ámbar para diferenciarlo a
+                      // simple vista del abierto (opcional), que queda gris.
+                      // El color NO habla del estado del paso (eso es el check).
                       <LockIcon
                         className="size-3.5"
+                        style={{ color: "#e0a11b" }}
                         aria-label="Paso obligatorio"
                       />
                     ) : (
                       <LockOpenIcon
                         className="size-3.5"
+                        style={{ color: "var(--muted-text, #8a857b)" }}
                         aria-label="Paso opcional"
                       />
                     )}
