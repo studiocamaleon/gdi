@@ -510,6 +510,21 @@ describe('runNestingForPaso montaje sobre sustrato', () => {
     expect(result!.consumedLengthMm).toBeGreaterThan(0);
   });
 
+  it('invariante: pieza más grande que la hoja → null (no la coloca desbordada)', async () => {
+    // 2500×1400 no entra en la hoja 1220×2440 ni rotada (1400 > 1220 y
+    // 2500 > 2440). Sin panelizado, el motor NO debe acomodarla desbordada:
+    // devuelve null y el guard corta con "no entra, activá panelizado".
+    const result = await runNestingForPaso(
+      buildPasoMontaje('auto') as never,
+      { cantidad: 1, piezas: [{ cantidad: 1, anchoMm: 2500, altoMm: 1400 }] },
+      {
+        id: 'chapa-122x244',
+        atributosVarianteJson: { anchoMm: 1220, largoMm: 2440 },
+      },
+    );
+    expect(result).toBeNull();
+  });
+
   it('calcula material de montaje en placa sin tratar el ancho de placa como rollo', async () => {
     const result = await runNestingForPaso(
       buildPasoMontaje('auto') as never,

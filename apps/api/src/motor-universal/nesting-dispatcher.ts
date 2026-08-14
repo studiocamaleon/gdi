@@ -509,6 +509,35 @@ export function partirPiezasEnPanosDeHoja(
 }
 
 /**
+ * Invariante universal: NINGUNA pieza puede quedar fuera del sustrato. Antes de
+ * acomodar en una HOJA, verifica que cada pieza entre en el área útil en alguna
+ * orientación (con el panelizado ya aplicado aguas arriba). Si alguna no entra,
+ * no hay layout válido → el dispatcher devuelve null y el guard corta con "no
+ * entra, activá panelizado", en vez de que el packer la coloque DESBORDADA
+ * (feedback del usuario: piezas dibujadas fuera de la chapa). El rollo ya lo
+ * respeta por su cuenta; esto cierra el hueco de las hojas (MaxRects abría un
+ * bin por overflow y colocaba igual).
+ */
+function todasLasPiezasEntranEnHoja(
+  piezas: Array<{ anchoMm: number; altoMm: number }>,
+  config: NestingConfigResolved,
+): boolean {
+  const utilW =
+    (config.sheetWidthMm ?? 0) - config.margins.leftMm - config.margins.rightMm;
+  const utilH =
+    (config.sheetHeightMm ?? 0) - config.margins.topMm - config.margins.bottomMm;
+  if (utilW <= 0 || utilH <= 0) return false;
+  const EPS = 1; // mm — tolerancia de redondeo
+  return piezas.every(
+    (p) =>
+      (p.anchoMm <= utilW + EPS && p.altoMm <= utilH + EPS) ||
+      (config.allowRotation &&
+        p.altoMm <= utilW + EPS &&
+        p.anchoMm <= utilH + EPS),
+  );
+}
+
+/**
  * Piezas que el paso va a acomodar.
  *
  * Un paso puede acomodar las piezas del propio trabajo o heredar lo que
@@ -958,6 +987,8 @@ function runGrid2DMultiForArea(
   if (piezas.length === 0) return null;
   void paso;
   if (!config.sheetWidthMm || !config.sheetHeightMm) return null;
+  // Invariante: sin layout válido si una pieza no entra en la hoja (→ guard).
+  if (!todasLasPiezasEntranEnHoja(piezas, config)) return null;
 
   const medidasDistintas = new Set(
     piezas.map((p) => `${p.anchoMm}x${p.altoMm}`),
@@ -1029,6 +1060,8 @@ function runGrid2DSingleForArea(
   const piezas = getPiezasParaNesting(jobContext);
   const pieza = piezas[0];
   if (!pieza || !config.sheetWidthMm || !config.sheetHeightMm) return null;
+  // Invariante: sin layout válido si una pieza no entra en la hoja (→ guard).
+  if (!todasLasPiezasEntranEnHoja(piezas, config)) return null;
 
   const sustrato = {
     kind: 'sheet' as const,
