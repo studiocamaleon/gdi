@@ -848,8 +848,11 @@ describe("sección Materiales", () => {
     expect(material.origenValor(ctx)).toBe("config");
   });
 
-  it("base de consumo: sólo adicional o insumo declarado, y resume base × factor", () => {
+  it("base de consumo: plegada dentro de consumo (ya no es control separado), pero resume base × factor", () => {
     const base = ESQUEMA_PASO.find((op) => op.clave === "materiales.base")!;
+    // "Regla propia" (base × factor) vive ahora dentro de materiales.consumo
+    // (las 3 formas): la clave materiales.base ya no se muestra sola. Se
+    // conserva su resumen para tests/textos.
     expect(base.visible(ctxBase({ slot: slotCtx({}) }))).toBe(false);
     const adicional = ctxBase({
       slot: slotCtx(
@@ -857,12 +860,12 @@ describe("sección Materiales", () => {
         { esAdicional: true },
       ),
     });
-    expect(base.visible(adicional)).toBe(true);
+    expect(base.visible(adicional)).toBe(false);
     expect(base.resumen(adicional)).toBe("2 por cantidad pedida");
     const insumo = ctxBase({
       slot: slotCtx({}, { declTipo: "INSUMO_PASO" }),
     });
-    expect(base.visible(insumo)).toBe(true);
+    expect(base.visible(insumo)).toBe(false);
     expect(base.resumen(insumo)).toBe("Según fórmula del consumo");
   });
 

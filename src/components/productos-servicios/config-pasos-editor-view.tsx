@@ -15,8 +15,11 @@ import {
   LockOpenIcon,
   PackageIcon,
   PlusIcon,
+  RulerIcon,
   SaveIcon,
   SearchIcon,
+  Share2Icon,
+  SlidersHorizontalIcon,
   StarIcon,
   Trash2Icon,
   XIcon,
@@ -61,6 +64,7 @@ import {
   opcionesDeEje,
   opcionesDeMaterial,
   GRUPOS_MATERIAL,
+  opcionesPiezasMontar,
   modosActivacionOfrecidos,
   MODO_ACTIVACION_LABELS,
   type EjePaso,
@@ -9222,6 +9226,372 @@ function CandidatosSlotDetalladoEditor({
   );
 }
 
+// ─── Consumo como frase: las 3 formas ─────────────────────────────────
+// "Cómo se calcula el consumo" se declara eligiendo UNA de tres formas y se
+// lee como una regla (igual que Tiempo). Reemplaza los dos selectores
+// circulares "Con qué fórmula" + "¿Por cada cuántos?" que se mandaban uno al
+// otro. Ver docs/consumo-frase-natural-diseno.md. [[project_tiempo_frase_natural]]
+
+// La fórmula, dicha como magnitud natural (lo que el paso mide), no como
+// nombre técnico. "Por unidad producida" → "lo que produce el paso".
+const FORMULA_MIDE_FRASE: Record<string, string> = {
+  por_unidad_productiva: "lo que produce el paso",
+  por_m2: "los m² que ocupan las piezas",
+  por_metro_lineal: "los metros lineales que consume",
+  por_pieza: "una unidad por cada pieza pedida",
+  fijo: "una sola unidad, fija por trabajo",
+};
+
+const FORMA_TINTS = {
+  mide: { bg: "#e6f1fb", fg: "#185fa5" },
+  regla: { bg: "#eeedfe", fg: "#534ab7" },
+  derivado: { bg: "#faeeda", fg: "#854f0b" },
+} as const;
+
+function FormaConsumoSeccion({
+  icono,
+  tint,
+  titulo,
+  subtitulo,
+  children,
+}: {
+  icono: React.ReactNode;
+  tint: { bg: string; fg: string };
+  titulo: string;
+  subtitulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <span
+          aria-hidden
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 26,
+            height: 26,
+            borderRadius: 7,
+            background: tint.bg,
+            color: tint.fg,
+            flexShrink: 0,
+          }}
+        >
+          {icono}
+        </span>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>{titulo}</span>
+        <span style={{ fontSize: 12, color: "var(--muted-text-2, #92929b)" }}>
+          {subtitulo}
+        </span>
+      </div>
+      <div style={{ paddingLeft: 35 }}>{children}</div>
+    </div>
+  );
+}
+
+// Un enlace de texto para cambiar de forma (sin peso de botón).
+function EnlaceForma({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        marginTop: 10,
+        border: 0,
+        background: "none",
+        padding: 0,
+        fontSize: 12,
+        color: "var(--muted-text, #6e6e76)",
+        textDecoration: "underline",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+const fraseConectorStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "var(--muted-text, #6e6e76)",
+};
+
+/**
+ * "Cómo se calcula el consumo" — las 3 formas. Reemplaza a la vez el select de
+ * fórmula (materiales.consumo) y la base×factor (materiales.base):
+ *  1. Lo mide el paso — sustrato y lo que sigue la geometría (fórmula).
+ *  2. Regla propia — N por base (broches por pila, ojales por pieza).
+ *  3. Lo deriva la geometría — sembrado LED, perfil en barras, cableado; se
+ *     lee la regla real (no perillas muertas), con opción de pisarla.
+ */
+function ConsumoReglaGuiado({
+  slot,
+  decl,
+  familia,
+  paramsPaso,
+  esAdicional,
+  materialLabel,
+  fuenteLabel,
+  onSlotPatch,
+}: {
+  slot: UpsertSlotMaterialPayload;
+  decl:
+    | {
+        codigo: string;
+        nombre?: string;
+        tipo?: string;
+        magnitudDerivada?: string;
+        cantidadFija?: number;
+        formulaForzada?: string;
+      }
+    | null
+    | undefined;
+  familia: { multiplicadoresSoportados?: string[] } | null | undefined;
+  paramsPaso: Record<string, unknown>;
+  esAdicional: boolean;
+  /** Sustantivo del material para la frase ("broche", "módulo"); null si no. */
+  materialLabel: string | null;
+  /** Fuente heredada de "Sobre qué mide" para el "de …" inline; null si no. */
+  fuenteLabel: string | null;
+  onSlotPatch: (patch: Partial<UpsertSlotMaterialPayload>) => void;
+}) {
+  // modulos_led no declara magnitudDerivada pero su cantidad la fija el
+  // derivador (sembrado). Lo tratamos como derivado para no mostrar perillas
+  // que el motor ignora — la confusión de raíz del caso LED.
+  const derivado = Boolean(
+    decl &&
+      (decl.magnitudDerivada ||
+        decl.cantidadFija !== undefined ||
+        decl.codigo === "modulos_led"),
+  );
+  const forzada = Boolean(decl?.formulaForzada) && !derivado;
+  const reglaPropia = Boolean(slot.cantidadBase);
+  const permiteReglaPropia =
+    esAdicional || decl?.tipo === "INSUMO_PASO" || derivado;
+
+  const dePart = fuenteLabel ? (
+    <>
+      {" "}
+      <span style={fraseConectorStyle}>de</span>{" "}
+      <span
+        style={{
+          fontSize: 13,
+          fontWeight: 500,
+          color: "var(--fg-2, #2c2c33)",
+        }}
+      >
+        {fuenteLabel}
+      </span>
+    </>
+  ) : null;
+
+  // ── Forma 3: lo deriva la geometría ─────────────────────────────────
+  if (derivado && !reglaPropia) {
+    let detalle: React.ReactNode;
+    if (decl?.cantidadFija !== undefined) {
+      detalle = (
+        <>
+          <b>{decl.cantidadFija} por cartel</b> — con varios carteles idénticos
+          se multiplica; cada uno se elige por los watts de SU cartel.
+        </>
+      );
+    } else if (decl?.codigo === "perfil_estructural") {
+      const params = paramsPaso ?? {};
+      const tipoBastidor =
+        String(params.tipoBastidor ?? "doble").toLowerCase() === "simple"
+          ? "frontlight"
+          : "backlight";
+      const profundidadM = (Number(params.profundidadMm) || 100) / 1000;
+      const m = derivarMetricas({
+        tipoCartel: tipoBastidor,
+        width: 1,
+        height: 0.8,
+        depth: profundidadM,
+        sepRefuerzoVcm: Number(params.sepRefuerzoVcm ?? 100) || 0,
+        sepRefuerzoHcm: Number(params.sepRefuerzoHcm ?? 0) || 0,
+        cenefa: false,
+        solapaCenefaCm: Number(params.solapaCenefaCm ?? 2) || 0,
+        pintura: false,
+        fondo: false,
+        perfilLadoM: 0.04,
+        densidadLed: 1,
+        coberturaLedM2: 0.0625,
+      });
+      detalle = (
+        <>
+          los <b>metros de perfil del bastidor</b>, comprados en{" "}
+          <b>barras enteras</b> cuando la variante declara su largo. Ej.: 1,00 ×
+          0,80 m → <b>{m.mlTotal.toFixed(1).replace(".", ",")} ml</b>.
+        </>
+      );
+    } else if (decl?.codigo === "modulos_led") {
+      detalle = (
+        <>
+          <b>los módulos</b> que siembra el paso: uno cada <i>paso</i> de la
+          variante, en grilla sobre la medida del cartel, × la densidad.
+        </>
+      );
+    } else if (decl?.codigo === "cableado") {
+      detalle = (
+        <>
+          <b>los metros de cable</b>: perímetro × 1,4 + 12 cm por módulo.
+        </>
+      );
+    } else {
+      detalle = (
+        <>
+          <b>{decl?.magnitudDerivada}</b>, la magnitud que publica la geometría
+          del paso.
+        </>
+      );
+    }
+    return (
+      <FormaConsumoSeccion
+        icono={<Share2Icon size={15} />}
+        tint={FORMA_TINTS.derivado}
+        titulo="Lo deriva la geometría"
+        subtitulo="la regla la fija el paso"
+      >
+        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+          <span style={fraseConectorStyle}>Gasta </span>
+          {detalle}
+        </div>
+        {permiteReglaPropia ? (
+          <EnlaceForma
+            onClick={() => onSlotPatch({ cantidadBase: "cantidad_pedida" })}
+          >
+            <SlidersHorizontalIcon size={13} /> …o pisala con una regla propia
+          </EnlaceForma>
+        ) : null}
+      </FormaConsumoSeccion>
+    );
+  }
+
+  // ── Forma 2: regla propia (N por base) ──────────────────────────────
+  if (reglaPropia) {
+    return (
+      <FormaConsumoSeccion
+        icono={<SlidersHorizontalIcon size={15} />}
+        tint={FORMA_TINTS.regla}
+        titulo="Regla propia"
+        subtitulo="N por base"
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 7,
+            lineHeight: 2,
+          }}
+        >
+          <span style={fraseConectorStyle}>Gasta</span>
+          <Input
+            type="number"
+            min={0}
+            step={0.0001}
+            value={slot.cantidadFactor ?? 1}
+            onChange={(event) =>
+              onSlotPatch({
+                cantidadFactor:
+                  event.target.value === "" ? null : Number(event.target.value),
+              })
+            }
+            style={{ maxWidth: 84 }}
+          />
+          {materialLabel ? (
+            <span style={{ fontSize: 13, fontWeight: 500 }}>
+              {materialLabel}
+            </span>
+          ) : null}
+          <span style={fraseConectorStyle}>por cada</span>
+          <div style={{ minWidth: 220 }}>
+            <HumanSelect
+              value={slot.cantidadBase ?? "cantidad_pedida"}
+              onValueChange={(v) =>
+                onSlotPatch({ cantidadBase: v || "cantidad_pedida" })
+              }
+              options={CANTIDAD_BASE_SLOT_OPTIONS}
+              placeholder="Base"
+            />
+          </div>
+        </div>
+        <EnlaceForma
+          onClick={() =>
+            onSlotPatch({ cantidadBase: null, cantidadFactor: null })
+          }
+        >
+          <ArrowLeftIcon size={13} />{" "}
+          {derivado ? "Volver a lo que deriva la geometría" : "Volver a lo que mide el paso"}
+        </EnlaceForma>
+      </FormaConsumoSeccion>
+    );
+  }
+
+  // ── Forma 1: lo mide el paso (fórmula) ──────────────────────────────
+  return (
+    <FormaConsumoSeccion
+      icono={<RulerIcon size={15} />}
+      tint={FORMA_TINTS.mide}
+      titulo="Lo mide el paso"
+      subtitulo="sustrato y lo que sigue la geometría"
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 7,
+          lineHeight: 2,
+        }}
+      >
+        <span style={fraseConectorStyle}>Gasta</span>
+        {forzada ? (
+          <>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>
+              {FORMULA_MIDE_FRASE[decl?.formulaForzada ?? ""] ??
+                decl?.formulaForzada}
+            </span>
+            <span style={fraseConectorStyle}>— lo fija el paso</span>
+          </>
+        ) : (
+          <div style={{ minWidth: 240 }}>
+            <HumanSelect
+              value={slot.formula ?? "por_unidad_productiva"}
+              onValueChange={(v) =>
+                onSlotPatch({ formula: v || "por_unidad_productiva" })
+              }
+              options={FORMULA_OPTIONS.map((o) => ({
+                value: o.value,
+                label: FORMULA_MIDE_FRASE[o.value] ?? o.label,
+              }))}
+              placeholder="Qué mide"
+            />
+          </div>
+        )}
+        {dePart}
+      </div>
+      {permiteReglaPropia ? (
+        <EnlaceForma
+          onClick={() => onSlotPatch({ cantidadBase: "cantidad_pedida" })}
+        >
+          <SlidersHorizontalIcon size={13} /> …o usá una regla propia (N por base)
+        </EnlaceForma>
+      ) : null}
+    </FormaConsumoSeccion>
+  );
+}
+
 /** Base × factor del consumo (materiales.base en el esquema): mismos
  *  bindings que el detallado, aplicados vía patch de slot. */
 function BaseConsumoGuiado({
@@ -13681,26 +14051,24 @@ function SeccionesEsquemaPaso({
                       );
                     }
                     if (id === "base-consumo") {
-                      return (
-                        <BaseConsumoGuiado
-                          slot={slot}
-                          esAdicional={!decl}
-                          onSlotPatch={(patch) =>
-                            materialesApi.updateSlot(
-                              pasoActual.id,
-                              slotIdx,
-                              patch,
-                            )
-                          }
-                        />
-                      );
+                      // Plegado dentro de "consumo-formula" (las 3 formas).
+                      return null;
                     }
                     if (id === "consumo-formula") {
+                      const fuenteLabel = slot.fuenteMedida
+                        ? (opcionesPiezasMontar(ctxSlot).find(
+                            (o) => o.value === slot.fuenteMedida,
+                          )?.label ?? null)
+                        : null;
                       return (
-                        <ConsumoFormulaGuiado
+                        <ConsumoReglaGuiado
                           slot={slot}
                           decl={decl}
+                          familia={familia}
                           paramsPaso={asRecord(cfg.paramsPasoJson)}
+                          esAdicional={!decl}
+                          materialLabel={null}
+                          fuenteLabel={fuenteLabel}
                           onSlotPatch={(patch) =>
                             materialesApi.updateSlot(
                               pasoActual.id,

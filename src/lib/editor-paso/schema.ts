@@ -2163,9 +2163,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "materiales.consumo",
     seccion: "materiales",
     grupo: "descuento",
-    // Ahora que "Sobre qué mide" vive en el mismo bloque, la fórmula lleva su
-    // propia etiqueta para distinguirlas (antes se apoyaba en el título).
-    etiqueta: "Con qué fórmula",
+    // Sin etiqueta: el componente de las 3 formas se auto-titula (cada forma
+    // lleva su propio encabezado con ícono). Ancho completo para la frase.
+    etiqueta: "",
+    anchoCompleto: true,
     pregunta: "¿Cómo se calcula el consumo?",
     ayuda:
       "La fórmula del motor para saber cuánto material gasta: por pieza, por m², por metro lineal… En slots derivados no hay fórmula: la geometría del paso decide.",
@@ -2275,15 +2276,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Por cada cuántos se gasta uno?",
     ayuda:
       "Base × factor: 2 broches por talonario, 1 cartón por pila, 4 ojales por pieza.",
-    visible: (ctx) =>
-      Boolean(
-        ctx.slot &&
-          (ctx.slot.esAdicional || ctx.slot.decl?.tipo === "INSUMO_PASO") &&
-          // H20: en slots derivados/fijos el motor ignora base × factor —
-          // la geometría manda; mostrar la pregunta era ruido.
-          !ctx.slot.decl?.magnitudDerivada &&
-          ctx.slot.decl?.cantidadFija === undefined,
-      ),
+    // Plegado dentro de "materiales.consumo" (las 3 formas): "Regla propia" ES
+    // esta base × factor. Se deja la clave para el resumen/tests, pero no se
+    // muestra como control separado.
+    visible: () => false,
     resumen: (ctx) => {
       const slot = ctx.slot;
       if (!slot) return "";
@@ -2760,7 +2756,7 @@ export const GRUPOS_MATERIAL: GrupoEje[] = [
     id: "descuento",
     titulo: "Cómo se calcula el consumo",
     ayuda:
-      "Dos cosas: SOBRE QUÉ mide (la medida de la que sale el consumo) y CON QUÉ fórmula lo descuenta el motor en cada OT — más cómo se cobra lo que sobra.",
+      "El consumo se declara de una de tres formas y se lee como una regla: lo mide el paso, una regla propia (N por base), o lo deriva la geometría. Abajo, sobre qué mide y cómo se cobra lo que sobra.",
     estilo: "campos",
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
     encabezado: "arriba",
