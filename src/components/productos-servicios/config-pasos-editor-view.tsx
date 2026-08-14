@@ -4575,15 +4575,14 @@ export function ConfigPasosEditorView({
                               </span>
                             );
                           }
+                          // "Listo para cotizar" lo dice el check verde de la
+                          // izquierda (feedback del usuario). Sólo queda el
+                          // recordatorio de guardar si el paso está completo
+                          // pero todavía no se persistió.
+                          if (summary.configExistente) return null;
                           return (
-                            <span
-                              title={resumen || undefined}
-                              style={{ ...lineaBase, color: "#1e7a46" }}
-                            >
-                              ✓ Listo para cotizar
-                              {summary.configExistente
-                                ? ""
-                                : " — guardá el paso"}
+                            <span style={{ ...lineaBase, color: "#8a6d3b" }}>
+                              Guardá el paso
                             </span>
                           );
                         })()
@@ -4591,6 +4590,10 @@ export function ConfigPasosEditorView({
                   </span>
                   <span
                     className="status"
+                    // Color NEUTRO fijo: el candado es obligatorio/opcional, no
+                    // el estado del paso. Sin esto heredaba el verde/rojo de
+                    // `.status` y confundía con el check de completitud.
+                    style={{ color: "var(--muted-text, #8a857b)" }}
                     title={
                       !summary.optional && !summary.skipped
                         ? "Paso obligatorio"
