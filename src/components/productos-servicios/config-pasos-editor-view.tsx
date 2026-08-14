@@ -144,6 +144,7 @@ import {
   validateRuleGroup,
 } from "@/lib/rule-builder";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
+import { getMateriaPrimaTemplate } from "@/lib/materia-prima-templates";
 import { derivarMetricas } from "@/components/carteleria/geometria";
 import {
   NIVELES_COBERTURA,
@@ -1872,7 +1873,7 @@ function materialRowSpecChips(item: MateriaPrimaBusquedaItem): string[] {
   if (!variante) return [];
   const summary = getVariantAttributeSummary(variante);
   const chips: string[] = [];
-  const medida = getVariantMeasureLabel(summary);
+  const medida = getVariantMeasureLabel(variante, item.templateId);
   if (medida) chips.push(medida);
   if (summary.espesor != null) chips.push(`${formatNumber(summary.espesor)} mm`);
   if (summary.color) chips.push(summary.color);
@@ -1968,14 +1969,53 @@ function canUseColorThicknessSelector(materiaPrima: MateriaPrimaBusquedaItem) {
   });
 }
 
+// Normaliza la unidad de UNA dimensión para el listado: mm → cm (los mm se leen
+// raro en materiales grandes), y m/cm quedan como están. Devuelve "N sym" — con
+// la unidad SIEMPRE, también en la primera medida.
+function formatMedidaDimension(
+  raw: unknown,
+  unit: string | undefined,
+): string | null {
+  const value =
+    typeof raw === "string" ? Number(raw.replace(",", ".")) : Number(raw);
+  if (!Number.isFinite(value)) return null;
+  if (unit === "mm") return `${formatNumber(value / 10)} cm`;
+  return unit ? `${formatNumber(value)} ${unit}` : formatNumber(value);
+}
+
+// La medida del material en el listado ("Ancho × Largo"). Antes pegaba "m" al
+// final y nada en la primera medida — un rollo de film DTF (ancho en mm, largo
+// en m) salía "300 x 100 m", como si 300 fueran metros. Ahora lee la unidad de
+// cada dimensión del template y la muestra en ambas, normalizando mm → cm.
 function getVariantMeasureLabel(
-  summary: ReturnType<typeof getVariantAttributeSummary>,
+  variante: MaterialVariantSearchItem,
+  templateId: string | null | undefined,
 ) {
+  const attrs = asRecord(variante.atributosVarianteJson);
+  const template = templateId ? getMateriaPrimaTemplate(templateId) : null;
+  if (template) {
+    const fieldByKey = new Map(
+      template.camposTecnicos.map((field) => [field.key, field]),
+    );
+    const anchoField = fieldByKey.get("ancho");
+    const segundoField = fieldByKey.get("alto") ?? fieldByKey.get("largo");
+    const anchoTxt = anchoField
+      ? formatMedidaDimension(attrs[anchoField.key], anchoField.unit)
+      : null;
+    const segundoTxt = segundoField
+      ? formatMedidaDimension(attrs[segundoField.key], segundoField.unit)
+      : null;
+    if (anchoTxt && segundoTxt) return `${anchoTxt} × ${segundoTxt}`;
+    if (anchoTxt) return anchoTxt;
+    if (segundoTxt) return segundoTxt;
+  }
+  // Sin template: números crudos, sin inventar unidades.
+  const summary = getVariantAttributeSummary(variante);
   if (summary.ancho !== null && summary.alto !== null) {
-    return `${formatNumber(summary.ancho)} x ${formatNumber(summary.alto)} m`;
+    return `${formatNumber(summary.ancho)} × ${formatNumber(summary.alto)}`;
   }
   if (summary.ancho !== null && summary.largo !== null) {
-    return `${formatNumber(summary.ancho)} x ${formatNumber(summary.largo)} m`;
+    return `${formatNumber(summary.ancho)} × ${formatNumber(summary.largo)}`;
   }
   return "";
 }
@@ -2101,7 +2141,7 @@ function ColorThicknessVariantSelector({
         <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
           {visibleVariants.map(({ variante, summary }) => {
             const checked = enabledVariantIds.has(variante.id);
-            const medida = getVariantMeasureLabel(summary);
+            const medida = getVariantMeasureLabel(variante, materiaPrima.templateId);
             const precio = variante.precioReferencia
               ? formatearMoneda(
                   Number(variante.precioReferencia),
