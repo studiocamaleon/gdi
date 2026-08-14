@@ -9507,6 +9507,48 @@ function RitmoGuiado({
   // derivada elegida ("cortes de hierro") le gana a la magnitud principal.
   const unidadCantidad =
     etiquetaFuenteDerivada(familia, fuente) ?? unidadCantidadDe(cfg, familia);
+  // ── Fuente INLINE de la frase ("… de [Tiras de cenefa] …"), reemplaza al
+  // bloque "Qué monta". Sólo en pasos que montan sobre un material. Hereda por
+  // default la fuente del material (Materiales → ¿Sobre qué mide? = fuenteMedida
+  // del slot SUSTRATO), con override. Ver project_tiempo_frase_natural.
+  const pasoMontaFuente = (familia?.fuentesPiezasNesting?.length ?? 0) > 0;
+  const ordenActualTiempo = pasos.find((p) => p.id === pasoId)?.orden ?? null;
+  const fuenteHeredadaTiempo =
+    (cfg.slotsMateriales ?? []).find(
+      (s) =>
+        s.slotRol === "SUSTRATO" &&
+        typeof s.fuenteMedida === "string" &&
+        s.fuenteMedida,
+    )?.fuenteMedida ?? null;
+  const opcionesFuenteTiempo = [
+    ...MONTAJE_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    ...pasos
+      .filter(
+        (p) =>
+          p.orden != null &&
+          ordenActualTiempo != null &&
+          p.orden < ordenActualTiempo,
+      )
+      .flatMap((p) =>
+        (familiasMap.get(p.familiaCodigo)?.outputsGeometricos ?? []).map(
+          (o) => ({
+            value: `output:${o.key}`,
+            label: `${o.etiqueta} · ${p.nombre}`,
+          }),
+        ),
+      ),
+  ];
+  const valorFuenteTiempo = String(
+    params.fuentePiezasMontaje ?? fuenteHeredadaTiempo ?? "piezas_jobcontext",
+  );
+  const fuenteTiempoEsHeredada =
+    typeof params.fuentePiezasMontaje !== "string" ||
+    params.fuentePiezasMontaje === fuenteHeredadaTiempo;
+  // Paso 2 (filtro chico): con una fuente de MONTAJE elegida (no "las del
+  // trabajo"), las magnitudes `derivada:*` son de la ESTRUCTURA del paso, no de
+  // lo que se monta → no aplican y se esconden del selector de magnitud.
+  const ocultarDerivadasPorMontaje =
+    pasoMontaFuente && valorFuenteTiempo !== "piezas_jobcontext";
   // ── La regla ÚNICA del tiempo variable (feedback del usuario): la misma
   // oración "[N] [magnitud] cada [T] [min|h]" expresa productividad
   // ("120 pliegos cada 1 hora") y tanda ("3 piezas cada 1 min"). La única
@@ -9634,6 +9676,14 @@ function RitmoGuiado({
   }
   for (const m of magnitudes) {
     if (m.fuente === "cantidad") continue;
+    // No escondemos la magnitud ya elegida (rompería el selector); sí las demás
+    // derivadas cuando hay fuente de montaje.
+    if (
+      ocultarDerivadasPorMontaje &&
+      m.fuente.startsWith("derivada:") &&
+      m.fuente !== fuente
+    )
+      continue;
     opcionesMagnitud.push({ value: `q:${m.value}`, label: m.label });
   }
   const valorMagnitud =
@@ -9670,41 +9720,6 @@ function RitmoGuiado({
       />
     </div>
   );
-  // ── Fuente INLINE de la frase ("… de [Tiras de cenefa] …"), reemplaza al
-  // bloque "Qué monta". Sólo en pasos que montan sobre un material. Hereda por
-  // default la fuente del material (Materiales → ¿Sobre qué mide? = fuenteMedida
-  // del slot SUSTRATO), con override. Ver project_tiempo_frase_natural.
-  const pasoMontaFuente = (familia?.fuentesPiezasNesting?.length ?? 0) > 0;
-  const ordenActualTiempo =
-    pasos.find((p) => p.id === pasoId)?.orden ?? null;
-  const fuenteHeredadaTiempo =
-    (cfg.slotsMateriales ?? []).find(
-      (s) =>
-        s.slotRol === "SUSTRATO" &&
-        typeof s.fuenteMedida === "string" &&
-        s.fuenteMedida,
-    )?.fuenteMedida ?? null;
-  const opcionesFuenteTiempo = [
-    ...MONTAJE_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
-    ...pasos
-      .filter(
-        (p) =>
-          p.orden != null &&
-          ordenActualTiempo != null &&
-          p.orden < ordenActualTiempo,
-      )
-      .flatMap((p) =>
-        (familiasMap.get(p.familiaCodigo)?.outputsGeometricos ?? []).map(
-          (o) => ({ value: `output:${o.key}`, label: `${o.etiqueta} · ${p.nombre}` }),
-        ),
-      ),
-  ];
-  const valorFuenteTiempo = String(
-    params.fuentePiezasMontaje ?? fuenteHeredadaTiempo ?? "piezas_jobcontext",
-  );
-  const fuenteTiempoEsHeredada =
-    typeof params.fuentePiezasMontaje !== "string" ||
-    params.fuentePiezasMontaje === fuenteHeredadaTiempo;
   const selectorFuenteTiempo = pasoMontaFuente ? (
     <>
       <span style={notaStyle}>de</span>
