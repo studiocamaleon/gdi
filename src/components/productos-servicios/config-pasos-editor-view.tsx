@@ -1614,9 +1614,13 @@ function MaterialSearchSelect({
   if (renderDetail) {
     const pinned = pinnedItems ?? [];
     const pinnedIds = new Set(pinned.map((it) => it.id));
+    // Como el buscador de máquinas (pedido del usuario): NO mostrar toda la
+    // lista de compatibles siempre. Los elegidos quedan fijos; los resultados
+    // sólo aparecen cuando hay búsqueda. Así la card no arrastra 20 materias.
+    const hayBusqueda = query.trim() !== "";
     const filas = [
       ...pinned,
-      ...items.filter((it) => !pinnedIds.has(it.id)),
+      ...(hayBusqueda ? items.filter((it) => !pinnedIds.has(it.id)) : []),
     ];
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1648,7 +1652,11 @@ function MaterialSearchSelect({
                 color: "var(--muted-text, #6e6e76)",
               }}
             >
-              {loading ? "Buscando…" : "Sin materias primas compatibles."}
+              {loading
+              ? "Buscando…"
+              : hayBusqueda
+                ? "Sin materias primas que coincidan."
+                : "Buscá arriba y agregá las materias que usa este paso."}
             </div>
           ) : (
             filas.map((item, i) => {
