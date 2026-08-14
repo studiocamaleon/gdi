@@ -446,6 +446,7 @@ export class ProductosService {
                     formula: slot.formula,
                     cantidadFactor: slot.cantidadFactor,
                     cantidadBase: slot.cantidadBase,
+                    fuenteMedida: slot.fuenteMedida,
                     aplicaMultiCaras: slot.aplicaMultiCaras,
                     activo: slot.activo,
                   },
@@ -1200,6 +1201,7 @@ export class ProductosService {
       formula?: string;
       cantidadFactor?: string | number | null;
       cantidadBase?: string | null;
+      fuenteMedida?: string | null;
       aplicaMultiCaras?: boolean;
       materialVarianteId?: string | null;
       candidatos?: CandidatoJson[];
@@ -1291,6 +1293,7 @@ export class ProductosService {
             formula: s.formula ?? '',
             cantidadFactor: s.cantidadFactor ?? null,
             cantidadBase: s.cantidadBase ?? null,
+            fuenteMedida: s.fuenteMedida ?? null,
             aplicaMultiCaras: s.aplicaMultiCaras ?? false,
             materialVariante:
               materialVariante && mvMateriaPrima

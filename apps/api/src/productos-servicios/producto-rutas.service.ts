@@ -231,6 +231,7 @@ export class ProductoRutasService {
               formula: slot.formula,
               cantidadFactor: slot.cantidadFactor,
               cantidadBase: slot.cantidadBase,
+              fuenteMedida: slot.fuenteMedida,
               aplicaMultiCaras: slot.aplicaMultiCaras,
               activo: slot.activo,
             },

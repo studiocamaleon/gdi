@@ -255,6 +255,7 @@ export class ConfigPasosService {
                   ? 1
                   : s.cantidadFactor,
               cantidadBase: s.cantidadBase ?? null,
+              fuenteMedida: s.fuenteMedida ?? null,
               aplicaMultiCaras: s.aplicaMultiCaras ?? false,
               activo: true,
             },

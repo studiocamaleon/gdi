@@ -11840,17 +11840,32 @@ function EjeGuiado({
             )}
             {titulo}
           </div>
-          <div
-            style={{
-              fontSize: 12.5,
-              color: "var(--muted-text, #6e6e76)",
-              marginTop: 2,
-              marginLeft: ocultarCheck ? 0 : 23,
-              maxWidth: 560,
-            }}
-          >
-            {fijo ? subtitulo : abierto ? (subtitulo ?? linea) : linea}
-          </div>
+          {(() => {
+            // El resumen bajo el título sólo aporta con la card CERRADA (dice
+            // qué quedó elegido sin abrir). Abierta, los controles ya lo dicen
+            // y la línea sólo repite — se esconde en las filas de lista.
+            const texto = fijo
+              ? subtitulo
+              : enLista && abierto
+              ? null
+              : abierto
+              ? (subtitulo ?? linea)
+              : linea;
+            if (!texto) return null;
+            return (
+              <div
+                style={{
+                  fontSize: 12.5,
+                  color: "var(--muted-text, #6e6e76)",
+                  marginTop: 2,
+                  marginLeft: ocultarCheck ? 0 : 23,
+                  maxWidth: 560,
+                }}
+              >
+                {texto}
+              </div>
+            );
+          })()}
         </div>
         <div
           style={{
@@ -12261,24 +12276,24 @@ function ControlGuiado({
               onClick={() => onAplicar(control.aplicar(ctx, op.value))}
               style={{
                 textAlign: "left",
-                borderRadius: 9,
-                padding: "10px 12px",
+                borderRadius: 8,
+                padding: "7px 10px",
                 background: "var(--surface, #fff)",
                 border: activa
                   ? "1.5px solid var(--fg, #14141a)"
                   : "1px solid var(--hairline, #e5e2db)",
                 cursor: "pointer",
                 display: "flex",
-                gap: 9,
+                gap: 8,
                 alignItems: "flex-start",
               }}
             >
               <span
                 aria-hidden
                 style={{
-                  marginTop: 2,
-                  width: 14,
-                  height: 14,
+                  marginTop: 1,
+                  width: 13,
+                  height: 13,
                   borderRadius: "50%",
                   flexShrink: 0,
                   border: activa
@@ -12298,8 +12313,8 @@ function ControlGuiado({
                       display: "block",
                       fontSize: 11,
                       color: "var(--muted-text, #6e6e76)",
-                      marginTop: 2,
-                      lineHeight: 1.4,
+                      marginTop: 1,
+                      lineHeight: 1.3,
                     }}
                   >
                     {op.descripcion}
@@ -13694,12 +13709,13 @@ function SeccionesEsquemaPaso({
                         accionExtra={
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="destructive"
                             size="sm"
                             onClick={() =>
                               materialesApi.removeSlot(pasoActual.id, slotIdx)
                             }
                           >
+                            <Trash2Icon className="size-3.5" />
                             Quitar
                           </Button>
                         }

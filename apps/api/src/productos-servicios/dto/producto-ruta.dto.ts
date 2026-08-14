@@ -326,6 +326,12 @@ export class UpsertSlotMaterialDto {
   @IsString()
   cantidadBase?: string | null;
 
+  // Fuente de medida del consumo de este slot (override del default a nivel
+  // paso). docs/fuente-de-medida-de-consumo-diseno.md §8.
+  @IsOptional()
+  @IsString()
+  fuenteMedida?: string | null;
+
   @IsOptional()
   @IsBoolean()
   aplicaMultiCaras?: boolean;
