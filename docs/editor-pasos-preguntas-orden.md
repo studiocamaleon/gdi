@@ -584,3 +584,220 @@ con `impresion_por_hoja`. Los hallazgos entran en §6.
 5. **¿Sobra o falta alguna pregunta?** Este repaso todavía no propuso ni sacar
    ni agregar ninguna. Es probable que aparezcan al recorrer las 30 familias
    que faltan.
+
+## 10. "El trabajo" se disuelve: una sección por concepto (2026-08-14)
+
+Disparado por una lectura de Lucas de la sección "El trabajo": *"no quiero una
+sección donde metamos cosas juntas que no entren en otras. Que cada cosa tenga
+su lugar, estructurado."*
+
+### 10.1 El diagnóstico: "El trabajo" no es un eje, es un residuo
+
+Un eje legítimo es **una decisión con un árbol adentro**: "Máquina" (en qué
+fierro y con qué perfil) o "Tiempo" (cómo se calcula) son una sola cosa aunque
+tengan muchos controles. "El trabajo" no pasa ese test — junta **tres
+decisiones sin hilo común**:
+
+| Tarjeta (hoy en el eje `trabajo`) | Qué decide | Con qué se relaciona de verdad |
+|---|---|---|
+| `oficio.acomodado` | cómo se acomodan y cobran las piezas **en el material** | Materiales / el sustrato |
+| `oficio.params_familia` | las perillas del oficio (refuerzos del bastidor, densidad del LED) | la familia misma |
+| `oficio.efectos` | qué le **exige** el paso al trabajo (demasía para envolver) | geometría / pasos vecinos |
+
+Es el descendiente directo de la vieja sección **"oficio" / "Avanzado"** del
+censo E.0: el cajón donde caía "lo que no entraba en otra sección". Que era un
+cajón lo prueba que **partes ya se mudaron a su lugar** — setup/cleanup pasaron
+al eje **Tiempo**, `piezas_montar` también. Lo que queda en "El trabajo" es el
+**residuo** de esa mudanza a medio hacer. Los hallazgos H-1 (talonario en un
+folleto) y H-5 (tóner en Máquina siendo consumo) son el mismo problema de
+domicilio equivocado, en otras piezas.
+
+### 10.2 El rastrillo de las 31 familias
+
+Clasificación estática de qué familia dispara cada tarjeta de "El trabajo"
+(predicados reales del render — `nestingAplica`, `familiaConParamsEditables`,
+`soportaDemasiaMedida`; ver `src/lib/editor-paso/schema.ts` opciones
+`oficio.*`). **Distinto del §8**, que es abrir el paso real en dev y leerlo;
+esto es análisis del catálogo `apps/api/src/productos-servicios/pasos/familias.ts`.
+
+**Sólo 10 de 31 familias muestran "El trabajo" con contenido; 21 caen en el
+estado vacío.** Y no hay solapamientos: cada familia dispara por una sola
+tarjeta.
+
+| Tarjeta | Predicado (de la ficha) | Familias |
+|---|---|---|
+| **Acomodado** | `nestingConfig` && no `derivador` | `impresion_por_hoja`, `impresion_por_area`, `plotter_corte`, `laminado`, `plastificado_pouch`, `montaje_sobre_sustrato` (6) |
+| **Params del oficio** | `editorParamsGenerico` && `paramsPasoSchema`>0 | `estructura_bastidor`, `iluminacion_led`, `colocacion_ojales` (3) |
+| **Efectos** | `efectosSoportados` incluye `demasiaMedida` | `trabajo_manual` (1) |
+
+Hallazgo lateral (para 10.4): **11 familias más tienen `paramsPasoSchema` real
+pero NO muestran la tarjeta de params** porque les falta `editorParamsGenerico`
+(por diseño: tienen UI a medida o el motor aún no consume esos params). La
+tarjeta de params está gateada por un flag que casi nadie tiene, no por la
+existencia del schema.
+
+### 10.3 El principio: "camino B", que la ficha declare la sección
+
+Lo que pide Lucas —*"sección necesaria se muestra, la que no toca el paso no se
+muestra, pero estructurada"*— **ya es la física de `EjeGuiado`**: recibe las
+opciones filtradas por `visible(ctx)` y si quedan cero devuelve `null` (la card
+desaparece). Por eso "El proveedor" sólo aparece en pasos tercerizados. *5
+pasos con efectos muestran la misma sección Efectos; los pasos con nesting
+muestran Acomodo* — eso no hay que construirlo, es cómo funciona el componente.
+
+Lo que falta es el **camino B del §7**: que la ficha declare qué secciones tiene
+y el editor arme una card por sección declarada. El "paso A" ya está (cada
+opción declara su `eje`). El bloqueo estructural real: **hoy la lista y el orden
+de las 8 secciones están hard-codeadas como JSX secuencial** en
+`config-pasos-editor-view.tsx` (~13554-14024) — no existe un array
+`SECCIONES = [{ eje, titulo, subtitulo, filtro, resumenPrincipal, cuándo }]`
+sobre el que el render itere. **Ese array es la pieza que convierte "cajón" en
+"sistema"**, y es el corazón del refactor.
+
+### 10.4 La taxonomía objetivo
+
+"El trabajo" se disuelve; cada concepto pasa a sección de un solo tema, mostrada
+sólo si la familia la declara:
+
+| Sección | La declara la ficha con | Familias | De dónde sale |
+|---|---|---|---|
+| **Nesting** *(titulada "Acomodo" hasta 2026-08-14)* | `nestingConfig` && no `derivador` | 6 | tarjeta acomodado (menos el costeo, ver 10.5) |
+| **Parámetros del oficio** | `editorParamsGenerico` + schema | 3 (+revisar las 11) | tarjeta params |
+| **Efectos** | `efectosSoportados` | 1 (creciendo) | tarjeta efectos |
+| *(costeo del sustrato)* | `slot.estrategiaCosto` en **Materiales** | — | se va de "El trabajo" |
+| *(talonario, H-1)* | arreglo aparte | — | se va de "El trabajo" |
+
+Con esto **"El trabajo" desaparece** como sección. La tensión con el norte del
+doc ("menos cards, 19→6") es aparente: la regla es *una card por decisión*;
+partir un residuo en sus decisiones reales la cumple. El enemigo no es el número
+de secciones sino la incoherencia de meter tres cosas en una. Un paso simple
+(`corte_manual`) sigue mostrando 0 de estas, porque cada una se auto-oculta.
+
+### 10.5 El costeo del sustrato: reunificar en Materiales
+
+Hallazgo técnico (verificado en el motor): **el costeo del sustrato hoy es
+por-PASO, no por-material.** Existe un mecanismo por-slot (`slot.estrategiaCosto`,
+declarado en el schema, persistido, leído por el motor) **pero para el sustrato
+nesteado está apagado en UI** (`schema.ts` oculta `materiales.costeo` cuando el
+slot es `sustrato_principal` y hay nesting) **y subordinado en el motor**:
+`resolverEstrategiaCosteoNesting` (`apps/api/src/motor-universal/motor.service.ts`
+~4725) lee `paramsPasoJson.nestingConfig.costing.strategy` — único por paso — y
+si existe y no es `simple` **pisa el `estrategiaCosto` de todos los slots**.
+Consecuencia: con más de un sustrato, hoy **no se puede costear cada uno
+distinto**.
+
+**Decisión (Lucas, 2026-08-14): sólo reunificar en UI.** El control de costeo
+sale del Acomodado y vuelve a la tarjeta de cada material en Materiales, donde ya
+existe `slot.estrategiaCosto`. Alcance acotado:
+
+- invertir la prioridad en `resolverEstrategiaCosteoNesting` para que mande
+  `slot.estrategiaCosto` (o dejar de leer `nestingConfig.costing.strategy`);
+- dejar de ocultar `materiales.costeo` para el sustrato nesteado
+  (`schema.ts` `nestingDefineCosteo` / la condición del slot sustrato);
+- sacar el bloque "Costeo del sustrato" del `AcomodadoDetalladoEditor` y que
+  `updateNestingCosting` / `nestingConfig.costing` dejen de ser fuente de verdad
+  (posible migración de datos guardados en `paramsPasoJson.nestingConfig.costing`);
+- ajustar los resúmenes/preview que hoy leen `nestingConfig.costing`.
+
+**Fuera de alcance por ahora:** costeo real multi-sustrato (cada sustrato con su
+propio nesting y `segmentSteps`). El nesting corre **una sola vez por paso**;
+costear dos sustratos distinto de verdad es un cambio de motor con su propio
+diseño. Se deja anotado, no se compromete.
+
+### 10.5.bis Acomodo consistente: el rollo también muestra su costeo (2026-08-14)
+
+Feedback de Lucas: el costeo del sustrato se ocultaba en rollo, y eso deja al
+usuario preguntándose "¿cómo se cobra en rollo?". Ahora el bloque "Costeo del
+sustrato" se muestra **siempre**: en SHEET (placa/pliego) es el selector de
+estrategia; en ROLLO —donde hoy hay una sola forma, *largo consumido × ancho
+útil incluido el sobrante*— se muestra **resuelta e informativa** ("Estrategia:
+Largo consumido"), no como dropdown falso ni como valor guardado que el motor
+ignoraría (sería el dato muerto que este mismo trabajo eliminó).
+
+**La forma de rollo vive en el CATÁLOGO, no hardcodeada en el front**
+(`ROLLO_COSTEO_OPTIONS` en catalogo-materiales.ts) — feedback de Lucas: "si hay
+un catálogo de estrategias, la de rollo debería ser una". Va aparte de las 4 de
+placa/pliego porque el rollo NO tiene la decisión "qué hago con la última unidad
+parcial" (es continuo); `costingStrategyOptions` siempre devuelve las 4 y el
+`consumed-length` del catálogo es sheet-only (tira error si no es sheet). El
+costeo del rollo YA está implementado de verdad, pero en la ruta de la FÓRMULA
+(`por_metro_lineal` × el largo consumido que da el nesting, motor.service.ts
+~4278), no en `applyCostingStrategy` (que modela la decisión de sheet). Es el
+punto de extensión: cuando el rollo tenga MÁS de una forma (cobrar hasta la
+última pieza vs el segmento entero vs redondear a X metros), se agregan a
+`ROLLO_COSTEO_OPTIONS` + su rama en el motor, y el display pasa a selector.
+Cambio UI-only, costos idénticos.
+
+### 10.6 Decisiones tomadas (Lucas, 2026-08-14)
+
+1. **Acomodo = sección propia** (no sub-bloque del material sustrato). Card de
+   primer nivel después de Materiales.
+2. **Costeo del sustrato = sólo reunificar en UI** (10.5). Multi-sustrato real
+   queda documentado, sin comprometer alcance.
+3. **Efectos = crearla ya**, con 1 familia. La estructura existe primero; se
+   muestra cuando la familia declara `efectosSoportados`.
+
+### 10.7 Lo que sigue
+
+Reordenado tras leer el render (2026-08-14, Lucas): el array `SECCIONES` global
+se **descartó por ahora** — es un rewrite de las ~480 líneas del render, alto
+riesgo y sin pago visible, y dos secciones (Materiales por-slot, estado vacío)
+lo resisten. La disolución de "El trabajo" NO lo necesita: se hace con el patrón
+de split que ya existe (filtrar `opcionesDeEje` por `clave`, como Identidad→2 y
+Tiempo→2).
+
+1. **Disolver "El trabajo" → 3 secciones (Acomodo · Parámetros del oficio ·
+   Efectos), en su lugar actual.** **HECHO (2026-08-14, sin commitear)** en
+   `config-pasos-editor-view.tsx`: el bloque único se reemplazó por tres
+   `<EjeGuiado>`, cada uno filtrando el eje `trabajo` por `clave`
+   (`oficio.acomodado` / `oficio.params_familia` / `oficio.efectos`) y
+   auto-ocultándose con 0 opciones. `clave`/`seccion` intactas → el test de
+   paridad no se toca. El **estado vacío** se quitó (su "agregar material" era
+   redundante con "Agregar componente" de Materiales). Typecheck limpio;
+   verificación visual pendiente (otra sesión tenía el dev server tomado).
+2. Reubicar **Acomodo justo tras Materiales** (decisión 1, H-2). **HECHO
+   (2026-08-14, sin commitear)**: las tres secciones del trabajo (Acomodo ·
+   Parámetros del oficio · Efectos) se movieron a ANTES de Tiempo. Orden final:
+   Materiales → Acomodo → Parámetros del oficio → Efectos → Tiempo. Cumple las
+   dos reglas del §4 a la vez ("El trabajo tras material" y "Tiempo último",
+   porque la cantidad que el tiempo multiplica sale del acomodado). Se movió el
+   trío completo, no sólo Acomodo, para no dejar Tiempo en el medio. Typecheck
+   limpio; visual pendiente (dev server tomado por otra sesión).
+3. Costeo del sustrato: **el nesting es el dueño** (10.5). **HECHO
+   (2026-08-14, sin commitear), verificado bit-idéntico.** La investigación
+   (docs/nesting-abstraccion-diseno.md §3.3) mostró que el costeo es función del
+   `NestingResult` y hay UNA corrida por paso → el dueño es el nesting, no el
+   material; el viejo `slot.estrategiaCosto` era un espejo redundante. Cambios:
+   - **Motor** `resolverEstrategiaCosteoNesting`: `nestingConfig.costing` es la
+     fuente única; se retiró el fallback al slot. Verificado con un arnés que
+     cotiza los 4 productos del seed en 5 escenarios → **0 diferencias** (seed
+     sincronizado). Suite del motor estable (12 fallos pre-existentes de
+     selección de algoritmo, 0 nuevos).
+   - **Editor guiado**: se eliminó la pregunta `materiales.costeo` (+ helper,
+     tests, CENSO). **Detallado**: se eliminó el control "Costeo" por slot. El
+     costeo vive sólo en Acomodo.
+   - **Backfill (requisito de deploy) — HECHO y verificado.** Migración
+     `20260814120000_backfill_costeo_sustrato_nesting`: copia el costeo del
+     sustrato no-`simple` del slot → `nestingConfig.costing.strategy` donde el
+     nesting no lo define (JSONB, crea los padres si faltan, idempotente). Corre
+     ANTES del código nuevo en el deploy, así que preserva las cotizaciones de
+     pasos prod des-sincronizados. Verificado con un test que fabrica el caso
+     des-sincronizado (nesting sin costing, sin nestingConfig, y con otra
+     strategy) y confirma que copia/crea/no-pisa correctamente; aplicada a
+     `gdi_saas_test` sin error (no-op sobre el seed sincronizado).
+   - **DROP de la columna `estrategiaCosto` — HECHO.** Migración
+     `20260814130000_drop_estrategia_costo_slot` (corre DESPUÉS del backfill).
+     Se sacaron los ~16 reads/writes de la columna del slot (services, DTO,
+     `SlotCargado`/`PasoCargado` en tipos, seed de plantillas, front types y
+     editor), **distinguiéndolos de la etiqueta de salida homónima** de las
+     líneas de costo (`m.estrategiaCosto`, `'costo_por_click'`,
+     `'consumo_maquina_por_m2'`), que se queda. Typecheck api + front limpios;
+     `prisma generate` corrido; migración aplicada a `gdi_saas_test`; suite del
+     motor en el baseline (12 pre-existentes de algoritmo, 0 nuevos). Con esto
+     el costeo del sustrato tiene UNA sola representación en datos:
+     `nestingConfig.costing`.
+4. Revisar las 11 familias con `paramsPasoSchema` sin `editorParamsGenerico`:
+   cuáles deberían encender "Parámetros del oficio" (10.2).
+5. Retomar H-1 (talonario) y H-5 (tóner) con el mismo criterio de domicilio.
+6. (Diferido) El array `SECCIONES` global, sólo si reordenar secciones se
+   vuelve frecuente.
