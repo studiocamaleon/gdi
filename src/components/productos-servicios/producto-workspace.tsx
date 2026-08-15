@@ -111,6 +111,20 @@ function nuevaMedidaPredefinida(index: number): MedidaPredefinidaProducto {
   };
 }
 
+/** Plancha completa: sin dims propias — la pieza se deriva del pliego del
+ *  paso de impresión al cotizar (área útil). El nombre lo pone cada empresa
+ *  ("Plancha", "Hoja completa"). Ver docs/medida-plancha-area-util-diseno.md. */
+function nuevaMedidaPlancha(index: number): MedidaPredefinidaProducto {
+  return {
+    id: `medida-${Date.now()}-${index}`,
+    nombre: "Plancha completa",
+    anchoMm: 0,
+    altoMm: 0,
+    esDefault: index === 0,
+    tipo: "pliego_util",
+  };
+}
+
 function modoMedidasUsaPredefinidas(modo: string) {
   return modo !== "LIBRE";
 }
@@ -154,14 +168,26 @@ function MedidasPredefinidasEditor({
     <div className="field">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <label>Medidas disponibles</label>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])}
-        >
-          <PlusIcon />
-          Agregar medida
-        </button>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])}
+          >
+            <PlusIcon />
+            Agregar medida
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => onChange([...medidas, nuevaMedidaPlancha(medidas.length)])}
+            disabled={medidas.some((medida) => medida.tipo === "pliego_util")}
+            title="La pieza es toda el área útil del pliego: se calcula al cotizar con el papel y la máquina del paso de impresión"
+          >
+            <PlusIcon />
+            Plancha completa
+          </button>
+        </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {medidas.map((medida, index) => (
@@ -181,26 +207,40 @@ function MedidasPredefinidasEditor({
               placeholder={medidaLabel({ ...medida, nombre: "" })}
               aria-label={`Nombre de medida ${index + 1}`}
             />
-            <input
-              type="number"
-              min="0"
-              value={medida.anchoMm || ""}
-              onChange={(event) =>
-                updateMedida(medida.id, { anchoMm: Number(event.target.value) || 0 })
-              }
-              placeholder="Ancho mm"
-              aria-label={`Ancho de medida ${index + 1}`}
-            />
-            <input
-              type="number"
-              min="0"
-              value={medida.altoMm || ""}
-              onChange={(event) =>
-                updateMedida(medida.id, { altoMm: Number(event.target.value) || 0 })
-              }
-              placeholder="Alto mm"
-              aria-label={`Alto de medida ${index + 1}`}
-            />
+            {medida.tipo === "pliego_util" ? (
+              // La plancha no declara dims: pieza = área útil del pliego,
+              // resuelta al cotizar (papel activo − márgenes de la máquina).
+              <span
+                className="help"
+                style={{ gridColumn: "span 2", margin: 0 }}
+                title="Se recalcula sola si cambia el papel o la máquina del paso de impresión"
+              >
+                área útil del pliego · se resuelve al cotizar
+              </span>
+            ) : (
+              <>
+                <input
+                  type="number"
+                  min="0"
+                  value={medida.anchoMm || ""}
+                  onChange={(event) =>
+                    updateMedida(medida.id, { anchoMm: Number(event.target.value) || 0 })
+                  }
+                  placeholder="Ancho mm"
+                  aria-label={`Ancho de medida ${index + 1}`}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  value={medida.altoMm || ""}
+                  onChange={(event) =>
+                    updateMedida(medida.id, { altoMm: Number(event.target.value) || 0 })
+                  }
+                  placeholder="Alto mm"
+                  aria-label={`Alto de medida ${index + 1}`}
+                />
+              </>
+            )}
             <button
               type="button"
               className={`icon-action medida-default-btn ${medida.esDefault ? "on" : ""}`}

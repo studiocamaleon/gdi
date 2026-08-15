@@ -92,14 +92,17 @@ import type {
   ConfigPasoDetalle,
   FamiliaListItem,
   ProductoDetalle,
+  MedidaPredefinidaProducto,
   ProductoListItem,
   RutaAlternativaDetalle,
 } from "@/lib/productos-servicios";
 import {
+  esMedidaPliegoUtil,
   getMedidaDefault,
   getMedidasPredefinidas,
   medidaLabel,
 } from "@/lib/producto-medidas";
+import { resolverPlanchaUtil } from "@/lib/medida-plancha";
 import {
   getSlotMaterialVariantDisplay,
   getSlotMaterialVariantSortValue,
@@ -624,12 +627,104 @@ function modoMedidasPermitePersonalizada(modoMedidas: string | null | undefined)
   return modoMedidas === "LIBRE" || modoMedidas === "MIXTA";
 }
 
+/** Pliego activo del paso de impresión por hoja: la variante de papel que el
+ *  comercial eligió para el slot (o la default del slot). */
+function getPliegoActivoDeImpresion(
+  configPaso: ConfigPasoDetalle,
+  config: Pick<MotorConfigState, "seleccionMaterial">,
+): { anchoMm: number; altoMm: number } | null {
+  const slot =
+    configPaso.slotsMateriales.find(
+      (item) =>
+        (item.slotRol ?? "").toUpperCase() === "SUSTRATO" ||
+        item.slotCodigo === "sustrato_principal",
+    ) ?? configPaso.slotsMateriales[0];
+  if (!slot) return null;
+  const key = materialSelectionKey(configPaso.id, slot.slotCodigo);
+  const seleccionadaId = config.seleccionMaterial[key] || null;
+  const variantes = [
+    ...(slot.materialVariante ? [slot.materialVariante] : []),
+    ...slot.candidatos.flatMap(
+      (candidato) => candidato.materiaPrima.variantes ?? [],
+    ),
+  ];
+  const porId = (id: string | null | undefined) =>
+    id ? variantes.find((variante) => variante.id === id) : undefined;
+  const variante =
+    porId(seleccionadaId) ??
+    porId(
+      slot.candidatos
+        .map((candidato) => candidato.defaultVarianteId)
+        .find(Boolean),
+    ) ??
+    slot.materialVariante ??
+    variantes[0] ??
+    null;
+  const attrs = getRecord(variante?.atributosVarianteJson);
+  const anchoMm = getNumberFromUnknown(attrs.anchoMm) ?? 0;
+  const altoMm =
+    getNumberFromUnknown(attrs.altoMm) ??
+    getNumberFromUnknown(attrs.largoMm) ??
+    0;
+  return anchoMm > 0 && altoMm > 0 ? { anchoMm, altoMm } : null;
+}
+
+/**
+ * Medidas del producto con las planchas (`tipo: "pliego_util"`) RESUELTAS:
+ * pieza = pliego de la variante activa − márgenes (espejo del motor, ver
+ * `src/lib/medida-plancha.ts`). Una plancha que no se puede resolver (paso de
+ * impresión sin máquina/papel) queda con dims 0 y la card se deshabilita.
+ */
+function resolverMedidasPredefinidas(
+  producto: ProductoDetalle | null,
+  config: MotorConfigState,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+): MedidaPredefinidaProducto[] {
+  if (!producto) return [];
+  const base = getMedidasPredefinidas(producto);
+  if (!base.some((medida) => medida.tipo === "pliego_util")) return base;
+  let plancha: { anchoMm: number; altoMm: number } | null = null;
+  const rutaSel = getRutaSeleccionada(producto, config.rutaAlternativaId ?? "");
+  for (const configPaso of rutaSel?.configPasos ?? []) {
+    if (configPaso.rutaPaso.familiaCodigo !== "impresion_por_hoja") continue;
+    if (!isExecutableConfigPaso(configPaso) || !includeConfig(configPaso)) {
+      continue;
+    }
+    const pliego = getPliegoActivoDeImpresion(configPaso, config);
+    if (!pliego) continue;
+    const machine = getActiveMachineForConfig(configPaso, config);
+    const resuelta = resolverPlanchaUtil({
+      pliegoAnchoMm: pliego.anchoMm,
+      pliegoAltoMm: pliego.altoMm,
+      maquinaParametrosTecnicos: machine?.parametrosTecnicosJson ?? null,
+      pasoParams: (configPaso.paramsPasoJson ?? null) as Record<
+        string,
+        unknown
+      > | null,
+    });
+    if (resuelta) {
+      plancha = resuelta;
+      break;
+    }
+  }
+  return base.map((medida) =>
+    medida.tipo === "pliego_util"
+      ? {
+          ...medida,
+          anchoMm: plancha?.anchoMm ?? 0,
+          altoMm: plancha?.altoMm ?? 0,
+        }
+      : medida,
+  );
+}
+
 function getSelectedPredefinedMeasure(
   producto: ProductoDetalle | null,
   medidaPredefinidaId: string,
+  medidasResueltas?: MedidaPredefinidaProducto[],
 ) {
   if (!producto || !modoMedidasUsaPredefinidas(producto.modoMedidas)) return null;
-  const medidas = getMedidasPredefinidas(producto);
+  const medidas = medidasResueltas ?? getMedidasPredefinidas(producto);
   return (
     medidas.find((medida) => medida.id === medidaPredefinidaId) ??
     medidas.find((medida) => medida.esDefault) ??
@@ -2639,8 +2734,13 @@ function medidasPersonalizadasIncompletas(
   const medidaPredefinida = getSelectedPredefinedMeasure(
     productoDetalle,
     config.medidaPredefinidaId,
+    resolverMedidasPredefinidas(productoDetalle, config),
   );
-  if (medidaPredefinida) return false;
+  if (medidaPredefinida) {
+    // Una plancha (pliego_util) SIN resolver tiene dims 0: cotizarla mandaría
+    // una pieza 0×0 al motor (el mismo OOM que este guard evita).
+    return !(medidaPredefinida.anchoMm > 0 && medidaPredefinida.altoMm > 0);
+  }
   if (config.piezas.length === 0) return true;
   return config.piezas.some(
     (pieza) => !(pieza.anchoMm > 0) || !(pieza.altoMm > 0),
@@ -2745,10 +2845,18 @@ function buildJobContext(
   slotsComercialElige: SlotComercialElige[],
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
 ) {
-  const medidaPredefinida = getSelectedPredefinedMeasure(
+  const medidaPredefinidaCruda = getSelectedPredefinedMeasure(
     productoDetalle,
     config.medidaPredefinidaId,
+    resolverMedidasPredefinidas(productoDetalle, config, includeConfig),
   );
+  // Plancha sin resolver (dims 0): no hay pieza válida que mandar al motor.
+  const medidaPredefinida =
+    medidaPredefinidaCruda &&
+    medidaPredefinidaCruda.anchoMm > 0 &&
+    medidaPredefinidaCruda.altoMm > 0
+      ? medidaPredefinidaCruda
+      : null;
   const cotizaConPiezas = usaPiezasParaCotizar(productoDetalle, config);
   const cotizaLinealDirecto =
     isMetroLinealConMedidasVariables(productoDetalle) &&
@@ -3319,8 +3427,14 @@ function buildPresentableSpecs(
   const medidaPredefinida = getSelectedPredefinedMeasure(
     productoDetalle,
     config.medidaPredefinidaId,
+    resolverMedidasPredefinidas(productoDetalle, config),
   );
-  if (medidaPredefinida && !usaMedidasPersonalizadas) {
+  if (
+    medidaPredefinida &&
+    medidaPredefinida.anchoMm > 0 &&
+    medidaPredefinida.altoMm > 0 &&
+    !usaMedidasPersonalizadas
+  ) {
     const medidas = formatMedidaPredefinidaSpec(medidaPredefinida);
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
@@ -4397,10 +4511,14 @@ function ApConfigStep({
   const necesitaInstalacion = getProductoNecesitaInstalacion(productoDetalle);
   const medidasPredefinidas = React.useMemo(
     () =>
-      modoMedidasUsaPredefinidas(productoDetalle?.modoMedidas)
-        ? getMedidasPredefinidas(productoDetalle)
+      productoDetalle && modoMedidasUsaPredefinidas(productoDetalle.modoMedidas)
+        ? resolverMedidasPredefinidas(
+            productoDetalle,
+            motorConfig,
+            includeVisibleConfig,
+          )
         : [],
-    [productoDetalle],
+    [productoDetalle, motorConfig, includeVisibleConfig],
   );
   const usaMedidaMixta = productoDetalle?.modoMedidas === "MIXTA";
   const usaMedidaPersonalizada =
@@ -4904,13 +5022,25 @@ function ApConfigStep({
 
   const renderMedidaCards = (
     selectedId: string,
-    medidas: Array<{ id: string; nombre: string; anchoMm: number; altoMm: number }>,
+    medidas: Array<{
+      id: string;
+      nombre: string;
+      anchoMm: number;
+      altoMm: number;
+      tipo?: MedidaPredefinidaProducto["tipo"];
+    }>,
     onSelect: (id: string) => void,
     allowCustom: boolean,
   ) => (
     <div className="ap-size-grid" role="radiogroup" aria-label="Medida">
       {medidas.map((medida) => {
-        const size = formatMedidasCm(medida.anchoMm, medida.altoMm);
+        const esPlancha = esMedidaPliegoUtil(medida);
+        const resuelta = medida.anchoMm > 0 && medida.altoMm > 0;
+        // Plancha sin resolver: falta máquina o papel en el paso de impresión.
+        // Se muestra deshabilitada en vez de esconderse (que se sepa que existe).
+        const size = resuelta
+          ? formatMedidasCm(medida.anchoMm, medida.altoMm)
+          : "se resuelve al elegir papel y máquina";
         const rawLabel = medidaLabel(medida);
         const isMmFallback = rawLabel.includes(" mm");
         const name = isMmFallback ? size : rawLabel;
@@ -4924,6 +5054,12 @@ function ApConfigStep({
             role="radio"
             aria-checked={selected}
             aria-label={`Medida: ${name}`}
+            disabled={esPlancha && !resuelta}
+            title={
+              esPlancha && resuelta
+                ? "Área útil del pliego: se recalcula si cambia el papel o la máquina"
+                : undefined
+            }
             onClick={() => onSelect(medida.id)}
           >
             <span className="ap-size-name">{name}</span>
@@ -6290,6 +6426,7 @@ function ApConfigStep({
                         : getSelectedPredefinedMeasure(
                             productoDetalle,
                             motorConfig.medidaPredefinidaId,
+                            medidasPredefinidas,
                           )?.id ?? "",
                       medidasPredefinidas,
                       (value) => {

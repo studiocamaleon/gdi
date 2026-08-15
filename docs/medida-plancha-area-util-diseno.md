@@ -51,6 +51,16 @@ hacerla a mano.
 
 ## 3. Diseño propuesto
 
+### 3.0 Modelo conceptual (clarificación 2026-08-15, con el usuario)
+
+**La medida del producto siempre define el tamaño de la PIEZA** (lo que se
+nestea y recibe el cliente). Los dos tipos no son dos ejes: son dos ORÍGENES
+del mismo valor — **fija** = la pieza la declara el modelador a mano;
+**plancha** = la pieza se deriva del pliego (área útil): "la pieza ES la
+plancha". El pliego en sí (325×500) nunca es una medida del producto — es una
+propiedad del material; meterlo como pieza era el error que forzaba el
+sistema (y por eso fallaba el nesting).
+
 ### 3.1 Un tipo de medida derivada
 
 `medidasPredefinidasJson` admite una entrada especial:
