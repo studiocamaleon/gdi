@@ -824,6 +824,9 @@ export class ProductosService {
                         nombre: true,
                         activo: true,
                         tipoPerfil: true,
+                        // Ordena los niveles de complejidad del corte en el
+                        // sheet (más m²/h = corte más fácil).
+                        productivityValue: true,
                         detalleJson: true,
                       },
                     },
@@ -964,6 +967,8 @@ export class ProductosService {
                             nombre: true,
                             activo: true,
                             tipoPerfil: true,
+                            // Ídem maquinaM1: niveles de complejidad del corte.
+                            productivityValue: true,
                             detalleJson: true,
                           },
                         },

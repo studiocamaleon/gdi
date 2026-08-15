@@ -1254,6 +1254,112 @@ function getPreferredCandidate(candidates: MaquinaCandidataComercial[]) {
   return candidates.find((candidate) => candidate.esPreferida) ?? candidates[0] ?? null;
 }
 
+/** Un paso de plotter de corte cuya máquina declara varios perfiles de
+ *  complejidad (Corte fácil / Corte complejo): el comercial elige el nivel
+ *  según el trabajo y eso viaja como override de perfil
+ *  (`perfilSeleccionado_<configPasoId>`, que el motor ya valida). */
+type ComplejidadCorteComercial = {
+  configPasoId: string;
+  nombreVisible: string | null;
+  familiaCodigo: string;
+  modoActivacion: string;
+  /** Perfil default del paso (queda seleccionado sin override). */
+  defaultId: string | null;
+  /** Ordenadas de más rápida a más lenta (fácil → complejo). */
+  opciones: Array<{ perfilId: string; nombre: string }>;
+};
+
+/** Letra grande = corte fácil (formas grandes), letra chica = corte complejo
+ *  (detalle intrincado). Mismo rol visual que los cuadraditos del modo de
+ *  color: se entiende sin leer. */
+function complejidadCorteGlyph(rank: number, total: number) {
+  const sizes = total <= 2 ? [20, 11] : [20, 15, 10];
+  const size = sizes[Math.min(rank, sizes.length - 1)] ?? 10;
+  const y = 13 + size * 0.36;
+  return (
+    <svg
+      className="ap-sheet-ico"
+      viewBox="0 0 26 26"
+      fill="none"
+      aria-hidden="true"
+    >
+      <text
+        x="13"
+        y={y}
+        textAnchor="middle"
+        fontSize={size}
+        fontWeight={800}
+        fill="#14141a"
+      >
+        A
+      </text>
+    </svg>
+  );
+}
+
+function getComplejidadCorte(
+  ruta: RutaAlternativaDetalle | null,
+  motorConfig: Pick<MotorConfigState, "seleccionMaquina">,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+): ComplejidadCorteComercial[] {
+  return (
+    ruta?.configPasos
+      .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
+      .map((config): ComplejidadCorteComercial | null => {
+        if (config.rutaPaso.familiaCodigo !== "plotter_corte") return null;
+        const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+        // El modelador fijó la complejidad: el paso cotiza siempre con su
+        // perfil default y el comercial no ve el selector.
+        if (params.perfilFijadoComercial === true) return null;
+        const candidata = getActiveCandidateForConfig(config, motorConfig);
+        const maquina = candidata?.maquina ?? config.maquinaM1;
+        const perfiles = (maquina?.perfilesOperativos ?? []).filter(
+          (perfil) =>
+            perfil.activo !== false &&
+            perfil.nombre &&
+            ["corte", "mixto"].includes(
+              (perfil.tipoPerfil ?? "").toLowerCase(),
+            ),
+        );
+        if (perfiles.length < 2) return null;
+        // Más m²/h = corte más fácil: eso ordena fácil → complejo y decide
+        // el tamaño de la letra del glyph.
+        const opciones = [...perfiles].sort((a, b) => {
+          const pa = Number(a.productivityValue ?? NaN);
+          const pb = Number(b.productivityValue ?? NaN);
+          if (Number.isFinite(pa) && Number.isFinite(pb)) return pb - pa;
+          if (Number.isFinite(pa)) return -1;
+          if (Number.isFinite(pb)) return 1;
+          return 0;
+        });
+        const defaultId =
+          (candidata?.perfilDefaultId &&
+          opciones.some((p) => p.id === candidata.perfilDefaultId)
+            ? candidata.perfilDefaultId
+            : null) ??
+          (config.perfilM1?.id &&
+          opciones.some((p) => p.id === config.perfilM1?.id)
+            ? config.perfilM1.id
+            : null) ??
+          opciones[0]?.id ??
+          null;
+        return {
+          configPasoId: config.id,
+          nombreVisible: config.nombreVisible ?? null,
+          familiaCodigo: config.rutaPaso.familiaCodigo,
+          modoActivacion: config.modoActivacion ?? "OBLIGATORIO",
+          defaultId,
+          opciones: opciones.map((perfil) => ({
+            perfilId: perfil.id,
+            nombre: perfil.nombre ?? "Perfil",
+          })),
+        };
+      })
+      .filter((item): item is ComplejidadCorteComercial => item !== null) ?? []
+  );
+}
+
 function getActiveCandidateForConfig(
   config: ConfigPasoDetalle,
   motorConfig: Pick<MotorConfigState, "seleccionMaquina">,
@@ -4135,6 +4241,26 @@ function ApConfigStep({
   const nivelesPrincipales = nivelesComercialRuta.filter(
     (item) => item.modoActivacion !== "OPCIONAL",
   );
+  // Complejidad del corte (plotter): misma regla que los niveles — pasos que
+  // corren siempre van con los datos del producto; los opcionales, dentro de
+  // la card del opcional activado.
+  const complejidadCorteRuta = React.useMemo(
+    () =>
+      getComplejidadCorte(
+        rutaSel,
+        { seleccionMaquina: motorConfig.seleccionMaquina },
+        includeVisibleConfig,
+      ),
+    [rutaSel, motorConfig.seleccionMaquina, includeVisibleConfig],
+  );
+  const complejidadPorConfigPaso = React.useMemo(
+    () =>
+      new Map(complejidadCorteRuta.map((item) => [item.configPasoId, item])),
+    [complejidadCorteRuta],
+  );
+  const complejidadesPrincipales = complejidadCorteRuta.filter(
+    (item) => item.modoActivacion !== "OPCIONAL",
+  );
   // Catálogo de familias: hace falta el `paramsPasoSchema` para renderizar los
   // campos que el modelador abrió al comercial.
   const [familiasCatalogo, setFamiliasCatalogo] = React.useState<
@@ -4212,6 +4338,9 @@ function ApConfigStep({
           nivel: opcional.configPasoId
             ? (nivelesPorConfigPaso.get(opcional.configPasoId) ?? null)
             : null,
+          complejidad: opcional.configPasoId
+            ? (complejidadPorConfigPaso.get(opcional.configPasoId) ?? null)
+            : null,
         }))
         .filter(
           (item) =>
@@ -4223,10 +4352,12 @@ function ApConfigStep({
             (item.slots.length > 0 ||
               item.tiempoManual !== null ||
               item.paramsComercial !== null ||
-              item.nivel !== null),
+              item.nivel !== null ||
+              item.complejidad !== null),
         ),
     [
       adi,
+      complejidadPorConfigPaso,
       nivelesPorConfigPaso,
       opcionalesEfectivosSheet,
       opcionalesPasos,
@@ -5419,6 +5550,50 @@ function ApConfigStep({
       <div className={seC.card} key={`nivel-${item.configPasoId}`}>
         <div className={seC.gh} title={nombrePaso}>
           {etiqueta}
+        </div>
+        <div className={seC.body}>{control}</div>
+      </div>
+    );
+  };
+  const renderComplejidadField = (
+    item: ComplejidadCorteComercial,
+    opts?: { sinTarjeta?: boolean },
+  ) => {
+    const nombrePaso =
+      item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
+    const value =
+      motorConfig.seleccionPerfil[item.configPasoId] || item.defaultId || "";
+    const control = renderChoiceCards(
+      "Complejidad del corte",
+      value,
+      item.opciones.map((opcion, indice) => ({
+        value: opcion.perfilId,
+        label: opcion.nombre,
+        desc: opcion.perfilId === item.defaultId ? "por defecto" : undefined,
+        glyph: complejidadCorteGlyph(indice, item.opciones.length),
+      })),
+      // Elegir el default = sin override (el motor resuelve solo); cualquier
+      // otro nivel viaja como perfilSeleccionado_<paso>.
+      (next) =>
+        setPerfil(item.configPasoId, next === item.defaultId ? "" : next),
+      { columns: item.opciones.length <= 2 ? 2 : 3, layout: "row" },
+    );
+    if (opts?.sinTarjeta) {
+      return (
+        <div key={`complejidad-${item.configPasoId}`}>
+          <span className={seC.sub} title={nombrePaso}>
+            Complejidad del corte
+          </span>
+          {control}
+        </div>
+      );
+    }
+    return (
+      <div className={seC.card} key={`complejidad-${item.configPasoId}`}>
+        <div className={seC.gh} title={nombrePaso}>
+          {complejidadesPrincipales.length === 1
+            ? "Complejidad del corte"
+            : `${nombrePaso} · complejidad`}
         </div>
         <div className={seC.body}>{control}</div>
       </div>
@@ -6691,6 +6866,10 @@ function ApConfigStep({
               );
             })}
 
+            {complejidadesPrincipales.map((item) =>
+              renderComplejidadField(item),
+            )}
+
             {nivelesPrincipales.map((item) => renderNivelField(item))}
 
             {tiemposManualesPrincipales.map((tiempoPaso) =>
@@ -6843,7 +7022,14 @@ function ApConfigStep({
             </div>
             <div className="ap-optional-config-grid">
               {opcionalesConfigurables.map(
-                ({ opcional, slots, tiempoManual, paramsComercial, nivel }) => {
+                ({
+                  opcional,
+                  slots,
+                  tiempoManual,
+                  paramsComercial,
+                  nivel,
+                  complejidad,
+                }) => {
                   const arrastrado = opcional.configPasoId
                     ? arrastradosSheet.has(opcional.configPasoId)
                     : false;
@@ -6881,6 +7067,11 @@ function ApConfigStep({
                     <div className={`${seC.body} ap-optional-config-fields`}>
                       {nivel
                         ? renderNivelField(nivel, { sinTarjeta: true })
+                        : null}
+                      {complejidad
+                        ? renderComplejidadField(complejidad, {
+                            sinTarjeta: true,
+                          })
                         : null}
                       {slots.length > 0 ? (
                         <div className={matS.list}>

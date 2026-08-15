@@ -1823,6 +1823,68 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     control: { tipo: "componente", id: "perfil-m1" },
   },
   {
+    // El plotter de corte declara UN PERFIL por nivel de complejidad (fácil,
+    // complejo). Cada trabajo tiene su dificultad → por defecto la elige el
+    // comercial al cotizar (el perfil de arriba queda como valor inicial);
+    // el modelador puede fijarla. Mismo principio que "Fijo manda" de los
+    // params del comercial.
+    clave: "maquina.complejidad",
+    eje: "maquina",
+    grupo: "cual",
+    etiqueta: "Complejidad del corte",
+    seccion: "maquina",
+    pregunta: "¿Quién decide la complejidad del corte?",
+    ayuda:
+      "La máquina tiene un perfil por nivel de complejidad: los cortes simples rinden más m²/hora que los intrincados. Abierta: el vendedor marca el nivel al cotizar y el perfil de arriba es el valor por defecto. Fija: todos los trabajos usan el perfil de arriba.",
+    visible: (ctx) => {
+      if (ctx.familia?.codigo !== "plotter_corte") return false;
+      if (!ctx.cfg.maquinaM1Id) return false;
+      const perfilesCorte = (
+        maquinaElegida(ctx)?.perfilesOperativos ?? []
+      ).filter((p) =>
+        ["corte", "mixto"].includes((p.tipoPerfil ?? "").toLowerCase()),
+      );
+      return perfilesCorte.length >= 2;
+    },
+    resumen: (ctx) => {
+      const params = ctx.cfg.paramsPasoJson as Record<string, unknown> | null;
+      return params?.perfilFijadoComercial === true
+        ? "Fija: siempre el perfil del paso"
+        : "La elige el comercial al cotizar";
+    },
+    origenValor: (ctx) => {
+      const params = ctx.cfg.paramsPasoJson as Record<string, unknown> | null;
+      return params?.perfilFijadoComercial === true ? "config" : "default-paso";
+    },
+    control: {
+      tipo: "pills",
+      presentacion: "tarjetas",
+      opciones: () => [
+        {
+          value: "comercial",
+          label: "La elige el comercial",
+          descripcion:
+            "Cada trabajo tiene su dificultad: el vendedor marca fácil o complejo al cotizar. El perfil de arriba es el valor por defecto.",
+        },
+        {
+          value: "fijo",
+          label: "Fija",
+          descripcion:
+            "Todos los trabajos de este paso cotizan con el perfil elegido arriba.",
+        },
+      ],
+      valor: (ctx) =>
+        (ctx.cfg.paramsPasoJson as Record<string, unknown> | null)
+          ?.perfilFijadoComercial === true
+          ? "fijo"
+          : "comercial",
+      aplicar: (_ctx, v) => ({
+        tipo: "params",
+        patch: { perfilFijadoComercial: v === "fijo" ? true : null },
+      }),
+    },
+  },
+  {
     clave: "maquina.candidatas",
     eje: "maquina",
     grupo: "lista",
