@@ -478,7 +478,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionTercerizado: {},
   tercerizadoCostoManual: {},
   paramsComercial: {},
-  modoCotizacionLineal: "nesting",
+  modoCotizacionLineal: "directo",
   zonaInstalacion: "CABA",
   m2Instalados: 0,
   personalizaciones: {},
@@ -5946,6 +5946,50 @@ function ApConfigStep({
     productoDetalle,
     usaMedidaMixta,
   ]);
+  // Transparencia del rollo (DTF/vinilo por metro): el comercial cotiza sobre
+  // un ancho útil fijo (anchoUtil de la máquina − márgenes) que hoy no ve.
+  // Gemelo del "Entran N por plancha", pero para rollo: ancho útil, consumo en
+  // ml y cuántas piezas entran a lo ancho. Cero cálculo nuevo — todo sale de
+  // getSelectedLinearMaterialMetrics y de la cotización viva.
+  const infoRolloLineal = React.useMemo(() => {
+    if (!metroLinealConMedidasVariables) return null;
+    const metrics = getSelectedLinearMaterialMetrics(
+      productoDetalle,
+      slotsComercialElige,
+      motorConfig,
+      includeVisibleConfig,
+    );
+    const anchoUtilCm =
+      metrics?.usableWidthMm && metrics.usableWidthMm > 0
+        ? metrics.usableWidthMm / 10
+        : null;
+    const paso = cotizacionExitosa?.pasos.find(
+      (item) => item.familiaCodigo === "impresion_por_area" && item.activado,
+    );
+    const nd = paso?.nestingResult;
+    const consumoMm = getNumberFromUnknown(nd?.consumedLengthMm);
+    const consumoMl = consumoMm && consumoMm > 0 ? consumoMm / 1000 : null;
+    // "Entran a lo ancho" = la franja horizontal más poblada del layout
+    // (agrupa placements por su Y). Robusto a maxrects, que no arma grilla.
+    const placements = Array.isArray(nd?.placements) ? nd.placements : [];
+    let entranAncho = 0;
+    if (placements.length > 0) {
+      const porFila = new Map<number, number>();
+      for (const p of placements) {
+        const fila = Math.round(getNumberFromUnknown(p.yMm) ?? 0);
+        porFila.set(fila, (porFila.get(fila) ?? 0) + 1);
+      }
+      entranAncho = Math.max(...porFila.values());
+    }
+    return { anchoUtilCm, consumoMl, entranAncho };
+  }, [
+    cotizacionExitosa,
+    includeVisibleConfig,
+    metroLinealConMedidasVariables,
+    motorConfig,
+    productoDetalle,
+    slotsComercialElige,
+  ]);
 
   const renderCantidadCard = () => (
     <div className={seC.card}>
@@ -6433,8 +6477,8 @@ function ApConfigStep({
                       "Modo de cotización lineal",
                       motorConfig.modoCotizacionLineal,
                       [
-                        { value: "nesting", label: "Calcular por piezas" },
                         { value: "directo", label: "Ingresar ml" },
+                        { value: "nesting", label: "Calcular por piezas" },
                       ],
                       (value) =>
                         setModoCotizacionLineal(value as ModoCotizacionLineal),
@@ -6442,7 +6486,30 @@ function ApConfigStep({
                   </div>
                 </div>
                 {mostrarEditorPiezas ? (
-                  renderPiezasEditor()
+                  <>
+                    {renderPiezasEditor()}
+                    {infoRolloLineal?.consumoMl ? (
+                      <div className="ap-minimum-alert">
+                        <Grid2X2Icon />
+                        <span>
+                          Consume{" "}
+                          {infoRolloLineal.consumoMl.toLocaleString("es-AR", {
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          ml de rollo
+                          {infoRolloLineal.entranAncho >= 2
+                            ? ` · entran ${infoRolloLineal.entranAncho} a lo ancho`
+                            : ""}
+                          {infoRolloLineal.anchoUtilCm
+                            ? ` · ${infoRolloLineal.anchoUtilCm.toLocaleString(
+                                "es-AR",
+                                { maximumFractionDigits: 1 },
+                              )} cm útil`
+                            : ""}
+                        </span>
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <>
                     {slotsMaterialesLinealDirecto.map((slot) =>
@@ -6452,6 +6519,18 @@ function ApConfigStep({
                       <label>Largo a cotizar</label>
                       {renderQuantityControl()}
                     </div>
+                    {infoRolloLineal?.anchoUtilCm ? (
+                      <div className="ap-minimum-alert">
+                        <Grid2X2Icon />
+                        <span>
+                          Rollo de{" "}
+                          {infoRolloLineal.anchoUtilCm.toLocaleString("es-AR", {
+                            maximumFractionDigits: 1,
+                          })}{" "}
+                          cm útil
+                        </span>
+                      </div>
+                    ) : null}
                   </>
                 )}
               </>
