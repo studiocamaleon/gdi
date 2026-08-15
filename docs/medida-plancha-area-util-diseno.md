@@ -145,5 +145,6 @@ puro display.
    útil 30,5×47 cm".
 2. ¿`esDefault` puede ser la plancha? Propuesta: sí (productos que se venden
    principalmente por plancha).
-3. Nombre editable por el modelador ("Plancha", "Hoja completa", "Plancha
-   grande") — propuesta: sí, el `nombre` ya existe en el modelo.
+3. ~~Nombre editable por el modelador~~ **RESUELTO (2026-08-15)**: sí — cada
+   empresa le llama como quiera ("Plancha", "Hoja completa", "Plancha
+   grande"); el `nombre` ya existe en el modelo.
