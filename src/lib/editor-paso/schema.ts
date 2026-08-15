@@ -67,7 +67,6 @@ import {
   SELECCION_MATERIAL_OPTIONS,
   FORMULA_OPTIONS,
   CRITERIO_AUTO_OPTIONS,
-  COSTING_STRATEGY_OPTIONS,
   costingStrategyOptions,
   CANTIDAD_BASE_SLOT_OPTIONS,
 } from "./catalogo-materiales";
@@ -791,15 +790,6 @@ function sustratoLuceRollo(ctx: ContextoOpcion): boolean {
         atributosLucenRollo(variante.atributosVarianteJson),
     );
   });
-}
-
-/** ¿El costeo del material lo define Acomodado/nesting (y no el slot)? */
-function nestingDefineCosteo(ctx: ContextoOpcion): boolean {
-  const nesting = ctx.paramsPaso.nestingConfig as
-    | { costing?: { strategy?: unknown } }
-    | undefined;
-  const estrategia = nesting?.costing?.strategy;
-  return typeof estrategia === "string" && estrategia !== "simple";
 }
 
 export const ESQUEMA_PASO: OpcionPaso[] = [
@@ -2208,66 +2198,13 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // en vez de una perilla que el motor ignora.
     control: { tipo: "componente", id: "consumo-formula" },
   },
-  {
-    clave: "materiales.costeo",
-    seccion: "materiales",
-    grupo: "descuento",
-    etiqueta: "Costeo",
-    pregunta: "¿Cómo se costea este material?",
-    ayuda:
-      "Cobrar exactamente lo consumido, sólo lo que ocupan las piezas, o la materia prima completa según cómo se aprovecha.",
-    // Un solo lugar por pregunta (feedback del usuario): para el SUSTRATO
-    // de un paso que acomoda, el costeo vive en "Ajustes del trabajo"
-    // (Costeo del sustrato del Acomodado); acá sólo queda para los demás
-    // slots. Y si el nesting ya define el costeo, tampoco aparece.
-    visible: (ctx) =>
-      Boolean(ctx.slot) &&
-      !nestingDefineCosteo(ctx) &&
-      !(
-        ctx.slot?.payload.slotCodigo === "sustrato_principal" &&
-        nestingAplica(ctx.familia, ctx.cfg)
-      ) &&
-      // Un INSUMO (caño, pintura, cable, film, módulos) nunca se costea por
-      // placas: el motor ignora la estrategia fuera del sustrato nesteado.
-      // Mostrar "Placas enteras" ahí era ruido puro (H5 del relevamiento).
-      ctx.slot?.decl?.tipo !== "INSUMO_PASO",
-    resumen: (ctx) => {
-      const estrategia = ctx.slot?.payload.estrategiaCosto ?? "simple";
-      const base = labelDe(COSTING_STRATEGY_OPTIONS, estrategia);
-      if (estrategia !== "plate-segments") return base;
-      // Los escalones REALES configurados (la descripción genérica dice
-      // "¼, ½, ¾ o entera", pero la chapa usa [100]: hoja entera siempre).
-      const nesting = ctx.paramsPaso.nestingConfig as
-        | { costing?: { segmentSteps?: unknown } }
-        | undefined;
-      const steps = Array.isArray(nesting?.costing?.segmentSteps)
-        ? (nesting.costing.segmentSteps as unknown[]).map(Number).filter(Number.isFinite)
-        : [];
-      if (steps.length === 1 && steps[0] === 100)
-        return `${base} · la última también se cobra entera`;
-      if (steps.length > 0) return `${base} · escalones ${steps.join("/")}%`;
-      return base;
-    },
-    origenValor: (ctx) =>
-      ctx.slot?.payload.estrategiaCosto &&
-      ctx.slot.payload.estrategiaCosto !== "simple"
-        ? "config"
-        : "default-paso",
-    control: {
-      tipo: "select",
-      opciones: () =>
-        COSTING_STRATEGY_OPTIONS.map((o) => ({
-          value: o.value,
-          label: o.label,
-          descripcion: o.description,
-        })),
-      valor: (ctx) => ctx.slot?.payload.estrategiaCosto ?? "simple",
-      aplicar: (_ctx, v) => ({
-        tipo: "slot",
-        patch: { estrategiaCosto: v || "simple" },
-      }),
-    },
-  },
+  // [Costeo del sustrato → nesting] La pregunta `materiales.costeo` se
+  // eliminó: el costeo del sustrato lo POSEE el nesting (Acomodo), no el
+  // material — las estrategias que cobran desperdicio son función del
+  // resultado geométrico y hay una sola corrida de nesting por paso. El
+  // material aporta precio + consumo; la estrategia vive en
+  // `nestingConfig.costing` (Acomodo) como fuente única.
+  // Ver docs/editor-pasos-preguntas-orden.md §10.5 y nesting-abstraccion §3.3.
   {
     clave: "materiales.base",
     seccion: "materiales",

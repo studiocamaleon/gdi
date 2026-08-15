@@ -78,8 +78,8 @@ import {
   SELECCION_MATERIAL_OPTIONS,
   FORMULA_OPTIONS,
   CRITERIO_AUTO_OPTIONS,
-  COSTING_STRATEGY_OPTIONS,
   costingStrategyOptions,
+  ROLLO_COSTEO_OPTIONS,
   SLOT_ROL_OPTIONS,
   CANTIDAD_BASE_SLOT_OPTIONS,
   CANTIDAD_BASE_SLOT_OPTIONS_INSUMO,
@@ -2105,10 +2105,8 @@ function ColorThicknessVariantSelector({
           {candidate.varianteIds.length} variantes
         </Badge>
       </div>
-      <div className="space-y-1">
-        <div className="text-muted-foreground text-[11px] font-medium">
-          Color
-        </div>
+      <div className="space-y-1.5">
+        <div className="text-foreground text-xs font-semibold">Color</div>
         <div className="flex flex-wrap gap-1.5">
           {colors.map((color) => {
             const count = variants.filter(
@@ -2119,10 +2117,11 @@ function ColorThicknessVariantSelector({
               <button
                 key={color}
                 type="button"
-                className={`rounded border px-2.5 py-1 text-xs font-medium transition ${
+                aria-pressed={active}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                   active
-                    ? "border-blue-600 bg-blue-50 text-blue-700"
-                    : "border-border bg-white text-muted-foreground hover:bg-muted"
+                    ? "border-foreground bg-foreground text-white shadow-sm"
+                    : "border-border bg-white/60 text-muted-foreground hover:border-foreground/30"
                 }`}
                 onClick={() => setSelectedColor(color)}
               >
@@ -2133,68 +2132,59 @@ function ColorThicknessVariantSelector({
           })}
         </div>
       </div>
-      <div className="space-y-1">
-        <div className="text-muted-foreground text-[11px] font-medium">
-          Espesor
-        </div>
-        <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-1.5">
+        <div className="text-foreground text-xs font-semibold">Espesor</div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {visibleVariants.map(({ variante, summary }) => {
             const checked = enabledVariantIds.has(variante.id);
             const medida = getVariantMeasureLabel(variante, materiaPrima.templateId);
-            const precio = variante.precioReferencia
-              ? formatearMoneda(
-                  Number(variante.precioReferencia),
-                  monedaDe(variante.moneda),
-                )
-              : null;
+            const esDefault = candidate.defaultVarianteId === variante.id;
             return (
-              <label
+              <button
                 key={variante.id}
-                className={`min-w-0 rounded border px-2.5 py-2 text-xs transition ${
+                type="button"
+                aria-pressed={checked}
+                onClick={() =>
+                  onChange(
+                    patchEnabledVariantIds(candidate, variante.id, !checked),
+                  )
+                }
+                className={`min-w-0 rounded-lg border px-3 py-2.5 text-left text-xs transition ${
                   checked
                     ? "border-foreground bg-white shadow-sm"
-                    : "border-transparent bg-white/70 text-muted-foreground"
+                    : "border-border bg-white/60 text-muted-foreground hover:border-foreground/30"
                 }`}
               >
-                <span className="flex items-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={checked}
-                    onChange={(event) =>
-                      onChange(
-                        patchEnabledVariantIds(
-                          candidate,
-                          variante.id,
-                          event.target.checked,
-                        ),
-                      )
-                    }
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-semibold text-foreground">
-                      {summary.espesor !== null
-                        ? `${formatNumber(summary.espesor)} mm`
-                        : variante.nombreVariante || variante.sku}
-                    </span>
-                    {medida ? (
-                      <span className="text-muted-foreground block truncate">
-                        {medida}
-                      </span>
-                    ) : null}
-                    {precio ? (
-                      <span className="text-muted-foreground block truncate">
-                        Ref. {precio}
-                      </span>
-                    ) : null}
-                    {candidate.defaultVarianteId === variante.id ? (
-                      <span className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                        Predeterminada
-                      </span>
+                <span className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate font-semibold text-foreground">
+                    {summary.espesor !== null
+                      ? `${formatNumber(summary.espesor)} mm`
+                      : variante.nombreVariante || variante.sku}
+                  </span>
+                  <span
+                    aria-hidden
+                    className={`flex size-4 shrink-0 items-center justify-center rounded-full border transition ${
+                      checked
+                        ? "border-foreground bg-foreground text-white"
+                        : "border-border"
+                    }`}
+                  >
+                    {checked ? (
+                      <CheckIcon className="size-2.5" strokeWidth={3} />
                     ) : null}
                   </span>
                 </span>
-              </label>
+                {medida ? (
+                  <span className="mt-0.5 block truncate text-muted-foreground">
+                    {medida}
+                  </span>
+                ) : null}
+                {esDefault ? (
+                  <span className="mt-1.5 inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Predeterminada
+                  </span>
+                ) : null}
+              </button>
             );
           })}
         </div>
@@ -2954,7 +2944,6 @@ export function ConfigPasosEditorView({
               varianteIds: candidate.variantes.map((item) => item.variante.id),
               todasLasVariantes: candidate.todasLasVariantes ?? false,
             })),
-            estrategiaCosto: s.estrategiaCosto,
             formula: s.formula,
             cantidadFactor:
               s.cantidadFactor === null || s.cantidadFactor === undefined
@@ -3853,7 +3842,6 @@ export function ConfigPasosEditorView({
         slotCodigo,
         modoSeleccion: "HARDCODED",
         materialVarianteId: null,
-        estrategiaCosto: "simple",
         // [Tanda B] La fórmula forzada la declara el SLOT de la ficha
         // (film de laminado → por metro lineal); antes copia local.
         formula:
@@ -3892,7 +3880,6 @@ export function ConfigPasosEditorView({
         slotRol: "COMPONENTE",
         modoSeleccion: "HARDCODED",
         materialVarianteId: null,
-        estrategiaCosto: "simple",
         formula: "por_pieza",
         cantidadFactor: 1,
         cantidadBase: "cantidad_pedida",
@@ -4944,14 +4931,6 @@ export function ConfigPasosEditorView({
                       !soportaPasoManual);
                   const mostrarOverridesTiempo =
                     mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
-                  const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
-                  const nestingCosting = asRecord(nestingConfig.costing);
-                  const nestingCostingStrategy =
-                    typeof nestingCosting.strategy === "string"
-                      ? nestingCosting.strategy
-                      : "simple";
-                  const nestingDefineCosteo =
-                    mostrarNesting && nestingCostingStrategy !== "simple";
                   const multiplicadoresSoportados =
                     familia?.multiplicadoresSoportados ?? [];
                   const maquinaParaDefaults = maquinaSel?.parametrosTecnicosJson
@@ -6361,51 +6340,14 @@ export function ConfigPasosEditorView({
                                                     triggerClassName="min-h-9 text-xs"
                                                   />
                                                 </div>
-                                                <div className="space-y-1">
-                                                  <LabelConTooltip
-                                                    label="Costeo"
-                                                    tooltip={
-                                                      nestingDefineCosteo
-                                                        ? "Este paso toma el costeo desde Acomodado / nesting. El valor del slot no se usa mientras esa estrategia esté activa."
-                                                        : "Estrategia de costeo del material cuando no hay una estrategia activa en Acomodado / nesting."
-                                                    }
-                                                  />
-                                                  {nestingDefineCosteo ? (
-                                                    <div className="min-h-9 rounded border bg-muted/40 px-3 py-2 text-xs">
-                                                      <div className="font-medium text-foreground">
-                                                        {optionLabel(
-                                                          COSTING_STRATEGY_OPTIONS,
-                                                          nestingCostingStrategy,
-                                                        )}
-                                                      </div>
-                                                      <div className="text-muted-foreground">
-                                                        Definido en Acomodado /
-                                                        nesting
-                                                      </div>
-                                                    </div>
-                                                  ) : (
-                                                    <HumanSelect
-                                                      value={
-                                                        slot.estrategiaCosto ??
-                                                        "simple"
-                                                      }
-                                                      onValueChange={(v) =>
-                                                        updateSlot(
-                                                          paso.id,
-                                                          slotIdx,
-                                                          {
-                                                            estrategiaCosto:
-                                                              v || "simple",
-                                                          },
-                                                        )
-                                                      }
-                                                      options={
-                                                        COSTING_STRATEGY_OPTIONS
-                                                      }
-                                                      triggerClassName="min-h-9 text-xs"
-                                                    />
-                                                  )}
-                                                </div>
+                                                {/* [Costeo del sustrato → nesting]
+                                                    El control de "Costeo" por slot
+                                                    se removió: el costeo lo posee el
+                                                    nesting (Acomodo), fuente única
+                                                    `nestingConfig.costing`. El
+                                                    material define qué/cuánto/precio,
+                                                    no cómo se cobra el desperdicio.
+                                                    Ver docs/editor-pasos-preguntas-orden.md §10.5. */}
                                               </div>
                                               {esSlotAdicional ||
                                               slotDecl?.tipo ===
@@ -6981,6 +6923,125 @@ interface NestingApi {
   ) => void;
   addNestingPliegoCandidato: (pasoId: string, presetValue?: string) => void;
   removeNestingPliegoCandidato: (pasoId: string, index: number) => void;
+}
+
+/** Input de escalones de ocupación (% de placa) como CHIPS: se escribe un
+ *  número y con espacio / enter / coma se crea un badge; Backspace en vacío
+ *  borra el último. Más claro que la lista separada por comas — el usuario ve
+ *  que cada valor quedó tomado. Ordena y deduplica; sólo 1–100. */
+function EscalonesChips({
+  value,
+  onChange,
+}: {
+  value: number[];
+  onChange: (steps: number[]) => void;
+}) {
+  const [draft, setDraft] = React.useState("");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const steps = value.length > 0 ? value : [25, 50, 75, 100];
+
+  const commit = () => {
+    const n = Number(draft.trim());
+    setDraft("");
+    if (!Number.isFinite(n) || n <= 0 || n > 100 || steps.includes(n)) return;
+    onChange([...steps, n].sort((a, b) => a - b));
+  };
+  const removeAt = (idx: number) =>
+    onChange(steps.filter((_, i) => i !== idx));
+
+  return (
+    <span
+      className={trab.ctl}
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 5,
+        alignItems: "center",
+        cursor: "text",
+        paddingTop: 4,
+        paddingBottom: 4,
+      }}
+      onClick={() => inputRef.current?.focus()}
+    >
+      {steps.map((s, idx) => (
+        <span
+          key={`${s}-${idx}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            height: 22,
+            padding: "0 3px 0 8px",
+            borderRadius: 5,
+            fontSize: 11.5,
+            fontFamily: "var(--font-mono, ui-monospace)",
+            background: "var(--surface-2, #f2f0ea)",
+            color: "var(--fg-2, #2c2c33)",
+            border: "1px solid var(--hairline, #e5e2db)",
+          }}
+        >
+          {s}%
+          <button
+            type="button"
+            aria-label={`Quitar ${s}%`}
+            onClick={(e) => {
+              e.stopPropagation();
+              removeAt(idx);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 15,
+              height: 15,
+              borderRadius: "50%",
+              border: 0,
+              background: "transparent",
+              color: "var(--muted-text, #6e6e76)",
+              cursor: "pointer",
+              padding: 0,
+              fontSize: 13,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        value={draft}
+        inputMode="numeric"
+        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " " || e.key === ",") {
+            e.preventDefault();
+            commit();
+          } else if (
+            e.key === "Backspace" &&
+            draft === "" &&
+            steps.length > 0
+          ) {
+            e.preventDefault();
+            removeAt(steps.length - 1);
+          }
+        }}
+        onBlur={commit}
+        placeholder={steps.length === 0 ? "25" : ""}
+        style={{
+          border: 0,
+          outline: 0,
+          background: "transparent",
+          font: "inherit",
+          fontSize: "12.5px",
+          width: 42,
+          minWidth: 0,
+          flex: "1 0 42px",
+          color: "var(--fg, #14141a)",
+        }}
+      />
+    </span>
+  );
 }
 
 function AcomodadoDetalladoEditor({
@@ -8617,11 +8678,16 @@ function AcomodadoDetalladoEditor({
                                       </div>
                                     </div>
 
-                                    {/* En ROLLO no hay nada que elegir: el consumo del acomodo ES
-                                        el costo (largo consumido × ancho). Las tres estrategias
-                                        alternativas son geometría de placa y el motor las ignora,
-                                        así que la card no se muestra. */}
-                                    {!sustratoRolloDisponible && (
+                                    {/* El costeo del sustrato se muestra SIEMPRE, para que Acomodo
+                                        sea consistente en todos los pasos que lo tienen. En SHEET
+                                        (placa/pliego) es un selector de estrategia. En ROLLO hoy hay
+                                        una sola forma —largo consumido × ancho útil, incluido el
+                                        sobrante que no se reutiliza— y se muestra RESUELTA
+                                        (informativa): el motor la deriva del sustrato, no se guarda
+                                        un valor que ignoraría (sería dato muerto). Cuando se modelen
+                                        distintas estrategias de rollo, esto pasa a selector.
+                                        Ver docs/editor-pasos-preguntas-orden.md §10.5. */}
+                                    {(
                                       <div className={trab.root}>
                                       <div className={trab.pliego}>
                                         <div className={trab.pliegoHead}>
@@ -8633,8 +8699,9 @@ function AcomodadoDetalladoEditor({
                                           className={trab.hint}
                                           style={{ margin: "-4px 0 0" }}
                                         >
-                                          Cómo se cobra el material cuando hay
-                                          resultado de nesting.
+                                          {sustratoRolloDisponible
+                                            ? ROLLO_COSTEO_OPTIONS[0].description
+                                            : "Cómo se cobra el material cuando hay resultado de nesting."}
                                         </p>
                                         <div
                                           style={{
@@ -8645,6 +8712,24 @@ function AcomodadoDetalladoEditor({
                                             alignItems: "end",
                                           }}
                                         >
+                                          {sustratoRolloDisponible ? (
+                                            <span className={trab.fl}>
+                                              <span className={trab.k}>
+                                                Estrategia
+                                              </span>
+                                              <span
+                                                className={trab.ctl}
+                                                style={{
+                                                  alignItems: "center",
+                                                  fontWeight: 500,
+                                                  color: "var(--fg, #14141a)",
+                                                }}
+                                              >
+                                                {ROLLO_COSTEO_OPTIONS[0].label}
+                                              </span>
+                                            </span>
+                                          ) : (
+                                          <>
                                           <span className={trab.fl}>
                                             <span className={trab.k}>
                                               Estrategia
@@ -8695,50 +8780,23 @@ function AcomodadoDetalladoEditor({
                                                   100
                                                 </span>
                                               </span>
-                                              <span className={trab.ctl}>
-                                                <input
-                                                  value={
-                                                    Array.isArray(
-                                                      nestingCosting.segmentSteps,
-                                                    )
-                                                      ? nestingCosting.segmentSteps.join(
-                                                          ", ",
-                                                        )
-                                                      : "25, 50, 75, 100"
-                                                  }
-                                                  onChange={(e) =>
-                                                    updateNestingCosting(
-                                                      pasoId,
-                                                      {
-                                                        segmentSteps:
-                                                          e.target.value
-                                                            .split(",")
-                                                            .map((item) =>
-                                                              Number(
-                                                                item.trim(),
-                                                              ),
-                                                            )
-                                                            .filter((item) =>
-                                                              Number.isFinite(
-                                                                item,
-                                                              ),
-                                                            ),
-                                                      },
-                                                    )
-                                                  }
-                                                  style={{
-                                                    border: 0,
-                                                    outline: 0,
-                                                    background: "transparent",
-                                                    font: "inherit",
-                                                    fontSize: "12.5px",
-                                                    width: "100%",
-                                                    minWidth: 0,
-                                                    color: "var(--fg, #14141a)",
-                                                  }}
-                                                />
-                                              </span>
+                                              <EscalonesChips
+                                                value={
+                                                  Array.isArray(
+                                                    nestingCosting.segmentSteps,
+                                                  )
+                                                    ? (nestingCosting.segmentSteps as number[])
+                                                    : [25, 50, 75, 100]
+                                                }
+                                                onChange={(steps) =>
+                                                  updateNestingCosting(pasoId, {
+                                                    segmentSteps: steps,
+                                                  })
+                                                }
+                                              />
                                             </span>
+                                          )}
+                                          </>
                                           )}
                                         </div>
                                       </div>
@@ -8990,41 +9048,23 @@ function CandidatosSlotDetalladoEditor({
       !candidate.todasLasVariantes && candidate.varianteIds.length === 0;
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 9,
-            cursor: "pointer",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <Switch
+            id={`usar-todas-${candidate.materiaPrimaId}`}
             checked={candidate.todasLasVariantes ?? false}
             onCheckedChange={(valor) =>
               updateSlotCandidate(pasoId, slotIdx, candidate.materiaPrimaId, {
                 todasLasVariantes: valor,
               })
             }
-            style={{ marginTop: 1, flexShrink: 0 }}
+            style={{ flexShrink: 0 }}
           />
-          <span>
-            <span style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}>
-              Usar todas las variantes activas
-            </span>
-            <span
-              style={{
-                display: "block",
-                fontSize: 11,
-                color: "var(--muted-text, #6e6e76)",
-                marginTop: 1,
-                maxWidth: "64ch",
-              }}
-            >
-              Las variantes nuevas de {materiaPrima.nombre} se suman solas — no
-              hace falta re-editar el paso.
-            </span>
-          </span>
-        </label>
+          <LabelConTooltip
+            htmlFor={`usar-todas-${candidate.materiaPrimaId}`}
+            label="Usar todas las variantes activas al cotizar en la orden."
+            tooltip={`Las variantes nuevas de ${materiaPrima.nombre} se suman solas — no hace falta re-editar el paso.`}
+          />
+        </div>
 
         {!candidate.todasLasVariantes && materiaPrima.variantes.length > 1 ? (
           canUseColorThicknessSelector(materiaPrima) ? (
@@ -9179,7 +9219,7 @@ function CandidatosSlotDetalladoEditor({
       >
         <div>
           <div style={{ fontSize: 12.5, fontWeight: 600 }}>
-            Materiales candidatos
+            Materia prima de este material
           </div>
           <div
             style={{
@@ -9260,9 +9300,13 @@ function magnitudProducePaso(
 }
 
 // La frase de "por_unidad_productiva" con la magnitud concreta si se conoce.
+// Forma NEUTRA a propósito: la magnitud va entre paréntesis, como aposición,
+// no detrás de un artículo. `los ${magnitud}` fallaba para casi todo sustantivo
+// ("los pintura", "los placa", "los m²"…) porque el género y el número los pone
+// el sustantivo, no el template. El paréntesis sirve para cualquier magnitud.
 function fraseUnidadProductiva(magnitud: string | null): string {
   return magnitud
-    ? `los ${magnitud} que produce el paso`
+    ? `lo que produce el paso (${magnitud})`
     : FORMULA_MIDE_FRASE.por_unidad_productiva;
 }
 
@@ -13893,8 +13937,64 @@ function SeccionesEsquemaPaso({
                     </div>
                   );
                 })()}
-                {/* Tiempo que consume: siempre DESPUÉS de Materiales
-                    (feedback del usuario). */}
+                {/* Acomodo · Parámetros del oficio · Efectos — "El trabajo" se
+                    disolvió en tres secciones de un solo concepto; cada una
+                    filtra el eje "trabajo" por clave y se auto-oculta con 0
+                    opciones (EjeGuiado devuelve null). Van DESPUÉS de Materiales
+                    y ANTES de Tiempo: el acomodo define cuántas piezas entran, y
+                    de ahí sale la cantidad que el tiempo multiplica (H-2). El
+                    estado vacío se quitó (su "agregar material" era redundante
+                    con "Agregar componente" de Materiales).
+                    Ver docs/editor-pasos-preguntas-orden.md §10. */}
+                {cfg.tercerizado ? null : (
+                  <>
+                    <EjeGuiado
+                      titulo="Nesting"
+                      subtitulo="Cómo se acomodan y aprovechan las piezas en el material."
+                      opciones={opcionesDeEje("trabajo", ctx).filter(
+                        (o) => o.clave === "oficio.acomodado",
+                      )}
+                      grupos={GRUPOS_EJE.trabajo}
+                      fijo
+                      resumenPrincipal={["oficio.acomodado"]}
+                      ctx={ctx}
+                      pendientesVivos={pendientesVivos}
+                      onAplicar={onAplicar}
+                      renderComponente={renderComponente}
+                    />
+                    <EjeGuiado
+                      titulo="Parámetros del oficio"
+                      subtitulo="Los números propios de este oficio que el motor usa para calcular el paso."
+                      opciones={opcionesDeEje("trabajo", ctx).filter(
+                        (o) => o.clave === "oficio.params_familia",
+                      )}
+                      grupos={GRUPOS_EJE.trabajo}
+                      fijo
+                      resumenPrincipal={["oficio.params_familia"]}
+                      ctx={ctx}
+                      pendientesVivos={pendientesVivos}
+                      onAplicar={onAplicar}
+                      renderComponente={renderComponente}
+                    />
+                    <EjeGuiado
+                      titulo="Efectos"
+                      subtitulo="Lo que el paso le exige al trabajo: material extra para agarre, envoltura o refilado."
+                      opciones={opcionesDeEje("trabajo", ctx).filter(
+                        (o) => o.clave === "oficio.efectos",
+                      )}
+                      grupos={GRUPOS_EJE.trabajo}
+                      fijo
+                      resumenPrincipal={["oficio.efectos"]}
+                      ctx={ctx}
+                      pendientesVivos={pendientesVivos}
+                      onAplicar={onAplicar}
+                      renderComponente={renderComponente}
+                    />
+                  </>
+                )}
+                {/* Tiempo que consume: ÚLTIMO — depende de todo lo anterior (el
+                    ritmo sale del perfil de la máquina, la cantidad del
+                    acomodado). */}
                 {!cfg.tercerizado ? (
                   <EjeGuiado
                     titulo="Tiempo que consume"
@@ -13921,107 +14021,6 @@ function SeccionesEsquemaPaso({
                     renderComponente={renderComponente}
                   />
                 ) : null}
-                {/* El trabajo: acomodado + parámetros del oficio. Si el paso no
-                    configura nada propio, el caso vacío del diseño en vez de
-                    esconder la sección (El trabajo.html · c-vacio). */}
-                {cfg.tercerizado ? null : opcionesDeEje("trabajo", ctx).length >
-                  0 ? (
-                  <EjeGuiado
-                    titulo="El trabajo"
-                    subtitulo="Cómo se acomoda en el material y con qué parámetros trabaja el paso."
-                    opciones={opcionesDeEje("trabajo", ctx)}
-                    grupos={GRUPOS_EJE.trabajo}
-                    fijo
-                    resumenPrincipal={[
-                      "oficio.acomodado",
-                      "oficio.params_familia",
-                      "oficio.efectos",
-                    ]}
-                    ctx={ctx}
-                    pendientesVivos={pendientesVivos}
-                    onAplicar={onAplicar}
-                    renderComponente={renderComponente}
-                  />
-                ) : (
-                  <div
-                    className={trab.root}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ padding: "2px 2px 0" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 7,
-                          fontSize: 15,
-                          fontWeight: 650,
-                        }}
-                      >
-                        <span
-                          aria-hidden
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 16,
-                            height: 16,
-                            borderRadius: "50%",
-                            flexShrink: 0,
-                            background: "#22a06b",
-                            color: "#fff",
-                          }}
-                        >
-                          <CheckIcon className="size-2.5" strokeWidth={3.2} />
-                        </span>
-                        El trabajo
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12.5,
-                          color: "var(--muted-text, #6e6e76)",
-                          marginTop: 2,
-                          marginLeft: 23,
-                        }}
-                      >
-                        Este paso no configura nada propio.
-                      </div>
-                    </div>
-                    <div className={trab.empty}>
-                      <span className={trab.emptyIc}>
-                        <svg
-                          width="17"
-                          height="17"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <rect x="3" y="3" width="18" height="18" rx="2" />
-                          <path d="M8 8h8v8H8z" strokeDasharray="2 2" />
-                        </svg>
-                      </span>
-                      <div>
-                        <div className={trab.emptyT}>
-                          Trabaja sobre la medida que le llega
-                        </div>
-                        <div className={trab.emptyD}>
-                          Este paso no acomoda ni parametriza nada: toma la pieza
-                          como viene del paso anterior. Si necesita que llegue
-                          más grande — para agarre, pinza o refilado — pedí ese
-                          material acá.
-                        </div>
-                      </div>
-                      <div className={trab.emptySp} />
-                      {renderComponente("agregar-slot")}
-                    </div>
-                  </div>
-                )}
 
               </>
             ) : null}

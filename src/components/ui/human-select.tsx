@@ -126,7 +126,7 @@ export function HumanSelect({
           // compita, alto automático (anulando también la variante de tamaño
           // `data-[size]:h-8`) y el select-value envuelve en vez de recortar.
           triggerConChips
-            ? "h-auto min-h-9 items-start py-2 whitespace-normal data-[size=default]:h-auto *:data-[slot=select-value]:flex-wrap *:data-[slot=select-value]:items-start *:data-[slot=select-value]:gap-2 *:data-[slot=select-value]:line-clamp-none"
+            ? "h-auto min-h-9 items-start py-2 whitespace-normal data-[size=default]:h-auto *:data-[slot=select-value]:flex-wrap *:data-[slot=select-value]:items-start *:data-[slot=select-value]:gap-3 *:data-[slot=select-value]:line-clamp-none"
             : "h-9",
           triggerClassName,
         )}
@@ -182,7 +182,7 @@ function HumanSelectTriggerValue({
     return (
       <span
         data-slot="select-value"
-        className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-left"
+        className="flex min-w-0 flex-1 flex-wrap items-center gap-3 text-left"
       >
         {option.details.map((detail) => (
           <span

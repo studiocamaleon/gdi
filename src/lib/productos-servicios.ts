@@ -275,7 +275,6 @@ export interface SlotMaterialDetalle {
   slotRol: string | null;
   modoSeleccion: string;
   criterioMotorAuto: string | null;
-  estrategiaCosto: string;
   formula: string;
   cantidadFactor: string | number | null;
   cantidadBase: string | null;

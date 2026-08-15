@@ -135,6 +135,26 @@ export function costingStrategyOptions(unidad: UnidadCosteoSustrato = "placa") {
 
 export const COSTING_STRATEGY_OPTIONS = costingStrategyOptions("placa");
 
+/**
+ * Formas de costeo del ROLLO. Van aparte de las 4 de placa/pliego porque el
+ * rollo NO tiene la decisión "qué hago con la última unidad parcial" (es
+ * continuo): se cobra el largo consumido × ancho útil, incluido el sobrante.
+ * Hoy hay UNA sola forma; vive en el catálogo (no hardcodeada en el front)
+ * para ser la fuente única y el punto de extensión — si mañana hay más de una
+ * (cobrar hasta la última pieza vs el segmento entero de rollo vs redondear a
+ * X metros), se agregan acá + su rama en el motor, y el display pasa a
+ * selector. El motor hoy la deriva del sustrato (fórmula por_metro_lineal
+ * sobre el largo consumido del nesting), no la guarda.
+ */
+export const ROLLO_COSTEO_OPTIONS: OpcionMaterialCatalogo[] = [
+  {
+    value: "consumed-length",
+    label: "Largo consumido",
+    description:
+      "Se cobra el largo de material consumido (× el ancho útil), incluido el sobrante que no se reutiliza.",
+  },
+];
+
 export const SLOT_ROL_OPTIONS: OpcionMaterialCatalogo[] = [
   { value: "COMPONENTE", label: "Componente" },
   { value: "SUSTRATO", label: "Sustrato" },

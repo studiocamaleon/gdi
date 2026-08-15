@@ -84,7 +84,6 @@ const CENSO: Record<string, string[]> = {
     "materiales.candidatos",
     "materiales.criterio",
     "materiales.consumo",
-    "materiales.costeo",
     "materiales.base",
     "materiales.caras",
   ],
@@ -760,7 +759,6 @@ describe("sección Materiales", () => {
       "materiales.quien",
       "materiales.material",
       "materiales.consumo",
-      "materiales.costeo",
     ]);
   });
 
@@ -869,42 +867,9 @@ describe("sección Materiales", () => {
     expect(base.resumen(insumo)).toBe("Según fórmula del consumo");
   });
 
-  it("el costeo se oculta cuando Acomodado/nesting lo define", () => {
-    const costeo = ESQUEMA_PASO.find((op) => op.clave === "materiales.costeo")!;
-    expect(costeo.visible(ctxBase({ slot: slotCtx({}) }))).toBe(true);
-    const conNesting = ctxBase({
-      cfg: {
-        paramsPasoJson: {
-          nestingConfig: { costing: { strategy: "consumed-length" } },
-        },
-      },
-      slot: slotCtx({}),
-    });
-    expect(costeo.visible(conNesting)).toBe(false);
-  });
-
-  it("el costeo del SUSTRATO de un paso que acomoda vive en Ajustes, no acá (una pregunta, un lugar)", () => {
-    const costeo = ESQUEMA_PASO.find((op) => op.clave === "materiales.costeo")!;
-    // [Etapa F2] La familia DECLARA que acomoda (nestingConfig), como en el
-    // catálogo real — nestingAplica ya no usa listas de códigos.
-    const sustratoNesting = ctxBase({
-      familia: {
-        codigo: "impresion_por_hoja",
-        nestingConfig: { superficie: "pliego", estrategia: "pliego_digital" },
-      },
-      slot: slotCtx({ slotCodigo: "sustrato_principal" }),
-    });
-    expect(costeo.visible(sustratoNesting)).toBe(false);
-    // Otros slots del mismo paso siguen preguntando su costeo.
-    const otroSlot = ctxBase({
-      familia: {
-        codigo: "impresion_por_hoja",
-        nestingConfig: { superficie: "pliego", estrategia: "pliego_digital" },
-      },
-      slot: slotCtx({ slotCodigo: "broches" }, { esAdicional: true }),
-    });
-    expect(costeo.visible(otroSlot)).toBe(true);
-  });
+  // [Costeo del sustrato → nesting] Los tests de `materiales.costeo` se
+  // eliminaron con la pregunta: el costeo del sustrato lo posee el nesting
+  // (Acomodo), fuente única `nestingConfig.costing`. Ver schema §materiales.
 
   it("el nombre sólo aplica a slots adicionales", () => {
     const nombre = ESQUEMA_PASO.find((op) => op.clave === "materiales.nombre")!;

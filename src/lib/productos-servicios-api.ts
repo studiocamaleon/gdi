@@ -355,7 +355,6 @@ export interface UpsertSlotMaterialPayload {
     /** true = usa todas las variantes activas del material (absorbe las nuevas). */
     todasLasVariantes?: boolean;
   }>;
-  estrategiaCosto?: string;
   formula?: string;
   cantidadFactor?: number | null;
   cantidadBase?: string | null;
