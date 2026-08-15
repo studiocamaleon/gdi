@@ -235,7 +235,6 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       cleanupMin: "2",
       feedReloadMin: "5",
       detalleJson: {
-        tipoCorte: "KISS_CUT",
         modoOperacion: "ROLLO",
         factorComplejidad: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 },
       },
@@ -459,7 +458,8 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
   // ============================================================================
   // 5. PLOTTER_DE_CORTE (Skycut C24) — vinilo
   //    Doc §8: anchoUtil + paramsTecnicos.modosOperacionSoportados.
-  //    Perfil por tipoCorte + modoOperacion. factorComplejidad controla la productividad base.
+  //    Un perfil por nivel de complejidad (Corte fácil/complejo). El formato
+  //    rollo/hoja lo decide el material cargado, no el perfil.
   // ============================================================================
   const skycut = await prisma.maquina.create({
     data: {
@@ -480,30 +480,25 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       espesorMaximo: "1",
       activo: true,
       parametrosTecnicosJson: {
-        anchoMinRolloMm: 200,
-        anchoMaxRolloMm: 610,
         modosOperacionSoportados: ["ROLLO", "HOJAS"],
       },
     },
   });
 
+  // Complejidad del corte = un perfil por nivel (ritmo m²/h distinto), como en
+  // Holdprint ("corte simple 8 · corte complejo 4"). El comercial elige uno.
   await prisma.maquinaPerfilOperativo.create({
     data: {
       tenantId,
       maquinaId: skycut.id,
-      nombre: "Corte completo - rollo",
+      nombre: "Corte fácil",
       tipoPerfil: TipoPerfilOperativoMaquina.CORTE,
       activo: true,
-      productivityValue: "36",
+      productivityValue: "8",
       productivityUnit: UnidadProduccionMaquina.M2_H,
       setupMin: "8",
       cleanupMin: "2",
-      feedReloadMin: "5",
-      detalleJson: {
-        tipoCorte: "COMPLETO",
-        modoOperacion: "ROLLO",
-        factorComplejidad: "simple",
-      },
+      detalleJson: {},
     },
   });
 
@@ -511,19 +506,14 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     data: {
       tenantId,
       maquinaId: skycut.id,
-      nombre: "Kiss cut - rollo",
+      nombre: "Corte complejo",
       tipoPerfil: TipoPerfilOperativoMaquina.CORTE,
       activo: true,
-      productivityValue: "36",
+      productivityValue: "4",
       productivityUnit: UnidadProduccionMaquina.M2_H,
       setupMin: "8",
       cleanupMin: "2",
-      feedReloadMin: "5",
-      detalleJson: {
-        tipoCorte: "KISS_CUT",
-        modoOperacion: "ROLLO",
-        factorComplejidad: "simple",
-      },
+      detalleJson: {},
     },
   });
 

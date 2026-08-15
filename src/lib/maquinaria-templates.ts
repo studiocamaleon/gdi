@@ -74,21 +74,9 @@ const coloresGranFormatoOptions = [
   option("CMYK+blanco+barniz", "CMYK + Blanco + Barniz"),
 ];
 
-const tipoCorteOptions = [
-  option("COMPLETO", "Corte completo"),
-  option("KISS_CUT", "Kiss cut"),
-];
-
 const modoOperacionPlotterOptions = [
   option("ROLLO", "Rollo"),
   option("HOJAS", "Hojas"),
-];
-
-const factorComplejidadPlotterOptions = [
-  option("simple", "Simple"),
-  option("intermedio", "Intermedio"),
-  option("complejo", "Complejo"),
-  option("personalizado", "Personalizado"),
 ];
 
 const modoLaminadoOptions = [
@@ -367,7 +355,6 @@ function buildGranFormatoSections(): MaquinariaTemplateSection[] {
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza al terminar." }),
         field({ key: "feedReloadMin", label: "Recarga rollo", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de recarga de rollo." }),
         field({ key: "colores", label: "Colores", scope: "perfil_operativo", kind: "select", options: coloresGranFormatoOptions, description: "Modo de color del perfil." }),
-        field({ key: "tipoCorte", label: "Tipo de corte", scope: "perfil_operativo", kind: "select", options: tipoCorteOptions, description: "Se usa en perfiles de corte integrado." }),
         field({ key: "factorComplejidad", label: "Factor complejidad (JSON)", scope: "perfil_operativo", kind: "textarea", description: "Se usa en perfiles de corte integrado. Ej: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 }." }),
       ],
     }),
@@ -412,42 +399,46 @@ function buildGuillotinaSections(): MaquinariaTemplateSection[] {
   ];
 }
 
-/** §8 — PLOTTER_DE_CORTE con discriminantes tipoCorte + modoOperacion. */
+/** §8 — PLOTTER_DE_CORTE: un perfil por nivel de complejidad. El formato
+ *  rollo/hoja lo dice el material cargado, no el perfil. */
 function buildPlotterCorteSections(): MaquinariaTemplateSection[] {
   return [
     section({
       id: "capacidades_fisicas",
       title: "Capacidades físicas",
-      description: "Ancho máximo de rollo aceptado.",
+      description: "Ancho de corte y espesor máximo.",
       fields: [
-        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de rollo (ej. 600mm)." }),
+        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho de corte de la boca (ej. 600mm)." }),
         field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Vinilo, films delgados (ej. 1mm)." }),
       ],
     }),
     section({
       id: "parametros_tecnicos",
       title: "Parámetros técnicos",
-      description: "Rangos de rollo y modos soportados.",
+      description: "Modos de carga soportados.",
       fields: [
-        // Sin anchoMinRolloMm (decisión 2026-07-28): nadie lo leía, mismo caso
-        // que en gran formato.
-        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Máximo de rollo aceptado." }),
+        // Sin anchoMaxRolloMm (decisión 2026-08-15): duplicaba "Ancho útil"
+        // (anchoUtil, Capacidades físicas), que es el campo canónico y requerido
+        // que lee el nesting. Mismo criterio que PLOTTER_CAD.
         field({ key: "modosOperacionSoportados", label: "Modos soportados", scope: "maquina", kind: "multiselect", required: true, options: modoOperacionPlotterOptions, description: "Rollo y/o hojas." }),
       ],
     }),
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Por tipo de corte + modo de operación. Complejidad la elige el comercial al cotizar.",
+      // Un perfil por nivel de complejidad de corte (fácil / complejo): el ritmo
+      // m²/h baja cuanto más intrincado es el corte. El modelador fija uno por
+      // defecto en la ruta; el comercial lo elige al cotizar. [Holdprint: mismo
+      // modelo — "corte simple 8 · corte complejo 4" m²/h.]
+      description: "Un perfil por nivel de complejidad (el ritmo m²/h baja cuanto más complejo es el corte).",
       fields: [
-        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Corte completo - rollo." }),
-        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", required: true, description: "m²/hora base (cortes simples)." }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Corte fácil, Corte complejo." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", required: true, description: "m²/hora de este nivel (ref: fácil ~8, complejo ~4)." }),
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de carga de rollo y calibración." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
-        field({ key: "feedReloadMin", label: "Cambio de rollo", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo entre rollos." }),
-        field({ key: "tipoCorte", label: "Tipo de corte", scope: "perfil_operativo", kind: "select", required: true, options: tipoCorteOptions, description: "Completo (atraviesa) o kiss-cut (solo vinilo)." }),
-        field({ key: "modoOperacion", label: "Modo operación", scope: "perfil_operativo", kind: "select", options: modoOperacionPlotterOptions, description: "Rollo u hojas." }),
-        field({ key: "factorComplejidad", label: "Factor de complejidad", scope: "perfil_operativo", kind: "select", options: factorComplejidadPlotterOptions, description: "" }),
+        // Sin `modoOperacion` (2026-08-15): rollo vs hoja lo dice el MATERIAL
+        // cargado (su subfamilia), no una bandera del perfil. La capacidad
+        // física sigue en `modosOperacionSoportados` a nivel máquina.
       ],
     }),
     section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cuchilla.", fields: genericWearFields }),
@@ -811,10 +802,10 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     visibleSections: commonTemplateSections,
     sections: buildPlotterCorteSections(),
     help: {
-      summary: "Perfiles por tipoCorte + modoOperacion. El factor de complejidad ajusta la productividad m²/hora.",
+      summary: "Un perfil por nivel de complejidad de corte. La productividad m²/h baja cuanto más intrincado es el corte.",
       tips: [
-        "Simple usa 36 m²/h, Intermedio 15 m²/h y Complejo 6 m²/h.",
-        "Para multi-rollo, declarar feedReloadMin > 0.",
+        "Referencia (Holdprint): corte fácil ~8 m²/h, corte complejo ~4 m²/h.",
+        "El modelador fija un perfil por defecto en el paso; el comercial lo cambia al cotizar.",
       ],
       examples: ["Skycut C24 para vinilo de rotulación"],
     },

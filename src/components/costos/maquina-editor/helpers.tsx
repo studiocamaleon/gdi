@@ -56,17 +56,6 @@ export const CANAL_META: Record<
   barniz: { label: "Barniz", short: "V", swatch: "#c7b58a" },
 };
 
-export type FactorComplejidadPlotter = "simple" | "intermedio" | "complejo" | "personalizado";
-
-export const PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY: Record<
-  Exclude<FactorComplejidadPlotter, "personalizado">,
-  number
-> = {
-  simple: 36,
-  intermedio: 15,
-  complejo: 6,
-};
-
 export function normalizeCanal(value: unknown): ConsumibleCanal | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
@@ -673,46 +662,15 @@ export function cleanPerfilDetailsForType(perfil: LocalPerfil): LocalPerfil {
   return { ...perfil, detalle };
 }
 
-export function complexityFromPlotterProductivity(
-  productivityValue: unknown,
-): FactorComplejidadPlotter {
-  const value = Number(productivityValue);
-  if (!Number.isFinite(value)) return "simple";
-  const match = Object.entries(PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY).find(
-    ([, defaultValue]) => Math.abs(value - defaultValue) < 0.001,
-  );
-  return (match?.[0] as FactorComplejidadPlotter | undefined) ?? "personalizado";
-}
-
 export function normalizePlotterCortePerfil(perfil: LocalPerfil, form: MaquinaPayload): LocalPerfil {
   if (form.plantilla !== "plotter_de_corte") return perfil;
-
+  // `tipoCorte` y `factorComplejidad` fueron retirados (eran inertes): no se
+  // re-guardan desde el editor. La complejidad ahora es UN PERFIL por nivel,
+  // con su propia productividad m²/h.
   const detalle = { ...(perfil.detalle ?? {}) };
-  const rawFactor = detalle.factorComplejidad;
-  const currentFactor =
-    typeof rawFactor === "string" &&
-    ["simple", "intermedio", "complejo", "personalizado"].includes(rawFactor)
-      ? (rawFactor as FactorComplejidadPlotter)
-      : complexityFromPlotterProductivity(perfil.productivityValue);
-  const factorComplejidad =
-    currentFactor === "personalizado" && !Number.isFinite(Number(perfil.productivityValue))
-      ? "simple"
-      : currentFactor;
-
-  return {
-    ...perfil,
-    productivityValue:
-      typeof perfil.productivityValue === "number"
-        ? perfil.productivityValue
-        : factorComplejidad === "personalizado"
-          ? perfil.productivityValue
-          : PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY[factorComplejidad],
-    productivityUnit: "m2_h",
-    detalle: {
-      ...detalle,
-      factorComplejidad,
-    },
-  };
+  delete detalle.tipoCorte;
+  delete detalle.factorComplejidad;
+  return { ...perfil, detalle, productivityUnit: "m2_h" };
 }
 
 export function setPerfilFieldValueForTemplate(
@@ -721,36 +679,12 @@ export function setPerfilFieldValueForTemplate(
   key: string,
   value: unknown,
 ): LocalPerfil {
-  if (form.plantilla !== "plotter_de_corte") {
-    return setPerfilFieldValue(perfil, key, value);
+  const next = setPerfilFieldValue(perfil, key, value);
+  // El plotter de corte cotiza siempre en m²/h.
+  if (form.plantilla === "plotter_de_corte" && key === "productivityValue") {
+    return { ...next, productivityUnit: "m2_h" };
   }
-
-  if (key === "factorComplejidad") {
-    const rawFactor = typeof value === "string" ? value : "simple";
-    const factor = ["simple", "intermedio", "complejo", "personalizado"].includes(rawFactor)
-      ? (rawFactor as FactorComplejidadPlotter)
-      : "simple";
-    const next = setPerfilFieldValue(perfil, key, factor);
-    if (factor === "personalizado") {
-      return { ...next, productivityUnit: "m2_h" };
-    }
-    return {
-      ...next,
-      productivityValue: PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY[factor] ?? 36,
-      productivityUnit: "m2_h",
-    };
-  }
-
-  if (key === "productivityValue") {
-    const next = setPerfilFieldValue(perfil, key, value);
-    return setPerfilFieldValue(
-      { ...next, productivityUnit: "m2_h" },
-      "factorComplejidad",
-      complexityFromPlotterProductivity(value),
-    );
-  }
-
-  return setPerfilFieldValue(perfil, key, value);
+  return next;
 }
 
 export function normalizePerfilTypeForTemplate(
@@ -842,7 +776,7 @@ export function shouldShowPerfilField(
   perfil?: MaquinaPayload["perfilesOperativos"][number],
 ) {
   if (form.plantilla !== "impresora_gran_formato_por_area") return true;
-  const corteFieldKeys = new Set(["tipoCorte", "factorComplejidad"]);
+  const corteFieldKeys = new Set(["factorComplejidad"]);
   const impresionFieldKeys = new Set(["colores"]);
   const isCorte = perfil?.tipoPerfil === "corte";
   const isMixto = perfil?.tipoPerfil === "mixto";

@@ -493,7 +493,7 @@ export function getUnidadProduccionMaquinaLabel(value: UnidadProduccionMaquina) 
 /**
  * Perfil operativo — modelo v3.0 (2026-04-26).
  * Solo columnas universales del doc §5–§13. Los discriminantes específicos
- * por plantilla (caras, colores, gramajeMinGr, tipoCorte, modoCalidad, etc.)
+ * por plantilla (caras, colores, gramajeMinGr, modoOperacion, modoCalidad, etc.)
  * viven en `detalle` (JSON libre).
  */
 export type MaquinaPerfilOperativo = {
