@@ -281,7 +281,6 @@ export async function provisionarPlantillaCentroCopiado(
           productoConfigPasoId: configPaso.id,
           slotCodigo: 'sustrato_principal',
           modoSeleccion: 'COMERCIAL_ELIGE',
-          estrategiaCosto: 'simple',
           formula: 'por_unidad_productiva',
           aplicaMultiCaras: false, // el papel se cuenta por hoja, no por carilla
           activo: true,
@@ -436,7 +435,6 @@ async function asegurarSlotsTapaCC(
             // El CC lo pinnea por slotMateriales; se ofrecen todas las tapas como
             // candidatos (mismo patrón que el papel de la impresión).
             modoSeleccion: 'COMERCIAL_ELIGE',
-            estrategiaCosto: 'simple',
             formula: 'por_unidad_productiva', // 1 tapa por libro (cantidad = juegos)
             aplicaMultiCaras: false, // la tapa se cuenta por libro, no por carilla
             activo: true,
@@ -733,7 +731,6 @@ async function provisionarPasoAnilladoTx(
         criterioMaterialCampo: 'capacidadMaxHojas',
         // El Ø auto se elige DENTRO del tipo pedido (jobContext.tipoAnillo).
         criterioFiltroCampo: 'tipoAnillo',
-        estrategiaCosto: 'simple',
         formula: 'por_unidad_productiva', // 1 anillo por libro (cantidad = juegos)
         activo: true,
       },

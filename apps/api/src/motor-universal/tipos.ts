@@ -1011,7 +1011,6 @@ export interface SlotCargado {
       orden: number;
     }>;
   }>;
-  estrategiaCosto: string;
   formula: string;
   cantidadFactor?: number | string | null;
   cantidadBase?: string | null;

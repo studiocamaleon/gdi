@@ -227,7 +227,6 @@ export class ProductoRutasService {
               criterioInputCampo: slot.criterioInputCampo,
               criterioMaterialCampo: slot.criterioMaterialCampo,
               materialVarianteId: slot.materialVarianteId,
-              estrategiaCosto: slot.estrategiaCosto,
               formula: slot.formula,
               cantidadFactor: slot.cantidadFactor,
               cantidadBase: slot.cantidadBase,

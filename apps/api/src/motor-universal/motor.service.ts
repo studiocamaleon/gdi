@@ -165,7 +165,6 @@ interface PasoExtraSlotJson {
     varianteIds?: string[];
     todasLasVariantes?: boolean;
   }>;
-  estrategiaCosto?: string;
   formula?: string;
   cantidadFactor?: number | string | null;
   cantidadBase?: string | null;
@@ -4338,7 +4337,7 @@ export class MotorUniversalService {
         materialResuelto.atributosVarianteJson,
       );
       const costeoNesting = this.calcularCosteoNestingMaterial(
-        this.resolverEstrategiaCosteoNesting(paso, slot.estrategiaCosto),
+        this.resolverEstrategiaCosteoNesting(paso),
         precioUnitario,
         jobContext,
         nestingDispatch,
@@ -4399,7 +4398,7 @@ export class MotorUniversalService {
         costoTotal,
         estrategiaCosto:
           costeoNesting?.strategy ??
-          this.resolverEstrategiaCosteoNesting(paso, slot.estrategiaCosto),
+          this.resolverEstrategiaCosteoNesting(paso),
         detalleCosteoNesting: costeoNesting
           ? {
               strategy: costeoNesting.strategy,
@@ -4722,10 +4721,15 @@ export class MotorUniversalService {
     });
   }
 
-  private resolverEstrategiaCosteoNesting(
-    paso: PasoCargado,
-    estrategiaSlot: string,
-  ): string {
+  /**
+   * La estrategia de costeo del sustrato la POSEE el nesting (una corrida por
+   * paso), no el material: las estrategias que cobran desperdicio son función
+   * del resultado geométrico. Fuente única = `nestingConfig.costing.strategy`.
+   * El viejo `slot.estrategiaCosto` era un espejo redundante que este resolver
+   * pisaba; se retiró como fuente. Ver docs/nesting-abstraccion-diseno.md §3.3
+   * y docs/editor-pasos-preguntas-orden.md §10.5.
+   */
+  private resolverEstrategiaCosteoNesting(paso: PasoCargado): string {
     const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
     const nestingConfig =
       typeof params.nestingConfig === 'object' &&
@@ -4740,9 +4744,7 @@ export class MotorUniversalService {
         ? (nestingConfig.costing as Record<string, unknown>)
         : {};
     const strategy = costingConfig.strategy;
-    return typeof strategy === 'string' && strategy !== 'simple'
-      ? strategy
-      : estrategiaSlot;
+    return typeof strategy === 'string' ? strategy : 'simple';
   }
 
   private totalPiezasParaCosteo(jobContext: JobContext): number {
@@ -7598,7 +7600,6 @@ export class MotorUniversalService {
                   orden: cv.orden,
                 })),
           })),
-          estrategiaCosto: s.estrategiaCosto,
           formula: s.formula,
           cantidadFactor:
             s.cantidadFactor === null || s.cantidadFactor === undefined
@@ -8281,7 +8282,6 @@ export class MotorUniversalService {
               };
             }),
           ),
-          estrategiaCosto: s.estrategiaCosto ?? 'AUTO',
           formula: s.formula ?? '',
           cantidadFactor:
             s.cantidadFactor === undefined ? null : s.cantidadFactor,

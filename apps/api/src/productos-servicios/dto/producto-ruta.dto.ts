@@ -310,10 +310,6 @@ export class UpsertSlotMaterialDto {
 
   @IsOptional()
   @IsString()
-  estrategiaCosto?: string;
-
-  @IsOptional()
-  @IsString()
   formula?: string;
 
   @IsOptional()

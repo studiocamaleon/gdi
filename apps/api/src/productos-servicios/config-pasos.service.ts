@@ -244,7 +244,6 @@ export class ConfigPasosService {
               criterioInputCampo: s.criterioInputCampo ?? null,
               criterioMaterialCampo: s.criterioMaterialCampo ?? null,
               materialVarianteId: s.materialVarianteId ?? null,
-              estrategiaCosto: s.estrategiaCosto ?? 'simple',
               formula: normalizarFormulaSlotMaterial(
                 rutaPaso.familiaCodigo,
                 s.slotCodigo,

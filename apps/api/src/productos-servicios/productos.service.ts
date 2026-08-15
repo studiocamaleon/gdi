@@ -442,7 +442,6 @@ export class ProductosService {
                     criterioInputCampo: slot.criterioInputCampo,
                     criterioMaterialCampo: slot.criterioMaterialCampo,
                     materialVarianteId: slot.materialVarianteId,
-                    estrategiaCosto: slot.estrategiaCosto,
                     formula: slot.formula,
                     cantidadFactor: slot.cantidadFactor,
                     cantidadBase: slot.cantidadBase,
@@ -1197,7 +1196,6 @@ export class ProductosService {
       slotRol?: string | null;
       modoSeleccion?: string;
       criterioMotorAuto?: string | null;
-      estrategiaCosto?: string;
       formula?: string;
       cantidadFactor?: string | number | null;
       cantidadBase?: string | null;
@@ -1289,7 +1287,6 @@ export class ProductosService {
             slotRol: s.slotRol ?? null,
             modoSeleccion: s.modoSeleccion ?? 'HARDCODED',
             criterioMotorAuto: s.criterioMotorAuto ?? null,
-            estrategiaCosto: s.estrategiaCosto ?? 'AUTO',
             formula: s.formula ?? '',
             cantidadFactor: s.cantidadFactor ?? null,
             cantidadBase: s.cantidadBase ?? null,

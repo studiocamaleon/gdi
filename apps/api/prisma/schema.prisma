@@ -2457,8 +2457,6 @@ model ProductoConfigPasoSlotMaterial {
   /// el campo homónimo del JobContext (ej: 'tipoAnillo' → sólo el tipo elegido).
   criterioFiltroCampo   String?
   materialVarianteId    String?                                   @db.Uuid
-  /// 'simple' | 'm2-exact' | 'consumed-length' | 'plate-segments'.
-  estrategiaCosto       String                                    @default("simple")
   /// 'por_unidad_productiva' | 'por_m2' | 'por_pieza' | 'por_metro_lineal' | 'fijo'.
   formula               String                                    @default("por_unidad_productiva")
   /// Multiplicador de consumo para componentes/accesorios adicionales.
