@@ -484,6 +484,22 @@ describe('runNestingForPaso plotter de corte', () => {
     expect(['shelf-rollo', 'maxrects-rollo']).toContain(result!.algorithm);
     expect(result!.unidad).toBe('m_lineales');
   });
+
+  it('heredado de una cadena de pliegos: no nestea (los pliegos van enteros)', async () => {
+    const result = await runNestingForPaso(
+      buildPasoPlotterCorte() as never,
+      {
+        cantidad: 100,
+        piezas: [{ cantidad: 100, anchoMm: 30, altoMm: 30 }],
+        pliegos_impresos: 4,
+        pliego_impresion_ancho_mm: 325,
+        pliego_impresion_alto_mm: 500,
+      } as never,
+      null,
+    );
+
+    expect(result).toBeNull();
+  });
 });
 
 describe('runNestingForPaso montaje sobre sustrato', () => {

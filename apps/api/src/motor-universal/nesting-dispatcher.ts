@@ -181,6 +181,22 @@ export function esCorteSobreHojas(
   return !esSustratoRollo(subfamilia);
 }
 
+/**
+ * Corte HEREDADO de una cadena de pliegos (papel impreso): lo que se monta en
+ * el plotter son los PLIEGOS ya impresos, no piezas sueltas sobre un rollo.
+ * El acomodo lo decidió la impresión por hoja — acá no se nestea nada y la
+ * medida del trabajo es el pliego. Las claves de pliego sólo las publica la
+ * cadena por hoja (la impresión por área/rollo no), así que la señal separa
+ * limpio papel-en-pliegos de vinilo-en-rollo.
+ */
+export function hayPliegosImpresosHeredados(jobContext: JobContext): boolean {
+  const ctx = jobContext as unknown as Record<string, unknown>;
+  const pliegos = Number(ctx.pliegos_impresos ?? ctx.pliegos_calculados ?? 0);
+  const anchoMm = Number(ctx.pliego_impresion_ancho_mm ?? 0);
+  const altoMm = Number(ctx.pliego_impresion_alto_mm ?? 0);
+  return pliegos > 0 && anchoMm > 0 && altoMm > 0;
+}
+
 /** Hooks async que el motor puede inyectar al dispatcher. */
 export interface NestingDispatchOpts {
   /**
@@ -305,6 +321,13 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
    *  placa (no rollo) no acomoda en rollo — el formato lo dice el material. */
   corte_rollo: (paso, jobContext, materialResuelto, config) => {
     if (esCorteSobreHojas(materialResuelto?.subfamilia)) {
+      return null;
+    }
+    // Heredado de una cadena de PLIEGOS (papel impreso): al plotter se montan
+    // los pliegos enteros — el acomodo ya lo decidió la impresión por hoja.
+    // Nestear las piezas sobre el ancho de la máquina inventaría un rollo que
+    // no existe. La cantidad cae al fallback m2_crudos (m² de pliegos).
+    if (!materialResuelto && hayPliegosImpresosHeredados(jobContext)) {
       return null;
     }
     return runShelfRollo(

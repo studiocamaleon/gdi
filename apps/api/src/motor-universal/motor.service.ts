@@ -66,6 +66,7 @@ import {
   esSustratoRollo,
   fuenteMedidaEfectiva,
   getImposicionCaballeteConfig,
+  hayPliegosImpresosHeredados,
   runNestingForPaso,
   type NestingDispatchResult,
 } from './nesting-dispatcher';
@@ -5631,13 +5632,17 @@ export class MotorUniversalService {
   private esPlotterCorteSobreHojas(
     paso: PasoCargado,
     subfamilia: string | null | undefined,
+    jobContext: JobContext,
   ): boolean {
     // Corte sobre rollo (estrategia declarada): el formato lo dice el material
-    // del slot, no el perfil. Hoja/placa → HOJAS; rollo o sin material → rollo.
+    // del slot, no el perfil. Hoja/placa → HOJAS; rollo → rollo. Sin material
+    // (heredado): si la cadena imprimió PLIEGOS, el plotter trabaja pliego a
+    // pliego (la medida es el pliego, no la pieza suelta).
     if (estrategiaNestingDeFamilia(paso.familiaCodigo) !== 'corte_rollo') {
       return false;
     }
-    return esCorteSobreHojas(subfamilia);
+    if (esCorteSobreHojas(subfamilia)) return true;
+    return !subfamilia && hayPliegosImpresosHeredados(jobContext);
   }
 
   /** Metros lineales desde la lista de piezas (para fórmula por_metro_lineal). */
@@ -5920,7 +5925,13 @@ export class MotorUniversalService {
       // m² crudos de las piezas (sin desperdicio) cuando el dispatcher no
       // dio layout. [Tanda A: era un if con los dos nombres]
       if (fallbackSinLayoutDeFamilia(paso.familiaCodigo) === 'm2_crudos') {
-        if (this.esPlotterCorteSobreHojas(paso, materialResuelto?.subfamilia)) {
+        if (
+          this.esPlotterCorteSobreHojas(
+            paso,
+            materialResuelto?.subfamilia,
+            jobContext,
+          )
+        ) {
           const m2Pliegos = this.calcularM2DesdePliegosImpresos(jobContext);
           if (m2Pliegos > 0) return m2Pliegos;
         }
