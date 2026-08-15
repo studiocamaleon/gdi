@@ -585,7 +585,6 @@ async function seedRutasYProductos(
           slotCodigo: 'sustrato_principal',
           modoSeleccion: 'HARDCODED',
           materialVarianteId: opalinaVarId,
-          estrategiaCosto: 'simple',
           formula: 'por_unidad_productiva',
           activo: true,
         },
@@ -597,7 +596,6 @@ async function seedRutasYProductos(
           productoConfigPasoId: configPaso.id,
           slotCodigo: 'film',
           modoSeleccion: 'COMERCIAL_ELIGE',
-          estrategiaCosto: 'simple',
           formula: 'por_metro_lineal',
           aplicaMultiCaras: true,
           candidatos: {
@@ -632,7 +630,6 @@ async function seedRutasYProductos(
           slotCodigo: 'caja',
           modoSeleccion: 'HARDCODED',
           materialVarianteId: bolsaVarId,
-          estrategiaCosto: 'simple',
           formula: 'por_unidad_productiva',
           activo: true,
         },
@@ -775,7 +772,6 @@ async function seedRutasYProductos(
           slotCodigo: 'sustrato_principal',
           modoSeleccion: 'MOTOR_ELIGE_AUTO',
           criterioMotorAuto: 'MAYOR_APROVECHAMIENTO',
-          estrategiaCosto: 'simple',
           formula: 'por_metro_lineal',
           activo: true,
           candidatos: {
@@ -981,7 +977,6 @@ async function seedRutasYProductos(
           slotCodigo: slotName,
           modoSeleccion: 'HARDCODED',
           materialVarianteId: materialId,
-          estrategiaCosto: 'simple',
           formula: 'por_unidad_productiva',
           activo: true,
         },
@@ -1118,7 +1113,6 @@ async function seedRutasYProductos(
           productoConfigPasoId: configPaso.id,
           slotCodigo: 'sustrato_principal',
           modoSeleccion: 'COMERCIAL_ELIGE',
-          estrategiaCosto: 'plate-segments',
           formula: 'por_unidad_productiva',
           activo: true,
           candidatos: {
