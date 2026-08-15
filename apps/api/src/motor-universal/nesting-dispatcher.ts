@@ -162,8 +162,23 @@ export interface MaterialResueltoParaNesting {
  */
 export function esSustratoRollo(subfamilia: string | null | undefined): boolean {
   return (
-    subfamilia === 'SUSTRATO_ROLLO_FLEXIBLE' || subfamilia === 'LAMINADO_FILM'
+    subfamilia === 'SUSTRATO_ROLLO_FLEXIBLE' ||
+    subfamilia === 'VINILO_CORTE' ||
+    subfamilia === 'LAMINADO_FILM'
   );
+}
+
+/**
+ * El corte va sobre HOJA/placa cuando el material cargado NO es un rollo. Sin
+ * material (heredado) o con material de rollo → corre sobre rollo (default).
+ * Reemplaza al `modoOperacion` del perfil: el formato (rollo vs hoja) lo dice
+ * el material, no una bandera estática del perfil.
+ */
+export function esCorteSobreHojas(
+  subfamilia: string | null | undefined,
+): boolean {
+  if (!subfamilia) return false;
+  return !esSustratoRollo(subfamilia);
 }
 
 /** Hooks async que el motor puede inyectar al dispatcher. */
@@ -286,9 +301,10 @@ type EstrategiaNestingFn = (
  * viven dentro de su estrategia, no en el dispatch.
  */
 const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
-  /** Corte sobre rollo: shelf sin panelizado; en modo HOJAS no acomoda. */
+  /** Corte sobre rollo: shelf sin panelizado. Si el material cargado es hoja/
+   *  placa (no rollo) no acomoda en rollo — el formato lo dice el material. */
   corte_rollo: (paso, jobContext, materialResuelto, config) => {
-    if (getPlotterModoOperacion(paso) === 'HOJAS') {
+    if (esCorteSobreHojas(materialResuelto?.subfamilia)) {
       return null;
     }
     return runShelfRollo(
@@ -323,19 +339,6 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
     return runGrid2DSingle(paso, jobContext, materialResuelto, config);
   },
 };
-
-function getPlotterModoOperacion(paso: PasoCargado): string | null {
-  const detalle =
-    paso.perfil?.detalleJson &&
-    typeof paso.perfil.detalleJson === 'object' &&
-    !Array.isArray(paso.perfil.detalleJson)
-      ? (paso.perfil.detalleJson as Record<string, unknown>)
-      : null;
-  const modoOperacion = detalle?.modoOperacion;
-  return typeof modoOperacion === 'string'
-    ? modoOperacion.trim().toUpperCase()
-    : null;
-}
 
 // ────────────────────────────────────────────────────────────────────
 // Implementaciones

@@ -62,6 +62,7 @@ import type {
   TiempoExtraEjecutado,
 } from './tipos';
 import {
+  esCorteSobreHojas,
   esSustratoRollo,
   fuenteMedidaEfectiva,
   getImposicionCaballeteConfig,
@@ -5627,13 +5628,16 @@ export class MotorUniversalService {
     return (pliegos * anchoMm * altoMm) / 1_000_000;
   }
 
-  private esPlotterCorteSobreHojas(paso: PasoCargado): boolean {
-    // [Tanda A] Corte sobre rollo (estrategia declarada) en modo HOJAS.
+  private esPlotterCorteSobreHojas(
+    paso: PasoCargado,
+    subfamilia: string | null | undefined,
+  ): boolean {
+    // Corte sobre rollo (estrategia declarada): el formato lo dice el material
+    // del slot, no el perfil. Hoja/placa → HOJAS; rollo o sin material → rollo.
     if (estrategiaNestingDeFamilia(paso.familiaCodigo) !== 'corte_rollo') {
       return false;
     }
-    const detalle = this.asRecord(paso.perfil?.detalleJson);
-    return String(detalle.modoOperacion ?? '').toUpperCase() === 'HOJAS';
+    return esCorteSobreHojas(subfamilia);
   }
 
   /** Metros lineales desde la lista de piezas (para fórmula por_metro_lineal). */
@@ -5838,6 +5842,7 @@ export class MotorUniversalService {
     nestingDispatch: NestingDispatchResult | null = null,
     materialResuelto: {
       atributosVarianteJson?: Record<string, unknown> | null;
+      subfamilia?: string | null;
     } | null = null,
   ): number {
     const mecanismo = paso.mecanismoCantidad ?? 'DIRECT_FROM_JOBCONTEXT';
@@ -5915,7 +5920,7 @@ export class MotorUniversalService {
       // m² crudos de las piezas (sin desperdicio) cuando el dispatcher no
       // dio layout. [Tanda A: era un if con los dos nombres]
       if (fallbackSinLayoutDeFamilia(paso.familiaCodigo) === 'm2_crudos') {
-        if (this.esPlotterCorteSobreHojas(paso)) {
+        if (this.esPlotterCorteSobreHojas(paso, materialResuelto?.subfamilia)) {
           const m2Pliegos = this.calcularM2DesdePliegosImpresos(jobContext);
           if (m2Pliegos > 0) return m2Pliegos;
         }
