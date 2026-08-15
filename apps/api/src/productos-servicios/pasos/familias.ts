@@ -38,6 +38,12 @@ const MP = {
       'PAPEL_TRANSFERENCIA',
     ],
   },
+  // Vinilo de corte de color (letras/stickers en plotter de corte). Subfamilia
+  // propia, separada del rollo flexible de impresión.
+  viniloCorte: {
+    familiasMateriaPrima: ['SUSTRATO'],
+    subfamiliasMateriaPrima: ['VINILO_CORTE'],
+  },
   sustratoPieza: {
     familiasMateriaPrima: ['SUSTRATO'],
     subfamiliasMateriaPrima: [
@@ -787,7 +793,20 @@ const plotter_corte: DefinicionFamilia = {
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
-  slotsRequeridos: [],
+  // Slot de sustrato OPCIONAL: el plotter corta un vinilo de corte PROPIO
+  // (letras/stickers de color) o troquela lo que imprimió un paso anterior
+  // (heredado, sin sustrato propio ni costo de material). Sin configurar el
+  // slot, la conducta es la de siempre (nestea sobre el ancho de la máquina).
+  // Ver docs/corte-sustrato-propio-o-heredado-diseno.md §7.
+  slotsRequeridos: [
+    {
+      codigo: 'sustrato_corte',
+      nombre: 'Vinilo de corte (opcional)',
+      tipo: 'SUSTRATO',
+      requerido: false,
+      compatibilidadMaterial: MP.viniloCorte,
+    },
+  ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [
     'PLOTTER_DE_CORTE',
@@ -800,6 +819,17 @@ const plotter_corte: DefinicionFamilia = {
   // Gran formato: 5 mm de aire entre piezas si nadie configuró otra cosa.
   // [Etapa A: era `defaultSeparationForFamily`]
   separacionNestingDefaultMm: 5,
+  // La geometría a cortar sale de las piezas del trabajo (default, que preserva
+  // la conducta actual) o de los pliegos que imprimió un paso anterior
+  // (troquela lo impreso). Mismo mecanismo que montaje_sobre_sustrato.
+  fuentesPiezasNesting: {
+    pliegos_impresos: {
+      cantidadDesde: ['pliegos_impresos', 'pliegos_calculados'],
+      anchoDesde: 'pliego_impresion_ancho_mm',
+      altoDesde: 'pliego_impresion_alto_mm',
+    },
+  },
+  fuentePiezasDefault: 'piezas_jobcontext',
   inputsRequeridos: ['piezas'],
   outputsCanonicos: ['piezas_cortadas', 'metros_lineales_corte'],
   validaciones: [],

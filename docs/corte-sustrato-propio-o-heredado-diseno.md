@@ -217,21 +217,27 @@ Dos casos de uso del mismo paso, elegibles por el modelador/comercial:
 Cambios (config primero, motor acotado):
 1. **Slot `SUSTRATO` OPCIONAL** en plotter_corte (`requerido: false`), compat con
    la subfamilia de "vinilo de corte" (decisión §6.2). Opcional = si no se
-   declara/elige, el paso trabaja sobre heredado.
+   declara/elige, el paso trabaja sobre heredado. **HECHO.**
 2. **`fuentesPiezasNesting`** con `piezas_jobcontext` (propio) + los outputs
    heredables de impresión por área (para el caso "troquela lo impreso") — el
-   patrón de `montaje_sobre_sustrato`.
+   patrón de `montaje_sobre_sustrato`. **HECHO.** + param `fuentePiezasMontaje`
+   ("Sobre qué trabaja") con default `piezas_jobcontext`.
 3. **Ancho de nesting**: cuando hay sustrato propio, del **material** (vinilo),
-   no de la máquina (hoy usa `anchoUtil`). Cuando es heredado, de la fuente.
+   no de la máquina — YA lo resuelve la cascada de `resolveNestingConfig`
+   (material → máquina). Sin sustrato, sigue en la máquina (conducta actual).
 4. **Costeo**: propio → cobra el vinilo (nesting rollo, "largo consumido");
-   heredado → sin línea de material (sólo tiempo).
+   heredado → sin línea de material (sólo tiempo). Sale solo del patrón.
 5. **Editor (transparencia)**: mostrar la fuente/material sobre el que trabaja
-   (hoy oculto — §5 Fase C).
+   — Fase C, pendiente de verificar en el editor (el slot y el param ya están
+   declarados; falta ver cómo los renderiza).
 
-**Ojo golden master**: plotter_corte se usa en `VINILO-IMPRESO-BLANCO` (heredado).
-El cambio debe dejar ese caso **bit-idéntico** (sigue sin cobrar material, mismo
-tiempo) y sólo AGREGAR la capacidad de sustrato propio. Verificar con el arnés
-que ya montamos.
+**Fase A HECHA y verificada (2026-08-15, rama analisis/corte-sustrato-propio-o-heredado,
+sin commitear):** `MP.viniloCorte` + slot opcional `sustrato_corte` +
+`fuentesPiezasNesting`/`fuentePiezasDefault` + param `fuentePiezasMontaje` en
+plotter_corte. Arnés que cotiza los productos del seed en 4 escenarios →
+**bit-idéntico** (los productos existentes no configuran el slot; default
+`piezas_jobcontext` = conducta actual). `familias.spec` 20/20; motor suite en el
+baseline (12 fallos pre-existentes de algoritmo, 0 nuevos); API typecheck limpio.
 
 ## 8. Bitácora
 

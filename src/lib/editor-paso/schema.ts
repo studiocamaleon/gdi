@@ -2122,10 +2122,18 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       const esSustrato =
         ctx.slot?.decl?.tipo === "SUSTRATO" ||
         ctx.slot?.payload.slotRol === "SUSTRATO";
+      // Aparece cuando hay una fuente REAL que elegir: un paso anterior publica
+      // un output geométrico (bastidor → tiras de cenefa…), O la familia declara
+      // que puede trabajar sobre un sustrato heredado (`fuentesPiezasNesting`:
+      // montaje, laminado, plotter de corte). Así el modelador VE y elige "sobre
+      // qué trabaja" el paso en vez de que sea implícito.
+      const familiaAdmiteFuente =
+        (ctx.familia?.fuentesPiezasNesting?.length ?? 0) > 0;
       return (
         Boolean(ctx.slot) &&
         esSustrato &&
-        opcionesPiezasMontar(ctx).length > MONTAJE_SOURCE_OPTIONS.length
+        (opcionesPiezasMontar(ctx).length > MONTAJE_SOURCE_OPTIONS.length ||
+          familiaAdmiteFuente)
       );
     },
     resumen: (ctx) => {
