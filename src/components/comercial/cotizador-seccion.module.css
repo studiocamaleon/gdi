@@ -19,9 +19,16 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  /* Barra negra con texto blanco (invierte en tema oscuro). */
-  color: var(--c-surface);
-  background: var(--c-ink);
+  /* Papel cálido con un tinte del naranja de marca a la derecha y aclarando a
+   * la izquierda: destila el header del canvas 3D (constelación naranja + velo
+   * blanco) sin el canvas. Texto gris oscuro en vez de negro pleno — contrasta,
+   * pero más suave que la barra negra anterior. Colores papel hardcodeados como
+   * el header: el sheet vive en `.ot-v1` (tokens siempre claros). */
+  color: var(--ink-2, #2c2c33);
+  background:
+    linear-gradient(90deg, transparent 34%, rgba(255, 106, 43, 0.13) 100%),
+    linear-gradient(180deg, #fbfaf8, #f4f2ee);
+  border-bottom: 1px solid var(--hairline, #efece8);
   padding: 7px 12px;
 }
 
@@ -66,7 +73,8 @@
 
 .ghQuit:hover {
   opacity: 1;
-  background: rgb(255 255 255 / 18%);
+  /* Fondo del encabezado ahora es claro: el hover tiñe en oscuro, no en blanco. */
+  background: rgb(0 0 0 / 7%);
 }
 
 .ghQuit svg {
