@@ -6019,7 +6019,13 @@ function ApConfigStep({
     );
   };
 
-  const renderPiezasEditor = (options?: { hideCantidad?: boolean }) => {
+  const renderPiezasEditor = (options?: {
+    hideCantidad?: boolean;
+    /** Título de la card. En medida MIXTA la card de arriba ya se llama
+     *  "Medida" (la elección): este editor pasa a llamarse "A medida" para
+     *  no repetir el mismo título dos veces (feedback del usuario). */
+    titulo?: string;
+  }) => {
     const mostrarProf = profundidadInline;
     // Override del grid (sin tocar globals ni sumar clases): suma "× [prof]".
     const gridConProf = options?.hideCantidad
@@ -6056,7 +6062,7 @@ function ApConfigStep({
     ) : null;
     return (
     <div className={seC.card}>
-      <div className={seC.gh}>Medida</div>
+      <div className={seC.gh}>{options?.titulo ?? "Medida"}</div>
       <div className={seC.body}>
       <div className="ap-piezas">
         <div
@@ -6488,7 +6494,10 @@ function ApConfigStep({
                   </div>
                 ) : null}
               {usaMedidaMixta && motorConfig.piezas.length > 0
-                ? renderPiezasEditor({ hideCantidad: piezasUsanCantidadComercial })
+                ? renderPiezasEditor({
+                    hideCantidad: piezasUsanCantidadComercial,
+                    titulo: "A medida",
+                  })
                 : null}
               {renderCantidadCard()}
               {entranPorPliego ? (
