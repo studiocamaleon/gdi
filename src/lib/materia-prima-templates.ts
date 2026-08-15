@@ -261,41 +261,28 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
   {
     id: "vinilo_de_corte_rollo_v1",
     nombre: "Vinilo de corte en rollo",
-    descripcion: "Vinilo de corte en rollo para plotter",
+    descripcion: "Vinilo de corte de color en rollo para plotter de corte",
     familia: "sustrato",
-    subfamilia: "sustrato_rollo_flexible",
+    subfamilia: "vinilo_corte",
     tipoTecnico: "vinilo_de_corte_rollo",
     unidadStock: "rollo",
     unidadCompra: "rollo",
     camposTecnicos: [
       { key: "ancho", label: "Ancho de rollo", type: "number", unit: "m", preferredDisplayUnit: "cm", required: true },
       { key: "largo", label: "Largo de rollo", type: "number", unit: "m", required: true },
-      { key: "color", label: "Color", type: "text", required: true },
-      { key: "acabado", label: "Acabado", type: "text", options: ["Brillante", "Mate"], required: true },
-      {
-        key: "tipoVinilo",
-        label: "Tipo de vinilo",
-        type: "text",
-        options: ["Calandrado", "Fundido", "Transfer", "Esmerilado", "Reflectivo"],
-        required: true,
-      },
-      {
-        key: "adhesivoTipo",
-        label: "Tipo de adhesivo",
-        type: "text",
-        options: ["Permanente", "Removible", "Alta adherencia"],
-        required: true,
-      },
+      // El precio del vinilo de corte varía entre negro / blanco / color
+      // (cualquier color): no hace falta la paleta completa. Los especiales
+      // (holográfico, metalizado, reflectivo) quedan fuera en esta etapa.
+      { key: "color", label: "Color", type: "text", options: ["Color", "Negro", "Blanco"], required: true },
+      { key: "acabado", label: "Acabado", type: "text", options: ["Brillo", "Mate"], required: true },
     ],
-    dimensionesVariante: ["ancho", "largo", "color", "acabado", "tipoVinilo", "adhesivoTipo"],
-    requiredAtributos: ["ancho", "largo", "color", "acabado", "tipoVinilo", "adhesivoTipo"],
+    dimensionesVariante: ["ancho", "largo", "color", "acabado"],
+    requiredAtributos: ["ancho", "largo", "color", "acabado"],
     atributosIniciales: {
       ancho: 0.61,
       largo: 50,
       color: "Blanco",
-      acabado: "Brillante",
-      tipoVinilo: "Calandrado",
-      adhesivoTipo: "Permanente",
+      acabado: "Brillo",
     },
   },
   {

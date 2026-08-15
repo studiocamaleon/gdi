@@ -60,6 +60,7 @@ import {
 const subfamiliaMateriaPrimaLabels: Record<SubfamiliaMateriaPrima, string> = {
   sustrato_hoja: "Sustrato hoja",
   sustrato_rollo_flexible: "Sustrato rollo flexible",
+  vinilo_corte: "Vinilo de corte",
   sustrato_rigido: "Sustrato rígido",
   objeto_promocional_base: "Objeto promocional base",
   tinta_impresion: "Tinta impresión",

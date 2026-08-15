@@ -1,6 +1,11 @@
 import type { UnitCode } from './unidades-canonicas';
 
-const FLEXIBLE_ROLL_SUBFAMILY = 'sustrato_rollo_flexible';
+// El vinilo de corte es un rollo igual que el sustrato flexible: deriva m² /
+// metro lineal desde ancho × largo.
+const FLEXIBLE_ROLL_SUBFAMILIES = new Set([
+  'sustrato_rollo_flexible',
+  'vinilo_corte',
+]);
 const FLEXIBLE_ROLL_SUPPORTED_UNITS = new Set<UnitCode>([
   'rollo',
   'm2',
@@ -94,9 +99,11 @@ export function canUseFlexibleRollDerivedUnits(input: {
   attributes?: unknown;
 }) {
   if (
-    String(input.subfamilia ?? '')
-      .trim()
-      .toLowerCase() !== FLEXIBLE_ROLL_SUBFAMILY
+    !FLEXIBLE_ROLL_SUBFAMILIES.has(
+      String(input.subfamilia ?? '')
+        .trim()
+        .toLowerCase(),
+    )
   ) {
     return false;
   }

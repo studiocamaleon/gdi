@@ -19,6 +19,7 @@ export type FamiliaMateriaPrima =
 export type SubfamiliaMateriaPrima =
   | "sustrato_hoja"
   | "sustrato_rollo_flexible"
+  | "vinilo_corte"
   | "sustrato_rigido"
   | "objeto_promocional_base"
   | "tinta_impresion"

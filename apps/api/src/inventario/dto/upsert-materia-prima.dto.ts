@@ -35,6 +35,7 @@ export enum FamiliaMateriaPrimaDto {
 export enum SubfamiliaMateriaPrimaDto {
   sustrato_hoja = 'sustrato_hoja',
   sustrato_rollo_flexible = 'sustrato_rollo_flexible',
+  vinilo_corte = 'vinilo_corte',
   sustrato_rigido = 'sustrato_rigido',
   objeto_promocional_base = 'objeto_promocional_base',
   tinta_impresion = 'tinta_impresion',
