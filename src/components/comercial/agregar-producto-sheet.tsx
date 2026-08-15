@@ -5906,6 +5906,46 @@ function ApConfigStep({
     qty,
     cotizacionExitosa,
   );
+  // "¿Cuántos entran por plancha?" — la pregunta del mostrador, respondida
+  // con la imposición que la cotización ya calculó (cero cálculo nuevo). Sólo
+  // cuando entran varias por pliego; con la medida "Plancha completa" elegida
+  // el dato es trivial (entra 1) y no se muestra. Si el producto tiene una
+  // plancha con nombre propio, la frase usa ese nombre.
+  const entranPorPliego = React.useMemo(() => {
+    if (!cotizacionExitosa) return null;
+    const medidaSel =
+      usaMedidaMixta && motorConfig.piezas.length > 0
+        ? null
+        : getSelectedPredefinedMeasure(
+            productoDetalle,
+            motorConfig.medidaPredefinidaId,
+            medidasPredefinidas,
+          );
+    if (medidaSel && esMedidaPliegoUtil(medidaSel)) return null;
+    const paso = cotizacionExitosa.pasos.find(
+      (item) => item.familiaCodigo === "impresion_por_hoja" && item.activado,
+    );
+    const imposicion = getRecord(
+      getRecord(paso?.outputsCanonicos).imposicion_calculada,
+    );
+    const porPliego = getNumberFromUnknown(imposicion.piezasPorPliego) ?? 0;
+    const pliegos = getNumberFromUnknown(imposicion.pliegosNecesarios) ?? 0;
+    if (porPliego < 2 || pliegos <= 0) return null;
+    const plancha = medidasPredefinidas.find((medida) =>
+      esMedidaPliegoUtil(medida),
+    );
+    // El nombre de la plancha va tal cual lo escribió la empresa ("Plancha
+    // SRA3"): bajarlo a minúsculas rompería siglas como SRA3.
+    const nombrePlancha = plancha ? medidaLabel(plancha) : "pliego";
+    return `Entran ${porPliego} por ${nombrePlancha} · este pedido usa ${pliegos}`;
+  }, [
+    cotizacionExitosa,
+    medidasPredefinidas,
+    motorConfig.medidaPredefinidaId,
+    motorConfig.piezas.length,
+    productoDetalle,
+    usaMedidaMixta,
+  ]);
 
   const renderCantidadCard = () => (
     <div className={seC.card}>
@@ -6451,6 +6491,14 @@ function ApConfigStep({
                 ? renderPiezasEditor({ hideCantidad: piezasUsanCantidadComercial })
                 : null}
               {renderCantidadCard()}
+              {entranPorPliego ? (
+                // Sin modificador is-warning/is-blocked: banda neutra
+                // informativa, misma anatomía que el aviso del mínimo.
+                <div className="ap-minimum-alert">
+                  <Grid2X2Icon />
+                  <span>{entranPorPliego}</span>
+                </div>
+              ) : null}
               {minimoComercialStatus ? (
                 <div
                   className={`ap-minimum-alert ${
