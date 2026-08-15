@@ -1309,9 +1309,6 @@ function getComplejidadCorte(
       .map((config): ComplejidadCorteComercial | null => {
         if (config.rutaPaso.familiaCodigo !== "plotter_corte") return null;
         const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
-        // El modelador fijó la complejidad: el paso cotiza siempre con su
-        // perfil default y el comercial no ve el selector.
-        if (params.perfilFijadoComercial === true) return null;
         const candidata = getActiveCandidateForConfig(config, motorConfig);
         const maquina = candidata?.maquina ?? config.maquinaM1;
         const perfiles = (maquina?.perfilesOperativos ?? []).filter(
@@ -1322,10 +1319,9 @@ function getComplejidadCorte(
               (perfil.tipoPerfil ?? "").toLowerCase(),
             ),
         );
-        if (perfiles.length < 2) return null;
         // Más m²/h = corte más fácil: eso ordena fácil → complejo y decide
         // el tamaño de la letra del glyph.
-        const opciones = [...perfiles].sort((a, b) => {
+        const ordenados = [...perfiles].sort((a, b) => {
           const pa = Number(a.productivityValue ?? NaN);
           const pb = Number(b.productivityValue ?? NaN);
           if (Number.isFinite(pa) && Number.isFinite(pb)) return pb - pa;
@@ -1335,15 +1331,29 @@ function getComplejidadCorte(
         });
         const defaultId =
           (candidata?.perfilDefaultId &&
-          opciones.some((p) => p.id === candidata.perfilDefaultId)
+          ordenados.some((p) => p.id === candidata.perfilDefaultId)
             ? candidata.perfilDefaultId
             : null) ??
           (config.perfilM1?.id &&
-          opciones.some((p) => p.id === config.perfilM1?.id)
+          ordenados.some((p) => p.id === config.perfilM1?.id)
             ? config.perfilM1.id
             : null) ??
-          opciones[0]?.id ??
+          ordenados[0]?.id ??
           null;
+        // Curaduría del modelador: sólo los niveles expuestos por producto
+        // (∪ el default, que no se puede des-exponer). Sin lista declarada,
+        // se exponen todos. Con UN nivel efectivo no hay decisión → sin
+        // selector, el motor usa el perfil default del paso.
+        const expuestosRaw = params.perfilesExpuestosComercial;
+        const expuestos = Array.isArray(expuestosRaw)
+          ? expuestosRaw.filter((v): v is string => typeof v === "string")
+          : null;
+        const opciones = expuestos
+          ? ordenados.filter(
+              (p) => p.id === defaultId || expuestos.includes(p.id),
+            )
+          : ordenados;
+        if (opciones.length < 2) return null;
         return {
           configPasoId: config.id,
           nombreVisible: config.nombreVisible ?? null,
