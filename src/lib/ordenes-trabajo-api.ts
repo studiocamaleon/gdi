@@ -4,6 +4,7 @@ import type {
   OrdenTrabajoDetalle,
   OrdenTrabajoListItem,
 } from "@/lib/ordenes-trabajo";
+import type { PropuestaCargoDirecto } from "@/lib/propuestas";
 import type {
   TableroItemData,
   TableroPasoAccion,
@@ -56,6 +57,8 @@ export type CrearOrdenTrabajoPayload = {
   cargosDirectos?: number;
   /** Sin comprobante fiscal desde el vamos (§6 cuaderno de margen). */
   tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
+  /** Snapshots completos de los cargos agregados a nivel orden. */
+  cargos?: PropuestaCargoDirecto[];
   items: CrearOrdenTrabajoItemPayload[];
 };
 

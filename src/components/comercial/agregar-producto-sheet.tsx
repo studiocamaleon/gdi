@@ -7605,6 +7605,8 @@ export function AgregarProductoSheet({
   const { moneda } = useConfigRegional();
   const [step, setStep] = React.useState<"select" | "config">("select");
   const [product, setProduct] = React.useState<CatalogProduct | null>(null);
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
+  const openerRef = React.useRef<HTMLElement | null>(null);
   // El scroll del cuerpo es el mismo elemento en los dos pasos: sin resetearlo,
   // al entrar a configurar un producto la vista arranca donde quedó el listado.
   const bodyRef = React.useRef<HTMLDivElement | null>(null);
@@ -8029,6 +8031,39 @@ export function AgregarProductoSheet({
 
   React.useEffect(() => {
     if (!open) return;
+    openerRef.current = document.activeElement as HTMLElement | null;
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusables = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => !element.hasAttribute("aria-hidden"));
+    const onTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const disponibles = focusables();
+      if (disponibles.length === 0) return;
+      const first = disponibles[0];
+      const last = disponibles[disponibles.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onTab);
+    return () => {
+      document.removeEventListener("keydown", onTab);
+      document.body.style.overflow = overflowAnterior;
+      openerRef.current?.focus();
+    };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (step === "config") back();
@@ -8056,6 +8091,7 @@ export function AgregarProductoSheet({
     <>
       <div className="sheet-backdrop" onClick={close} />
       <div
+        ref={dialogRef}
         className={`sheet sheet-ap${esCarteleriaFull ? ` ${cartS.sheetFull}` : ""}`}
         role="dialog"
         aria-modal="true"

@@ -74,6 +74,29 @@ const ARCHIVO_PUBLICO = {
   mimeType: true,
 } as const;
 
+type CargoOrdenSnapshot = {
+  montoNeto?: unknown;
+  impuestoMonto?: unknown;
+  total?: unknown;
+};
+
+/** Monto efectivo de los cargos según el tratamiento de la orden. */
+export function montoCargosPorTratamiento(
+  cargos: unknown,
+  tratamientoFiscal: 'FISCAL' | 'SIN_COMPROBANTE',
+  fallback = 0,
+) {
+  if (!Array.isArray(cargos) || cargos.length === 0) return fallback;
+  return cargos.reduce((total, raw) => {
+    const cargo = raw as CargoOrdenSnapshot;
+    const monto =
+      tratamientoFiscal === 'SIN_COMPROBANTE'
+        ? Number(cargo.montoNeto ?? 0)
+        : Number(cargo.total ?? 0);
+    return total + (Number.isFinite(monto) ? monto : 0);
+  }, 0);
+}
+
 /** `bytes` es BigInt en la base y JSON.stringify no lo sabe serializar. */
 function archivoPublico(a: {
   id: string;
@@ -711,6 +734,7 @@ export class OrdenesTrabajoService {
       payload.fechaEntrega ?? null,
     );
     this.validarMontosItems(payload.items);
+    this.validarMontosCargos(payload.cargos ?? []);
     // Emisión directa (no borrador): el descuento por encima del umbral exige
     // un supervisor — el mismo control que el envío de presupuestos. Las
     // líneas con CUPÓN están exentas: el cupón ES la autorización, y la
@@ -770,19 +794,47 @@ export class OrdenesTrabajoService {
       .map((item) => item.cotizacionItemId)
       .filter((v): v is string => Boolean(v));
     if (cotizacionItemIds.length > 0) {
-      const encontrados = await this.prisma.cotizacionItem.count({
+      const encontrados = await this.prisma.cotizacionItem.findMany({
         where: { id: { in: cotizacionItemIds }, tenantId: auth.tenantId },
+        select: { id: true, cotizacionId: true, precioTotal: true },
       });
-      if (encontrados !== new Set(cotizacionItemIds).size) {
+      if (encontrados.length !== new Set(cotizacionItemIds).size) {
         throw new NotFoundException(
           'Algún item de cotización referenciado no existe.',
         );
+      }
+      const snapshots = new Map(encontrados.map((item) => [item.id, item]));
+      for (const item of payload.items) {
+        if (!item.cotizacionItemId) continue;
+        const snapshot = snapshots.get(item.cotizacionItemId);
+        if (!snapshot) continue;
+        if (
+          payload.cotizacionId &&
+          snapshot.cotizacionId !== payload.cotizacionId
+        ) {
+          throw new BadRequestException(
+            `El snapshot de "${item.nombre}" no pertenece a la cotización de la orden.`,
+          );
+        }
+        if (
+          snapshot.precioTotal != null &&
+          Math.abs(item.total - Number(snapshot.precioTotal)) > 1
+        ) {
+          throw new BadRequestException(
+            `El total de "${item.nombre}" no coincide con el snapshot autorizado del cotizador.`,
+          );
+        }
       }
     }
 
     const subtotal = payload.items.reduce((s, i) => s + i.subtotal, 0);
     const impuestosItems = payload.items.reduce((s, i) => s + i.impuestos, 0);
-    const cargosDirectos = payload.cargosDirectos ?? 0;
+    const tratamientoFiscal = payload.tratamientoFiscal ?? 'FISCAL';
+    const cargosDirectos = montoCargosPorTratamiento(
+      payload.cargos,
+      tratamientoFiscal,
+      payload.cargosDirectos ?? 0,
+    );
     // Denormalizado para el listado. El descuento YA está dentro de `subtotal`
     // de cada item (el neto persistido es el descontado), no se resta de nuevo.
     const descuentoTotal = payload.items.reduce(
@@ -791,7 +843,6 @@ export class OrdenesTrabajoService {
     );
     // Sin comprobante: el desglose oculta el IVA y `total` = neto + cargos.
     // Ver docs/margen-y-decisiones-de-precio.md §6.
-    const tratamientoFiscal = payload.tratamientoFiscal ?? 'FISCAL';
     const impuestos =
       tratamientoFiscal === 'SIN_COMPROBANTE' ? 0 : impuestosItems;
     const total = subtotal + impuestos + cargosDirectos;
@@ -835,6 +886,7 @@ export class OrdenesTrabajoService {
           subtotal,
           impuestos,
           cargosDirectos,
+          cargosDirectosJson: (payload.cargos ?? []) as never,
           descuentoTotal,
           total,
           tratamientoFiscal,
@@ -1214,6 +1266,7 @@ export class OrdenesTrabajoService {
           estado: true,
           tratamientoFiscal: true,
           cargosDirectos: true,
+          cargosDirectosJson: true,
           facturadoTotal: true,
         },
       }),
@@ -1243,16 +1296,21 @@ export class OrdenesTrabajoService {
     }
 
     const usuarioNombre = firmaActor(auth, actor?.nombreCompleto ?? auth.email);
+    const cargosDirectos = montoCargosPorTratamiento(
+      orden.cargosDirectosJson,
+      tratamientoFiscal,
+      Number(orden.cargosDirectos ?? 0),
+    );
     await this.prisma.$transaction(async (tx) => {
       await tx.ordenTrabajo.update({
         where: { id },
-        data: { tratamientoFiscal },
+        data: { tratamientoFiscal, cargosDirectos },
       });
       // Recalcula total/impuestos leyendo el flag recién guardado.
       await this.recalcularTotales(
         tx,
         id,
-        Number(orden.cargosDirectos ?? 0),
+        cargosDirectos,
       );
       await tx.ordenTrabajoEvento.create({
         data: {
@@ -2184,6 +2242,24 @@ export class OrdenesTrabajoService {
       if (Math.abs(item.total - esperado) > 1) {
         throw new BadRequestException(
           `Los montos de "${item.nombre}" no cierran: total ${item.total} ≠ subtotal + impuestos (${esperado.toFixed(2)}).`,
+        );
+      }
+    }
+  }
+
+  validarMontosCargos(
+    cargos: Array<{
+      nombreSnapshot: string;
+      montoNeto: number;
+      impuestoMonto: number;
+      total: number;
+    }>,
+  ) {
+    for (const cargo of cargos) {
+      const esperado = cargo.montoNeto + cargo.impuestoMonto;
+      if (Math.abs(cargo.total - esperado) > 1) {
+        throw new BadRequestException(
+          `Los montos del cargo "${cargo.nombreSnapshot}" no cierran: total ${cargo.total} ≠ neto + impuestos (${esperado.toFixed(2)}).`,
         );
       }
     }
@@ -3546,6 +3622,11 @@ export class OrdenesTrabajoService {
       observaciones: orden.observaciones,
       canalVenta: (orden as { canalVenta?: string | null }).canalVenta ?? null,
       cargosDirectos: Number(orden.cargosDirectos ?? 0),
+      cargos: Array.isArray(
+        (orden as { cargosDirectosJson?: unknown }).cargosDirectosJson,
+      )
+        ? (orden as { cargosDirectosJson: unknown[] }).cargosDirectosJson
+        : [],
       // Tratamiento fiscal: FISCAL | SIN_COMPROBANTE (§6 cuaderno de margen).
       tratamientoFiscal:
         (orden as { tratamientoFiscal?: string | null }).tratamientoFiscal ??

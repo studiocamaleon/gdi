@@ -14,6 +14,7 @@
  */
 
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import type { PropuestaCargoDirecto } from "@/lib/propuestas";
 
 export type OrdenTrabajoEstado =
   | "borrador"
@@ -240,6 +241,8 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   canalVenta: string | null;
   /** Cargos directos a nivel orden (viático, flete…). */
   cargosDirectos: number;
+  /** Snapshots detallados de los cargos; vacío en órdenes históricas. */
+  cargos?: PropuestaCargoDirecto[];
   /** Tratamiento fiscal: 'FISCAL' (con IVA y comprobante) | 'SIN_COMPROBANTE'
    *  (IVA oculto, `total` = neto, fuera de la cola de facturar). §6 del
    *  cuaderno docs/margen-y-decisiones-de-precio.md. */

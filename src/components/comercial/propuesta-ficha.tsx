@@ -879,6 +879,7 @@ function ClienteCombobox({
 }) {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const listboxId = React.useId();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [options, setOptions] = React.useState(() =>
@@ -888,6 +889,7 @@ function ClienteCombobox({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [debouncedQuery, setDebouncedQuery] = React.useState("");
+  const [activeIndex, setActiveIndex] = React.useState(0);
 
   const selectedCliente = React.useMemo(
     () => options.find((cliente) => cliente.id === value) ?? null,
@@ -914,6 +916,10 @@ function ClienteCombobox({
     const timer = window.setTimeout(() => setDebouncedQuery(query), 220);
     return () => window.clearTimeout(timer);
   }, [query]);
+
+  React.useEffect(() => {
+    setActiveIndex(0);
+  }, [query, open]);
 
   React.useEffect(() => {
     setOptions((current) => mergeClientes(current, initialClientes));
@@ -1000,6 +1006,33 @@ function ClienteCombobox({
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Buscar por nombre, razón social o email..."
               aria-label="Buscar cliente"
+              role="combobox"
+              aria-expanded={open}
+              aria-controls={listboxId}
+              aria-activedescendant={
+                visibleOptions[activeIndex]
+                  ? `${listboxId}-${visibleOptions[activeIndex].id}`
+                  : undefined
+              }
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setActiveIndex((current) =>
+                    visibleOptions.length === 0
+                      ? 0
+                      : Math.min(current + 1, visibleOptions.length - 1),
+                  );
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setActiveIndex((current) => Math.max(0, current - 1));
+                } else if (
+                  event.key === "Enter" &&
+                  visibleOptions[activeIndex]
+                ) {
+                  event.preventDefault();
+                  selectCliente(visibleOptions[activeIndex]);
+                }
+              }}
             />
             {query ? (
               <button
@@ -1012,14 +1045,16 @@ function ClienteCombobox({
             ) : null}
           </div>
 
-          <div className="cliente-combobox-results" role="listbox">
-            {visibleOptions.map((cliente) => (
+          <div id={listboxId} className="cliente-combobox-results" role="listbox">
+            {visibleOptions.map((cliente, index) => (
               <button
                 key={cliente.id}
+                id={`${listboxId}-${cliente.id}`}
                 type="button"
-                className={`cliente-option ${cliente.id === value ? "selected" : ""}`}
+                className={`cliente-option ${cliente.id === value ? "selected" : ""}${index === activeIndex ? " keyboard" : ""}`}
                 role="option"
                 aria-selected={cliente.id === value}
+                onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => selectCliente(cliente)}
               >
                 <span className="cliente-option-main">
@@ -5332,7 +5367,9 @@ export function PropuestaFicha({
   );
   const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(
     () =>
-      orden && orden.cargosDirectos > 0
+      orden?.cargos?.length
+        ? orden.cargos
+        : orden && orden.cargosDirectos > 0
         ? [
             {
               id: "ot-cargos",
@@ -6439,6 +6476,7 @@ export function PropuestaFicha({
         cargosDirectos: sinComprobante
           ? resumen.cargosSubtotal
           : resumen.cargosTotal,
+        cargos: cargosOrden,
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),
@@ -6558,6 +6596,7 @@ export function PropuestaFicha({
         cargosDirectos: sinComprobante
           ? resumen.cargosSubtotal
           : resumen.cargosTotal,
+        cargos: cargosOrden,
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),

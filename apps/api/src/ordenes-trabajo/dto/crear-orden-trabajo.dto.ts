@@ -8,6 +8,7 @@ import {
   IsInt,
   IsISO8601,
   IsNumber,
+  IsObject,
   IsOptional,
   IsPositive,
   IsString,
@@ -121,6 +122,76 @@ export class CrearOrdenTrabajoItemDto {
   adicionales?: string[];
 }
 
+export class CrearOrdenTrabajoCargoDto {
+  @IsString()
+  @MaxLength(120)
+  id: string;
+
+  @IsUUID()
+  cargoDirectoCatalogoId: string;
+
+  @IsString()
+  @MaxLength(80)
+  codigoSnapshot: string;
+
+  @IsString()
+  @MaxLength(200)
+  nombreSnapshot: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  descripcionSnapshot?: string | null;
+
+  @IsIn([
+    'MONTO_FIJO_PLANO',
+    'PORCENTAJE_SOBRE_BASE',
+    'POR_UNIDAD_INPUT',
+  ])
+  modoCalculoSnapshot: string;
+
+  @IsObject()
+  configSnapshot: Record<string, unknown>;
+
+  @IsNumber()
+  @Min(0)
+  baseCalculo: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cantidadInput?: number;
+
+  @IsNumber()
+  @Min(0)
+  montoNeto: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  impuestoPorcentaje: number;
+
+  @IsNumber()
+  @Min(0)
+  impuestoMonto: number;
+
+  @IsNumber()
+  @Min(0)
+  total: number;
+
+  @IsString()
+  @MaxLength(300)
+  detalle: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  nota?: string;
+
+  @IsISO8601()
+  createdAt: string;
+}
+
 export class CrearOrdenTrabajoDto {
   /** Identificador estable del intento para que un retry no duplique la OT. */
   @IsOptional()
@@ -168,6 +239,13 @@ export class CrearOrdenTrabajoDto {
   @IsOptional()
   @IsIn(['FISCAL', 'SIN_COMPROBANTE'])
   tratamientoFiscal?: 'FISCAL' | 'SIN_COMPROBANTE';
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CrearOrdenTrabajoCargoDto)
+  @ArrayMaxSize(30)
+  cargos?: CrearOrdenTrabajoCargoDto[];
 
   @IsArray()
   @ValidateNested({ each: true })

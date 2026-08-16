@@ -2850,6 +2850,8 @@ model OrdenTrabajo {
   subtotal                Decimal?               @db.Decimal(14, 2)
   impuestos               Decimal?               @db.Decimal(14, 2)
   cargosDirectos          Decimal?               @db.Decimal(14, 2)
+  /// Snapshots de cargos a nivel orden. Null en órdenes históricas.
+  cargosDirectosJson      Json?
   /// Σ de los descuentos comerciales de los items (sobre el neto), denormalizado
   /// para el listado. El descuento ya está DENTRO de `subtotal`/`total`.
   descuentoTotal          Decimal?               @db.Decimal(14, 2)

@@ -3467,6 +3467,10 @@ body {
   background: var(--surface-2);
 }
 
+.ot-v1 .cliente-option.keyboard {
+  background: var(--surface-2);
+}
+
 .ot-v1 .cliente-option-main {
   display: grid;
   gap: 2px;

@@ -7,6 +7,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   corteJornadaDe,
+  montoCargosPorTratamiento,
   OrdenesTrabajoService,
   ordenSeFinaliza,
   pasoEjecutable,
@@ -284,6 +285,31 @@ describe('OrdenesTrabajoService — validarMontosItems', () => {
     expect(() => svc().validarMontosItems([item(31735, 6665, 45000)])).toThrow(
       BadRequestException,
     );
+  });
+});
+
+describe('cargos de orden', () => {
+  const cargos = [
+    { montoNeto: 1000, impuestoMonto: 210, total: 1210 },
+    { montoNeto: 500, impuestoMonto: 105, total: 605 },
+  ];
+
+  it('usa el bruto fiscal y el neto sin comprobante', () => {
+    expect(montoCargosPorTratamiento(cargos, 'FISCAL')).toBe(1815);
+    expect(montoCargosPorTratamiento(cargos, 'SIN_COMPROBANTE')).toBe(1500);
+  });
+
+  it('rechaza cargos cuyo total no coincide con neto más impuesto', () => {
+    expect(() =>
+      svc().validarMontosCargos([
+        {
+          nombreSnapshot: 'Flete',
+          montoNeto: 1000,
+          impuestoMonto: 210,
+          total: 1500,
+        },
+      ]),
+    ).toThrow(/Flete.*no cierran/);
   });
 });
 
