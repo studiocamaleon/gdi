@@ -637,7 +637,8 @@ function getPliegoActivoDeImpresion(
     configPaso.slotsMateriales.find(
       (item) =>
         (item.slotRol ?? "").toUpperCase() === "SUSTRATO" ||
-        item.slotCodigo === "sustrato_principal",
+        // `sustrato_principal` (impresión), `sustrato_corte` (plotter), etc.
+        item.slotCodigo.startsWith("sustrato"),
     ) ?? configPaso.slotsMateriales[0];
   if (!slot) return null;
   const key = materialSelectionKey(configPaso.id, slot.slotCodigo);
@@ -2810,6 +2811,30 @@ function getSelectedLinearMaterialMetrics(
     return {
       materialWidthMm: anchoRolloMm,
       usableWidthMm: usableWidthMm > 0 ? usableWidthMm : anchoRolloMm,
+      margins,
+    };
+  }
+  // Fallback: corte sobre rollo (plotter de corte con sustrato propio, ej.
+  // vinilo). El slot de sustrato es HARDCODED — no lo elige el comercial, así
+  // que no entra por el loop de `slotsComercialElige` de arriba, y el paso no
+  // es `impresion_por_area`. El ancho de trabajo lo da el ROLLO cargado (el
+  // vinilo), no la boca de la máquina: se puede cargar un vinilo más angosto.
+  // El motor sintetiza la pieza = ancho útil × ml igual que en impresión.
+  for (const configPaso of rutaSel?.configPasos ?? []) {
+    if (configPaso.rutaPaso.familiaCodigo !== "plotter_corte") continue;
+    if (!includeConfig(configPaso)) continue;
+    const sustrato = getPliegoActivoDeImpresion(configPaso, config);
+    if (!sustrato || sustrato.anchoMm <= 0) continue;
+    const margins = getMachineMarginsMm(
+      getActiveMachineForConfig(configPaso, config),
+    );
+    const usableWidthMm = Math.max(
+      0,
+      sustrato.anchoMm - margins.leftMm - margins.rightMm,
+    );
+    return {
+      materialWidthMm: sustrato.anchoMm,
+      usableWidthMm: usableWidthMm > 0 ? usableWidthMm : sustrato.anchoMm,
       margins,
     };
   }
