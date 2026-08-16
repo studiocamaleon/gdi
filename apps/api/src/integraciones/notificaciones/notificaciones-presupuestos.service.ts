@@ -49,6 +49,63 @@ export class NotificacionesPresupuestosService {
     }
   }
 
+  /** Encola, una sola vez, presupuestos enviados que vencen en tres días. */
+  async barrerPorVencer(tenantId: string, ahora = new Date()): Promise<number> {
+    const hasta = new Date(ahora.getTime() + 3 * 86_400_000);
+    const yaAvisados = (
+      await this.prisma.notificacionWhatsapp.findMany({
+        where: {
+          tenantId,
+          evento: 'presupuesto_por_vencer',
+          cotizacionId: { not: null },
+        },
+        select: { cotizacionId: true },
+      })
+    ).map((fila) => fila.cotizacionId!);
+    const presupuestos = await this.prisma.cotizacion.findMany({
+      where: {
+        tenantId,
+        estado: 'enviado',
+        clienteId: { not: null },
+        publicToken: { not: null },
+        fechaValidez: { gte: ahora, lte: hasta },
+        ...(yaAvisados.length ? { id: { notIn: yaAvisados } } : {}),
+      },
+      select: {
+        id: true,
+        numero: true,
+        clienteId: true,
+        publicToken: true,
+        fechaValidez: true,
+        cliente: { select: { razonSocial: true } },
+      },
+      orderBy: { fechaValidez: 'asc' },
+    });
+    const { zonaHoraria } = await regionalDelTenant(this.prisma, tenantId);
+    let encoladas = 0;
+    for (const presupuesto of presupuestos) {
+      const resultado = await enContextoDe(tenantId, () =>
+        this.notificaciones.encolar({
+          evento: 'presupuesto_por_vencer',
+          entidadId: presupuesto.id,
+          clienteId: presupuesto.clienteId!,
+          cotizacionId: presupuesto.id,
+          parametros: [
+            nombreDelCliente(presupuesto.cliente?.razonSocial),
+            presupuesto.numero ?? '',
+            fechaLegible(presupuesto.fechaValidez, zonaHoraria),
+            urlEnlacePublico(
+              TipoEnlacePublico.PRESUPUESTO,
+              presupuesto.publicToken!,
+            ),
+          ],
+        }),
+      );
+      if (resultado.encolada) encoladas += 1;
+    }
+    return encoladas;
+  }
+
   private async intentar(cotizacionId: string): Promise<void> {
     const p = await this.prisma.cotizacion.findFirst({
       where: { id: cotizacionId },
@@ -112,4 +169,3 @@ function fechaLegible(d: Date | null, zona: string): string {
     timeZone: zona,
   });
 }
-

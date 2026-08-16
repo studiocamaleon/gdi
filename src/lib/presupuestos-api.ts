@@ -40,6 +40,14 @@ export type PresupuestoItemPayload = {
   adicionales?: string[];
 };
 
+export type PresupuestoCargoPayload = {
+  cargoDirectoCatalogoId: string;
+  configInput: Record<string, unknown>;
+  cantidadInput?: number;
+  montoNeto: number;
+  nota?: string;
+};
+
 export type PresupuestoResumen = {
   id: string;
   numero: string;
@@ -96,6 +104,8 @@ export type PresupuestoDetalle = {
   publicToken: string | null;
   ordenConvertida: string | null;
   ordenConvertidaId: string | null;
+  ordenesConvertidas: Array<{ id: string; numero: string }>;
+  advertenciaEnvio?: string;
   /** Σ del descuento comercial de los items (0 = sin descuento). */
   descuentoTotal: number;
   items: Array<{
@@ -115,6 +125,7 @@ export type PresupuestoDetalle = {
     totalLista?: number;
     specs: Array<{ etiqueta: string; valor: string }>;
     adicionales: string[];
+    conversion: { id: string; numero: string } | null;
   }>;
   eventos: PresupuestoEventoPanel[];
 };
@@ -122,6 +133,12 @@ export type PresupuestoDetalle = {
 export type PresupuestosListado = {
   presupuestos: PresupuestoResumen[];
   stats: Array<{ estado: PresupuestoEstado; cantidad: number; total: number }>;
+  paginacion: {
+    skip: number;
+    limit: number;
+    total: number;
+    hayMas: boolean;
+  };
 };
 
 export type PresupuestoPublico = {
@@ -166,17 +183,22 @@ export type ConfigPresupuestos = {
   aprobacionMargenMinPct: number | null;
   /** Descuento máximo (%) sin aprobación interna. null = regla desactivada. */
   aprobacionDescuentoMaxPct: number | null;
+  requiereAprobacionSinCosteo: boolean;
 };
 
 export function listarPresupuestos(filtros?: {
   estado?: string;
   clienteId?: string;
   busqueda?: string;
+  skip?: number;
+  limit?: number;
 }) {
   const params = new URLSearchParams();
   if (filtros?.estado) params.set("estado", filtros.estado);
   if (filtros?.clienteId) params.set("clienteId", filtros.clienteId);
   if (filtros?.busqueda) params.set("busqueda", filtros.busqueda);
+  if (filtros?.skip != null) params.set("skip", String(filtros.skip));
+  if (filtros?.limit != null) params.set("limit", String(filtros.limit));
   const s = params.toString();
   return apiRequest<PresupuestosListado>(`/presupuestos${s ? `?${s}` : ""}`);
 }
@@ -194,7 +216,7 @@ export function emitirPresupuesto(payload: {
   validezDias?: number;
   observaciones?: string;
   senaSugeridaPct?: number;
-  cargosDirectos?: number;
+  cargos?: PresupuestoCargoPayload[];
   items: PresupuestoItemPayload[];
 }) {
   return apiRequest<PresupuestoDetalle>(`/presupuestos/emitir`, {
@@ -220,7 +242,13 @@ export function resolverPresupuesto(
 }
 
 export function convertirPresupuesto(id: string, payload?: { itemIds?: string[] }) {
-  return apiRequest<{ ordenId: string; ordenNumero: string; parcial: boolean }>(
+  return apiRequest<{
+    ordenId: string;
+    ordenNumero: string;
+    parcial: boolean;
+    completa: boolean;
+    itemsPendientes: number;
+  }>(
     `/presupuestos/${id}/convertir`,
     { method: "POST", body: JSON.stringify(payload ?? {}) },
   );

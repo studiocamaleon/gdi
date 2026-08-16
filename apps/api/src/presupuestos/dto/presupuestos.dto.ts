@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
@@ -17,6 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  CrearOrdenTrabajoCargoDto,
   CrearOrdenTrabajoItemDto,
   ORDEN_CANALES_VENTA,
 } from '../../ordenes-trabajo/dto/crear-orden-trabajo.dto';
@@ -84,10 +86,16 @@ export class EmitirPresupuestoDto {
   @Max(100)
   senaSugeridaPct?: number;
 
+  /**
+   * Decisiones del comercial sobre cargos. El backend vuelve a buscar el
+   * catálogo y calcula sus importes; nunca acepta un total agregado del front.
+   */
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  cargosDirectos?: number;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CrearOrdenTrabajoCargoDto)
+  @ArrayMaxSize(30)
+  cargos?: CrearOrdenTrabajoCargoDto[];
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -143,6 +151,19 @@ export class ListarPresupuestosDto {
   @IsString()
   @MaxLength(120)
   busqueda?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  skip?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }
 
 /** Resolución de una aprobación interna pendiente (SUPERVISOR/ADMIN). */
@@ -195,4 +216,8 @@ export class ActualizarConfigPresupuestosDto {
   @Min(0)
   @Max(100)
   aprobacionDescuentoMaxPct?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  requiereAprobacionSinCosteo?: boolean;
 }

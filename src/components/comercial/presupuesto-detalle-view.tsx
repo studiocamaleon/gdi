@@ -34,6 +34,7 @@ import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
 import type { MembershipRole } from "@/lib/auth";
 import { CANALES_VENTA } from "@/lib/propuestas";
+import { fechaConDia } from "@/lib/fecha";
 
 /**
  * Vista de detalle DEDICADA de un presupuesto (antes vivía en un drawer de
@@ -81,7 +82,12 @@ export function PresupuestoDetalleView({
 }) {
   const router = useRouter();
   const { fechaCorta, fechaHora } = useFecha();
-  const fmtFecha = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
+  const fmtFecha = (iso: string | null) =>
+    iso
+      ? /^\d{4}-\d{2}-\d{2}$/.test(iso)
+        ? fechaConDia(iso)
+        : fechaCorta(iso)
+      : "—";
   const fmtMomento = fechaHora;
   const [d, setD] = React.useState<PresupuestoDetalle>(inicial);
   const [tab, setTab] = React.useState<Tab>("productos");
@@ -93,7 +99,7 @@ export function PresupuestoDetalleView({
   const [notaDevolucion, setNotaDevolucion] = React.useState("");
   const [linkCopiado, setLinkCopiado] = React.useState(false);
   const [seleccion, setSeleccion] = React.useState<Set<string>>(
-    () => new Set(inicial.items.map((i) => i.cotizacionItemId).filter((x): x is string => x != null)),
+    () => new Set(inicial.items.filter((i) => !i.conversion).map((i) => i.cotizacionItemId).filter((x): x is string => x != null)),
   );
 
   const puedeAprobar = rol === "administrador" || rol === "supervisor";
@@ -141,7 +147,7 @@ export function PresupuestoDetalleView({
     toast.success("Link copiado. El cliente puede aprobar desde ahí.");
   };
 
-  const itemsConvertibles = d.items.filter((i) => i.cotizacionItemId != null);
+  const itemsConvertibles = d.items.filter((i) => i.cotizacionItemId != null && !i.conversion);
   const parcial = seleccion.size < itemsConvertibles.length;
 
   // Convertir lleva DERECHO a la orden, con ?convertida=1: allá se abre el
@@ -287,6 +293,7 @@ export function PresupuestoDetalleView({
         onConvertir={() => void convertir()}
         parcial={parcial}
         seleccionadas={seleccion.size}
+        disponibles={itemsConvertibles.length}
       />
 
       {devolucionAbierta ? (
@@ -454,6 +461,7 @@ function AccionesEstado({
   onConvertir,
   parcial,
   seleccionadas,
+  disponibles,
 }: {
   d: PresupuestoDetalle;
   puedeAprobar: boolean;
@@ -465,19 +473,24 @@ function AccionesEstado({
   onConvertir: () => void;
   parcial: boolean;
   seleccionadas: number;
+  disponibles: number;
 }) {
   if (d.estado === "convertido") {
     return (
       <div className="pp-accion-bar ok">
         <div>
-          <div className="t">Convertido en {d.ordenConvertida}</div>
-          <div className="s">La orden de trabajo ya existe; seguí desde ahí.</div>
+          <div className="t">
+            Convertido en {d.ordenesConvertidas.length || 1} orden{d.ordenesConvertidas.length === 1 ? "" : "es"}
+          </div>
+          <div className="s">Todos los productos del presupuesto ya pasaron a producción.</div>
         </div>
-        {d.ordenConvertidaId ? (
-          <Link className="btn btn-primary" href={`/produccion/ordenes/${d.ordenConvertidaId}`}>
-            Ver la orden
-          </Link>
-        ) : null}
+        <div className="acts">
+          {d.ordenesConvertidas.map((orden) => (
+            <Link key={orden.id} className="btn btn-primary" href={`/produccion/ordenes/${orden.id}`}>
+              Ver {orden.numero}
+            </Link>
+          ))}
+        </div>
       </div>
     );
   }
@@ -548,11 +561,11 @@ function AccionesEstado({
           <div className="t">Aprobado por el cliente</div>
           <div className="s">
             {parcial
-              ? `Se convertirán ${seleccionadas} de ${d.items.length} productos (elegilos en la pestaña Conversión).`
-              : "Se convertirá el presupuesto completo en una orden de trabajo."}
+              ? `Se convertirán ${seleccionadas} de ${disponibles} productos pendientes (elegilos en la pestaña Conversión).`
+              : "Se convertirán todos los productos pendientes en una orden de trabajo."}
           </div>
         </div>
-        <button type="button" className="btn btn-primary" disabled={trabajando} onClick={onConvertir}>
+        <button type="button" className="btn btn-primary" disabled={trabajando || seleccionadas === 0} onClick={onConvertir}>
           Convertir en orden
         </button>
       </div>
@@ -700,6 +713,7 @@ function TabConversion({
 }) {
   const { moneda } = useConfigRegional();
   const convertibles = d.items.filter((i) => i.cotizacionItemId != null);
+  const pendientes = convertibles.filter((i) => !i.conversion);
   const disponible = d.estado === "aprobado";
 
   const toggle = (itemId: string) => {
@@ -721,7 +735,7 @@ function TabConversion({
         </span>
         <span className="sub">
           {disponible
-            ? "Destildá lo que el cliente no confirmó: se crea la OT sólo con lo elegido."
+            ? "Destildá lo que todavía no quieras producir: los productos ya convertidos quedan identificados."
             : "Disponible cuando el presupuesto esté aprobado."}
         </span>
       </div>
@@ -731,16 +745,20 @@ function TabConversion({
         ) : (
           convertibles.map((i) => {
             const itemId = i.cotizacionItemId!;
-            const on = seleccion.has(itemId);
+            const yaConvertido = i.conversion != null;
+            const on = yaConvertido || seleccion.has(itemId);
             return (
               <label key={itemId} className={`pp-conv-row ${on ? "on" : ""} ${disponible ? "" : "off"}`}>
                 <input
                   type="checkbox"
                   checked={on}
-                  disabled={!disponible}
+                  disabled={!disponible || yaConvertido}
                   onChange={() => toggle(itemId)}
                 />
-                <span className="nm">{i.nombre}</span>
+                <span className="nm">
+                  {i.nombre}
+                  {i.conversion ? <small className="mono"> → {i.conversion.numero}</small> : null}
+                </span>
                 <span className="qt mono">
                   {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
                 </span>
@@ -753,7 +771,7 @@ function TabConversion({
       {convertibles.length > 0 ? (
         <div className="pp-conv-foot">
           <span>
-            {seleccion.size} de {convertibles.length} productos
+            {seleccion.size} de {pendientes.length} productos pendientes
           </span>
           <b className="mono">{fmtMoneda(totalSel, moneda)}</b>
         </div>
@@ -791,4 +809,3 @@ function TabHistorial({ d }: { d: PresupuestoDetalle }) {
     </div>
   );
 }
-

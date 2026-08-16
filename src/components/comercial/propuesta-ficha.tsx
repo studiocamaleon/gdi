@@ -4056,15 +4056,17 @@ export function ResumenBar({
                 <TicketPercentIcon />
               </button>
             ) : null}
-            <button
-              type="button"
-              className="btn"
-              onClick={tipo === "orden" ? onGuardarBorrador : undefined}
-              disabled={guardandoBorrador || emitiendo || items.length === 0}
-            >
-              <SaveIcon />
-              {guardandoBorrador ? "Guardando…" : "Borrador"}
-            </button>
+            {tipo === "orden" ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={onGuardarBorrador}
+                disabled={guardandoBorrador || emitiendo || items.length === 0}
+              >
+                <SaveIcon />
+                {guardandoBorrador ? "Guardando…" : "Borrador"}
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn btn-primary"
@@ -6354,6 +6356,7 @@ export function PropuestaFicha({
         jobContext: item.jobContext as never,
         clienteId: clienteId || null,
         periodo: getCurrentPeriodo(),
+        descuento: descuentoParaMotor(item.descuentoInput),
         cotizacionId,
       });
       if (!response.result.exitoso) {
@@ -6410,24 +6413,29 @@ export function PropuestaFicha({
       if (!cotizacionId) {
         throw new Error("No se pudo persistir la cotización del presupuesto.");
       }
-      const resumen = calcularResumenOrden(items, cargosOrden);
       const presupuesto = await emitirPresupuesto({
         cotizacionId,
         clienteId,
         canalVenta,
         fechaEntrega: fechaEntregaOrden(),
-        cargosDirectos: resumen.cargosTotal,
+        cargos: cargosOrden.map(cargoToOrdenInput),
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),
         ),
       });
       // El backend emite y envía de una; si las reglas de aprobación
       // dispararon, vuelve en `pendiente_aprobacion` en vez de enviado.
-      toast.success(
-        presupuesto.estado === "pendiente_aprobacion"
-          ? `Presupuesto ${presupuesto.numero}: espera la aprobación de un supervisor antes de salir.`
-          : `Presupuesto ${presupuesto.numero} emitido y enviado.`,
-      );
+      if (presupuesto.advertenciaEnvio || presupuesto.estado === "borrador") {
+        toast.warning(
+          `Presupuesto ${presupuesto.numero} guardado, pero no pudo enviarse: ${presupuesto.advertenciaEnvio ?? "reintentá desde su detalle"}.`,
+        );
+      } else {
+        toast.success(
+          presupuesto.estado === "pendiente_aprobacion"
+            ? `Presupuesto ${presupuesto.numero}: espera la aprobación de un supervisor antes de salir.`
+            : `Presupuesto ${presupuesto.numero} emitido y enviado.`,
+        );
+      }
       router.push("/comercial/presupuestos");
     } catch (error) {
       toast.error(

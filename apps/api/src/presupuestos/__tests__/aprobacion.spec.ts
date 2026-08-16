@@ -14,8 +14,13 @@ describe('evaluarAprobacion', () => {
   });
 
   it('monto: dispara sólo por encima del umbral (el igual pasa)', () => {
-    const config = { aprobacionMontoMax: 100_000, aprobacionMargenMinPct: null };
-    expect(evaluarAprobacion(config, { total: 100_000, items: [] })).toEqual([]);
+    const config = {
+      aprobacionMontoMax: 100_000,
+      aprobacionMargenMinPct: null,
+    };
+    expect(evaluarAprobacion(config, { total: 100_000, items: [] })).toEqual(
+      [],
+    );
     const motivos = evaluarAprobacion(config, { total: 100_001, items: [] });
     expect(motivos).toHaveLength(1);
     expect(motivos[0].regla).toBe('monto');
@@ -25,7 +30,10 @@ describe('evaluarAprobacion', () => {
     const config = { aprobacionMontoMax: null, aprobacionMargenMinPct: 25 };
     // margen 40% → pasa
     expect(
-      evaluarAprobacion(config, { total: 0, items: items([[100_000, 60_000]]) }),
+      evaluarAprobacion(config, {
+        total: 0,
+        items: items([[100_000, 60_000]]),
+      }),
     ).toEqual([]);
     // margen 10% → dispara
     const motivos = evaluarAprobacion(config, {
@@ -40,7 +48,13 @@ describe('evaluarAprobacion', () => {
   it('margen con item sin costo: dispara sin_costeo y no inventa el margen', () => {
     const motivos = evaluarAprobacion(
       { aprobacionMontoMax: null, aprobacionMargenMinPct: 25 },
-      { total: 0, items: items([[100_000, 60_000], [50_000, null]]) },
+      {
+        total: 0,
+        items: items([
+          [100_000, 60_000],
+          [50_000, null],
+        ]),
+      },
     );
     expect(motivos.map((m) => m.regla)).toEqual(['sin_costeo']);
   });
@@ -60,6 +74,18 @@ describe('evaluarAprobacion', () => {
         { total: 0, items: [] },
       ),
     ).toEqual([]);
+  });
+
+  it('puede exigir aprobación por falta de costeo sin configurar margen', () => {
+    const motivos = evaluarAprobacion(
+      {
+        aprobacionMontoMax: null,
+        aprobacionMargenMinPct: null,
+        requiereAprobacionSinCosteo: true,
+      },
+      { total: 50_000, items: items([[50_000, null]]) },
+    );
+    expect(motivos.map((m) => m.regla)).toEqual(['sin_costeo']);
   });
 
   describe('descuento (F3)', () => {

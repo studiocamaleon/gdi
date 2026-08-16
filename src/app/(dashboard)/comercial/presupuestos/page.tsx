@@ -6,7 +6,11 @@ import { listarPresupuestos, type PresupuestosListado } from "@/lib/presupuestos
 export const dynamic = "force-dynamic";
 
 export default async function PresupuestosPage() {
-  let listado: PresupuestosListado = { presupuestos: [], stats: [] };
+  let listado: PresupuestosListado = {
+    presupuestos: [],
+    stats: [],
+    paginacion: { skip: 0, limit: 50, total: 0, hayMas: false },
+  };
   // El rol decide qué acciones ve el drawer (aprobación interna, config).
   // Ante la duda, el rol más restrictivo.
   let rol: MembershipRole = "operador";

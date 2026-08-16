@@ -5,11 +5,7 @@
  * Reglas con campo null = desactivadas (default: nada cambia).
  */
 
-import {
-  formatearMoneda,
-  monedaDe,
-  type Moneda,
-} from '../common/moneda';
+import { formatearMoneda, monedaDe, type Moneda } from '../common/moneda';
 
 export type ConfigAprobacion = {
   /** Total máximo que un operador puede enviar sin aprobación. */
@@ -18,6 +14,7 @@ export type ConfigAprobacion = {
   aprobacionMargenMinPct: number | null;
   /** Descuento máximo (%) que se puede aplicar sin aprobación (F3 descuentos). */
   aprobacionDescuentoMaxPct?: number | null;
+  requiereAprobacionSinCosteo?: boolean;
 };
 
 export type ItemAprobacion = {
@@ -70,17 +67,19 @@ export function evaluarAprobacion(
     }
   }
 
+  const sinCosto = presupuesto.items.filter((i) => i.costoTotal == null).length;
+  if (
+    sinCosto > 0 &&
+    (config.requiereAprobacionSinCosteo ||
+      config.aprobacionMargenMinPct != null)
+  ) {
+    motivos.push({
+      regla: 'sin_costeo',
+      detalle: `${sinCosto} item${sinCosto === 1 ? '' : 's'} sin costeo verificable: el margen no se puede controlar.`,
+    });
+  }
+
   if (config.aprobacionMargenMinPct != null) {
-    const sinCosto = presupuesto.items.filter(
-      (i) => i.costoTotal == null,
-    ).length;
-    if (sinCosto > 0) {
-      // Sin costo verificable no se puede garantizar el margen mínimo.
-      motivos.push({
-        regla: 'sin_costeo',
-        detalle: `${sinCosto} item${sinCosto === 1 ? '' : 's'} sin costeo verificable: el margen no se puede controlar.`,
-      });
-    }
     const neto = presupuesto.items.reduce((a, i) => a + i.subtotal, 0);
     const costo = presupuesto.items.reduce(
       (a, i) => a + (i.costoTotal ?? 0),

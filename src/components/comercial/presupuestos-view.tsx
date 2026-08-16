@@ -70,16 +70,27 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
   const [data, setData] = React.useState(initial);
   const [filtro, setFiltro] = React.useState<PresupuestoEstado | "todos">("todos");
   const [busqueda, setBusqueda] = React.useState("");
+  const [pagina, setPagina] = React.useState(0);
   const [configAbierta, setConfigAbierta] = React.useState(false);
   const puedeAprobar = rol === "administrador" || rol === "supervisor";
 
   const recargar = React.useCallback(async () => {
     try {
-      setData(await listarPresupuestos());
+      setData(await listarPresupuestos({
+        estado: filtro === "todos" ? undefined : filtro,
+        busqueda: busqueda.trim() || undefined,
+        skip: pagina * 50,
+        limit: 50,
+      }));
     } catch {
       /* la vista conserva lo último */
     }
-  }, []);
+  }, [busqueda, filtro, pagina]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => void recargar(), 250);
+    return () => clearTimeout(timer);
+  }, [recargar]);
 
   // La decisión del cliente llega por el link público desde OTRO
   // navegador: el estado se refresca por polling (patrón del tablero,
@@ -96,14 +107,7 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
     };
   }, [recargar]);
 
-  const lista = data.presupuestos.filter((p) => {
-    if (filtro !== "todos" && p.estado !== filtro) return false;
-    if (busqueda) {
-      const q = busqueda.toLowerCase();
-      if (!p.numero.toLowerCase().includes(q) && !p.cliente.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
+  const lista = data.presupuestos;
 
   const statDe = (estado: PresupuestoEstado) =>
     data.stats.find((s) => s.estado === estado) ?? { cantidad: 0, total: 0 };
@@ -124,7 +128,9 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
     { k: "convertido", label: "Convertidos" },
   ];
   const countChip = (k: PresupuestoEstado | "todos") =>
-    k === "todos" ? data.presupuestos.length : data.presupuestos.filter((p) => p.estado === k).length;
+    k === "todos"
+      ? data.stats.reduce((s, estado) => s + estado.cantidad, 0)
+      : statDe(k).cantidad;
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "28px 34px 60px" }}>
@@ -169,14 +175,14 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
           <div className="otl-kpi accent">
             <div className="k-lbl">Perdidos</div>
             <div className="k-val mono">{statDe("rechazado").cantidad + statDe("vencido").cantidad}</div>
-            <div className="k-hint">{fmtMoneda(statDe("rechazado").total + statDe("vencido").total, moneda)} con motivo registrado</div>
+            <div className="k-hint">{fmtMoneda(statDe("rechazado").total + statDe("vencido").total, moneda)} rechazados o vencidos</div>
           </div>
         </div>
 
         <div className="otl-toolbar">
           <div className="otl-filters">
             {chips.map((f) => (
-              <button key={f.k} type="button" className={`otl-fchip ${filtro === f.k ? "on" : ""}`} onClick={() => setFiltro(f.k)}>
+              <button key={f.k} type="button" className={`otl-fchip ${filtro === f.k ? "on" : ""}`} onClick={() => { setPagina(0); setFiltro(f.k); }}>
                 {f.label}
                 <span className="ct">{countChip(f.k)}</span>
               </button>
@@ -185,7 +191,7 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
           <div className="otl-tools-right">
             <div className="otl-search">
               <SearchIcon size={15} />
-              <input placeholder="Buscar por Nº, cliente…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              <input placeholder="Buscar por Nº, cliente…" value={busqueda} onChange={(e) => { setPagina(0); setBusqueda(e.target.value); }} />
             </div>
           </div>
         </div>
@@ -231,6 +237,15 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
             </table>
           </div>
         )}
+        {data.paginacion.total > data.paginacion.limit ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <button className="btn" type="button" disabled={pagina === 0} onClick={() => setPagina((p) => Math.max(0, p - 1))}>Anterior</button>
+            <span style={{ fontSize: 12, color: "var(--muted-text)" }}>
+              {data.paginacion.skip + 1}–{data.paginacion.skip + data.presupuestos.length} de {data.paginacion.total}
+            </span>
+            <button className="btn" type="button" disabled={!data.paginacion.hayMas} onClick={() => setPagina((p) => p + 1)}>Siguiente</button>
+          </div>
+        ) : null}
       </div>
 
       {configAbierta ? (
@@ -242,6 +257,7 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
 
 /* ─── Panel lateral de detalle ─── */
 function ConfigPresupuestosSheet({ onCerrar }: { onCerrar: () => void }) {
+  const { moneda } = useConfigRegional();
   const [cfg, setCfg] = React.useState<ConfigPresupuestos | null>(null);
   const [guardando, setGuardando] = React.useState(false);
 
@@ -309,7 +325,7 @@ function ConfigPresupuestosSheet({ onCerrar }: { onCerrar: () => void }) {
               <div style={{ fontSize: 11.5, color: "var(--muted-text)", marginBottom: 12 }}>
                 Si un presupuesto se sale de estos límites, un operador no puede enviarlo: queda esperando la aprobación de un supervisor. Vacío = regla desactivada.
               </div>
-              {campo("Monto máximo sin aprobación ($)", "Totales por encima de este valor requieren aprobación.", (
+              {campo(`Monto máximo sin aprobación (${moneda.codigo})`, "Totales por encima de este valor requieren aprobación.", (
                 <input type="number" min={0} style={inputStyle} placeholder="Sin límite"
                   value={cfg.aprobacionMontoMax ?? ""}
                   onChange={(e) => setCfg({ ...cfg, aprobacionMontoMax: num(e.target.value) })} />
@@ -324,6 +340,14 @@ function ConfigPresupuestosSheet({ onCerrar }: { onCerrar: () => void }) {
                   value={cfg.aprobacionDescuentoMaxPct ?? ""}
                   onChange={(e) => setCfg({ ...cfg, aprobacionDescuentoMaxPct: num(e.target.value) })} />
               ))}
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 12.5 }}>
+                <input
+                  type="checkbox"
+                  checked={cfg.requiereAprobacionSinCosteo}
+                  onChange={(e) => setCfg({ ...cfg, requiereAprobacionSinCosteo: e.target.checked })}
+                />
+                Exigir aprobación cuando algún producto no tenga costeo verificable
+              </label>
 
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button type="button" className="pp-da primary" disabled={guardando} onClick={() => void guardar()}>

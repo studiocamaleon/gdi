@@ -57,6 +57,7 @@ import {
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
+import { evaluarCupon } from '../cupones/cupon-reglas';
 
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
@@ -103,21 +104,34 @@ function redondearDinero(valor: number, decimales: number) {
 
 /** Importes congelados por el cotizador; reconstruye snapshots históricos. */
 export function montosCotizacionItem(
-  snapshot: Pick<CotizacionItemFinanciero, 'precioNetoTotal' | 'impuestosPorFueraTotal' | 'precioTotal' | 'impuestosSnapshotJson'>,
+  snapshot: Pick<
+    CotizacionItemFinanciero,
+    | 'precioNetoTotal'
+    | 'impuestosPorFueraTotal'
+    | 'precioTotal'
+    | 'impuestosSnapshotJson'
+  >,
   decimales = 2,
 ) {
   const total = Number(snapshot.precioTotal);
   if (!Number.isFinite(total) || total < 0) return null;
   const netoExacto = Number(snapshot.precioNetoTotal);
   const impuestoExacto = Number(snapshot.impuestosPorFueraTotal);
-  if (snapshot.precioNetoTotal != null && Number.isFinite(netoExacto) && netoExacto >= 0) {
+  if (
+    snapshot.precioNetoTotal != null &&
+    Number.isFinite(netoExacto) &&
+    netoExacto >= 0
+  ) {
     const subtotal = redondearDinero(netoExacto, decimales);
-    const impuestos = snapshot.impuestosPorFueraTotal != null && Number.isFinite(impuestoExacto)
-      ? redondearDinero(Math.max(0, impuestoExacto), decimales)
-      : redondearDinero(Math.max(0, total - subtotal), decimales);
+    const impuestos =
+      snapshot.impuestosPorFueraTotal != null && Number.isFinite(impuestoExacto)
+        ? redondearDinero(Math.max(0, impuestoExacto), decimales)
+        : redondearDinero(Math.max(0, total - subtotal), decimales);
     return { subtotal, impuestos, total: redondearDinero(total, decimales) };
   }
-  const impuestos = Array.isArray(snapshot.impuestosSnapshotJson) ? snapshot.impuestosSnapshotJson : [];
+  const impuestos = Array.isArray(snapshot.impuestosSnapshotJson)
+    ? snapshot.impuestosSnapshotJson
+    : [];
   const porcentajePorFuera = impuestos.reduce((suma, raw) => {
     if (!raw || typeof raw !== 'object') return suma;
     const impuesto = raw as { porcentaje?: unknown; traslado?: unknown };
@@ -154,20 +168,46 @@ export function montoCargosPorTratamiento(
 }
 
 /** Recalcula los cargos cuya base depende del subtotal de productos. */
-export function recalcularCargosPorSubtotal(cargos: unknown, subtotalProductos: number, decimales = 2) {
+export function recalcularCargosPorSubtotal(
+  cargos: unknown,
+  subtotalProductos: number,
+  decimales = 2,
+) {
   if (!Array.isArray(cargos)) return [];
   return cargos.map((raw) => {
     if (!raw || typeof raw !== 'object') return raw;
     const cargo = raw as Record<string, unknown>;
     if (cargo.modoCalculoSnapshot !== 'PORCENTAJE_SOBRE_BASE') return cargo;
-    const config = cargo.configSnapshot && typeof cargo.configSnapshot === 'object' && !Array.isArray(cargo.configSnapshot)
-      ? (cargo.configSnapshot as Record<string, unknown>) : {};
+    const config =
+      cargo.configSnapshot &&
+      typeof cargo.configSnapshot === 'object' &&
+      !Array.isArray(cargo.configSnapshot)
+        ? (cargo.configSnapshot as Record<string, unknown>)
+        : {};
     const porcentaje = Number(config.porcentajeAplicado ?? 0);
     const impuestoPorcentaje = Number(cargo.impuestoPorcentaje ?? 0);
-    if (!Number.isFinite(porcentaje) || porcentaje < 0 || !Number.isFinite(impuestoPorcentaje) || impuestoPorcentaje < 0) return cargo;
-    const montoNeto = redondearDinero(subtotalProductos * (porcentaje / 100), decimales);
-    const impuestoMonto = redondearDinero(montoNeto * (impuestoPorcentaje / 100), decimales);
-    return { ...cargo, baseCalculo: subtotalProductos, montoNeto, impuestoMonto, total: redondearDinero(montoNeto + impuestoMonto, decimales) };
+    if (
+      !Number.isFinite(porcentaje) ||
+      porcentaje < 0 ||
+      !Number.isFinite(impuestoPorcentaje) ||
+      impuestoPorcentaje < 0
+    )
+      return cargo;
+    const montoNeto = redondearDinero(
+      subtotalProductos * (porcentaje / 100),
+      decimales,
+    );
+    const impuestoMonto = redondearDinero(
+      montoNeto * (impuestoPorcentaje / 100),
+      decimales,
+    );
+    return {
+      ...cargo,
+      baseCalculo: subtotalProductos,
+      montoNeto,
+      impuestoMonto,
+      total: redondearDinero(montoNeto + impuestoMonto, decimales),
+    };
   });
 }
 
@@ -421,7 +461,8 @@ function fechasEstadoDeEventos(
     if (evento.tipo === 'borrador') marcar('borrador', evento.fecha);
     else if (evento.tipo === 'emision') marcar('pendiente', evento.fecha);
     else if (evento.tipo === 'estado') {
-      if (typeof datos.despues === 'string') marcar(datos.despues, evento.fecha);
+      if (typeof datos.despues === 'string')
+        marcar(datos.despues, evento.fecha);
       else if (datos.cerrada === true) marcar('entregada', evento.fecha);
     }
   }
@@ -853,52 +894,103 @@ export class OrdenesTrabajoService {
       payload.cotizacionId
         ? this.prisma.cotizacion.findFirst({
             where: { id: payload.cotizacionId, tenantId: auth.tenantId },
-            select: { id: true, numero: true, total: true, _count: { select: { items: true } } },
+            select: {
+              id: true,
+              numero: true,
+              total: true,
+              _count: { select: { items: true } },
+            },
           })
         : null,
       this.prisma.cotizacionItem.findMany({
         where: { id: { in: idsSnapshot }, tenantId: auth.tenantId },
         select: {
-          id: true, cotizacionId: true, cantidad: true, snapshotJson: true,
-          precioNetoTotal: true, impuestosPorFueraTotal: true, precioTotal: true,
-          impuestosSnapshotJson: true, descuentoTipo: true,
-          descuentoValor: true, descuentoMonto: true,
+          id: true,
+          cotizacionId: true,
+          cantidad: true,
+          snapshotJson: true,
+          precioNetoTotal: true,
+          impuestosPorFueraTotal: true,
+          precioTotal: true,
+          impuestosSnapshotJson: true,
+          descuentoTipo: true,
+          descuentoValor: true,
+          descuentoMonto: true,
         },
       }),
       regionalDelTenant(this.prisma, auth.tenantId),
     ]);
-    if (payload.cotizacionId && !cotizacion) throw new NotFoundException('No se encontró la cotización.');
+    if (payload.cotizacionId && !cotizacion)
+      throw new NotFoundException('No se encontró la cotización.');
     if (encontrados.length !== idsSnapshot.length) {
-      throw new NotFoundException('Algún item de cotización referenciado no existe.');
+      throw new NotFoundException(
+        'Algún item de cotización referenciado no existe.',
+      );
     }
-    const decimales = regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    const decimales =
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
     const snapshots = new Map(encontrados.map((item) => [item.id, item]));
-    const items = payload.items.map((item) => {
+    let items = payload.items.map((item) => {
       const snapshot = snapshots.get(item.cotizacionItemId);
-      if (!snapshot) throw new NotFoundException(`No se encontró la cotización de "${item.nombre}".`);
-      if (payload.cotizacionId && snapshot.cotizacionId !== payload.cotizacionId) {
-        throw new BadRequestException(`El snapshot de "${item.nombre}" no pertenece a la cotización de la orden.`);
+      if (!snapshot)
+        throw new NotFoundException(
+          `No se encontró la cotización de "${item.nombre}".`,
+        );
+      if (
+        payload.cotizacionId &&
+        snapshot.cotizacionId !== payload.cotizacionId
+      ) {
+        throw new BadRequestException(
+          `El snapshot de "${item.nombre}" no pertenece a la cotización de la orden.`,
+        );
       }
       return this.itemAutorizado(item, snapshot, decimales);
     });
+    items = await this.validarCupones(auth, payload.clienteId ?? null, items);
     this.validarMontosItems(items);
     if (emitida) {
-      await this.exigirDescuentoEmitible(auth, items.filter((item) => !item.descuentoCuponId));
+      await this.exigirDescuentoEmitible(
+        auth,
+        items.filter((item) => !item.descuentoCuponId),
+      );
     }
 
     const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
     const impuestosItems = items.reduce((s, i) => s + i.impuestos, 0);
     const tratamientoFiscal = payload.tratamientoFiscal ?? 'FISCAL';
-    const cargos = await this.cargosAutorizados(auth.tenantId, payload.cargos ?? [], subtotal, decimales);
-    const cargoPresupuesto = cargos.length === 0 && cotizacion?.numero && cotizacion.total != null && cotizacion._count.items === items.length
-      ? Math.max(0, Number(cotizacion.total) - items.reduce((s, i) => s + i.total, 0)) : 0;
-    if (cargos.length === 0 && (payload.cargosDirectos ?? 0) > 0 && cargoPresupuesto === 0) {
-      throw new BadRequestException('Los cargos de la orden deben enviarse con su catálogo e inputs de cálculo.');
+    const cargos = await this.cargosAutorizados(
+      auth.tenantId,
+      payload.cargos ?? [],
+      subtotal,
+      decimales,
+    );
+    const cargoPresupuesto =
+      cargos.length === 0 &&
+      cotizacion?.numero &&
+      cotizacion.total != null &&
+      cotizacion._count.items === items.length
+        ? Math.max(
+            0,
+            Number(cotizacion.total) - items.reduce((s, i) => s + i.total, 0),
+          )
+        : 0;
+    if (
+      cargos.length === 0 &&
+      (payload.cargosDirectos ?? 0) > 0 &&
+      cargoPresupuesto === 0
+    ) {
+      throw new BadRequestException(
+        'Los cargos de la orden deben enviarse con su catálogo e inputs de cálculo.',
+      );
     }
     const cargosDirectos = montoCargosPorTratamiento(
       cargos,
       tratamientoFiscal,
-      tratamientoFiscal === 'FISCAL' ? cargoPresupuesto : cargoPresupuesto > 0 ? cargoPresupuesto / 1.21 : 0,
+      tratamientoFiscal === 'FISCAL'
+        ? cargoPresupuesto
+        : cargoPresupuesto > 0
+          ? cargoPresupuesto / 1.21
+          : 0,
     );
     // Denormalizado para el listado. El descuento YA está dentro de `subtotal`
     // de cada item (el neto persistido es el descontado), no se resta de nuevo.
@@ -924,122 +1016,124 @@ export class OrdenesTrabajoService {
     let creada: { id: string };
     try {
       creada = await this.prisma.$transaction(async (tx) => {
-      const anio = ahora.getFullYear();
-      const contador = await tx.ordenTrabajoContador.upsert({
-        where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
-        create: { tenantId: auth.tenantId, anio, ultimo: 1 },
-        update: { ultimo: { increment: 1 } },
-      });
-      const numero = `OT-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
-
-      const orden = await tx.ordenTrabajo.create({
-        data: {
-          tenantId: auth.tenantId,
-          idempotencyKey: payload.idempotencyKey ?? null,
-          numero,
-          clienteId: payload.clienteId ?? null,
-          vendedorEmpleadoId,
-          cotizacionId: payload.cotizacionId ?? null,
-          estado: estadoInicial,
-          fechaEmision: emitida ? ahora : null,
-          publicToken: tokenSeguimiento,
-          fechaEntrega: payload.fechaEntrega
-            ? new Date(payload.fechaEntrega)
-            : null,
-          canalVenta: payload.canalVenta ?? null,
-          observaciones: payload.observaciones ?? null,
-          subtotal,
-          impuestos,
-          cargosDirectos,
-          cargosDirectosJson: cargos as never,
-          descuentoTotal,
-          total,
-          tratamientoFiscal,
-          items: {
-            create: items.map((item, indice) => ({
-              tenantId: auth.tenantId,
-              cotizacionItemId: item.cotizacionItemId ?? null,
-              codigo: item.codigo,
-              nombre: item.nombre,
-              familia: item.familia,
-              categoriaComercial: item.categoriaComercial ?? '',
-              subcategoriaComercial: item.subcategoriaComercial ?? '',
-              cantidad: item.cantidad,
-              cantidadUnidad: item.cantidadUnidad,
-              subtotal: item.subtotal,
-              impuestos: item.impuestos,
-              total: item.total,
-              descuentoTipo: item.descuentoTipo ?? null,
-              descuentoValor: item.descuentoValor ?? null,
-              descuentoMonto: item.descuentoMonto ?? null,
-              descuentoCuponId: item.descuentoCuponId ?? null,
-              // Serializado a objetos planos: los DTOs (clases) no matchean
-              // InputJsonValue de Prisma.
-              specsJson: (item.specs ?? []).map((spec) => ({
-                etiqueta: spec.etiqueta,
-                valor: spec.valor,
-              })),
-              adicionalesJson: item.adicionales ?? [],
-              ordenIndice: indice,
-            })),
-          },
-        },
-      });
-
-      if (tokenSeguimiento) {
-        await this.enlaces.emitir(tx, {
-          tenantId: auth.tenantId,
-          tipo: TipoEnlacePublico.SEGUIMIENTO_OT,
-          entidadId: orden.id,
-          token: tokenSeguimiento,
+        const anio = ahora.getFullYear();
+        const contador = await tx.ordenTrabajoContador.upsert({
+          where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
+          create: { tenantId: auth.tenantId, anio, ultimo: 1 },
+          update: { ultimo: { increment: 1 } },
         });
-      }
+        const numero = `OT-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
 
-      // Emitir al taller materializa los pasos de producción del Tablero
-      // desde la trazabilidad del snapshot (el borrador espera a emitirse).
-      if (emitida) {
-        const itemsCreados = await tx.ordenTrabajoItem.findMany({
-          where: { ordenId: orden.id },
-          select: { id: true, ordenId: true, cotizacionItemId: true },
-        });
-        await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
-        // Cupones: la redención (contador + auditoría) va en la MISMA
-        // transacción que emite — si el cupón se agotó o venció entre
-        // aplicarlo y emitir, la emisión entera se cae con error claro.
-        await this.redimirCupones(tx, auth, orden.id, items);
-      }
-
-      // Timeline: se insertan en orden cronológico (productos → borrador →
-      // número → emisión) con timestamps levemente separados para que el
-      // orden por fecha sea estable.
-      const eventos: Array<{ tipo: string; descripcion: string }> = [
-        {
-          tipo: 'productos',
-          descripcion: `${payload.items.length} producto${
-            payload.items.length === 1 ? '' : 's'
-          } agregado${payload.items.length === 1 ? '' : 's'} a la orden`,
-        },
-        { tipo: 'borrador', descripcion: 'Borrador guardado' },
-        { tipo: 'numero_asignado', descripcion: `Nº asignado ${numero}` },
-        ...(emitida
-          ? [{ tipo: 'emision', descripcion: 'OT emitida al taller' }]
-          : []),
-      ];
-      await tx.ordenTrabajoEvento.createMany({
-        data: eventos.map((evento, i) => {
-          const esSistema = evento.tipo === 'numero_asignado';
-          return {
+        const orden = await tx.ordenTrabajo.create({
+          data: {
             tenantId: auth.tenantId,
-            ordenId: orden.id,
-            fecha: new Date(ahora.getTime() - (eventos.length - 1 - i) * 1000),
-            tipo: evento.tipo,
-            descripcion: evento.descripcion,
-            usuarioNombre: esSistema ? 'Sistema' : usuarioNombre,
-            usuarioId: esSistema ? null : auth.userId,
-            origen: esSistema ? 'sistema' : 'usuario',
-          };
-        }),
-      });
+            idempotencyKey: payload.idempotencyKey ?? null,
+            numero,
+            clienteId: payload.clienteId ?? null,
+            vendedorEmpleadoId,
+            cotizacionId: payload.cotizacionId ?? null,
+            estado: estadoInicial,
+            fechaEmision: emitida ? ahora : null,
+            publicToken: tokenSeguimiento,
+            fechaEntrega: payload.fechaEntrega
+              ? new Date(payload.fechaEntrega)
+              : null,
+            canalVenta: payload.canalVenta ?? null,
+            observaciones: payload.observaciones ?? null,
+            subtotal,
+            impuestos,
+            cargosDirectos,
+            cargosDirectosJson: cargos as never,
+            descuentoTotal,
+            total,
+            tratamientoFiscal,
+            items: {
+              create: items.map((item, indice) => ({
+                tenantId: auth.tenantId,
+                cotizacionItemId: item.cotizacionItemId ?? null,
+                codigo: item.codigo,
+                nombre: item.nombre,
+                familia: item.familia,
+                categoriaComercial: item.categoriaComercial ?? '',
+                subcategoriaComercial: item.subcategoriaComercial ?? '',
+                cantidad: item.cantidad,
+                cantidadUnidad: item.cantidadUnidad,
+                subtotal: item.subtotal,
+                impuestos: item.impuestos,
+                total: item.total,
+                descuentoTipo: item.descuentoTipo ?? null,
+                descuentoValor: item.descuentoValor ?? null,
+                descuentoMonto: item.descuentoMonto ?? null,
+                descuentoCuponId: item.descuentoCuponId ?? null,
+                // Serializado a objetos planos: los DTOs (clases) no matchean
+                // InputJsonValue de Prisma.
+                specsJson: (item.specs ?? []).map((spec) => ({
+                  etiqueta: spec.etiqueta,
+                  valor: spec.valor,
+                })),
+                adicionalesJson: item.adicionales ?? [],
+                ordenIndice: indice,
+              })),
+            },
+          },
+        });
+
+        if (tokenSeguimiento) {
+          await this.enlaces.emitir(tx, {
+            tenantId: auth.tenantId,
+            tipo: TipoEnlacePublico.SEGUIMIENTO_OT,
+            entidadId: orden.id,
+            token: tokenSeguimiento,
+          });
+        }
+
+        // Emitir al taller materializa los pasos de producción del Tablero
+        // desde la trazabilidad del snapshot (el borrador espera a emitirse).
+        if (emitida) {
+          const itemsCreados = await tx.ordenTrabajoItem.findMany({
+            where: { ordenId: orden.id },
+            select: { id: true, ordenId: true, cotizacionItemId: true },
+          });
+          await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
+          // Cupones: la redención (contador + auditoría) va en la MISMA
+          // transacción que emite — si el cupón se agotó o venció entre
+          // aplicarlo y emitir, la emisión entera se cae con error claro.
+          await this.redimirCupones(tx, auth, orden.id, items);
+        }
+
+        // Timeline: se insertan en orden cronológico (productos → borrador →
+        // número → emisión) con timestamps levemente separados para que el
+        // orden por fecha sea estable.
+        const eventos: Array<{ tipo: string; descripcion: string }> = [
+          {
+            tipo: 'productos',
+            descripcion: `${payload.items.length} producto${
+              payload.items.length === 1 ? '' : 's'
+            } agregado${payload.items.length === 1 ? '' : 's'} a la orden`,
+          },
+          { tipo: 'borrador', descripcion: 'Borrador guardado' },
+          { tipo: 'numero_asignado', descripcion: `Nº asignado ${numero}` },
+          ...(emitida
+            ? [{ tipo: 'emision', descripcion: 'OT emitida al taller' }]
+            : []),
+        ];
+        await tx.ordenTrabajoEvento.createMany({
+          data: eventos.map((evento, i) => {
+            const esSistema = evento.tipo === 'numero_asignado';
+            return {
+              tenantId: auth.tenantId,
+              ordenId: orden.id,
+              fecha: new Date(
+                ahora.getTime() - (eventos.length - 1 - i) * 1000,
+              ),
+              tipo: evento.tipo,
+              descripcion: evento.descripcion,
+              usuarioNombre: esSistema ? 'Sistema' : usuarioNombre,
+              usuarioId: esSistema ? null : auth.userId,
+              origen: esSistema ? 'sistema' : 'usuario',
+            };
+          }),
+        });
 
         return orden;
       });
@@ -1072,6 +1166,73 @@ export class OrdenesTrabajoService {
     this.avisarAlCliente(creada.id);
 
     return this.findOne(auth, creada.id);
+  }
+
+  /**
+   * Fuente común de verdad para una OT y un presupuesto. Conserva únicamente
+   * la proyección descriptiva del cliente; cantidades, precios, impuestos y
+   * descuentos salen de los snapshots persistidos por el motor.
+   */
+  async autorizarItemsCotizados(
+    auth: CurrentAuth,
+    cotizacionId: string,
+    payload: CrearOrdenTrabajoItemDto[],
+    clienteId: string | null = null,
+  ): Promise<CrearOrdenTrabajoItemDto[]> {
+    const ids = payload.map((item) => item.cotizacionItemId);
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException(
+        'Hay items duplicados: dos productos referencian la misma cotización.',
+      );
+    }
+    const [encontrados, regional] = await Promise.all([
+      this.prisma.cotizacionItem.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          cotizacionId,
+          id: { in: ids },
+        },
+        select: {
+          id: true,
+          cotizacionId: true,
+          cantidad: true,
+          snapshotJson: true,
+          precioNetoTotal: true,
+          impuestosPorFueraTotal: true,
+          precioTotal: true,
+          impuestosSnapshotJson: true,
+          descuentoTipo: true,
+          descuentoValor: true,
+          descuentoMonto: true,
+        },
+      }),
+      regionalDelTenant(this.prisma, auth.tenantId),
+    ]);
+    if (encontrados.length !== ids.length) {
+      throw new BadRequestException(
+        'Algún item no existe o no pertenece a esta cotización.',
+      );
+    }
+    const porId = new Map(encontrados.map((item) => [item.id, item]));
+    const decimales =
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    const autorizados = payload.map((item) =>
+      this.itemAutorizado(item, porId.get(item.cotizacionItemId)!, decimales),
+    );
+    this.validarMontosItems(autorizados);
+    return this.validarCupones(auth, clienteId, autorizados);
+  }
+
+  /** Calcula y congela cargos desde el catálogo vigente del tenant. */
+  async autorizarCargosCotizados(
+    auth: CurrentAuth,
+    cargos: CrearOrdenTrabajoCargoDto[],
+    subtotal: number,
+  ) {
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const decimales =
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    return this.cargosAutorizados(auth.tenantId, cargos, subtotal, decimales);
   }
 
   // ── Edición de datos comerciales ─────────────────────────────────────
@@ -1373,11 +1534,7 @@ export class OrdenesTrabajoService {
         data: { tratamientoFiscal, cargosDirectos },
       });
       // Recalcula total/impuestos leyendo el flag recién guardado.
-      await this.recalcularTotales(
-        tx,
-        id,
-        cargosDirectos,
-      );
+      await this.recalcularTotales(tx, id, cargosDirectos);
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -1414,7 +1571,12 @@ export class OrdenesTrabajoService {
     // que anular la factura o emitir una nota de crédito.
     const actual = await tx.ordenTrabajo.findUniqueOrThrow({
       where: { id: ordenId },
-      select: { facturadoTotal: true, tenantId: true, tratamientoFiscal: true, cargosDirectosJson: true },
+      select: {
+        facturadoTotal: true,
+        tenantId: true,
+        tratamientoFiscal: true,
+        cargosDirectosJson: true,
+      },
     });
     const regional = await regionalDelTenant(this.prisma, actual.tenantId);
     const cargos = recalcularCargosPorSubtotal(
@@ -1461,12 +1623,22 @@ export class OrdenesTrabajoService {
   ): CrearOrdenTrabajoItemDto {
     const montos = montosCotizacionItem(snapshot, decimales);
     if (!montos) {
-      throw new BadRequestException(`La cotización de "${item.nombre}" no tiene un precio válido. Volvé a cotizar el producto.`);
+      throw new BadRequestException(
+        `La cotización de "${item.nombre}" no tiene un precio válido. Volvé a cotizar el producto.`,
+      );
     }
-    const raiz = snapshot.snapshotJson && typeof snapshot.snapshotJson === 'object' && !Array.isArray(snapshot.snapshotJson)
-      ? (snapshot.snapshotJson as Record<string, unknown>) : {};
-    const producto = raiz.producto && typeof raiz.producto === 'object' && !Array.isArray(raiz.producto)
-      ? (raiz.producto as Record<string, unknown>) : {};
+    const raiz =
+      snapshot.snapshotJson &&
+      typeof snapshot.snapshotJson === 'object' &&
+      !Array.isArray(snapshot.snapshotJson)
+        ? (snapshot.snapshotJson as Record<string, unknown>)
+        : {};
+    const producto =
+      raiz.producto &&
+      typeof raiz.producto === 'object' &&
+      !Array.isArray(raiz.producto)
+        ? (raiz.producto as Record<string, unknown>)
+        : {};
     return {
       ...item,
       codigo: String(producto.codigo ?? item.codigo),
@@ -1475,11 +1647,149 @@ export class OrdenesTrabajoService {
       subtotal: montos.subtotal,
       impuestos: montos.impuestos,
       total: montos.total,
-      descuentoTipo: snapshot.descuentoTipo === 'PORCENTAJE' || snapshot.descuentoTipo === 'MONTO' ? snapshot.descuentoTipo : null,
-      descuentoValor: snapshot.descuentoValor != null ? Number(snapshot.descuentoValor) : null,
-      descuentoMonto: snapshot.descuentoMonto != null ? Number(snapshot.descuentoMonto) : null,
+      descuentoTipo:
+        snapshot.descuentoTipo === 'PORCENTAJE' ||
+        snapshot.descuentoTipo === 'MONTO'
+          ? snapshot.descuentoTipo
+          : null,
+      descuentoValor:
+        snapshot.descuentoValor != null
+          ? Number(snapshot.descuentoValor)
+          : null,
+      descuentoMonto:
+        snapshot.descuentoMonto != null
+          ? Number(snapshot.descuentoMonto)
+          : null,
       descuentoCuponId: item.descuentoCuponId ?? null,
     };
+  }
+
+  /** Revalida en backend todo cupón antes de tratarlo como autorización. */
+  private async validarCupones(
+    auth: CurrentAuth,
+    clienteId: string | null,
+    items: CrearOrdenTrabajoItemDto[],
+  ): Promise<CrearOrdenTrabajoItemDto[]> {
+    const idsCupon = Array.from(
+      new Set(
+        items
+          .map((item) => item.descuentoCuponId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    if (idsCupon.length === 0) return items;
+
+    const [cupones, referencias] = await Promise.all([
+      this.prisma.cupon.findMany({
+        where: { tenantId: auth.tenantId, id: { in: idsCupon } },
+      }),
+      this.prisma.cotizacionItem.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          id: { in: items.map((item) => item.cotizacionItemId) },
+        },
+        select: {
+          id: true,
+          productoId: true,
+          producto: {
+            select: {
+              codigo: true,
+              subcategoriaComercial: {
+                select: {
+                  codigo: true,
+                  categoria: { select: { codigo: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+    if (cupones.length !== idsCupon.length) {
+      throw new BadRequestException(
+        'Algún cupón aplicado no existe o pertenece a otro negocio.',
+      );
+    }
+    const referenciaPorId = new Map(
+      referencias.map((referencia) => [referencia.id, referencia]),
+    );
+    const contexto = {
+      ahora: new Date(),
+      clienteId,
+      items: items.map((item) => {
+        const referencia = referenciaPorId.get(item.cotizacionItemId);
+        return {
+          key: item.cotizacionItemId,
+          productoId: referencia?.productoId ?? null,
+          productoCodigo: referencia?.producto.codigo ?? item.codigo,
+          categoriaCodigo:
+            referencia?.producto.subcategoriaComercial.categoria.codigo ?? null,
+          subcategoriaCodigo:
+            referencia?.producto.subcategoriaComercial.codigo ?? null,
+          neto: item.subtotal + Number(item.descuentoMonto ?? 0),
+        };
+      }),
+    };
+
+    for (const cupon of cupones) {
+      const evaluacion = evaluarCupon(
+        {
+          codigo: cupon.codigo,
+          tipo: cupon.tipo,
+          valor: Number(cupon.valor),
+          alcanceTipo: cupon.alcanceTipo,
+          alcanceRef: cupon.alcanceRef,
+          montoMinimo:
+            cupon.montoMinimo != null ? Number(cupon.montoMinimo) : null,
+          vigenciaDesde: cupon.vigenciaDesde,
+          vigenciaHasta: cupon.vigenciaHasta,
+          usoMax: cupon.usoMax,
+          usoCount: cupon.usoCount,
+          activo: cupon.activo,
+        },
+        contexto,
+      );
+      if (!evaluacion.ok) throw new BadRequestException(evaluacion.motivo);
+      const alcanzadas = new Set(evaluacion.alcanzadas);
+      const aplicados = items.filter(
+        (item) => item.descuentoCuponId === cupon.id,
+      );
+      if (
+        aplicados.some(
+          (item) =>
+            !alcanzadas.has(item.cotizacionItemId) ||
+            item.descuentoTipo !== cupon.tipo,
+        )
+      ) {
+        throw new BadRequestException(
+          `El cupón ${cupon.codigo} no autoriza alguno de los descuentos aplicados.`,
+        );
+      }
+      if (
+        cupon.tipo === 'PORCENTAJE' &&
+        aplicados.some(
+          (item) =>
+            Math.abs(Number(item.descuentoValor ?? 0) - Number(cupon.valor)) >
+            0.001,
+        )
+      ) {
+        throw new BadRequestException(
+          `El porcentaje aplicado no coincide con el cupón ${cupon.codigo}.`,
+        );
+      }
+      if (cupon.tipo === 'MONTO') {
+        const montoAplicado = aplicados.reduce(
+          (suma, item) => suma + Number(item.descuentoMonto ?? 0),
+          0,
+        );
+        if (montoAplicado > Number(cupon.valor) + 0.01) {
+          throw new BadRequestException(
+            `El descuento aplicado supera el monto del cupón ${cupon.codigo}.`,
+          );
+        }
+      }
+    }
+    return items;
   }
 
   private async cargosAutorizados(
@@ -1490,65 +1800,142 @@ export class OrdenesTrabajoService {
   ) {
     if (cargos.length === 0) return [];
     const ids = cargos.map((cargo) => cargo.cargoDirectoCatalogoId);
-    if (new Set(ids).size !== ids.length) throw new BadRequestException('No se puede agregar dos veces el mismo cargo a una orden.');
+    if (new Set(ids).size !== ids.length)
+      throw new BadRequestException(
+        'No se puede agregar dos veces el mismo cargo a una orden.',
+      );
     const catalogos = await this.prisma.cargoDirectoCatalogo.findMany({
       where: { tenantId, id: { in: ids }, activo: true },
-      select: { id: true, codigo: true, nombre: true, descripcion: true, modoCalculo: true, configJson: true },
+      select: {
+        id: true,
+        codigo: true,
+        nombre: true,
+        descripcion: true,
+        modoCalculo: true,
+        configJson: true,
+      },
     });
-    if (catalogos.length !== ids.length) throw new NotFoundException('Algún cargo no existe, está inactivo o pertenece a otro negocio.');
+    if (catalogos.length !== ids.length)
+      throw new NotFoundException(
+        'Algún cargo no existe, está inactivo o pertenece a otro negocio.',
+      );
     const porId = new Map(catalogos.map((catalogo) => [catalogo.id, catalogo]));
     return cargos.map((input) => {
       const catalogo = porId.get(input.cargoDirectoCatalogoId)!;
-      const config = catalogo.configJson && typeof catalogo.configJson === 'object' && !Array.isArray(catalogo.configJson)
-        ? (catalogo.configJson as Record<string, unknown>) : {};
+      const config =
+        catalogo.configJson &&
+        typeof catalogo.configJson === 'object' &&
+        !Array.isArray(catalogo.configJson)
+          ? (catalogo.configJson as Record<string, unknown>)
+          : {};
       const inputConfig = input.configInput ?? {};
       let montoNeto = 0;
       let detalle = 'Monto fijo';
       const configSnapshot: Record<string, unknown> = { ...config };
       if (catalogo.modoCalculo === 'MONTO_FIJO_PLANO') {
         const zonas = Array.isArray(config.zonas) ? config.zonas : [];
-        const zonaCodigo = String((inputConfig.zonaAplicada as { codigo?: unknown } | undefined)?.codigo ?? '');
+        const zonaCodigo = String(
+          (inputConfig.zonaAplicada as { codigo?: unknown } | undefined)
+            ?.codigo ?? '',
+        );
         if (zonas.length > 0) {
-          const zona = zonas.find((raw) => raw && typeof raw === 'object' && String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo) as { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
-          if (!zona) throw new BadRequestException(`Elegí un importe válido para el cargo "${catalogo.nombre}".`);
+          const zona = zonas.find(
+            (raw) =>
+              raw &&
+              typeof raw === 'object' &&
+              String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
+          ) as
+            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
+          if (!zona)
+            throw new BadRequestException(
+              `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
+            );
           montoNeto = Number(zona.monto ?? 0);
-          configSnapshot.zonaAplicada = { codigo: String(zona.codigo ?? ''), nombre: String(zona.nombre ?? zona.codigo ?? ''), monto: montoNeto };
+          configSnapshot.zonaAplicada = {
+            codigo: String(zona.codigo ?? ''),
+            nombre: String(zona.nombre ?? zona.codigo ?? ''),
+            monto: montoNeto,
+          };
           detalle = `Zona ${String(zona.nombre ?? zona.codigo ?? '')}`;
         } else {
           montoNeto = Number(input.montoNeto);
         }
         configSnapshot.montoAplicado = montoNeto;
       } else if (catalogo.modoCalculo === 'PORCENTAJE_SOBRE_BASE') {
-        const porcentaje = Number(inputConfig.porcentajeAplicado ?? config.porcentaje ?? config.porcentajeDefault ?? 0);
-        if (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100) throw new BadRequestException(`El porcentaje del cargo "${catalogo.nombre}" debe estar entre 0 y 100.`);
-        montoNeto = subtotalProductos * porcentaje / 100;
+        const porcentaje = Number(
+          inputConfig.porcentajeAplicado ??
+            config.porcentaje ??
+            config.porcentajeDefault ??
+            0,
+        );
+        if (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100)
+          throw new BadRequestException(
+            `El porcentaje del cargo "${catalogo.nombre}" debe estar entre 0 y 100.`,
+          );
+        montoNeto = (subtotalProductos * porcentaje) / 100;
         configSnapshot.porcentajeAplicado = porcentaje;
         detalle = `${porcentaje}% sobre subtotal`;
       } else if (catalogo.modoCalculo === 'POR_UNIDAD_INPUT') {
         const cantidad = Number(input.cantidadInput ?? 0);
-        const precio = Number(inputConfig.precioPorUnidadAplicado ?? config.precioPorUnidad ?? 0);
-        if (!Number.isFinite(cantidad) || cantidad < 0 || !Number.isFinite(precio) || precio < 0) throw new BadRequestException(`La cantidad y el precio de "${catalogo.nombre}" deben ser válidos.`);
+        const precio = Number(
+          inputConfig.precioPorUnidadAplicado ?? config.precioPorUnidad ?? 0,
+        );
+        if (
+          !Number.isFinite(cantidad) ||
+          cantidad < 0 ||
+          !Number.isFinite(precio) ||
+          precio < 0
+        )
+          throw new BadRequestException(
+            `La cantidad y el precio de "${catalogo.nombre}" deben ser válidos.`,
+          );
         montoNeto = cantidad * precio;
         configSnapshot.cantidadAplicada = cantidad;
         configSnapshot.precioPorUnidadAplicado = precio;
         detalle = `${cantidad} × ${precio}`;
       } else {
-        throw new BadRequestException(`El cargo "${catalogo.nombre}" tiene un modo de cálculo no soportado.`);
+        throw new BadRequestException(
+          `El cargo "${catalogo.nombre}" tiene un modo de cálculo no soportado.`,
+        );
       }
-      if (!Number.isFinite(montoNeto) || montoNeto < 0) throw new BadRequestException(`El importe del cargo "${catalogo.nombre}" no es válido.`);
+      if (!Number.isFinite(montoNeto) || montoNeto < 0)
+        throw new BadRequestException(
+          `El importe del cargo "${catalogo.nombre}" no es válido.`,
+        );
       const neto = redondearDinero(montoNeto, decimales);
       const impuestoPorcentaje = Number(config.impuestoPorcentaje ?? 21);
-      if (!Number.isFinite(impuestoPorcentaje) || impuestoPorcentaje < 0 || impuestoPorcentaje > 100) throw new BadRequestException(`La alícuota configurada para "${catalogo.nombre}" no es válida.`);
-      const impuestoMonto = redondearDinero(neto * impuestoPorcentaje / 100, decimales);
+      if (
+        !Number.isFinite(impuestoPorcentaje) ||
+        impuestoPorcentaje < 0 ||
+        impuestoPorcentaje > 100
+      )
+        throw new BadRequestException(
+          `La alícuota configurada para "${catalogo.nombre}" no es válida.`,
+        );
+      const impuestoMonto = redondearDinero(
+        (neto * impuestoPorcentaje) / 100,
+        decimales,
+      );
       return {
-        id: randomUUID(), cargoDirectoCatalogoId: catalogo.id,
-        codigoSnapshot: catalogo.codigo, nombreSnapshot: catalogo.nombre,
-        descripcionSnapshot: catalogo.descripcion, modoCalculoSnapshot: catalogo.modoCalculo,
-        configSnapshot, baseCalculo: subtotalProductos,
-        cantidadInput: catalogo.modoCalculo === 'POR_UNIDAD_INPUT' ? Number(input.cantidadInput ?? 0) : undefined,
-        montoNeto: neto, impuestoPorcentaje, impuestoMonto,
-        total: redondearDinero(neto + impuestoMonto, decimales), detalle,
-        nota: input.nota?.trim() || undefined, createdAt: new Date().toISOString(),
+        id: randomUUID(),
+        cargoDirectoCatalogoId: catalogo.id,
+        codigoSnapshot: catalogo.codigo,
+        nombreSnapshot: catalogo.nombre,
+        descripcionSnapshot: catalogo.descripcion,
+        modoCalculoSnapshot: catalogo.modoCalculo,
+        configSnapshot,
+        baseCalculo: subtotalProductos,
+        cantidadInput:
+          catalogo.modoCalculo === 'POR_UNIDAD_INPUT'
+            ? Number(input.cantidadInput ?? 0)
+            : undefined,
+        montoNeto: neto,
+        impuestoPorcentaje,
+        impuestoMonto,
+        total: redondearDinero(neto + impuestoMonto, decimales),
+        detalle,
+        nota: input.nota?.trim() || undefined,
+        createdAt: new Date().toISOString(),
       };
     });
   }
@@ -1584,14 +1971,24 @@ export class OrdenesTrabajoService {
     cotizacionItemId: string | undefined,
     exceptoItemId?: string,
   ) {
-    if (!cotizacionItemId) throw new BadRequestException('El producto debe tener una cotización persistida.');
+    if (!cotizacionItemId)
+      throw new BadRequestException(
+        'El producto debe tener una cotización persistida.',
+      );
     const snapshot = await this.prisma.cotizacionItem.findFirst({
       where: { id: cotizacionItemId, tenantId: auth.tenantId },
       select: {
-        id: true, cotizacionId: true, cantidad: true, snapshotJson: true,
-        precioNetoTotal: true, impuestosPorFueraTotal: true, precioTotal: true,
-        impuestosSnapshotJson: true, descuentoTipo: true,
-        descuentoValor: true, descuentoMonto: true,
+        id: true,
+        cotizacionId: true,
+        cantidad: true,
+        snapshotJson: true,
+        precioNetoTotal: true,
+        impuestosPorFueraTotal: true,
+        precioTotal: true,
+        impuestosSnapshotJson: true,
+        descuentoTipo: true,
+        descuentoValor: true,
+        descuentoMonto: true,
       },
     });
     if (!snapshot) {
@@ -1599,7 +1996,6 @@ export class OrdenesTrabajoService {
         'El item de cotización referenciado no existe.',
       );
     }
-    return snapshot;
     const usado = await this.prisma.ordenTrabajoItem.count({
       where: {
         tenantId: auth.tenantId,
@@ -1613,6 +2009,7 @@ export class OrdenesTrabajoService {
         'Otro producto de la orden ya referencia esa cotización.',
       );
     }
+    return snapshot;
   }
 
   async agregarItem(
@@ -1628,8 +2025,15 @@ export class OrdenesTrabajoService {
       this.validarSnapshotDisponible(auth, orden.id, payload.cotizacionItemId),
       regionalDelTenant(this.prisma, auth.tenantId),
     ]);
-    if (orden.cotizacionId && snapshot.cotizacionId !== orden.cotizacionId) throw new BadRequestException('La cotización del producto no pertenece a la orden.');
-    const item = this.itemAutorizado(payload, snapshot, regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales);
+    if (orden.cotizacionId && snapshot.cotizacionId !== orden.cotizacionId)
+      throw new BadRequestException(
+        'La cotización del producto no pertenece a la orden.',
+      );
+    const item = this.itemAutorizado(
+      payload,
+      snapshot,
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales,
+    );
     this.validarMontosItems([item]);
     // La orden ya está en el taller: un item nuevo con descuento sobre el
     // umbral es el mismo gate que la emisión (si no, sería el bypass obvio:
@@ -1705,11 +2109,23 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró el producto en la orden.');
     }
     const [snapshot, regional] = await Promise.all([
-      this.validarSnapshotDisponible(auth, orden.id, payload.cotizacionItemId, existente.id),
+      this.validarSnapshotDisponible(
+        auth,
+        orden.id,
+        payload.cotizacionItemId,
+        existente.id,
+      ),
       regionalDelTenant(this.prisma, auth.tenantId),
     ]);
-    if (orden.cotizacionId && snapshot.cotizacionId !== orden.cotizacionId) throw new BadRequestException('La cotización del producto no pertenece a la orden.');
-    const item = this.itemAutorizado(payload, snapshot, regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales);
+    if (orden.cotizacionId && snapshot.cotizacionId !== orden.cotizacionId)
+      throw new BadRequestException(
+        'La cotización del producto no pertenece a la orden.',
+      );
+    const item = this.itemAutorizado(
+      payload,
+      snapshot,
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales,
+    );
     this.validarMontosItems([item]);
     // En una orden ya emitida sólo gatea un descuento que AUMENTA: reeditar
     // specs de un item cuyo descuento ya salió firmado (o emitido por un
@@ -1732,7 +2148,9 @@ export class OrdenesTrabajoService {
     const moneda = await this.monedaDe(auth.tenantId);
     const partes: string[] = [];
     if (antes.cantidad !== item.cantidad) {
-      partes.push(`cantidad ${antes.cantidad} → ${item.cantidad} ${item.cantidadUnidad}`);
+      partes.push(
+        `cantidad ${antes.cantidad} → ${item.cantidad} ${item.cantidadUnidad}`,
+      );
     }
     if (antes.total !== item.total) {
       const dinero = (n: number) =>
@@ -1886,7 +2304,11 @@ export class OrdenesTrabajoService {
       // lo valida en la misma transacción.
       const itemsDescuento = await this.prisma.ordenTrabajoItem.findMany({
         where: { ordenId: orden.id },
-        select: { subtotal: true, descuentoMonto: true, descuentoCuponId: true },
+        select: {
+          subtotal: true,
+          descuentoMonto: true,
+          descuentoCuponId: true,
+        },
       });
       await this.exigirDescuentoEmitible(
         auth,
@@ -2082,7 +2504,8 @@ export class OrdenesTrabajoService {
     const pasosHechos = pasos.filter((p) => p.estado === 'hecho').length;
     const minutosReales = Math.round(
       pasos.reduce((acc, p) => {
-        const asentado = p.tiempoRealMin != null ? Number(p.tiempoRealMin) : null;
+        const asentado =
+          p.tiempoRealMin != null ? Number(p.tiempoRealMin) : null;
         return acc + (asentado ?? sumaTramosMin(p.tramos));
       }, 0),
     );
@@ -2092,7 +2515,11 @@ export class OrdenesTrabajoService {
       //    los cierra: la orden sale del tablero y el barrido de fin de jornada
       //    sólo mira lo que el tablero lee.
       await tx.ordenTrabajoPasoTramo.updateMany({
-        where: { tenantId: auth.tenantId, finEl: null, paso: { item: { ordenId: orden.id } } },
+        where: {
+          tenantId: auth.tenantId,
+          finEl: null,
+          paso: { item: { ordenId: orden.id } },
+        },
         data: { finEl: ahora, motivoFin: 'cancelacion' },
       });
 
@@ -2367,7 +2794,13 @@ export class OrdenesTrabajoService {
         // Diagnóstico para el error: por qué no se pudo tomar.
         const cupon = await tx.cupon.findFirst({
           where: { id: cuponId, tenantId: auth.tenantId },
-          select: { codigo: true, activo: true, usoMax: true, usoCount: true, vigenciaHasta: true },
+          select: {
+            codigo: true,
+            activo: true,
+            usoMax: true,
+            usoCount: true,
+            vigenciaHasta: true,
+          },
         });
         const motivo = !cupon
           ? 'el cupón ya no existe'
@@ -2771,7 +3204,9 @@ export class OrdenesTrabajoService {
           include: {
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
-            cotizacionItem: { select: { producto: { select: { nombre: true } } } },
+            cotizacionItem: {
+              select: { producto: { select: { nombre: true } } },
+            },
             // Sólo el conteo de archivos LISTO: el tablero muestra un clip
             // con el número, no la lista. Traer las filas para contarlas
             // sería N+1 disfrazado.
@@ -2855,7 +3290,9 @@ export class OrdenesTrabajoService {
           include: {
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
-            cotizacionItem: { select: { producto: { select: { nombre: true } } } },
+            cotizacionItem: {
+              select: { producto: { select: { nombre: true } } },
+            },
             // Sólo el conteo de archivos LISTO: el tablero muestra un clip
             // con el número, no la lista. Traer las filas para contarlas
             // sería N+1 disfrazado.

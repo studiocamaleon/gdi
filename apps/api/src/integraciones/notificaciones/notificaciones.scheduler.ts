@@ -7,6 +7,7 @@ import { runWithTenant } from '../../common/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DespachoService } from './despacho.service';
 import { NotificacionesResenasService } from './notificaciones-resenas.service';
+import { NotificacionesPresupuestosService } from './notificaciones-presupuestos.service';
 import { ESTADOS } from './estados';
 
 /**
@@ -43,6 +44,7 @@ export class NotificacionesScheduler {
     private readonly prisma: PrismaService,
     private readonly despacho: DespachoService,
     private readonly resenas: NotificacionesResenasService,
+    private readonly presupuestos: NotificacionesPresupuestosService,
   ) {}
 
   @Cron('*/5 * * * *', { name: 'notificaciones-whatsapp' })
@@ -108,6 +110,33 @@ export class NotificacionesScheduler {
     } catch (error) {
       this.logger.error(
         'Falló el barrido de pedidos de reseña.',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  @Cron('15 10 * * *', { name: 'notificaciones-presupuestos-por-vencer' })
+  async recordarPresupuestos(): Promise<void> {
+    try {
+      await conLockDeCron(
+        this.prisma,
+        'notificaciones-presupuestos-por-vencer',
+        600,
+        async () => {
+          let total = 0;
+          for (const tenantId of await this.tenantsConWati()) {
+            total += await this.presupuestos.barrerPorVencer(tenantId);
+          }
+          if (total > 0) {
+            this.logger.log(
+              `${total} recordatorio(s) de presupuesto encolados.`,
+            );
+          }
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        'Falló el barrido de presupuestos por vencer.',
         error instanceof Error ? error.stack : String(error),
       );
     }

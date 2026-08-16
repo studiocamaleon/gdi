@@ -10,6 +10,7 @@ import {
   Prisma,
   TipoEnlacePublico,
 } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
@@ -17,6 +18,7 @@ import { PresupuestoPdfService } from './presupuesto-pdf.service';
 import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import type { CrearOrdenTrabajoItemDto } from '../ordenes-trabajo/dto/crear-orden-trabajo.dto';
+import { claveFechaEnZona, instanteDe, sumarDiasAClave } from '../common/zona';
 import { evaluarAprobacion } from './aprobacion';
 import {
   ConvertirPresupuestoDto,
@@ -45,8 +47,6 @@ import {
  * Todo cambio queda en CotizacionEvento (timeline = respaldo del acuerdo).
  */
 
-const MS_DIA = 86_400_000;
-
 const ETIQUETA_MOTIVO: Record<string, string> = {
   precio: 'Precio',
   plazo: 'Plazo de entrega',
@@ -58,11 +58,33 @@ const ETIQUETA_MOTIVO: Record<string, string> = {
 type EmisionJson = {
   fechaEntrega?: string;
   canalVenta?: string;
+  validezDias?: number;
   cargosDirectos?: number;
+  cargos?: unknown[];
   items: CrearOrdenTrabajoItemDto[];
 };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+export function fechaValidezPresupuesto(
+  ahora: Date,
+  dias: number,
+  zonaHoraria: string,
+): Date {
+  const hoy = claveFechaEnZona(ahora, zonaHoraria);
+  const ultimoDia = sumarDiasAClave(hoy, dias);
+  const diaSiguiente = sumarDiasAClave(ultimoDia, 1);
+  return new Date(instanteDe(diaSiguiente, '00:00', zonaHoraria).getTime() - 1);
+}
+
+export function idempotenciaConversionPresupuesto(
+  cotizacionId: string,
+  itemIds: string[],
+): string {
+  const base = `${cotizacionId}:${[...itemIds].sort().join(',')}`;
+  const hex = createHash('sha256').update(base).digest('hex').slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20)}`;
+}
 
 @Injectable()
 export class PresupuestosService {
@@ -110,6 +132,7 @@ export class PresupuestosService {
         row?.aprobacionDescuentoMaxPct != null
           ? Number(row.aprobacionDescuentoMaxPct)
           : null,
+      requiereAprobacionSinCosteo: row?.requiereAprobacionSinCosteo ?? false,
     };
   }
 
@@ -146,6 +169,13 @@ export class PresupuestosService {
     // Vendedor: el indicado, o el empleado ligado al usuario que emite
     // (mismo default que la OT).
     let vendedorEmpleadoId = dto.vendedorEmpleadoId ?? null;
+    if (vendedorEmpleadoId) {
+      const vendedor = await this.prisma.empleado.findFirst({
+        where: { id: vendedorEmpleadoId },
+        select: { id: true },
+      });
+      if (!vendedor) throw new BadRequestException('El vendedor no existe.');
+    }
     if (!vendedorEmpleadoId) {
       const emisor = await this.prisma.empleado.findFirst({
         where: { userId: auth.userId },
@@ -157,17 +187,30 @@ export class PresupuestosService {
     const cfg = await this.config(auth.tenantId);
     const ahora = new Date();
     const validezDias = dto.validezDias ?? cfg.validezDiasDefault;
-    const fechaValidez = new Date(ahora.getTime() + validezDias * MS_DIA);
-    const subtotal = r2(dto.items.reduce((a, i) => a + i.subtotal, 0));
-    const impuestos = r2(dto.items.reduce((a, i) => a + i.impuestos, 0));
-    const total = r2(
-      dto.items.reduce((a, i) => a + i.total, 0) + (dto.cargosDirectos ?? 0),
+    const items = await this.ordenes.autorizarItemsCotizados(
+      auth,
+      dto.cotizacionId,
+      dto.items,
+      dto.clienteId,
     );
+    const subtotal = r2(items.reduce((a, i) => a + i.subtotal, 0));
+    const impuestos = r2(items.reduce((a, i) => a + i.impuestos, 0));
+    const cargos = await this.ordenes.autorizarCargosCotizados(
+      auth,
+      dto.cargos ?? [],
+      subtotal,
+    );
+    const cargosDirectos = r2(
+      cargos.reduce((a, cargo) => a + Number(cargo.total ?? 0), 0),
+    );
+    const total = r2(items.reduce((a, i) => a + i.total, 0) + cargosDirectos);
     const emisionJson: EmisionJson = {
       fechaEntrega: dto.fechaEntrega,
       canalVenta: dto.canalVenta,
-      cargosDirectos: dto.cargosDirectos,
-      items: dto.items,
+      validezDias,
+      cargosDirectos,
+      cargos,
+      items,
     };
 
     const numero = await this.prisma.$transaction(async (tx) => {
@@ -178,8 +221,8 @@ export class PresupuestosService {
         update: { ultimo: { increment: 1 } },
       });
       const nro = `PRES-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
-      await tx.cotizacion.update({
-        where: { id: dto.cotizacionId },
+      const actualizada = await tx.cotizacion.updateMany({
+        where: { id: dto.cotizacionId, numero: null },
         data: {
           numero: nro,
           clienteId: dto.clienteId,
@@ -187,15 +230,22 @@ export class PresupuestosService {
           canalVenta: dto.canalVenta,
           estado: 'borrador',
           fechaEmision: ahora,
-          fechaValidez,
+          fechaValidez: null,
           observaciones: dto.observaciones,
           senaSugeridaPct: dto.senaSugeridaPct ?? cfg.senaSugeridaPctDefault,
           subtotal,
           impuestos,
           total,
+          cargosDirectosCotizacionJson:
+            cargos as unknown as Prisma.InputJsonValue,
           emisionJson: emisionJson as unknown as Prisma.InputJsonValue,
         },
       });
+      if (actualizada.count !== 1) {
+        throw new BadRequestException(
+          'Esta cotización ya fue emitida como presupuesto.',
+        );
+      }
       await tx.cotizacionEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -208,17 +258,6 @@ export class PresupuestosService {
       });
       return nro;
     });
-
-    // El PDF se arma acá y no en la primera visita: así el cliente que abre
-    // el link no espera a que arranque Chrome. Best-effort — si falla, el
-    // endpoint lo genera al pedirlo.
-    await this.materializarPdf(auth, dto.cotizacionId).catch(
-      (error: unknown) => {
-        this.logger.warn(
-          `No pude materializar el PDF de ${numero}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      },
-    );
 
     // Emitir es emitir: el comercial que apretó "Emitir presupuesto" quiere
     // que salga, no dejarlo en borrador para acordarse de enviarlo después.
@@ -235,7 +274,13 @@ export class PresupuestosService {
       this.logger.warn(
         `${numero} quedó en borrador: no pude enviarlo — ${error instanceof Error ? error.message : String(error)}`,
       );
-      return this.detalle(auth, dto.cotizacionId, { numero });
+      return {
+        ...(await this.detalle(auth, dto.cotizacionId, { numero })),
+        advertenciaEnvio:
+          error instanceof Error
+            ? error.message
+            : 'No se pudo enviar el presupuesto.',
+      };
     }
   }
 
@@ -345,6 +390,7 @@ export class PresupuestosService {
   // ── Listado + stats (pipeline en $) ────────────────────────────────
   async listado(auth: CurrentAuth, filtros: ListarPresupuestosDto) {
     await this.vencerExpirados(auth.tenantId);
+    const regional = await this.empresa.regional(auth.tenantId);
     const where: Prisma.CotizacionWhereInput = {
       numero: { not: null },
       ...(filtros.estado ? { estado: filtros.estado } : {}),
@@ -362,11 +408,14 @@ export class PresupuestosService {
           }
         : {}),
     };
-    const [rows, porEstado] = await Promise.all([
+    const skip = filtros.skip ?? 0;
+    const limit = filtros.limit ?? 50;
+    const [rows, totalFiltrado, porEstado] = await Promise.all([
       this.prisma.cotizacion.findMany({
         where,
         orderBy: { fechaEmision: 'desc' },
-        take: 200,
+        skip,
+        take: limit,
         select: {
           id: true,
           numero: true,
@@ -385,6 +434,7 @@ export class PresupuestosService {
           _count: { select: { items: true } },
         },
       }),
+      this.prisma.cotizacion.count({ where }),
       this.prisma.cotizacion.groupBy({
         by: ['estado'],
         where: { numero: { not: null } },
@@ -410,7 +460,9 @@ export class PresupuestosService {
         numero: rw.numero,
         estado: rw.estado as PresupuestoEstado,
         fechaEmision: rw.fechaEmision?.toISOString() ?? null,
-        fechaValidez: rw.fechaValidez?.toISOString().slice(0, 10) ?? null,
+        fechaValidez: rw.fechaValidez
+          ? claveFechaEnZona(rw.fechaValidez, regional.zonaHoraria)
+          : null,
         fechaEnvio: rw.fechaEnvio?.toISOString() ?? null,
         fechaResuelto: rw.fechaResuelto?.toISOString() ?? null,
         visto: rw.primeraVistaEl != null,
@@ -431,6 +483,12 @@ export class PresupuestosService {
         cantidad: e._count._all,
         total: Number(e._sum.total ?? 0),
       })),
+      paginacion: {
+        skip,
+        limit,
+        total: totalFiltrado,
+        hayMas: skip + rows.length < totalFiltrado,
+      },
     };
   }
 
@@ -443,9 +501,20 @@ export class PresupuestosService {
         cliente: { select: { id: true, nombre: true } },
         vendedor: { select: { id: true, nombreCompleto: true } },
         eventos: { orderBy: { fecha: 'desc' }, take: 50 },
+        items: {
+          select: {
+            id: true,
+            ordenTrabajoItems: {
+              select: {
+                orden: { select: { id: true, numero: true } },
+              },
+            },
+          },
+        },
       },
     });
     if (!c) throw new NotFoundException('El presupuesto no existe.');
+    const regional = await this.empresa.regional(auth.tenantId);
     const emision = (c.emisionJson ?? { items: [] }) as unknown as EmisionJson;
     const ordenConvertida = c.convertidaOrdenId
       ? await this.prisma.ordenTrabajo.findFirst({
@@ -453,6 +522,21 @@ export class PresupuestosService {
           select: { id: true, numero: true },
         })
       : null;
+    const conversionPorItem = new Map(
+      c.items.flatMap((item) =>
+        item.ordenTrabajoItems.map(
+          (otItem) => [item.id, otItem.orden] as const,
+        ),
+      ),
+    );
+    const ordenesConvertidas = Array.from(
+      new Map(
+        Array.from(conversionPorItem.values()).map((orden) => [
+          orden.id,
+          orden,
+        ]),
+      ).values(),
+    );
     return {
       id: c.id,
       numero: extra?.numero ?? c.numero,
@@ -465,7 +549,9 @@ export class PresupuestosService {
         : null,
       canalVenta: c.canalVenta,
       fechaEmision: c.fechaEmision?.toISOString() ?? null,
-      fechaValidez: c.fechaValidez?.toISOString().slice(0, 10) ?? null,
+      fechaValidez: c.fechaValidez
+        ? claveFechaEnZona(c.fechaValidez, regional.zonaHoraria)
+        : null,
       fechaEnvio: c.fechaEnvio?.toISOString() ?? null,
       fechaResuelto: c.fechaResuelto?.toISOString() ?? null,
       primeraVistaEl: c.primeraVistaEl?.toISOString() ?? null,
@@ -489,6 +575,7 @@ export class PresupuestosService {
       publicToken: c.publicToken,
       ordenConvertida: ordenConvertida?.numero ?? null,
       ordenConvertidaId: ordenConvertida?.id ?? null,
+      ordenesConvertidas,
       items: emision.items.map((i) => ({
         cotizacionItemId: i.cotizacionItemId ?? null,
         codigo: i.codigo,
@@ -502,6 +589,9 @@ export class PresupuestosService {
         ...this.descuentoDeItem(i),
         specs: i.specs ?? [],
         adicionales: i.adicionales ?? [],
+        conversion: i.cotizacionItemId
+          ? (conversionPorItem.get(i.cotizacionItemId) ?? null)
+          : null,
       })),
       eventos: c.eventos.map((e) => ({
         fecha: e.fecha.toISOString(),
@@ -577,19 +667,43 @@ export class PresupuestosService {
   /** El acto de envío en sí (token + fecha + estado + evento). */
   private async ejecutarEnvio(
     auth: CurrentAuth,
-    c: { id: string; publicToken: string | null },
+    c: {
+      id: string;
+      publicToken: string | null;
+      fechaValidez?: Date | null;
+      emisionJson?: Prisma.JsonValue | null;
+    },
     opts: { reenvio: boolean; descripcion?: string },
   ) {
     const token = c.publicToken ?? generarTokenPublico();
+    const emision = (c.emisionJson ?? { items: [] }) as unknown as EmisionJson;
+    const fechaValidez =
+      c.fechaValidez ??
+      (await this.fechaValidezDesdeEnvio(
+        auth.tenantId,
+        emision.validezDias ??
+          (await this.config(auth.tenantId)).validezDiasDefault,
+      ));
     await this.prisma.$transaction(async (tx) => {
-      await tx.cotizacion.update({
-        where: { id: c.id },
+      const actualizada = await tx.cotizacion.updateMany({
+        where: {
+          id: c.id,
+          estado: opts.reenvio
+            ? 'enviado'
+            : { in: ['borrador', 'pendiente_aprobacion'] },
+        },
         data: {
           estado: 'enviado',
           fechaEnvio: new Date(),
+          fechaValidez,
           publicToken: token,
         },
       });
+      if (actualizada.count !== 1) {
+        throw new BadRequestException(
+          'El presupuesto cambió de estado mientras se intentaba enviar.',
+        );
+      }
       // Reenviar no acuña token nuevo: `emitir` es idempotente por entidad, así
       // que el link que el cliente ya tiene sigue siendo el mismo.
       await this.enlaces.emitir(tx, {
@@ -607,7 +721,18 @@ export class PresupuestosService {
           ? 'Presupuesto reenviado al cliente.'
           : 'Presupuesto enviado al cliente.'),
     });
+    await this.materializarPdf(auth, c.id).catch((error: unknown) => {
+      this.logger.warn(
+        `No pude materializar el PDF del presupuesto ${c.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
     return this.detalle(auth, c.id);
+  }
+
+  /** Fin del último día de validez en la zona horaria comercial del tenant. */
+  private async fechaValidezDesdeEnvio(tenantId: string, dias: number) {
+    const { zonaHoraria } = await this.empresa.regional(tenantId);
+    return fechaValidezPresupuesto(new Date(), dias, zonaHoraria);
   }
 
   /** Reglas de aprobación contra los items con costo del snapshot. */
@@ -620,11 +745,14 @@ export class PresupuestosService {
       this.config(tenantId),
       this.prisma.cotizacionItem.findMany({
         where: { cotizacionId },
-        select: { precioTotal: true, costoTotal: true },
+        select: {
+          id: true,
+          precioNetoTotal: true,
+          precioTotal: true,
+          costoTotal: true,
+          descuentoMonto: true,
+        },
       }),
-      // El % de descuento por línea sale del emisionJson (neto + monto,
-      // ambos en términos netos — exacto, sin asumir alícuota de IVA). El
-      // CotizacionItem tiene la traza pero no el neto descontado.
       this.prisma.cotizacion.findUnique({
         where: { id: cotizacionId },
         select: { emisionJson: true },
@@ -634,12 +762,15 @@ export class PresupuestosService {
     const emision = (cotizacion?.emisionJson ?? {
       items: [],
     }) as unknown as EmisionJson;
-    // Las líneas con CUPÓN no cuentan para el umbral: el cupón ES la
-    // autorización (lo creó un supervisor/admin con reglas y vigencia).
-    const descuentoMaxPct = emision.items.reduce((max, i) => {
-      if (i.descuentoCuponId) return max;
+    const autorizadosPorCupon = new Set(
+      emision.items
+        .filter((item) => Boolean(item.descuentoCuponId))
+        .map((item) => item.cotizacionItemId),
+    );
+    const descuentoMaxPct = items.reduce((max, i) => {
+      if (autorizadosPorCupon.has(i.id)) return max;
       const monto = Number(i.descuentoMonto ?? 0);
-      const netoLista = Number(i.subtotal) + monto;
+      const netoLista = Number(i.precioNetoTotal ?? 0) + monto;
       const pct = monto > 0 && netoLista > 0 ? (monto / netoLista) * 100 : 0;
       return Math.max(max, pct);
     }, 0);
@@ -648,11 +779,12 @@ export class PresupuestosService {
         aprobacionMontoMax: cfg.aprobacionMontoMax,
         aprobacionMargenMinPct: cfg.aprobacionMargenMinPct,
         aprobacionDescuentoMaxPct: cfg.aprobacionDescuentoMaxPct,
+        requiereAprobacionSinCosteo: cfg.requiereAprobacionSinCosteo,
       },
       {
         total,
         items: items.map((i) => ({
-          subtotal: Number(i.precioTotal ?? 0),
+          subtotal: Number(i.precioNetoTotal ?? i.precioTotal ?? 0),
           costoTotal: i.costoTotal != null ? Number(i.costoTotal) : null,
         })),
         descuentoMaxPct,
@@ -691,14 +823,10 @@ export class PresupuestosService {
       tipo: 'aprobacion_aprobada',
       descripcion: `Aprobación interna otorgada por ${nombre}.`,
     });
-    return this.ejecutarEnvio(
-      auth,
-      { id: c.id, publicToken: c.publicToken },
-      {
-        reenvio: false,
-        descripcion: 'Presupuesto enviado al cliente (con aprobación interna).',
-      },
-    );
+    return this.ejecutarEnvio(auth, c, {
+      reenvio: false,
+      descripcion: 'Presupuesto enviado al cliente (con aprobación interna).',
+    });
   }
 
   // ── Resolver: el vendedor marca la decisión ────────────────────────
@@ -751,9 +879,56 @@ export class PresupuestosService {
         'El presupuesto no tiene la proyección de items para convertir.',
       );
     }
-    let items = emision.items;
+    const todosLosIds = emision.items
+      .map((item) => item.cotizacionItemId)
+      .filter((itemId): itemId is string => Boolean(itemId));
+    const conversiones = await this.prisma.ordenTrabajoItem.findMany({
+      where: {
+        cotizacionItemId: { in: todosLosIds },
+        orden: { cotizacionId: id },
+      },
+      select: { cotizacionItemId: true, ordenId: true },
+    });
+    const convertidos = new Set(
+      conversiones
+        .map((item) => item.cotizacionItemId)
+        .filter((itemId): itemId is string => Boolean(itemId)),
+    );
+    const restantes = emision.items.filter(
+      (item) =>
+        item.cotizacionItemId && !convertidos.has(item.cotizacionItemId),
+    );
+    if (restantes.length === 0) {
+      throw new BadRequestException(
+        'Todos los items de este presupuesto ya fueron convertidos.',
+      );
+    }
+
+    let items = restantes;
     if (dto.itemIds?.length) {
-      items = items.filter(
+      const solicitados = new Set(dto.itemIds);
+      if (solicitados.size !== dto.itemIds.length) {
+        throw new BadRequestException(
+          'La selección contiene items duplicados.',
+        );
+      }
+      const desconocidos = dto.itemIds.filter(
+        (itemId) => !todosLosIds.includes(itemId),
+      );
+      if (desconocidos.length > 0) {
+        throw new BadRequestException(
+          'Algún item seleccionado no pertenece al presupuesto.',
+        );
+      }
+      const yaConvertidos = dto.itemIds.filter((itemId) =>
+        convertidos.has(itemId),
+      );
+      if (yaConvertidos.length > 0) {
+        throw new BadRequestException(
+          'Algún item seleccionado ya fue convertido en una orden.',
+        );
+      }
+      items = restantes.filter(
         (i) => i.cotizacionItemId && dto.itemIds!.includes(i.cotizacionItemId),
       );
       if (items.length === 0) {
@@ -773,6 +948,10 @@ export class PresupuestosService {
         : undefined;
 
     const orden = await this.ordenes.create(auth, {
+      idempotencyKey: idempotenciaConversionPresupuesto(
+        id,
+        items.map((item) => item.cotizacionItemId),
+      ),
       clienteId: c.clienteId ?? undefined,
       vendedorEmpleadoId: c.vendedorEmpleadoId ?? undefined,
       cotizacionId: id,
@@ -788,17 +967,33 @@ export class PresupuestosService {
     // orden: producción lo necesita ahí, no en un documento ya cerrado.
     await this.archivos.revincularCotizacionAOrden(id, orden.id);
 
+    const convertidosTrasEstaOrden = new Set([
+      ...convertidos,
+      ...items
+        .map((item) => item.cotizacionItemId)
+        .filter((itemId): itemId is string => Boolean(itemId)),
+    ]);
+    const completa = convertidosTrasEstaOrden.size === todosLosIds.length;
     await this.prisma.cotizacion.update({
       where: { id },
-      data: { estado: 'convertido', convertidaOrdenId: orden.id },
+      data: {
+        estado: completa ? 'convertido' : 'aprobado',
+        convertidaOrdenId: orden.id,
+      },
     });
     await this.evento(auth, id, {
       tipo: 'convertido',
-      descripcion: `Convertido en la orden ${orden.numero}${parcial ? ` (${items.length} de ${emision.items.length} items)` : ''}. La orden queda en borrador para revisar fecha y emitir.`,
-      datosJson: { ordenId: orden.id, parcial },
+      descripcion: `Convertido en la orden ${orden.numero}${parcial ? ` (${items.length} de ${emision.items.length} items; ${todosLosIds.length - convertidosTrasEstaOrden.size} pendientes)` : ''}. La orden queda en borrador para revisar fecha y emitir.`,
+      datosJson: { ordenId: orden.id, parcial, completa },
     });
 
-    return { ordenId: orden.id, ordenNumero: orden.numero, parcial };
+    return {
+      ordenId: orden.id,
+      ordenNumero: orden.numero,
+      parcial,
+      completa,
+      itemsPendientes: todosLosIds.length - convertidosTrasEstaOrden.size,
+    };
   }
 
   // ── Link público: ver + decidir ────────────────────────────────────
@@ -827,26 +1022,30 @@ export class PresupuestosService {
     let estado = c.estado;
     if (estado === 'enviado' && c.fechaValidez && c.fechaValidez < new Date()) {
       estado = 'vencido';
-      await this.prisma.cotizacion.update({
-        where: { id: c.id },
+      const vencida = await this.prisma.cotizacion.updateMany({
+        where: { id: c.id, estado: 'enviado' },
         data: { estado },
       });
-      await this.eventoSistema(c.tenantId, c.id, {
-        tipo: 'vencido',
-        descripcion: 'El presupuesto venció (fecha de validez cumplida).',
-      });
+      if (vencida.count === 1) {
+        await this.eventoSistema(c.tenantId, c.id, {
+          tipo: 'vencido',
+          descripcion: 'El presupuesto venció (fecha de validez cumplida).',
+        });
+      }
     }
 
     if (!c.primeraVistaEl && estado === 'enviado') {
-      await this.prisma.cotizacion.update({
-        where: { id: c.id },
+      const vista = await this.prisma.cotizacion.updateMany({
+        where: { id: c.id, primeraVistaEl: null, estado: 'enviado' },
         data: { primeraVistaEl: new Date() },
       });
-      await this.eventoSistema(c.tenantId, c.id, {
-        tipo: 'visto',
-        descripcion: 'El cliente abrió el presupuesto por primera vez.',
-        origen: 'cliente',
-      });
+      if (vista.count === 1) {
+        await this.eventoSistema(c.tenantId, c.id, {
+          tipo: 'visto',
+          descripcion: 'El cliente abrió el presupuesto por primera vez.',
+          origen: 'cliente',
+        });
+      }
     }
 
     const emision = (c.emisionJson ?? { items: [] }) as unknown as EmisionJson;
@@ -861,7 +1060,9 @@ export class PresupuestosService {
       cliente: c.cliente?.nombre ?? null,
       vendedor: c.vendedor?.nombreCompleto ?? null,
       fechaEmision: c.fechaEmision?.toISOString().slice(0, 10) ?? null,
-      fechaValidez: c.fechaValidez?.toISOString().slice(0, 10) ?? null,
+      fechaValidez: c.fechaValidez
+        ? claveFechaEnZona(c.fechaValidez, regional.zonaHoraria)
+        : null,
       observaciones: c.observaciones,
       senaSugeridaPct:
         c.senaSugeridaPct != null ? Number(c.senaSugeridaPct) : null,
@@ -916,8 +1117,12 @@ export class PresupuestosService {
         'El presupuesto está vencido: pedí una actualización.',
       );
     }
-    await this.prisma.cotizacion.update({
-      where: { id: c.id },
+    const resuelta = await this.prisma.cotizacion.updateMany({
+      where: {
+        id: c.id,
+        estado: 'enviado',
+        ...(c.fechaValidez ? { fechaValidez: { gte: new Date() } } : {}),
+      },
       data: {
         estado: dto.decision,
         fechaResuelto: new Date(),
@@ -928,6 +1133,11 @@ export class PresupuestosService {
             : null,
       },
     });
+    if (resuelta.count !== 1) {
+      throw new BadRequestException(
+        'El presupuesto ya fue resuelto o venció mientras se registraba la decisión.',
+      );
+    }
     // El timestamp de esta decisión ES la firma virtual del acuerdo.
     await this.eventoSistema(c.tenantId, c.id, {
       tipo: dto.decision,
@@ -955,14 +1165,16 @@ export class PresupuestosService {
       c.fechaValidez &&
       c.fechaValidez < new Date()
     ) {
-      await this.prisma.cotizacion.update({
-        where: { id },
+      const vencida = await this.prisma.cotizacion.updateMany({
+        where: { id, estado: 'enviado' },
         data: { estado: 'vencido' },
       });
-      await this.eventoSistema(c.tenantId, c.id, {
-        tipo: 'vencido',
-        descripcion: 'El presupuesto venció (fecha de validez cumplida).',
-      });
+      if (vencida.count === 1) {
+        await this.eventoSistema(c.tenantId, c.id, {
+          tipo: 'vencido',
+          descripcion: 'El presupuesto venció (fecha de validez cumplida).',
+        });
+      }
       c.estado = 'vencido';
     }
     if (!estados.includes(c.estado as PresupuestoEstado)) {
@@ -985,20 +1197,18 @@ export class PresupuestosService {
       select: { id: true },
     });
     if (vencidos.length === 0) return;
-    await this.prisma.cotizacion.updateMany({
-      where: { id: { in: vencidos.map((v) => v.id) } },
-      data: { estado: 'vencido' },
-    });
-    await this.prisma.cotizacionEvento.createMany({
-      data: vencidos.map((v) => ({
-        tenantId,
-        cotizacionId: v.id,
-        tipo: 'vencido',
-        descripcion: 'El presupuesto venció (fecha de validez cumplida).',
-        usuarioNombre: 'Sistema',
-        origen: 'sistema',
-      })),
-    });
+    for (const vencido of vencidos) {
+      const actualizado = await this.prisma.cotizacion.updateMany({
+        where: { id: vencido.id, estado: 'enviado' },
+        data: { estado: 'vencido' },
+      });
+      if (actualizado.count === 1) {
+        await this.eventoSistema(tenantId, vencido.id, {
+          tipo: 'vencido',
+          descripcion: 'El presupuesto venció (fecha de validez cumplida).',
+        });
+      }
+    }
   }
 
   private async evento(

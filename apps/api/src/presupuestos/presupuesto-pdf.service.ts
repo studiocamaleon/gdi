@@ -2,11 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { jsPDF } from 'jspdf';
-import {
-  formatearMonedaDoc,
-  monedaDe,
-  type Moneda,
-} from '../common/moneda';
+import { formatearMonedaDoc, monedaDe, type Moneda } from '../common/moneda';
 
 /**
  * PDF del presupuesto, dibujado con jsPDF.
@@ -77,9 +73,15 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
 
 const fecha = (iso: string | null) => {
   if (!iso) return '—';
+  // El contrato admite instantes y fechas calendario. Para YYYY-MM-DD no se
+  // construye Date: medianoche UTC sería el día anterior en América.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
   const d = new Date(iso);
   const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
 };
 
 /** Iniciales del negocio para el cuadrado del logo (fallback sin imagen). */
@@ -428,7 +430,12 @@ export class PresupuestoPdfService {
     total: number;
   } {
     return (
-      this.colsDoc ?? { orden: px(22), cant: px(66), unit: px(96), total: px(104) }
+      this.colsDoc ?? {
+        orden: px(22),
+        cant: px(66),
+        unit: px(96),
+        total: px(104),
+      }
     );
   }
 
