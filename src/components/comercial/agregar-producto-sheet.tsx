@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -2357,26 +2358,6 @@ function findSelectedCandidateVariant(
   return { candidate, variant };
 }
 
-// Resumen de una línea para el pie de la card del opcional:
-// "Laminado film BOPP · Brillante · 330 mm × 150 m".
-function describeSlotSelection(
-  slot: SlotComercialElige,
-  config: Pick<MotorConfigState, "seleccionMaterial">,
-): string | null {
-  const { candidate, variant } = findSelectedCandidateVariant(slot, config);
-  if (!candidate) return null;
-  const parts: string[] = [];
-  if (candidate.label) parts.push(candidate.label);
-  if (variant) {
-    const card = describeCandidateVariants(candidate).get(variant.variantId);
-    const specsText = (card?.specs ?? []).map((spec) => spec.value).join(" × ");
-    if (card?.title) parts.push(card.title);
-    if (specsText) parts.push(specsText);
-    if (!card?.title && !specsText) parts.push(variant.label);
-  }
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
 function getSelectedMaterialSummaries(
   slotsComercialElige: SlotComercialElige[],
   config: MotorConfigState,
@@ -4116,7 +4097,7 @@ function ApSelectStep({
             onPick(activeProduct);
           }}
         />
-        <span className="kbd">⌘K</span>
+        <span className="kbd">↑↓ Enter</span>
       </div>
 
       {/* Filtros por categoría plegados: por defecto sólo se ven los productos;
@@ -4177,12 +4158,13 @@ function ApSelectStep({
             {filtered.length} producto{filtered.length === 1 ? "" : "s"}
           </span>
         </div>
-        <div className="ap-list">
+        <div className="ap-list" role="listbox" aria-label="Productos del catálogo">
           {filtered.map((product, index) => (
             <button
               key={product.code}
               ref={activeProduct?.code === product.code ? activeResultRef : null}
               type="button"
+              role="option"
               className={`ap-prod ${activeProduct?.code === product.code ? "is-keyboard-target" : ""}`}
               aria-selected={activeProduct?.code === product.code}
               onMouseEnter={() => setActiveIndex(index)}
@@ -5110,36 +5092,6 @@ function ApConfigStep({
           <span className="ap-size-hint">Definir cm</span>
         </button>
       ) : null}
-    </div>
-  );
-
-  const renderOptionList = (
-    name: string,
-    value: string,
-    options: Array<{ value: string; label: string }>,
-    onChange: (value: string) => void,
-  ) => (
-    <div
-      className={`ap-option-list${options.length > 2 ? " ap-option-list-grid-2" : ""}`}
-      role="radiogroup"
-      aria-label={name}
-    >
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            className={selected ? "active" : ""}
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onChange(option.value)}
-          >
-            <span className="ap-option-dot" aria-hidden="true" />
-            <span>{option.label}</span>
-          </button>
-        );
-      })}
     </div>
   );
 
@@ -7675,6 +7627,10 @@ export function AgregarProductoSheet({
   const [cotizacion, setCotizacion] = React.useState<CotizarResponse | null>(null);
   const [cotizando, setCotizando] = React.useState(false);
   const [cotizacionError, setCotizacionError] = React.useState<string | null>(null);
+  // La respuesta anterior puede seguir mostrándose durante el debounce, pero
+  // deja de ser confirmable apenas cambia cualquier input cotizable.
+  const [cotizacionDesactualizada, setCotizacionDesactualizada] =
+    React.useState(true);
   const suppressNextCotizacionClear = React.useRef(false);
   // Token de secuencia: descarta respuestas de cotizaciones que quedaron viejas
   // (el usuario cambió algo mientras una estaba en vuelo).
@@ -7795,6 +7751,7 @@ export function AgregarProductoSheet({
       setMotorConfig(nextMotorConfig);
       setNotaProduccion(itemToEdit.notaProduccion ?? "");
       setCotizacion(cotizacionFromItem(itemToEdit));
+      setCotizacionDesactualizada(false);
       setCotizacionError(null);
       setCotizando(false);
       setStep("config");
@@ -7831,6 +7788,7 @@ export function AgregarProductoSheet({
     setAdi([]);
     setNotaProduccion("");
     setCotizacion(null);
+    setCotizacionDesactualizada(true);
     setCotizacionError(null);
     setPlanosAdjuntos([]);
     const rutaPreferida =
@@ -7912,6 +7870,8 @@ export function AgregarProductoSheet({
       setCotizacion(res);
       if (!res.exitoso) {
         setCotizacionError(res.errores[0]?.mensaje ?? "El motor no pudo cotizar este producto.");
+      } else {
+        setCotizacionDesactualizada(false);
       }
     } catch (error) {
       if (seq !== cotizacionSeqRef.current) return;
@@ -7934,8 +7894,14 @@ export function AgregarProductoSheet({
     // recotizamos hasta el primer cambio real del usuario.
     if (suppressNextCotizacionClear.current) {
       suppressNextCotizacionClear.current = false;
+      setCotizacionDesactualizada(false);
       return;
     }
+    // Invalida también cualquier request que ya estuviera en vuelo. El precio
+    // anterior queda visible, pero no se puede confirmar hasta que coincida con
+    // la configuración actual.
+    cotizacionSeqRef.current += 1;
+    setCotizacionDesactualizada(true);
     const handle = setTimeout(() => {
       void cotizarActual();
     }, 450);
@@ -7945,8 +7911,8 @@ export function AgregarProductoSheet({
   const addCurrent = React.useCallback(
     (keepOpen: boolean) => {
       if (!product) return;
-      if (product.real && !cotizacionExitosa) {
-        toast.error("Primero cotizá el producto para previsualizar el precio.");
+      if (product.real && (!cotizacionExitosa || cotizacionDesactualizada)) {
+        toast.error("Esperá a que termine la cotización actualizada del producto.");
         return;
       }
       const minimumStatus = getMinimumCommercialStatus(
@@ -8010,6 +7976,7 @@ export function AgregarProductoSheet({
         setNotaProduccion("");
         setMotorConfig(DEFAULT_MOTOR_CONFIG);
         setCotizacion(null);
+        setCotizacionDesactualizada(true);
         setCotizacionError(null);
         setPlanosAdjuntos([]);
         return;
@@ -8020,6 +7987,7 @@ export function AgregarProductoSheet({
       adi,
       close,
       cotizacion,
+      cotizacionDesactualizada,
       cotizacionExitosa,
       editingItem,
       fechaEntregaDefault,
@@ -8052,6 +8020,7 @@ export function AgregarProductoSheet({
       setMotorConfig(DEFAULT_MOTOR_CONFIG);
       setLoadingProductId(null);
       setCotizacion(null);
+      setCotizacionDesactualizada(true);
       setCotizacionError(null);
       setCotizando(false);
       suppressNextCotizacionClear.current = false;
@@ -8165,7 +8134,7 @@ export function AgregarProductoSheet({
                 <span className="lbl">Total c/ imp.</span>
                 <span className="val mono">
                   {product.real
-                    ? cotizando
+                    ? cotizando || cotizacionDesactualizada
                       ? "Cotizando..."
                       : cotizacionExitosa
                         ? formatCurrency(getCotizacionTotal(cotizacionExitosa), moneda)
@@ -8181,6 +8150,7 @@ export function AgregarProductoSheet({
                   disabled={
                     product.real &&
                     (!cotizacionExitosa ||
+                      cotizacionDesactualizada ||
                       cotizando ||
                       isBlockedByMinimum ||
                       isBlockedByTiempoManual)
@@ -8196,6 +8166,7 @@ export function AgregarProductoSheet({
                 disabled={
                   product.real &&
                   (!cotizacionExitosa ||
+                    cotizacionDesactualizada ||
                     cotizando ||
                     isBlockedByMinimum ||
                     isBlockedByTiempoManual)
@@ -8208,7 +8179,10 @@ export function AgregarProductoSheet({
           ) : (
             <>
               <span className="ap-foot-hint">
-                ¿No está en el catálogo? <button type="button" className="ap-link">Crear producto custom →</button>
+                ¿No está en el catálogo?{" "}
+                <Link href="/productos-servicios/nuevo" className="ap-link">
+                  Crear producto custom →
+                </Link>
               </span>
               <span className="ap-foot-spacer" />
               <button type="button" className="btn" onClick={close}>

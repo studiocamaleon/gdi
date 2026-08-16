@@ -579,6 +579,16 @@
     min-width: 0;
   }
 
+  .orden-load-warning {
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    color: #9a3412;
+    font-size: 12.5px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: var(--r-2);
+  }
+
   .orden-tabs-row {
     display: flex;
     align-items: center;
@@ -34418,4 +34428,3 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-

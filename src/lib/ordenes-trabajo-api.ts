@@ -42,6 +42,8 @@ export type CrearOrdenTrabajoItemPayload = {
 };
 
 export type CrearOrdenTrabajoPayload = {
+  /** UUID estable durante los reintentos de una misma creación. */
+  idempotencyKey?: string;
   clienteId?: string;
   vendedorEmpleadoId?: string;
   cotizacionId?: string;

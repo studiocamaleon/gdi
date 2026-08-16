@@ -692,6 +692,17 @@ export class OrdenesTrabajoService {
   // ── Crear ────────────────────────────────────────────────────────────
 
   async create(auth: CurrentAuth, payload: CrearOrdenTrabajoDto) {
+    if (payload.idempotencyKey) {
+      const existente = await this.prisma.ordenTrabajo.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          idempotencyKey: payload.idempotencyKey,
+        },
+        select: { id: true },
+      });
+      if (existente) return this.findOne(auth, existente.id);
+    }
+
     const estadoInicial: OrdenTrabajoEstado = payload.estado ?? 'borrador';
     const emitida = estadoInicial === 'pendiente';
     this.validarEmision(estadoInicial, payload.clienteId ?? null);
@@ -794,7 +805,9 @@ export class OrdenesTrabajoService {
     // acá para poder registrarlo en EnlacePublico dentro de la misma tx.
     const tokenSeguimiento = emitida ? generarTokenPublico() : null;
 
-    const creada = await this.prisma.$transaction(async (tx) => {
+    let creada: { id: string };
+    try {
+      creada = await this.prisma.$transaction(async (tx) => {
       const anio = ahora.getFullYear();
       const contador = await tx.ordenTrabajoContador.upsert({
         where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
@@ -806,6 +819,7 @@ export class OrdenesTrabajoService {
       const orden = await tx.ordenTrabajo.create({
         data: {
           tenantId: auth.tenantId,
+          idempotencyKey: payload.idempotencyKey ?? null,
           numero,
           clienteId: payload.clienteId ?? null,
           vendedorEmpleadoId,
@@ -910,8 +924,28 @@ export class OrdenesTrabajoService {
         }),
       });
 
-      return orden;
-    });
+        return orden;
+      });
+    } catch (error) {
+      // Dos requests con la misma llave pueden pasar el lookup inicial a la
+      // vez. El índice único elige un ganador; el perdedor devuelve esa misma
+      // orden en lugar de transformar un retry seguro en un conflicto.
+      if (
+        payload.idempotencyKey &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existente = await this.prisma.ordenTrabajo.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            idempotencyKey: payload.idempotencyKey,
+          },
+          select: { id: true },
+        });
+        if (existente) return this.findOne(auth, existente.id);
+      }
+      throw error;
+    }
 
     // Emitida directo al taller: congela la promesa de ETA (post-commit).
     if (emitida) {

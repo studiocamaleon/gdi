@@ -19,34 +19,29 @@ export default function CrearPropuestaPage() {
 }
 
 async function CrearPropuestaContent() {
-  let clientes: ClienteDetalle[] = [];
-  let productos: ProductoListItem[] = [];
-  let cargosDirectos: CargoDirectoCatalogo[] = [];
-  let currentUser: CurrentUser | null = null;
-
-  try {
-    clientes = await getClientes({ limit: 30 });
-  } catch {
-    clientes = [];
-  }
-
-  try {
-    productos = await getProductos(true);
-  } catch {
-    productos = [];
-  }
-
-  try {
-    cargosDirectos = await getCargosDirectosCatalogo(true);
-  } catch {
-    cargosDirectos = [];
-  }
-
-  try {
-    currentUser = (await tryGetCurrentUser())?.currentUser ?? null;
-  } catch {
-    currentUser = null;
-  }
+  const [clientesResult, productosResult, cargosResult, usuarioResult] =
+    await Promise.allSettled([
+      getClientes({ limit: 30 }),
+      getProductos(true),
+      getCargosDirectosCatalogo(true),
+      tryGetCurrentUser(),
+    ]);
+  const clientes: ClienteDetalle[] =
+    clientesResult.status === "fulfilled" ? clientesResult.value : [];
+  const productos: ProductoListItem[] =
+    productosResult.status === "fulfilled" ? productosResult.value : [];
+  const cargosDirectos: CargoDirectoCatalogo[] =
+    cargosResult.status === "fulfilled" ? cargosResult.value : [];
+  const currentUser: CurrentUser | null =
+    usuarioResult.status === "fulfilled"
+      ? (usuarioResult.value?.currentUser ?? null)
+      : null;
+  const initialLoadErrors = [
+    clientesResult.status === "rejected" ? "clientes" : null,
+    productosResult.status === "rejected" ? "productos" : null,
+    cargosResult.status === "rejected" ? "cargos" : null,
+    usuarioResult.status === "rejected" ? "usuario" : null,
+  ].filter((value): value is string => value !== null);
 
   return (
     <PropuestaFicha
@@ -54,6 +49,7 @@ async function CrearPropuestaContent() {
       initialProductos={productos}
       initialCargosDirectos={cargosDirectos}
       currentUser={currentUser}
+      initialLoadErrors={initialLoadErrors}
     />
   );
 }

@@ -29,6 +29,36 @@ function svc(): OrdenesTrabajoService {
   ) as OrdenesTrabajoService;
 }
 
+describe('OrdenesTrabajoService — idempotencia de creación', () => {
+  it('devuelve la OT existente antes de volver a ejecutar la creación', async () => {
+    const findFirst = jest.fn().mockResolvedValue({ id: 'ot-existente' });
+    const findOne = jest.fn().mockResolvedValue({ id: 'ot-existente' });
+    const service = svc() as unknown as {
+      prisma: unknown;
+      findOne: typeof findOne;
+      create: OrdenesTrabajoService['create'];
+    };
+    service.prisma = { ordenTrabajo: { findFirst } };
+    service.findOne = findOne;
+    const auth = { tenantId: 'tenant-1', userId: 'user-1' } as never;
+
+    await expect(
+      service.create(auth, {
+        idempotencyKey: '2fb1b338-a40d-40a0-8d90-8313b585b6c4',
+        items: [],
+      }),
+    ).resolves.toEqual({ id: 'ot-existente' });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        idempotencyKey: '2fb1b338-a40d-40a0-8d90-8313b585b6c4',
+      },
+      select: { id: true },
+    });
+    expect(findOne).toHaveBeenCalledWith(auth, 'ot-existente');
+  });
+});
+
 describe('OrdenesTrabajoService — validarTransicion', () => {
   const casosValidos: Array<[OrdenTrabajoEstado, OrdenTrabajoEstado]> = [
     ['borrador', 'pendiente'],

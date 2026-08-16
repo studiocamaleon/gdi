@@ -122,6 +122,11 @@ export class CrearOrdenTrabajoItemDto {
 }
 
 export class CrearOrdenTrabajoDto {
+  /** Identificador estable del intento para que un retry no duplique la OT. */
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
+
   @IsOptional()
   @IsUUID()
   clienteId?: string;

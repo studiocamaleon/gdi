@@ -2828,6 +2828,9 @@ model CotizacionItem {
 model OrdenTrabajo {
   id                      String                 @id @default(uuid()) @db.Uuid
   tenantId                String                 @db.Uuid
+  /// UUID estable del comando de creación. Permite devolver la misma OT ante
+  /// reintentos luego de una respuesta perdida, sin duplicar taller ni cobros.
+  idempotencyKey          String?                @db.Uuid
   /// "OT-2026-0184" — asignado al crear vía OrdenTrabajoContador.
   numero                  String
   clienteId               String?                @db.Uuid
@@ -2926,6 +2929,7 @@ model OrdenTrabajo {
   archivos                Archivo[]
 
   @@unique([tenantId, numero])
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, estado])
   @@index([tenantId, createdAt])
   @@index([tenantId, clienteId])

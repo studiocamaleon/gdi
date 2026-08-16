@@ -106,7 +106,6 @@ import {
 import {
   ORDEN_TRABAJO_ESTADOS,
   esCancelable,
-  ORDEN_TRABAJO_FLOW,
   formatFechaOrden,
   type OrdenTrabajoDetalle,
   type OrdenTrabajoProducto,
@@ -192,6 +191,7 @@ type PropuestaFichaProps = {
   initialProductos?: ProductoListItem[];
   initialCargosDirectos?: CargoDirectoCatalogo[];
   currentUser?: CurrentUser | null;
+  initialLoadErrors?: string[];
   /**
    * Modo orden: la MISMA ficha renderiza una OT ya persistida (solo lectura,
    * rehidratada desde los snapshots) con número, estado, flujo e historial.
@@ -4161,15 +4161,20 @@ function CargoOrdenSheet({
 }) {
   const { moneda } = useConfigRegional();
   const [cargoId, setCargoId] = React.useState("");
-  const selectedCargo = cargos.find((cargo) => cargo.id === cargoId) ?? null;
-  const selectedConfig = getCargoConfig(selectedCargo);
-  const zonas = Array.isArray(selectedConfig.zonas)
-    ? (selectedConfig.zonas as Array<{
-        codigo?: string;
-        nombre?: string;
-        monto?: number;
-      }>)
-    : [];
+  const selectedCargo = React.useMemo(
+    () => cargos.find((cargo) => cargo.id === cargoId) ?? null,
+    [cargos, cargoId],
+  );
+  const zonas = React.useMemo(() => {
+    const selectedConfig = getCargoConfig(selectedCargo);
+    return Array.isArray(selectedConfig.zonas)
+      ? (selectedConfig.zonas as Array<{
+          codigo?: string;
+          nombre?: string;
+          monto?: number;
+        }>)
+      : [];
+  }, [selectedCargo]);
   const [monto, setMonto] = React.useState(0);
   const [porcentaje, setPorcentaje] = React.useState(0);
   const [precioUnidad, setPrecioUnidad] = React.useState(0);
@@ -4190,7 +4195,7 @@ function CargoOrdenSheet({
     setCantidadInput(1);
     setZonaCodigo(zonas[0]?.codigo ?? "");
     setNota("");
-  }, [selectedCargo?.id]);
+  }, [selectedCargo, zonas]);
 
   if (!open) return null;
 
@@ -5202,6 +5207,7 @@ export function PropuestaFicha({
   initialProductos = [],
   initialCargosDirectos = [],
   currentUser = null,
+  initialLoadErrors = [],
   orden: ordenProp,
   recienEmitida = false,
   recienConvertida = false,
@@ -5428,6 +5434,10 @@ export function PropuestaFicha({
   const [fechaEstimada, setFechaEstimada] = React.useState(
     () => orden?.fechaEntrega ?? offsetDate(7),
   );
+  const creacionDefaultsRef = React.useRef({
+    canalVenta,
+    fechaEstimada,
+  });
 
   // ── Demora estimada por el sistema (fase 3, simulación de flujo) ──────
   // Sólo en creación/borrador: una orden emitida ya está EN las colas del
@@ -5547,6 +5557,8 @@ export function PropuestaFicha({
   const [emitiendo, setEmitiendo] = React.useState(false);
   const [emisionNumero, setEmisionNumero] = React.useState<string | null>(null);
   const emisionOrdenIdRef = React.useRef<string | null>(null);
+  const emisionIdempotencyRef = React.useRef<string | null>(null);
+  const borradorIdempotencyRef = React.useRef<string | null>(null);
   const [editandoOrden, setEditandoOrden] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
   const [trackCopiado, setTrackCopiado] = React.useState(false);
@@ -5649,8 +5661,17 @@ export function PropuestaFicha({
     return payload;
   }, [orden, editandoOrden, clienteId, canalVenta, fechaEstimada]);
 
+  const cambiosCreacion = !orden
+    ? items.length +
+      cargosOrden.length +
+      cobrosStaged.length +
+      Number(Boolean(clienteId)) +
+      Number(canalVenta !== creacionDefaultsRef.current.canalVenta) +
+      Number(fechaEstimada !== creacionDefaultsRef.current.fechaEstimada) +
+      Number(sinComprobante)
+    : 0;
   const cambiosSinGuardar =
-    cambiosItems.total + Object.keys(cambiosFields).length;
+    cambiosCreacion + cambiosItems.total + Object.keys(cambiosFields).length;
 
   /**
    * Qué le va a pasar a la orden al cancelarla. Se arma con los datos de ESTA
@@ -6401,17 +6422,23 @@ export function PropuestaFicha({
     setEmitiendo(true);
     setEmisionNumero(null);
     emisionOrdenIdRef.current = null;
+    const idempotencyKey =
+      emisionIdempotencyRef.current ?? crypto.randomUUID();
+    emisionIdempotencyRef.current = idempotencyKey;
     try {
       const { itemsConSnapshot, cotizacionId } =
         await persistirSnapshotsItems();
       const resumen = calcularResumenOrden(items, cargosOrden);
       const orden = await crearOrdenTrabajo({
+        idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
         estado: "pendiente",
         fechaEntrega,
         canalVenta,
-        cargosDirectos: resumen.cargosTotal,
+        cargosDirectos: sinComprobante
+          ? resumen.cargosSubtotal
+          : resumen.cargosTotal,
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),
@@ -6447,15 +6474,25 @@ export function PropuestaFicha({
         }
       }
 
-      // El arte de los sellos + los PDF del centro de copiado, antes de mostrar
-      // el cartel de emitida: si algo falla, el aviso llega con la orden en
-      // pantalla.
-      await publicarArtes(orden.productos);
-      await subirArchivosCentroCopiado(
-        orden.productos,
-        mapaArchivosCC(itemsConSnapshot),
-      );
-      await publicarPlanosDeOrden(itemsConSnapshot, orden.productos);
+      // La OT ya existe: los adjuntos son tareas posteriores y un fallo no puede
+      // convertir una emisión exitosa en un falso error reintentable.
+      const adjuntos = await Promise.allSettled([
+        publicarArtes(orden.productos),
+        subirArchivosCentroCopiado(
+          orden.productos,
+          mapaArchivosCC(itemsConSnapshot),
+        ),
+        publicarPlanosDeOrden(itemsConSnapshot, orden.productos),
+      ]);
+      const adjuntosFallidos = adjuntos.filter(
+        (resultado) => resultado.status === "rejected",
+      ).length;
+      if (adjuntosFallidos > 0) {
+        toast.warning(
+          `La orden se emitió, pero ${adjuntosFallidos} tarea${adjuntosFallidos === 1 ? "" : "s"} de archivos quedó pendiente. Revisá los adjuntos desde la orden.`,
+          { duration: 10000 },
+        );
+      }
 
       setEmisionNumero(orden.numero);
     } catch (error) {
@@ -6472,12 +6509,14 @@ export function PropuestaFicha({
     clienteId,
     canalVenta,
     cobrosStaged,
+    moneda,
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
     subirArchivosCentroCopiado,
     mapaArchivosCC,
     publicarPlanosDeOrden,
+    sinComprobante,
   ]);
 
   const finalizarEmision = React.useCallback(() => {
@@ -6506,24 +6545,41 @@ export function PropuestaFicha({
         await persistirSnapshotsItems();
       const resumen = calcularResumenOrden(items, cargosOrden);
       const fechaEntrega = fechaEntregaOrden();
+      const idempotencyKey =
+        borradorIdempotencyRef.current ?? crypto.randomUUID();
+      borradorIdempotencyRef.current = idempotencyKey;
       const orden = await crearOrdenTrabajo({
+        idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
         estado: "borrador",
         fechaEntrega: fechaEntrega || undefined,
         canalVenta,
-        cargosDirectos: resumen.cargosTotal,
+        cargosDirectos: sinComprobante
+          ? resumen.cargosSubtotal
+          : resumen.cargosTotal,
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),
         ),
       });
-      await publicarArtes(orden.productos);
-      await subirArchivosCentroCopiado(
-        orden.productos,
-        mapaArchivosCC(itemsConSnapshot),
-      );
-      await publicarPlanosDeOrden(itemsConSnapshot, orden.productos);
+      const adjuntos = await Promise.allSettled([
+        publicarArtes(orden.productos),
+        subirArchivosCentroCopiado(
+          orden.productos,
+          mapaArchivosCC(itemsConSnapshot),
+        ),
+        publicarPlanosDeOrden(itemsConSnapshot, orden.productos),
+      ]);
+      const adjuntosFallidos = adjuntos.filter(
+        (resultado) => resultado.status === "rejected",
+      ).length;
+      if (adjuntosFallidos > 0) {
+        toast.warning(
+          `El borrador se guardó, pero ${adjuntosFallidos} tarea${adjuntosFallidos === 1 ? "" : "s"} de archivos quedó pendiente.`,
+          { duration: 10000 },
+        );
+      }
       toast.success(
         `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
       );
@@ -6549,6 +6605,7 @@ export function PropuestaFicha({
     mapaArchivosCC,
     publicarPlanosDeOrden,
     router,
+    sinComprobante,
   ]);
 
   // Al cambiar el cliente con productos ya cargados, los precios de esos items
@@ -7167,6 +7224,12 @@ export function PropuestaFicha({
 
   return (
     <section className="ot-v1 flex flex-1 flex-col p-4 md:p-6">
+      {initialLoadErrors.length > 0 ? (
+        <div className="orden-load-warning" role="alert">
+          No se pudieron cargar: {initialLoadErrors.join(", ")}. Reintentá
+          recargando antes de emitir para no trabajar con un catálogo incompleto.
+        </div>
+      ) : null}
       <div className="orden-head">
         <div className="left">
           {modoOrden ? (
@@ -7902,9 +7965,18 @@ export function PropuestaFicha({
         open={navPendiente !== null}
         cambios={cambiosSinGuardar}
         guardando={guardandoEdicion}
-        onGuardarYSalir={() =>
-          void guardarEdicion({ destino: navPendiente ?? undefined })
-        }
+        onGuardarYSalir={() => {
+          if (orden) {
+            void guardarEdicion({ destino: navPendiente ?? undefined });
+            return;
+          }
+          if (cobrosStaged.length > 0) {
+            setNavPendiente(null);
+            setConfirmBorradorConCobros(true);
+            return;
+          }
+          void guardarBorrador();
+        }}
         onDescartarYSalir={descartarYSalir}
         onSeguirEditando={() => setNavPendiente(null)}
       />
