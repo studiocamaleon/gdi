@@ -1076,6 +1076,9 @@ export interface CotizarResponse {
       configPasoId?: string;
       activado: boolean;
       razonNoActivado?: string;
+      /** Outputs canónicos publicados por el paso (imposicion_calculada,
+       *  pliegos_impresos…). El sheet lee de acá "entran N por plancha". */
+      outputsCanonicos?: Record<string, unknown>;
       /** El paso se encendió porque otro lo exige (ojales arrastra refuerzo). */
       activadoPorDependencia?: { requeridoPorNombre: string } | null;
       /**

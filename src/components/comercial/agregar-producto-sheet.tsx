@@ -92,14 +92,17 @@ import type {
   ConfigPasoDetalle,
   FamiliaListItem,
   ProductoDetalle,
+  MedidaPredefinidaProducto,
   ProductoListItem,
   RutaAlternativaDetalle,
 } from "@/lib/productos-servicios";
 import {
+  esMedidaPliegoUtil,
   getMedidaDefault,
   getMedidasPredefinidas,
   medidaLabel,
 } from "@/lib/producto-medidas";
+import { resolverPlanchaUtil } from "@/lib/medida-plancha";
 import {
   getSlotMaterialVariantDisplay,
   getSlotMaterialVariantSortValue,
@@ -475,7 +478,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionTercerizado: {},
   tercerizadoCostoManual: {},
   paramsComercial: {},
-  modoCotizacionLineal: "nesting",
+  modoCotizacionLineal: "directo",
   zonaInstalacion: "CABA",
   m2Instalados: 0,
   personalizaciones: {},
@@ -624,12 +627,105 @@ function modoMedidasPermitePersonalizada(modoMedidas: string | null | undefined)
   return modoMedidas === "LIBRE" || modoMedidas === "MIXTA";
 }
 
+/** Pliego activo del paso de impresión por hoja: la variante de papel que el
+ *  comercial eligió para el slot (o la default del slot). */
+function getPliegoActivoDeImpresion(
+  configPaso: ConfigPasoDetalle,
+  config: Pick<MotorConfigState, "seleccionMaterial">,
+): { anchoMm: number; altoMm: number } | null {
+  const slot =
+    configPaso.slotsMateriales.find(
+      (item) =>
+        (item.slotRol ?? "").toUpperCase() === "SUSTRATO" ||
+        // `sustrato_principal` (impresión), `sustrato_corte` (plotter), etc.
+        item.slotCodigo.startsWith("sustrato"),
+    ) ?? configPaso.slotsMateriales[0];
+  if (!slot) return null;
+  const key = materialSelectionKey(configPaso.id, slot.slotCodigo);
+  const seleccionadaId = config.seleccionMaterial[key] || null;
+  const variantes = [
+    ...(slot.materialVariante ? [slot.materialVariante] : []),
+    ...slot.candidatos.flatMap(
+      (candidato) => candidato.materiaPrima.variantes ?? [],
+    ),
+  ];
+  const porId = (id: string | null | undefined) =>
+    id ? variantes.find((variante) => variante.id === id) : undefined;
+  const variante =
+    porId(seleccionadaId) ??
+    porId(
+      slot.candidatos
+        .map((candidato) => candidato.defaultVarianteId)
+        .find(Boolean),
+    ) ??
+    slot.materialVariante ??
+    variantes[0] ??
+    null;
+  const attrs = getRecord(variante?.atributosVarianteJson);
+  const anchoMm = getNumberFromUnknown(attrs.anchoMm) ?? 0;
+  const altoMm =
+    getNumberFromUnknown(attrs.altoMm) ??
+    getNumberFromUnknown(attrs.largoMm) ??
+    0;
+  return anchoMm > 0 && altoMm > 0 ? { anchoMm, altoMm } : null;
+}
+
+/**
+ * Medidas del producto con las planchas (`tipo: "pliego_util"`) RESUELTAS:
+ * pieza = pliego de la variante activa − márgenes (espejo del motor, ver
+ * `src/lib/medida-plancha.ts`). Una plancha que no se puede resolver (paso de
+ * impresión sin máquina/papel) queda con dims 0 y la card se deshabilita.
+ */
+function resolverMedidasPredefinidas(
+  producto: ProductoDetalle | null,
+  config: MotorConfigState,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+): MedidaPredefinidaProducto[] {
+  if (!producto) return [];
+  const base = getMedidasPredefinidas(producto);
+  if (!base.some((medida) => medida.tipo === "pliego_util")) return base;
+  let plancha: { anchoMm: number; altoMm: number } | null = null;
+  const rutaSel = getRutaSeleccionada(producto, config.rutaAlternativaId ?? "");
+  for (const configPaso of rutaSel?.configPasos ?? []) {
+    if (configPaso.rutaPaso.familiaCodigo !== "impresion_por_hoja") continue;
+    if (!isExecutableConfigPaso(configPaso) || !includeConfig(configPaso)) {
+      continue;
+    }
+    const pliego = getPliegoActivoDeImpresion(configPaso, config);
+    if (!pliego) continue;
+    const machine = getActiveMachineForConfig(configPaso, config);
+    const resuelta = resolverPlanchaUtil({
+      pliegoAnchoMm: pliego.anchoMm,
+      pliegoAltoMm: pliego.altoMm,
+      maquinaParametrosTecnicos: machine?.parametrosTecnicosJson ?? null,
+      pasoParams: (configPaso.paramsPasoJson ?? null) as Record<
+        string,
+        unknown
+      > | null,
+    });
+    if (resuelta) {
+      plancha = resuelta;
+      break;
+    }
+  }
+  return base.map((medida) =>
+    medida.tipo === "pliego_util"
+      ? {
+          ...medida,
+          anchoMm: plancha?.anchoMm ?? 0,
+          altoMm: plancha?.altoMm ?? 0,
+        }
+      : medida,
+  );
+}
+
 function getSelectedPredefinedMeasure(
   producto: ProductoDetalle | null,
   medidaPredefinidaId: string,
+  medidasResueltas?: MedidaPredefinidaProducto[],
 ) {
   if (!producto || !modoMedidasUsaPredefinidas(producto.modoMedidas)) return null;
-  const medidas = getMedidasPredefinidas(producto);
+  const medidas = medidasResueltas ?? getMedidasPredefinidas(producto);
   return (
     medidas.find((medida) => medida.id === medidaPredefinidaId) ??
     medidas.find((medida) => medida.esDefault) ??
@@ -1252,6 +1348,122 @@ type TecnologiaCandidataComercial = {
 
 function getPreferredCandidate(candidates: MaquinaCandidataComercial[]) {
   return candidates.find((candidate) => candidate.esPreferida) ?? candidates[0] ?? null;
+}
+
+/** Un paso de plotter de corte cuya máquina declara varios perfiles de
+ *  complejidad (Corte fácil / Corte complejo): el comercial elige el nivel
+ *  según el trabajo y eso viaja como override de perfil
+ *  (`perfilSeleccionado_<configPasoId>`, que el motor ya valida). */
+type ComplejidadCorteComercial = {
+  configPasoId: string;
+  nombreVisible: string | null;
+  familiaCodigo: string;
+  modoActivacion: string;
+  /** Perfil default del paso (queda seleccionado sin override). */
+  defaultId: string | null;
+  /** Ordenadas de más rápida a más lenta (fácil → complejo). */
+  opciones: Array<{ perfilId: string; nombre: string }>;
+};
+
+/** Letra grande = corte fácil (formas grandes), letra chica = corte complejo
+ *  (detalle intrincado). Mismo rol visual que los cuadraditos del modo de
+ *  color: se entiende sin leer. */
+function complejidadCorteGlyph(rank: number, total: number) {
+  const sizes = total <= 2 ? [20, 11] : [20, 15, 10];
+  const size = sizes[Math.min(rank, sizes.length - 1)] ?? 10;
+  const y = 13 + size * 0.36;
+  return (
+    <svg
+      className="ap-sheet-ico"
+      viewBox="0 0 26 26"
+      fill="none"
+      aria-hidden="true"
+    >
+      <text
+        x="13"
+        y={y}
+        textAnchor="middle"
+        fontSize={size}
+        fontWeight={800}
+        fill="#14141a"
+      >
+        A
+      </text>
+    </svg>
+  );
+}
+
+function getComplejidadCorte(
+  ruta: RutaAlternativaDetalle | null,
+  motorConfig: Pick<MotorConfigState, "seleccionMaquina">,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+): ComplejidadCorteComercial[] {
+  return (
+    ruta?.configPasos
+      .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
+      .map((config): ComplejidadCorteComercial | null => {
+        if (config.rutaPaso.familiaCodigo !== "plotter_corte") return null;
+        const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+        const candidata = getActiveCandidateForConfig(config, motorConfig);
+        const maquina = candidata?.maquina ?? config.maquinaM1;
+        const perfiles = (maquina?.perfilesOperativos ?? []).filter(
+          (perfil) =>
+            perfil.activo !== false &&
+            perfil.nombre &&
+            ["corte", "mixto"].includes(
+              (perfil.tipoPerfil ?? "").toLowerCase(),
+            ),
+        );
+        // Más m²/h = corte más fácil: eso ordena fácil → complejo y decide
+        // el tamaño de la letra del glyph.
+        const ordenados = [...perfiles].sort((a, b) => {
+          const pa = Number(a.productivityValue ?? NaN);
+          const pb = Number(b.productivityValue ?? NaN);
+          if (Number.isFinite(pa) && Number.isFinite(pb)) return pb - pa;
+          if (Number.isFinite(pa)) return -1;
+          if (Number.isFinite(pb)) return 1;
+          return 0;
+        });
+        const defaultId =
+          (candidata?.perfilDefaultId &&
+          ordenados.some((p) => p.id === candidata.perfilDefaultId)
+            ? candidata.perfilDefaultId
+            : null) ??
+          (config.perfilM1?.id &&
+          ordenados.some((p) => p.id === config.perfilM1?.id)
+            ? config.perfilM1.id
+            : null) ??
+          ordenados[0]?.id ??
+          null;
+        // Curaduría del modelador: sólo los niveles expuestos por producto
+        // (∪ el default, que no se puede des-exponer). Sin lista declarada,
+        // se exponen todos. Con UN nivel efectivo no hay decisión → sin
+        // selector, el motor usa el perfil default del paso.
+        const expuestosRaw = params.perfilesExpuestosComercial;
+        const expuestos = Array.isArray(expuestosRaw)
+          ? expuestosRaw.filter((v): v is string => typeof v === "string")
+          : null;
+        const opciones = expuestos
+          ? ordenados.filter(
+              (p) => p.id === defaultId || expuestos.includes(p.id),
+            )
+          : ordenados;
+        if (opciones.length < 2) return null;
+        return {
+          configPasoId: config.id,
+          nombreVisible: config.nombreVisible ?? null,
+          familiaCodigo: config.rutaPaso.familiaCodigo,
+          modoActivacion: config.modoActivacion ?? "OBLIGATORIO",
+          defaultId,
+          opciones: opciones.map((perfil) => ({
+            perfilId: perfil.id,
+            nombre: perfil.nombre ?? "Perfil",
+          })),
+        };
+      })
+      .filter((item): item is ComplejidadCorteComercial => item !== null) ?? []
+  );
 }
 
 function getActiveCandidateForConfig(
@@ -2523,8 +2735,13 @@ function medidasPersonalizadasIncompletas(
   const medidaPredefinida = getSelectedPredefinedMeasure(
     productoDetalle,
     config.medidaPredefinidaId,
+    resolverMedidasPredefinidas(productoDetalle, config),
   );
-  if (medidaPredefinida) return false;
+  if (medidaPredefinida) {
+    // Una plancha (pliego_util) SIN resolver tiene dims 0: cotizarla mandaría
+    // una pieza 0×0 al motor (el mismo OOM que este guard evita).
+    return !(medidaPredefinida.anchoMm > 0 && medidaPredefinida.altoMm > 0);
+  }
   if (config.piezas.length === 0) return true;
   return config.piezas.some(
     (pieza) => !(pieza.anchoMm > 0) || !(pieza.altoMm > 0),
@@ -2597,6 +2814,30 @@ function getSelectedLinearMaterialMetrics(
       margins,
     };
   }
+  // Fallback: corte sobre rollo (plotter de corte con sustrato propio, ej.
+  // vinilo). El slot de sustrato es HARDCODED — no lo elige el comercial, así
+  // que no entra por el loop de `slotsComercialElige` de arriba, y el paso no
+  // es `impresion_por_area`. El ancho de trabajo lo da el ROLLO cargado (el
+  // vinilo), no la boca de la máquina: se puede cargar un vinilo más angosto.
+  // El motor sintetiza la pieza = ancho útil × ml igual que en impresión.
+  for (const configPaso of rutaSel?.configPasos ?? []) {
+    if (configPaso.rutaPaso.familiaCodigo !== "plotter_corte") continue;
+    if (!includeConfig(configPaso)) continue;
+    const sustrato = getPliegoActivoDeImpresion(configPaso, config);
+    if (!sustrato || sustrato.anchoMm <= 0) continue;
+    const margins = getMachineMarginsMm(
+      getActiveMachineForConfig(configPaso, config),
+    );
+    const usableWidthMm = Math.max(
+      0,
+      sustrato.anchoMm - margins.leftMm - margins.rightMm,
+    );
+    return {
+      materialWidthMm: sustrato.anchoMm,
+      usableWidthMm: usableWidthMm > 0 ? usableWidthMm : sustrato.anchoMm,
+      margins,
+    };
+  }
   return null;
 }
 
@@ -2629,10 +2870,18 @@ function buildJobContext(
   slotsComercialElige: SlotComercialElige[],
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
 ) {
-  const medidaPredefinida = getSelectedPredefinedMeasure(
+  const medidaPredefinidaCruda = getSelectedPredefinedMeasure(
     productoDetalle,
     config.medidaPredefinidaId,
+    resolverMedidasPredefinidas(productoDetalle, config, includeConfig),
   );
+  // Plancha sin resolver (dims 0): no hay pieza válida que mandar al motor.
+  const medidaPredefinida =
+    medidaPredefinidaCruda &&
+    medidaPredefinidaCruda.anchoMm > 0 &&
+    medidaPredefinidaCruda.altoMm > 0
+      ? medidaPredefinidaCruda
+      : null;
   const cotizaConPiezas = usaPiezasParaCotizar(productoDetalle, config);
   const cotizaLinealDirecto =
     isMetroLinealConMedidasVariables(productoDetalle) &&
@@ -3203,8 +3452,14 @@ function buildPresentableSpecs(
   const medidaPredefinida = getSelectedPredefinedMeasure(
     productoDetalle,
     config.medidaPredefinidaId,
+    resolverMedidasPredefinidas(productoDetalle, config),
   );
-  if (medidaPredefinida && !usaMedidasPersonalizadas) {
+  if (
+    medidaPredefinida &&
+    medidaPredefinida.anchoMm > 0 &&
+    medidaPredefinida.altoMm > 0 &&
+    !usaMedidasPersonalizadas
+  ) {
     const medidas = formatMedidaPredefinidaSpec(medidaPredefinida);
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
@@ -4135,6 +4390,26 @@ function ApConfigStep({
   const nivelesPrincipales = nivelesComercialRuta.filter(
     (item) => item.modoActivacion !== "OPCIONAL",
   );
+  // Complejidad del corte (plotter): misma regla que los niveles — pasos que
+  // corren siempre van con los datos del producto; los opcionales, dentro de
+  // la card del opcional activado.
+  const complejidadCorteRuta = React.useMemo(
+    () =>
+      getComplejidadCorte(
+        rutaSel,
+        { seleccionMaquina: motorConfig.seleccionMaquina },
+        includeVisibleConfig,
+      ),
+    [rutaSel, motorConfig.seleccionMaquina, includeVisibleConfig],
+  );
+  const complejidadPorConfigPaso = React.useMemo(
+    () =>
+      new Map(complejidadCorteRuta.map((item) => [item.configPasoId, item])),
+    [complejidadCorteRuta],
+  );
+  const complejidadesPrincipales = complejidadCorteRuta.filter(
+    (item) => item.modoActivacion !== "OPCIONAL",
+  );
   // Catálogo de familias: hace falta el `paramsPasoSchema` para renderizar los
   // campos que el modelador abrió al comercial.
   const [familiasCatalogo, setFamiliasCatalogo] = React.useState<
@@ -4212,6 +4487,9 @@ function ApConfigStep({
           nivel: opcional.configPasoId
             ? (nivelesPorConfigPaso.get(opcional.configPasoId) ?? null)
             : null,
+          complejidad: opcional.configPasoId
+            ? (complejidadPorConfigPaso.get(opcional.configPasoId) ?? null)
+            : null,
         }))
         .filter(
           (item) =>
@@ -4223,10 +4501,12 @@ function ApConfigStep({
             (item.slots.length > 0 ||
               item.tiempoManual !== null ||
               item.paramsComercial !== null ||
-              item.nivel !== null),
+              item.nivel !== null ||
+              item.complejidad !== null),
         ),
     [
       adi,
+      complejidadPorConfigPaso,
       nivelesPorConfigPaso,
       opcionalesEfectivosSheet,
       opcionalesPasos,
@@ -4256,10 +4536,14 @@ function ApConfigStep({
   const necesitaInstalacion = getProductoNecesitaInstalacion(productoDetalle);
   const medidasPredefinidas = React.useMemo(
     () =>
-      modoMedidasUsaPredefinidas(productoDetalle?.modoMedidas)
-        ? getMedidasPredefinidas(productoDetalle)
+      productoDetalle && modoMedidasUsaPredefinidas(productoDetalle.modoMedidas)
+        ? resolverMedidasPredefinidas(
+            productoDetalle,
+            motorConfig,
+            includeVisibleConfig,
+          )
         : [],
-    [productoDetalle],
+    [productoDetalle, motorConfig, includeVisibleConfig],
   );
   const usaMedidaMixta = productoDetalle?.modoMedidas === "MIXTA";
   const usaMedidaPersonalizada =
@@ -4763,13 +5047,25 @@ function ApConfigStep({
 
   const renderMedidaCards = (
     selectedId: string,
-    medidas: Array<{ id: string; nombre: string; anchoMm: number; altoMm: number }>,
+    medidas: Array<{
+      id: string;
+      nombre: string;
+      anchoMm: number;
+      altoMm: number;
+      tipo?: MedidaPredefinidaProducto["tipo"];
+    }>,
     onSelect: (id: string) => void,
     allowCustom: boolean,
   ) => (
     <div className="ap-size-grid" role="radiogroup" aria-label="Medida">
       {medidas.map((medida) => {
-        const size = formatMedidasCm(medida.anchoMm, medida.altoMm);
+        const esPlancha = esMedidaPliegoUtil(medida);
+        const resuelta = medida.anchoMm > 0 && medida.altoMm > 0;
+        // Plancha sin resolver: falta máquina o papel en el paso de impresión.
+        // Se muestra deshabilitada en vez de esconderse (que se sepa que existe).
+        const size = resuelta
+          ? formatMedidasCm(medida.anchoMm, medida.altoMm)
+          : "se resuelve al elegir papel y máquina";
         const rawLabel = medidaLabel(medida);
         const isMmFallback = rawLabel.includes(" mm");
         const name = isMmFallback ? size : rawLabel;
@@ -4783,6 +5079,12 @@ function ApConfigStep({
             role="radio"
             aria-checked={selected}
             aria-label={`Medida: ${name}`}
+            disabled={esPlancha && !resuelta}
+            title={
+              esPlancha && resuelta
+                ? "Área útil del pliego: se recalcula si cambia el papel o la máquina"
+                : undefined
+            }
             onClick={() => onSelect(medida.id)}
           >
             <span className="ap-size-name">{name}</span>
@@ -5424,6 +5726,50 @@ function ApConfigStep({
       </div>
     );
   };
+  const renderComplejidadField = (
+    item: ComplejidadCorteComercial,
+    opts?: { sinTarjeta?: boolean },
+  ) => {
+    const nombrePaso =
+      item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo);
+    const value =
+      motorConfig.seleccionPerfil[item.configPasoId] || item.defaultId || "";
+    const control = renderChoiceCards(
+      "Complejidad del corte",
+      value,
+      item.opciones.map((opcion, indice) => ({
+        value: opcion.perfilId,
+        label: opcion.nombre,
+        desc: opcion.perfilId === item.defaultId ? "por defecto" : undefined,
+        glyph: complejidadCorteGlyph(indice, item.opciones.length),
+      })),
+      // Elegir el default = sin override (el motor resuelve solo); cualquier
+      // otro nivel viaja como perfilSeleccionado_<paso>.
+      (next) =>
+        setPerfil(item.configPasoId, next === item.defaultId ? "" : next),
+      { columns: item.opciones.length <= 2 ? 2 : 3, layout: "row" },
+    );
+    if (opts?.sinTarjeta) {
+      return (
+        <div key={`complejidad-${item.configPasoId}`}>
+          <span className={seC.sub} title={nombrePaso}>
+            Complejidad del corte
+          </span>
+          {control}
+        </div>
+      );
+    }
+    return (
+      <div className={seC.card} key={`complejidad-${item.configPasoId}`}>
+        <div className={seC.gh} title={nombrePaso}>
+          {complejidadesPrincipales.length === 1
+            ? "Complejidad del corte"
+            : `${nombrePaso} · complejidad`}
+        </div>
+        <div className={seC.body}>{control}</div>
+      </div>
+    );
+  };
   // El bloque de copias (tipo de copia + hojas por talonario) se muestra si el
   // producto es de subcategoría "talonarios" O si su ruta realmente usa
   // `tipoCopia` (algún talonario está en otra subcategoría, ej. papelería).
@@ -5585,6 +5931,90 @@ function ApConfigStep({
     qty,
     cotizacionExitosa,
   );
+  // "¿Cuántos entran por plancha?" — la pregunta del mostrador, respondida
+  // con la imposición que la cotización ya calculó (cero cálculo nuevo). Sólo
+  // cuando entran varias por pliego; con la medida "Plancha completa" elegida
+  // el dato es trivial (entra 1) y no se muestra. Si el producto tiene una
+  // plancha con nombre propio, la frase usa ese nombre.
+  const entranPorPliego = React.useMemo(() => {
+    if (!cotizacionExitosa) return null;
+    const medidaSel =
+      usaMedidaMixta && motorConfig.piezas.length > 0
+        ? null
+        : getSelectedPredefinedMeasure(
+            productoDetalle,
+            motorConfig.medidaPredefinidaId,
+            medidasPredefinidas,
+          );
+    if (medidaSel && esMedidaPliegoUtil(medidaSel)) return null;
+    const paso = cotizacionExitosa.pasos.find(
+      (item) => item.familiaCodigo === "impresion_por_hoja" && item.activado,
+    );
+    const imposicion = getRecord(
+      getRecord(paso?.outputsCanonicos).imposicion_calculada,
+    );
+    const porPliego = getNumberFromUnknown(imposicion.piezasPorPliego) ?? 0;
+    const pliegos = getNumberFromUnknown(imposicion.pliegosNecesarios) ?? 0;
+    if (porPliego < 2 || pliegos <= 0) return null;
+    const plancha = medidasPredefinidas.find((medida) =>
+      esMedidaPliegoUtil(medida),
+    );
+    // El nombre de la plancha va tal cual lo escribió la empresa ("Plancha
+    // SRA3"): bajarlo a minúsculas rompería siglas como SRA3.
+    const nombrePlancha = plancha ? medidaLabel(plancha) : "pliego";
+    return `Entran ${porPliego} por ${nombrePlancha} · este pedido usa ${pliegos}`;
+  }, [
+    cotizacionExitosa,
+    medidasPredefinidas,
+    motorConfig.medidaPredefinidaId,
+    motorConfig.piezas.length,
+    productoDetalle,
+    usaMedidaMixta,
+  ]);
+  // Transparencia del rollo (DTF/vinilo por metro): el comercial cotiza sobre
+  // un ancho útil fijo (anchoUtil de la máquina − márgenes) que hoy no ve.
+  // Gemelo del "Entran N por plancha", pero para rollo: ancho útil, consumo en
+  // ml y cuántas piezas entran a lo ancho. Cero cálculo nuevo — todo sale de
+  // getSelectedLinearMaterialMetrics y de la cotización viva.
+  const infoRolloLineal = React.useMemo(() => {
+    if (!metroLinealConMedidasVariables) return null;
+    const metrics = getSelectedLinearMaterialMetrics(
+      productoDetalle,
+      slotsComercialElige,
+      motorConfig,
+      includeVisibleConfig,
+    );
+    const anchoUtilCm =
+      metrics?.usableWidthMm && metrics.usableWidthMm > 0
+        ? metrics.usableWidthMm / 10
+        : null;
+    const paso = cotizacionExitosa?.pasos.find(
+      (item) => item.familiaCodigo === "impresion_por_area" && item.activado,
+    );
+    const nd = paso?.nestingResult;
+    const consumoMm = getNumberFromUnknown(nd?.consumedLengthMm);
+    const consumoMl = consumoMm && consumoMm > 0 ? consumoMm / 1000 : null;
+    // "Entran a lo ancho" = la franja horizontal más poblada del layout
+    // (agrupa placements por su Y). Robusto a maxrects, que no arma grilla.
+    const placements = Array.isArray(nd?.placements) ? nd.placements : [];
+    let entranAncho = 0;
+    if (placements.length > 0) {
+      const porFila = new Map<number, number>();
+      for (const p of placements) {
+        const fila = Math.round(getNumberFromUnknown(p.yMm) ?? 0);
+        porFila.set(fila, (porFila.get(fila) ?? 0) + 1);
+      }
+      entranAncho = Math.max(...porFila.values());
+    }
+    return { anchoUtilCm, consumoMl, entranAncho };
+  }, [
+    cotizacionExitosa,
+    includeVisibleConfig,
+    metroLinealConMedidasVariables,
+    motorConfig,
+    productoDetalle,
+    slotsComercialElige,
+  ]);
 
   const renderCantidadCard = () => (
     <div className={seC.card}>
@@ -5658,7 +6088,13 @@ function ApConfigStep({
     );
   };
 
-  const renderPiezasEditor = (options?: { hideCantidad?: boolean }) => {
+  const renderPiezasEditor = (options?: {
+    hideCantidad?: boolean;
+    /** Título de la card. En medida MIXTA la card de arriba ya se llama
+     *  "Medida" (la elección): este editor pasa a llamarse "A medida" para
+     *  no repetir el mismo título dos veces (feedback del usuario). */
+    titulo?: string;
+  }) => {
     const mostrarProf = profundidadInline;
     // Override del grid (sin tocar globals ni sumar clases): suma "× [prof]".
     const gridConProf = options?.hideCantidad
@@ -5695,7 +6131,7 @@ function ApConfigStep({
     ) : null;
     return (
     <div className={seC.card}>
-      <div className={seC.gh}>Medida</div>
+      <div className={seC.gh}>{options?.titulo ?? "Medida"}</div>
       <div className={seC.body}>
       <div className="ap-piezas">
         <div
@@ -6066,8 +6502,8 @@ function ApConfigStep({
                       "Modo de cotización lineal",
                       motorConfig.modoCotizacionLineal,
                       [
-                        { value: "nesting", label: "Calcular por piezas" },
                         { value: "directo", label: "Ingresar ml" },
+                        { value: "nesting", label: "Calcular por piezas" },
                       ],
                       (value) =>
                         setModoCotizacionLineal(value as ModoCotizacionLineal),
@@ -6075,7 +6511,30 @@ function ApConfigStep({
                   </div>
                 </div>
                 {mostrarEditorPiezas ? (
-                  renderPiezasEditor()
+                  <>
+                    {renderPiezasEditor()}
+                    {infoRolloLineal?.consumoMl ? (
+                      <div className="ap-minimum-alert">
+                        <Grid2X2Icon />
+                        <span>
+                          Consume{" "}
+                          {infoRolloLineal.consumoMl.toLocaleString("es-AR", {
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          ml de rollo
+                          {infoRolloLineal.entranAncho >= 2
+                            ? ` · entran ${infoRolloLineal.entranAncho} a lo ancho`
+                            : ""}
+                          {infoRolloLineal.anchoUtilCm
+                            ? ` · ${infoRolloLineal.anchoUtilCm.toLocaleString(
+                                "es-AR",
+                                { maximumFractionDigits: 1 },
+                              )} cm útil`
+                            : ""}
+                        </span>
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <>
                     {slotsMaterialesLinealDirecto.map((slot) =>
@@ -6085,6 +6544,18 @@ function ApConfigStep({
                       <label>Largo a cotizar</label>
                       {renderQuantityControl()}
                     </div>
+                    {infoRolloLineal?.anchoUtilCm ? (
+                      <div className="ap-minimum-alert">
+                        <Grid2X2Icon />
+                        <span>
+                          Rollo de{" "}
+                          {infoRolloLineal.anchoUtilCm.toLocaleString("es-AR", {
+                            maximumFractionDigits: 1,
+                          })}{" "}
+                          cm útil
+                        </span>
+                      </div>
+                    ) : null}
                   </>
                 )}
               </>
@@ -6105,6 +6576,7 @@ function ApConfigStep({
                         : getSelectedPredefinedMeasure(
                             productoDetalle,
                             motorConfig.medidaPredefinidaId,
+                            medidasPredefinidas,
                           )?.id ?? "",
                       medidasPredefinidas,
                       (value) => {
@@ -6126,9 +6598,20 @@ function ApConfigStep({
                   </div>
                 ) : null}
               {usaMedidaMixta && motorConfig.piezas.length > 0
-                ? renderPiezasEditor({ hideCantidad: piezasUsanCantidadComercial })
+                ? renderPiezasEditor({
+                    hideCantidad: piezasUsanCantidadComercial,
+                    titulo: "A medida",
+                  })
                 : null}
               {renderCantidadCard()}
+              {entranPorPliego ? (
+                // Sin modificador is-warning/is-blocked: banda neutra
+                // informativa, misma anatomía que el aviso del mínimo.
+                <div className="ap-minimum-alert">
+                  <Grid2X2Icon />
+                  <span>{entranPorPliego}</span>
+                </div>
+              ) : null}
               {minimoComercialStatus ? (
                 <div
                   className={`ap-minimum-alert ${
@@ -6691,6 +7174,10 @@ function ApConfigStep({
               );
             })}
 
+            {complejidadesPrincipales.map((item) =>
+              renderComplejidadField(item),
+            )}
+
             {nivelesPrincipales.map((item) => renderNivelField(item))}
 
             {tiemposManualesPrincipales.map((tiempoPaso) =>
@@ -6843,7 +7330,14 @@ function ApConfigStep({
             </div>
             <div className="ap-optional-config-grid">
               {opcionalesConfigurables.map(
-                ({ opcional, slots, tiempoManual, paramsComercial, nivel }) => {
+                ({
+                  opcional,
+                  slots,
+                  tiempoManual,
+                  paramsComercial,
+                  nivel,
+                  complejidad,
+                }) => {
                   const arrastrado = opcional.configPasoId
                     ? arrastradosSheet.has(opcional.configPasoId)
                     : false;
@@ -6881,6 +7375,11 @@ function ApConfigStep({
                     <div className={`${seC.body} ap-optional-config-fields`}>
                       {nivel
                         ? renderNivelField(nivel, { sinTarjeta: true })
+                        : null}
+                      {complejidad
+                        ? renderComplejidadField(complejidad, {
+                            sinTarjeta: true,
+                          })
                         : null}
                       {slots.length > 0 ? (
                         <div className={matS.list}>

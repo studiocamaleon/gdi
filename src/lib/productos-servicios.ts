@@ -31,9 +31,17 @@ export type MinimoComercialBase =
 export interface MedidaPredefinidaProducto {
   id: string;
   nombre: string;
+  /** Para tipo "pliego_util" es 0 hasta que el sheet la resuelve en runtime. */
   anchoMm: number;
   altoMm: number;
   esDefault: boolean;
+  /**
+   * Origen del valor. Ausente/"fija" = la pieza la declara el modelador.
+   * "pliego_util" = la pieza se DERIVA del pliego del paso de impresión
+   * (variante activa del papel − márgenes de la máquina activa): "la pieza ES
+   * la plancha". Ver docs/medida-plancha-area-util-diseno.md.
+   */
+  tipo?: "fija" | "pliego_util";
 }
 
 export interface AtributoComercialSchema {
@@ -176,6 +184,8 @@ export interface ConfigPasoDetalle {
       nombre?: string;
       activo?: boolean;
       tipoPerfil?: string | null;
+      /** Ordena los niveles de complejidad del corte (más m²/h = más fácil). */
+      productivityValue?: number | string | null;
       detalleJson?: Record<string, unknown> | null;
     }>;
     centroCostoPrincipalId?: string | null;

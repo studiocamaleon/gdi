@@ -90,8 +90,10 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   }),
 
   // ─── §6 IMPRESORA_GRAN_FORMATO_POR_AREA ─────────────────────────
-  // Compatibilidad: numeroPasadas, modoCalidad y modoOperacion se toleran
-  // en datos viejos, pero el modo funcional sale de colores/tipoCorte.
+  // Compatibilidad: numeroPasadas, modoCalidad y tipoCorte se toleran en datos
+  // viejos, pero el modo funcional sale de colores (impresión) / modoOperacion
+  // (corte integrado). `tipoCorte` era un discriminante inerte — el motor nunca
+  // lo leyó — retirado 2026-08-15; se conserva como clave tolerada.
   [PlantillaMaquinariaDto.impresora_gran_formato_por_area]: buildRule({
     detalleKeys: [
       'numeroPasadas',
@@ -102,7 +104,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
       'factorComplejidad',
     ],
     requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
-    modeSourceKeys: ['colores', 'tipoCorte'],
+    modeSourceKeys: ['colores', 'modoOperacion'],
     allowedProfileTypes: [
       TipoPerfilOperativoMaquinaDto.impresion,
       TipoPerfilOperativoMaquinaDto.corte,
@@ -126,17 +128,19 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   }),
 
   // ─── §8 PLOTTER_DE_CORTE ────────────────────────────────────────
-  // Discriminantes (detalle): tipoCorte (COMPLETO|KISS_CUT), modoOperacion (ROLLO|HOJAS).
-  // paramsPerfilJson (detalle): factorComplejidad simple|intermedio|complejo|personalizado.
+  // El perfil se discrimina por NIVEL DE COMPLEJIDAD (un perfil por nivel, con
+  // su ritmo m²/h). El formato rollo vs hoja lo dice el material cargado (su
+  // subfamilia), no el perfil. `tipoCorte`, `modoOperacion` y `factorComplejidad`
+  // ya no se usan — retirados de la UI 2026-08-15; se conservan como claves
+  // toleradas para no rechazar perfiles viejos. Sin modeSourceKeys: la
+  // complejidad no es un "modo", la elige el comercial al cotizar (Fase 2).
   [PlantillaMaquinariaDto.plotter_de_corte]: buildRule({
     detalleKeys: ['tipoCorte', 'modoOperacion', 'factorComplejidad'],
     requiredFieldKeys: [
       'nombre',
       'productivityValue',
       'productivityUnit',
-      'tipoCorte',
     ],
-    modeSourceKeys: ['tipoCorte', 'modoOperacion'],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
 
@@ -322,16 +326,6 @@ export function validatePerfilOperativoByTemplate(
         `El perfil operativo ${perfilName} debe completar el campo ${requiredKey} para la plantilla ${plantilla}.`,
       );
     }
-  }
-
-  if (
-    plantilla === PlantillaMaquinariaDto.impresora_gran_formato_por_area &&
-    perfil.tipoPerfil === TipoPerfilOperativoMaquinaDto.corte &&
-    !hasValue(getPerfilFieldValue(perfil, 'tipoCorte'))
-  ) {
-    throw new Error(
-      `El perfil operativo ${perfilName} debe completar el campo tipoCorte para usar corte integrado.`,
-    );
   }
 
   if (rule.modeSourceKeys.size > 0) {

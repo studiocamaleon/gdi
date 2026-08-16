@@ -11,9 +11,23 @@ function numberFromMaybe(value: unknown) {
   return Number.isFinite(numberValue) ? numberValue : 0;
 }
 
-export function medidaLabel(medida: Pick<MedidaPredefinidaProducto, "nombre" | "anchoMm" | "altoMm">) {
-  const fallback = `${medida.anchoMm} x ${medida.altoMm} mm`;
+export function medidaLabel(
+  medida: Pick<MedidaPredefinidaProducto, "nombre" | "anchoMm" | "altoMm"> & {
+    tipo?: MedidaPredefinidaProducto["tipo"];
+  },
+) {
+  const fallback =
+    medida.tipo === "pliego_util"
+      ? "Plancha completa"
+      : `${medida.anchoMm} x ${medida.altoMm} mm`;
   return medida.nombre?.trim() || fallback;
+}
+
+/** La plancha no declara dims: se resuelve en runtime (pliego − márgenes). */
+export function esMedidaPliegoUtil(
+  medida: Pick<MedidaPredefinidaProducto, "tipo">,
+): boolean {
+  return medida.tipo === "pliego_util";
 }
 
 export function getMedidasPredefinidas(
@@ -26,12 +40,23 @@ export function getMedidasPredefinidas(
     const medidas = producto.medidasPredefinidasJson
       .map((medida, index) => ({
         id: medida.id || `medida-${index + 1}`,
-        nombre: medida.nombre || `${medida.anchoMm} x ${medida.altoMm} mm`,
+        nombre:
+          medida.nombre ||
+          (medida.tipo === "pliego_util"
+            ? "Plancha completa"
+            : `${medida.anchoMm} x ${medida.altoMm} mm`),
         anchoMm: numberFromMaybe(medida.anchoMm),
         altoMm: numberFromMaybe(medida.altoMm),
         esDefault: medida.esDefault === true,
+        ...(medida.tipo === "pliego_util" ? { tipo: "pliego_util" as const } : {}),
       }))
-      .filter((medida) => medida.anchoMm > 0 && medida.altoMm > 0);
+      // La plancha (pliego_util) pasa sin dims: las resuelve el sheet en
+      // runtime. Las fijas sin dims siguen siendo inválidas.
+      .filter(
+        (medida) =>
+          medida.tipo === "pliego_util" ||
+          (medida.anchoMm > 0 && medida.altoMm > 0),
+      );
     if (medidas.some((medida) => medida.esDefault)) return medidas;
     return medidas.map((medida, index) => ({ ...medida, esDefault: index === 0 }));
   }
@@ -59,12 +84,22 @@ export function normalizeMedidasDraft(medidas: MedidaDraft[]) {
   const validas = medidas
     .map((medida, index) => ({
       id: medida.id || `medida-${index + 1}`,
-      nombre: medida.nombre?.trim() || `${medida.anchoMm} x ${medida.altoMm} mm`,
+      nombre:
+        medida.nombre?.trim() ||
+        (medida.tipo === "pliego_util"
+          ? "Plancha completa"
+          : `${medida.anchoMm} x ${medida.altoMm} mm`),
       anchoMm: numberFromMaybe(medida.anchoMm),
       altoMm: numberFromMaybe(medida.altoMm),
       esDefault: medida.esDefault === true,
+      ...(medida.tipo === "pliego_util" ? { tipo: "pliego_util" as const } : {}),
     }))
-    .filter((medida) => medida.anchoMm > 0 && medida.altoMm > 0);
+    // La plancha se guarda sin dims (0×0): las resuelve el sheet al cotizar.
+    .filter(
+      (medida) =>
+        medida.tipo === "pliego_util" ||
+        (medida.anchoMm > 0 && medida.altoMm > 0),
+    );
 
   if (validas.length === 0) return [];
   const defaultIndex = validas.findIndex((medida) => medida.esDefault);

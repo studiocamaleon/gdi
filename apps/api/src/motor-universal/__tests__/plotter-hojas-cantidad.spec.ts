@@ -6,15 +6,62 @@ function createServiceForPrivateMethods() {
   };
 }
 
+// El modo (rollo vs hoja) lo dice el MATERIAL cargado, no el perfil: una
+// subfamilia que no es de rollo hace que el corte corra "sobre hojas".
+const materialHoja = { subfamilia: 'SUSTRATO_HOJA' };
+
 describe('MotorUniversalService — cantidad para plotter sobre hojas', () => {
   it('usa m2 del pliego impreso, no m2 de la pieza final', () => {
     const service = createServiceForPrivateMethods();
     const paso = {
       familiaCodigo: 'plotter_corte',
       mecanismoCantidad: 'CALCULADO_POR_PASO',
-      perfil: {
-        detalleJson: { modoOperacion: 'HOJAS' },
+    };
+
+    const cantidad = service.resolverCantidad(
+      paso,
+      {
+        cantidad: 100,
+        piezas: [{ cantidad: 100, anchoMm: 30, altoMm: 30 }],
+        pliegos_impresos: 64,
+        pliego_impresion_ancho_mm: 210,
+        pliego_impresion_alto_mm: 297,
       },
+      null,
+      materialHoja,
+    );
+
+    expect(cantidad).toBeCloseTo((64 * 210 * 297) / 1_000_000, 6);
+    expect(cantidad).toBeGreaterThan((100 * 30 * 30) / 1_000_000);
+  });
+
+  it('mantiene el fallback por m2 de piezas si no hay pliego publicado', () => {
+    const service = createServiceForPrivateMethods();
+    const paso = {
+      familiaCodigo: 'plotter_corte',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+    };
+
+    const cantidad = service.resolverCantidad(
+      paso,
+      {
+        cantidad: 100,
+        piezas: [{ cantidad: 100, anchoMm: 30, altoMm: 30 }],
+      },
+      null,
+      materialHoja,
+    );
+
+    expect(cantidad).toBeCloseTo((100 * 30 * 30) / 1_000_000, 6);
+  });
+
+  it('heredado sin material: si la cadena imprimió pliegos, mide los pliegos', () => {
+    // El plotter troquela los pliegos que salieron de la impresión por hoja:
+    // se montan enteros en la máquina, la medida del trabajo es el pliego.
+    const service = createServiceForPrivateMethods();
+    const paso = {
+      familiaCodigo: 'plotter_corte',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
     };
 
     const cantidad = service.resolverCantidad(
@@ -31,17 +78,13 @@ describe('MotorUniversalService — cantidad para plotter sobre hojas', () => {
     );
 
     expect(cantidad).toBeCloseTo((64 * 210 * 297) / 1_000_000, 6);
-    expect(cantidad).toBeGreaterThan((100 * 30 * 30) / 1_000_000);
   });
 
-  it('mantiene el fallback por m2 de piezas si no hay pliego publicado', () => {
+  it('heredado sin material NI pliegos (cadena de rollo) usa m2 de piezas', () => {
     const service = createServiceForPrivateMethods();
     const paso = {
       familiaCodigo: 'plotter_corte',
       mecanismoCantidad: 'CALCULADO_POR_PASO',
-      perfil: {
-        detalleJson: { modoOperacion: 'HOJAS' },
-      },
     };
 
     const cantidad = service.resolverCantidad(

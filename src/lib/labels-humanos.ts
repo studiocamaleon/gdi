@@ -424,19 +424,6 @@ export const modoCalidadLabels: DiccionarioLabels = {
   },
 };
 
-/** Tipo de corte para plotters de corte. */
-export const tipoCorteLabels: DiccionarioLabels = {
-  COMPLETO: {
-    label: "Corte completo (atraviesa todo)",
-    descripcion: "La cuchilla atraviesa el vinilo + el liner. Las piezas quedan separadas.",
-  },
-  KISS_CUT: {
-    label: "Kiss cut (solo vinilo)",
-    descripcion:
-      "La cuchilla corta solo el vinilo, no el liner. Piezas se transfieren con cinta.",
-  },
-};
-
 /** Modo de operación del plotter (rollo vs hojas). */
 export const modoOperacionPlotterLabels: DiccionarioLabels = {
   ROLLO: { label: "Rollo continuo", descripcion: "Carga material desde rollo." },

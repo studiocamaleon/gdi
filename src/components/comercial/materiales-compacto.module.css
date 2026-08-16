@@ -37,10 +37,14 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  /* Barra negra con texto blanco (invierte en tema oscuro): separa fuerte el
-   * encabezado del material del resto. */
-  color: var(--c-surface);
-  background: var(--c-ink);
+  /* Mismo encabezado papel-cálido que las secciones del sheet
+   * (cotizador-seccion.module.css): tinte del naranja de marca a la derecha,
+   * aclara a la izquierda, texto gris oscuro. */
+  color: var(--ink-2, #2c2c33);
+  background:
+    linear-gradient(90deg, transparent 34%, rgba(255, 106, 43, 0.13) 100%),
+    linear-gradient(180deg, #fbfaf8, #f4f2ee);
+  border-bottom: 1px solid var(--hairline, #efece8);
   padding: 7px 12px;
 }
 

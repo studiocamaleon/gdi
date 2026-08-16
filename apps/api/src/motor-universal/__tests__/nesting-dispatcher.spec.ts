@@ -151,7 +151,7 @@ function buildPasoImpresionPorHoja(plantilla = 'IMPRESORA_LASER') {
   };
 }
 
-function buildPasoPlotterCorte(modoOperacion: 'ROLLO' | 'HOJAS') {
+function buildPasoPlotterCorte() {
   return {
     rutaPasoId: 'rp-plotter',
     rutaPasoOrden: 1,
@@ -188,13 +188,13 @@ function buildPasoPlotterCorte(modoOperacion: 'ROLLO' | 'HOJAS') {
     },
     perfil: {
       id: 'perfil-plotter',
-      nombre: modoOperacion === 'HOJAS' ? 'Hoja' : 'Rollo',
+      nombre: 'Corte',
       tipoPerfil: 'corte',
       productivityValue: 36,
       productivityUnit: 'm2_h',
       setupMin: 0,
       cleanupMin: 0,
-      detalleJson: { modoOperacion },
+      detalleJson: {},
     },
   };
 }
@@ -449,15 +449,16 @@ describe('runNestingForPaso centrado visual de placements', () => {
 });
 
 describe('runNestingForPaso plotter de corte', () => {
-  it('no genera nesting cuando el perfil operativo trabaja sobre hojas', async () => {
+  it('no genera nesting cuando el material cargado es hoja/placa', async () => {
     const result = await runNestingForPaso(
-      buildPasoPlotterCorte('HOJAS') as never,
+      buildPasoPlotterCorte() as never,
       {
         cantidad: 100,
         piezas: [{ cantidad: 100, anchoMm: 30, altoMm: 30 }],
       },
       {
         id: 'papel-a4',
+        subfamilia: 'SUSTRATO_HOJA',
         atributosVarianteJson: { anchoMm: 210, altoMm: 297 },
       },
     );
@@ -465,15 +466,16 @@ describe('runNestingForPaso plotter de corte', () => {
     expect(result).toBeNull();
   });
 
-  it('mantiene nesting de rollo cuando el perfil operativo trabaja sobre rollo', async () => {
+  it('mantiene nesting de rollo cuando el material cargado es rollo', async () => {
     const result = await runNestingForPaso(
-      buildPasoPlotterCorte('ROLLO') as never,
+      buildPasoPlotterCorte() as never,
       {
         cantidad: 100,
         piezas: [{ cantidad: 100, anchoMm: 30, altoMm: 30 }],
       },
       {
         id: 'vinilo-61',
+        subfamilia: 'VINILO_CORTE',
         atributosVarianteJson: { anchoMm: 610 },
       },
     );
@@ -481,6 +483,22 @@ describe('runNestingForPaso plotter de corte', () => {
     expect(result).not.toBeNull();
     expect(['shelf-rollo', 'maxrects-rollo']).toContain(result!.algorithm);
     expect(result!.unidad).toBe('m_lineales');
+  });
+
+  it('heredado de una cadena de pliegos: no nestea (los pliegos van enteros)', async () => {
+    const result = await runNestingForPaso(
+      buildPasoPlotterCorte() as never,
+      {
+        cantidad: 100,
+        piezas: [{ cantidad: 100, anchoMm: 30, altoMm: 30 }],
+        pliegos_impresos: 4,
+        pliego_impresion_ancho_mm: 325,
+        pliego_impresion_alto_mm: 500,
+      } as never,
+      null,
+    );
+
+    expect(result).toBeNull();
   });
 });
 

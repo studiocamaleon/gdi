@@ -115,6 +115,11 @@ export const bibliotecaFamilias: Record<
     key: "sustrato_rollo_flexible",
     parent: "sustrato",
   },
+  vinilo_corte: {
+    nm: "Vinilo de corte",
+    key: "vinilo_corte",
+    parent: "sustrato",
+  },
   objeto_promocional_base: {
     nm: "Objetos promocionales",
     key: "objeto_promocional_base",

@@ -973,11 +973,11 @@ const presets = [
     advertencias: [
       'El color se define en la ficha/variante real luego de instalar el material.',
     ],
-    ...rollPresetMeta('vinilo_de_corte_color'),
+    ...viniloCortePresetMeta(),
     variantes: rollVariants('VIN-CORTE', [0.3, 0.61, 0.76, 1.22, 1.52], {
       largo: 50,
-      acabado: 'Color',
-      color: 'Color surtido',
+      acabado: 'Brillo',
+      color: 'Color',
       recomendadas: new Set([0.61, 1.22]),
     }),
   },
@@ -2974,6 +2974,17 @@ function rollPresetMeta(tipoTecnico) {
     subfamilia: SubfamiliaMateriaPrima.SUSTRATO_ROLLO_FLEXIBLE,
     tipoTecnico,
     templateId: 'sustrato_rollo_flexible_v1',
+  };
+}
+
+// El vinilo de corte es su propia subfamilia (VINILO_CORTE), distinta del rollo
+// flexible de impresión, para que el plotter de corte filtre sólo a él.
+function viniloCortePresetMeta() {
+  return {
+    familia: FamiliaMateriaPrima.SUSTRATO,
+    subfamilia: SubfamiliaMateriaPrima.VINILO_CORTE,
+    tipoTecnico: 'vinilo_de_corte_rollo',
+    templateId: 'vinilo_de_corte_rollo_v1',
   };
 }
 

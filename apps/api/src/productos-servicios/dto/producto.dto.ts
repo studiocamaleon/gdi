@@ -42,6 +42,9 @@ export interface MedidaPredefinidaDto {
   anchoMm?: number;
   altoMm?: number;
   esDefault?: boolean;
+  /** "pliego_util" = plancha completa: la pieza se deriva del pliego del paso
+   *  de impresión en el sheet (área útil). Ausente = medida fija. */
+  tipo?: "fija" | "pliego_util";
 }
 
 export class CrearProductoDto {

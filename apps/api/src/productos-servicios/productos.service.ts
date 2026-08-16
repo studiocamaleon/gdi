@@ -21,6 +21,8 @@ type MedidaPredefinidaNormalizada = {
   anchoMm: number;
   altoMm: number;
   esDefault: boolean;
+  /** "pliego_util" = plancha completa (pieza derivada del pliego al cotizar). */
+  tipo?: 'pliego_util';
 };
 
 @Injectable()
@@ -730,14 +732,18 @@ export class ProductosService {
     }
 
     const medidas = fuente.map((medida, index) => {
-      const anchoMm = Number(medida.anchoMm);
-      const altoMm = Number(medida.altoMm);
-      if (!Number.isFinite(anchoMm) || anchoMm <= 0) {
+      // "Plancha completa" (pliego_util): la pieza se deriva del pliego del
+      // paso de impresión al cotizar — no declara dims propias (0×0 acá).
+      // Ver docs/medida-plancha-area-util-diseno.md.
+      const esPliegoUtil = medida.tipo === 'pliego_util';
+      const anchoMm = esPliegoUtil ? 0 : Number(medida.anchoMm);
+      const altoMm = esPliegoUtil ? 0 : Number(medida.altoMm);
+      if (!esPliegoUtil && (!Number.isFinite(anchoMm) || anchoMm <= 0)) {
         throw new BadRequestException(
           'Cada medida debe tener ancho mayor a 0.',
         );
       }
-      if (!Number.isFinite(altoMm) || altoMm <= 0) {
+      if (!esPliegoUtil && (!Number.isFinite(altoMm) || altoMm <= 0)) {
         throw new BadRequestException('Cada medida debe tener alto mayor a 0.');
       }
       return {
@@ -748,10 +754,13 @@ export class ProductosService {
         nombre:
           typeof medida.nombre === 'string' && medida.nombre.trim()
             ? medida.nombre.trim()
-            : `${anchoMm} x ${altoMm} mm`,
+            : esPliegoUtil
+              ? 'Plancha completa'
+              : `${anchoMm} x ${altoMm} mm`,
         anchoMm,
         altoMm,
         esDefault: medida.esDefault === true,
+        ...(esPliegoUtil ? { tipo: 'pliego_util' as const } : {}),
       };
     });
 
@@ -824,6 +833,9 @@ export class ProductosService {
                         nombre: true,
                         activo: true,
                         tipoPerfil: true,
+                        // Ordena los niveles de complejidad del corte en el
+                        // sheet (más m²/h = corte más fácil).
+                        productivityValue: true,
                         detalleJson: true,
                       },
                     },
@@ -964,6 +976,8 @@ export class ProductosService {
                             nombre: true,
                             activo: true,
                             tipoPerfil: true,
+                            // Ídem maquinaM1: niveles de complejidad del corte.
+                            productivityValue: true,
                             detalleJson: true,
                           },
                         },

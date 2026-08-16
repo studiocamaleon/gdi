@@ -154,6 +154,7 @@ export type FamiliaMateriaPrimaCompat =
 export type SubfamiliaMateriaPrimaCompat =
   | 'SUSTRATO_HOJA'
   | 'SUSTRATO_ROLLO_FLEXIBLE'
+  | 'VINILO_CORTE'
   | 'SUSTRATO_RIGIDO'
   | 'OBJETO_PROMOCIONAL_BASE'
   | 'TINTA_IMPRESION'

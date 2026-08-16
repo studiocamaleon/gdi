@@ -626,6 +626,39 @@ function maquinaElegida(ctx: ContextoOpcion) {
   return ctx.lookups.maquinas.find((m) => m.id === ctx.cfg.maquinaM1Id);
 }
 
+/** Perfiles de corte de la máquina del paso, ordenados fácil → complejo
+ *  (más m²/h primero) — el mismo orden que usa el sheet. */
+function perfilesCorteDeMaquina(ctx: ContextoOpcion) {
+  const perfiles = (maquinaElegida(ctx)?.perfilesOperativos ?? []).filter(
+    (p) => ["corte", "mixto"].includes((p.tipoPerfil ?? "").toLowerCase()),
+  );
+  return [...perfiles].sort((a, b) => {
+    const pa = Number(a.productivityValue ?? NaN);
+    const pb = Number(b.productivityValue ?? NaN);
+    if (Number.isFinite(pa) && Number.isFinite(pb)) return pb - pa;
+    if (Number.isFinite(pa)) return -1;
+    if (Number.isFinite(pb)) return 1;
+    return 0;
+  });
+}
+
+/** Niveles de complejidad expuestos al comercial: la curaduría del modelador
+ *  (`params.perfilesExpuestosComercial`) ∪ el perfil default del paso. Sin
+ *  curaduría declarada, se exponen todos. */
+function perfilesCorteExpuestos(ctx: ContextoOpcion) {
+  const perfiles = perfilesCorteDeMaquina(ctx);
+  const params = ctx.cfg.paramsPasoJson as Record<string, unknown> | null;
+  const lista = Array.isArray(params?.perfilesExpuestosComercial)
+    ? (params.perfilesExpuestosComercial as unknown[]).filter(
+        (v): v is string => typeof v === "string",
+      )
+    : null;
+  if (!lista) return perfiles;
+  return perfiles.filter(
+    (p) => p.id === ctx.cfg.perfilM1Id || lista.includes(p.id),
+  );
+}
+
 /** El paso imprime con láser (tóner) → aplica la cobertura por nivel. */
 function pasoUsaLaser(ctx: ContextoOpcion): boolean {
   const ids =
@@ -1823,6 +1856,70 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     control: { tipo: "componente", id: "perfil-m1" },
   },
   {
+    // El plotter de corte declara UN PERFIL por nivel de complejidad (fácil,
+    // complejo). El modelador cura POR PRODUCTO qué niveles puede elegir el
+    // comercial al cotizar (mismo principio que los modos de color
+    // permitidos). Un solo nivel expuesto = decisión fija: el selector no
+    // aparece en el sheet y el paso cotiza con el perfil de arriba. El perfil
+    // default del paso siempre queda expuesto (no se puede des-exponer).
+    clave: "maquina.complejidad",
+    eje: "maquina",
+    grupo: "cual",
+    etiqueta: "Complejidad del corte",
+    seccion: "maquina",
+    pregunta: "¿Entre qué niveles de complejidad elige el comercial?",
+    ayuda:
+      "La máquina tiene un perfil por nivel de complejidad: los cortes simples rinden más m²/hora que los intrincados. Los niveles prendidos se le ofrecen al vendedor al cotizar, con el perfil de arriba como valor por defecto. Si dejás uno solo, no se le pregunta nada: todos los trabajos usan ese perfil.",
+    visible: (ctx) => {
+      if (ctx.familia?.codigo !== "plotter_corte") return false;
+      if (!ctx.cfg.maquinaM1Id) return false;
+      const perfilesCorte = (
+        maquinaElegida(ctx)?.perfilesOperativos ?? []
+      ).filter((p) =>
+        ["corte", "mixto"].includes((p.tipoPerfil ?? "").toLowerCase()),
+      );
+      return perfilesCorte.length >= 2;
+    },
+    resumen: (ctx) => {
+      const expuestos = perfilesCorteExpuestos(ctx);
+      if (expuestos.length <= 1) {
+        const nombre = expuestos[0]?.nombre ?? "el perfil del paso";
+        return `Fija: siempre ${nombre}`;
+      }
+      return `El comercial elige entre ${expuestos.length} niveles`;
+    },
+    origenValor: (ctx) => {
+      const params = ctx.cfg.paramsPasoJson as Record<string, unknown> | null;
+      return Array.isArray(params?.perfilesExpuestosComercial)
+        ? "config"
+        : "default-paso";
+    },
+    control: {
+      tipo: "toggles",
+      opciones: (ctx) =>
+        perfilesCorteDeMaquina(ctx).map((perfil) => ({
+          value: perfil.id,
+          label:
+            perfil.id === ctx.cfg.perfilM1Id
+              ? `${perfil.nombre} (default)`
+              : perfil.nombre,
+        })),
+      activos: (ctx) => perfilesCorteExpuestos(ctx).map((p) => p.id),
+      aplicar: (ctx, valores) => {
+        // El default del paso no se puede des-exponer: sin él, el sheet no
+        // tendría con qué cotizar cuando el comercial no toca nada.
+        const conDefault =
+          ctx.cfg.perfilM1Id && !valores.includes(ctx.cfg.perfilM1Id)
+            ? [...valores, ctx.cfg.perfilM1Id]
+            : valores;
+        return {
+          tipo: "params",
+          patch: { perfilesExpuestosComercial: conDefault },
+        };
+      },
+    },
+  },
+  {
     clave: "maquina.candidatas",
     eje: "maquina",
     grupo: "lista",
@@ -2122,10 +2219,18 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       const esSustrato =
         ctx.slot?.decl?.tipo === "SUSTRATO" ||
         ctx.slot?.payload.slotRol === "SUSTRATO";
+      // Aparece cuando hay una fuente REAL que elegir: un paso anterior publica
+      // un output geométrico (bastidor → tiras de cenefa…), O la familia declara
+      // que puede trabajar sobre un sustrato heredado (`fuentesPiezasNesting`:
+      // montaje, laminado, plotter de corte). Así el modelador VE y elige "sobre
+      // qué trabaja" el paso en vez de que sea implícito.
+      const familiaAdmiteFuente =
+        (ctx.familia?.fuentesPiezasNesting?.length ?? 0) > 0;
       return (
         Boolean(ctx.slot) &&
         esSustrato &&
-        opcionesPiezasMontar(ctx).length > MONTAJE_SOURCE_OPTIONS.length
+        (opcionesPiezasMontar(ctx).length > MONTAJE_SOURCE_OPTIONS.length ||
+          familiaAdmiteFuente)
       );
     },
     resumen: (ctx) => {
