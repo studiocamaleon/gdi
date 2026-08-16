@@ -28,17 +28,25 @@ function armar(rastro: {
   cotizaciones?: number;
   comprobantes?: number;
   cobros?: number;
+  valores?: number;
+  precios?: number;
+  archivos?: number;
   activo?: boolean;
 }) {
   const cliente = {
     id: 'c1',
     nombre: 'Cliente RI de prueba',
     activo: rastro.activo ?? true,
+    updatedAt: new Date('2026-08-16T00:00:00.000Z'),
+    aceptaWhatsapp: null,
+    aceptaWhatsappEl: null,
     contactos: [],
     direcciones: [],
   };
   const del = jest.fn().mockResolvedValue(cliente);
-  const update = jest.fn().mockResolvedValue({ ...cliente, activo: !cliente.activo });
+  const update = jest
+    .fn()
+    .mockResolvedValue({ ...cliente, activo: !cliente.activo });
 
   const prisma = {
     cliente: {
@@ -47,10 +55,23 @@ function armar(rastro: {
       update,
     },
     ordenTrabajo: { count: jest.fn().mockResolvedValue(rastro.ordenes ?? 0) },
-    cotizacion: { count: jest.fn().mockResolvedValue(rastro.cotizaciones ?? 0) },
-    comprobante: { count: jest.fn().mockResolvedValue(rastro.comprobantes ?? 0) },
+    cotizacion: {
+      count: jest.fn().mockResolvedValue(rastro.cotizaciones ?? 0),
+    },
+    comprobante: {
+      count: jest.fn().mockResolvedValue(rastro.comprobantes ?? 0),
+    },
     cobro: { count: jest.fn().mockResolvedValue(rastro.cobros ?? 0) },
-  } as unknown as PrismaService;
+    valor: { count: jest.fn().mockResolvedValue(rastro.valores ?? 0) },
+    productoPrecioEspecialClienteV2: {
+      count: jest.fn().mockResolvedValue(rastro.precios ?? 0),
+    },
+    archivo: { count: jest.fn().mockResolvedValue(rastro.archivos ?? 0) },
+    clienteEvento: { create: jest.fn().mockResolvedValue({}) },
+  } as unknown as PrismaService & { $transaction: jest.Mock };
+  prisma.$transaction = jest.fn(
+    (callback: (tx: PrismaService) => Promise<unknown>) => callback(prisma),
+  );
 
   return { service: new ClientesService(prisma), del, update };
 }
@@ -62,6 +83,9 @@ describe('borrar o inhabilitar un cliente', () => {
       ['presupuestos', { cotizaciones: 5 }],
       ['comprobantes', { comprobantes: 5 }],
       ['cobros', { cobros: 1 }],
+      ['valores', { valores: 1 }],
+      ['precios especiales', { precios: 1 }],
+      ['archivos', { archivos: 1 }],
     ])('lo frena si tiene %s', async (_caso, rastro) => {
       const { service, del } = armar(rastro);
 
@@ -99,7 +123,7 @@ describe('borrar o inhabilitar un cliente', () => {
   describe('inhabilitar', () => {
     it('apaga al activo', async () => {
       const { service, update } = armar({ activo: true, ordenes: 4 });
-      await service.alternarActivo(AUTH, 'c1');
+      await service.fijarActivo(AUTH, 'c1', false);
       expect(update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { activo: false } }),
       );
@@ -107,7 +131,7 @@ describe('borrar o inhabilitar un cliente', () => {
 
     it('vuelve a encender al inhabilitado', async () => {
       const { service, update } = armar({ activo: false });
-      await service.alternarActivo(AUTH, 'c1');
+      await service.fijarActivo(AUTH, 'c1', true);
       expect(update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { activo: true } }),
       );

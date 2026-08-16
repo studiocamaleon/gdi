@@ -607,6 +607,7 @@ model Tenant {
   movimientoStockMateriaPrima                      MovimientoStockMateriaPrima[]
   clienteContactos                                 ClienteContacto[]
   clienteDireccions                                ClienteDireccion[]
+  clienteEventos                                   ClienteEvento[]
   proveedorContactos                               ProveedorContacto[]
   proveedorDireccions                              ProveedorDireccion[]
   empleadoDireccions                               EmpleadoDireccion[]
@@ -991,6 +992,7 @@ model Cliente {
   tenant              Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contactos           ClienteContacto[]
   direcciones         ClienteDireccion[]
+  eventos             ClienteEvento[]
   // === Modelo Universal V2 ===
   cotizacionesV2      Cotizacion[]                      @relation("CotizacionV2Cliente")
   preciosEspecialesV2 ProductoPrecioEspecialClienteV2[] @relation("ProductoPrecioEspecialClienteV2Cliente")
@@ -1001,6 +1003,8 @@ model Cliente {
   archivos            Archivo[]
 
   @@unique([tenantId, nombre])
+  @@unique([tenantId, documentoNumero])
+  @@unique([tenantId, cuit])
   @@index([tenantId, nombre])
   /// El listado sano esconde a los inhabilitados, así que filtra por activo
   /// en toda consulta.
@@ -1114,6 +1118,21 @@ model ClienteDireccion {
   cliente      Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, clienteId])
+}
+
+model ClienteEvento {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  clienteId   String   @db.Uuid
+  tipo        String   @db.VarChar(40)
+  actorId     String?  @db.Uuid
+  actorNombre String?
+  detalle     Json?
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, clienteId, createdAt])
 }
 
 model ProveedorContacto {
@@ -2709,7 +2728,7 @@ model Cotizacion {
   createdAt                    DateTime           @default(now())
   updatedAt                    DateTime           @updatedAt
   tenant                       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente                      Cliente?           @relation("CotizacionV2Cliente", fields: [clienteId], references: [id])
+  cliente                      Cliente?           @relation("CotizacionV2Cliente", fields: [clienteId], references: [id], onDelete: Restrict)
   vendedor                     Empleado?          @relation("CotizacionVendedor", fields: [vendedorEmpleadoId], references: [id], onDelete: SetNull)
   items                        CotizacionItem[]
   ordenesTrabajo               OrdenTrabajo[]
@@ -2924,7 +2943,7 @@ model OrdenTrabajo {
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
   tenant                  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente                 Cliente?               @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id])
+  cliente                 Cliente?               @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
   vendedor                Empleado?              @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
   cotizacion              Cotizacion?            @relation(fields: [cotizacionId], references: [id])
   items                   OrdenTrabajoItem[]
@@ -3408,7 +3427,7 @@ model Cobro {
   createdAt                 DateTime              @default(now())
   updatedAt                 DateTime              @updatedAt
   tenant                    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente                   Cliente?              @relation(fields: [clienteId], references: [id])
+  cliente                   Cliente?              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   orden                     OrdenTrabajo?         @relation(fields: [ordenId], references: [id])
   metodoPago                MetodoPago            @relation(fields: [metodoPagoId], references: [id])
   cuentaDestino             CuentaFondos          @relation(fields: [cuentaDestinoId], references: [id])
@@ -3487,7 +3506,7 @@ model Valor {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente          Cliente?           @relation(fields: [clienteId], references: [id])
+  cliente          Cliente?           @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   proveedor        Proveedor?         @relation(fields: [proveedorId], references: [id])
   cobro            Cobro?             @relation(fields: [cobroId], references: [id])
   cuentaDeposito   CuentaFondos?      @relation(fields: [cuentaDepositoId], references: [id])
@@ -3642,7 +3661,7 @@ model Comprobante {
 
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   puntoVenta        PuntoVenta         @relation(fields: [puntoVentaId], references: [id], onDelete: Restrict)
-  cliente           Cliente?           @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  cliente           Cliente?           @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   orden             OrdenTrabajo?      @relation(fields: [ordenId], references: [id], onDelete: SetNull)
   comprobanteOrigen Comprobante?       @relation("ComprobanteCorrige", fields: [comprobanteOrigenId], references: [id], onDelete: SetNull)
   correcciones      Comprobante[]      @relation("ComprobanteCorrige")
@@ -4043,7 +4062,7 @@ model Archivo {
 
   tenant      Tenant            @relation("ArchivosDelTenant", fields: [tenantId], references: [id], onDelete: Cascade)
   subidoPor   User?             @relation("ArchivosSubidos", fields: [subidoPorId], references: [id], onDelete: SetNull)
-  cliente     Cliente?          @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cliente     Cliente?          @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   orden       OrdenTrabajo?     @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   ordenItem   OrdenTrabajoItem? @relation(fields: [ordenItemId], references: [id], onDelete: Cascade)
   cotizacion  Cotizacion?       @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)

@@ -23,7 +23,7 @@ export type ClientesListResponse = {
 
 function buildClientesPath(params: ClientesQuery = {}) {
   const searchParams = new URLSearchParams();
-  searchParams.set("limit", String(params.limit ?? 200));
+  searchParams.set("limit", String(params.limit ?? 25));
   if (params.page) searchParams.set("page", String(params.page));
   if (params.q?.trim()) searchParams.set("q", params.q.trim());
   if (params.incluirInactivos) searchParams.set("incluirInactivos", "true");
@@ -58,10 +58,14 @@ export async function createCliente(payload: ClientePayload) {
   });
 }
 
-export async function updateCliente(id: string, payload: ClientePayload) {
+export async function updateCliente(
+  id: string,
+  payload: ClientePayload,
+  updatedAt: string,
+) {
   return apiRequest<ClienteDetalle>(`/clientes/${id}`, {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, updatedAt }),
   });
 }
 
@@ -75,10 +79,18 @@ export async function deleteCliente(id: string) {
  * Inhabilitar o volver a habilitar. Es la salida para el cliente que ya operó:
  * borrarlo dejaría sus órdenes sin dueño.
  */
-export async function toggleCliente(id: string) {
-  return apiRequest<ClienteDetalle>(`/clientes/${id}/toggle`, {
+export async function setClienteActivo(id: string, activo: boolean) {
+  return apiRequest<ClienteDetalle>(`/clientes/${id}/estado`, {
     method: "PATCH",
+    body: JSON.stringify({ activo }),
   });
+}
+
+export async function importarClientes(clientes: ClientePayload[]) {
+  return apiRequest<{ data: ClienteDetalle[]; total: number }>(
+    "/clientes/importar",
+    { method: "POST", body: JSON.stringify({ clientes }) },
+  );
 }
 
 /**

@@ -163,10 +163,14 @@ export class PresupuestosService {
       );
     }
     const cliente = await this.prisma.cliente.findFirst({
-      where: { id: dto.clienteId },
+      where: { id: dto.clienteId, activo: true },
       select: { id: true },
     });
-    if (!cliente) throw new BadRequestException('El cliente no existe.');
+    if (!cliente) {
+      throw new BadRequestException(
+        'El cliente no existe o está inhabilitado.',
+      );
+    }
 
     // Vendedor: el indicado, o el empleado ligado al usuario que emite
     // (mismo default que la OT).
@@ -1298,8 +1302,7 @@ export class PresupuestosService {
         usuarioId: auth.userId,
         usuarioNombre: await this.nombreDe(auth),
         datosJson: (e.datosJson ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
+          Prisma.InputJsonValue | undefined,
       },
     });
   }
@@ -1323,8 +1326,7 @@ export class PresupuestosService {
         usuarioNombre: e.origen === 'cliente' ? 'Cliente' : 'Sistema',
         origen: e.origen ?? 'sistema',
         datosJson: (e.datosJson ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
+          Prisma.InputJsonValue | undefined,
       },
     });
   }

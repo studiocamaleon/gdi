@@ -55,34 +55,41 @@ export default async function DashboardLayout({
   return (
     <PermisosProvider permisos={currentUser.tenantActual?.permisos}>
       <ConfigRegionalProvider regional={currentUser.tenantActual?.regional}>
-      <NavigationFeedbackProvider>
-        <ImpersonacionBanner currentUser={currentUser} />
-        <SidebarProvider
-          defaultOpen
-          style={{ height: "100dvh", overflow: "hidden" }}
-        >
-          <AppSidebar currentUser={currentUser} />
-          <SidebarInset className="main" style={{ minHeight: 0 }}>
-            <header className="topbar">
-              <SidebarTrigger className="icon-btn" />
-              <div className="ml-auto">
-                <LogoutButton />
-              </div>
-            </header>
+        <NavigationFeedbackProvider>
+          <ImpersonacionBanner currentUser={currentUser} />
+          <SidebarProvider
+            defaultOpen
+            style={
+              {
+                height: "100dvh",
+                overflow: "hidden",
+                "--sidebar-width": "262px",
+                "--sidebar-width-icon": "66px",
+              } as React.CSSProperties
+            }
+          >
+            <AppSidebar currentUser={currentUser} />
+            <SidebarInset className="main" style={{ minHeight: 0 }}>
+              <header className="topbar">
+                <SidebarTrigger className="icon-btn" />
+                <div className="ml-auto">
+                  <LogoutButton />
+                </div>
+              </header>
 
-            <main
-              className="gp-main flex flex-1"
-              style={{ minHeight: 0, overflowY: "auto" }}
-            >
-              {children}
-            </main>
-          </SidebarInset>
-          <PasosEnCursoWidget />
-          {/* Escanear el QR del cliente abre la entrega desde cualquier
+              <main
+                className="gp-main flex flex-1"
+                style={{ minHeight: 0, overflowY: "auto" }}
+              >
+                {children}
+              </main>
+            </SidebarInset>
+            <PasosEnCursoWidget />
+            {/* Escanear el QR del cliente abre la entrega desde cualquier
               pantalla. */}
-          <EntregaEscaneoWatcher />
-        </SidebarProvider>
-      </NavigationFeedbackProvider>
+            <EntregaEscaneoWatcher />
+          </SidebarProvider>
+        </NavigationFeedbackProvider>
       </ConfigRegionalProvider>
     </PermisosProvider>
   );

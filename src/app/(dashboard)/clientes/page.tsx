@@ -2,7 +2,8 @@ import { Suspense } from "react";
 
 import { ClientesTable } from "@/components/clientes/clientes-table";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
-import { getClientes } from "@/lib/clientes-api";
+import { listClientes } from "@/lib/clientes-api";
+import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,10 @@ export default function ClientesPage() {
 }
 
 async function ClientesPageContent() {
-  const clientes = await getClientes();
+  const [response, canManage] = await Promise.all([
+    listClientes({ page: 1, limit: 25 }),
+    tienePermiso("registros.gestionar"),
+  ]);
 
-  return <ClientesTable initialClientes={clientes} />;
+  return <ClientesTable initialResponse={response} canManage={canManage} />;
 }

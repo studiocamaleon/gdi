@@ -1,4 +1,9 @@
-import { IsBooleanString, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsBooleanString,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class ClientesQueryDto extends PaginationDto {

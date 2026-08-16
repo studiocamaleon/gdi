@@ -35,21 +35,19 @@ const CONTACT_IMPORT_HEADERS = [
   "ciudad",
 ] as const;
 
-const REQUIRED_HEADERS = new Set([
-  "nombre",
-  "email",
-  "telefonoCodigo",
-  "telefonoNumero",
-  "pais",
-  "contactoNombre",
-  "direccionDescripcion",
-  "direccion",
-  "ciudad",
-]);
+const REQUIRED_HEADERS = new Set(["nombre", "pais"]);
 
-const CONTACT_IMPORT_HEADER_LABELS = CONTACT_IMPORT_HEADERS.map((header) =>
-  REQUIRED_HEADERS.has(header) ? `${header}*` : header,
-);
+function contactImportHeaderLabels(kind: ContactImportKind) {
+  const required = new Set<string>(REQUIRED_HEADERS);
+  if (kind === "proveedores") {
+    required.add("email");
+    required.add("telefonoCodigo");
+    required.add("telefonoNumero");
+  }
+  return CONTACT_IMPORT_HEADERS.map((header) =>
+    required.has(header) ? `${header}*` : header,
+  );
+}
 
 const SAMPLE_BY_KIND: Record<ContactImportKind, readonly string[]> = {
   clientes: [
@@ -93,11 +91,14 @@ const SAMPLE_BY_KIND: Record<ContactImportKind, readonly string[]> = {
 export function downloadContactImportTemplate(kind: ContactImportKind) {
   downloadCsv(
     `plantilla-importacion-${kind}.csv`,
-    toCsv([CONTACT_IMPORT_HEADER_LABELS, SAMPLE_BY_KIND[kind]]),
+    toCsv([contactImportHeaderLabels(kind), SAMPLE_BY_KIND[kind]]),
   );
 }
 
-export function parseContactImportCsv(csv: string): ContactImportParseResult {
+export function parseContactImportCsv(
+  csv: string,
+  kind: ContactImportKind,
+): ContactImportParseResult {
   const rows = parseCsv(csv).filter((row) =>
     row.some((cell) => cell.trim().length > 0),
   );
@@ -122,9 +123,12 @@ export function parseContactImportCsv(csv: string): ContactImportParseResult {
   return {
     rows: rows.slice(1).map((row, idx) => {
       const record = Object.fromEntries(
-        headers.map((header, headerIdx) => [header, row[headerIdx]?.trim() ?? ""]),
+        headers.map((header, headerIdx) => [
+          header,
+          row[headerIdx]?.trim() ?? "",
+        ]),
       );
-      return recordToContactPayload(record, idx + 2);
+      return recordToContactPayload(record, idx + 2, kind);
     }),
   };
 }
@@ -132,10 +136,47 @@ export function parseContactImportCsv(csv: string): ContactImportParseResult {
 function recordToContactPayload(
   record: Record<string, string>,
   rowNumber: number,
+  kind: ContactImportKind,
 ): ContactImportRowResult {
   const errors: string[] = [];
   for (const header of REQUIRED_HEADERS) {
     if (!record[header]) errors.push(`Falta ${header}.`);
+  }
+  if (kind === "proveedores") {
+    for (const header of [
+      "email",
+      "telefonoCodigo",
+      "telefonoNumero",
+    ] as const) {
+      if (!record[header]) errors.push(`Falta ${header}.`);
+    }
+  }
+  const tieneContacto = [
+    "contactoNombre",
+    "contactoCargo",
+    "contactoEmail",
+    "contactoTelefonoCodigo",
+    "contactoTelefonoNumero",
+  ].some((header) => Boolean(record[header]));
+  if (tieneContacto && !record.contactoNombre) {
+    errors.push("Falta contactoNombre para el contacto informado.");
+  }
+  const tieneDireccion = [
+    "direccionDescripcion",
+    "codigoPostal",
+    "direccion",
+    "numero",
+    "ciudad",
+  ].some((header) => Boolean(record[header]));
+  if (tieneDireccion) {
+    for (const header of [
+      "direccionDescripcion",
+      "direccion",
+      "ciudad",
+    ] as const) {
+      if (!record[header])
+        errors.push(`Falta ${header} para la dirección informada.`);
+    }
   }
   if (record.pais && record.pais.length !== 2) {
     errors.push("pais debe ser un código ISO de 2 letras, por ejemplo AR.");
@@ -156,35 +197,42 @@ function recordToContactPayload(
     pais: record.pais.toUpperCase(),
     telefonoCodigo: record.telefonoCodigo,
     telefonoNumero: record.telefonoNumero,
-    contactos: [
-      {
-        nombre: record.contactoNombre,
-        cargo: record.contactoCargo || undefined,
-        email: record.contactoEmail || undefined,
-        telefonoCodigo: record.contactoTelefonoCodigo || undefined,
-        telefonoNumero: record.contactoTelefonoNumero || undefined,
-        principal: true,
-      },
-    ],
-    direcciones: [
-      {
-        descripcion: record.direccionDescripcion,
-        pais: record.pais.toUpperCase(),
-        codigoPostal: record.codigoPostal || undefined,
-        direccion: record.direccion,
-        numero: record.numero || undefined,
-        ciudad: record.ciudad,
-        tipo: "principal",
-        principal: true,
-      },
-    ],
+    contactos: tieneContacto
+      ? [
+          {
+            nombre: record.contactoNombre,
+            cargo: record.contactoCargo || undefined,
+            email: record.contactoEmail || undefined,
+            telefonoCodigo: record.contactoTelefonoCodigo || undefined,
+            telefonoNumero: record.contactoTelefonoNumero || undefined,
+            principal: true,
+          },
+        ]
+      : [],
+    direcciones: tieneDireccion
+      ? [
+          {
+            descripcion: record.direccionDescripcion,
+            pais: record.pais.toUpperCase(),
+            codigoPostal: record.codigoPostal || undefined,
+            direccion: record.direccion,
+            numero: record.numero || undefined,
+            ciudad: record.ciudad,
+            tipo: "principal",
+            principal: true,
+          },
+        ]
+      : [],
   };
 
   return { rowNumber, payload, errors: [] };
 }
 
 function normalizeHeader(header: string) {
-  return header.replace(/^\uFEFF/, "").trim().replace(/\*$/, "");
+  return header
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .replace(/\*$/, "");
 }
 
 function isEmailLike(value: string) {

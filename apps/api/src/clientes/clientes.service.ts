@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,6 +8,7 @@ import {
   Cliente,
   ClienteContacto,
   ClienteDireccion,
+  ClienteEvento,
   Prisma,
   TipoDireccion,
 } from '@prisma/client';
@@ -19,12 +21,14 @@ import { ClienteDireccionDto, TipoDireccionDto } from './dto/direccion.dto';
 import { ClientesQueryDto } from './dto/clientes-query.dto';
 import {
   AltaPorDocumentoDto,
+  UpdateClienteDto,
   UpsertClienteDto,
 } from './dto/upsert-cliente.dto';
 
 type ClienteCompleto = Cliente & {
   contactos: ClienteContacto[];
   direcciones: ClienteDireccion[];
+  eventos?: ClienteEvento[];
 };
 
 @Injectable()
@@ -44,6 +48,24 @@ export class ClientesService {
               { nombre: { contains: query, mode: 'insensitive' } },
               { razonSocial: { contains: query, mode: 'insensitive' } },
               { emailPrincipal: { contains: query, mode: 'insensitive' } },
+              { telefonoNumero: { contains: query, mode: 'insensitive' } },
+              { documentoNumero: { contains: query, mode: 'insensitive' } },
+              { cuit: { contains: query, mode: 'insensitive' } },
+              {
+                contactos: {
+                  some: {
+                    OR: [
+                      { nombre: { contains: query, mode: 'insensitive' } },
+                      { email: { contains: query, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+              {
+                direcciones: {
+                  some: { ciudad: { contains: query, mode: 'insensitive' } },
+                },
+              },
             ],
           }
         : {}),
@@ -114,6 +136,11 @@ export class ClientesService {
       include: { contactos: true, direcciones: true },
     });
     if (existente) {
+      if (!existente.activo) {
+        throw new ConflictException(
+          `${existente.nombre} está inhabilitado. Habilitalo desde Registros > Clientes antes de usarlo.`,
+        );
+      }
       // Rellena huecos, NUNCA pisa. Si el que ya está no tiene teléfono y el
       // operador lo tiene enfrente, aprovechamos; si ya tenía uno, el que
       // manda es el cargado —puede ser el bueno y el del mostrador un
@@ -134,38 +161,115 @@ export class ClientesService {
         data: completa,
         include: { contactos: true, direcciones: true },
       });
+      await this.prisma.clienteEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          clienteId: actualizado.id,
+          tipo: 'editado',
+          actorId: auth.userId,
+          actorNombre: auth.email,
+          detalle: { origen: 'alta_por_documento', campo: 'telefono' },
+        },
+      });
       return { cliente: this.toResponse(actualizado), yaExistia: true };
     }
 
     const telefonoNumero = (payload.telefonoNumero ?? '').trim();
-    const cliente = await this.prisma.cliente.create({
-      data: {
-        tenantId: auth.tenantId,
-        nombre: payload.nombre.trim(),
-        documentoNumero: documento,
-        cuit: payload.cuit ?? null,
-        origenAlta: 'mostrador',
-        // Consumidor final: es lo que corresponde a una persona identificada
-        // con DNI, y define la letra del comprobante.
-        condicionFiscal: 'consumidor_final',
-        emailPrincipal: null,
-        telefonoCodigo: telefonoNumero
-          ? (payload.telefonoCodigo ?? '+54').trim()
-          : '',
-        telefonoNumero,
-        paisCodigo: 'AR',
-      },
-      include: { contactos: true, direcciones: true },
-    });
-    return { cliente: this.toResponse(cliente), yaExistia: false };
+    try {
+      const cliente = await this.prisma.cliente.create({
+        data: {
+          tenantId: auth.tenantId,
+          nombre: payload.nombre.trim(),
+          documentoNumero: documento,
+          cuit: payload.cuit ?? null,
+          origenAlta: 'mostrador',
+          // Consumidor final: es lo que corresponde a una persona identificada
+          // con DNI, y define la letra del comprobante.
+          condicionFiscal: 'consumidor_final',
+          emailPrincipal: null,
+          telefonoCodigo: telefonoNumero
+            ? (payload.telefonoCodigo ?? '+54').trim()
+            : '',
+          telefonoNumero,
+          paisCodigo: 'AR',
+          eventos: {
+            create: {
+              tenantId: auth.tenantId,
+              tipo: 'creado',
+              actorId: auth.userId,
+              actorNombre: auth.email,
+              detalle: { origen: 'alta_por_documento' },
+            },
+          },
+        },
+        include: { contactos: true, direcciones: true },
+      });
+      return { cliente: this.toResponse(cliente), yaExistia: false };
+    } catch (error) {
+      this.rethrowUniqueCliente(error);
+    }
   }
 
   async create(auth: CurrentAuth, payload: UpsertClienteDto) {
     const normalized = this.normalizePayload(payload);
+    try {
+      const cliente = await this.createNormalized(
+        this.prisma,
+        auth.tenantId,
+        normalized,
+        auth.userId,
+        auth.email,
+      );
+      return this.toResponse(cliente);
+    } catch (error) {
+      this.rethrowUniqueCliente(error);
+    }
+  }
 
-    const cliente = await this.prisma.cliente.create({
+  async importar(auth: CurrentAuth, payloads: UpsertClienteDto[]) {
+    if (payloads.length === 0) return { data: [], total: 0 };
+    const normalized = payloads.map((payload) =>
+      this.normalizePayload(payload),
+    );
+
+    try {
+      const creados = await this.prisma.$transaction(
+        async (tx) => {
+          const resultado: ClienteCompleto[] = [];
+          for (const cliente of normalized) {
+            resultado.push(
+              await this.createNormalized(
+                tx,
+                auth.tenantId,
+                cliente,
+                auth.userId,
+                auth.email,
+              ),
+            );
+          }
+          return resultado;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      return {
+        data: creados.map((cliente) => this.toResponse(cliente)),
+        total: creados.length,
+      };
+    } catch (error) {
+      this.rethrowUniqueCliente(error);
+    }
+  }
+
+  private createNormalized(
+    db: PrismaService | Prisma.TransactionClient,
+    tenantId: string,
+    normalized: ReturnType<ClientesService['normalizePayload']>,
+    actorId: string,
+    actorNombre: string,
+  ) {
+    return db.cliente.create({
       data: {
-        tenantId: auth.tenantId,
+        tenantId,
         nombre: normalized.nombre,
         razonSocial: normalized.razonSocial,
         cuit: normalized.cuit,
@@ -176,9 +280,13 @@ export class ClientesService {
         telefonoCodigo: normalized.telefonoCodigo,
         telefonoNumero: normalized.telefonoNumero,
         paisCodigo: normalized.pais,
+        aceptaWhatsapp: normalized.aceptaWhatsapp,
+        aceptaWhatsappEl:
+          normalized.aceptaWhatsapp === null ? null : new Date(),
         contactos: {
           create: normalized.contactos.map((contacto) => ({
-            tenantId: auth.tenantId,
+            ...(contacto.id ? { id: contacto.id } : {}),
+            tenantId,
             nombre: contacto.nombre,
             cargo: contacto.cargo,
             email: contacto.email,
@@ -189,7 +297,8 @@ export class ClientesService {
         },
         direcciones: {
           create: normalized.direcciones.map((direccion) => ({
-            tenantId: auth.tenantId,
+            ...(direccion.id ? { id: direccion.id } : {}),
+            tenantId,
             descripcion: direccion.descripcion,
             paisCodigo: direccion.pais,
             codigoPostal: direccion.codigoPostal,
@@ -199,82 +308,178 @@ export class ClientesService {
             tipo: this.toPrismaTipoDireccion(direccion.tipo),
             principal: direccion.principal,
           })),
+        },
+        eventos: {
+          create: {
+            tenantId,
+            tipo: 'creado',
+            actorId,
+            actorNombre,
+          },
         },
       },
       include: {
         contactos: true,
         direcciones: true,
+        eventos: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
-
-    return this.toResponse(cliente);
   }
 
-  async update(auth: CurrentAuth, id: string, payload: UpsertClienteDto) {
+  async update(auth: CurrentAuth, id: string, payload: UpdateClienteDto) {
     const normalized = this.normalizePayload(payload);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const actual = await this.findClienteOrThrow(auth, id, tx);
+        const version = new Date(payload.updatedAt);
+        const aceptaWhatsapp =
+          payload.aceptaWhatsapp === undefined
+            ? actual.aceptaWhatsapp
+            : normalized.aceptaWhatsapp;
+        const consentimientoCambio = aceptaWhatsapp !== actual.aceptaWhatsapp;
+        const actualizado = await tx.cliente.updateMany({
+          where: { id, tenantId: auth.tenantId, updatedAt: version },
+          data: {
+            nombre: normalized.nombre,
+            razonSocial: normalized.razonSocial,
+            cuit: normalized.cuit,
+            documentoNumero: normalized.documentoNumero,
+            condicionFiscal: normalized.condicionFiscal,
+            limiteCredito: normalized.limiteCredito,
+            emailPrincipal: normalized.email,
+            telefonoCodigo: normalized.telefonoCodigo,
+            telefonoNumero: normalized.telefonoNumero,
+            paisCodigo: normalized.pais,
+            aceptaWhatsapp,
+            ...(consentimientoCambio
+              ? {
+                  aceptaWhatsappEl: aceptaWhatsapp === null ? null : new Date(),
+                }
+              : {}),
+          },
+        });
+        if (actualizado.count !== 1) {
+          throw new ConflictException(
+            'Este cliente fue modificado por otra persona. Recargá la ficha antes de volver a guardar.',
+          );
+        }
 
-    return this.prisma.$transaction(async (tx) => {
-      await this.findClienteOrThrow(auth, id, tx);
-
-      await tx.cliente.update({
-        where: { id },
-        data: {
-          nombre: normalized.nombre,
-          razonSocial: normalized.razonSocial,
-          cuit: normalized.cuit,
-          documentoNumero: normalized.documentoNumero,
-          condicionFiscal: normalized.condicionFiscal,
-          limiteCredito: normalized.limiteCredito,
-          emailPrincipal: normalized.email,
-          telefonoCodigo: normalized.telefonoCodigo,
-          telefonoNumero: normalized.telefonoNumero,
-          paisCodigo: normalized.pais,
-        },
-      });
-
-      await tx.clienteContacto.deleteMany({
-        where: { clienteId: id, tenantId: auth.tenantId },
-      });
-
-      await tx.clienteDireccion.deleteMany({
-        where: { clienteId: id, tenantId: auth.tenantId },
-      });
-
-      if (normalized.contactos.length > 0) {
-        await tx.clienteContacto.createMany({
-          data: normalized.contactos.map((contacto) => ({
+        await this.sincronizarContactos(
+          tx,
+          auth.tenantId,
+          id,
+          actual.contactos,
+          normalized.contactos,
+        );
+        await this.sincronizarDirecciones(
+          tx,
+          auth.tenantId,
+          id,
+          actual.direcciones,
+          normalized.direcciones,
+        );
+        await tx.clienteEvento.create({
+          data: {
             tenantId: auth.tenantId,
             clienteId: id,
-            nombre: contacto.nombre,
-            cargo: contacto.cargo,
-            email: contacto.email,
-            telefonoCodigo: contacto.telefonoCodigo,
-            telefonoNumero: contacto.telefonoNumero,
-            principal: contacto.principal,
-          })),
+            tipo: 'editado',
+            actorId: auth.userId,
+            actorNombre: auth.email,
+          },
         });
-      }
 
-      if (normalized.direcciones.length > 0) {
-        await tx.clienteDireccion.createMany({
-          data: normalized.direcciones.map((direccion) => ({
-            tenantId: auth.tenantId,
-            clienteId: id,
-            descripcion: direccion.descripcion,
-            paisCodigo: direccion.pais,
-            codigoPostal: direccion.codigoPostal,
-            direccion: direccion.direccion,
-            numero: direccion.numero,
-            ciudad: direccion.ciudad,
-            tipo: this.toPrismaTipoDireccion(direccion.tipo),
-            principal: direccion.principal,
-          })),
-        });
-      }
+        const cliente = await this.findClienteOrThrow(auth, id, tx);
+        return this.toResponse(cliente);
+      });
+    } catch (error) {
+      this.rethrowUniqueCliente(error);
+    }
+  }
 
-      const cliente = await this.findClienteOrThrow(auth, id, tx);
-      return this.toResponse(cliente);
+  private async sincronizarContactos(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    clienteId: string,
+    actuales: ClienteContacto[],
+    entrantes: ReturnType<ClientesService['normalizeContactos']>,
+  ) {
+    const idsActuales = new Set(actuales.map((contacto) => contacto.id));
+    const idsConservar = entrantes
+      .map((contacto) => contacto.id)
+      .filter((id): id is string => Boolean(id && idsActuales.has(id)));
+    await tx.clienteContacto.deleteMany({
+      where: {
+        tenantId,
+        clienteId,
+        ...(idsConservar.length > 0 ? { id: { notIn: idsConservar } } : {}),
+      },
     });
+    for (const contacto of entrantes) {
+      const data = {
+        nombre: contacto.nombre,
+        cargo: contacto.cargo,
+        email: contacto.email,
+        telefonoCodigo: contacto.telefonoCodigo,
+        telefonoNumero: contacto.telefonoNumero,
+        principal: contacto.principal,
+      };
+      if (contacto.id && idsActuales.has(contacto.id)) {
+        await tx.clienteContacto.update({ where: { id: contacto.id }, data });
+      } else {
+        await tx.clienteContacto.create({
+          data: {
+            ...(contacto.id ? { id: contacto.id } : {}),
+            tenantId,
+            clienteId,
+            ...data,
+          },
+        });
+      }
+    }
+  }
+
+  private async sincronizarDirecciones(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    clienteId: string,
+    actuales: ClienteDireccion[],
+    entrantes: ReturnType<ClientesService['normalizeDirecciones']>,
+  ) {
+    const idsActuales = new Set(actuales.map((direccion) => direccion.id));
+    const idsConservar = entrantes
+      .map((direccion) => direccion.id)
+      .filter((id): id is string => Boolean(id && idsActuales.has(id)));
+    await tx.clienteDireccion.deleteMany({
+      where: {
+        tenantId,
+        clienteId,
+        ...(idsConservar.length > 0 ? { id: { notIn: idsConservar } } : {}),
+      },
+    });
+    for (const direccion of entrantes) {
+      const data = {
+        descripcion: direccion.descripcion,
+        paisCodigo: direccion.pais,
+        codigoPostal: direccion.codigoPostal,
+        direccion: direccion.direccion,
+        numero: direccion.numero,
+        ciudad: direccion.ciudad,
+        tipo: this.toPrismaTipoDireccion(direccion.tipo),
+        principal: direccion.principal,
+      };
+      if (direccion.id && idsActuales.has(direccion.id)) {
+        await tx.clienteDireccion.update({ where: { id: direccion.id }, data });
+      } else {
+        await tx.clienteDireccion.create({
+          data: {
+            ...(direccion.id ? { id: direccion.id } : {}),
+            tenantId,
+            clienteId,
+            ...data,
+          },
+        });
+      }
+    }
   }
 
   /**
@@ -286,29 +491,54 @@ export class ClientesService {
    * comprobantes zafaban de casualidad porque congelan el receptor al emitir.
    */
   async remove(auth: CurrentAuth, id: string) {
-    const cliente = await this.findClienteOrThrow(auth, id, this.prisma);
-    const rastro = await this.contarRastro(auth.tenantId, id);
-
-    if (rastro.total > 0) {
-      throw new BadRequestException(
-        `${cliente.nombre} no se puede eliminar porque tiene ${rastro.detalle}. ` +
-          'Inhabilitalo: desaparece de las listas y de los buscadores, y su ' +
-          'historial queda intacto.',
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          const cliente = await this.findClienteOrThrow(auth, id, tx);
+          const rastro = await this.contarRastro(tx, auth.tenantId, id);
+          if (rastro.total > 0) {
+            throw new BadRequestException(
+              `${cliente.nombre} no se puede eliminar porque tiene ${rastro.detalle}. ` +
+                'Inhabilitalo: desaparece de las listas y de los buscadores, y su ' +
+                'historial queda intacto.',
+            );
+          }
+          await tx.cliente.delete({ where: { id } });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new ConflictException(
+          'El cliente recibió actividad mientras se intentaba eliminar. Inhabilitalo para conservar el historial.',
+        );
+      }
+      throw error;
     }
-
-    await this.prisma.cliente.delete({ where: { id } });
   }
 
-  /** Inhabilitar / volver a habilitar. */
-  async alternarActivo(auth: CurrentAuth, id: string) {
+  /** Fija el estado pedido; repetir la misma solicitud es idempotente. */
+  async fijarActivo(auth: CurrentAuth, id: string, activo: boolean) {
     const cliente = await this.findClienteOrThrow(auth, id, this.prisma);
+    if (cliente.activo === activo) return this.toResponse(cliente);
     const actualizado = await this.prisma.cliente.update({
       where: { id },
-      data: { activo: !cliente.activo },
+      data: { activo },
       include: {
         contactos: { orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }] },
         direcciones: { orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }] },
+      },
+    });
+    await this.prisma.clienteEvento.create({
+      data: {
+        tenantId: auth.tenantId,
+        clienteId: id,
+        tipo: activo ? 'habilitado' : 'inhabilitado',
+        actorId: auth.userId,
+        actorNombre: auth.email,
       },
     });
     return this.toResponse(actualizado);
@@ -320,12 +550,29 @@ export class ClientesService {
    * cascadean (contactos, direcciones) no cuentan: se van con él, que es lo
    * que corresponde.
    */
-  private async contarRastro(tenantId: string, clienteId: string) {
-    const [ordenes, cotizaciones, comprobantes, cobros] = await Promise.all([
-      this.prisma.ordenTrabajo.count({ where: { tenantId, clienteId } }),
-      this.prisma.cotizacion.count({ where: { tenantId, clienteId } }),
-      this.prisma.comprobante.count({ where: { tenantId, clienteId } }),
-      this.prisma.cobro.count({ where: { tenantId, clienteId } }),
+  private async contarRastro(
+    db: PrismaService | Prisma.TransactionClient,
+    tenantId: string,
+    clienteId: string,
+  ) {
+    const [
+      ordenes,
+      cotizaciones,
+      comprobantes,
+      cobros,
+      valores,
+      precios,
+      archivos,
+    ] = await Promise.all([
+      db.ordenTrabajo.count({ where: { tenantId, clienteId } }),
+      db.cotizacion.count({ where: { tenantId, clienteId } }),
+      db.comprobante.count({ where: { tenantId, clienteId } }),
+      db.cobro.count({ where: { tenantId, clienteId } }),
+      db.valor.count({ where: { tenantId, clienteId } }),
+      db.productoPrecioEspecialClienteV2.count({
+        where: { tenantId, clienteId },
+      }),
+      db.archivo.count({ where: { tenantId, clienteId } }),
     ]);
 
     const partes: string[] = [];
@@ -336,14 +583,27 @@ export class ClientesService {
     sumar(cotizaciones, 'presupuesto', 'presupuestos');
     sumar(comprobantes, 'comprobante', 'comprobantes');
     sumar(cobros, 'cobro', 'cobros');
+    sumar(valores, 'valor', 'valores');
+    sumar(precios, 'precio especial', 'precios especiales');
+    sumar(archivos, 'archivo', 'archivos');
 
     return {
-      total: ordenes + cotizaciones + comprobantes + cobros,
+      total:
+        ordenes +
+        cotizaciones +
+        comprobantes +
+        cobros +
+        valores +
+        precios +
+        archivos,
       detalle: partes.join(', '),
       ordenes,
       cotizaciones,
       comprobantes,
       cobros,
+      valores,
+      precios,
+      archivos,
     };
   }
 
@@ -364,6 +624,7 @@ export class ClientesService {
         direcciones: {
           orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
         },
+        eventos: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
 
@@ -400,10 +661,11 @@ export class ClientesService {
         payload.limiteCredito === undefined || payload.limiteCredito === null
           ? null
           : payload.limiteCredito,
-      email: payload.email.trim().toLowerCase(),
+      email: payload.email?.trim().toLowerCase() || null,
       pais: payload.pais.trim().toUpperCase(),
-      telefonoCodigo: payload.telefonoCodigo.trim(),
-      telefonoNumero: payload.telefonoNumero.trim(),
+      telefonoCodigo: payload.telefonoCodigo?.trim() || '',
+      telefonoNumero: payload.telefonoNumero?.trim() || '',
+      aceptaWhatsapp: payload.aceptaWhatsapp ?? null,
       contactos: this.normalizeContactos(payload.contactos),
       direcciones: this.normalizeDirecciones(payload.direcciones),
     };
@@ -469,6 +731,7 @@ export class ClientesService {
       cuit: cliente.cuit ?? '',
       condicionFiscal: cliente.condicionFiscal,
       activo: cliente.activo,
+      updatedAt: cliente.updatedAt.toISOString(),
       limiteCredito:
         cliente.limiteCredito === null ? null : Number(cliente.limiteCredito),
       // Sin email es '' y no null: el front lo pone en un <input>, y un null
@@ -476,6 +739,8 @@ export class ClientesService {
       email: cliente.emailPrincipal ?? '',
       telefonoCodigo: cliente.telefonoCodigo,
       telefonoNumero: cliente.telefonoNumero,
+      aceptaWhatsapp: cliente.aceptaWhatsapp,
+      aceptaWhatsappEl: cliente.aceptaWhatsappEl?.toISOString() ?? null,
       documentoNumero: cliente.documentoNumero,
       /** 'mostrador' = alta rápida por DNI, puede tener datos incompletos. */
       origenAlta: cliente.origenAlta,
@@ -502,7 +767,37 @@ export class ClientesService {
         tipo: this.fromPrismaTipoDireccion(direccion.tipo),
         principal: direccion.principal,
       })),
+      eventos: (cliente.eventos ?? []).map((evento) => ({
+        id: evento.id,
+        tipo: evento.tipo,
+        actorNombre: evento.actorNombre ?? 'Sistema',
+        createdAt: evento.createdAt.toISOString(),
+      })),
     };
+  }
+
+  private rethrowUniqueCliente(error: unknown): never {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      const targetMeta = error.meta?.target;
+      const target = Array.isArray(targetMeta)
+        ? targetMeta
+            .filter((value): value is string => typeof value === 'string')
+            .join(' ')
+        : typeof targetMeta === 'string'
+          ? targetMeta
+          : '';
+      if (target.includes('documentoNumero')) {
+        throw new ConflictException('Ya existe un cliente con ese DNI.');
+      }
+      if (target.includes('cuit')) {
+        throw new ConflictException('Ya existe un cliente con ese CUIT/CUIL.');
+      }
+      throw new ConflictException('Ya existe un cliente con ese nombre.');
+    }
+    throw error;
   }
 
   private toPrismaTipoDireccion(tipo: TipoDireccionDto) {

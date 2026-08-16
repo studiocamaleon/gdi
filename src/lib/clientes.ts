@@ -68,6 +68,8 @@ export function formatCuit(cuit: string): string {
 export type ClienteDetalle = {
   /** Inhabilitado: no aparece en listas ni buscadores, su historial queda. */
   activo: boolean;
+  /** Versión para evitar que dos ediciones se pisen silenciosamente. */
+  updatedAt: string;
   id: string;
   nombre: string;
   razonSocial: string;
@@ -82,12 +84,20 @@ export type ClienteDetalle = {
   pais: string;
   telefonoCodigo: string;
   telefonoNumero: string;
+  aceptaWhatsapp: boolean | null;
+  aceptaWhatsappEl: string | null;
   /** DNI, cuando el alta salió del documento escaneado. */
   documentoNumero: string | null;
   /** 'mostrador' = alta rápida por DNI; puede faltarle email o teléfono. */
   origenAlta: string | null;
   contactos: ClienteContacto[];
   direcciones: ClienteDireccion[];
+  eventos: Array<{
+    id: string;
+    tipo: "creado" | "editado" | "habilitado" | "inhabilitado" | string;
+    actorNombre: string;
+    createdAt: string;
+  }>;
 };
 
 export type ClientePayload = {
@@ -102,7 +112,9 @@ export type ClientePayload = {
   pais: string;
   telefonoCodigo: string;
   telefonoNumero: string;
+  aceptaWhatsapp?: boolean | null;
   contactos: Array<{
+    id?: string;
     nombre: string;
     cargo?: string;
     email?: string;
@@ -111,6 +123,7 @@ export type ClientePayload = {
     principal: boolean;
   }>;
   direcciones: Array<{
+    id?: string;
     descripcion: string;
     pais: string;
     codigoPostal?: string;
@@ -125,6 +138,7 @@ export type ClientePayload = {
 export function createEmptyCliente(): ClienteDetalle {
   return {
     id: "",
+    updatedAt: new Date(0).toISOString(),
     nombre: "",
     razonSocial: "",
     cuit: "",
@@ -139,29 +153,10 @@ export function createEmptyCliente(): ClienteDetalle {
     pais: "AR",
     telefonoCodigo: "54",
     telefonoNumero: "",
-    contactos: [
-      {
-        id: crypto.randomUUID(),
-        nombre: "",
-        cargo: "",
-        email: "",
-        telefonoCodigo: "54",
-        telefonoNumero: "",
-        principal: true,
-      },
-    ],
-    direcciones: [
-      {
-        id: crypto.randomUUID(),
-        descripcion: "",
-        pais: "AR",
-        codigoPostal: "",
-        direccion: "",
-        numero: "",
-        ciudad: "",
-        tipo: "principal",
-        principal: true,
-      },
-    ],
+    aceptaWhatsapp: null,
+    aceptaWhatsappEl: null,
+    contactos: [],
+    direcciones: [],
+    eventos: [],
   };
 }
