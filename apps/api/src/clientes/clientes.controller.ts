@@ -13,6 +13,9 @@ import {
 import { CurrentSession } from '../auth/current-auth.decorator';
 import {
   AltaPorDocumentoDto,
+  EstadoClienteDto,
+  ImportarClientesDto,
+  UpdateClienteDto,
   UpsertClienteDto,
 } from './dto/upsert-cliente.dto';
 import { ClientesQueryDto } from './dto/clientes-query.dto';
@@ -59,6 +62,15 @@ export class ClientesController {
     return this.clientesService.create(auth, payload);
   }
 
+  @Permiso('registros.gestionar')
+  @Post('importar')
+  importar(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: ImportarClientesDto,
+  ) {
+    return this.clientesService.importar(auth, payload.clientes);
+  }
+
   /**
    * Alta escaneando el DNI en el mostrador. Lo usa el comercial mientras
    * atiende, así que va con `comercial.gestionar` además del permiso de
@@ -78,16 +90,20 @@ export class ClientesController {
   update(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
-    @Body() payload: UpsertClienteDto,
+    @Body() payload: UpdateClienteDto,
   ) {
     return this.clientesService.update(auth, id, payload);
   }
 
-  /** Inhabilitar o volver a habilitar: la salida para el que ya operó. */
+  /** Fijar el estado explícitamente evita el read-toggle-write concurrente. */
   @Permiso('registros.gestionar')
-  @Patch(':id/toggle')
-  toggle(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
-    return this.clientesService.alternarActivo(auth, id);
+  @Patch(':id/estado')
+  estado(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: EstadoClienteDto,
+  ) {
+    return this.clientesService.fijarActivo(auth, id, payload.activo);
   }
 
   @Permiso('registros.gestionar')

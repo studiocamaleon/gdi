@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertCircleIcon,
   ArrowLeftIcon,
   MapPinHouseIcon,
   PlusIcon,
@@ -29,6 +30,14 @@ import {
   requiereCuit,
 } from "@/lib/clientes";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -52,17 +61,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 type ClienteFichaProps = {
   cliente: ClienteDetalle;
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
 };
 
 type DatosGeneralesState = {
@@ -95,8 +99,14 @@ const phoneCodeItems = latamCountries.map((country) => ({
 
 const addressTypeItems: Array<{ label: string; value: TipoDireccion }> = [
   { label: "Principal", value: "principal" },
-  { label: "Facturacion", value: "facturacion" },
+  { label: "Facturación", value: "facturacion" },
   { label: "Entrega", value: "entrega" },
+];
+
+const whatsappConsentItems = [
+  { label: "Sin definir", value: "sin_definir" },
+  { label: "Sí, autoriza mensajes", value: "si" },
+  { label: "No autoriza mensajes", value: "no" },
 ];
 
 function formatWhatsappPhone(phoneCode: string, phoneNumber: string) {
@@ -118,6 +128,7 @@ function buildPayload(
   datosGenerales: DatosGeneralesState,
   contactos: ClienteContacto[],
   direcciones: ClienteDireccion[],
+  aceptaWhatsapp: boolean | null,
 ): ClientePayload {
   return {
     nombre: datosGenerales.nombre.trim(),
@@ -134,7 +145,9 @@ function buildPayload(
     pais: datosGenerales.pais.trim(),
     telefonoCodigo: datosGenerales.telefonoCodigo.trim(),
     telefonoNumero: datosGenerales.telefonoNumero.trim(),
+    aceptaWhatsapp,
     contactos: contactos.map((contacto) => ({
+      id: contacto.id,
       nombre: contacto.nombre.trim(),
       cargo: contacto.cargo.trim() || undefined,
       email: contacto.email.trim() || undefined,
@@ -143,6 +156,7 @@ function buildPayload(
       principal: contacto.principal,
     })),
     direcciones: direcciones.map((direccion) => ({
+      id: direccion.id,
       descripcion: direccion.descripcion.trim(),
       pais: direccion.pais.trim(),
       codigoPostal: direccion.codigoPostal.trim() || undefined,
@@ -155,17 +169,51 @@ function buildPayload(
   };
 }
 
+type FieldErrors = Partial<
+  Record<
+    | "nombre"
+    | "email"
+    | "telefonoNumero"
+    | "cuit"
+    | "documentoNumero"
+    | "limiteCredito",
+    string
+  >
+>;
+
 function validatePayload(payload: ClientePayload) {
-  if (!payload.nombre || !payload.email || !payload.telefonoNumero) {
-    return "Completa al menos nombre, correo principal y telefono principal.";
+  const fields: FieldErrors = {};
+  if (!payload.nombre) fields.nombre = "Ingresá el nombre del cliente.";
+  if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+    fields.email = "Ingresá un correo válido.";
   }
+  if (payload.cuit && payload.cuit.replace(/\D/g, "").length !== 11) {
+    fields.cuit = "El CUIT/CUIL debe tener 11 dígitos.";
+  }
+  if (payload.documentoNumero && !/^\d{7,9}$/.test(payload.documentoNumero)) {
+    fields.documentoNumero = "El DNI debe tener entre 7 y 9 dígitos.";
+  }
+  if (
+    payload.limiteCredito !== null &&
+    payload.limiteCredito !== undefined &&
+    !Number.isFinite(payload.limiteCredito)
+  ) {
+    fields.limiteCredito = "Ingresá un límite de crédito válido.";
+  }
+
+  const fieldMessage = Object.values(fields)[0];
+  if (fieldMessage) return { message: fieldMessage, fields, focusId: null };
 
   const contactoInvalido = payload.contactos.findIndex(
     (contacto) => !contacto.nombre,
   );
 
   if (contactoInvalido !== -1) {
-    return `Completa el nombre del contacto ${contactoInvalido + 1}.`;
+    return {
+      message: `Completá el nombre del contacto ${contactoInvalido + 1}.`,
+      fields,
+      focusId: `contacto-nombre-${payload.contactos[contactoInvalido].id}`,
+    };
   }
 
   const direccionInvalida = payload.direcciones.findIndex(
@@ -177,10 +225,23 @@ function validatePayload(payload: ClientePayload) {
   );
 
   if (direccionInvalida !== -1) {
-    return `Completa descripcion, pais, direccion y ciudad en la direccion ${direccionInvalida + 1}.`;
+    const direccion = payload.direcciones[direccionInvalida];
+    const suffix = direccion.id;
+    const missing = !direccion.descripcion
+      ? "descripcion"
+      : !direccion.pais
+        ? "pais"
+        : !direccion.direccion
+          ? "calle"
+          : "ciudad";
+    return {
+      message: `Completá descripción, país, dirección y ciudad en la dirección ${direccionInvalida + 1}.`,
+      fields,
+      focusId: `direccion-${missing}-${suffix}`,
+    };
   }
 
-  return null;
+  return { message: null, fields, focusId: null };
 }
 
 function createEmptyContacto(phoneCode: string): ClienteContacto {
@@ -213,19 +274,25 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const router = useRouter();
   const [isSaving, startSaving] = React.useTransition();
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [datosGenerales, setDatosGenerales] = React.useState<DatosGeneralesState>({
-    nombre: cliente.nombre,
-    razonSocial: cliente.razonSocial,
-    cuit: cliente.cuit,
-    documentoNumero: cliente.documentoNumero ?? "",
-    condicionFiscal: cliente.condicionFiscal,
-    limiteCredito:
-      cliente.limiteCredito === null ? "" : String(cliente.limiteCredito),
-    telefonoCodigo: cliente.telefonoCodigo,
-    telefonoNumero: cliente.telefonoNumero,
-    email: cliente.email,
-    pais: cliente.pais,
-  });
+  const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
+  const [aceptaWhatsapp, setAceptaWhatsapp] = React.useState<boolean | null>(
+    cliente.aceptaWhatsapp,
+  );
+  const [version, setVersion] = React.useState(cliente.updatedAt);
+  const [datosGenerales, setDatosGenerales] =
+    React.useState<DatosGeneralesState>({
+      nombre: cliente.nombre,
+      razonSocial: cliente.razonSocial,
+      cuit: cliente.cuit,
+      documentoNumero: cliente.documentoNumero ?? "",
+      condicionFiscal: cliente.condicionFiscal,
+      limiteCredito:
+        cliente.limiteCredito === null ? "" : String(cliente.limiteCredito),
+      telefonoCodigo: cliente.telefonoCodigo,
+      telefonoNumero: cliente.telefonoNumero,
+      email: cliente.email,
+      pais: cliente.pais,
+    });
   const [contactos, setContactos] = React.useState(cliente.contactos);
   const [direcciones, setDirecciones] = React.useState(cliente.direcciones);
   const [activeContactoId, setActiveContactoId] = React.useState(
@@ -234,6 +301,33 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const [activeDireccionId, setActiveDireccionId] = React.useState(
     cliente.direcciones[0]?.id ?? "",
   );
+  const readOnly = mode === "view";
+  const snapshot = JSON.stringify({
+    datosGenerales,
+    contactos,
+    direcciones,
+    aceptaWhatsapp,
+  });
+  const [savedSnapshot, setSavedSnapshot] = React.useState(snapshot);
+  const isDirty = !readOnly && snapshot !== savedSnapshot;
+
+  React.useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [isDirty]);
+
+  const confirmNavigation = (event: { preventDefault(): void }) => {
+    if (
+      isDirty &&
+      !window.confirm("Hay cambios sin guardar. ¿Querés salir igualmente?")
+    ) {
+      event.preventDefault();
+    }
+  };
 
   const telefonoWhatsapp = formatWhatsappPhone(
     datosGenerales.telefonoCodigo,
@@ -272,15 +366,37 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   };
 
   const removeContacto = (contactoId: string) => {
+    const removed = contactos.find((contacto) => contacto.id === contactoId);
+    const removedIndex = contactos.findIndex(
+      (contacto) => contacto.id === contactoId,
+    );
     setContactos((current) => {
-      const nextContactos = current.filter((contacto) => contacto.id !== contactoId);
+      const nextContactos = current.filter(
+        (contacto) => contacto.id !== contactoId,
+      );
 
-      if (nextContactos.length > 0 && !nextContactos.some((contacto) => contacto.principal)) {
+      if (
+        nextContactos.length > 0 &&
+        !nextContactos.some((contacto) => contacto.principal)
+      ) {
         nextContactos[0] = { ...nextContactos[0], principal: true };
       }
 
       return nextContactos;
     });
+    if (removed) {
+      toast("Contacto quitado.", {
+        action: {
+          label: "Deshacer",
+          onClick: () =>
+            setContactos((current) => {
+              const next = [...current];
+              next.splice(removedIndex, 0, removed);
+              return next;
+            }),
+        },
+      });
+    }
   };
 
   const updateContacto = (
@@ -314,6 +430,12 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   };
 
   const removeDireccion = (direccionId: string) => {
+    const removed = direcciones.find(
+      (direccion) => direccion.id === direccionId,
+    );
+    const removedIndex = direcciones.findIndex(
+      (direccion) => direccion.id === direccionId,
+    );
     setDirecciones((current) => {
       const nextDirecciones = current.filter(
         (direccion) => direccion.id !== direccionId,
@@ -328,6 +450,19 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
 
       return nextDirecciones;
     });
+    if (removed) {
+      toast("Dirección quitada.", {
+        action: {
+          label: "Deshacer",
+          onClick: () =>
+            setDirecciones((current) => {
+              const next = [...current];
+              next.splice(removedIndex, 0, removed);
+              return next;
+            }),
+        },
+      });
+    }
   };
 
   const updateDireccion = (
@@ -353,15 +488,47 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = (event?: React.FormEvent) => {
+    event?.preventDefault();
+    if (readOnly) return;
     setErrorMessage(null);
 
-    const payload = buildPayload(datosGenerales, contactos, direcciones);
-    const validationError = validatePayload(payload);
+    const payload = buildPayload(
+      datosGenerales,
+      contactos,
+      direcciones,
+      aceptaWhatsapp,
+    );
+    const validation = validatePayload(payload);
+    setFieldErrors(validation.fields);
 
-    if (validationError) {
-      setErrorMessage(validationError);
-      toast.error(validationError);
+    if (validation.message) {
+      setErrorMessage(validation.message);
+      toast.error(validation.message);
+      const firstField = Object.keys(validation.fields)[0] as
+        keyof FieldErrors | undefined;
+      const fieldIds: Record<keyof FieldErrors, string> = {
+        nombre: "cliente-nombre",
+        email: "cliente-email",
+        telefonoNumero: "telefono-numero",
+        cuit: "cliente-cuit",
+        documentoNumero: "cliente-documento",
+        limiteCredito: "cliente-limite-credito",
+      };
+      if (firstField) document.getElementById(fieldIds[firstField])?.focus();
+      else if (validation.focusId) {
+        const contacto = contactos.find((item) =>
+          validation.focusId?.endsWith(item.id),
+        );
+        const direccion = direcciones.find((item) =>
+          validation.focusId?.endsWith(item.id),
+        );
+        if (contacto) setActiveContactoId(contacto.id);
+        if (direccion) setActiveDireccionId(direccion.id);
+        window.setTimeout(() =>
+          document.getElementById(validation.focusId!)?.focus(),
+        );
+      }
       return;
     }
 
@@ -370,7 +537,11 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         const savedCliente =
           mode === "create"
             ? await createCliente(payload)
-            : await updateCliente(cliente.id, payload);
+            : await updateCliente(cliente.id, payload, version);
+
+        setSavedSnapshot(snapshot);
+        setVersion(savedCliente.updatedAt);
+        setFieldErrors({});
 
         if (mode === "create") {
           toast.success("Cliente creado correctamente.");
@@ -394,7 +565,11 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   };
 
   return (
-    <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-4 md:p-6">
+    <form
+      className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6"
+      onSubmit={handleSave}
+      noValidate
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-3">
           <Button
@@ -402,7 +577,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
             nativeButton={false}
             size="sm"
             className="w-fit"
-            render={<Link href="/clientes" />}
+            render={<Link href="/clientes" onNavigate={confirmNavigation} />}
           >
             <ArrowLeftIcon data-icon="inline-start" />
             Volver a clientes
@@ -412,240 +587,126 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
               <h1 className="text-2xl font-semibold tracking-tight">
                 {mode === "create" ? "Nuevo cliente" : "Ficha de cliente"}
               </h1>
+              {!cliente.activo && mode !== "create" ? (
+                <Badge variant="outline">Inhabilitado</Badge>
+              ) : null}
             </div>
             <p className="max-w-3xl text-sm text-muted-foreground">
-              Consolida los datos principales del cliente, sus contactos y sus
+              Consolidá los datos principales del cliente, sus contactos y sus
               direcciones operativas en una sola vista de trabajo.
             </p>
             {errorMessage ? (
-              <p className="text-sm font-medium text-destructive">{errorMessage}</p>
+              <Alert variant="destructive">
+                <AlertCircleIcon />
+                <AlertTitle>No pudimos guardar</AlertTitle>
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
             ) : null}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {mode === "edit" ? (
+          {mode !== "create" ? (
             <Button
               variant="outline"
               nativeButton={false}
-              render={<Link href={`/clientes/${cliente.id}/cuenta-corriente`} />}
+              render={
+                <Link
+                  href={`/clientes/${cliente.id}/cuenta-corriente`}
+                  onNavigate={confirmNavigation}
+                />
+              }
             >
               <ReceiptTextIcon data-icon="inline-start" />
               Cuenta corriente
             </Button>
           ) : null}
-          <Button variant="brand" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
-            {mode === "create" ? "Crear cliente" : "Guardar cambios"}
-          </Button>
+          {!readOnly ? (
+            <Button
+              variant="brand"
+              type="submit"
+              disabled={isSaving || !isDirty}
+            >
+              {isSaving ? (
+                <GdiSpinner data-icon="inline-start" />
+              ) : (
+                <SaveIcon data-icon="inline-start" />
+              )}
+              {mode === "create" ? "Crear cliente" : "Guardar cambios"}
+            </Button>
+          ) : null}
         </div>
       </div>
 
+      {!cliente.activo && mode !== "create" ? (
+        <Alert>
+          <AlertCircleIcon />
+          <AlertTitle>Cliente inhabilitado</AlertTitle>
+          <AlertDescription>
+            Conserva su historial, pero no puede seleccionarse en nuevas
+            operaciones comerciales.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <fieldset disabled={readOnly} className="contents">
       <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-bold tracking-tight">
-            Datos generales
-          </CardTitle>
-          <CardDescription>
-            Define la informacion base del cliente y el telefono principal en
-            formato compatible con WhatsApp.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup className="grid lg:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="cliente-nombre">Nombre del cliente</FieldLabel>
-              <Input
-                id="cliente-nombre"
-                value={datosGenerales.nombre}
-                onChange={(event) =>
-                  setDatosGenerales((current) => ({
-                    ...current,
-                    nombre: event.target.value,
-                  }))
-                }
-                placeholder="Ej. Cafe del Centro"
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="cliente-razon-social">
-                Razon social
-              </FieldLabel>
-              <Input
-                id="cliente-razon-social"
-                value={datosGenerales.razonSocial}
-                onChange={(event) =>
-                  setDatosGenerales((current) => ({
-                    ...current,
-                    razonSocial: event.target.value,
-                  }))
-                }
-                placeholder="Ej. Cafe del Centro SRL"
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="cliente-condicion-fiscal">
-                Condicion fiscal
-              </FieldLabel>
-              <Select
-                items={condicionFiscalItems}
-                value={datosGenerales.condicionFiscal}
-                onValueChange={(value) => {
-                  if (!value) {
-                    return;
+          <CardHeader>
+            <CardTitle className="text-lg font-bold tracking-tight">
+              Datos generales
+            </CardTitle>
+            <CardDescription>
+              Definí la información base del cliente y el teléfono principal en
+              formato compatible con WhatsApp.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup className="grid lg:grid-cols-2">
+              <Field data-invalid={Boolean(fieldErrors.nombre)}>
+                <FieldLabel htmlFor="cliente-nombre">
+                  Nombre del cliente
+                </FieldLabel>
+                <Input
+                  id="cliente-nombre"
+                  aria-invalid={Boolean(fieldErrors.nombre)}
+                  value={datosGenerales.nombre}
+                  onChange={(event) =>
+                    setDatosGenerales((current) => ({
+                      ...current,
+                      nombre: event.target.value,
+                    }))
                   }
+                  placeholder="Ej. Cafe del Centro"
+                />
+                {fieldErrors.nombre ? (
+                  <FieldDescription>{fieldErrors.nombre}</FieldDescription>
+                ) : null}
+              </Field>
 
-                  setDatosGenerales((current) => ({
-                    ...current,
-                    condicionFiscal: value as CondicionFiscal,
-                  }));
-                }}
-              >
-                <SelectTrigger id="cliente-condicion-fiscal" className="w-full">
-                  <SelectValue placeholder="Selecciona la condicion" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {condicionFiscalItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <FieldDescription>
-                Define la letra del comprobante al facturarle.
-              </FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="cliente-cuit">
-                CUIT{" "}
-                {requiereCuit(datosGenerales.condicionFiscal) ? "" : "(opcional)"}
-              </FieldLabel>
-              <Input
-                id="cliente-cuit"
-                inputMode="numeric"
-                value={datosGenerales.cuit}
-                onChange={(event) =>
-                  setDatosGenerales((current) => ({
-                    ...current,
-                    cuit: event.target.value,
-                  }))
-                }
-                placeholder="30-71234567-8"
-              />
-              <FieldDescription>
-                {requiereCuit(datosGenerales.condicionFiscal)
-                  ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
-                  : "Con o sin guiones. Se valida el digito verificador."}
-              </FieldDescription>
-            </Field>
-
-            {/* El DNI va aparte del CUIT y no es lo mismo: ARCA los declara
-                con tipos distintos (96 vs 80). Lo llena solo el alta por
-                escaneo del documento en el mostrador. */}
-            <Field>
-              <FieldLabel htmlFor="cliente-documento">
-                DNI (opcional)
-              </FieldLabel>
-              <Input
-                id="cliente-documento"
-                inputMode="numeric"
-                value={datosGenerales.documentoNumero}
-                onChange={(event) =>
-                  setDatosGenerales((current) => ({
-                    ...current,
-                    documentoNumero: event.target.value.replace(/\D/g, ""),
-                  }))
-                }
-                placeholder="12345678"
-              />
-              <FieldDescription>
-                Sirve para identificar al cliente en la factura sin CUIT. Se
-                completa solo al dar de alta escaneando el documento.
-              </FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="cliente-limite-credito">
-                Limite de credito (opcional)
-              </FieldLabel>
-              <Input
-                id="cliente-limite-credito"
-                inputMode="numeric"
-                value={datosGenerales.limiteCredito}
-                onChange={(event) =>
-                  setDatosGenerales((current) => ({
-                    ...current,
-                    limiteCredito: event.target.value.replace(/[^\d.]/g, ""),
-                  }))
-                }
-                placeholder="Sin limite"
-              />
-              <FieldDescription>
-                Tope de deuda en cuenta corriente. Vacio = sin limite.
-              </FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="cliente-email">
-                Correo electronico principal
-              </FieldLabel>
-              <Input
-                id="cliente-email"
-                type="email"
-                value={datosGenerales.email}
-                onChange={(event) =>
-                  setDatosGenerales((current) => ({
-                    ...current,
-                    email: event.target.value,
-                  }))
-                }
-                placeholder="contacto@empresa.com"
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="cliente-pais">Pais</FieldLabel>
-              <Select
-                items={countryItems}
-                value={datosGenerales.pais}
-                onValueChange={(value) => {
-                  if (!value) {
-                    return;
-                  }
-
-                  setDatosGenerales((current) => ({
-                    ...current,
-                    pais: value,
-                  }));
-                }}
-              >
-                <SelectTrigger id="cliente-pais" className="w-full">
-                  <SelectValue placeholder="Selecciona un pais" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {countryItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
-
-            <FieldGroup className="grid md:grid-cols-[180px_1fr] lg:col-span-2">
               <Field>
-                <FieldLabel htmlFor="telefono-codigo">Codigo pais</FieldLabel>
+                <FieldLabel htmlFor="cliente-razon-social">
+                  Razón social
+                </FieldLabel>
+                <Input
+                  id="cliente-razon-social"
+                  value={datosGenerales.razonSocial}
+                  onChange={(event) =>
+                    setDatosGenerales((current) => ({
+                      ...current,
+                      razonSocial: event.target.value,
+                    }))
+                  }
+                  placeholder="Ej. Cafe del Centro SRL"
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="cliente-condicion-fiscal">
+                  Condición fiscal
+                </FieldLabel>
                 <Select
-                  items={phoneCodeItems}
-                  value={datosGenerales.telefonoCodigo}
+                  items={condicionFiscalItems}
+                  value={datosGenerales.condicionFiscal}
                   onValueChange={(value) => {
                     if (!value) {
                       return;
@@ -653,16 +714,152 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
 
                     setDatosGenerales((current) => ({
                       ...current,
-                      telefonoCodigo: value,
+                      condicionFiscal: value as CondicionFiscal,
                     }));
                   }}
                 >
-                  <SelectTrigger id="telefono-codigo" className="w-full">
-                    <SelectValue placeholder="Codigo" />
+                  <SelectTrigger
+                    id="cliente-condicion-fiscal"
+                    className="w-full"
+                  >
+                    <SelectValue placeholder="Seleccioná la condición" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {phoneCodeItems.map((item) => (
+                      {condicionFiscalItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  Define la letra del comprobante al facturarle.
+                </FieldDescription>
+              </Field>
+
+              <Field data-invalid={Boolean(fieldErrors.cuit)}>
+                <FieldLabel htmlFor="cliente-cuit">
+                  CUIT{" "}
+                  {requiereCuit(datosGenerales.condicionFiscal)
+                    ? ""
+                    : "(opcional)"}
+                </FieldLabel>
+                <Input
+                  id="cliente-cuit"
+                  aria-invalid={Boolean(fieldErrors.cuit)}
+                  inputMode="numeric"
+                  value={datosGenerales.cuit}
+                  onChange={(event) =>
+                    setDatosGenerales((current) => ({
+                      ...current,
+                      cuit: event.target.value,
+                    }))
+                  }
+                  placeholder="30-71234567-8"
+                />
+                <FieldDescription>
+                  {fieldErrors.cuit ??
+                    (requiereCuit(datosGenerales.condicionFiscal)
+                      ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
+                      : "Con o sin guiones. Se valida el dígito verificador.")}
+                </FieldDescription>
+              </Field>
+
+              {/* El DNI va aparte del CUIT y no es lo mismo: ARCA los declara
+                con tipos distintos (96 vs 80). Lo llena solo el alta por
+                escaneo del documento en el mostrador. */}
+              <Field data-invalid={Boolean(fieldErrors.documentoNumero)}>
+                <FieldLabel htmlFor="cliente-documento">
+                  DNI (opcional)
+                </FieldLabel>
+                <Input
+                  id="cliente-documento"
+                  aria-invalid={Boolean(fieldErrors.documentoNumero)}
+                  inputMode="numeric"
+                  value={datosGenerales.documentoNumero}
+                  onChange={(event) =>
+                    setDatosGenerales((current) => ({
+                      ...current,
+                      documentoNumero: event.target.value.replace(/\D/g, ""),
+                    }))
+                  }
+                  placeholder="12345678"
+                />
+                <FieldDescription>
+                  {fieldErrors.documentoNumero ??
+                    "Sirve para identificar al cliente en la factura sin CUIT."}
+                </FieldDescription>
+              </Field>
+
+              <Field data-invalid={Boolean(fieldErrors.limiteCredito)}>
+                <FieldLabel htmlFor="cliente-limite-credito">
+                  Límite de crédito (opcional)
+                </FieldLabel>
+                <Input
+                  id="cliente-limite-credito"
+                  inputMode="decimal"
+                  aria-invalid={Boolean(fieldErrors.limiteCredito)}
+                  value={datosGenerales.limiteCredito}
+                  onChange={(event) =>
+                    setDatosGenerales((current) => ({
+                      ...current,
+                      limiteCredito: event.target.value.replace(",", "."),
+                    }))
+                  }
+                  placeholder="Sin límite"
+                />
+                <FieldDescription>
+                  {fieldErrors.limiteCredito ??
+                    "Tope de deuda en cuenta corriente. Vacío = sin límite."}
+                </FieldDescription>
+              </Field>
+
+              <Field data-invalid={Boolean(fieldErrors.email)}>
+                <FieldLabel htmlFor="cliente-email">
+                  Correo electrónico principal (opcional)
+                </FieldLabel>
+                <Input
+                  id="cliente-email"
+                  type="email"
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  value={datosGenerales.email}
+                  onChange={(event) =>
+                    setDatosGenerales((current) => ({
+                      ...current,
+                      email: event.target.value,
+                    }))
+                  }
+                  placeholder="contacto@empresa.com"
+                />
+                {fieldErrors.email ? (
+                  <FieldDescription>{fieldErrors.email}</FieldDescription>
+                ) : null}
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="cliente-pais">País</FieldLabel>
+                <Select
+                  items={countryItems}
+                  value={datosGenerales.pais}
+                  onValueChange={(value) => {
+                    if (!value) {
+                      return;
+                    }
+
+                    setDatosGenerales((current) => ({
+                      ...current,
+                      pais: value,
+                    }));
+                  }}
+                >
+                  <SelectTrigger id="cliente-pais" className="w-full">
+                    <SelectValue placeholder="Seleccioná un país" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {countryItems.map((item) => (
                         <SelectItem key={item.value} value={item.value}>
                           {item.label}
                         </SelectItem>
@@ -672,473 +869,708 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                 </Select>
               </Field>
 
-              <Field>
-                <FieldLabel htmlFor="telefono-numero">
-                  Telefono principal
+              <FieldGroup className="grid md:grid-cols-[180px_1fr] lg:col-span-2">
+                <Field>
+                  <FieldLabel htmlFor="telefono-codigo">
+                    Código de país
+                  </FieldLabel>
+                  <Select
+                    items={phoneCodeItems}
+                    value={datosGenerales.telefonoCodigo}
+                    onValueChange={(value) => {
+                      if (!value) {
+                        return;
+                      }
+
+                      setDatosGenerales((current) => ({
+                        ...current,
+                        telefonoCodigo: value,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id="telefono-codigo" className="w-full">
+                      <SelectValue placeholder="Código" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {phoneCodeItems.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field data-invalid={Boolean(fieldErrors.telefonoNumero)}>
+                  <FieldLabel htmlFor="telefono-numero">
+                    Teléfono principal (opcional)
+                  </FieldLabel>
+                  <Input
+                    id="telefono-numero"
+                    inputMode="tel"
+                    aria-invalid={Boolean(fieldErrors.telefonoNumero)}
+                    value={datosGenerales.telefonoNumero}
+                    onChange={(event) =>
+                      setDatosGenerales((current) => ({
+                        ...current,
+                        telefonoNumero: event.target.value,
+                      }))
+                    }
+                    placeholder="Número sin código de país"
+                  />
+                  <FieldDescription>
+                    {fieldErrors.telefonoNumero ??
+                      `Se guardará como: ${telefonoWhatsapp || "Sin definir"}`}
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+
+              <Field className="lg:col-span-2">
+                <FieldLabel htmlFor="cliente-whatsapp-consentimiento">
+                  Consentimiento para WhatsApp
                 </FieldLabel>
-                <Input
-                  id="telefono-numero"
-                  inputMode="tel"
-                  value={datosGenerales.telefonoNumero}
-                  onChange={(event) =>
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      telefonoNumero: event.target.value,
-                    }))
+                <Select
+                  items={whatsappConsentItems}
+                  value={
+                    aceptaWhatsapp === null
+                      ? "sin_definir"
+                      : aceptaWhatsapp
+                        ? "si"
+                        : "no"
                   }
-                  placeholder="Numero sin codigo pais"
-                />
+                  onValueChange={(value) =>
+                    setAceptaWhatsapp(
+                      value === "sin_definir" ? null : value === "si",
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    id="cliente-whatsapp-consentimiento"
+                    className="w-full"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {whatsappConsentItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
                 <FieldDescription>
-                  Se guardara como: {telefonoWhatsapp || "Sin definir"}
+                  Sin consentimiento explícito solo se permiten avisos
+                  transaccionales; si dice que no, no se envía ningún mensaje.
                 </FieldDescription>
               </Field>
             </FieldGroup>
-          </FieldGroup>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader className="gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle className="text-lg font-bold tracking-tight">
-                Contactos
-              </CardTitle>
-              <CardDescription>
-                Puedes registrar uno o mas contactos y definir cual sera el
-                principal para la relacion comercial.
-              </CardDescription>
-            </div>
-            <Button variant="brand" className="w-full sm:w-auto" onClick={addContacto}>
-              <UserRoundPlusIcon data-icon="inline-start" />
-              Agregar contacto
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Tabs
-            value={activeContactoId}
-            onValueChange={(value) => {
-              if (value) {
-                setActiveContactoId(value);
-              }
-            }}
-          >
-            <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-              {contactos.map((contacto, index) => (
-                <TabsTrigger
-                  key={contacto.id}
-                  value={contacto.id}
-                  className="flex-none rounded-lg px-3 py-1.5"
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight">
+                  Contactos
+                </CardTitle>
+                <CardDescription>
+                  Podés registrar uno o más contactos y definir cuál será el
+                  principal para la relación comercial.
+                </CardDescription>
+              </div>
+              {!readOnly ? (
+                <Button
+                  type="button"
+                  variant="brand"
+                  className="w-full sm:w-auto"
+                  onClick={addContacto}
                 >
-                  {contacto.nombre || `Contacto ${index + 1}`}
-                  {contacto.principal ? (
-                    <StarIcon className="fill-current text-primary" />
-                  ) : null}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {contactos.map((contacto, index) => (
-              <TabsContent key={contacto.id} value={contacto.id}>
-                {activeContactoId === contacto.id ? (
-                <Card className="rounded-xl border-border/70 shadow-none">
-                  <CardHeader className="gap-4 border-b border-border/70">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-base">
-                          {contacto.nombre || `Contacto ${index + 1}`}
-                        </CardTitle>
-                        {contacto.principal ? (
-                          <Badge variant="secondary">
-                            <StarIcon
-                              data-icon="inline-start"
-                              className="fill-current text-primary"
-                            />
-                            Principal
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        {!contacto.principal ? (
-                          <Button
-                            variant="sidebar"
-                            size="sm"
-                            onClick={() => setPrimaryContacto(contacto.id)}
-                          >
-                            Definir principal
-                          </Button>
-                        ) : null}
-                        <Button
-                          variant="sidebar"
-                          size="sm"
-                          onClick={() => removeContacto(contacto.id)}
-                        >
-                          <Trash2Icon data-icon="inline-start" />
-                          Quitar
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <FieldGroup className="grid lg:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor={`contacto-nombre-${contacto.id}`}>
-                          Nombre completo
-                        </FieldLabel>
-                        <Input
-                          id={`contacto-nombre-${contacto.id}`}
-                          value={contacto.nombre}
-                          onChange={(event) =>
-                            updateContacto(contacto.id, "nombre", event.target.value)
-                          }
-                          placeholder="Nombre y apellido"
-                        />
-                      </Field>
-
-                      <Field>
-                        <FieldLabel htmlFor={`contacto-cargo-${contacto.id}`}>
-                          Cargo o area
-                        </FieldLabel>
-                        <Input
-                          id={`contacto-cargo-${contacto.id}`}
-                          value={contacto.cargo}
-                          onChange={(event) =>
-                            updateContacto(contacto.id, "cargo", event.target.value)
-                          }
-                          placeholder="Compras, administracion, marketing..."
-                        />
-                      </Field>
-
-                      <Field>
-                        <FieldLabel htmlFor={`contacto-email-${contacto.id}`}>
-                          Correo electronico
-                        </FieldLabel>
-                        <Input
-                          id={`contacto-email-${contacto.id}`}
-                          type="email"
-                          value={contacto.email}
-                          onChange={(event) =>
-                            updateContacto(contacto.id, "email", event.target.value)
-                          }
-                          placeholder="mail@empresa.com"
-                        />
-                      </Field>
-
-                      <FieldGroup className="grid md:grid-cols-[180px_1fr]">
-                        <Field>
-                          <FieldLabel htmlFor={`contacto-codigo-${contacto.id}`}>
-                            Codigo pais
-                          </FieldLabel>
-                          <Select
-                            items={phoneCodeItems}
-                            value={contacto.telefonoCodigo}
-                            onValueChange={(value) => {
-                              if (!value) {
-                                return;
-                              }
-
-                              updateContacto(contacto.id, "telefonoCodigo", value);
-                            }}
-                          >
-                            <SelectTrigger
-                              id={`contacto-codigo-${contacto.id}`}
-                              className="w-full"
-                            >
-                              <SelectValue placeholder="Codigo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                {phoneCodeItems.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-
-                        <Field>
-                          <FieldLabel htmlFor={`contacto-telefono-${contacto.id}`}>
-                            Telefono
-                          </FieldLabel>
-                          <Input
-                            id={`contacto-telefono-${contacto.id}`}
-                            inputMode="tel"
-                            value={contacto.telefonoNumero}
-                            onChange={(event) =>
-                              updateContacto(
-                                contacto.id,
-                                "telefonoNumero",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="Numero del contacto"
-                          />
-                          <FieldDescription>
-                            WhatsApp:{" "}
-                            {formatWhatsappPhone(
-                              contacto.telefonoCodigo,
-                              contacto.telefonoNumero,
-                            ) || "Sin definir"}
-                          </FieldDescription>
-                        </Field>
-                      </FieldGroup>
-                    </FieldGroup>
-                  </CardContent>
-                </Card>
-                ) : null}
-              </TabsContent>
-            ))}
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader className="gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle className="text-lg font-bold tracking-tight">
-                Direcciones
-              </CardTitle>
-              <CardDescription>
-                Registra multiples direcciones y marca una como principal para
-                uso operativo.
-              </CardDescription>
+                  <UserRoundPlusIcon data-icon="inline-start" />
+                  Agregar contacto
+                </Button>
+              ) : null}
             </div>
-            <Button variant="brand" className="w-full sm:w-auto" onClick={addDireccion}>
-              <PlusIcon data-icon="inline-start" />
-              Agregar direccion
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Tabs
-            value={activeDireccionId}
-            onValueChange={(value) => {
-              if (value) {
-                setActiveDireccionId(value);
-              }
-            }}
-          >
-            <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-              {direcciones.map((direccion, index) => (
-                <TabsTrigger
-                  key={direccion.id}
-                  value={direccion.id}
-                  className="flex-none rounded-lg px-3 py-1.5"
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {contactos.length === 0 ? (
+              <Empty className="min-h-48">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <UserRoundPlusIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>Sin contactos adicionales</EmptyTitle>
+                  <EmptyDescription>
+                    El teléfono y el correo principal pueden cargarse arriba.
+                    Agregá un contacto solo si necesitás identificar a una
+                    persona específica.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <Tabs
+                value={activeContactoId}
+                onValueChange={(value) => {
+                  if (value) {
+                    setActiveContactoId(value);
+                  }
+                }}
+              >
+                <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
+                  {contactos.map((contacto, index) => (
+                    <TabsTrigger
+                      key={contacto.id}
+                      value={contacto.id}
+                      className="flex-none rounded-lg px-3 py-1.5"
+                    >
+                      {contacto.nombre || `Contacto ${index + 1}`}
+                      {contacto.principal ? (
+                        <StarIcon className="fill-current text-primary" />
+                      ) : null}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {contactos.map((contacto, index) => (
+                  <TabsContent key={contacto.id} value={contacto.id}>
+                    {activeContactoId === contacto.id ? (
+                      <Card className="rounded-xl border-border/70 shadow-none">
+                        <CardHeader className="gap-4 border-b border-border/70">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex items-center gap-2">
+                              <CardTitle className="text-base">
+                                {contacto.nombre || `Contacto ${index + 1}`}
+                              </CardTitle>
+                              {contacto.principal ? (
+                                <Badge variant="secondary">
+                                  <StarIcon
+                                    data-icon="inline-start"
+                                    className="fill-current text-primary"
+                                  />
+                                  Principal
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              {!contacto.principal ? (
+                                <Button
+                                  type="button"
+                                  variant="sidebar"
+                                  size="sm"
+                                  onClick={() =>
+                                    setPrimaryContacto(contacto.id)
+                                  }
+                                >
+                                  Definir principal
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => removeContacto(contacto.id)}
+                              >
+                                <Trash2Icon data-icon="inline-start" />
+                                Quitar
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <FieldGroup className="grid lg:grid-cols-2">
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`contacto-nombre-${contacto.id}`}
+                              >
+                                Nombre completo
+                              </FieldLabel>
+                              <Input
+                                id={`contacto-nombre-${contacto.id}`}
+                                value={contacto.nombre}
+                                onChange={(event) =>
+                                  updateContacto(
+                                    contacto.id,
+                                    "nombre",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Nombre y apellido"
+                              />
+                            </Field>
+
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`contacto-cargo-${contacto.id}`}
+                              >
+                                Cargo o area
+                              </FieldLabel>
+                              <Input
+                                id={`contacto-cargo-${contacto.id}`}
+                                value={contacto.cargo}
+                                onChange={(event) =>
+                                  updateContacto(
+                                    contacto.id,
+                                    "cargo",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Compras, administracion, marketing..."
+                              />
+                            </Field>
+
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`contacto-email-${contacto.id}`}
+                              >
+                                Correo electrónico
+                              </FieldLabel>
+                              <Input
+                                id={`contacto-email-${contacto.id}`}
+                                type="email"
+                                value={contacto.email}
+                                onChange={(event) =>
+                                  updateContacto(
+                                    contacto.id,
+                                    "email",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="mail@empresa.com"
+                              />
+                            </Field>
+
+                            <FieldGroup className="grid md:grid-cols-[180px_1fr]">
+                              <Field>
+                                <FieldLabel
+                                  htmlFor={`contacto-codigo-${contacto.id}`}
+                                >
+                                  Código de país
+                                </FieldLabel>
+                                <Select
+                                  items={phoneCodeItems}
+                                  value={contacto.telefonoCodigo}
+                                  onValueChange={(value) => {
+                                    if (!value) {
+                                      return;
+                                    }
+
+                                    updateContacto(
+                                      contacto.id,
+                                      "telefonoCodigo",
+                                      value,
+                                    );
+                                  }}
+                                >
+                                  <SelectTrigger
+                                    id={`contacto-codigo-${contacto.id}`}
+                                    className="w-full"
+                                  >
+                                    <SelectValue placeholder="Código" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectGroup>
+                                      {phoneCodeItems.map((item) => (
+                                        <SelectItem
+                                          key={item.value}
+                                          value={item.value}
+                                        >
+                                          {item.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </Field>
+
+                              <Field>
+                                <FieldLabel
+                                  htmlFor={`contacto-telefono-${contacto.id}`}
+                                >
+                                  Teléfono
+                                </FieldLabel>
+                                <Input
+                                  id={`contacto-telefono-${contacto.id}`}
+                                  inputMode="tel"
+                                  value={contacto.telefonoNumero}
+                                  onChange={(event) =>
+                                    updateContacto(
+                                      contacto.id,
+                                      "telefonoNumero",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="Número del contacto"
+                                />
+                                <FieldDescription>
+                                  WhatsApp:{" "}
+                                  {formatWhatsappPhone(
+                                    contacto.telefonoCodigo,
+                                    contacto.telefonoNumero,
+                                  ) || "Sin definir"}
+                                </FieldDescription>
+                              </Field>
+                            </FieldGroup>
+                          </FieldGroup>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+                  </TabsContent>
+                ))}
+              </Tabs>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight">
+                  Direcciones
+                </CardTitle>
+                <CardDescription>
+                  Registrá múltiples direcciones y marcá una como principal para
+                  uso operativo.
+                </CardDescription>
+              </div>
+              {!readOnly ? (
+                <Button
+                  type="button"
+                  variant="brand"
+                  className="w-full sm:w-auto"
+                  onClick={addDireccion}
                 >
-                  {direccion.descripcion || `Direccion ${index + 1}`}
-                  {direccion.principal ? (
-                    <StarIcon className="fill-current text-primary" />
-                  ) : null}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+                  <PlusIcon data-icon="inline-start" />
+                  Agregar dirección
+                </Button>
+              ) : null}
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {direcciones.length === 0 ? (
+              <Empty className="min-h-48">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <MapPinHouseIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>Sin direcciones cargadas</EmptyTitle>
+                  <EmptyDescription>
+                    Podés guardar el cliente sin dirección y completarla cuando
+                    la necesites para facturación o entrega.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <Tabs
+                value={activeDireccionId}
+                onValueChange={(value) => {
+                  if (value) {
+                    setActiveDireccionId(value);
+                  }
+                }}
+              >
+                <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
+                  {direcciones.map((direccion, index) => (
+                    <TabsTrigger
+                      key={direccion.id}
+                      value={direccion.id}
+                      className="flex-none rounded-lg px-3 py-1.5"
+                    >
+                      {direccion.descripcion || `Dirección ${index + 1}`}
+                      {direccion.principal ? (
+                        <StarIcon className="fill-current text-primary" />
+                      ) : null}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
 
-            {direcciones.map((direccion, index) => (
-              <TabsContent key={direccion.id} value={direccion.id}>
-                {activeDireccionId === direccion.id ? (
-                <Card className="rounded-xl border-border/70 shadow-none">
-                  <CardHeader className="gap-4 border-b border-border/70">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-base">
-                          {direccion.descripcion || `Direccion ${index + 1}`}
-                        </CardTitle>
-                        {direccion.principal ? (
-                          <Badge variant="secondary">
-                            <StarIcon
-                              data-icon="inline-start"
-                              className="fill-current text-primary"
-                            />
-                            Principal
-                          </Badge>
-                        ) : null}
-                        <Badge variant="outline">
-                          <MapPinHouseIcon data-icon="inline-start" />
-                          {
-                            addressTypeItems.find((item) => item.value === direccion.tipo)
-                              ?.label
-                          }
-                        </Badge>
-                      </div>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        {!direccion.principal ? (
-                          <Button
-                            variant="sidebar"
-                            size="sm"
-                            onClick={() => setPrimaryDireccion(direccion.id)}
-                          >
-                            Definir principal
-                          </Button>
-                        ) : null}
-                        <Button
-                          variant="sidebar"
-                          size="sm"
-                          onClick={() => removeDireccion(direccion.id)}
-                        >
-                          <Trash2Icon data-icon="inline-start" />
-                          Quitar
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <FieldGroup className="grid lg:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-descripcion-${direccion.id}`}>
-                          Descripcion
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-descripcion-${direccion.id}`}
-                          value={direccion.descripcion}
-                          onChange={(event) =>
-                            updateDireccion(
-                              direccion.id,
-                              "descripcion",
-                              event.target.value,
-                            )
-                          }
-                          placeholder="Ej. Domicilio principal"
-                        />
-                      </Field>
+                {direcciones.map((direccion, index) => (
+                  <TabsContent key={direccion.id} value={direccion.id}>
+                    {activeDireccionId === direccion.id ? (
+                      <Card className="rounded-xl border-border/70 shadow-none">
+                        <CardHeader className="gap-4 border-b border-border/70">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <CardTitle className="text-base">
+                                {direccion.descripcion ||
+                                  `Dirección ${index + 1}`}
+                              </CardTitle>
+                              {direccion.principal ? (
+                                <Badge variant="secondary">
+                                  <StarIcon
+                                    data-icon="inline-start"
+                                    className="fill-current text-primary"
+                                  />
+                                  Principal
+                                </Badge>
+                              ) : null}
+                              <Badge variant="outline">
+                                <MapPinHouseIcon data-icon="inline-start" />
+                                {
+                                  addressTypeItems.find(
+                                    (item) => item.value === direccion.tipo,
+                                  )?.label
+                                }
+                              </Badge>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              {!direccion.principal ? (
+                                <Button
+                                  type="button"
+                                  variant="sidebar"
+                                  size="sm"
+                                  onClick={() =>
+                                    setPrimaryDireccion(direccion.id)
+                                  }
+                                >
+                                  Definir principal
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => removeDireccion(direccion.id)}
+                              >
+                                <Trash2Icon data-icon="inline-start" />
+                                Quitar
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <FieldGroup className="grid lg:grid-cols-2">
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-descripcion-${direccion.id}`}
+                              >
+                                Descripcion
+                              </FieldLabel>
+                              <Input
+                                id={`direccion-descripcion-${direccion.id}`}
+                                value={direccion.descripcion}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "descripcion",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Ej. Domicilio principal"
+                              />
+                            </Field>
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-tipo-${direccion.id}`}>
-                          Tipo
-                        </FieldLabel>
-                        <Select
-                          items={addressTypeItems}
-                          value={direccion.tipo}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-tipo-${direccion.id}`}
+                              >
+                                Tipo
+                              </FieldLabel>
+                              <Select
+                                items={addressTypeItems}
+                                value={direccion.tipo}
+                                onValueChange={(value) => {
+                                  if (!value) {
+                                    return;
+                                  }
 
-                            updateDireccion(direccion.id, "tipo", value);
-                          }}
-                        >
-                          <SelectTrigger
-                            id={`direccion-tipo-${direccion.id}`}
-                            className="w-full"
-                          >
-                            <SelectValue placeholder="Selecciona un tipo" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {addressTypeItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
+                                  updateDireccion(direccion.id, "tipo", value);
+                                }}
+                              >
+                                <SelectTrigger
+                                  id={`direccion-tipo-${direccion.id}`}
+                                  className="w-full"
+                                >
+                                  <SelectValue placeholder="Seleccioná un tipo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    {addressTypeItems.map((item) => (
+                                      <SelectItem
+                                        key={item.value}
+                                        value={item.value}
+                                      >
+                                        {item.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                            </Field>
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-pais-${direccion.id}`}>
-                          Pais
-                        </FieldLabel>
-                        <Select
-                          items={countryItems}
-                          value={direccion.pais}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-pais-${direccion.id}`}
+                              >
+                                País
+                              </FieldLabel>
+                              <Select
+                                items={countryItems}
+                                value={direccion.pais}
+                                onValueChange={(value) => {
+                                  if (!value) {
+                                    return;
+                                  }
 
-                            updateDireccion(direccion.id, "pais", value);
-                          }}
-                        >
-                          <SelectTrigger
-                            id={`direccion-pais-${direccion.id}`}
-                            className="w-full"
-                          >
-                            <SelectValue placeholder="Selecciona un pais" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {countryItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
+                                  updateDireccion(direccion.id, "pais", value);
+                                }}
+                              >
+                                <SelectTrigger
+                                  id={`direccion-pais-${direccion.id}`}
+                                  className="w-full"
+                                >
+                                  <SelectValue placeholder="Seleccioná un país" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    {countryItems.map((item) => (
+                                      <SelectItem
+                                        key={item.value}
+                                        value={item.value}
+                                      >
+                                        {item.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                            </Field>
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-cp-${direccion.id}`}>
-                          Codigo postal
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-cp-${direccion.id}`}
-                          value={direccion.codigoPostal}
-                          onChange={(event) =>
-                            updateDireccion(
-                              direccion.id,
-                              "codigoPostal",
-                              event.target.value,
-                            )
-                          }
-                          placeholder="Codigo postal"
-                        />
-                      </Field>
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-cp-${direccion.id}`}
+                              >
+                                Código postal
+                              </FieldLabel>
+                              <Input
+                                id={`direccion-cp-${direccion.id}`}
+                                value={direccion.codigoPostal}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "codigoPostal",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Código postal"
+                              />
+                            </Field>
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-calle-${direccion.id}`}>
-                          Direccion
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-calle-${direccion.id}`}
-                          value={direccion.direccion}
-                          onChange={(event) =>
-                            updateDireccion(direccion.id, "direccion", event.target.value)
-                          }
-                          placeholder="Calle o avenida"
-                        />
-                      </Field>
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-calle-${direccion.id}`}
+                              >
+                                Dirección
+                              </FieldLabel>
+                              <Input
+                                id={`direccion-calle-${direccion.id}`}
+                                value={direccion.direccion}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "direccion",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Calle o avenida"
+                              />
+                            </Field>
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-numero-${direccion.id}`}>
-                          Numero
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-numero-${direccion.id}`}
-                          value={direccion.numero}
-                          onChange={(event) =>
-                            updateDireccion(direccion.id, "numero", event.target.value)
-                          }
-                          placeholder="Numero o piso"
-                        />
-                      </Field>
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-numero-${direccion.id}`}
+                              >
+                                Número
+                              </FieldLabel>
+                              <Input
+                                id={`direccion-numero-${direccion.id}`}
+                                value={direccion.numero}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "numero",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Número o piso"
+                              />
+                            </Field>
 
-                      <Field className="lg:col-span-2">
-                        <FieldLabel htmlFor={`direccion-ciudad-${direccion.id}`}>
-                          Ciudad
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-ciudad-${direccion.id}`}
-                          value={direccion.ciudad}
-                          onChange={(event) =>
-                            updateDireccion(direccion.id, "ciudad", event.target.value)
-                          }
-                          placeholder="Ciudad"
-                        />
-                      </Field>
-                    </FieldGroup>
-                  </CardContent>
-                </Card>
-                ) : null}
-              </TabsContent>
-            ))}
-          </Tabs>
-        </CardContent>
+                            <Field className="lg:col-span-2">
+                              <FieldLabel
+                                htmlFor={`direccion-ciudad-${direccion.id}`}
+                              >
+                                Ciudad
+                              </FieldLabel>
+                              <Input
+                                id={`direccion-ciudad-${direccion.id}`}
+                                value={direccion.ciudad}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "ciudad",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Ciudad"
+                              />
+                            </Field>
+                          </FieldGroup>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+                  </TabsContent>
+                ))}
+              </Tabs>
+            )}
+          </CardContent>
       </Card>
-    </div>
+      {mode !== "create" ? (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold tracking-tight">
+              Actividad de la ficha
+            </CardTitle>
+            <CardDescription>
+              Últimos cambios registrados con fecha y responsable.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {cliente.eventos.length === 0 ? (
+              <Empty className="min-h-32">
+                <EmptyHeader>
+                  <EmptyTitle>Sin actividad registrada</EmptyTitle>
+                  <EmptyDescription>
+                    Los próximos cambios quedarán visibles en esta sección.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {cliente.eventos.map((evento) => (
+                  <li key={evento.id} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <span>
+                      <strong className="font-medium capitalize">{evento.tipo}</strong>
+                      {" por "}{evento.actorNombre}
+                    </span>
+                    <time dateTime={evento.createdAt} className="text-sm text-muted-foreground">
+                      {new Intl.DateTimeFormat("es-AR", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }).format(new Date(evento.createdAt))}
+                    </time>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+      </fieldset>
+    </form>
   );
 }

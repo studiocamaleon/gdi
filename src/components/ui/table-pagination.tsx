@@ -35,9 +35,9 @@ export function TablePagination({
           size="sm"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
-          aria-label="Pagina anterior"
+          aria-label="Página anterior"
         >
-          <ChevronLeftIcon className="h-4 w-4" />
+          <ChevronLeftIcon />
         </Button>
         <span className="px-2">
           {page} / {pages}
@@ -47,9 +47,9 @@ export function TablePagination({
           size="sm"
           disabled={page >= pages}
           onClick={() => onPageChange(page + 1)}
-          aria-label="Pagina siguiente"
+          aria-label="Página siguiente"
         >
-          <ChevronRightIcon className="h-4 w-4" />
+          <ChevronRightIcon />
         </Button>
       </div>
     </div>

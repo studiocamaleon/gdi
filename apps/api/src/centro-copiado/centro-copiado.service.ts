@@ -43,7 +43,9 @@ import { PliegoDim } from './pliegos';
  * fuente de verdad es la config del tenant; esto sólo destraba el out-of-box.
  */
 const TAPA_TRANSPARENTE_RX = /transp|cristal/i;
-function esTapaFrontalDetect(...textos: Array<string | null | undefined>): boolean {
+function esTapaFrontalDetect(
+  ...textos: Array<string | null | undefined>
+): boolean {
   return TAPA_TRANSPARENTE_RX.test(textos.filter(Boolean).join(' '));
 }
 
@@ -75,7 +77,11 @@ type Ctx = PlantillaContexto & {
     materiaPrimaId: string;
     nombre: string;
     esFrontal: boolean;
-    variantes: Array<{ id: string; anchoMm: number | null; altoMm: number | null }>;
+    variantes: Array<{
+      id: string;
+      anchoMm: number | null;
+      altoMm: number | null;
+    }>;
   }>;
   /** Materia prima elegida en Configuración para cada rol (null = auto/heurística). */
   tapaFrontalMpId: string | null;
@@ -1507,10 +1513,12 @@ export class CentroCopiadoService {
     }
     if (clienteId) {
       const cliente = await this.prisma.cliente.findFirst({
-        where: { id: clienteId, tenantId },
+        where: { id: clienteId, tenantId, activo: true },
         select: { id: true },
       });
-      if (!cliente) throw new NotFoundException('No se encontró el cliente.');
+      if (!cliente) {
+        throw new NotFoundException('No se encontró un cliente activo.');
+      }
     }
     const nueva = await this.prisma.cotizacion.create({
       data: { tenantId, clienteId: clienteId ?? null, estado: 'borrador' },

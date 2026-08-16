@@ -17,7 +17,7 @@
   --surface: #fff;
 
   position: relative;
-  width: 262px;
+  width: 100%;
   height: 100%;
   flex: none;
   display: flex;
@@ -29,7 +29,7 @@
 }
 
 .mini {
-  width: 66px;
+  width: 100%;
 }
 
 .sb > * {

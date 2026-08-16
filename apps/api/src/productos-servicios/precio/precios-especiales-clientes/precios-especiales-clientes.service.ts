@@ -129,9 +129,13 @@ export class PreciosEspecialesClientesService {
 
   private async assertClienteExiste(tenantId: string, clienteId: string) {
     const c = await this.prisma.cliente.findFirst({
-      where: { id: clienteId, tenantId },
+      where: { id: clienteId, tenantId, activo: true },
       select: { id: true },
     });
-    if (!c) throw new NotFoundException(`Cliente ${clienteId} no encontrado`);
+    if (!c) {
+      throw new NotFoundException(
+        `Cliente ${clienteId} no encontrado o inhabilitado`,
+      );
+    }
   }
 }

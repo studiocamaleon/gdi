@@ -16,7 +16,7 @@ import {
   PALABRAS_CONFIG,
   seccionesConfigVisibles,
 } from "@/components/configuracion/configuracion-secciones";
-import { useSidebar } from "@/components/ui/sidebar";
+import { Sidebar, useSidebar } from "@/components/ui/sidebar";
 import { PerfilUsuarioModal } from "@/components/perfil-usuario-modal";
 import s from "@/components/app-sidebar.module.css";
 
@@ -29,7 +29,17 @@ type IconComponent = (props: IconProps) => React.ReactElement;
 
 const Ico = {
   Chart: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="M4 3v16a2 2 0 0 0 2 2h15" />
       <rect x="7" y="12" width="3.5" height="5" rx="1" />
       <rect x="13" y="8" width="3.5" height="9" rx="1" />
@@ -37,7 +47,17 @@ const Ico = {
     </svg>
   ),
   Grid: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <rect x="3" y="3" width="7" height="7" rx="1.5" />
       <rect x="14" y="3" width="7" height="7" rx="1.5" />
       <rect x="3" y="14" width="7" height="7" rx="1.5" />
@@ -45,13 +65,33 @@ const Ico = {
     </svg>
   ),
   Briefcase: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <rect x="2" y="7" width="20" height="14" rx="2" />
       <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     </svg>
   ),
   Users: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
@@ -59,46 +99,116 @@ const Ico = {
     </svg>
   ),
   Coin: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <circle cx="12" cy="12" r="9" />
       <path d="M14.5 9.5h-3.75a1.75 1.75 0 0 0 0 3.5h2.5a1.75 1.75 0 0 1 0 3.5H9" />
       <path d="M12 7v1.5M12 15.5V17" />
     </svg>
   ),
   Factory: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="M3 20V10l5 3V10l5 3V10l5 3v7Z" />
       <path d="M3 20h18" />
       <path d="M7 16h2M11 16h2M15 16h2" />
     </svg>
   ),
   Wallet: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="M20 7H5a2 2 0 0 1 0-4h13v4" />
       <path d="M4 5v14a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1" />
       <path d="M16 13.5h.5" />
     </svg>
   ),
   Cube: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="M12 3 21 7.5v9L12 21 3 16.5v-9Z" />
       <path d="M3 7.5 12 12l9-4.5" />
       <path d="M12 12v9" />
     </svg>
   ),
   Cog: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8 2 2 0 1 1-2.8 2.8 1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2 2 2 0 1 1-2.8-2.8A1.7 1.7 0 0 0 3 14a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9 2 2 0 1 1 2.8-2.8A1.7 1.7 0 0 0 10 3a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2 2 2 0 1 1 2.8 2.8A1.7 1.7 0 0 0 21 10a2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.6 1Z" />
     </svg>
   ),
   Chev: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="m9 6 6 6-6 6" />
     </svg>
   ),
   Search: (props: IconProps) => (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3-3" />
     </svg>
@@ -106,11 +216,38 @@ const Ico = {
 } satisfies Record<string, IconComponent>;
 
 const LogoNodes = ({ size = 22 }: { size?: number }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" aria-hidden="true">
-    <path d="M5.5 6.5 L18 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    <path d="M5.5 6.5 L12 17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    <path d="M18 6.5 L12 17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    <path d="M18 6.5 L18 14.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.55" />
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    fill="none"
+    aria-hidden="true"
+  >
+    <path
+      d="M5.5 6.5 L18 6.5"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+    <path
+      d="M5.5 6.5 L12 17.5"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+    <path
+      d="M18 6.5 L12 17.5"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+    <path
+      d="M18 6.5 L18 14.5"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      opacity="0.55"
+    />
     <circle cx="5.5" cy="6.5" r="2.2" fill="currentColor" />
     <circle cx="18" cy="6.5" r="2.2" fill="currentColor" />
     <circle cx="12" cy="17.5" r="2.2" fill="currentColor" />
@@ -182,7 +319,11 @@ function getParentKey(nav: NavItem[], activeKey: string | undefined) {
     return undefined;
   }
 
-  return nav.find((item) => hasChildren(item) && item.children.some((child) => child.key === activeKey))?.key;
+  return nav.find(
+    (item) =>
+      hasChildren(item) &&
+      item.children.some((child) => child.key === activeKey),
+  )?.key;
 }
 
 // La card muestra plan y días SÓLO con datos reales del backend. Antes esto
@@ -225,8 +366,14 @@ function getSuscripcionProgress(susc: TenantSummary["suscripcion"]) {
 // una sección sin módulos visibles no muestra encabezado. "Sistema" (control
 // plane) se arma aparte porque es staff-only.
 const SECCIONES: ReadonlyArray<{ label: string; keys: string[] }> = [
-  { label: "Operación", keys: ["panel", "comercial", "produccion", "inventario"] },
-  { label: "Gestión", keys: ["registros", "costos", "administracion", "reportes"] },
+  {
+    label: "Operación",
+    keys: ["panel", "comercial", "produccion", "inventario"],
+  },
+  {
+    label: "Gestión",
+    keys: ["registros", "costos", "administracion", "reportes"],
+  },
 ];
 
 export function AppSidebar({ currentUser }: AppSidebarProps) {
@@ -256,19 +403,19 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   const parentKey = getParentKey(nav, activeKey);
   // Acordeón: un solo grupo abierto a la vez. Se abre el del módulo actual;
   // al abrir otro, el anterior se colapsa.
-  const [openKey, setOpenKey] = React.useState<string | null>(() => parentKey ?? null);
+  const [openKey, setOpenKey] = React.useState<string | null>(
+    () => parentKey ?? null,
+  );
   // Sin dato real no se inventa un nombre de plan (antes caía a "Plan diamante").
   const suscripcion = currentUser.tenantActual.suscripcion;
   const planNombre = suscripcion?.planNombre?.trim() || "Suscripción";
   const suscripcionProgress = getSuscripcionProgress(suscripcion);
-  const { state, setOpen } = useSidebar();
-  const collapsed = state === "collapsed";
-  const usuarioNombre =
-    currentUser.nombreCompleto?.trim() || currentUser.email;
+  const { state, setOpen, setOpenMobile, isMobile } = useSidebar();
+  const collapsed = !isMobile && state === "collapsed";
+  const usuarioNombre = currentUser.nombreCompleto?.trim() || currentUser.email;
   const tenantNombre = currentUser.tenantActual.nombre;
   const rolNombre =
-    currentUser.tenantActual.rolNombre?.trim() ||
-    currentUser.tenantActual.rol;
+    currentUser.tenantActual.rolNombre?.trim() || currentUser.tenantActual.rol;
   const [query, setQuery] = React.useState("");
   const [perfilAbierto, setPerfilAbierto] = React.useState(false);
   const q = query.trim().toLowerCase();
@@ -311,6 +458,10 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
 
     setOpenKey(parentKey);
   }, [parentKey]);
+
+  React.useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
 
   const toggle = (key: string) => {
     setOpenKey((prev) => (prev === key ? null : key));
@@ -405,163 +556,169 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   };
 
   return (
-    <aside
-      className={`${s.sb} ${collapsed ? s.mini : ""}`}
-      data-collapsed={collapsed}
-    >
-      {/* Sin malla 3D ni toggle propio: el colapso vive en el botón del
+    <Sidebar collapsible="icon">
+      <aside
+        className={`${s.sb} ${collapsed ? s.mini : ""}`}
+        data-collapsed={collapsed}
+      >
+        {/* Sin malla 3D ni toggle propio: el colapso vive en el botón del
           topbar (SidebarTrigger), que hace exactamente lo mismo. */}
-      <Brand collapsed={collapsed} />
+        <Brand collapsed={collapsed} />
 
-      {collapsed ? (
-        <button
-          type="button"
-          className={s.search}
-          onClick={() => setOpen(true)}
-          title="Buscar"
-          aria-label="Buscar"
-        >
-          <Ico.Search />
-        </button>
-      ) : (
-        <label className={s.search}>
-          <Ico.Search />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                setQuery("");
-                event.currentTarget.blur();
-              }
-            }}
-            placeholder="Buscar…"
-            aria-label="Buscar en el menú"
-          />
-        </label>
-      )}
+        {collapsed ? (
+          <button
+            type="button"
+            className={s.search}
+            onClick={() => setOpen(true)}
+            title="Buscar"
+            aria-label="Buscar"
+          >
+            <Ico.Search />
+          </button>
+        ) : (
+          <label className={s.search}>
+            <Ico.Search />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setQuery("");
+                  event.currentTarget.blur();
+                }
+              }}
+              placeholder="Buscar…"
+              aria-label="Buscar en el menú"
+            />
+          </label>
+        )}
 
-      <nav className={s.nav}>
-        {SECCIONES.map((sec) => {
-          const items = sec.keys
-            .map((key) => filteredNav.find((it) => it.key === key))
-            .filter((it): it is NavItem => Boolean(it));
-          if (items.length === 0) return null;
-          return (
-            <React.Fragment key={sec.label}>
+        <nav className={s.nav}>
+          {SECCIONES.map((sec) => {
+            const items = sec.keys
+              .map((key) => filteredNav.find((it) => it.key === key))
+              .filter((it): it is NavItem => Boolean(it));
+            if (items.length === 0) return null;
+            return (
+              <React.Fragment key={sec.label}>
+                <div className={s.grp}>
+                  <span className={s.lbl}>{sec.label}</span>
+                  <span className={s.rule} />
+                </div>
+                {items.map(renderItem)}
+              </React.Fragment>
+            );
+          })}
+
+          {/* Módulos fuera de las secciones definidas (futuros): sin encabezado,
+            para que un módulo nuevo nunca desaparezca por no estar mapeado. */}
+          {(() => {
+            const enSeccion = new Set(SECCIONES.flatMap((x) => x.keys));
+            return filteredNav
+              .filter((it) => !enSeccion.has(it.key))
+              .map(renderItem);
+          })()}
+
+          {filtering && filteredNav.length === 0 && !configMatch ? (
+            <div className={s.sinResultados}>
+              Sin resultados para “{query}”.
+            </div>
+          ) : null}
+
+          {/* Sistema: control plane, sólo el staff de Grafo lo ve. La
+            autorización real la hace el API — esto es descubribilidad. */}
+          {currentUser.rolPlataforma &&
+          (!filtering || "plataforma".includes(q)) ? (
+            <React.Fragment>
               <div className={s.grp}>
-                <span className={s.lbl}>{sec.label}</span>
+                <span className={s.lbl}>Sistema</span>
                 <span className={s.rule} />
               </div>
-              {items.map(renderItem)}
+              <NavLink href="/plataforma" title="Plataforma" className={s.it}>
+                <span className={s.ic}>
+                  <Ico.Grid />
+                </span>
+                <span className={s.tx}>
+                  {filtering ? highlightMatch("Plataforma", q) : "Plataforma"}
+                </span>
+              </NavLink>
             </React.Fragment>
-          );
-        })}
+          ) : null}
+        </nav>
 
-        {/* Módulos fuera de las secciones definidas (futuros): sin encabezado,
-            para que un módulo nuevo nunca desaparezca por no estar mapeado. */}
-        {(() => {
-          const enSeccion = new Set(SECCIONES.flatMap((x) => x.keys));
-          return filteredNav
-            .filter((it) => !enSeccion.has(it.key))
-            .map(renderItem);
-        })()}
-
-        {filtering && filteredNav.length === 0 && !configMatch ? (
-          <div className={s.sinResultados}>Sin resultados para “{query}”.</div>
+        {/* El plan y la facturación son configuración: el operario no tiene por
+          qué ver cuánto paga la imprenta ni entrar a cambiarlo. */}
+        {puede(currentUser, "configuracion.ver") ? (
+          <Link href="/suscripcion" className={s.plan} title={planNombre}>
+            <div className={s.planT}>
+              <i />
+              <span>{planNombre}</span>
+            </div>
+            <div className={s.planD}>{formatPlanTier(suscripcion)}</div>
+            <div className={s.bar}>
+              <i style={{ width: `${suscripcionProgress}%` }} />
+            </div>
+            <span className={s.lnk}>Administrar suscripción</span>
+          </Link>
         ) : null}
 
-        {/* Sistema: control plane, sólo el staff de Grafo lo ve. La
-            autorización real la hace el API — esto es descubribilidad. */}
-        {currentUser.rolPlataforma &&
-        (!filtering || "plataforma".includes(q)) ? (
-          <React.Fragment>
-            <div className={s.grp}>
-              <span className={s.lbl}>Sistema</span>
-              <span className={s.rule} />
-            </div>
-            <NavLink href="/plataforma" title="Plataforma" className={s.it}>
+        <div className={s.foot}>
+          {hayConfig && (!filtering || configMatch) ? (
+            <NavLink
+              href="/configuracion"
+              title="Configuración"
+              className={`${s.it} ${configActiva ? s.on : ""}`}
+            >
               <span className={s.ic}>
-                <Ico.Grid />
+                <Ico.Cog />
               </span>
               <span className={s.tx}>
-                {filtering ? highlightMatch("Plataforma", q) : "Plataforma"}
+                {filtering
+                  ? highlightMatch("Configuración", q)
+                  : "Configuración"}
               </span>
             </NavLink>
-          </React.Fragment>
-        ) : null}
-      </nav>
+          ) : null}
 
-      {/* El plan y la facturación son configuración: el operario no tiene por
-          qué ver cuánto paga la imprenta ni entrar a cambiarlo. */}
-      {puede(currentUser, "configuracion.ver") ? (
-        <Link href="/suscripcion" className={s.plan} title={planNombre}>
-          <div className={s.planT}>
-            <i />
-            <span>{planNombre}</span>
-          </div>
-          <div className={s.planD}>{formatPlanTier(suscripcion)}</div>
-          <div className={s.bar}>
-            <i style={{ width: `${suscripcionProgress}%` }} />
-          </div>
-          <span className={s.lnk}>Administrar suscripción</span>
-        </Link>
-      ) : null}
-
-      <div className={s.foot}>
-        {hayConfig && (!filtering || configMatch) ? (
-          <NavLink
-            href="/configuracion"
-            title="Configuración"
-            className={`${s.it} ${configActiva ? s.on : ""}`}
+          <button
+            type="button"
+            className={s.user}
+            onClick={() => setPerfilAbierto(true)}
+            title={`${usuarioNombre} · ${tenantNombre}`}
+            aria-label="Abrir perfil de usuario"
           >
-            <span className={s.ic}>
-              <Ico.Cog />
+            <span className={s.av}>{inicialesDe(usuarioNombre)}</span>
+            <span className={s.userNm}>
+              <span className={s.userA}>{usuarioNombre}</span>
+              <span className={s.userB}>
+                {tenantNombre} · {rolNombre}
+              </span>
             </span>
-            <span className={s.tx}>
-              {filtering ? highlightMatch("Configuración", q) : "Configuración"}
-            </span>
-          </NavLink>
+            <svg
+              className={s.userChev}
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m8 9 4-4 4 4M16 15l-4 4-4-4" />
+            </svg>
+          </button>
+        </div>
+
+        {perfilAbierto ? (
+          <PerfilUsuarioModal
+            currentUser={currentUser}
+            onClose={() => setPerfilAbierto(false)}
+          />
         ) : null}
-
-        <button
-          type="button"
-          className={s.user}
-          onClick={() => setPerfilAbierto(true)}
-          title={`${usuarioNombre} · ${tenantNombre}`}
-          aria-label="Abrir perfil de usuario"
-        >
-          <span className={s.av}>{inicialesDe(usuarioNombre)}</span>
-          <span className={s.userNm}>
-            <span className={s.userA}>{usuarioNombre}</span>
-            <span className={s.userB}>
-              {tenantNombre} · {rolNombre}
-            </span>
-          </span>
-          <svg
-            className={s.userChev}
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m8 9 4-4 4 4M16 15l-4 4-4-4" />
-          </svg>
-        </button>
-      </div>
-
-      {perfilAbierto ? (
-        <PerfilUsuarioModal
-          currentUser={currentUser}
-          onClose={() => setPerfilAbierto(false)}
-        />
-      ) : null}
-    </aside>
+      </aside>
+    </Sidebar>
   );
 }

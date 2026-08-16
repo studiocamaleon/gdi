@@ -1,8 +1,11 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEmail,
   IsIn,
+  IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
@@ -11,10 +14,12 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { ClienteContactoDto } from './contacto.dto';
 import { ClienteDireccionDto } from './direccion.dto';
+import { PAISES_CLIENTES } from './paises';
 
 /**
  * Condiciones fiscales del receptor (AR). Junto con la del emisor definen
@@ -33,10 +38,12 @@ export type CondicionFiscal = (typeof CONDICIONES_FISCALES)[number];
 export class UpsertClienteDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(160)
   nombre: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   razonSocial?: string;
 
   /** CUIT con o sin guiones; se normaliza a 11 dígitos. */
@@ -45,6 +52,7 @@ export class UpsertClienteDto {
   @Matches(/^[\d-]*$/, {
     message: 'El CUIT sólo puede tener números y guiones',
   })
+  @MaxLength(13)
   cuit?: string;
 
   /** DNI sin puntos. Va aparte del CUIT: ARCA los declara con tipos
@@ -64,28 +72,63 @@ export class UpsertClienteDto {
   @Min(0)
   limiteCredito?: number | null;
 
+  @ValidateIf(
+    (_, value) => value !== undefined && value !== null && value !== '',
+  )
   @IsEmail()
-  email: string;
+  @MaxLength(254)
+  email?: string | null;
 
+  @IsOptional()
   @IsString()
-  telefonoCodigo: string;
+  @MaxLength(8)
+  telefonoCodigo?: string;
 
+  @IsOptional()
   @IsString()
-  telefonoNumero: string;
+  @MaxLength(30)
+  telefonoNumero?: string;
 
   @IsString()
   @Length(2, 2)
+  @IsIn(PAISES_CLIENTES as unknown as string[], {
+    message: 'El país no pertenece al catálogo disponible.',
+  })
   pais: string;
 
+  @IsOptional()
+  @IsBoolean()
+  aceptaWhatsapp?: boolean | null;
+
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => ClienteContactoDto)
   contactos: ClienteContactoDto[];
 
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => ClienteDireccionDto)
   direcciones: ClienteDireccionDto[];
+}
+
+export class UpdateClienteDto extends UpsertClienteDto {
+  @IsISO8601()
+  updatedAt: string;
+}
+
+export class EstadoClienteDto {
+  @IsBoolean()
+  activo: boolean;
+}
+
+export class ImportarClientesDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertClienteDto)
+  clientes: UpsertClienteDto[];
 }
 
 /**

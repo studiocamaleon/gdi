@@ -47,7 +47,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TablePagination, usePagination } from "@/components/ui/table-pagination";
+import {
+  TablePagination,
+  usePagination,
+} from "@/components/ui/table-pagination";
 import { Input } from "@/components/ui/input";
 
 type ProveedoresTableProps = {
@@ -67,19 +70,23 @@ function buildCsv(proveedores: ProveedorDetalle[]) {
   ];
 
   return rows
-    .map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(","))
+    .map((row) =>
+      row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(","),
+    )
     .join("\n");
 }
 
-export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) {
+export function ProveedoresTable({
+  initialProveedores,
+}: ProveedoresTableProps) {
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [proveedores, setProveedores] = React.useState(initialProveedores);
   const [search, setSearch] = React.useState("");
   const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
-  const [selectedProveedores, setSelectedProveedores] = React.useState<Set<string>>(
-    new Set(),
-  );
+  const [selectedProveedores, setSelectedProveedores] = React.useState<
+    Set<string>
+  >(new Set());
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isDeleting, startDeleteTransition] = React.useTransition();
   const [isImporting, startImportTransition] = React.useTransition();
@@ -99,8 +106,11 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
   const { paged, page, total, setPage, pageSize } = usePagination(filtered);
 
   const selectedCount = selectedProveedores.size;
-  const allSelected = paged.length > 0 && paged.every((p) => selectedProveedores.has(p.id));
-  const selectedRows = proveedores.filter((proveedor) => selectedProveedores.has(proveedor.id));
+  const allSelected =
+    paged.length > 0 && paged.every((p) => selectedProveedores.has(p.id));
+  const selectedRows = proveedores.filter((proveedor) =>
+    selectedProveedores.has(proveedor.id),
+  );
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -159,7 +169,9 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
   const confirmarEliminarSeleccion = () => {
     setConfirmandoEliminar(false);
     startDeleteTransition(async () => {
-      await Promise.all(selectedRows.map((proveedor) => deleteProveedor(proveedor.id)));
+      await Promise.all(
+        selectedRows.map((proveedor) => deleteProveedor(proveedor.id)),
+      );
       setProveedores((current) =>
         current.filter((proveedor) => !selectedProveedores.has(proveedor.id)),
       );
@@ -171,7 +183,7 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
   const handleImportFile = (file: File | undefined) => {
     if (!file) return;
     startImportTransition(async () => {
-      const parsed = parseContactImportCsv(await file.text());
+      const parsed = parseContactImportCsv(await file.text(), "proveedores");
       if (parsed.fatalError) {
         toast.error(parsed.fatalError);
         return;
@@ -186,7 +198,9 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
         return;
       }
 
-      const payloads = parsed.rows.flatMap((row) => (row.payload ? [row.payload] : []));
+      const payloads = parsed.rows.flatMap((row) =>
+        row.payload ? [row.payload] : [],
+      );
       const created: ProveedorDetalle[] = [];
       const failed: string[] = [];
       for (let idx = 0; idx < payloads.length; idx += 1) {
@@ -230,7 +244,10 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
             <Input
               placeholder="Buscar por nombre, email o ciudad..."
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="max-w-xs"
             />
 
@@ -252,12 +269,18 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
                     <Button variant="sidebar" className="w-full sm:w-auto" />
                   }
                 >
-                  {selectedCount > 0 ? `Acciones (${selectedCount})` : "Acciones"}
+                  {selectedCount > 0
+                    ? `Acciones (${selectedCount})`
+                    : "Acciones"}
                   <ChevronDownIcon data-icon="inline-end" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuGroup>
-                    <DropdownMenuItem onClick={() => downloadContactImportTemplate("proveedores")}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        downloadContactImportTemplate("proveedores")
+                      }
+                    >
                       <FileSpreadsheetIcon />
                       Descargar plantilla
                     </DropdownMenuItem>
@@ -364,7 +387,12 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
               })}
             </TableBody>
           </Table>
-          <TablePagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} />
+          <TablePagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
 

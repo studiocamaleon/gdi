@@ -899,7 +899,11 @@ export class OrdenesTrabajoService {
     const [cliente, vendedor, emisor] = await Promise.all([
       payload.clienteId
         ? this.prisma.cliente.findFirst({
-            where: { id: payload.clienteId, tenantId: auth.tenantId },
+            where: {
+              id: payload.clienteId,
+              tenantId: auth.tenantId,
+              activo: true,
+            },
             select: { id: true, nombre: true },
           })
         : null,
@@ -1350,7 +1354,11 @@ export class OrdenesTrabajoService {
     const [clienteNuevo, vendedorNuevo] = await Promise.all([
       payload.clienteId
         ? this.prisma.cliente.findFirst({
-            where: { id: payload.clienteId, tenantId: auth.tenantId },
+            where: {
+              id: payload.clienteId,
+              tenantId: auth.tenantId,
+              activo: true,
+            },
             select: { id: true },
           })
         : null,
@@ -1367,8 +1375,7 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró el vendedor.');
 
     let itemsAutorizados:
-      | Array<CrearOrdenTrabajoItemDto & { id?: string }>
-      | undefined;
+      Array<CrearOrdenTrabajoItemDto & { id?: string }> | undefined;
     if (payload.items) {
       const idsExistentes = payload.items
         .map((item) => item.id)
@@ -1636,7 +1643,11 @@ export class OrdenesTrabajoService {
     const [clienteNuevo, vendedorNuevo] = await Promise.all([
       payload.clienteId
         ? this.prisma.cliente.findFirst({
-            where: { id: payload.clienteId, tenantId: auth.tenantId },
+            where: {
+              id: payload.clienteId,
+              tenantId: auth.tenantId,
+              activo: true,
+            },
             select: { id: true, nombre: true },
           })
         : null,
@@ -2217,8 +2228,7 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
-            | undefined;
+            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
