@@ -50,9 +50,7 @@ export const ESTADO_CANCELADA = "cancelada" as const;
  */
 export function esCancelable(estado: OrdenTrabajoEstado): boolean {
   return (
-    estado === "borrador" ||
-    estado === "pendiente" ||
-    estado === "produccion"
+    estado === "borrador" || estado === "pendiente" || estado === "produccion"
   );
 }
 
@@ -61,7 +59,12 @@ export const ORDEN_TRABAJO_ESTADOS: Record<
   { label: string; fg: string; bg: string; dot: string }
 > = {
   borrador: { label: "Borrador", fg: "#6e6e76", bg: "#f0efec", dot: "#92929b" },
-  pendiente: { label: "Pendiente", fg: "#c2410c", bg: "#fef3ed", dot: "#e8802a" },
+  pendiente: {
+    label: "Pendiente",
+    fg: "#c2410c",
+    bg: "#fef3ed",
+    dot: "#e8802a",
+  },
   produccion: {
     label: "En producción",
     fg: "#1d4ed8",
@@ -74,10 +77,20 @@ export const ORDEN_TRABAJO_ESTADOS: Record<
     bg: "#e9f4ee",
     dot: "#1f9d6b",
   },
-  entregada: { label: "Entregada", fg: "#2c2c33", bg: "#e8e6e1", dot: "#4a4a52" },
+  entregada: {
+    label: "Entregada",
+    fg: "#2c2c33",
+    bg: "#e8e6e1",
+    dot: "#4a4a52",
+  },
   // Apagada a propósito: no es un error (rojo) ni un logro (verde), es un
   // trabajo que no va a pasar. Tiene que leerse como cerrado, no como alarma.
-  cancelada: { label: "Cancelada", fg: "#7a7a82", bg: "#f4f3f1", dot: "#a8a8b0" },
+  cancelada: {
+    label: "Cancelada",
+    fg: "#7a7a82",
+    bg: "#f4f3f1",
+    dot: "#a8a8b0",
+  },
 };
 
 /**
@@ -96,6 +109,10 @@ export type OrdenTrabajoListItem = {
   estado: OrdenTrabajoEstado;
   /** Fecha de creación (ISO). */
   creadaEl: string;
+  /** Instante real en que salió del borrador y fue emitida al taller. */
+  fechaEmision: string | null;
+  /** Versión optimista para rechazar ediciones hechas sobre datos viejos. */
+  version: string;
   /** Fecha comprometida de entrega (ISO date) o null si no se pactó. */
   fechaEntrega: string | null;
   /** Cantidad de items (productos) de la orden. */
@@ -124,6 +141,8 @@ export type OrdenTrabajoEventoTipo =
   | "item_agregado"
   | "item_modificado"
   | "item_quitado"
+  | "cancelacion"
+  | "tratamiento_fiscal"
   | "paso"
   | "nota";
 
@@ -199,10 +218,7 @@ export type OrdenTrabajoProducto = {
 };
 
 export type OrdenTrabajoCuotaEstado =
-  | "pagado"
-  | "parcial"
-  | "pendiente"
-  | "vencido";
+  "pagado" | "parcial" | "pendiente" | "vencido";
 
 /**
  * Plan de pagos de la OT — PREVIEW del módulo de pagos (diseño Grafo V2).
@@ -241,6 +257,10 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   canalVenta: string | null;
   /** Cargos directos a nivel orden (viático, flete…). */
   cargosDirectos: number;
+  /** Denormalizados autoritativos de la orden; evitan recalcular históricos. */
+  subtotal: number;
+  impuestos: number;
+  descuentoTotal: number;
   /** Snapshots detallados de los cargos; vacío en órdenes históricas. */
   cargos?: PropuestaCargoDirecto[];
   /** Tratamiento fiscal: 'FISCAL' (con IVA y comprobante) | 'SIN_COMPROBANTE'
@@ -257,6 +277,8 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   cancelacion: OrdenTrabajoCancelacion | null;
   productos: OrdenTrabajoProducto[];
   eventos: OrdenTrabajoEvento[];
+  /** Puede superar `eventos.length`: el detalle limita el timeline a 200. */
+  eventosTotal: number;
   /** Fecha (ISO) en que la orden alcanzó cada estado. Para el stepper (hover).
    *  Sólo trae los alcanzados; los futuros no están. El API real siempre lo
    *  manda; opcional para no obligar a los mocks. */
@@ -287,13 +309,12 @@ export type OrdenesTrabajoStats = {
   activas: number;
   valorEnCurso: number;
   proximasEntregar: number;
+  atrasadas: number;
   emitidasHoy: number;
 };
 
 /** Progreso derivado del estado cuando producción no informa un valor real. */
-export function progresoDerivado(
-  estado: OrdenTrabajoEstado,
-): number | null {
+export function progresoDerivado(estado: OrdenTrabajoEstado): number | null {
   switch (estado) {
     case "borrador":
       return null;
@@ -356,6 +377,9 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
       observaciones: null,
       canalVenta: null,
       cargosDirectos: 0,
+      subtotal: item.total,
+      impuestos: 0,
+      descuentoTotal: 0,
       tratamientoFiscal: "FISCAL",
       publicToken: null,
       facturadoTotal: 0,
@@ -363,6 +387,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
       cancelacion: null,
       productos: [],
       eventos: [],
+      eventosTotal: 0,
       pago: null,
     };
   }
@@ -372,6 +397,9 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
     observaciones: null,
     canalVenta: "mostrador",
     cargosDirectos: 8500,
+    subtotal: 211798,
+    impuestos: 0,
+    descuentoTotal: 0,
     tratamientoFiscal: "FISCAL",
     publicToken: null,
     facturadoTotal: 0,
@@ -456,6 +484,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
         usuarioNombre: "Lucas G. Gomez",
       },
     ],
+    eventosTotal: 6,
     pago: {
       plan: "50% anticipo · saldo contra entrega",
       condicion: "Cuenta corriente · 15 días",
@@ -495,7 +524,17 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
   };
 }
 
-export const MOCK_ORDENES_TRABAJO: OrdenTrabajoListItem[] = [
+function completarMockOrdenes(
+  ordenes: Array<Omit<OrdenTrabajoListItem, "fechaEmision" | "version">>,
+): OrdenTrabajoListItem[] {
+  return ordenes.map((orden) => ({
+    ...orden,
+    fechaEmision: orden.estado === "borrador" ? null : orden.creadaEl,
+    version: `${orden.creadaEl}T12:00:00.000Z`,
+  }));
+}
+
+export const MOCK_ORDENES_TRABAJO = completarMockOrdenes([
   {
     id: "mock-0184",
     numero: "OT-2026-0184",
@@ -631,4 +670,4 @@ export const MOCK_ORDENES_TRABAJO: OrdenTrabajoListItem[] = [
     progresoPct: null,
     resumen: "Vidriera local · Cruz LED (cotizando)",
   },
-];
+]);

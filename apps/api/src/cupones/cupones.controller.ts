@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
@@ -17,6 +18,7 @@ import { CuponesService } from './cupones.service';
 import {
   ActualizarCuponDto,
   CrearCuponDto,
+  ListarCuponesDto,
   ValidarCuponDto,
 } from './dto/cupones.dto';
 
@@ -26,8 +28,11 @@ export class CuponesController {
   constructor(private readonly service: CuponesService) {}
 
   @Get()
-  listar(@CurrentSession() auth: CurrentAuth) {
-    return this.service.listar(auth);
+  listar(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() filtros: ListarCuponesDto,
+  ) {
+    return this.service.listar(auth, filtros);
   }
 
   // Crear/editar cupones ES autorizar descuentos (por eso aplicarlos no
@@ -67,11 +72,11 @@ export class CuponesController {
     return this.service.validar(auth, dto);
   }
 
-  @Get(':id/qr')
-  qr(
+  @Get(':id/historial')
+  historial(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.service.qr(auth, id);
+    return this.service.historial(auth, id);
   }
 }

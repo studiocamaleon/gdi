@@ -11,4 +11,8 @@ export class OrdenesTrabajoQueryDto extends PaginationDto {
   @IsOptional()
   @IsIn(ORDEN_TRABAJO_ESTADOS)
   estado?: string;
+
+  @IsOptional()
+  @IsIn(['atrasadas'])
+  urgencia?: 'atrasadas';
 }

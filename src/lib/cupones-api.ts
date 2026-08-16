@@ -7,11 +7,7 @@
 import { apiRequest } from "@/lib/api";
 
 export type CuponAlcanceTipo =
-  | "ORDEN"
-  | "CATEGORIA"
-  | "SUBCATEGORIA"
-  | "PRODUCTO"
-  | "CLIENTE";
+  "ORDEN" | "CATEGORIA" | "SUBCATEGORIA" | "PRODUCTO" | "CLIENTE";
 
 export type Cupon = {
   id: string;
@@ -30,7 +26,12 @@ export type Cupon = {
   usoMax: number | null;
   usoCount: number;
   activo: boolean;
+  estado?: "VIGENTE" | "PAUSADO" | "VENCIDO" | "AGOTADO" | "PROGRAMADO";
+  version: number;
+  creadoPor: string | null;
+  actualizadoPor: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type CrearCuponPayload = {
@@ -40,7 +41,6 @@ export type CrearCuponPayload = {
   valor: number;
   alcanceTipo?: CuponAlcanceTipo;
   alcanceRef?: string;
-  alcanceNombre?: string;
   montoMinimo?: number;
   vigenciaDesde?: string;
   vigenciaHasta?: string;
@@ -49,11 +49,58 @@ export type CrearCuponPayload = {
 
 /** El código no se edita: es la identidad y ya puede estar impreso en QRs. */
 export type ActualizarCuponPayload = Partial<
-  Omit<CrearCuponPayload, "codigo">
-> & { activo?: boolean; alcanceRef?: string | null };
+  Omit<
+    CrearCuponPayload,
+    | "codigo"
+    | "descripcion"
+    | "alcanceRef"
+    | "montoMinimo"
+    | "vigenciaDesde"
+    | "vigenciaHasta"
+    | "usoMax"
+  >
+> & {
+  version: number;
+  activo?: boolean;
+  descripcion?: string | null;
+  alcanceRef?: string | null;
+  montoMinimo?: number | null;
+  vigenciaDesde?: string | null;
+  vigenciaHasta?: string | null;
+  usoMax?: number | null;
+  confirmarUsoMaxMenor?: boolean;
+};
 
-export function listarCupones() {
-  return apiRequest<Cupon[]>("/cupones");
+export type CuponMetricas = {
+  total: number;
+  vigentes: number;
+  porVencer: number;
+  agotados: number;
+  redencionesMes: number;
+  descontadoMes: number;
+};
+
+export type CuponesListado = {
+  items: Cupon[];
+  total: number;
+  skip: number;
+  limit: number;
+  metricas: CuponMetricas;
+};
+
+export function listarCupones(filtros?: {
+  busqueda?: string;
+  estado?: Cupon["estado"];
+  skip?: number;
+  limit?: number;
+}) {
+  const qs = new URLSearchParams();
+  if (filtros?.busqueda) qs.set("busqueda", filtros.busqueda);
+  if (filtros?.estado) qs.set("estado", filtros.estado);
+  if (filtros?.skip != null) qs.set("skip", String(filtros.skip));
+  if (filtros?.limit != null) qs.set("limit", String(filtros.limit));
+  const query = qs.toString();
+  return apiRequest<CuponesListado>(`/cupones${query ? `?${query}` : ""}`);
 }
 
 export function crearCupon(payload: CrearCuponPayload) {
@@ -78,9 +125,30 @@ export function eliminarCupon(id: string) {
   });
 }
 
-/** QR del código plano (el lector 2D lo tipea como teclado). */
-export function qrCupon(id: string) {
-  return apiRequest<{ codigo: string; dataUrl: string }>(`/cupones/${id}/qr`);
+export type CuponHistorial = {
+  cupon: Cupon;
+  eventos: Array<{
+    id: string;
+    tipo: string;
+    descripcion: string;
+    actor: string;
+    fecha: string;
+  }>;
+  redenciones: Array<{
+    id: string;
+    estado: "RESERVADA" | "CONSUMIDA" | "LIBERADA";
+    montoAplicado: number;
+    presupuesto: { id: string; numero: string | null } | null;
+    orden: { id: string; numero: string } | null;
+    actor: string | null;
+    fecha: string;
+    liberadaEl: string | null;
+    liberadaMotivo: string | null;
+  }>;
+};
+
+export function historialCupon(id: string) {
+  return apiRequest<CuponHistorial>(`/cupones/${id}/historial`);
 }
 
 export type ValidarCuponPayload = {
@@ -100,9 +168,16 @@ export type ValidarCuponPayload = {
   }>;
 };
 
+export type ValidarCuponResultado = {
+  cupon: Cupon;
+  alcanzadas: string[];
+  plan: Array<{ key: string; tipo: "PORCENTAJE" | "MONTO"; valor: number }>;
+  montoAplicado: number | null;
+};
+
 export function validarCupon(payload: ValidarCuponPayload) {
-  return apiRequest<{ cupon: Cupon; alcanzadas: string[] }>(
-    "/cupones/validar",
-    { method: "POST", body: JSON.stringify(payload) },
-  );
+  return apiRequest<ValidarCuponResultado>("/cupones/validar", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

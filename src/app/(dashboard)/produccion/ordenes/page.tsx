@@ -4,6 +4,7 @@ import type {
   OrdenesTrabajoStats,
 } from "@/lib/ordenes-trabajo";
 import { getOrdenesTrabajo } from "@/lib/ordenes-trabajo-api";
+import { ApiError } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ const STATS_VACIAS: OrdenesTrabajoStats = {
   activas: 0,
   valorEnCurso: 0,
   proximasEntregar: 0,
+  atrasadas: 0,
   emitidasHoy: 0,
 };
 
@@ -43,7 +45,12 @@ const ESTADOS_VALIDOS = new Set([
 export default async function OrdenesTrabajoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; estado?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    estado?: string;
+    urgencia?: string;
+    page?: string;
+  }>;
 }) {
   const params = await searchParams;
   const q = params.q?.trim() || undefined;
@@ -53,11 +60,23 @@ export default async function OrdenesTrabajoPage({
       ? (params.estado as OrdenTrabajoEstado)
       : undefined;
   const page = Math.max(1, Number(params.page) || 1);
+  const urgencia = params.urgencia === "atrasadas" ? "atrasadas" : undefined;
 
   let respuesta;
+  let errorCarga: string | null = null;
   try {
-    respuesta = await getOrdenesTrabajo({ q, estado, page, limit: LIMIT });
-  } catch {
+    respuesta = await getOrdenesTrabajo({
+      q,
+      estado: urgencia ? undefined : estado,
+      urgencia,
+      page,
+      limit: LIMIT,
+    });
+  } catch (error) {
+    errorCarga =
+      error instanceof ApiError && error.status === 403
+        ? "No tenés permisos para consultar las órdenes de trabajo."
+        : "No se pudieron cargar las órdenes de trabajo. Revisá la conexión e intentá nuevamente.";
     respuesta = {
       data: [],
       total: 0,
@@ -77,7 +96,9 @@ export default async function OrdenesTrabajoPage({
       pages={respuesta.pages}
       limit={respuesta.limit}
       q={q ?? ""}
-      estado={estado ?? "todas"}
+      estado={urgencia ? "todas" : (estado ?? "todas")}
+      urgencia={urgencia}
+      errorCarga={errorCarga}
     />
   );
 }

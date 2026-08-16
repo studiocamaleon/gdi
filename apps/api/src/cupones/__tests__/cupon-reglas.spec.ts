@@ -1,6 +1,7 @@
 import {
   evaluarCupon,
   normalizarCodigoCupon,
+  planDescuentoCupon,
   type CuponEvaluable,
   type ContextoCarrito,
 } from '../cupon-reglas';
@@ -21,6 +22,7 @@ const base: CuponEvaluable = {
 
 const carrito = (extra?: Partial<ContextoCarrito>): ContextoCarrito => ({
   ahora: new Date('2026-08-08T12:00:00Z'),
+  zonaHoraria: 'America/Argentina/Buenos_Aires',
   clienteId: 'cli-1',
   items: [
     {
@@ -50,8 +52,8 @@ describe('evaluarCupon', () => {
   it('inactivo, no vigente aún, vencido y agotado rechazan con su motivo', () => {
     const casos: Array<[Partial<CuponEvaluable>, RegExp]> = [
       [{ activo: false }, /desactivado/],
-      [{ vigenciaDesde: new Date('2026-09-01') }, /todavía no/],
-      [{ vigenciaHasta: new Date('2026-08-01') }, /vencido/],
+      [{ vigenciaDesde: '2026-09-01' }, /todavía no/],
+      [{ vigenciaHasta: '2026-08-01' }, /vencido/],
       [{ usoMax: 1, usoCount: 1 }, /usos disponibles/],
     ];
     for (const [override, motivo] of casos) {
@@ -65,12 +67,84 @@ describe('evaluarCupon', () => {
     const r = evaluarCupon(
       {
         ...base,
-        vigenciaDesde: new Date('2026-08-01'),
-        vigenciaHasta: new Date('2026-12-31'),
+        vigenciaDesde: '2026-08-01',
+        vigenciaHasta: '2026-12-31',
       },
       carrito(),
     );
     expect(r.ok).toBe(true);
+  });
+
+  it('incluye todo el día final en la zona del tenant', () => {
+    const r = evaluarCupon(
+      { ...base, vigenciaHasta: '2026-08-08' },
+      carrito({ ahora: new Date('2026-08-09T02:30:00Z') }),
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it('vence al cambiar el día comercial, no a medianoche UTC', () => {
+    const cupon = { ...base, vigenciaHasta: '2026-08-08' };
+    expect(
+      evaluarCupon(cupon, carrito({ ahora: new Date('2026-08-09T02:59:59Z') }))
+        .ok,
+    ).toBe(true);
+    expect(
+      evaluarCupon(cupon, carrito({ ahora: new Date('2026-08-09T03:00:00Z') }))
+        .ok,
+    ).toBe(false);
+  });
+
+  it('prorratea monto fijo con suma exacta y centavos canónicos', () => {
+    const plan = planDescuentoCupon(
+      { tipo: 'MONTO', valor: 10 },
+      [
+        { key: 'a', neto: 10 },
+        { key: 'b', neto: 10 },
+        { key: 'c', neto: 10 },
+      ],
+      ['a', 'b', 'c'],
+      2,
+    );
+    expect(plan.map((linea) => linea.valor)).toEqual([3.34, 3.33, 3.33]);
+    expect(plan.reduce((suma, linea) => suma + linea.valor, 0)).toBeCloseTo(10);
+  });
+
+  it('respeta monedas sin decimales y nunca descuenta más que el neto', () => {
+    const plan = planDescuentoCupon(
+      { tipo: 'MONTO', valor: 999 },
+      [
+        { key: 'a', neto: 2 },
+        { key: 'b', neto: 3 },
+      ],
+      ['a', 'b'],
+      0,
+    );
+    expect(plan).toEqual([
+      { key: 'a', tipo: 'MONTO', valor: 2 },
+      { key: 'b', tipo: 'MONTO', valor: 3 },
+    ]);
+  });
+
+  it('mantiene el prorrateo exacto cerca del máximo monetario', () => {
+    const plan = planDescuentoCupon(
+      { tipo: 'MONTO', valor: 999_999_999_999.99 },
+      [
+        { key: 'a', neto: 999_999_999_999.99 },
+        { key: 'b', neto: 999_999_999_999.98 },
+        { key: 'c', neto: 0.03 },
+      ],
+      ['a', 'b', 'c'],
+      2,
+    );
+    expect(
+      Math.round(plan.reduce((suma, linea) => suma + linea.valor, 0) * 100),
+    ).toBe(99_999_999_999_999);
+    expect(
+      plan.every((linea) =>
+        Number.isSafeInteger(Math.round(linea.valor * 100)),
+      ),
+    ).toBe(true);
   });
 
   it('alcance CATEGORIA filtra las líneas', () => {
@@ -157,9 +231,9 @@ describe('evaluarCupon', () => {
       carrito(),
     );
     expect(r.ok).toBe(true);
-    expect(
-      evaluarCupon({ ...base, montoMinimo: 150_000 }, carrito()).ok,
-    ).toBe(false);
+    expect(evaluarCupon({ ...base, montoMinimo: 150_000 }, carrito()).ok).toBe(
+      false,
+    );
   });
 });
 

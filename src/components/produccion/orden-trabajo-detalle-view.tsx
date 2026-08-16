@@ -34,7 +34,10 @@ import {
   type OrdenTrabajoPago,
   type OrdenTrabajoProducto,
 } from "@/lib/ordenes-trabajo";
-import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
+import {
+  useConfigRegional,
+  useFecha,
+} from "@/components/navigation/config-regional-provider";
 
 /* ─────────── helpers ─────────── */
 
@@ -51,6 +54,8 @@ export const EVENTO_ICONOS: Record<
   item_agregado: { Icono: PlusIcon },
   item_modificado: { Icono: PencilIcon },
   item_quitado: { Icono: Trash2Icon },
+  cancelacion: { Icono: Trash2Icon },
+  tratamiento_fiscal: { Icono: CoinsIcon },
   paso: { Icono: FactoryIcon },
   nota: { Icono: TagIcon },
 };
@@ -152,7 +157,9 @@ function ProductoRow({ p }: { p: OrdenTrabajoProducto }) {
         <span className="otd-prod-qty">
           {p.cantidad.toLocaleString("es-AR")} {p.cantidadUnidad}
         </span>
-        <span className="otd-prod-total">{formatMonedaOrden(p.total, moneda)}</span>
+        <span className="otd-prod-total">
+          {formatMonedaOrden(p.total, moneda)}
+        </span>
       </div>
       {open ? (
         <div className="otd-prod-body">
@@ -207,7 +214,9 @@ function CobroForm({
   onCancel,
 }: {
   saldo: number;
-  onSubmit: (mov: Omit<MovimientoView, "comprobante" | "usuarioNombre">) => void;
+  onSubmit: (
+    mov: Omit<MovimientoView, "comprobante" | "usuarioNombre">,
+  ) => void;
   onCancel: () => void;
 }) {
   const { moneda } = useConfigRegional();
@@ -346,7 +355,8 @@ export function PagosTab({
 
   const cobrado = movs.reduce((s, m) => s + m.monto, 0);
   const saldo = Math.max(0, total - cobrado);
-  const pct = total > 0 ? Math.min(100, Math.round((cobrado / total) * 100)) : 0;
+  const pct =
+    total > 0 ? Math.min(100, Math.round((cobrado / total) * 100)) : 0;
   const saldado = saldo <= 0;
 
   const registrar = (
@@ -396,7 +406,9 @@ export function PagosTab({
           </div>
           <div className="pk pk-ok">
             <span className="pk-l">Cobrado</span>
-            <span className="pk-v">{formatMonedaOrden(cobradoReal, moneda)}</span>
+            <span className="pk-v">
+              {formatMonedaOrden(cobradoReal, moneda)}
+            </span>
             <span className="pk-s">
               {pctReal}% · {lista.length} cobro{lista.length === 1 ? "" : "s"}
             </span>
@@ -439,7 +451,9 @@ export function PagosTab({
               <div className="arc-three">
                 <div className="arc-tc f">
                   <div className="l">Cobrado (bruto)</div>
-                  <div className="v">{formatMonedaOrden(cobradoReal, moneda)}</div>
+                  <div className="v">
+                    {formatMonedaOrden(cobradoReal, moneda)}
+                  </div>
                   <div className="sub">
                     {lista.length === 0
                       ? "Sin cobros registrados"
@@ -451,7 +465,8 @@ export function PagosTab({
                   <div className="v">{formatMonedaOrden(netoReal, moneda)}</div>
                   {comisionesReal > 0 ? (
                     <div className="delta">
-                      −{formatMonedaOrden(comisionesReal, moneda)} comisiones + IVA
+                      −{formatMonedaOrden(comisionesReal, moneda)} comisiones +
+                      IVA
                     </div>
                   ) : (
                     <div className="sub">Sin comisiones de métodos</div>
@@ -459,7 +474,9 @@ export function PagosTab({
                 </div>
                 <div className="arc-tc d">
                   <div className="l">Disponible real</div>
-                  <div className="v">{formatMonedaOrden(disponibleTotal, moneda)}</div>
+                  <div className="v">
+                    {formatMonedaOrden(disponibleTotal, moneda)}
+                  </div>
                   {retencionesReal > 0 ? (
                     <div className="delta">
                       −{formatMonedaOrden(retencionesReal, moneda)} retenciones
@@ -487,16 +504,16 @@ export function PagosTab({
                 </span>
                 <div className="ps-txt">
                   <div className="ps-ttl">Orden totalmente saldada</div>
-                  <div className="ps-sub">
-                    No hay saldo pendiente de cobro.
-                  </div>
+                  <div className="ps-sub">No hay saldo pendiente de cobro.</div>
                 </div>
               </div>
             ) : (
               <div className="pagos-reg-cta">
                 <div className="prc-saldo">
                   <span className="l">Saldo a cobrar</span>
-                  <span className="v">{formatMonedaOrden(saldoReal, moneda)}</span>
+                  <span className="v">
+                    {formatMonedaOrden(saldoReal, moneda)}
+                  </span>
                 </div>
                 {puedeCobrar ? (
                   <Link
@@ -549,7 +566,9 @@ export function PagosTab({
                 <div key={c.id} className="mov-row">
                   <span className="mov-fecha">{formatFechaOrden(c.fecha)}</span>
                   <span className="mov-metodo">
-                    <span className="mov-badge">{metodoIni(c.metodoNombre)}</span>
+                    <span className="mov-badge">
+                      {metodoIni(c.metodoNombre)}
+                    </span>
                     {c.metodoNombre}
                   </span>
                   <span className="mov-ref">
@@ -609,8 +628,8 @@ export function PagosTab({
           <span className="pf-ico">
             <CheckIcon />
           </span>
-          Cobro de <strong>{formatMonedaOrden(flash, moneda)}</strong> registrado
-          correctamente.
+          Cobro de <strong>{formatMonedaOrden(flash, moneda)}</strong>{" "}
+          registrado correctamente.
         </div>
       ) : null}
 
@@ -786,7 +805,9 @@ export function PagosTab({
                   <span className="mov-who">· {m.usuarioNombre}</span>
                 </span>
                 <span className="mov-comp">{m.comprobante}</span>
-                <span className="mov-monto">{formatMonedaOrden(m.monto, moneda)}</span>
+                <span className="mov-monto">
+                  {formatMonedaOrden(m.monto, moneda)}
+                </span>
               </div>
             ))}
             <div className="mov-foot">
@@ -1060,23 +1081,31 @@ export function OrdenTrabajoDetalleView({
                 <div className="otd-econ-rows">
                   <div className="er">
                     <span className="l">Subtotal</span>
-                    <span className="v">{formatMonedaOrden(subtotal, moneda)}</span>
+                    <span className="v">
+                      {formatMonedaOrden(subtotal, moneda)}
+                    </span>
                   </div>
                   <div className="er">
                     <span className="l">
                       Impuestos <span className="s">IVA 21% · IIBB 5%</span>
                     </span>
-                    <span className="v">{formatMonedaOrden(impuestos, moneda)}</span>
+                    <span className="v">
+                      {formatMonedaOrden(impuestos, moneda)}
+                    </span>
                   </div>
                   {cargos > 0 ? (
                     <div className="er">
                       <span className="l">Cargos directos</span>
-                      <span className="v">{formatMonedaOrden(cargos, moneda)}</span>
+                      <span className="v">
+                        {formatMonedaOrden(cargos, moneda)}
+                      </span>
                     </div>
                   ) : null}
                   <div className="er total">
                     <span className="l">Total c/ imp.</span>
-                    <span className="v">{formatMonedaOrden(total, moneda)}</span>
+                    <span className="v">
+                      {formatMonedaOrden(total, moneda)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1133,7 +1162,9 @@ export function OrdenTrabajoDetalleView({
                 </div>
                 <div className="ot-track-txt">
                   <div className="tt">Link de seguimiento</div>
-                  <div className="ts">El cliente ve el avance en tiempo real</div>
+                  <div className="ts">
+                    El cliente ve el avance en tiempo real
+                  </div>
                 </div>
                 <button type="button" className="btn sm">
                   Copiar

@@ -77,19 +77,20 @@ type PaginatedResponse<T> = {
   pages: number;
 };
 
-export type OrdenesTrabajoListado =
-  PaginatedResponse<OrdenTrabajoListItem> & {
-    stats: OrdenesTrabajoStats;
-  };
+export type OrdenesTrabajoListado = PaginatedResponse<OrdenTrabajoListItem> & {
+  stats: OrdenesTrabajoStats;
+};
 
 export async function getOrdenesTrabajo(params?: {
   estado?: string;
+  urgencia?: "atrasadas";
   q?: string;
   page?: number;
   limit?: number;
 }): Promise<OrdenesTrabajoListado> {
   const search = new URLSearchParams();
   if (params?.estado) search.set("estado", params.estado);
+  if (params?.urgencia) search.set("urgencia", params.urgencia);
   if (params?.q) search.set("q", params.q);
   if (params?.page) search.set("page", String(params.page));
   if (params?.limit) search.set("limit", String(params.limit));
@@ -128,6 +129,22 @@ export async function editarOrdenTrabajo(
   payload: EditarOrdenTrabajoPayload,
 ): Promise<OrdenTrabajoDetalle> {
   return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type EditarOrdenTrabajoLotePayload = EditarOrdenTrabajoPayload & {
+  expectedVersion: string;
+  /** Conjunto final completo; con `id` actualiza, sin `id` crea. */
+  items?: Array<CrearOrdenTrabajoItemPayload & { id?: string }>;
+};
+
+export async function editarOrdenTrabajoLote(
+  id: string,
+  payload: EditarOrdenTrabajoLotePayload,
+): Promise<OrdenTrabajoDetalle> {
+  return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}/lote`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
@@ -277,10 +294,13 @@ export async function completarPasosLote(
   duracionTandaMin?: number,
   ahorro?: AhorroConsolidacionPayload,
 ) {
-  const resultado = await apiRequest<{ completados: number; errores: Array<{ pasoId: string; motivo: string }> }>(
-    "/ordenes-trabajo/tablero/pasos/completar-lote",
-    { method: "POST", body: JSON.stringify({ pasoIds, duracionTandaMin, ahorro }) },
-  );
+  const resultado = await apiRequest<{
+    completados: number;
+    errores: Array<{ pasoId: string; motivo: string }>;
+  }>("/ordenes-trabajo/tablero/pasos/completar-lote", {
+    method: "POST",
+    body: JSON.stringify({ pasoIds, duracionTandaMin, ahorro }),
+  });
   avisarTramosCambiaron();
   return resultado;
 }
