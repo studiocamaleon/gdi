@@ -17,6 +17,7 @@ import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
+import { RolSistema } from '@prisma/client';
 
 /**
  * Reportes (Inteligencia de negocio) — un endpoint por REPORTE. Cada uno
@@ -219,7 +220,12 @@ export class ReportesController {
   @Get('equipo')
   async equipo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
-    const equipo = await this.equipoSvc.equipo(auth.tenantId, rango);
+    const equipo = await this.equipoSvc.equipo(
+      auth.tenantId,
+      rango,
+      auth.role === RolSistema.ADMINISTRADOR ||
+        Boolean(auth.permisos?.has('registros.ver_comisiones')),
+    );
     return {
       meta: this.service.metaBase(rango, anterior, 'Tramos de trabajo y pasos completados', {
         limites: this.equipoSvc.limites(),

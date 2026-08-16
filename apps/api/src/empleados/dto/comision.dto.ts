@@ -1,4 +1,12 @@
-import { IsEnum, IsNumberString, IsString, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export enum TipoComisionDto {
   porcentaje = 'porcentaje',
@@ -6,13 +14,21 @@ export enum TipoComisionDto {
 }
 
 export class EmpleadoComisionDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
   @IsString()
   @MinLength(1)
+  @MaxLength(160)
   descripcion: string;
 
   @IsEnum(TipoComisionDto)
   tipo: TipoComisionDto;
 
-  @IsNumberString()
+  @Matches(/^\d+(?:[.,]\d{1,2})?$/, {
+    message:
+      'El valor de la comisión debe ser positivo y tener hasta 2 decimales.',
+  })
   valor: string;
 }

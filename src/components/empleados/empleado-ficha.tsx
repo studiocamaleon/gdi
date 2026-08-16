@@ -12,6 +12,8 @@ import {
   ShieldCheckIcon,
   StarIcon,
   Trash2Icon,
+  HistoryIcon,
+  UserXIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,6 +38,7 @@ import {
   latamCountries,
 } from "@/lib/empleados";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -70,6 +73,8 @@ import {
 type EmpleadoFichaProps = {
   empleado: EmpleadoDetalle;
   mode: "create" | "edit";
+  canManage: boolean;
+  canViewCommissions: boolean;
 };
 
 type DatosPrincipalesState = {
@@ -137,6 +142,7 @@ function buildPayload(
     fechaNacimiento: informacionGeneral.fechaNacimiento || undefined,
     comisionesHabilitadas,
     direcciones: direcciones.map((direccion) => ({
+      id: direccion.id,
       descripcion: direccion.descripcion.trim(),
       pais: direccion.pais.trim(),
       codigoPostal: direccion.codigoPostal.trim() || undefined,
@@ -147,6 +153,7 @@ function buildPayload(
       principal: direccion.principal,
     })),
     comisiones: comisiones.map((comision) => ({
+      id: comision.id,
       descripcion: comision.descripcion.trim(),
       tipo: comision.tipo,
       valor: comision.valor.trim(),
@@ -190,7 +197,12 @@ function validatePayload(payload: EmpleadoPayload) {
   return null;
 }
 
-export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
+export function EmpleadoFicha({
+  empleado,
+  mode,
+  canManage,
+  canViewCommissions,
+}: EmpleadoFichaProps) {
   const router = useRouter();
   const [isSaving, startSaving] = React.useTransition();
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -341,7 +353,10 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
         const savedEmpleado =
           mode === "create"
             ? await createEmpleado(payload)
-            : await updateEmpleado(empleado.id, payload);
+            : await updateEmpleado(empleado.id, {
+                ...payload,
+                updatedAt: empleado.updatedAt,
+              });
 
         if (mode === "create") {
           toast.success("Empleado creado correctamente.");
@@ -365,7 +380,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
   };
 
   return (
-    <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-4 md:p-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 [&>*]:shrink-0 md:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-3">
           <Button
@@ -383,8 +398,8 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               {mode === "create" ? "Nuevo empleado" : "Ficha de empleado"}
             </h1>
             <p className="max-w-3xl text-sm text-muted-foreground">
-              Datos personales, remuneración, dirección y esquema de
-              comisiones en una sola ficha.
+              Datos personales, laborales, dirección y reglas comerciales en
+              una sola ficha.
             </p>
             {errorMessage ? (
               <p className="text-sm font-medium text-destructive">{errorMessage}</p>
@@ -392,6 +407,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
           </div>
         </div>
 
+        {canManage && empleado.activo ? (
         <Button variant="brand" onClick={handleSave} disabled={isSaving}>
           {isSaving ? (
             <GdiSpinner className="size-4" data-icon="inline-start" />
@@ -400,7 +416,30 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
           )}
           {mode === "create" ? "Crear empleado" : "Guardar cambios"}
         </Button>
+        ) : null}
       </div>
+
+      {!empleado.activo ? (
+        <Alert variant="destructive">
+          <UserXIcon />
+          <AlertTitle>Empleado dado de baja</AlertTitle>
+          <AlertDescription>
+            El legajo se conserva para el historial, pero ya no aparece en
+            estaciones, usuarios ni nuevas operaciones.
+            {empleado.fechaBaja ? ` Baja: ${empleado.fechaBaja}.` : ""}
+            {empleado.motivoBaja ? ` Motivo: ${empleado.motivoBaja}.` : ""}
+          </AlertDescription>
+        </Alert>
+      ) : !canManage && mode === "edit" ? (
+        <Alert>
+          <AlertTitle>Ficha en modo lectura</AlertTitle>
+          <AlertDescription>
+            Podés consultar el legajo, pero no tenés permiso para modificarlo.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <fieldset disabled={!canManage || !empleado.activo} className="contents">
 
       <Card className="rounded-2xl border-border/70 shadow-sm">
         <CardHeader>
@@ -418,6 +457,8 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               <FieldLabel htmlFor="empleado-nombre">Nombre completo</FieldLabel>
               <Input
                 id="empleado-nombre"
+                required
+                maxLength={160}
                 value={datosPrincipales.nombreCompleto}
                 onChange={(event) =>
                   setDatosPrincipales((current) => ({
@@ -436,6 +477,8 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               <Input
                 id="empleado-email"
                 type="email"
+                required
+                maxLength={254}
                 value={datosPrincipales.email}
                 onChange={(event) =>
                   setDatosPrincipales((current) => ({
@@ -451,6 +494,8 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               <FieldLabel htmlFor="empleado-sector">Sector</FieldLabel>
               <Input
                 id="empleado-sector"
+                required
+                maxLength={120}
                 value={datosPrincipales.sector}
                 onChange={(event) =>
                   setDatosPrincipales((current) => ({
@@ -503,6 +548,8 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
                 <Input
                   id="empleado-telefono"
                   inputMode="tel"
+                  required
+                  maxLength={30}
                   value={datosPrincipales.telefonoNumero}
                   onChange={(event) =>
                     setDatosPrincipales((current) => ({
@@ -537,6 +584,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               <FieldLabel htmlFor="empleado-ocupacion">Ocupacion</FieldLabel>
               <Input
                 id="empleado-ocupacion"
+                maxLength={160}
                 value={informacionGeneral.ocupacion}
                 onChange={(event) =>
                   setInformacionGeneral((current) => ({
@@ -582,6 +630,8 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               <Input
                 id="empleado-fecha-ingreso"
                 type="date"
+                required
+                max={new Date().toISOString().slice(0, 10)}
                 value={informacionGeneral.fechaIngreso}
                 onChange={(event) =>
                   setInformacionGeneral((current) => ({
@@ -599,6 +649,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               <Input
                 id="empleado-fecha-nacimiento"
                 type="date"
+                max={new Date().toISOString().slice(0, 10)}
                 value={informacionGeneral.fechaNacimiento}
                 onChange={(event) =>
                   setInformacionGeneral((current) => ({
@@ -923,6 +974,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
         </Card>
       ) : null}
 
+      {canViewCommissions ? (
       <Card className="rounded-2xl border-border/70 shadow-sm">
         <CardHeader className="gap-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -931,8 +983,9 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
                 Comisiones
               </CardTitle>
               <CardDescription>
-                Define como comisiona el empleado. Por ahora se resuelve como un
-                esquema editable simple y desacoplado.
+                Estimación usada en Reportes → Equipo: el porcentaje se aplica
+                sobre la venta neta emitida y el monto fijo una vez por orden.
+                No reemplaza una liquidación de haberes.
               </CardDescription>
             </div>
             <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
@@ -1039,6 +1092,10 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
                       <Input
                         id={`comision-valor-${comision.id}`}
                         inputMode="decimal"
+                        type="number"
+                        min="0.01"
+                        max={comision.tipo === "porcentaje" ? "100" : "99999999.99"}
+                        step="0.01"
                         value={comision.valor}
                         onChange={(event) =>
                           updateComision(comision.id, "valor", event.target.value)
@@ -1053,6 +1110,35 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
           </CardContent>
         ) : null}
       </Card>
+      ) : null}
+
+      </fieldset>
+
+      {mode === "edit" && empleado.eventos.length > 0 ? (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold tracking-tight">
+              Historial del legajo
+            </CardTitle>
+            <CardDescription>
+              Últimos cambios de datos y estado, con su responsable.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {empleado.eventos.map((evento) => (
+              <div key={evento.id} className="flex items-start gap-3">
+                <HistoryIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium capitalize">{evento.tipo}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {evento.actorNombre} · {new Date(evento.createdAt).toLocaleString("es-AR")}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {(empleado?.usuarioSistema || comisionesHabilitadas) && (
         <div className="flex flex-wrap gap-2">
@@ -1073,4 +1159,3 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
     </div>
   );
 }
-

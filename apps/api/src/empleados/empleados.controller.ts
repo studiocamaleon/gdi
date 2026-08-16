@@ -5,34 +5,40 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Put,
   Query,
 } from '@nestjs/common';
-import { ProhibidoImpersonando } from '../auth/prohibido-impersonando.decorator';
-import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
-import { Roles } from '../auth/roles.decorator';
-import { PaginationDto } from '../common/dto/pagination.dto';
-import { InvitarAccesoDto } from './dto/invitar-acceso.dto';
 import { EmpleadosService } from './empleados.service';
-import { UpsertEmpleadoDto } from './dto/upsert-empleado.dto';
+import {
+  EstadoEmpleadoDto,
+  EstadoEmpleadosDto,
+  ImportarEmpleadosDto,
+  UpdateEmpleadoDto,
+  UpsertEmpleadoDto,
+} from './dto/upsert-empleado.dto';
+import { EmpleadosQueryDto } from './dto/empleados-query.dto';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
 
 @Permiso('registros.ver')
 @Controller('empleados')
 export class EmpleadosController {
-  constructor(
-    private readonly empleadosService: EmpleadosService,
-  ) {}
+  constructor(private readonly empleadosService: EmpleadosService) {}
 
   @Get()
   findAll(
     @CurrentSession() auth: CurrentAuth,
-    @Query() pagination: PaginationDto,
+    @Query() pagination: EmpleadosQueryDto,
   ) {
     return this.empleadosService.findAll(auth, pagination);
+  }
+
+  @Get('opciones')
+  opciones(@CurrentSession() auth: CurrentAuth) {
+    return this.empleadosService.opciones(auth);
   }
 
   @Get(':id')
@@ -40,7 +46,7 @@ export class EmpleadosController {
     return this.empleadosService.findOne(auth, id);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso('registros.gestionar_empleados')
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -49,19 +55,56 @@ export class EmpleadosController {
     return this.empleadosService.create(auth, payload);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso('registros.gestionar_empleados')
+  @Post('importar')
+  importar(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: ImportarEmpleadosDto,
+  ) {
+    return this.empleadosService.importar(auth, payload.empleados);
+  }
+
+  @Permiso('registros.gestionar_empleados')
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
-    @Body() payload: UpsertEmpleadoDto,
+    @Body() payload: UpdateEmpleadoDto,
   ) {
     return this.empleadosService.update(auth, id, payload);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso('registros.gestionar_empleados')
+  @Patch('estado')
+  estadoMuchos(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: EstadoEmpleadosDto,
+  ) {
+    return this.empleadosService.fijarEstadoMuchos(
+      auth,
+      payload.ids,
+      payload.activo,
+      payload.motivo,
+    );
+  }
+
+  @Permiso('registros.gestionar_empleados')
+  @Patch(':id/estado')
+  estado(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: EstadoEmpleadoDto,
+  ) {
+    return this.empleadosService.fijarActivo(
+      auth,
+      id,
+      payload.activo,
+      payload.motivo,
+    );
+  }
+
+  @Permiso('registros.gestionar_empleados')
   @Delete(':id')
-  @Roles(RolSistema.ADMINISTRADOR)
   @HttpCode(204)
   async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     await this.empleadosService.remove(auth, id);

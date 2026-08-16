@@ -41,6 +41,10 @@ export type EmpleadoDetalle = {
   sexo: SexoEmpleado | "";
   fechaIngreso: string;
   fechaNacimiento: string;
+  activo: boolean;
+  fechaBaja: string;
+  motivoBaja: string;
+  updatedAt: string;
   /* ── Espejo del acceso al sistema ──────────────────────────────────────
    * El legajo NO los escribe: el alta y el rol viven en Configuración →
    * Usuarios. Vienen para poder mostrar si la persona entra al sistema y con
@@ -48,11 +52,40 @@ export type EmpleadoDetalle = {
   usuarioSistema: boolean;
   emailAcceso: string;
   rolSistema: RolSistema | "";
+  comisionesVisibles: boolean;
   comisionesHabilitadas: boolean;
   ciudad: string;
   direcciones: EmpleadoDireccion[];
   comisiones: EmpleadoComision[];
+  eventos: Array<{
+    id: string;
+    tipo: string;
+    actorNombre: string;
+    detalle: unknown;
+    createdAt: string;
+  }>;
 };
+
+export type EmpleadoResumen = Pick<
+  EmpleadoDetalle,
+  | "id"
+  | "nombreCompleto"
+  | "email"
+  | "sector"
+  | "ocupacion"
+  | "ciudad"
+  | "activo"
+  | "fechaBaja"
+  | "motivoBaja"
+  | "usuarioSistema"
+  | "emailAcceso"
+  | "updatedAt"
+>;
+
+export type EmpleadoOpcion = Pick<
+  EmpleadoDetalle,
+  "id" | "nombreCompleto" | "sector" | "ocupacion"
+>;
 
 export type EmpleadoPayload = {
   nombreCompleto: string;
@@ -66,6 +99,7 @@ export type EmpleadoPayload = {
   fechaNacimiento?: string;
   comisionesHabilitadas: boolean;
   direcciones: Array<{
+    id?: string;
     descripcion: string;
     pais: string;
     codigoPostal?: string;
@@ -76,6 +110,7 @@ export type EmpleadoPayload = {
     principal: boolean;
   }>;
   comisiones: Array<{
+    id?: string;
     descripcion: string;
     tipo: TipoComision;
     valor: string;
@@ -135,12 +170,18 @@ export function createEmptyEmpleado(): EmpleadoDetalle {
     sexo: "",
     fechaIngreso: "",
     fechaNacimiento: "",
+    activo: true,
+    fechaBaja: "",
+    motivoBaja: "",
+    updatedAt: "",
     usuarioSistema: false,
     emailAcceso: "",
     rolSistema: "",
+    comisionesVisibles: true,
     comisionesHabilitadas: false,
     ciudad: "",
     direcciones: [createEmptyDireccion()],
     comisiones: [],
+    eventos: [],
   };
 }

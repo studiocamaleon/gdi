@@ -6,21 +6,28 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   FileSpreadsheetIcon,
-  UploadIcon,
   PencilIcon,
   PlusIcon,
-  Trash2Icon,
+  SearchXIcon,
+  UploadIcon,
+  UserCheckIcon,
+  UserMinusIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createEmpleado, deleteEmpleado } from "@/lib/empleados-api";
-import { EmpleadoDetalle } from "@/lib/empleados";
+import { NavLink } from "@/components/navigation/nav-link";
+import { useNavigationFeedback } from "@/components/navigation/navigation-feedback";
+import {
+  importarEmpleados,
+  listEmpleados,
+  setEmpleadosActivos,
+  type EmpleadosListResponse,
+} from "@/lib/empleados-api";
+import type { EmpleadoResumen } from "@/lib/empleados";
 import {
   downloadEmpleadosImportTemplate,
   parseEmpleadosImportCsv,
 } from "@/lib/empleados-importacion";
-import { NavLink } from "@/components/navigation/nav-link";
-import { useNavigationFeedback } from "@/components/navigation/navigation-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +48,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
   Table,
   TableBody,
   TableCell,
@@ -48,110 +65,127 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TablePagination, usePagination } from "@/components/ui/table-pagination";
-import { Input } from "@/components/ui/input";
+import { TablePagination } from "@/components/ui/table-pagination";
 
 type EmpleadosTableProps = {
-  initialEmpleados: EmpleadoDetalle[];
+  initialResponse: EmpleadosListResponse;
+  canManage: boolean;
 };
 
-function buildCsv(empleados: EmpleadoDetalle[]) {
+function safeSpreadsheetCell(value: string) {
+  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
+function buildCsv(empleados: EmpleadoResumen[]) {
   const rows = [
-    [
-      "Nombre completo",
-      "Sector",
-      "Ocupacion",
-      "Email principal",
-      "Ciudad",
-      "Usuario del sistema",
-    ],
+    ["Nombre completo", "Sector", "Ocupación", "Email", "Ciudad", "Acceso", "Estado"],
     ...empleados.map((empleado) => [
       empleado.nombreCompleto,
       empleado.sector,
       empleado.ocupacion,
       empleado.email,
       empleado.ciudad,
-      empleado.usuarioSistema ? "Si" : "No",
+      empleado.usuarioSistema ? "Habilitado" : "Sin acceso",
+      empleado.activo ? "Activo" : "Baja",
     ]),
   ];
-
-  return rows
-    .map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(","))
-    .join("\n");
+  return `\uFEFF${rows
+    .map((row) =>
+      row
+        .map((cell) => `"${safeSpreadsheetCell(cell).replaceAll('"', '""')}"`)
+        .join(","),
+    )
+    .join("\n")}`;
 }
 
-export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
+export function EmpleadosTable({
+  initialResponse,
+  canManage,
+}: EmpleadosTableProps) {
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
-  const [empleados, setEmpleados] = React.useState(initialEmpleados);
+  const [response, setResponse] = React.useState(initialResponse);
   const [search, setSearch] = React.useState("");
-  const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
-  const [selectedEmpleados, setSelectedEmpleados] = React.useState<Set<string>>(
-    new Set(),
-  );
+  const [debouncedSearch, setDebouncedSearch] = React.useState("");
+  const [page, setPage] = React.useState(initialResponse.page);
+  const [verInactivos, setVerInactivos] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [confirmandoBaja, setConfirmandoBaja] = React.useState(false);
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const [isDeleting, startDeleteTransition] = React.useTransition();
+  const [isChangingState, startStateTransition] = React.useTransition();
   const [isImporting, startImportTransition] = React.useTransition();
 
-  const filtered = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return empleados;
-    return empleados.filter(
-      (e) =>
-        e.nombreCompleto.toLowerCase().includes(q) ||
-        e.sector.toLowerCase().includes(q) ||
-        e.email.toLowerCase().includes(q) ||
-        (e.ciudad ?? "").toLowerCase().includes(q),
-    );
-  }, [empleados, search]);
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
-  const { paged, page, total, setPage, pageSize } = usePagination(filtered);
-
-  const selectedCount = selectedEmpleados.size;
-  const allSelected = paged.length > 0 && paged.every((e) => selectedEmpleados.has(e.id));
-  const selectedRows = empleados.filter((empleado) =>
-    selectedEmpleados.has(empleado.id),
-  );
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedEmpleados(new Set(paged.map((empleado) => empleado.id)));
-      return;
-    }
-
-    setSelectedEmpleados(new Set());
-  };
-
-  const handleSelectEmpleado = (empleadoId: string, checked: boolean) => {
-    const nextSelection = new Set(selectedEmpleados);
-
-    if (checked) {
-      nextSelection.add(empleadoId);
-    } else {
-      nextSelection.delete(empleadoId);
-    }
-
-    setSelectedEmpleados(nextSelection);
-  };
-
-  const handleEditSelection = () => {
-    if (selectedRows.length !== 1) {
-      return;
-    }
-
-    startNavigation(`/empleados/${selectedRows[0].id}`);
-    router.push(`/empleados/${selectedRows[0].id}`);
-  };
-
-  const handleExportSelection = () => {
-    if (selectedRows.length === 0) {
-      return;
-    }
-
-    const blob = new Blob([buildCsv(selectedRows)], {
-      type: "text/csv;charset=utf-8;",
+  const refresh = React.useCallback(async () => {
+    const next = await listEmpleados({
+      q: debouncedSearch,
+      page,
+      limit: initialResponse.limit,
+      incluirInactivos: verInactivos,
     });
-    const url = URL.createObjectURL(blob);
+    setResponse(next);
+    setSelected(new Set());
+  }, [debouncedSearch, initialResponse.limit, page, verInactivos]);
+
+  React.useEffect(() => {
+    let active = true;
+    setIsLoading(true);
+    listEmpleados({
+      q: debouncedSearch,
+      page,
+      limit: initialResponse.limit,
+      incluirInactivos: verInactivos,
+    })
+      .then((next) => {
+        if (!active) return;
+        setResponse(next);
+        setSelected(new Set());
+      })
+      .catch((error) => {
+        if (active) {
+          toast.error(error instanceof Error ? error.message : "No se pudo actualizar la lista.");
+        }
+      })
+      .finally(() => active && setIsLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch, initialResponse.limit, page, verInactivos]);
+
+  const empleados = response.data;
+  const selectedRows = empleados.filter((empleado) => selected.has(empleado.id));
+  const allSelected =
+    empleados.length > 0 && empleados.every((empleado) => selected.has(empleado.id));
+
+  const handleSelect = (id: string, checked: boolean) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const handleOpenSelection = () => {
+    if (selectedRows.length !== 1) return;
+    const href = `/empleados/${selectedRows[0].id}`;
+    startNavigation(href);
+    router.push(href);
+  };
+
+  const handleExport = () => {
+    if (selectedRows.length === 0) return;
+    const url = URL.createObjectURL(
+      new Blob([buildCsv(selectedRows)], { type: "text/csv;charset=utf-8;" }),
+    );
     const link = document.createElement("a");
     link.href = url;
     link.download = "empleados-seleccion.csv";
@@ -159,99 +193,76 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
     URL.revokeObjectURL(url);
   };
 
-  const handleDeleteSelection = () => {
-    if (selectedRows.length === 0) {
-      return;
-    }
-
-    setConfirmandoEliminar(true);
-  };
-
-  const confirmarEliminarSeleccion = () => {
-    setConfirmandoEliminar(false);
-    startDeleteTransition(async () => {
-      await Promise.all(selectedRows.map((empleado) => deleteEmpleado(empleado.id)));
-      setEmpleados((current) =>
-        current.filter((empleado) => !selectedEmpleados.has(empleado.id)),
-      );
-      setSelectedEmpleados(new Set());
-      router.refresh();
+  const cambiarEstado = (ids: string[], activo: boolean) => {
+    startStateTransition(async () => {
+      try {
+        await setEmpleadosActivos(ids, activo);
+        await refresh();
+        router.refresh();
+        toast.success(
+          activo
+            ? `${ids.length} empleado(s) reactivado(s).`
+            : `${ids.length} empleado(s) dado(s) de baja.`,
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo cambiar el estado.");
+      }
     });
   };
 
   const handleImportFile = (file: File | undefined) => {
     if (!file) return;
     startImportTransition(async () => {
-      const content = await file.text();
-      const parsed = parseEmpleadosImportCsv(content);
-      if (parsed.fatalError) {
-        toast.error(parsed.fatalError);
-        return;
-      }
-
-      const invalidRows = parsed.rows.filter((row) => row.errors.length > 0);
-      if (invalidRows.length > 0) {
-        const firstInvalid = invalidRows[0];
-        toast.error(
-          `No se importó el archivo. Fila ${firstInvalid.rowNumber}: ${firstInvalid.errors.join(" ")}`,
-        );
-        return;
-      }
-
-      const payloads = parsed.rows.flatMap((row) => (row.payload ? [row.payload] : []));
-      if (payloads.length === 0) {
-        toast.error("No hay empleados válidos para importar.");
-        return;
-      }
-
-      const created: EmpleadoDetalle[] = [];
-      const failed: string[] = [];
-      for (let idx = 0; idx < payloads.length; idx += 1) {
-        try {
-          const empleado = await createEmpleado(payloads[idx]);
-          created.push(empleado);
-        } catch (error) {
-          failed.push(
-            `Fila ${parsed.rows[idx].rowNumber}: ${
-              error instanceof Error ? error.message : "error desconocido"
-            }`,
-          );
+      try {
+        const parsed = parseEmpleadosImportCsv(await file.text());
+        if (parsed.fatalError) throw new Error(parsed.fatalError);
+        const invalid = parsed.rows.find((row) => row.errors.length > 0);
+        if (invalid) {
+          throw new Error(`Fila ${invalid.rowNumber}: ${invalid.errors.join(" ")}`);
         }
-      }
-
-      if (created.length > 0) {
-        setEmpleados((current) => [...created, ...current]);
+        const payloads = parsed.rows.flatMap((row) => (row.payload ? [row.payload] : []));
+        if (payloads.length === 0) throw new Error("No hay empleados válidos para importar.");
+        const result = await importarEmpleados(payloads);
+        await refresh();
         router.refresh();
-      }
-      if (failed.length > 0) {
-        toast.error(
-          `Se importaron ${created.length} empleado(s), con ${failed.length} error(es). ${failed[0]}`,
-        );
-      } else {
-        toast.success(`Se importaron ${created.length} empleado(s).`);
+        toast.success(`Se importaron ${result.total} empleado(s).`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo importar el archivo.");
       }
     });
   };
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
+    <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
       <Card className="rounded-2xl border-border/70 shadow-sm">
         <CardHeader className="gap-4 border-b border-border/70">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl">
               <CardTitle>Empleados</CardTitle>
               <CardDescription>
-                Administra la base de empleados, su acceso al sistema y las
-                condiciones operativas asociadas a cada ficha.
+                Legajos activos e históricos. Dar de baja conserva ventas,
+                producción y egresos asociados.
               </CardDescription>
             </div>
-            <Input
-              placeholder="Buscar por nombre, sector o email..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="max-w-xs"
-            />
-
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Input
+                placeholder="Buscar por nombre, sector, email o ciudad..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="w-full sm:w-80"
+              />
+              <Field orientation="horizontal" className="w-fit">
+                <Switch
+                  id="empleados-inactivos"
+                  checked={verInactivos}
+                  onCheckedChange={(checked) => {
+                    setVerInactivos(checked);
+                    setPage(1);
+                  }}
+                />
+                <FieldLabel htmlFor="empleados-inactivos">Mostrar bajas</FieldLabel>
+              </Field>
+            </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 ref={fileInputRef}
@@ -265,112 +276,127 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
                 }}
               />
               <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button variant="sidebar" className="w-full sm:w-auto" />
-                  }
-                >
-                  {selectedCount > 0 ? `Acciones (${selectedCount})` : "Acciones"}
+                <DropdownMenuTrigger render={<Button variant="sidebar" className="w-full sm:w-auto" />}>
+                  {selected.size > 0 ? `Acciones (${selected.size})` : "Acciones"}
                   <ChevronDownIcon data-icon="inline-end" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem onClick={downloadEmpleadosImportTemplate}>
-                      <FileSpreadsheetIcon />
-                      Descargar plantilla
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={isImporting}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <UploadIcon />
-                      {isImporting ? "Importando..." : "Importar empleados"}
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
+                  {canManage ? (
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={downloadEmpleadosImportTemplate}>
+                        <FileSpreadsheetIcon />
+                        Descargar plantilla
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={isImporting}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <UploadIcon />
+                        {isImporting ? "Importando..." : "Importar empleados"}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  ) : null}
+                  {canManage ? <DropdownMenuSeparator /> : null}
                   <DropdownMenuGroup>
                     <DropdownMenuItem
                       disabled={selectedRows.length !== 1}
-                      onClick={handleEditSelection}
+                      onClick={handleOpenSelection}
                     >
                       <PencilIcon />
-                      Editar seleccion
+                      {canManage ? "Editar selección" : "Ver ficha"}
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={selectedRows.length === 0}
-                      onClick={handleExportSelection}
-                    >
+                    <DropdownMenuItem disabled={selectedRows.length === 0} onClick={handleExport}>
                       <DownloadIcon />
-                      Exportar seleccion
+                      Exportar selección
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    disabled={selectedRows.length === 0 || isDeleting}
-                    onClick={handleDeleteSelection}
-                  >
-                    <Trash2Icon />
-                    Eliminar seleccion
-                  </DropdownMenuItem>
+                  {canManage && selectedRows.length > 0 ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      {selectedRows.every((item) => !item.activo) ? (
+                        <DropdownMenuItem
+                          disabled={isChangingState}
+                          onClick={() => cambiarEstado(selectedRows.map((item) => item.id), true)}
+                        >
+                          <UserCheckIcon />
+                          Reactivar selección
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={isChangingState}
+                          onClick={() => setConfirmandoBaja(true)}
+                        >
+                          <UserMinusIcon />
+                          Dar de baja selección
+                        </DropdownMenuItem>
+                      )}
+                    </>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              <Button
-                variant="brand"
-                className="w-full sm:w-auto"
-                nativeButton={false}
-                render={<NavLink href="/empleados/nuevo" />}
-              >
-                <PlusIcon data-icon="inline-start" />
-                Nuevo empleado
-              </Button>
+              {canManage ? (
+                <Button
+                  variant="brand"
+                  className="w-full sm:w-auto"
+                  nativeButton={false}
+                  render={<NavLink href="/empleados/nuevo" />}
+                >
+                  <PlusIcon data-icon="inline-start" />
+                  Nuevo empleado
+                </Button>
+              ) : null}
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="px-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10 px-4">
-                  <Checkbox
-                    aria-label="Seleccionar todos los empleados"
-                    checked={allSelected}
-                    onCheckedChange={handleSelectAll}
-                  />
-                </TableHead>
-                <TableHead>Empleado</TableHead>
-                <TableHead>Sector</TableHead>
-                <TableHead>Ocupacion</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Ciudad</TableHead>
-                <TableHead className="w-[170px]">Usuario del sistema</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paged.map((empleado) => {
-                const isSelected = selectedEmpleados.has(empleado.id);
-
-                return (
-                  <TableRow
-                    key={empleado.id}
-                    data-state={isSelected ? "selected" : undefined}
-                  >
+          {empleados.length === 0 ? (
+            <Empty className="border-0 py-14">
+              <EmptyHeader>
+                <EmptyMedia variant="icon"><SearchXIcon /></EmptyMedia>
+                <EmptyTitle>No encontramos empleados</EmptyTitle>
+                <EmptyDescription>
+                  {search || verInactivos
+                    ? "Probá otra búsqueda o cambiá el filtro de bajas."
+                    : "Creá el primer legajo para asignarlo a ventas o producción."}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10 px-4">
+                    <Checkbox
+                      aria-label="Seleccionar todos los empleados visibles"
+                      checked={allSelected}
+                      onCheckedChange={(checked) =>
+                        setSelected(checked ? new Set(empleados.map((item) => item.id)) : new Set())
+                      }
+                    />
+                  </TableHead>
+                  <TableHead>Empleado</TableHead>
+                  <TableHead>Sector</TableHead>
+                  <TableHead>Ocupación</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Ciudad</TableHead>
+                  <TableHead>Acceso</TableHead>
+                  <TableHead>Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className={isLoading ? "opacity-60" : undefined}>
+                {empleados.map((empleado) => (
+                  <TableRow key={empleado.id} data-state={selected.has(empleado.id) ? "selected" : undefined}>
                     <TableCell className="px-4">
                       <Checkbox
                         aria-label={`Seleccionar a ${empleado.nombreCompleto}`}
-                        checked={isSelected}
-                        onCheckedChange={(checked) =>
-                          handleSelectEmpleado(empleado.id, checked === true)
-                        }
+                        checked={selected.has(empleado.id)}
+                        onCheckedChange={(checked) => handleSelect(empleado.id, checked === true)}
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      <NavLink
-                        href={`/empleados/${empleado.id}`}
-                        className="underline-offset-4 hover:underline"
-                      >
+                      <NavLink href={`/empleados/${empleado.id}`} className="underline-offset-4 hover:underline">
                         {empleado.nombreCompleto}
                       </NavLink>
                     </TableCell>
@@ -379,31 +405,40 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
                     <TableCell>{empleado.email}</TableCell>
                     <TableCell>{empleado.ciudad || "-"}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={empleado.usuarioSistema ? "secondary" : "outline"}
-                      >
+                      <Badge variant={empleado.usuarioSistema ? "secondary" : "outline"}>
                         {empleado.usuarioSistema ? "Habilitado" : "Sin acceso"}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      <Badge variant={empleado.activo ? "secondary" : "destructive"}>
+                        {empleado.activo ? "Activo" : "Baja"}
+                      </Badge>
+                    </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <TablePagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} />
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          <TablePagination
+            total={response.total}
+            page={response.page}
+            pageSize={response.limit}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
 
       <ConfirmacionDestructiva
-        open={confirmandoEliminar}
-        onOpenChange={(open) => {
-          if (!open) setConfirmandoEliminar(false);
-        }}
-        titulo="Eliminar empleados"
-        descripcion={`Se eliminaran ${selectedRows.length} empleado(s). Esta accion no se puede deshacer.`}
+        open={confirmandoBaja}
+        onOpenChange={(open) => !open && setConfirmandoBaja(false)}
+        titulo="Dar de baja empleados"
+        descripcion={`Se darán de baja ${selectedRows.filter((item) => item.activo).length} empleado(s). Sus ventas, trabajos y egresos se conservarán; si tenían acceso, se revocará.`}
         requiereTipear={false}
-        accionLabel="Eliminar"
-        onConfirmar={confirmarEliminarSeleccion}
+        accionLabel="Dar de baja"
+        onConfirmar={() => {
+          setConfirmandoBaja(false);
+          cambiarEstado(selectedRows.filter((item) => item.activo).map((item) => item.id), false);
+        }}
       />
     </div>
   );

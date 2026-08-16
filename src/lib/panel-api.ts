@@ -366,6 +366,7 @@ export type VendedorEquipoPanel = {
   comisionEstimada: number | null;
 };
 export type EquipoPanel = {
+  comisionesVisibles: boolean;
   kpis: {
     personasActivas: number;
     minutosProductivos: number;

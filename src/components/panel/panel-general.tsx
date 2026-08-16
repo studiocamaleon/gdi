@@ -1315,9 +1315,9 @@ export function TabEquipo({ d }: { d: EquipoPanel }) {
           ) : null}
           <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted-text)" }}>Más oscuro = más tiempo. Una familia con una sola persona es un riesgo de cobertura.</div>
         </Card>
-        <Card span={12} title="Vendedores" sub="venta, margen y comisión estimada del período · sin IVA" flush>
+        <Card span={12} title="Vendedores" sub={d.comisionesVisibles ? "venta, margen y comisión estimada del período · sin IVA" : "venta y margen del período · sin IVA"} flush>
           {d.vendedores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
-            <table className="d-tbl"><thead><tr><th>Vendedor</th><th className="right">Órdenes</th><th className="right">Ticket</th><th className="right">Margen</th><th className="right">Ventas</th><th className="right" title="Reglas de comisión configuradas aplicadas a la venta; no es liquidación">Comisión est.</th></tr></thead>
+            <table className="d-tbl"><thead><tr><th>Vendedor</th><th className="right">Órdenes</th><th className="right">Ticket</th><th className="right">Margen</th><th className="right">Ventas</th>{d.comisionesVisibles ? <th className="right" title="Reglas de comisión configuradas aplicadas a la venta; no es liquidación">Comisión est.</th> : null}</tr></thead>
               <tbody>{d.vendedores.map((v) => (
                 <tr key={v.empleadoId ?? v.nombre}>
                   <td><div className="nm">{v.nombre}</div>{v.itemsSinCosto > 0 ? <div className="sub">{v.itemsSinCosto} item{v.itemsSinCosto === 1 ? "" : "s"} sin costo (fuera del margen)</div> : null}</td>
@@ -1325,7 +1325,7 @@ export function TabEquipo({ d }: { d: EquipoPanel }) {
                   <td className="right mono">{abreviarMoneda(v.ticketPromedio, moneda)}</td>
                   <td className="right mono" style={{ color: "var(--ok)" }}>{v.margenPct != null ? pct(v.margenPct) : "—"}</td>
                   <td className="right mono" style={{ fontWeight: 600 }}>{abreviarMoneda(v.facturado, moneda)}</td>
-                  <td className="right mono">{v.comisionEstimada != null ? abreviarMoneda(v.comisionEstimada, moneda) : <span style={{ color: "var(--muted-text)" }}>sin regla</span>}</td>
+                  {d.comisionesVisibles ? <td className="right mono">{v.comisionEstimada != null ? abreviarMoneda(v.comisionEstimada, moneda) : <span style={{ color: "var(--muted-text)" }}>sin regla</span>}</td> : null}
                 </tr>
               ))}</tbody>
             </table>

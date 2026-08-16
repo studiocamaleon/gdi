@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getEmpleadoById } from "@/lib/empleados-api";
+import { tienePermiso } from "@/lib/permisos-server";
 
 const EmpleadoFicha = dynamicImport(
   () =>
@@ -35,11 +36,22 @@ async function EmpleadoDetallePageContent({
   params: Promise<{ empleadoId: string }>;
 }) {
   const { empleadoId } = await params;
-  const empleado = await getEmpleadoById(empleadoId);
+  const [empleado, canManage, canViewCommissions] = await Promise.all([
+    getEmpleadoById(empleadoId),
+    tienePermiso("registros.gestionar_empleados"),
+    tienePermiso("registros.ver_comisiones"),
+  ]);
 
   if (!empleado) {
     notFound();
   }
 
-  return <EmpleadoFicha empleado={empleado} mode="edit" />;
+  return (
+    <EmpleadoFicha
+      empleado={empleado}
+      mode="edit"
+      canManage={canManage}
+      canViewCommissions={canViewCommissions}
+    />
+  );
 }

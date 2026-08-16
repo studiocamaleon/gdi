@@ -613,6 +613,7 @@ model Tenant {
   proveedorEventos                                 ProveedorEvento[]
   empleadoDireccions                               EmpleadoDireccion[]
   empleadoComisions                                EmpleadoComision[]
+  empleadoEventos                                  EmpleadoEvento[]
   productosImpuestosCatalogo                       ProductoImpuestoCatalogo[]
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
   cupones                                          Cupon[]
@@ -1073,12 +1074,16 @@ model Empleado {
   fechaIngreso           DateTime            @db.Date
   fechaNacimiento        DateTime?           @db.Date
   comisionesHabilitadas  Boolean             @default(false)
+  activo                 Boolean             @default(true)
+  fechaBaja              DateTime?           @db.Date
+  motivoBaja             String?             @db.VarChar(300)
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
   tenant                 Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user                   User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   direcciones            EmpleadoDireccion[]
   comisiones             EmpleadoComision[]
+  eventos                EmpleadoEvento[]
   invitations            Invitation[]
   ordenesTrabajoVendidas OrdenTrabajo[]      @relation("OrdenTrabajoVendedor")
   cotizacionesVendidas   Cotizacion[]        @relation("CotizacionVendedor")
@@ -1087,6 +1092,23 @@ model Empleado {
 
   @@index([tenantId, nombreCompleto])
   @@index([tenantId, sector])
+  @@index([tenantId, activo])
+}
+
+/// Historial append-only de cambios sensibles del legajo.
+model EmpleadoEvento {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  empleadoId  String   @db.Uuid
+  tipo        String   @db.VarChar(40)
+  actorId     String?  @db.Uuid
+  actorNombre String?
+  detalle     Json?
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, empleadoId, createdAt])
 }
 
 model ClienteContacto {

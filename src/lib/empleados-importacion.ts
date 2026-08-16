@@ -44,9 +44,6 @@ const EMPLEADOS_IMPORT_SAMPLE = [
   "2026-05-01",
   "1992-03-14",
   "no",
-  "",
-  "",
-  "no",
   "Principal",
   "AR",
   "1406",
@@ -84,14 +81,14 @@ const SEXO_VALUES = new Set<SexoEmpleado>([
 
 
 export function downloadEmpleadosImportTemplate() {
-  const helpRows = [
-    EMPLEADOS_IMPORT_HEADER_LABELS,
-    EMPLEADOS_IMPORT_SAMPLE,
-  ];
   downloadCsv(
     "plantilla-importacion-empleados.csv",
-    toCsv(helpRows),
+    buildEmpleadosImportTemplateCsv(),
   );
+}
+
+export function buildEmpleadosImportTemplateCsv() {
+  return toCsv([EMPLEADOS_IMPORT_HEADER_LABELS, EMPLEADOS_IMPORT_SAMPLE]);
 }
 
 export function downloadCsv(filename: string, csv: string) {

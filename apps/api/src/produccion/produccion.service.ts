@@ -1214,10 +1214,16 @@ export class ProduccionService {
 
     if (empleadoIds.length > 0) {
       const encontrados = await this.prisma.empleado.count({
-        where: { tenantId: auth.tenantId, id: { in: empleadoIds } },
+        where: {
+          tenantId: auth.tenantId,
+          id: { in: empleadoIds },
+          activo: true,
+        },
       });
       if (encontrados !== empleadoIds.length) {
-        throw new NotFoundException('Algún empleado referenciado no existe.');
+        throw new NotFoundException(
+          'Algún empleado no existe o está dado de baja.',
+        );
       }
     }
     if (maquinaIds.length > 0) {

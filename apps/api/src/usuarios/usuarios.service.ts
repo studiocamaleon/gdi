@@ -845,10 +845,12 @@ export class UsuariosService {
     });
     if (!empleadoId) return;
     const empleado = await db.empleado.findFirst({
-      where: { id: empleadoId, tenantId },
+      where: { id: empleadoId, tenantId, activo: true },
       select: { id: true },
     });
-    if (!empleado) throw new NotFoundException('Ese empleado no existe.');
+    if (!empleado) {
+      throw new NotFoundException('Ese empleado no existe o está dado de baja.');
+    }
     await db.empleado.updateMany({
       where: { id: empleadoId, tenantId },
       data: { userId },

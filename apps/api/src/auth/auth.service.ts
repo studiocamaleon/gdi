@@ -648,6 +648,7 @@ export class AuthService {
       where: {
         id: empleadoId,
         tenantId: auth.tenantId,
+        activo: true,
       },
     });
 
@@ -776,35 +777,43 @@ export class AuthService {
       return;
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.membership.updateMany({
-        where: {
-          userId: empleado.userId!,
-          tenantId: auth.tenantId,
-        },
-        data: {
-          activa: false,
-        },
-      });
+    await this.prisma.$transaction((tx) =>
+      this.revokeEmployeeAccessInTransaction(
+        tx,
+        auth.tenantId,
+        empleadoId,
+        empleado.userId!,
+      ),
+    );
+  }
 
-      await tx.empleado.update({
-        where: { id: empleadoId },
-        data: {
-          userId: null,
-        },
-      });
-
-      await tx.invitation.updateMany({
-        where: {
-          tenantId: auth.tenantId,
-          empleadoId,
-          acceptedAt: null,
-          revokedAt: null,
-        },
-        data: {
-          revokedAt: new Date(),
-        },
-      });
+  /**
+   * Variante transaccional para que una baja de legajo y la revocación de su
+   * acceso sean un único commit. Las tablas de identidad siguen encapsuladas
+   * en Auth aunque la transacción la abra el dominio Empleados.
+   */
+  async revokeEmployeeAccessInTransaction(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    empleadoId: string,
+    userId: string,
+  ) {
+    await tx.membership.updateMany({
+      where: { userId, tenantId },
+      data: { activa: false },
+    });
+    await tx.empleado.update({
+      where: { id: empleadoId },
+      data: { userId: null },
+    });
+    await tx.invitation.updateMany({
+      where: {
+        tenantId,
+        empleadoId,
+        acceptedAt: null,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
     });
   }
 

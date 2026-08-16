@@ -2,7 +2,8 @@ import { Suspense } from "react";
 
 import { EmpleadosTable } from "@/components/empleados/empleados-table";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
-import { getEmpleados } from "@/lib/empleados-api";
+import { listEmpleados } from "@/lib/empleados-api";
+import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,10 @@ export default function EmpleadosPage() {
 }
 
 async function EmpleadosPageContent() {
-  const empleados = await getEmpleados();
+  const [response, canManage] = await Promise.all([
+    listEmpleados({ page: 1, limit: 25 }),
+    tienePermiso("registros.gestionar_empleados"),
+  ]);
 
-  return <EmpleadosTable initialEmpleados={empleados} />;
+  return <EmpleadosTable initialResponse={response} canManage={canManage} />;
 }

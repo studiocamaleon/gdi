@@ -177,14 +177,26 @@ export class PresupuestosService {
     let vendedorEmpleadoId = dto.vendedorEmpleadoId ?? null;
     if (vendedorEmpleadoId) {
       const vendedor = await this.prisma.empleado.findFirst({
-        where: { id: vendedorEmpleadoId },
+        where: {
+          id: vendedorEmpleadoId,
+          tenantId: auth.tenantId,
+          activo: true,
+        },
         select: { id: true },
       });
-      if (!vendedor) throw new BadRequestException('El vendedor no existe.');
+      if (!vendedor) {
+        throw new BadRequestException(
+          'El vendedor no existe o está dado de baja.',
+        );
+      }
     }
     if (!vendedorEmpleadoId) {
       const emisor = await this.prisma.empleado.findFirst({
-        where: { userId: auth.userId },
+        where: {
+          userId: auth.userId,
+          tenantId: auth.tenantId,
+          activo: true,
+        },
         select: { id: true },
       });
       vendedorEmpleadoId = emisor?.id ?? null;

@@ -75,7 +75,11 @@ export type VendedorEquipo = {
 export class EquipoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async equipo(tenantId: string, rango: Rango) {
+  async equipo(
+    tenantId: string,
+    rango: Rango,
+    incluirComisiones = false,
+  ) {
     const desde = rango.desde;
     const hastaExcl = finExclusivo(rango);
 
@@ -86,7 +90,7 @@ export class EquipoService {
         this.eficienciaSerie(tenantId, desde, hastaExcl, rango.zona),
         this.disciplina(tenantId, desde, hastaExcl),
         this.polivalencia(tenantId, desde, hastaExcl),
-        this.vendedores(tenantId, desde, hastaExcl),
+        this.vendedores(tenantId, desde, hastaExcl, incluirComisiones),
       ]);
 
     // Eficiencia con guardas: desvío sólo con muestra suficiente; la serie
@@ -130,6 +134,7 @@ export class EquipoService {
       .map(([familia, set]) => ({ familia, persona: [...set][0] }));
 
     return {
+      comisionesVisibles: incluirComisiones,
       kpis: {
         personasActivas: personas.length,
         minutosProductivos: r2(personas.reduce((a, p) => a + p.minutos, 0)),
@@ -323,6 +328,7 @@ export class EquipoService {
     tenantId: string,
     desde: Date,
     hastaExcl: Date,
+    incluirComisiones: boolean,
   ): Promise<VendedorEquipo[]> {
     const [ventas, reglas] = await Promise.all([
       this.prisma.$queryRaw<
@@ -351,10 +357,12 @@ export class EquipoService {
         GROUP BY 1, 2
         ORDER BY facturado DESC
       `,
-      this.prisma.empleadoComision.findMany({
-        where: { tenantId },
-        select: { empleadoId: true, tipo: true, valor: true },
-      }),
+      incluirComisiones
+        ? this.prisma.empleadoComision.findMany({
+            where: { tenantId },
+            select: { empleadoId: true, tipo: true, valor: true },
+          })
+        : Promise.resolve([]),
     ]);
 
     const reglasPorEmpleado = new Map<string, Array<{ tipo: string; valor: number }>>();

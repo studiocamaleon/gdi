@@ -909,7 +909,11 @@ export class OrdenesTrabajoService {
         : null,
       payload.vendedorEmpleadoId
         ? this.prisma.empleado.findFirst({
-            where: { id: payload.vendedorEmpleadoId, tenantId: auth.tenantId },
+            where: {
+              id: payload.vendedorEmpleadoId,
+              tenantId: auth.tenantId,
+              activo: true,
+            },
             select: { id: true, nombreCompleto: true },
           })
         : null,
@@ -1364,7 +1368,11 @@ export class OrdenesTrabajoService {
         : null,
       payload.vendedorEmpleadoId
         ? this.prisma.empleado.findFirst({
-            where: { id: payload.vendedorEmpleadoId, tenantId: auth.tenantId },
+            where: {
+              id: payload.vendedorEmpleadoId,
+              tenantId: auth.tenantId,
+              activo: true,
+            },
             select: { id: true },
           })
         : null,
@@ -1653,7 +1661,11 @@ export class OrdenesTrabajoService {
         : null,
       payload.vendedorEmpleadoId
         ? this.prisma.empleado.findFirst({
-            where: { id: payload.vendedorEmpleadoId, tenantId: auth.tenantId },
+            where: {
+              id: payload.vendedorEmpleadoId,
+              tenantId: auth.tenantId,
+              activo: true,
+            },
             select: { id: true, nombreCompleto: true },
           })
         : null,

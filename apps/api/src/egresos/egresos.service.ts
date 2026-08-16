@@ -520,6 +520,22 @@ export class EgresosService {
       throw new BadRequestException('Esa categoría está desactivada.');
     }
 
+    if (dto.empleadoId) {
+      const empleado = await this.prisma.empleado.findFirst({
+        where: {
+          id: dto.empleadoId,
+          tenantId: auth.tenantId,
+          activo: true,
+        },
+        select: { id: true },
+      });
+      if (!empleado) {
+        throw new BadRequestException(
+          'Ese empleado no existe o está dado de baja.',
+        );
+      }
+    }
+
     const cuotas = dto.cuotas ?? 1;
     if (cuotas > 1 && !dto.fechaVencimiento) {
       throw new BadRequestException(

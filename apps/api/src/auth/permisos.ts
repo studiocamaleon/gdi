@@ -133,6 +133,18 @@ export const PERMISOS_TRANSVERSALES = [
     descripcion:
       'El tablero que resume el negocio entero: facturación, margen, punto de equilibrio y alertas. Ver los demás reportes no alcanza.',
   },
+  {
+    clave: 'registros.gestionar_empleados',
+    label: 'Administrar legajos de empleados',
+    descripcion:
+      'Crear, editar, importar y dar de baja empleados. Gestionar clientes o proveedores no alcanza.',
+  },
+  {
+    clave: 'registros.ver_comisiones',
+    label: 'Ver y editar comisiones de empleados',
+    descripcion:
+      'Reglas de comisión y estimaciones por vendedor. Administrar legajos no alcanza.',
+  },
   /**
    * Los sueldos son el dato más sensible del sistema y el módulo que los aloja
    * es el más abierto: el Vendedor tiene `registros.gestionar` porque carga
