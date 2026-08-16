@@ -21,6 +21,7 @@ import {
   CrearOrdenTrabajoDto,
   CrearOrdenTrabajoItemDto,
   EditarOrdenTrabajoDto,
+  EditarOrdenTrabajoLoteDto,
   TratamientoFiscalDto,
 } from './dto/crear-orden-trabajo.dto';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
@@ -135,6 +136,12 @@ export class OrdenesTrabajoController {
   }
 
   @Get()
+  @Permiso(
+    'produccion.ver',
+    'comercial.ver',
+    'administracion.ver',
+    'administracion.gestionar',
+  )
   findAll(
     @CurrentSession() auth: CurrentAuth,
     @Query() query: OrdenesTrabajoQueryDto,
@@ -206,12 +213,19 @@ export class OrdenesTrabajoController {
   }
 
   @Get(':id')
+  @Permiso(
+    'produccion.ver',
+    'comercial.ver',
+    'administracion.ver',
+    'administracion.gestionar',
+  )
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.ordenesTrabajoService.findOne(auth, id);
   }
 
   /** Pasos materializados de la orden (tab Producción del detalle). */
   @Get(':id/pasos')
+  @Permiso('produccion.ver', 'comercial.ver')
   pasosDeOrden(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.ordenesTrabajoService.pasosDeOrden(auth, id);
   }
@@ -223,6 +237,16 @@ export class OrdenesTrabajoController {
     @Body() payload: CrearOrdenTrabajoDto,
   ) {
     return this.ordenesTrabajoService.create(auth, payload);
+  }
+
+  @Permiso('comercial.gestionar')
+  @Patch(':id/lote')
+  editarLote(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: EditarOrdenTrabajoLoteDto,
+  ) {
+    return this.ordenesTrabajoService.editarLote(auth, id, payload);
   }
 
   @Permiso('comercial.gestionar')

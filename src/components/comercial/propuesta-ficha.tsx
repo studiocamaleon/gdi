@@ -52,15 +52,12 @@ import {
   type NestingViewerInput,
 } from "@/lib/productos-servicios-api";
 import {
-  agregarOrdenItem,
   cambiarEstadoOrdenTrabajo,
   cancelarOrdenTrabajo,
   crearOrdenTrabajo,
-  editarOrdenItem,
-  editarOrdenTrabajo,
+  editarOrdenTrabajoLote,
   getOrdenTrabajo,
   getTableroProduccion,
-  quitarOrdenItem,
   setTratamientoFiscalOrden,
 } from "@/lib/ordenes-trabajo-api";
 import {
@@ -79,7 +76,10 @@ import {
 import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
-import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
+import {
+  mensajeDeArtes,
+  publicarArtesDeSello,
+} from "@/lib/sello-arte/publicar";
 import { publicarPlanos, type PlanosDeItem } from "@/lib/planos-persistir";
 import {
   subirArchivo,
@@ -285,7 +285,6 @@ function getCotizacionImpuestos(cotizacion: CotizacionExitosa) {
     : 0;
 }
 
-
 export function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
     .filter(
@@ -373,18 +372,90 @@ function CarasSpecValue({ value }: { value: string }) {
   return (
     <span className="op-caras-value">
       {doble ? (
-        <svg className="op-caras-ico" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-          <rect x="3" y="5" width="13" height="18" rx="2" fill="var(--surface,#fff)" stroke="var(--muted,#b8b6b1)" strokeWidth="1.5" />
-          <rect x="10" y="3" width="13" height="18" rx="2" fill="var(--surface,#fff)" stroke="currentColor" strokeWidth="1.6" />
-          <line x1="13" y1="8" x2="20" y2="8" stroke="currentColor" strokeWidth="1.4" />
-          <line x1="13" y1="12" x2="20" y2="12" stroke="var(--muted,#b8b6b1)" strokeWidth="1.4" />
+        <svg
+          className="op-caras-ico"
+          viewBox="0 0 26 26"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="3"
+            y="5"
+            width="13"
+            height="18"
+            rx="2"
+            fill="var(--surface,#fff)"
+            stroke="var(--muted,#b8b6b1)"
+            strokeWidth="1.5"
+          />
+          <rect
+            x="10"
+            y="3"
+            width="13"
+            height="18"
+            rx="2"
+            fill="var(--surface,#fff)"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <line
+            x1="13"
+            y1="8"
+            x2="20"
+            y2="8"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <line
+            x1="13"
+            y1="12"
+            x2="20"
+            y2="12"
+            stroke="var(--muted,#b8b6b1)"
+            strokeWidth="1.4"
+          />
         </svg>
       ) : (
-        <svg className="op-caras-ico" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-          <rect x="6" y="3" width="14" height="20" rx="2" fill="var(--surface,#fff)" stroke="currentColor" strokeWidth="1.6" />
-          <line x1="9" y1="8" x2="17" y2="8" stroke="currentColor" strokeWidth="1.4" />
-          <line x1="9" y1="12" x2="17" y2="12" stroke="var(--muted,#b8b6b1)" strokeWidth="1.4" />
-          <line x1="9" y1="16" x2="14" y2="16" stroke="var(--muted,#b8b6b1)" strokeWidth="1.4" />
+        <svg
+          className="op-caras-ico"
+          viewBox="0 0 26 26"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="6"
+            y="3"
+            width="14"
+            height="20"
+            rx="2"
+            fill="var(--surface,#fff)"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <line
+            x1="9"
+            y1="8"
+            x2="17"
+            y2="8"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <line
+            x1="9"
+            y1="12"
+            x2="17"
+            y2="12"
+            stroke="var(--muted,#b8b6b1)"
+            strokeWidth="1.4"
+          />
+          <line
+            x1="9"
+            y1="16"
+            x2="14"
+            y2="16"
+            stroke="var(--muted,#b8b6b1)"
+            strokeWidth="1.4"
+          />
         </svg>
       )}
       <span>{value}</span>
@@ -761,7 +832,7 @@ function OrdenTabs({
     icon: React.ReactNode;
   }> = [
     { key: "productos", label: "Productos", count, icon: <PackageIcon /> },
-    { key: "produccion", label: "Produccion", icon: <FactoryIcon /> },
+    { key: "produccion", label: "Producción", icon: <FactoryIcon /> },
     { key: "pagos", label: "Pagos", icon: <CreditCardIcon /> },
     ...(comprobantesCount !== undefined
       ? [
@@ -1045,7 +1116,11 @@ function ClienteCombobox({
             ) : null}
           </div>
 
-          <div id={listboxId} className="cliente-combobox-results" role="listbox">
+          <div
+            id={listboxId}
+            className="cliente-combobox-results"
+            role="listbox"
+          >
             {visibleOptions.map((cliente, index) => (
               <button
                 key={cliente.id}
@@ -1235,7 +1310,9 @@ function getAttrNumber(attrs: Record<string, unknown>, keys: string[]) {
 
 function getCommercialMaterialKind(material: MaterialCosteo) {
   const templateId = normalizeSearchText(material.materiaPrimaTemplateId ?? "");
-  const tipoTecnico = normalizeSearchText(material.materiaPrimaTipoTecnico ?? "");
+  const tipoTecnico = normalizeSearchText(
+    material.materiaPrimaTipoTecnico ?? "",
+  );
   const attrs = material.atributosVarianteJson ?? {};
   const combined = `${templateId} ${tipoTecnico}`;
 
@@ -1253,7 +1330,10 @@ function getCommercialMaterialKind(material: MaterialCosteo) {
   if (attrs.formatoComercial && (attrs.gramaje ?? attrs.gramajeGr)) {
     return "sustrato_hoja";
   }
-  if ((attrs.micrones ?? attrs.espesorMicrones ?? attrs.espesor) && attrs.acabado) {
+  if (
+    (attrs.micrones ?? attrs.espesorMicrones ?? attrs.espesor) &&
+    attrs.acabado
+  ) {
     return "laminado_film";
   }
   return "generico";
@@ -1267,7 +1347,12 @@ function getMaterialVariantParts(
   const kind = getCommercialMaterialKind(material);
   const parts: string[] = [];
   const push = (value: string) => {
-    if (value && !parts.some((part) => normalizeSearchText(part) === normalizeSearchText(value))) {
+    if (
+      value &&
+      !parts.some(
+        (part) => normalizeSearchText(part) === normalizeSearchText(value),
+      )
+    ) {
       parts.push(value);
     }
   };
@@ -1311,7 +1396,11 @@ function getMaterialVariantParts(
     push(getAttrText(attrs, ["ladoImprimible", "tecnologiaCompatible"]));
   } else if (kind === "toner" || kind === "tinta_impresion") {
     push(color);
-    push(technologyCodeLabel(getAttrText(attrs, ["tecnologiaCompatible", "equipoCompatible"])));
+    push(
+      technologyCodeLabel(
+        getAttrText(attrs, ["tecnologiaCompatible", "equipoCompatible"]),
+      ),
+    );
   } else {
     const commercialKeys = [
       "material",
@@ -1373,7 +1462,9 @@ function getMaterialCommercialLabel(
   // "· DTF textil" redundante.
   const parts = getMaterialVariantParts(material, options).filter((part) => {
     const normalizedPart = normalizeSearchText(part);
-    return normalizedPart.length > 0 && !normalizedName.includes(normalizedPart);
+    return (
+      normalizedPart.length > 0 && !normalizedName.includes(normalizedPart)
+    );
   });
   if (parts.length === 0) return materialName;
   return `${materialName} · ${parts.join(" · ")}`;
@@ -1436,7 +1527,9 @@ function isFazSpecKey(key: string, label: string) {
  * señal confiable. Devuelve 2 (doble faz), 1 (simple) o null si no aplica.
  */
 function getCarasItem(item: PropuestaItem): number | null {
-  const caras = Number((item.jobContext as Record<string, unknown> | undefined)?.caras);
+  const caras = Number(
+    (item.jobContext as Record<string, unknown> | undefined)?.caras,
+  );
   return caras === 2 ? 2 : caras === 1 ? 1 : null;
 }
 
@@ -1460,10 +1553,11 @@ function getCopiasItem(item: PropuestaItem): number {
  * muestra en su propio bloque "Montaje" para que quede claro sobre qué se monta
  * (hoy solo se veía su espesor suelto, sin decir de qué material).
  */
-function getMontajeSustratoMaterial(item: PropuestaItem): MaterialCosteo | null {
+function getMontajeSustratoMaterial(
+  item: PropuestaItem,
+): MaterialCosteo | null {
   const montajePaso = item.cotizacion.pasos.find(
-    (paso) =>
-      paso.activado && paso.familiaCodigo === "montaje_sobre_sustrato",
+    (paso) => paso.activado && paso.familiaCodigo === "montaje_sobre_sustrato",
   );
   if (!montajePaso) return null;
   const sustrato = (montajePaso.materiales ?? []).find((material) => {
@@ -1481,9 +1575,13 @@ function getOptionalMaterialDetails(item: PropuestaItem, adicional: string) {
 
   for (const paso of item.cotizacion.pasos) {
     if (!paso.activado) continue;
-    const pasoLabel = paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
+    const pasoLabel =
+      paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
     const pasoNorm = normalizeSearchText(pasoLabel);
-    if (!pasoNorm || (!pasoNorm.includes(adicionalNorm) && !adicionalNorm.includes(pasoNorm))) {
+    if (
+      !pasoNorm ||
+      (!pasoNorm.includes(adicionalNorm) && !adicionalNorm.includes(pasoNorm))
+    ) {
       continue;
     }
     for (const material of paso.materiales ?? []) {
@@ -2389,11 +2487,6 @@ function formatDecimal(value: number, maximumFractionDigits = 2) {
   }).format(value);
 }
 
-
-
-
-
-
 /**
  * Detalle de un paso `modificacion_pre`: explica por qué el material mide más
  * que lo que pidió el cliente. Es el dato que evita la pregunta "¿por qué esta
@@ -2747,17 +2840,13 @@ function CostosItemView({
                         )}
                       </td>
                       <td className="num">
-                        {materialesTotal > 0
-                          ? fmt(materialesTotal)
-                          : "-"}
+                        {materialesTotal > 0 ? fmt(materialesTotal) : "-"}
                       </td>
                       <td className="num">
                         {cargosTotal > 0 ? fmt(cargosTotal) : "-"}
                       </td>
                       <td className="num strong">
-                        {paso.costoTotal > 0
-                          ? fmt(paso.costoTotal)
-                          : "-"}
+                        {paso.costoTotal > 0 ? fmt(paso.costoTotal) : "-"}
                       </td>
                     </tr>
                     {puedeExpandir && expanded ? (
@@ -2836,7 +2925,7 @@ function buildOrdenItemSpecs(
       val:
         mainMaterial && isMaterialSpecKey(attr.key, attr.label)
           ? getMaterialCommercialLabel(mainMaterial)
-          : item.especificaciones[attr.key] ?? "A definir",
+          : (item.especificaciones[attr.key] ?? "A definir"),
     }));
 
   const arr = [...specsBase];
@@ -2944,9 +3033,12 @@ function buildOrdenItemSpecs(
   // al proveedor. docs/productos-tercerizados-diseno.md
   let tecnologiaTercerizado: string | null = null;
   for (const paso of item.cotizacion.pasos) {
-    if (paso.tecnologiaTercerizado) tecnologiaTercerizado = paso.tecnologiaTercerizado;
+    if (paso.tecnologiaTercerizado)
+      tecnologiaTercerizado = paso.tecnologiaTercerizado;
     for (const fila of paso.tercerizadoEtiquetas ?? []) {
-      if (arr.some((spec) => spec.lbl.toLowerCase() === fila.eje.toLowerCase())) {
+      if (
+        arr.some((spec) => spec.lbl.toLowerCase() === fila.eje.toLowerCase())
+      ) {
         continue;
       }
       arr.push({ lbl: fila.eje, val: fila.valor });
@@ -2955,8 +3047,12 @@ function buildOrdenItemSpecs(
   // Tecnología asignada al tercerizado: pisa la genérica del producto ("Impresión")
   // con el proceso real (ej. Offset), que es lo que clasifican los reportes.
   if (tecnologiaTercerizado) {
-    const label = TECNOLOGIA_TERCERIZADO_LABEL[tecnologiaTercerizado] ?? tecnologiaTercerizado;
-    const idx = arr.findIndex((spec) => spec.lbl.toLowerCase() === "tecnología");
+    const label =
+      TECNOLOGIA_TERCERIZADO_LABEL[tecnologiaTercerizado] ??
+      tecnologiaTercerizado;
+    const idx = arr.findIndex(
+      (spec) => spec.lbl.toLowerCase() === "tecnología",
+    );
     if (idx >= 0) arr[idx] = { ...arr[idx], val: label };
     else arr.push({ lbl: "Tecnología", val: label });
   }
@@ -3002,7 +3098,10 @@ function describirEta(
   if (!eta || !eta.finEstimado) return null;
   const fin = eta.finEstimado;
   const margen = opts?.margenDias ?? 0;
-  const sugerida = margen > 0 ? sumarDiasHabiles(fin, margen, opts?.noLaborables, opts?.zona) : null;
+  const sugerida =
+    margen > 0
+      ? sumarDiasHabiles(fin, margen, opts?.noLaborables, opts?.zona)
+      : null;
   const elegida = fechaElegida ? fechaElegida.slice(0, 10) : null;
   const nivel =
     elegida && elegida < claveFechaEta(fin)
@@ -3041,7 +3140,12 @@ function fechaRecomendadaEta(
   const margen = opts?.margenDias ?? 0;
   const fecha =
     margen > 0
-      ? sumarDiasHabiles(eta.finEstimado, margen, opts?.noLaborables, opts?.zona)
+      ? sumarDiasHabiles(
+          eta.finEstimado,
+          margen,
+          opts?.noLaborables,
+          opts?.zona,
+        )
       : eta.finEstimado;
   return claveFechaEta(fecha);
 }
@@ -3280,35 +3384,35 @@ export function ProductRow({
                 de colgar a la derecha. Layout inline para no depender de globals.css
                 (Turbopack no recompila ese archivo de forma confiable). */}
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="op-subnav">
-              <button
-                type="button"
-                className={innerTab === "specs" ? "on" : ""}
-                onClick={() => setInnerTab("specs")}
-              >
-                Especificaciones
-              </button>
-              <button
-                type="button"
-                className={innerTab === "costos" ? "on" : ""}
-                onClick={() => setInnerTab("costos")}
-              >
-                Costos
-              </button>
-              <button
-                type="button"
-                className={innerTab === "produccion" ? "on" : ""}
-                onClick={() => setInnerTab("produccion")}
-              >
-                Produccion
-              </button>
-            </div>
-            {onEdit ? (
-              <button type="button" className="btn-link" onClick={onEdit}>
-                <Edit3Icon />
-                Editar especificaciones
-              </button>
-            ) : null}
+              <div className="op-subnav">
+                <button
+                  type="button"
+                  className={innerTab === "specs" ? "on" : ""}
+                  onClick={() => setInnerTab("specs")}
+                >
+                  Especificaciones
+                </button>
+                <button
+                  type="button"
+                  className={innerTab === "costos" ? "on" : ""}
+                  onClick={() => setInnerTab("costos")}
+                >
+                  Costos
+                </button>
+                <button
+                  type="button"
+                  className={innerTab === "produccion" ? "on" : ""}
+                  onClick={() => setInnerTab("produccion")}
+                >
+                  Producción
+                </button>
+              </div>
+              {onEdit ? (
+                <button type="button" className="btn-link" onClick={onEdit}>
+                  <Edit3Icon />
+                  Editar especificaciones
+                </button>
+              ) : null}
             </div>
             {/* Descuento al final (derecha). `marginLeft: auto` lo empuja al
                 borde sin depender del `justify-content` de op-sub en globals.css
@@ -3337,7 +3441,10 @@ export function ProductRow({
                   spec.val.length > 40;
                 const cortas = specs.filter((spec) => !esLarga(spec));
                 const largas = specs.filter(esLarga);
-                const renderSpec = (spec: (typeof specs)[number], idx: number) => {
+                const renderSpec = (
+                  spec: (typeof specs)[number],
+                  idx: number,
+                ) => {
                   const isMedidasSpec = spec.lbl
                     .toLowerCase()
                     .includes("medida");
@@ -3366,9 +3473,7 @@ export function ProductRow({
                         className={`val ${
                           isMedidasSpec || isEstampasSpec ? "multi" : ""
                         } ${
-                          isModoColorSpec ||
-                          isCarasSpec ||
-                          spec.val.length > 28
+                          isModoColorSpec || isCarasSpec || spec.val.length > 28
                             ? "wrap"
                             : ""
                         }`}
@@ -3465,17 +3570,32 @@ export function ProductRow({
                     )}
                   </div>
                   {(() => {
-                    const eta = describirEta(etaSistema, item.fechaEntrega ?? fechaEstimada, { margenDias: margenEtaDias, noLaborables, zona: zonaHoraria });
+                    const eta = describirEta(
+                      etaSistema,
+                      item.fechaEntrega ?? fechaEstimada,
+                      {
+                        margenDias: margenEtaDias,
+                        noLaborables,
+                        zona: zonaHoraria,
+                      },
+                    );
                     if (!eta) return null;
                     return (
                       <div className="op-mini-row">
                         <span className="mlbl">Sistema estima</span>
                         <span
                           className={`mval mono ${eta.nivel === "tarde" ? "eta-tarde" : eta.nivel === "sin-margen" ? "eta-justo" : ""}`}
-                          title={eta.motivo || "Simulado contra las colas actuales del taller"}
+                          title={
+                            eta.motivo ||
+                            "Simulado contra las colas actuales del taller"
+                          }
                         >
                           {eta.etiqueta}
-                          {eta.nivel === "tarde" ? " · después de la fecha" : eta.nivel === "sin-margen" ? " · sin margen" : ""}
+                          {eta.nivel === "tarde"
+                            ? " · después de la fecha"
+                            : eta.nivel === "sin-margen"
+                              ? " · sin margen"
+                              : ""}
                         </span>
                       </div>
                     );
@@ -3626,7 +3746,9 @@ function descuentoMontoDeItem(item: PropuestaItem): number {
 
 function getItemOrderVisibleAmounts(item: PropuestaItem) {
   const impuestosResumen = getImpuestosItemResumen(item);
-  const subtotal = roundVisibleCurrency(item.subtotal + impuestosResumen.ocultos);
+  const subtotal = roundVisibleCurrency(
+    item.subtotal + impuestosResumen.ocultos,
+  );
   const impuestos = roundVisibleCurrency(
     Math.max(0, item.impuestoMonto - impuestosResumen.ocultos),
   );
@@ -3779,7 +3901,12 @@ function EmitOverlay({
                 />
               ))
             : null}
-          <svg className="emit-check" viewBox="0 0 52 52" width="82" height="82">
+          <svg
+            className="emit-check"
+            viewBox="0 0 52 52"
+            width="82"
+            height="82"
+          >
             <circle
               className="ec-circle"
               cx="26"
@@ -3886,6 +4013,7 @@ export function ResumenBar({
   onToggleTratamientoFiscal,
   togglingFiscal = false,
   readOnly = false,
+  resumenPersistido,
   accionesOrden,
 }: {
   items: PropuestaItem[];
@@ -3910,6 +4038,12 @@ export function ResumenBar({
   onToggleTratamientoFiscal?: () => void;
   togglingFiscal?: boolean;
   readOnly?: boolean;
+  resumenPersistido?: {
+    subtotal: number;
+    impuestos: number;
+    descuentoTotal: number;
+    total: number;
+  };
   /** Acciones de la OT emitida (Editar / Cancelar): van acá, no en el header,
    *  para ganar alto. Sólo en modo lectura. */
   accionesOrden?: React.ReactNode;
@@ -3951,11 +4085,32 @@ export function ResumenBar({
   // cumple la identidad totalConCargos = subtotal + impuestosVisibles, y este
   // neto coincide con el `total` que persiste el backend.
   const impuestosMostrados = sinComprobante ? 0 : impuestosVisibles;
-  const totalMostrado = sinComprobante ? subtotal : totalConCargos;
+  const totalMostrado =
+    readOnly && resumenPersistido
+      ? resumenPersistido.total
+      : sinComprobante
+        ? subtotal
+        : totalConCargos;
+  const descuentoMostrado =
+    readOnly && resumenPersistido
+      ? resumenPersistido.descuentoTotal
+      : descuentoTotal;
   const brk = [
-    { k: "Subtotal", v: subtotal },
-    { k: "Descuento", v: -descuentoTotal },
-    { k: "Impuestos", v: impuestosMostrados },
+    {
+      k: "Subtotal",
+      v: readOnly && resumenPersistido ? resumenPersistido.subtotal : subtotal,
+    },
+    {
+      k: "Descuento",
+      v: descuentoMostrado > 0 ? -descuentoMostrado : 0,
+    },
+    {
+      k: "Impuestos",
+      v:
+        readOnly && resumenPersistido
+          ? resumenPersistido.impuestos
+          : impuestosMostrados,
+    },
     { k: "Cargos", v: cargos },
   ];
 
@@ -4815,9 +4970,7 @@ function DescuentoModal({
                 <strong>
                   {validandoCupon ? "Validando…" : "Escaneá el cupón"}
                 </strong>
-                <small>
-                  Apuntá el lector al QR: se valida y aplica solo.
-                </small>
+                <small>Apuntá el lector al QR: se valida y aplica solo.</small>
                 <button
                   type="button"
                   className="btn-link"
@@ -4979,9 +5132,7 @@ function itemToOrdenItemPayload(
     codigo: item.productoCodigo,
     nombre: item.productoNombre,
     familia:
-      item.subcategoriaComercialNombre ||
-      item.categoriaComercialNombre ||
-      "—",
+      item.subcategoriaComercialNombre || item.categoriaComercialNombre || "—",
     categoriaComercial: item.categoriaComercialNombre,
     subcategoriaComercial: item.subcategoriaComercialNombre,
     cantidad: item.cantidad,
@@ -5136,7 +5287,8 @@ function rehidratarOrdenItem(
   const costoUnit = snap?.costoUnitario ?? 0;
   const margenEfectivoPct =
     netoUnit > 0 ? ((precioBaseUnit - costoUnit) / netoUnit) * 100 : 0;
-  const totalImpuestosUnit = Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
+  const totalImpuestosUnit =
+    Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
 
   const cotizacion = {
     productoId: snap?.productoId ?? producto.codigo,
@@ -5186,11 +5338,14 @@ function rehidratarOrdenItem(
           descuento: {
             aplicado: descuentoMontoPersistido > 0,
             montoUnitario:
-              cantidadPricing > 0 ? descuentoMontoPersistido / cantidadPricing : 0,
+              cantidadPricing > 0
+                ? descuentoMontoPersistido / cantidadPricing
+                : 0,
             montoTotal: descuentoMontoPersistido,
             netoListaUnitario:
               cantidadPricing > 0
-                ? (producto.subtotal + descuentoMontoPersistido) / cantidadPricing
+                ? (producto.subtotal + descuentoMontoPersistido) /
+                  cantidadPricing
                 : netoUnit,
             netoListaTotal: producto.subtotal + descuentoMontoPersistido,
           },
@@ -5291,7 +5446,10 @@ export function PropuestaFicha({
     if (orden?.id) {
       setTogglingFiscal(true);
       try {
-        const actualizada = await setTratamientoFiscalOrden(orden.id, siguiente);
+        const actualizada = await setTratamientoFiscalOrden(
+          orden.id,
+          siguiente,
+        );
         setOrden(actualizada);
         setSinComprobante(siguiente === "SIN_COMPROBANTE");
       } catch (error) {
@@ -5383,24 +5541,24 @@ export function PropuestaFicha({
       orden?.cargos?.length
         ? orden.cargos
         : orden && orden.cargosDirectos > 0
-        ? [
-            {
-              id: "ot-cargos",
-              cargoDirectoCatalogoId: "",
-              codigoSnapshot: "cargos_orden",
-              nombreSnapshot: "Cargos directos de la orden",
-              modoCalculoSnapshot: "MONTO_FIJO_PLANO",
-              configSnapshot: {},
-              baseCalculo: 0,
-              montoNeto: orden.cargosDirectos,
-              impuestoPorcentaje: 0,
-              impuestoMonto: 0,
-              total: orden.cargosDirectos,
-              detalle: "Persistido al emitir la orden",
-              createdAt: orden.creadaEl,
-            },
-          ]
-        : [],
+          ? [
+              {
+                id: "ot-cargos",
+                cargoDirectoCatalogoId: "",
+                codigoSnapshot: "cargos_orden",
+                nombreSnapshot: "Cargos directos de la orden",
+                modoCalculoSnapshot: "MONTO_FIJO_PLANO",
+                configSnapshot: {},
+                baseCalculo: 0,
+                montoNeto: orden.cargosDirectos,
+                impuestoPorcentaje: 0,
+                impuestoMonto: 0,
+                total: orden.cargosDirectos,
+                detalle: "Persistido al emitir la orden",
+                createdAt: orden.creadaEl,
+              },
+            ]
+          : [],
   );
   const totalPropuesta = React.useMemo(() => {
     const r = calcularResumenOrden(items, cargosOrden);
@@ -5516,7 +5674,9 @@ export function PropuestaFicha({
         setColasTaller({
           enCola: tablero.items,
           estaciones,
-          medianas: new Map(duraciones.map((d) => [d.familiaCodigo, d.medianaMin])),
+          medianas: new Map(
+            duraciones.map((d) => [d.familiaCodigo, d.medianaMin]),
+          ),
           noLaborables: new Set(diasNoLaborables.map((dia) => dia.fecha)),
         });
       })
@@ -5919,9 +6079,9 @@ export function PropuestaFicha({
    * de origen si es nuevo), después la proyección. Lanza en error — el
    * guardado en lote decide qué reportar.
    */
-  const persistirItemOrden = React.useCallback(
-    async (item: PropuestaItem, modo: "agregar" | "editar") => {
-      if (!orden) return;
+  const prepararItemOrden = React.useCallback(
+    async (item: PropuestaItem) => {
+      if (!orden) throw new Error("No se cargó la orden de trabajo.");
       if (!item.motorCodigo || !item.jobContext) {
         throw new Error(
           `"${item.productoNombre}" no tiene datos de cotización para persistir.`,
@@ -5961,42 +6121,9 @@ export function PropuestaFicha({
         cotizacionItemId = respuesta.cotizacionItemId;
       }
       const payload = itemToOrdenItemPayload(item, cotizacionItemId);
-      const detalle =
-        modo === "agregar"
-          ? await agregarOrdenItem(orden.id, payload)
-          : await editarOrdenItem(orden.id, item.id, payload);
-
-      // Sólo el ítem que se tocó: republicar los demás borraría y volvería a
-      // subir un arte idéntico por nada. En el alta el id recién existe acá,
-      // así que se lo busca por el snapshot que se acaba de guardar.
-      const tocado = detalle.productos.filter((p) =>
-        modo === "agregar"
-          ? p.cotizacionItemId === cotizacionItemId
-          : p.id === item.id,
-      );
-      await publicarArtes(tocado);
-      await subirArchivosCentroCopiado(
-        tocado,
-        mapaArchivosCC([{ item, cotizacionItemId }]),
-      );
-      // Los PDF medidos del ítem (si se adjuntaron en el sheet) → Archivos del
-      // ítem recién persistido.
-      if (item.planosPendientes?.length && tocado[0]?.id) {
-        const { errores } = await publicarPlanos([
-          { ordenItemId: tocado[0].id, planos: item.planosPendientes },
-        ]);
-        if (errores.length > 0) {
-          toast.error(`Algunos planos no se subieron: ${errores.join(" · ")}`);
-        }
-      }
+      return { item, cotizacionItemId, payload };
     },
-    [
-      orden,
-      clienteId,
-      publicarArtes,
-      subirArchivosCentroCopiado,
-      mapaArchivosCC,
-    ],
+    [orden, clienteId],
   );
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
@@ -6027,10 +6154,9 @@ export function PropuestaFicha({
   }, [orden]);
 
   /**
-   * Commit en lote del staging: bajas → ediciones → altas de items, y al
-   * final los datos comerciales. Cada operación genera su evento de
-   * auditoría en el backend. Ante un error se recarga la orden para
-   * reflejar exactamente lo que alcanzó a aplicarse.
+   * Commit atómico del staging. Los snapshots se recalculan primero y luego
+   * el backend aplica campos, altas, ediciones, bajas, pasos, totales y
+   * cupones dentro de una única transacción con control de versión.
    */
   const guardarEdicion = React.useCallback(
     async (opciones?: { destino?: string }) => {
@@ -6043,17 +6169,66 @@ export function PropuestaFicha({
       }
       setGuardandoEdicion(true);
       try {
-        for (const producto of cambiosItems.quitados) {
-          await quitarOrdenItem(orden.id, producto.id!);
+        const tocados = [...cambiosItems.editados, ...cambiosItems.agregados];
+        const preparados = [];
+        for (const item of tocados) {
+          preparados.push(await prepararItemOrden(item));
         }
-        for (const item of cambiosItems.editados) {
-          await persistirItemOrden(item, "editar");
-        }
-        for (const item of cambiosItems.agregados) {
-          await persistirItemOrden(item, "agregar");
-        }
-        if (Object.keys(cambiosFields).length > 0) {
-          await editarOrdenTrabajo(orden.id, cambiosFields);
+        const porItemId = new Map(
+          preparados.map((preparado) => [preparado.item.id, preparado]),
+        );
+        const idsPersistidos = new Set(
+          orden.productos.map((producto) => producto.id),
+        );
+        const itemsFinales =
+          cambiosItems.quitados.length > 0 || preparados.length > 0
+            ? items.map((item) => {
+                const preparado = porItemId.get(item.id);
+                const cotizacionItemId =
+                  preparado?.cotizacionItemId ?? item.cotizacionItemId;
+                if (!cotizacionItemId) {
+                  throw new Error(
+                    `"${item.productoNombre}" no tiene una cotización persistida.`,
+                  );
+                }
+                return {
+                  ...(preparado?.payload ??
+                    itemToOrdenItemPayload(item, cotizacionItemId)),
+                  ...(idsPersistidos.has(item.id) ? { id: item.id } : {}),
+                };
+              })
+            : undefined;
+        const detalle = await editarOrdenTrabajoLote(orden.id, {
+          expectedVersion: orden.version,
+          ...cambiosFields,
+          items: itemsFinales,
+        });
+
+        // Los binarios se publican post-commit y sólo para los ítems tocados;
+        // no forman parte de la consistencia comercial de la orden.
+        for (const preparado of preparados) {
+          const productos = detalle.productos.filter(
+            (producto) =>
+              producto.cotizacionItemId === preparado.cotizacionItemId,
+          );
+          await publicarArtes(productos);
+          await subirArchivosCentroCopiado(
+            productos,
+            mapaArchivosCC([preparado]),
+          );
+          if (preparado.item.planosPendientes?.length && productos[0]?.id) {
+            const { errores } = await publicarPlanos([
+              {
+                ordenItemId: productos[0].id,
+                planos: preparado.item.planosPendientes,
+              },
+            ]);
+            if (errores.length > 0) {
+              toast.error(
+                `Algunos planos no se subieron: ${errores.join(" · ")}`,
+              );
+            }
+          }
         }
         toast.success(
           `Orden actualizada: ${cambiosSinGuardar} cambio${
@@ -6069,13 +6244,11 @@ export function PropuestaFicha({
           router.refresh();
         }
       } catch (error) {
-        // Ante error NO navegamos: recargamos para reflejar lo aplicado y el
-        // usuario decide desde la ficha.
         toast.error(
           (error instanceof Error
             ? error.message
-            : "No se pudieron guardar todos los cambios.") +
-            " Se recargó la orden para reflejar lo aplicado.",
+            : "No se pudieron guardar los cambios.") +
+            " La orden no se modificó; se recargó la versión vigente.",
         );
         setEditadosIds(new Set());
         setEditandoOrden(false);
@@ -6090,7 +6263,11 @@ export function PropuestaFicha({
       cambiosSinGuardar,
       cambiosItems,
       cambiosFields,
-      persistirItemOrden,
+      items,
+      prepararItemOrden,
+      publicarArtes,
+      subirArchivosCentroCopiado,
+      mapaArchivosCC,
       router,
     ],
   );
@@ -6154,9 +6331,7 @@ export function PropuestaFicha({
       router.refresh();
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "No se pudo emitir la orden.",
+        error instanceof Error ? error.message : "No se pudo emitir la orden.",
       );
     } finally {
       setEmitiendoBorrador(false);
@@ -6220,8 +6395,7 @@ export function PropuestaFicha({
     (item: PropuestaItem | undefined): string | null =>
       (
         item?.jobContext as
-          | { _centroCopiado?: { grupoTomoId?: string | null } }
-          | undefined
+          { _centroCopiado?: { grupoTomoId?: string | null } } | undefined
       )?._centroCopiado?.grupoTomoId ?? null,
     [],
   );
@@ -6229,8 +6403,7 @@ export function PropuestaFicha({
     (item: PropuestaItem): string | null =>
       (
         item.jobContext as
-          | { _centroCopiado?: { tomoNombre?: string | null } }
-          | undefined
+          { _centroCopiado?: { tomoNombre?: string | null } } | undefined
       )?._centroCopiado?.tomoNombre ?? null,
     [],
   );
@@ -6240,8 +6413,7 @@ export function PropuestaFicha({
     (item: PropuestaItem | undefined): string | null =>
       (
         item?.jobContext as
-          | { _centroCopiado?: { grupoCargaId?: string | null } }
-          | undefined
+          { _centroCopiado?: { grupoCargaId?: string | null } } | undefined
       )?._centroCopiado?.grupoCargaId ?? null,
     [],
   );
@@ -6330,19 +6502,25 @@ export function PropuestaFicha({
             grupoId: "T",
           })),
           grupos: [
-            { id: "T", nombre: metaTomo.tomoNombre, juegos: metaTomo.juegos ?? 1 },
+            {
+              id: "T",
+              nombre: metaTomo.tomoNombre,
+              juegos: metaTomo.juegos ?? 1,
+            },
           ],
           cotizacionId,
           clienteId: clienteId || null,
         });
         if (resp.error || !resp.cotizacionItemId) {
           throw new Error(
-            resp.error ??
-              `No se pudo guardar el tomo ${item.productoNombre}.`,
+            resp.error ?? `No se pudo guardar el tomo ${item.productoNombre}.`,
           );
         }
         cotizacionId = resp.cotizacionId ?? cotizacionId;
-        itemsConSnapshot.push({ item, cotizacionItemId: resp.cotizacionItemId });
+        itemsConSnapshot.push({
+          item,
+          cotizacionItemId: resp.cotizacionItemId,
+        });
         continue;
       }
       if (!item.motorCodigo || !item.jobContext) {
@@ -6400,7 +6578,9 @@ export function PropuestaFicha({
   const [emitiendoPresupuesto, setEmitiendoPresupuesto] = React.useState(false);
   const emitirPresupuestoCb = React.useCallback(async () => {
     if (items.length === 0) {
-      toast.error("Agregá al menos un producto antes de emitir el presupuesto.");
+      toast.error(
+        "Agregá al menos un producto antes de emitir el presupuesto.",
+      );
       return;
     }
     if (!clienteId) {
@@ -6409,7 +6589,8 @@ export function PropuestaFicha({
     }
     setEmitiendoPresupuesto(true);
     try {
-      const { itemsConSnapshot, cotizacionId } = await persistirSnapshotsItems();
+      const { itemsConSnapshot, cotizacionId } =
+        await persistirSnapshotsItems();
       if (!cotizacionId) {
         throw new Error("No se pudo persistir la cotización del presupuesto.");
       }
@@ -6477,8 +6658,7 @@ export function PropuestaFicha({
     setEmitiendo(true);
     setEmisionNumero(null);
     emisionOrdenIdRef.current = null;
-    const idempotencyKey =
-      emisionIdempotencyRef.current ?? crypto.randomUUID();
+    const idempotencyKey = emisionIdempotencyRef.current ?? crypto.randomUUID();
     emisionIdempotencyRef.current = idempotencyKey;
     try {
       const { itemsConSnapshot, cotizacionId } =
@@ -6745,19 +6925,21 @@ export function PropuestaFicha({
       if (exitosos > 0) {
         partes.push(
           `${exitosos} producto${exitosos === 1 ? "" : "s"} recotizado${exitosos === 1 ? "" : "s"} con el cliente seleccionado` +
-            (conEspecial > 0
-              ? ` (${conEspecial} con precio especial)`
-              : ""),
+            (conEspecial > 0 ? ` (${conEspecial} con precio especial)` : ""),
         );
       }
       if (fallidos > 0) {
-        partes.push(`${fallidos} no se pudieron recotizar y conservan su precio`);
+        partes.push(
+          `${fallidos} no se pudieron recotizar y conservan su precio`,
+        );
       }
       if (omitidos > 0) {
         partes.push(`${omitidos} sin datos para recotizar`);
       }
       if (partes.length > 0) {
-        (fallidos > 0 ? toast.warning : toast.success)(partes.join(" · ") + ".");
+        (fallidos > 0 ? toast.warning : toast.success)(
+          partes.join(" · ") + ".",
+        );
       }
     },
     [],
@@ -6820,8 +7002,9 @@ export function PropuestaFicha({
   const umbralDescuentoAprobacion = React.useCallback(async () => {
     if (umbralDescuentoRef.current === undefined) {
       try {
-        umbralDescuentoRef.current = (await getConfigPresupuestos())
-          .aprobacionDescuentoMaxPct;
+        umbralDescuentoRef.current = (
+          await getConfigPresupuestos()
+        ).aprobacionDescuentoMaxPct;
       } catch {
         umbralDescuentoRef.current = null;
       }
@@ -6849,7 +7032,10 @@ export function PropuestaFicha({
         return;
       }
 
-      let plan: Array<{ item: PropuestaItem; descuento: DescuentoInput | null }>;
+      let plan: Array<{
+        item: PropuestaItem;
+        descuento: DescuentoInput | null;
+      }>;
       if (scope === "item") {
         const target = recotizables.find((item) => item.id === targetItemId);
         if (!target) {
@@ -6858,7 +7044,10 @@ export function PropuestaFicha({
         }
         plan = [{ item: target, descuento: descuentoInput }];
       } else if (!descuentoInput || descuentoInput.tipo === "PORCENTAJE") {
-        plan = recotizables.map((item) => ({ item, descuento: descuentoInput }));
+        plan = recotizables.map((item) => ({
+          item,
+          descuento: descuentoInput,
+        }));
       } else {
         const pesos = recotizables.map((item) => netoListaDeItem(item));
         const totalPeso = pesos.reduce((acc, peso) => acc + peso, 0);
@@ -6876,7 +7065,8 @@ export function PropuestaFicha({
           }
           return {
             item,
-            descuento: share > 0 ? { tipo: "MONTO" as const, valor: share } : null,
+            descuento:
+              share > 0 ? { tipo: "MONTO" as const, valor: share } : null,
           };
         });
       }
@@ -6903,7 +7093,9 @@ export function PropuestaFicha({
         }
         if (actualizados.size > 0) {
           setItems((current) =>
-            current.map((candidate) => actualizados.get(candidate.id) ?? candidate),
+            current.map(
+              (candidate) => actualizados.get(candidate.id) ?? candidate,
+            ),
           );
         }
 
@@ -6921,7 +7113,9 @@ export function PropuestaFicha({
         if (descuentoInput != null && actualizados.size > 0) {
           const margenes = [...actualizados.values()]
             .filter((item) => descuentoMontoDeItem(item) > 0)
-            .map((item) => item.cotizacion.desglosePrecio?.margenEfectivoPct ?? 0);
+            .map(
+              (item) => item.cotizacion.desglosePrecio?.margenEfectivoPct ?? 0,
+            );
           const minMargen = margenes.length ? Math.min(...margenes) : null;
           if (minMargen != null && minMargen < DESCUENTO_MARGEN_ALERTA_PCT) {
             toast.warning(
@@ -7049,7 +7243,10 @@ export function PropuestaFicha({
             tipo: "aviso",
             titulo: "El cupón se aplicó parcialmente",
             detalle: `${fallidos} producto${fallidos === 1 ? " no se pudo recotizar" : "s no se pudieron recotizar"}. Revisá los precios antes de emitir.`,
-            monto: descontado > 0 ? `−${formatCurrency(descontado, moneda)}` : undefined,
+            monto:
+              descontado > 0
+                ? `−${formatCurrency(descontado, moneda)}`
+                : undefined,
           });
         } else {
           setAvisoCupon({
@@ -7060,7 +7257,10 @@ export function PropuestaFicha({
               (pisadas > 0
                 ? ` Reemplazó el descuento manual en ${pisadas} producto${pisadas === 1 ? "" : "s"}.`
                 : ""),
-            monto: descontado > 0 ? `−${formatCurrency(descontado, moneda)}` : undefined,
+            monto:
+              descontado > 0
+                ? `−${formatCurrency(descontado, moneda)}`
+                : undefined,
           });
         }
         setDescuentoTarget(null);
@@ -7276,7 +7476,8 @@ export function PropuestaFicha({
       {initialLoadErrors.length > 0 ? (
         <div className="orden-load-warning" role="alert">
           No se pudieron cargar: {initialLoadErrors.join(", ")}. Reintentá
-          recargando antes de emitir para no trabajar con un catálogo incompleto.
+          recargando antes de emitir para no trabajar con un catálogo
+          incompleto.
         </div>
       ) : null}
       <div className="orden-head">
@@ -7285,7 +7486,7 @@ export function PropuestaFicha({
             <nav className="orden-breadcrumb" aria-label="Ubicación">
               <span className="bc-item">
                 <FactoryIcon />
-                Producción
+                Comercial
               </span>
               <span className="bc-sep">›</span>
               <Link className="bc-item bc-link" href="/produccion/ordenes">
@@ -7336,9 +7537,17 @@ export function PropuestaFicha({
           <div className="orden-meta">
             {/* El N° ya está grande a la izquierda; acá sólo la fecha. */}
             <span className="meta-row">
-              <span className="ml">{modoOrden ? "Emitida" : "Creado"}</span>
+              <span className="ml">
+                {modoOrden
+                  ? orden?.fechaEmision
+                    ? "Emitida"
+                    : "Creada"
+                  : "Creado"}
+              </span>
               <span className="mv mono">
-                {orden ? formatFechaOrden(orden.creadaEl) : "hoy"}
+                {orden
+                  ? formatFechaOrden(orden.fechaEmision ?? orden.creadaEl)
+                  : "hoy"}
               </span>
             </span>
           </div>
@@ -7503,18 +7712,33 @@ export function PropuestaFicha({
             </div>
           )}
           {(() => {
-            const eta = describirEta(demoraOrden, fechaEstimada, { margenDias: margenEtaDias, noLaborables: colasTaller?.noLaborables, zona: zonaHoraria });
+            const eta = describirEta(demoraOrden, fechaEstimada, {
+              margenDias: margenEtaDias,
+              noLaborables: colasTaller?.noLaborables,
+              zona: zonaHoraria,
+            });
             if (!eta) return null;
             return (
               <div
                 className={`eta-sugerida ${eta.nivel === "tarde" ? "tarde" : eta.nivel === "sin-margen" ? "justo" : ""}`}
-                title={eta.motivo || "Simulado contra las colas actuales del taller"}
+                title={
+                  eta.motivo || "Simulado contra las colas actuales del taller"
+                }
               >
                 <ClockIcon />
                 <span>
                   El taller la terminaría <strong>{eta.etiqueta}</strong>
-                  {eta.sugeridaEtiqueta ? <> · prometé desde <strong>{eta.sugeridaEtiqueta}</strong></> : null}
-                  {eta.nivel === "tarde" ? " — después de la fecha elegida" : eta.nivel === "sin-margen" ? " — la fecha elegida queda sin margen" : ""}
+                  {eta.sugeridaEtiqueta ? (
+                    <>
+                      {" "}
+                      · prometé desde <strong>{eta.sugeridaEtiqueta}</strong>
+                    </>
+                  ) : null}
+                  {eta.nivel === "tarde"
+                    ? " — después de la fecha elegida"
+                    : eta.nivel === "sin-margen"
+                      ? " — la fecha elegida queda sin margen"
+                      : ""}
                 </span>
               </div>
             );
@@ -7528,14 +7752,19 @@ export function PropuestaFicha({
           scrollear cuando hay muchos productos. */}
       <div
         className="orden-main-full"
-        style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 }}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flex: "1 1 auto",
+          minHeight: 0,
+        }}
       >
         <div className="orden-tabs-row">
           <OrdenTabs
             value={tab}
             onChange={setTab}
             count={items.length}
-            historialCount={orden ? orden.eventos.length : undefined}
+            historialCount={orden ? orden.eventosTotal : undefined}
             comprobantesCount={orden ? 0 : undefined}
             archivosCount={archivosCount}
           />
@@ -7577,313 +7806,336 @@ export function PropuestaFicha({
         </div>
 
         <div className={resumenBar.scroll}>
-        {tab === "productos" ? (
-          <div className="orden-table">
-            <div
-              className="ohead"
-              style={
-                sinComprobante
-                  ? { gridTemplateColumns: ORDEN_COLS_SIN_IMP }
-                  : undefined
-              }
-            >
-              <span className="ix">#</span>
-              <span className="chev" />
-              <span className="prod">Producto</span>
-              <span className="num qty">Cantidad</span>
-              <span className="num">Subtotal</span>
-              {sinComprobante ? null : <span className="num">Imp.</span>}
-              <span className="num">Unitario</span>
-              <span className="num">Total</span>
-              <span className="x" />
-            </div>
-            {recotizandoIds.size > 0 ? (
-              <div className="orden-recotizando" role="status" aria-live="polite">
-                <span className="spin" aria-hidden="true" />
-                Recotizando {recotizandoIds.size}{" "}
-                {recotizandoIds.size === 1 ? "producto" : "productos"} con los
-                precios del cliente seleccionado…
-              </div>
-            ) : null}
-            <div className="orows">
-              {items.map((item, index) => {
-                const tomo = tomoDeItem(item);
-                const iniciaTomo = !!tomo && tomo !== tomoDeItem(items[index - 1]);
-                const cuentaTomo = tomo
-                  ? items.filter((x) => tomoDeItem(x) === tomo).length
-                  : 0;
-                return (
-                <React.Fragment key={item.id}>
-                {iniciaTomo && (
-                  <div className={ccFicha.tomoHead}>
-                    Tomo anillado
-                    {tomoNombreDeItem(item) ? ` · ${tomoNombreDeItem(item)}` : ""}
-                    <span className={ccFicha.cuenta}>· {cuentaTomo} documentos</span>
-                  </div>
-                )}
-                <div
-                  className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}${tomo ? ` ${ccFicha.enTomo}` : ""}`}
-                  ref={(node) => {
-                    if (node) {
-                      rowRefs.current.set(item.id, node);
-                    } else {
-                      rowRefs.current.delete(item.id);
-                    }
-                  }}
-                >
-                  <ProductRow
-                    item={item}
-                    index={index}
-                    sinComprobante={sinComprobante}
-                    expanded={openIds.has(item.id)}
-                    etaSistema={demoraPorItem?.get(item.id) ?? null}
-                    margenEtaDias={margenEtaDias}
-                    noLaborables={colasTaller?.noLaborables}
-                    onToggle={() => toggle(item.id)}
-                    onRemove={
-                      modoOrden
-                        ? itemsEnEdicion
-                          ? () => quitarItemDeOrden(item)
-                          : undefined
-                        : () =>
-                            setItems((current) =>
-                              current.filter(
-                                (candidate) => candidate.id !== item.id,
-                              ),
-                            )
-                    }
-                    onEdit={
-                      modoOrden
-                        ? itemsEnEdicion && item.jobContext && item.motorCodigo
-                          ? () => abrirEdicion(item)
-                          : undefined
-                        : () => abrirEdicion(item)
-                    }
-                    onDescuento={
-                      !modoOrden && item.jobContext && item.motorCodigo
-                        ? () =>
-                            setDescuentoTarget({
-                              scope: "item",
-                              itemId: item.id,
-                            })
-                        : undefined
-                    }
-                    onVerPrecios={
-                      esCentroCopiado(item)
-                        ? () => setPreciosOpen(true)
-                        : undefined
-                    }
-                    onEditPanels={(targetItem, paso) => {
-                      setPanelEditor({ item: targetItem, paso });
-                    }}
-                    onChangeFechaEntrega={(fechaEntrega) => {
-                      itemFechaTocadaRef.current.add(item.id);
-                      setItems((current) =>
-                        current.map((candidate) =>
-                          candidate.id === item.id
-                            ? {
-                                ...candidate,
-                                fechaEntrega: fechaEntrega || fechaEstimada,
-                              }
-                            : candidate,
-                        ),
-                      );
-                    }}
-                    fechaEstimada={fechaEstimada}
-                    readOnly={modoOrden}
-                  />
-                </div>
-                </React.Fragment>
-                );
-              })}
-            </div>
-            {!modoOrden || itemsEnEdicion ? (
-              <button
-                type="button"
-                className="orden-add-ghost"
-                onClick={abrirAgregarProducto}
+          {tab === "productos" ? (
+            <div className="orden-table">
+              <div
+                className="ohead"
+                style={
+                  sinComprobante
+                    ? { gridTemplateColumns: ORDEN_COLS_SIN_IMP }
+                    : undefined
+                }
               >
-                <PlusIcon />
-                Agregar otro producto a la{" "}
-                {modoOrden || ordenTipo === "orden" ? "orden" : "propuesta"}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-
-        {tab === "productos" && cargosOrden.length > 0 ? (
-          <section className="orden-cargos-card">
-            <div className="orden-cargos-head">
-              <div>
-                <div className="ttl">Cargos de la orden</div>
-                <div className="sub">
-                  Aplicados al total general con snapshot del catálogo.
-                </div>
+                <span className="ix">#</span>
+                <span className="chev" />
+                <span className="prod">Producto</span>
+                <span className="num qty">Cantidad</span>
+                <span className="num">Subtotal</span>
+                {sinComprobante ? null : <span className="num">Imp.</span>}
+                <span className="num">Unitario</span>
+                <span className="num">Total</span>
+                <span className="x" />
               </div>
-              {!modoOrden ? (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setCargoOpen(true)}
+              {recotizandoIds.size > 0 ? (
+                <div
+                  className="orden-recotizando"
+                  role="status"
+                  aria-live="polite"
                 >
-                  <PlusIcon />
-                  Agregar cargo
-                </button>
-              ) : null}
-            </div>
-            <div className="orden-cargos-list">
-              {cargosOrden.map((cargo) => (
-                <div className="orden-cargo-row" key={cargo.id}>
-                  <div className="cargo-main">
-                    <strong>{cargo.nombreSnapshot}</strong>
-                    <small>{cargo.detalle}</small>
-                    {cargo.nota ? <em>{cargo.nota}</em> : null}
-                  </div>
-                  <div className="cargo-num">
-                    <span>Neto</span>
-                    <strong>{formatCurrency(cargo.montoNeto, moneda)}</strong>
-                  </div>
-                  <div className="cargo-num">
-                    <span>IVA</span>
-                    <strong>{formatCurrency(cargo.impuestoMonto, moneda)}</strong>
-                  </div>
-                  <div className="cargo-num total">
-                    <span>Total</span>
-                    <strong>{formatCurrency(cargo.total, moneda)}</strong>
-                  </div>
-                  {!modoOrden ? (
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      onClick={() =>
-                        setCargosOrden((current) =>
-                          current.filter(
-                            (candidate) => candidate.id !== cargo.id,
-                          ),
-                        )
-                      }
-                      aria-label={`Eliminar cargo ${cargo.nombreSnapshot}`}
-                    >
-                      <Trash2Icon />
-                    </button>
-                  ) : null}
+                  <span className="spin" aria-hidden="true" />
+                  Recotizando {recotizandoIds.size}{" "}
+                  {recotizandoIds.size === 1 ? "producto" : "productos"} con los
+                  precios del cliente seleccionado…
                 </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {tab === "produccion" ? (
-          orden ? (
-            <ProduccionOrdenTab ordenId={orden.id} onOrdenActualizada={recargarOrden} />
-          ) : (
-            <EmptyTab
-              title="Programacion de produccion"
-              description="Una vez confirmada la OT vas a poder ver pasos, maquinas asignadas y tiempos estimados aca."
-            />
-          )
-        ) : null}
-        {tab === "pagos" ? (
-          orden ? (
-            <div className="otd-page" style={{ padding: 0 }}>
-              <PagosTab
-                pago={orden.pago}
-                total={orden.total}
-                ordenId={orden.id}
-                puedeCobrar={orden.estado !== "borrador"}
-                sinComprobante={orden.tratamientoFiscal === "SIN_COMPROBANTE"}
-              />
-            </div>
-          ) : (
-            <div className="otd-page" style={{ padding: 0 }}>
-              <PagosStagingTab
-                total={totalPropuesta}
-                sinComprobante={sinComprobante}
-                cobros={cobrosStaged}
-                onAgregar={(draft) =>
-                  setCobrosStaged((prev) => [...prev, draft])
-                }
-                onQuitar={(index) =>
-                  setCobrosStaged((prev) =>
-                    prev.filter((_, i) => i !== index),
-                  )
-                }
-              />
-            </div>
-          )
-        ) : null}
-        {tab === "comprobantes" && orden ? (
-          <div className="otd-page" style={{ padding: 0 }}>
-            <ComprobantesOrdenTab
-              ordenId={orden.id}
-              numero={orden.numero}
-              total={orden.total}
-              facturadoInicial={orden.facturadoTotal}
-              cobradoInicial={orden.cobradoTotal}
-              puedeFacturar={orden.estado !== "borrador"}
-              recargarToken={0}
-            />
-          </div>
-        ) : null}
-        {tab === "archivos" ? (
-          orden ? (
-            <ArchivosOrdenTab
-              ordenId={orden.id}
-              onTotalCambio={setArchivosCount}
-            />
-          ) : (
-            // Todavía es una propuesta sin persistir: los items son
-            // borradores locales sin fila en la base, así que no hay dónde
-            // colgar un archivo. Ver docs/archivos-r2-diseno.md §4.
-            <EmptyTab
-              title="Archivos"
-              description="Guardá la propuesta o emitila como orden para poder adjuntar el arte y las referencias del cliente."
-            />
-          )
-        ) : null}
-        {tab === "costos" ? (
-          <CostosOrdenTab
-            items={items}
-            cargosOrden={cargosOrden}
-            ordenId={orden?.id}
-            sinComprobante={sinComprobante}
-          />
-        ) : null}
-        {tab === "historial" && orden ? (
-          <div className="otd-card">
-            <div className="otd-card-head">
-              <span className="ttl">
-                Historial <span className="ct">{orden.eventos.length}</span>
-              </span>
-            </div>
-            {orden.eventos.length === 0 ? (
-              <div className="otd-noprod">Sin eventos registrados.</div>
-            ) : (
-              <div className="otd-timeline">
-                {orden.eventos.map((ev, i) => {
-                  const { Icono, tone } =
-                    EVENTO_ICONOS[ev.tipo] ?? EVENTO_ICONOS.nota;
+              ) : null}
+              <div className="orows">
+                {items.map((item, index) => {
+                  const tomo = tomoDeItem(item);
+                  const iniciaTomo =
+                    !!tomo && tomo !== tomoDeItem(items[index - 1]);
+                  const cuentaTomo = tomo
+                    ? items.filter((x) => tomoDeItem(x) === tomo).length
+                    : 0;
                   return (
-                    <div key={i} className={`otd-ev ${tone ?? ""}`}>
-                      <span className="otd-ev-ico">
-                        <Icono />
-                      </span>
-                      <div className="otd-ev-body">
-                        <div className="otd-ev-txt">{ev.descripcion}</div>
-                        <div className="otd-ev-meta">
-                          <span className="mono">
-                            {formatEventoFecha(ev.fecha)}
-                          </span>{" "}
-                          · {ev.usuarioNombre}
+                    <React.Fragment key={item.id}>
+                      {iniciaTomo && (
+                        <div className={ccFicha.tomoHead}>
+                          Tomo anillado
+                          {tomoNombreDeItem(item)
+                            ? ` · ${tomoNombreDeItem(item)}`
+                            : ""}
+                          <span className={ccFicha.cuenta}>
+                            · {cuentaTomo} documentos
+                          </span>
                         </div>
+                      )}
+                      <div
+                        className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}${tomo ? ` ${ccFicha.enTomo}` : ""}`}
+                        ref={(node) => {
+                          if (node) {
+                            rowRefs.current.set(item.id, node);
+                          } else {
+                            rowRefs.current.delete(item.id);
+                          }
+                        }}
+                      >
+                        <ProductRow
+                          item={item}
+                          index={index}
+                          sinComprobante={sinComprobante}
+                          expanded={openIds.has(item.id)}
+                          etaSistema={demoraPorItem?.get(item.id) ?? null}
+                          margenEtaDias={margenEtaDias}
+                          noLaborables={colasTaller?.noLaborables}
+                          onToggle={() => toggle(item.id)}
+                          onRemove={
+                            modoOrden
+                              ? itemsEnEdicion
+                                ? () => quitarItemDeOrden(item)
+                                : undefined
+                              : () =>
+                                  setItems((current) =>
+                                    current.filter(
+                                      (candidate) => candidate.id !== item.id,
+                                    ),
+                                  )
+                          }
+                          onEdit={
+                            modoOrden
+                              ? itemsEnEdicion &&
+                                item.jobContext &&
+                                item.motorCodigo
+                                ? () => abrirEdicion(item)
+                                : undefined
+                              : () => abrirEdicion(item)
+                          }
+                          onDescuento={
+                            !modoOrden && item.jobContext && item.motorCodigo
+                              ? () =>
+                                  setDescuentoTarget({
+                                    scope: "item",
+                                    itemId: item.id,
+                                  })
+                              : undefined
+                          }
+                          onVerPrecios={
+                            esCentroCopiado(item)
+                              ? () => setPreciosOpen(true)
+                              : undefined
+                          }
+                          onEditPanels={(targetItem, paso) => {
+                            setPanelEditor({ item: targetItem, paso });
+                          }}
+                          onChangeFechaEntrega={(fechaEntrega) => {
+                            itemFechaTocadaRef.current.add(item.id);
+                            setItems((current) =>
+                              current.map((candidate) =>
+                                candidate.id === item.id
+                                  ? {
+                                      ...candidate,
+                                      fechaEntrega:
+                                        fechaEntrega || fechaEstimada,
+                                    }
+                                  : candidate,
+                              ),
+                            );
+                          }}
+                          fechaEstimada={fechaEstimada}
+                          readOnly={modoOrden}
+                        />
                       </div>
-                    </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
-            )}
-          </div>
-        ) : null}
+              {!modoOrden || itemsEnEdicion ? (
+                <button
+                  type="button"
+                  className="orden-add-ghost"
+                  onClick={abrirAgregarProducto}
+                >
+                  <PlusIcon />
+                  Agregar otro producto a la{" "}
+                  {modoOrden || ordenTipo === "orden" ? "orden" : "propuesta"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {tab === "productos" && cargosOrden.length > 0 ? (
+            <section className="orden-cargos-card">
+              <div className="orden-cargos-head">
+                <div>
+                  <div className="ttl">Cargos de la orden</div>
+                  <div className="sub">
+                    Aplicados al total general con snapshot del catálogo.
+                  </div>
+                </div>
+                {!modoOrden ? (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setCargoOpen(true)}
+                  >
+                    <PlusIcon />
+                    Agregar cargo
+                  </button>
+                ) : null}
+              </div>
+              <div className="orden-cargos-list">
+                {cargosOrden.map((cargo) => (
+                  <div className="orden-cargo-row" key={cargo.id}>
+                    <div className="cargo-main">
+                      <strong>{cargo.nombreSnapshot}</strong>
+                      <small>{cargo.detalle}</small>
+                      {cargo.nota ? <em>{cargo.nota}</em> : null}
+                    </div>
+                    <div className="cargo-num">
+                      <span>Neto</span>
+                      <strong>{formatCurrency(cargo.montoNeto, moneda)}</strong>
+                    </div>
+                    <div className="cargo-num">
+                      <span>IVA</span>
+                      <strong>
+                        {formatCurrency(cargo.impuestoMonto, moneda)}
+                      </strong>
+                    </div>
+                    <div className="cargo-num total">
+                      <span>Total</span>
+                      <strong>{formatCurrency(cargo.total, moneda)}</strong>
+                    </div>
+                    {!modoOrden ? (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() =>
+                          setCargosOrden((current) =>
+                            current.filter(
+                              (candidate) => candidate.id !== cargo.id,
+                            ),
+                          )
+                        }
+                        aria-label={`Eliminar cargo ${cargo.nombreSnapshot}`}
+                      >
+                        <Trash2Icon />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {tab === "produccion" ? (
+            orden ? (
+              <ProduccionOrdenTab
+                ordenId={orden.id}
+                onOrdenActualizada={recargarOrden}
+              />
+            ) : (
+              <EmptyTab
+                title="Programación de producción"
+                description="Una vez confirmada la OT vas a poder ver pasos, maquinas asignadas y tiempos estimados aca."
+              />
+            )
+          ) : null}
+          {tab === "pagos" ? (
+            orden ? (
+              <div className="otd-page" style={{ padding: 0 }}>
+                <PagosTab
+                  pago={orden.pago}
+                  total={orden.total}
+                  ordenId={orden.id}
+                  puedeCobrar={orden.estado !== "borrador"}
+                  sinComprobante={orden.tratamientoFiscal === "SIN_COMPROBANTE"}
+                />
+              </div>
+            ) : (
+              <div className="otd-page" style={{ padding: 0 }}>
+                <PagosStagingTab
+                  total={totalPropuesta}
+                  sinComprobante={sinComprobante}
+                  cobros={cobrosStaged}
+                  onAgregar={(draft) =>
+                    setCobrosStaged((prev) => [...prev, draft])
+                  }
+                  onQuitar={(index) =>
+                    setCobrosStaged((prev) =>
+                      prev.filter((_, i) => i !== index),
+                    )
+                  }
+                />
+              </div>
+            )
+          ) : null}
+          {tab === "comprobantes" && orden ? (
+            <div className="otd-page" style={{ padding: 0 }}>
+              <ComprobantesOrdenTab
+                ordenId={orden.id}
+                numero={orden.numero}
+                total={orden.total}
+                facturadoInicial={orden.facturadoTotal}
+                cobradoInicial={orden.cobradoTotal}
+                puedeFacturar={orden.estado !== "borrador"}
+                recargarToken={0}
+              />
+            </div>
+          ) : null}
+          {tab === "archivos" ? (
+            orden ? (
+              <ArchivosOrdenTab
+                ordenId={orden.id}
+                onTotalCambio={setArchivosCount}
+              />
+            ) : (
+              // Todavía es una propuesta sin persistir: los items son
+              // borradores locales sin fila en la base, así que no hay dónde
+              // colgar un archivo. Ver docs/archivos-r2-diseno.md §4.
+              <EmptyTab
+                title="Archivos"
+                description="Guardá la propuesta o emitila como orden para poder adjuntar el arte y las referencias del cliente."
+              />
+            )
+          ) : null}
+          {tab === "costos" ? (
+            <CostosOrdenTab
+              items={items}
+              cargosOrden={cargosOrden}
+              ordenId={orden?.id}
+              sinComprobante={sinComprobante}
+            />
+          ) : null}
+          {tab === "historial" && orden ? (
+            <div className="otd-card">
+              <div className="otd-card-head">
+                <span className="ttl">
+                  Historial <span className="ct">{orden.eventosTotal}</span>
+                </span>
+              </div>
+              {orden.eventos.length === 0 ? (
+                <div className="otd-noprod">Sin eventos registrados.</div>
+              ) : (
+                <div className="otd-timeline">
+                  {orden.eventosTotal > orden.eventos.length ? (
+                    <div className="otd-noprod">
+                      Se muestran los 200 eventos más recientes de{" "}
+                      {orden.eventosTotal}.
+                    </div>
+                  ) : null}
+                  {orden.eventos.map((ev, i) => {
+                    const { Icono, tone } =
+                      EVENTO_ICONOS[ev.tipo] ?? EVENTO_ICONOS.nota;
+                    return (
+                      <div key={i} className={`otd-ev ${tone ?? ""}`}>
+                        <span className="otd-ev-ico">
+                          <Icono />
+                        </span>
+                        <div className="otd-ev-body">
+                          <div className="otd-ev-txt">{ev.descripcion}</div>
+                          <div className="otd-ev-meta">
+                            <span className="mono">
+                              {formatEventoFecha(ev.fecha)}
+                            </span>{" "}
+                            · {ev.usuarioNombre}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
 
         {tab === "productos" ? (
@@ -7921,6 +8173,16 @@ export function PropuestaFicha({
             }
             togglingFiscal={togglingFiscal}
             readOnly={modoOrden}
+            resumenPersistido={
+              orden
+                ? {
+                    subtotal: orden.subtotal,
+                    impuestos: orden.impuestos,
+                    descuentoTotal: orden.descuentoTotal,
+                    total: orden.total,
+                  }
+                : undefined
+            }
             accionesOrden={
               modoOrden &&
               orden &&

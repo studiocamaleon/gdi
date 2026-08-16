@@ -236,6 +236,31 @@ export class EditarOrdenTrabajoDto {
   observaciones?: string;
 }
 
+export class EditarOrdenTrabajoItemLoteDto extends CrearOrdenTrabajoItemDto {
+  /** ID de la línea si ya existe; sin ID se crea dentro del mismo commit. */
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+}
+
+/**
+ * Commit atómico del editor. `expectedVersion` evita guardar sobre una orden
+ * que cambió desde que el usuario abrió la ficha y `items` representa el
+ * conjunto final completo (altas, cambios, bajas y orden incluidos).
+ */
+export class EditarOrdenTrabajoLoteDto extends EditarOrdenTrabajoDto {
+  @IsISO8601()
+  expectedVersion: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EditarOrdenTrabajoItemLoteDto)
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  items?: EditarOrdenTrabajoItemLoteDto[];
+}
+
 export class CancelarOrdenTrabajoDto {
   /**
    * Por qué se cancela. Obligatorio: una orden que desaparece de las ventas
