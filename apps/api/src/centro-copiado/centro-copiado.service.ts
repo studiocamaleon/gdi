@@ -2326,6 +2326,11 @@ export class CentroCopiadoService {
         } as never,
         costoUnitario: String(a.costos.unitario),
         costoTotal: String(a.costos.total),
+        precioNetoUnitario: String(
+          a.juegos > 0 ? a.subtotal / a.juegos : a.subtotal,
+        ),
+        precioNetoTotal: String(a.subtotal),
+        impuestosPorFueraTotal: String(a.iva),
         precioUnitario: String(precioUnitario),
         precioTotal: String(a.total),
         trazabilidadJson: {

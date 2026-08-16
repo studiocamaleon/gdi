@@ -4,7 +4,6 @@ import type {
   OrdenTrabajoDetalle,
   OrdenTrabajoListItem,
 } from "@/lib/ordenes-trabajo";
-import type { PropuestaCargoDirecto } from "@/lib/propuestas";
 import type {
   TableroItemData,
   TableroPasoAccion,
@@ -35,6 +34,7 @@ export type CrearOrdenTrabajoItemPayload = {
   subcategoriaComercial?: string;
   cantidad: number;
   cantidadUnidad: string;
+  /** Vista previa de UI. La API de OT los reemplaza por el snapshot cotizado. */
   subtotal: number;
   impuestos: number;
   total: number;
@@ -54,11 +54,18 @@ export type CrearOrdenTrabajoPayload = {
   fechaEntrega?: string;
   canalVenta?: string;
   observaciones?: string;
+  /** Sólo compatibilidad con presupuestos históricos; una OT nueva usa `cargos`. */
   cargosDirectos?: number;
   /** Sin comprobante fiscal desde el vamos (§6 cuaderno de margen). */
   tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
-  /** Snapshots completos de los cargos agregados a nivel orden. */
-  cargos?: PropuestaCargoDirecto[];
+  /** Inputs comerciales; nombres, configuración derivada e importes los resuelve la API. */
+  cargos?: Array<{
+    cargoDirectoCatalogoId: string;
+    configInput: Record<string, unknown>;
+    cantidadInput?: number;
+    montoNeto: number;
+    nota?: string;
+  }>;
   items: CrearOrdenTrabajoItemPayload[];
 };
 

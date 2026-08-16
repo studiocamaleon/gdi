@@ -13,6 +13,7 @@ import {
   TipoEnlacePublico,
 } from '@prisma/client';
 import QRCode from 'qrcode';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import {
@@ -44,6 +45,7 @@ import {
 import type {
   CambiarEstadoOrdenTrabajoDto,
   CancelarOrdenTrabajoDto,
+  CrearOrdenTrabajoCargoDto,
   CrearOrdenTrabajoDto,
   CrearOrdenTrabajoItemDto,
   EditarOrdenTrabajoDto,
@@ -80,6 +82,60 @@ type CargoOrdenSnapshot = {
   total?: unknown;
 };
 
+type CotizacionItemFinanciero = {
+  id: string;
+  cotizacionId: string;
+  cantidad: unknown;
+  snapshotJson: unknown;
+  precioNetoTotal: unknown;
+  impuestosPorFueraTotal: unknown;
+  precioTotal: unknown;
+  impuestosSnapshotJson: unknown;
+  descuentoTipo: string | null;
+  descuentoValor: unknown;
+  descuentoMonto: unknown;
+};
+
+function redondearDinero(valor: number, decimales: number) {
+  const factor = 10 ** decimales;
+  return Math.round((valor + Number.EPSILON) * factor) / factor;
+}
+
+/** Importes congelados por el cotizador; reconstruye snapshots históricos. */
+export function montosCotizacionItem(
+  snapshot: Pick<CotizacionItemFinanciero, 'precioNetoTotal' | 'impuestosPorFueraTotal' | 'precioTotal' | 'impuestosSnapshotJson'>,
+  decimales = 2,
+) {
+  const total = Number(snapshot.precioTotal);
+  if (!Number.isFinite(total) || total < 0) return null;
+  const netoExacto = Number(snapshot.precioNetoTotal);
+  const impuestoExacto = Number(snapshot.impuestosPorFueraTotal);
+  if (snapshot.precioNetoTotal != null && Number.isFinite(netoExacto) && netoExacto >= 0) {
+    const subtotal = redondearDinero(netoExacto, decimales);
+    const impuestos = snapshot.impuestosPorFueraTotal != null && Number.isFinite(impuestoExacto)
+      ? redondearDinero(Math.max(0, impuestoExacto), decimales)
+      : redondearDinero(Math.max(0, total - subtotal), decimales);
+    return { subtotal, impuestos, total: redondearDinero(total, decimales) };
+  }
+  const impuestos = Array.isArray(snapshot.impuestosSnapshotJson) ? snapshot.impuestosSnapshotJson : [];
+  const porcentajePorFuera = impuestos.reduce((suma, raw) => {
+    if (!raw || typeof raw !== 'object') return suma;
+    const impuesto = raw as { porcentaje?: unknown; traslado?: unknown };
+    if (impuesto.traslado !== 'POR_FUERA') return suma;
+    const porcentaje = Number(impuesto.porcentaje ?? 0);
+    return suma + (Number.isFinite(porcentaje) ? porcentaje : 0);
+  }, 0);
+  const subtotal = redondearDinero(
+    porcentajePorFuera > 0 ? total / (1 + porcentajePorFuera / 100) : total,
+    decimales,
+  );
+  return {
+    subtotal,
+    impuestos: redondearDinero(Math.max(0, total - subtotal), decimales),
+    total: redondearDinero(total, decimales),
+  };
+}
+
 /** Monto efectivo de los cargos según el tratamiento de la orden. */
 export function montoCargosPorTratamiento(
   cargos: unknown,
@@ -95,6 +151,24 @@ export function montoCargosPorTratamiento(
         : Number(cargo.total ?? 0);
     return total + (Number.isFinite(monto) ? monto : 0);
   }, 0);
+}
+
+/** Recalcula los cargos cuya base depende del subtotal de productos. */
+export function recalcularCargosPorSubtotal(cargos: unknown, subtotalProductos: number, decimales = 2) {
+  if (!Array.isArray(cargos)) return [];
+  return cargos.map((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const cargo = raw as Record<string, unknown>;
+    if (cargo.modoCalculoSnapshot !== 'PORCENTAJE_SOBRE_BASE') return cargo;
+    const config = cargo.configSnapshot && typeof cargo.configSnapshot === 'object' && !Array.isArray(cargo.configSnapshot)
+      ? (cargo.configSnapshot as Record<string, unknown>) : {};
+    const porcentaje = Number(config.porcentajeAplicado ?? 0);
+    const impuestoPorcentaje = Number(cargo.impuestoPorcentaje ?? 0);
+    if (!Number.isFinite(porcentaje) || porcentaje < 0 || !Number.isFinite(impuestoPorcentaje) || impuestoPorcentaje < 0) return cargo;
+    const montoNeto = redondearDinero(subtotalProductos * (porcentaje / 100), decimales);
+    const impuestoMonto = redondearDinero(montoNeto * (impuestoPorcentaje / 100), decimales);
+    return { ...cargo, baseCalculo: subtotalProductos, montoNeto, impuestoMonto, total: redondearDinero(montoNeto + impuestoMonto, decimales) };
+  });
 }
 
 /** `bytes` es BigInt en la base y JSON.stringify no lo sabe serializar. */
@@ -733,19 +807,6 @@ export class OrdenesTrabajoService {
       estadoInicial,
       payload.fechaEntrega ?? null,
     );
-    this.validarMontosItems(payload.items);
-    this.validarMontosCargos(payload.cargos ?? []);
-    // Emisión directa (no borrador): el descuento por encima del umbral exige
-    // un supervisor — el mismo control que el envío de presupuestos. Las
-    // líneas con CUPÓN están exentas: el cupón ES la autorización, y la
-    // redención (misma transacción de emisión) valida que sea real y vigente.
-    if (emitida) {
-      await this.exigirDescuentoEmitible(
-        auth,
-        payload.items.filter((item) => !item.descuentoCuponId),
-      );
-    }
-
     // Dos items de la orden no pueden apuntar al mismo snapshot del cotizador.
     const idsSnapshot = payload.items
       .map((item) => item.cotizacionItemId)
@@ -753,6 +814,11 @@ export class OrdenesTrabajoService {
     if (new Set(idsSnapshot).size !== idsSnapshot.length) {
       throw new BadRequestException(
         'Hay items duplicados: dos productos referencian la misma cotización.',
+      );
+    }
+    if (idsSnapshot.length !== payload.items.length) {
+      throw new BadRequestException(
+        'Todos los productos de la orden deben tener una cotización persistida.',
       );
     }
 
@@ -783,61 +849,60 @@ export class OrdenesTrabajoService {
     if (payload.vendedorEmpleadoId && !vendedor) {
       throw new NotFoundException('No se encontró el vendedor.');
     }
-    if (payload.cotizacionId) {
-      const cot = await this.prisma.cotizacion.findFirst({
-        where: { id: payload.cotizacionId, tenantId: auth.tenantId },
-        select: { id: true },
-      });
-      if (!cot) throw new NotFoundException('No se encontró la cotización.');
+    const [cotizacion, encontrados, regional] = await Promise.all([
+      payload.cotizacionId
+        ? this.prisma.cotizacion.findFirst({
+            where: { id: payload.cotizacionId, tenantId: auth.tenantId },
+            select: { id: true, numero: true, total: true, _count: { select: { items: true } } },
+          })
+        : null,
+      this.prisma.cotizacionItem.findMany({
+        where: { id: { in: idsSnapshot }, tenantId: auth.tenantId },
+        select: {
+          id: true, cotizacionId: true, cantidad: true, snapshotJson: true,
+          precioNetoTotal: true, impuestosPorFueraTotal: true, precioTotal: true,
+          impuestosSnapshotJson: true, descuentoTipo: true,
+          descuentoValor: true, descuentoMonto: true,
+        },
+      }),
+      regionalDelTenant(this.prisma, auth.tenantId),
+    ]);
+    if (payload.cotizacionId && !cotizacion) throw new NotFoundException('No se encontró la cotización.');
+    if (encontrados.length !== idsSnapshot.length) {
+      throw new NotFoundException('Algún item de cotización referenciado no existe.');
     }
-    const cotizacionItemIds = payload.items
-      .map((item) => item.cotizacionItemId)
-      .filter((v): v is string => Boolean(v));
-    if (cotizacionItemIds.length > 0) {
-      const encontrados = await this.prisma.cotizacionItem.findMany({
-        where: { id: { in: cotizacionItemIds }, tenantId: auth.tenantId },
-        select: { id: true, cotizacionId: true, precioTotal: true },
-      });
-      if (encontrados.length !== new Set(cotizacionItemIds).size) {
-        throw new NotFoundException(
-          'Algún item de cotización referenciado no existe.',
-        );
+    const decimales = regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    const snapshots = new Map(encontrados.map((item) => [item.id, item]));
+    const items = payload.items.map((item) => {
+      const snapshot = snapshots.get(item.cotizacionItemId);
+      if (!snapshot) throw new NotFoundException(`No se encontró la cotización de "${item.nombre}".`);
+      if (payload.cotizacionId && snapshot.cotizacionId !== payload.cotizacionId) {
+        throw new BadRequestException(`El snapshot de "${item.nombre}" no pertenece a la cotización de la orden.`);
       }
-      const snapshots = new Map(encontrados.map((item) => [item.id, item]));
-      for (const item of payload.items) {
-        if (!item.cotizacionItemId) continue;
-        const snapshot = snapshots.get(item.cotizacionItemId);
-        if (!snapshot) continue;
-        if (
-          payload.cotizacionId &&
-          snapshot.cotizacionId !== payload.cotizacionId
-        ) {
-          throw new BadRequestException(
-            `El snapshot de "${item.nombre}" no pertenece a la cotización de la orden.`,
-          );
-        }
-        if (
-          snapshot.precioTotal != null &&
-          Math.abs(item.total - Number(snapshot.precioTotal)) > 1
-        ) {
-          throw new BadRequestException(
-            `El total de "${item.nombre}" no coincide con el snapshot autorizado del cotizador.`,
-          );
-        }
-      }
+      return this.itemAutorizado(item, snapshot, decimales);
+    });
+    this.validarMontosItems(items);
+    if (emitida) {
+      await this.exigirDescuentoEmitible(auth, items.filter((item) => !item.descuentoCuponId));
     }
 
-    const subtotal = payload.items.reduce((s, i) => s + i.subtotal, 0);
-    const impuestosItems = payload.items.reduce((s, i) => s + i.impuestos, 0);
+    const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+    const impuestosItems = items.reduce((s, i) => s + i.impuestos, 0);
     const tratamientoFiscal = payload.tratamientoFiscal ?? 'FISCAL';
+    const cargos = await this.cargosAutorizados(auth.tenantId, payload.cargos ?? [], subtotal, decimales);
+    const cargoPresupuesto = cargos.length === 0 && cotizacion?.numero && cotizacion.total != null && cotizacion._count.items === items.length
+      ? Math.max(0, Number(cotizacion.total) - items.reduce((s, i) => s + i.total, 0)) : 0;
+    if (cargos.length === 0 && (payload.cargosDirectos ?? 0) > 0 && cargoPresupuesto === 0) {
+      throw new BadRequestException('Los cargos de la orden deben enviarse con su catálogo e inputs de cálculo.');
+    }
     const cargosDirectos = montoCargosPorTratamiento(
-      payload.cargos,
+      cargos,
       tratamientoFiscal,
-      payload.cargosDirectos ?? 0,
+      tratamientoFiscal === 'FISCAL' ? cargoPresupuesto : cargoPresupuesto > 0 ? cargoPresupuesto / 1.21 : 0,
     );
     // Denormalizado para el listado. El descuento YA está dentro de `subtotal`
     // de cada item (el neto persistido es el descontado), no se resta de nuevo.
-    const descuentoTotal = payload.items.reduce(
+    const descuentoTotal = items.reduce(
       (s, i) => s + (i.descuentoMonto ?? 0),
       0,
     );
@@ -886,12 +951,12 @@ export class OrdenesTrabajoService {
           subtotal,
           impuestos,
           cargosDirectos,
-          cargosDirectosJson: (payload.cargos ?? []) as never,
+          cargosDirectosJson: cargos as never,
           descuentoTotal,
           total,
           tratamientoFiscal,
           items: {
-            create: payload.items.map((item, indice) => ({
+            create: items.map((item, indice) => ({
               tenantId: auth.tenantId,
               cotizacionItemId: item.cotizacionItemId ?? null,
               codigo: item.codigo,
@@ -941,7 +1006,7 @@ export class OrdenesTrabajoService {
         // Cupones: la redención (contador + auditoría) va en la MISMA
         // transacción que emite — si el cupón se agotó o venció entre
         // aplicarlo y emitir, la emisión entera se cae con error claro.
-        await this.redimirCupones(tx, auth, orden.id, payload.items);
+        await this.redimirCupones(tx, auth, orden.id, items);
       }
 
       // Timeline: se insertan en orden cronológico (productos → borrador →
@@ -1220,6 +1285,7 @@ export class OrdenesTrabajoService {
         select: {
           id: true,
           estado: true,
+          cotizacionId: true,
           cargosDirectos: true,
           _count: { select: { items: true } },
         },
@@ -1335,7 +1401,7 @@ export class OrdenesTrabajoService {
   private async recalcularTotales(
     tx: Prisma.TransactionClient,
     ordenId: string,
-    cargosDirectos: number,
+    cargosDirectosFallback: number,
   ) {
     const agregado = await tx.ordenTrabajoItem.aggregate({
       where: { ordenId },
@@ -1348,16 +1414,27 @@ export class OrdenesTrabajoService {
     // que anular la factura o emitir una nota de crédito.
     const actual = await tx.ordenTrabajo.findUniqueOrThrow({
       where: { id: ordenId },
-      select: { facturadoTotal: true, tenantId: true, tratamientoFiscal: true },
+      select: { facturadoTotal: true, tenantId: true, tratamientoFiscal: true, cargosDirectosJson: true },
     });
+    const regional = await regionalDelTenant(this.prisma, actual.tenantId);
+    const cargos = recalcularCargosPorSubtotal(
+      actual.cargosDirectosJson,
+      subtotal,
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales,
+    );
     // Sin comprobante: el desglose oculta el IVA y `total` = neto + cargos.
     // Los snapshots de ítem no se tocan (impuestosItems sigue siendo su IVA);
     // sólo cae el denormalizado de la orden. Ver §6 del cuaderno de margen.
     const sinComprobante = actual.tratamientoFiscal === 'SIN_COMPROBANTE';
     const impuestos = sinComprobante ? 0 : impuestosItems;
+    const cargosDirectos = montoCargosPorTratamiento(
+      cargos,
+      sinComprobante ? 'SIN_COMPROBANTE' : 'FISCAL',
+      cargosDirectosFallback,
+    );
     const total = subtotal + impuestos + cargosDirectos;
     if (total < Number(actual.facturadoTotal) - 0.01) {
-      const { moneda } = await regionalDelTenant(this.prisma, actual.tenantId);
+      const { moneda } = regional;
       const dinero = (n: number) =>
         formatearMoneda(n, moneda, { decimales: 0 });
       throw new ConflictException(
@@ -1369,9 +1446,110 @@ export class OrdenesTrabajoService {
       data: {
         subtotal,
         impuestos,
+        cargosDirectos,
+        ...(cargos.length > 0 ? { cargosDirectosJson: cargos as never } : {}),
         descuentoTotal,
         total,
       },
+    });
+  }
+
+  private itemAutorizado(
+    item: CrearOrdenTrabajoItemDto,
+    snapshot: CotizacionItemFinanciero,
+    decimales: number,
+  ): CrearOrdenTrabajoItemDto {
+    const montos = montosCotizacionItem(snapshot, decimales);
+    if (!montos) {
+      throw new BadRequestException(`La cotización de "${item.nombre}" no tiene un precio válido. Volvé a cotizar el producto.`);
+    }
+    const raiz = snapshot.snapshotJson && typeof snapshot.snapshotJson === 'object' && !Array.isArray(snapshot.snapshotJson)
+      ? (snapshot.snapshotJson as Record<string, unknown>) : {};
+    const producto = raiz.producto && typeof raiz.producto === 'object' && !Array.isArray(raiz.producto)
+      ? (raiz.producto as Record<string, unknown>) : {};
+    return {
+      ...item,
+      codigo: String(producto.codigo ?? item.codigo),
+      nombre: String(producto.nombre ?? item.nombre),
+      cantidad: Number(snapshot.cantidad),
+      subtotal: montos.subtotal,
+      impuestos: montos.impuestos,
+      total: montos.total,
+      descuentoTipo: snapshot.descuentoTipo === 'PORCENTAJE' || snapshot.descuentoTipo === 'MONTO' ? snapshot.descuentoTipo : null,
+      descuentoValor: snapshot.descuentoValor != null ? Number(snapshot.descuentoValor) : null,
+      descuentoMonto: snapshot.descuentoMonto != null ? Number(snapshot.descuentoMonto) : null,
+      descuentoCuponId: item.descuentoCuponId ?? null,
+    };
+  }
+
+  private async cargosAutorizados(
+    tenantId: string,
+    cargos: CrearOrdenTrabajoCargoDto[],
+    subtotalProductos: number,
+    decimales: number,
+  ) {
+    if (cargos.length === 0) return [];
+    const ids = cargos.map((cargo) => cargo.cargoDirectoCatalogoId);
+    if (new Set(ids).size !== ids.length) throw new BadRequestException('No se puede agregar dos veces el mismo cargo a una orden.');
+    const catalogos = await this.prisma.cargoDirectoCatalogo.findMany({
+      where: { tenantId, id: { in: ids }, activo: true },
+      select: { id: true, codigo: true, nombre: true, descripcion: true, modoCalculo: true, configJson: true },
+    });
+    if (catalogos.length !== ids.length) throw new NotFoundException('Algún cargo no existe, está inactivo o pertenece a otro negocio.');
+    const porId = new Map(catalogos.map((catalogo) => [catalogo.id, catalogo]));
+    return cargos.map((input) => {
+      const catalogo = porId.get(input.cargoDirectoCatalogoId)!;
+      const config = catalogo.configJson && typeof catalogo.configJson === 'object' && !Array.isArray(catalogo.configJson)
+        ? (catalogo.configJson as Record<string, unknown>) : {};
+      const inputConfig = input.configInput ?? {};
+      let montoNeto = 0;
+      let detalle = 'Monto fijo';
+      const configSnapshot: Record<string, unknown> = { ...config };
+      if (catalogo.modoCalculo === 'MONTO_FIJO_PLANO') {
+        const zonas = Array.isArray(config.zonas) ? config.zonas : [];
+        const zonaCodigo = String((inputConfig.zonaAplicada as { codigo?: unknown } | undefined)?.codigo ?? '');
+        if (zonas.length > 0) {
+          const zona = zonas.find((raw) => raw && typeof raw === 'object' && String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo) as { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
+          if (!zona) throw new BadRequestException(`Elegí un importe válido para el cargo "${catalogo.nombre}".`);
+          montoNeto = Number(zona.monto ?? 0);
+          configSnapshot.zonaAplicada = { codigo: String(zona.codigo ?? ''), nombre: String(zona.nombre ?? zona.codigo ?? ''), monto: montoNeto };
+          detalle = `Zona ${String(zona.nombre ?? zona.codigo ?? '')}`;
+        } else {
+          montoNeto = Number(input.montoNeto);
+        }
+        configSnapshot.montoAplicado = montoNeto;
+      } else if (catalogo.modoCalculo === 'PORCENTAJE_SOBRE_BASE') {
+        const porcentaje = Number(inputConfig.porcentajeAplicado ?? config.porcentaje ?? config.porcentajeDefault ?? 0);
+        if (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100) throw new BadRequestException(`El porcentaje del cargo "${catalogo.nombre}" debe estar entre 0 y 100.`);
+        montoNeto = subtotalProductos * porcentaje / 100;
+        configSnapshot.porcentajeAplicado = porcentaje;
+        detalle = `${porcentaje}% sobre subtotal`;
+      } else if (catalogo.modoCalculo === 'POR_UNIDAD_INPUT') {
+        const cantidad = Number(input.cantidadInput ?? 0);
+        const precio = Number(inputConfig.precioPorUnidadAplicado ?? config.precioPorUnidad ?? 0);
+        if (!Number.isFinite(cantidad) || cantidad < 0 || !Number.isFinite(precio) || precio < 0) throw new BadRequestException(`La cantidad y el precio de "${catalogo.nombre}" deben ser válidos.`);
+        montoNeto = cantidad * precio;
+        configSnapshot.cantidadAplicada = cantidad;
+        configSnapshot.precioPorUnidadAplicado = precio;
+        detalle = `${cantidad} × ${precio}`;
+      } else {
+        throw new BadRequestException(`El cargo "${catalogo.nombre}" tiene un modo de cálculo no soportado.`);
+      }
+      if (!Number.isFinite(montoNeto) || montoNeto < 0) throw new BadRequestException(`El importe del cargo "${catalogo.nombre}" no es válido.`);
+      const neto = redondearDinero(montoNeto, decimales);
+      const impuestoPorcentaje = Number(config.impuestoPorcentaje ?? 21);
+      if (!Number.isFinite(impuestoPorcentaje) || impuestoPorcentaje < 0 || impuestoPorcentaje > 100) throw new BadRequestException(`La alícuota configurada para "${catalogo.nombre}" no es válida.`);
+      const impuestoMonto = redondearDinero(neto * impuestoPorcentaje / 100, decimales);
+      return {
+        id: randomUUID(), cargoDirectoCatalogoId: catalogo.id,
+        codigoSnapshot: catalogo.codigo, nombreSnapshot: catalogo.nombre,
+        descripcionSnapshot: catalogo.descripcion, modoCalculoSnapshot: catalogo.modoCalculo,
+        configSnapshot, baseCalculo: subtotalProductos,
+        cantidadInput: catalogo.modoCalculo === 'POR_UNIDAD_INPUT' ? Number(input.cantidadInput ?? 0) : undefined,
+        montoNeto: neto, impuestoPorcentaje, impuestoMonto,
+        total: redondearDinero(neto + impuestoMonto, decimales), detalle,
+        nota: input.nota?.trim() || undefined, createdAt: new Date().toISOString(),
+      };
     });
   }
 
@@ -1406,15 +1584,22 @@ export class OrdenesTrabajoService {
     cotizacionItemId: string | undefined,
     exceptoItemId?: string,
   ) {
-    if (!cotizacionItemId) return;
-    const existe = await this.prisma.cotizacionItem.count({
+    if (!cotizacionItemId) throw new BadRequestException('El producto debe tener una cotización persistida.');
+    const snapshot = await this.prisma.cotizacionItem.findFirst({
       where: { id: cotizacionItemId, tenantId: auth.tenantId },
+      select: {
+        id: true, cotizacionId: true, cantidad: true, snapshotJson: true,
+        precioNetoTotal: true, impuestosPorFueraTotal: true, precioTotal: true,
+        impuestosSnapshotJson: true, descuentoTipo: true,
+        descuentoValor: true, descuentoMonto: true,
+      },
     });
-    if (!existe) {
+    if (!snapshot) {
       throw new NotFoundException(
         'El item de cotización referenciado no existe.',
       );
     }
+    return snapshot;
     const usado = await this.prisma.ordenTrabajoItem.count({
       where: {
         tenantId: auth.tenantId,
@@ -1439,18 +1624,19 @@ export class OrdenesTrabajoService {
       auth,
       ordenId,
     );
-    this.validarMontosItems([payload]);
+    const [snapshot, regional] = await Promise.all([
+      this.validarSnapshotDisponible(auth, orden.id, payload.cotizacionItemId),
+      regionalDelTenant(this.prisma, auth.tenantId),
+    ]);
+    if (orden.cotizacionId && snapshot.cotizacionId !== orden.cotizacionId) throw new BadRequestException('La cotización del producto no pertenece a la orden.');
+    const item = this.itemAutorizado(payload, snapshot, regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales);
+    this.validarMontosItems([item]);
     // La orden ya está en el taller: un item nuevo con descuento sobre el
     // umbral es el mismo gate que la emisión (si no, sería el bypass obvio:
     // emitir limpia y agregar el descuento después).
     if (orden.estado !== 'borrador') {
-      await this.exigirDescuentoEmitible(auth, [payload]);
+      await this.exigirDescuentoEmitible(auth, [item]);
     }
-    await this.validarSnapshotDisponible(
-      auth,
-      orden.id,
-      payload.cotizacionItemId,
-    );
 
     const ultimo = await this.prisma.ordenTrabajoItem.aggregate({
       where: { ordenId: orden.id },
@@ -1461,7 +1647,7 @@ export class OrdenesTrabajoService {
         data: {
           tenantId: auth.tenantId,
           ordenId: orden.id,
-          ...this.buildItemData(payload),
+          ...this.buildItemData(item),
           ordenIndice: (ultimo._max.ordenIndice ?? -1) + 1,
         },
       });
@@ -1485,16 +1671,16 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           tipo: 'item_agregado',
-          descripcion: `Producto agregado: "${payload.nombre}" · ${payload.cantidad} ${payload.cantidadUnidad} · ${formatearMoneda(payload.total, await this.monedaDe(auth.tenantId), { decimales: 0 })}`,
+          descripcion: `Producto agregado: "${item.nombre}" · ${item.cantidad} ${item.cantidadUnidad} · ${formatearMoneda(item.total, await this.monedaDe(auth.tenantId), { decimales: 0 })}`,
           usuarioNombre,
           usuarioId: auth.userId,
           origen: 'usuario',
           datosJson: {
             itemId: creado.id,
-            codigo: payload.codigo,
-            nombre: payload.nombre,
-            cantidad: payload.cantidad,
-            total: payload.total,
+            codigo: item.codigo,
+            nombre: item.nombre,
+            cantidad: item.cantidad,
+            total: item.total,
           },
         },
       });
@@ -1518,22 +1704,22 @@ export class OrdenesTrabajoService {
     if (!existente) {
       throw new NotFoundException('No se encontró el producto en la orden.');
     }
-    this.validarMontosItems([payload]);
+    const [snapshot, regional] = await Promise.all([
+      this.validarSnapshotDisponible(auth, orden.id, payload.cotizacionItemId, existente.id),
+      regionalDelTenant(this.prisma, auth.tenantId),
+    ]);
+    if (orden.cotizacionId && snapshot.cotizacionId !== orden.cotizacionId) throw new BadRequestException('La cotización del producto no pertenece a la orden.');
+    const item = this.itemAutorizado(payload, snapshot, regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales);
+    this.validarMontosItems([item]);
     // En una orden ya emitida sólo gatea un descuento que AUMENTA: reeditar
     // specs de un item cuyo descuento ya salió firmado (o emitido por un
     // supervisor) no puede trabarse por reenviar el mismo porcentaje.
     if (
       orden.estado !== 'borrador' &&
-      this.descuentoPctDe(payload) > this.descuentoPctDe(existente) + 0.01
+      this.descuentoPctDe(item) > this.descuentoPctDe(existente) + 0.01
     ) {
-      await this.exigirDescuentoEmitible(auth, [payload]);
+      await this.exigirDescuentoEmitible(auth, [item]);
     }
-    await this.validarSnapshotDisponible(
-      auth,
-      orden.id,
-      payload.cotizacionItemId,
-      existente.id,
-    );
 
     const antes = {
       cantidad: Number(existente.cantidad),
@@ -1545,22 +1731,20 @@ export class OrdenesTrabajoService {
     };
     const moneda = await this.monedaDe(auth.tenantId);
     const partes: string[] = [];
-    if (antes.cantidad !== payload.cantidad) {
-      partes.push(
-        `cantidad ${antes.cantidad} → ${payload.cantidad} ${payload.cantidadUnidad}`,
-      );
+    if (antes.cantidad !== item.cantidad) {
+      partes.push(`cantidad ${antes.cantidad} → ${item.cantidad} ${item.cantidadUnidad}`);
     }
-    if (antes.total !== payload.total) {
+    if (antes.total !== item.total) {
       const dinero = (n: number) =>
         formatearMoneda(n, moneda, { decimales: 0 });
-      partes.push(`total ${dinero(antes.total)} → ${dinero(payload.total)}`);
+      partes.push(`total ${dinero(antes.total)} → ${dinero(item.total)}`);
     }
     if (partes.length === 0) partes.push('especificaciones actualizadas');
 
     await this.prisma.$transaction(async (tx) => {
       await tx.ordenTrabajoItem.update({
         where: { id: existente.id },
-        data: this.buildItemData(payload),
+        data: this.buildItemData(item),
       });
       // Emitida: el item pudo cambiar de snapshot/ruta → pasos de nuevo.
       // No hay ejecución que pisar: ejecutar promueve a `produccion`, y ahí
@@ -1573,7 +1757,7 @@ export class OrdenesTrabajoService {
             {
               id: existente.id,
               ordenId: orden.id,
-              cotizacionItemId: payload.cotizacionItemId ?? null,
+              cotizacionItemId: item.cotizacionItemId ?? null,
             },
           ],
           { reemplazar: true },
@@ -1589,7 +1773,7 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           tipo: 'item_modificado',
-          descripcion: `Producto modificado: "${payload.nombre}" — ${partes.join(' · ')}`,
+          descripcion: `Producto modificado: "${item.nombre}" — ${partes.join(' · ')}`,
           usuarioNombre,
           usuarioId: auth.userId,
           origen: 'usuario',
@@ -1597,16 +1781,16 @@ export class OrdenesTrabajoService {
             itemId: existente.id,
             antes,
             despues: {
-              cantidad: payload.cantidad,
-              subtotal: payload.subtotal,
-              impuestos: payload.impuestos,
-              total: payload.total,
+              cantidad: item.cantidad,
+              subtotal: item.subtotal,
+              impuestos: item.impuestos,
+              total: item.total,
               // Objetos planos: los DTOs (clases) no matchean InputJsonValue.
-              specs: (payload.specs ?? []).map((spec) => ({
+              specs: (item.specs ?? []).map((spec) => ({
                 etiqueta: spec.etiqueta,
                 valor: spec.valor,
               })),
-              adicionales: payload.adicionales ?? [],
+              adicionales: item.adicionales ?? [],
             },
           },
         },
@@ -2242,24 +2426,6 @@ export class OrdenesTrabajoService {
       if (Math.abs(item.total - esperado) > 1) {
         throw new BadRequestException(
           `Los montos de "${item.nombre}" no cierran: total ${item.total} ≠ subtotal + impuestos (${esperado.toFixed(2)}).`,
-        );
-      }
-    }
-  }
-
-  validarMontosCargos(
-    cargos: Array<{
-      nombreSnapshot: string;
-      montoNeto: number;
-      impuestoMonto: number;
-      total: number;
-    }>,
-  ) {
-    for (const cargo of cargos) {
-      const esperado = cargo.montoNeto + cargo.impuestoMonto;
-      if (Math.abs(cargo.total - esperado) > 1) {
-        throw new BadRequestException(
-          `Los montos del cargo "${cargo.nombreSnapshot}" no cierran: total ${cargo.total} ≠ neto + impuestos (${esperado.toFixed(2)}).`,
         );
       }
     }

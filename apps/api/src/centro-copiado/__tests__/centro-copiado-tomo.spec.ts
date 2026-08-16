@@ -126,4 +126,7 @@ it('guardar-tomo persiste UN CotizacionItem con pasos concatenados y metadata', 
   expect(meta?.esTomo).toBe(true);
   expect(meta?.segmentos).toHaveLength(2);
   expect(Number(ci.costoTotal)).toBeGreaterThan(0);
+  expect(Number(ci.precioNetoTotal)).toBe(r.subtotal);
+  expect(Number(ci.impuestosPorFueraTotal)).toBe(r.iva);
+  expect(Number(ci.precioTotal)).toBe(r.total);
 });

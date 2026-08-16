@@ -39,10 +39,9 @@ export class OrdenTrabajoItemSpecDto {
 }
 
 export class CrearOrdenTrabajoItemDto {
-  /** FK al snapshot completo del cotizador; null en OT manual/histórica. */
-  @IsOptional()
+  /** FK obligatoria: los montos de la OT se toman de este snapshot. */
   @IsUUID()
-  cotizacionItemId?: string;
+  cotizacionItemId: string;
 
   @IsString()
   @MinLength(1)
@@ -123,39 +122,12 @@ export class CrearOrdenTrabajoItemDto {
 }
 
 export class CrearOrdenTrabajoCargoDto {
-  @IsString()
-  @MaxLength(120)
-  id: string;
-
   @IsUUID()
   cargoDirectoCatalogoId: string;
 
-  @IsString()
-  @MaxLength(80)
-  codigoSnapshot: string;
-
-  @IsString()
-  @MaxLength(200)
-  nombreSnapshot: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  descripcionSnapshot?: string | null;
-
-  @IsIn([
-    'MONTO_FIJO_PLANO',
-    'PORCENTAJE_SOBRE_BASE',
-    'POR_UNIDAD_INPUT',
-  ])
-  modoCalculoSnapshot: string;
-
+  /** Inputs elegidos por el comercial (zona, porcentaje o precio unitario). */
   @IsObject()
-  configSnapshot: Record<string, unknown>;
-
-  @IsNumber()
-  @Min(0)
-  baseCalculo: number;
+  configInput: Record<string, unknown>;
 
   @IsOptional()
   @IsNumber()
@@ -166,30 +138,10 @@ export class CrearOrdenTrabajoCargoDto {
   @Min(0)
   montoNeto: number;
 
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  impuestoPorcentaje: number;
-
-  @IsNumber()
-  @Min(0)
-  impuestoMonto: number;
-
-  @IsNumber()
-  @Min(0)
-  total: number;
-
-  @IsString()
-  @MaxLength(300)
-  detalle: string;
-
   @IsOptional()
   @IsString()
   @MaxLength(500)
   nota?: string;
-
-  @IsISO8601()
-  createdAt: string;
 }
 
 export class CrearOrdenTrabajoDto {

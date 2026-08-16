@@ -2786,6 +2786,11 @@ model CotizacionItem {
   snapshotJson                      Json
   costoUnitario                     Decimal?           @db.Decimal(14, 2)
   costoTotal                        Decimal?           @db.Decimal(14, 2)
+  /// Neto fiscal exacto que resolvió el motor. La OT usa estos importes como
+  /// fuente de verdad; `precioTotal` es el bruto cobrado.
+  precioNetoUnitario                Decimal?           @db.Decimal(14, 2)
+  precioNetoTotal                   Decimal?           @db.Decimal(14, 2)
+  impuestosPorFueraTotal            Decimal?           @db.Decimal(14, 2)
   precioUnitario                    Decimal?           @db.Decimal(14, 2)
   precioTotal                       Decimal?           @db.Decimal(14, 2)
   /// Descuento comercial de la línea (sobre el neto). El efecto ya está en

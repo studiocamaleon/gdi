@@ -4995,6 +4995,17 @@ function itemToOrdenItemPayload(
   };
 }
 
+/** Sólo manda decisiones del comercial; el backend construye el snapshot. */
+function cargoToOrdenInput(cargo: PropuestaCargoDirecto) {
+  return {
+    cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
+    configInput: cargo.configSnapshot,
+    cantidadInput: cargo.cantidadInput,
+    montoNeto: cargo.montoNeto,
+    nota: cargo.nota,
+  };
+}
+
 /**
  * Campos editables según estado — espejo de camposEditables() del backend.
  * borrador/pendiente: datos comerciales; produccion: fecha y observaciones;
@@ -6333,10 +6344,9 @@ export function PropuestaFicha({
         continue;
       }
       if (!item.motorCodigo || !item.jobContext) {
-        // Item sin motor (no debería pasar hoy): va sin snapshot y la OT
-        // usa el fallback "sin detalle".
-        itemsConSnapshot.push({ item });
-        continue;
+        throw new Error(
+          `"${item.productoNombre}" no tiene una cotización persistible. Volvé a configurarlo antes de guardar la orden.`,
+        );
       }
       const response = await cotizarYGuardar({
         productoId: item.motorCodigo,
@@ -6465,7 +6475,6 @@ export function PropuestaFicha({
     try {
       const { itemsConSnapshot, cotizacionId } =
         await persistirSnapshotsItems();
-      const resumen = calcularResumenOrden(items, cargosOrden);
       const orden = await crearOrdenTrabajo({
         idempotencyKey,
         clienteId: clienteId || undefined,
@@ -6473,10 +6482,7 @@ export function PropuestaFicha({
         estado: "pendiente",
         fechaEntrega,
         canalVenta,
-        cargosDirectos: sinComprobante
-          ? resumen.cargosSubtotal
-          : resumen.cargosTotal,
-        cargos: cargosOrden,
+        cargos: cargosOrden.map(cargoToOrdenInput),
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),
@@ -6581,7 +6587,6 @@ export function PropuestaFicha({
     try {
       const { itemsConSnapshot, cotizacionId } =
         await persistirSnapshotsItems();
-      const resumen = calcularResumenOrden(items, cargosOrden);
       const fechaEntrega = fechaEntregaOrden();
       const idempotencyKey =
         borradorIdempotencyRef.current ?? crypto.randomUUID();
@@ -6593,10 +6598,7 @@ export function PropuestaFicha({
         estado: "borrador",
         fechaEntrega: fechaEntrega || undefined,
         canalVenta,
-        cargosDirectos: sinComprobante
-          ? resumen.cargosSubtotal
-          : resumen.cargosTotal,
-        cargos: cargosOrden,
+        cargos: cargosOrden.map(cargoToOrdenInput),
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
         items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
           itemToOrdenItemPayload(item, cotizacionItemId),

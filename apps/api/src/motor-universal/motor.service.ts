@@ -1234,6 +1234,15 @@ export class MotorUniversalService {
       } as never,
       costoUnitario: args.cotizacion.costos.unitario.toString(),
       costoTotal: args.cotizacion.costos.total.toString(),
+      precioNetoUnitario:
+        desglosePrecio?.precioNetoUnitario?.toString() ?? null,
+      precioNetoTotal: desglosePrecio?.precioNetoTotal?.toString() ?? null,
+      impuestosPorFueraTotal: desglosePrecio
+        ? Math.max(
+            0,
+            desglosePrecio.precioBrutoTotal - desglosePrecio.precioNetoTotal,
+          ).toString()
+        : null,
       precioUnitario: precioResultado?.precioUnitario?.toString() ?? null,
       precioTotal: precioResultado?.precioTotal?.toString() ?? null,
       descuentoTipo: args.descuento?.tipo ?? null,

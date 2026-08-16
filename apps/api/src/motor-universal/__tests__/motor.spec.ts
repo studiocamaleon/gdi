@@ -1540,6 +1540,11 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(item.productoId).toBe(tarjetas.id);
     expect(Number(item.cantidad)).toBe(500);
     expect(Number(item.costoTotal)).toBeGreaterThan(0);
+    expect(Number(item.precioNetoTotal)).toBeGreaterThan(0);
+    expect(Number(item.impuestosPorFueraTotal)).toBeGreaterThanOrEqual(0);
+    expect(
+      Number(item.precioNetoTotal) + Number(item.impuestosPorFueraTotal),
+    ).toBeCloseTo(Number(item.precioTotal), 2);
 
     // Verificar snapshot
     const snap = item.snapshotJson as Record<string, unknown>;
