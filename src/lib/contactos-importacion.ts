@@ -35,16 +35,22 @@ const CONTACT_IMPORT_HEADERS = [
   "ciudad",
 ] as const;
 
+const PROVIDER_IMPORT_HEADERS = [
+  "cuit",
+  "condicionIva",
+  "condicionPagoDias",
+  "cbuAlias",
+] as const;
+
 const REQUIRED_HEADERS = new Set(["nombre", "pais"]);
 
 function contactImportHeaderLabels(kind: ContactImportKind) {
   const required = new Set<string>(REQUIRED_HEADERS);
-  if (kind === "proveedores") {
-    required.add("email");
-    required.add("telefonoCodigo");
-    required.add("telefonoNumero");
-  }
-  return CONTACT_IMPORT_HEADERS.map((header) =>
+  const headers =
+    kind === "proveedores"
+      ? [...CONTACT_IMPORT_HEADERS, ...PROVIDER_IMPORT_HEADERS]
+      : [...CONTACT_IMPORT_HEADERS];
+  return headers.map((header) =>
     required.has(header) ? `${header}*` : header,
   );
 }
@@ -85,6 +91,10 @@ const SAMPLE_BY_KIND: Record<ContactImportKind, readonly string[]> = {
     "Av. Mitre",
     "2450",
     "Avellaneda",
+    "30712345671",
+    "RI",
+    "30",
+    "papelera.sur",
   ],
 };
 
@@ -110,7 +120,11 @@ export function parseContactImportCsv(
   }
 
   const headers = rows[0].map(normalizeHeader);
-  const missingHeaders = CONTACT_IMPORT_HEADERS.filter(
+  const expectedHeaders =
+    kind === "proveedores"
+      ? [...CONTACT_IMPORT_HEADERS, ...PROVIDER_IMPORT_HEADERS]
+      : CONTACT_IMPORT_HEADERS;
+  const missingHeaders = expectedHeaders.filter(
     (header) => !headers.includes(header),
   );
   if (missingHeaders.length > 0) {
@@ -141,15 +155,6 @@ function recordToContactPayload(
   const errors: string[] = [];
   for (const header of REQUIRED_HEADERS) {
     if (!record[header]) errors.push(`Falta ${header}.`);
-  }
-  if (kind === "proveedores") {
-    for (const header of [
-      "email",
-      "telefonoCodigo",
-      "telefonoNumero",
-    ] as const) {
-      if (!record[header]) errors.push(`Falta ${header}.`);
-    }
   }
   const tieneContacto = [
     "contactoNombre",
@@ -187,6 +192,27 @@ function recordToContactPayload(
   if (record.contactoEmail && !isEmailLike(record.contactoEmail)) {
     errors.push("contactoEmail no tiene un formato válido.");
   }
+  if (kind === "proveedores") {
+    if (record.cuit && !/^\d{11}$/.test(record.cuit)) {
+      errors.push("cuit debe tener 11 dígitos.");
+    }
+    if (
+      record.condicionIva &&
+      !["RI", "MONOTRIBUTO", "EXENTO", "CF"].includes(record.condicionIva)
+    ) {
+      errors.push("condicionIva debe ser RI, MONOTRIBUTO, EXENTO o CF.");
+    }
+    if (record.condicionIva === "RI" && !record.cuit) {
+      errors.push("Los responsables inscriptos necesitan CUIT.");
+    }
+    if (
+      record.condicionPagoDias &&
+      (!/^\d+$/.test(record.condicionPagoDias) ||
+        Number(record.condicionPagoDias) > 365)
+    ) {
+      errors.push("condicionPagoDias debe ser un entero entre 0 y 365.");
+    }
+  }
 
   if (errors.length > 0) return { rowNumber, errors };
 
@@ -223,6 +249,16 @@ function recordToContactPayload(
           },
         ]
       : [],
+    ...(kind === "proveedores"
+      ? {
+          cuit: record.cuit || undefined,
+          condicionIva: record.condicionIva || undefined,
+          condicionPagoDias: record.condicionPagoDias
+            ? Number(record.condicionPagoDias)
+            : undefined,
+          cbuAlias: record.cbuAlias || undefined,
+        }
+      : {}),
   };
 
   return { rowNumber, payload, errors: [] };

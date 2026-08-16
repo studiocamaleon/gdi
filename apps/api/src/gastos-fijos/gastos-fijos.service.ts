@@ -7,6 +7,7 @@ import { FrecuenciaGastoFijo, NaturalezaEgreso, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { UpsertGastoFijoDto } from './dto/upsert-gasto-fijo.dto';
+import { exigirProveedorActivoDelTenant } from '../proveedores/proveedor-validacion';
 
 /**
  * Gastos fijos de estructura — fuente ÚNICA del pool de costos fijos del
@@ -52,6 +53,11 @@ export class GastosFijosService {
   async crear(auth: CurrentAuth, dto: UpsertGastoFijoDto) {
     this.validarVigencia(dto);
     await this.validarCategoria(auth, dto.categoriaEgresoId);
+    await exigirProveedorActivoDelTenant(
+      this.prisma,
+      auth.tenantId,
+      dto.proveedorId,
+    );
     const row = await this.prisma.gastoFijoEstructura.create({
       data: {
         tenantId: auth.tenantId,
@@ -65,6 +71,11 @@ export class GastosFijosService {
   async actualizar(auth: CurrentAuth, id: string, dto: UpsertGastoFijoDto) {
     this.validarVigencia(dto);
     await this.validarCategoria(auth, dto.categoriaEgresoId);
+    await exigirProveedorActivoDelTenant(
+      this.prisma,
+      auth.tenantId,
+      dto.proveedorId,
+    );
     await this.obtenerOFallar(auth, id);
     const row = await this.prisma.gastoFijoEstructura.update({
       where: { id },

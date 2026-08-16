@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { useFecha } from "@/components/navigation/config-regional-provider";
 import { createCliente, updateCliente } from "@/lib/clientes-api";
 import {
   CONDICIONES_FISCALES,
@@ -272,6 +273,7 @@ function createEmptyDireccion(countryCode: string): ClienteDireccion {
 
 export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const router = useRouter();
+  const { fechaHora } = useFecha();
   const [isSaving, startSaving] = React.useTransition();
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
@@ -566,7 +568,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
 
   return (
     <form
-      className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6"
+      className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6 [&>*]:shrink-0"
       onSubmit={handleSave}
       noValidate
     >
@@ -649,7 +651,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         </Alert>
       ) : null}
 
-      <fieldset disabled={readOnly} className="contents">
+      <fieldset
+        disabled={readOnly}
+        className="contents [&>*]:shrink-0"
+      >
       <Card className="rounded-2xl border-border/70 shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-bold tracking-tight">
@@ -1558,10 +1563,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                       {" por "}{evento.actorNombre}
                     </span>
                     <time dateTime={evento.createdAt} className="text-sm text-muted-foreground">
-                      {new Intl.DateTimeFormat("es-AR", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      }).format(new Date(evento.createdAt))}
+                      {fechaHora(evento.createdAt)}
                     </time>
                   </li>
                 ))}

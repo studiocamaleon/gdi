@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getProveedorById } from "@/lib/proveedores-api";
+import { tienePermiso } from "@/lib/permisos-server";
 
 const ProveedorFicha = dynamicImport(
   () =>
@@ -35,11 +36,16 @@ async function ProveedorDetallePageContent({
   params: Promise<{ proveedorId: string }>;
 }) {
   const { proveedorId } = await params;
-  const proveedor = await getProveedorById(proveedorId);
+  const [proveedor, canManage] = await Promise.all([
+    getProveedorById(proveedorId),
+    tienePermiso("registros.gestionar"),
+  ]);
 
   if (!proveedor) {
     notFound();
   }
 
-  return <ProveedorFicha proveedor={proveedor} mode="edit" />;
+  return (
+    <ProveedorFicha proveedor={proveedor} mode={canManage ? "edit" : "view"} />
+  );
 }

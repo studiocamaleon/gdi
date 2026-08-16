@@ -44,7 +44,7 @@ import {
   type UnitCode,
 } from "@/lib/unidades";
 import { convertFlexibleRollUnitPrice } from "@/lib/unidades-derivadas";
-import type { ProveedorDetalle } from "@/lib/proveedores";
+import type { ProveedorOpcion } from "@/lib/proveedores";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -198,7 +198,7 @@ type FormState = {
 
 type MateriaPrimaFichaProps = {
   materiaPrima: MateriaPrima;
-  proveedores: ProveedorDetalle[];
+  proveedores: ProveedorOpcion[];
   maquinas: Maquina[];
 };
 

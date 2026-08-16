@@ -5,13 +5,19 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Put,
   Query,
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
-import { PaginationDto } from '../common/dto/pagination.dto';
-import { UpsertProveedorDto } from './dto/upsert-proveedor.dto';
+import {
+  EstadoProveedorDto,
+  ImportarProveedoresDto,
+  UpdateProveedorDto,
+  UpsertProveedorDto,
+} from './dto/upsert-proveedor.dto';
+import { ProveedoresQueryDto } from './dto/proveedores-query.dto';
 import { ProveedoresService } from './proveedores.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
@@ -24,9 +30,14 @@ export class ProveedoresController {
   @Get()
   findAll(
     @CurrentSession() auth: CurrentAuth,
-    @Query() pagination: PaginationDto,
+    @Query() pagination: ProveedoresQueryDto,
   ) {
     return this.proveedoresService.findAll(auth, pagination);
+  }
+
+  @Get('opciones')
+  opciones(@CurrentSession() auth: CurrentAuth) {
+    return this.proveedoresService.opciones(auth);
   }
 
   @Get(':id')
@@ -44,13 +55,32 @@ export class ProveedoresController {
   }
 
   @Permiso('registros.gestionar')
+  @Post('importar')
+  importar(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: ImportarProveedoresDto,
+  ) {
+    return this.proveedoresService.importar(auth, payload.proveedores);
+  }
+
+  @Permiso('registros.gestionar')
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
-    @Body() payload: UpsertProveedorDto,
+    @Body() payload: UpdateProveedorDto,
   ) {
     return this.proveedoresService.update(auth, id, payload);
+  }
+
+  @Permiso('registros.gestionar')
+  @Patch(':id/estado')
+  estado(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: EstadoProveedorDto,
+  ) {
+    return this.proveedoresService.fijarActivo(auth, id, payload.activo);
   }
 
   @Permiso('registros.gestionar')

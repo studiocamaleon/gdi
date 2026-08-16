@@ -83,7 +83,7 @@ import {
   type ValorEnCartera,
 } from "@/lib/egresos-api";
 import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
-import type { ProveedorDetalle } from "@/lib/proveedores";
+import type { ProveedorOpcion } from "@/lib/proveedores";
 import type { PagoDeEgreso } from "@/lib/egresos";
 import type { Archivo } from "@/lib/archivos";
 import { listarArchivos } from "@/lib/archivos-api";
@@ -427,7 +427,7 @@ export function EgresosView({
   initialEgresos: Egreso[];
   initialResumen: ResumenEgresos | null;
   categorias: CategoriaEgreso[];
-  proveedores: ProveedorDetalle[];
+  proveedores: ProveedorOpcion[];
   metodosPago: MetodoPago[];
   cuentas: CuentaFondosResumen[];
   /** Qué mitad del módulo se está mirando. Ver `ModoEgresos`. */
@@ -869,7 +869,7 @@ function Recurrentes({
 }: {
   recurrentes: GastoRecurrente[] | null;
   categorias: CategoriaEgreso[];
-  proveedores: ProveedorDetalle[];
+  proveedores: ProveedorOpcion[];
   hoy: string;
   puedeGestionar: boolean;
   fmt: (v: number) => string;
@@ -1433,7 +1433,7 @@ function AltaEgreso({
   onListo,
 }: {
   categorias: CategoriaEgreso[];
-  proveedores: ProveedorDetalle[];
+  proveedores: ProveedorOpcion[];
   metodosPago: MetodoPago[];
   cuentas: CuentaFondosResumen[];
   hoy: string;

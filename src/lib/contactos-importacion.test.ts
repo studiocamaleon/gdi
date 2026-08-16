@@ -21,6 +21,14 @@ const headers = [
   "ciudad",
 ].join(",");
 
+const providerHeaders = [
+  headers,
+  "cuit",
+  "condicionIva",
+  "condicionPagoDias",
+  "cbuAlias",
+].join(",");
+
 describe("importación de clientes y proveedores", () => {
   it("acepta un cliente mínimo sin inventar contacto ni dirección", () => {
     const parsed = parseContactImportCsv(
@@ -38,19 +46,33 @@ describe("importación de clientes y proveedores", () => {
     });
   });
 
-  it("mantiene email y teléfono obligatorios para proveedores", () => {
+  it("acepta un proveedor mínimo sin email ni teléfono", () => {
     const parsed = parseContactImportCsv(
-      `${headers}\nProveedor incompleto,,,,,AR,,,,,,,,,,`,
+      `${providerHeaders}\nProveedor mínimo,,,,,AR,,,,,,,,,,,,,,,`,
       "proveedores",
     );
 
-    expect(parsed.rows[0].errors).toEqual(
-      expect.arrayContaining([
-        "Falta email.",
-        "Falta telefonoCodigo.",
-        "Falta telefonoNumero.",
-      ]),
+    expect(parsed.rows[0].errors).toEqual([]);
+    expect(parsed.rows[0].payload).toMatchObject({
+      nombre: "Proveedor mínimo",
+      email: "",
+      telefonoNumero: "",
+    });
+  });
+
+  it("importa los datos de pago del proveedor", () => {
+    const parsed = parseContactImportCsv(
+      `${providerHeaders}\nPapelera Sur,,,,,AR,,,,,,,,,,,30712345671,MONOTRIBUTO,30,papelera.sur`,
+      "proveedores",
     );
+
+    expect(parsed.rows[0].errors).toEqual([]);
+    expect(parsed.rows[0].payload).toMatchObject({
+      cuit: "30712345671",
+      condicionIva: "MONOTRIBUTO",
+      condicionPagoDias: 30,
+      cbuAlias: "papelera.sur",
+    });
   });
 
   it("rechaza contactos y direcciones parcialmente informados", () => {

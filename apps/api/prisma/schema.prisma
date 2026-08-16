@@ -610,6 +610,7 @@ model Tenant {
   clienteEventos                                   ClienteEvento[]
   proveedorContactos                               ProveedorContacto[]
   proveedorDireccions                              ProveedorDireccion[]
+  proveedorEventos                                 ProveedorEvento[]
   empleadoDireccions                               EmpleadoDireccion[]
   empleadoComisions                                EmpleadoComision[]
   productosImpuestosCatalogo                       ProductoImpuestoCatalogo[]
@@ -1032,11 +1033,15 @@ model Proveedor {
   /// factura suya; 0 = contado. Null = no sabemos, se pide a mano.
   condicionPagoDias               Int?
   cbuAlias                        String?
+  /// Inhabilitado conserva compras, pagos, materiales y tercerizaciones, pero
+  /// deja de ofrecerse para operaciones nuevas.
+  activo                          Boolean                @default(true)
   createdAt                       DateTime               @default(now())
   updatedAt                       DateTime               @updatedAt
   tenant                          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contactos                       ProveedorContacto[]
   direcciones                     ProveedorDireccion[]
+  eventos                         ProveedorEvento[]
   materiaPrimaVariantesReferencia MateriaPrimaVariante[] @relation("MateriaPrimaVarianteProveedorReferencia")
   configPasosTercerizados         ProductoConfigPaso[]   @relation("ProductoConfigPasoProveedor")
 
@@ -1049,7 +1054,9 @@ model Proveedor {
   pasosTenant         PasoTenant[]
 
   @@unique([tenantId, nombre])
+  @@unique([tenantId, cuit])
   @@index([tenantId, nombre])
+  @@index([tenantId, activo])
 }
 
 model Empleado {
@@ -1133,6 +1140,21 @@ model ClienteEvento {
   cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, clienteId, createdAt])
+}
+
+model ProveedorEvento {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  proveedorId String    @db.Uuid
+  tipo        String    @db.VarChar(40)
+  actorId     String?   @db.Uuid
+  actorNombre String?
+  detalle     Json?
+  createdAt   DateTime  @default(now())
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proveedor   Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, proveedorId, createdAt])
 }
 
 model ProveedorContacto {
@@ -1638,7 +1660,7 @@ model GastoFijoEstructura {
   updatedAt         DateTime            @updatedAt
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   categoria         CategoriaEgreso     @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
-  proveedor         Proveedor?          @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  proveedor         Proveedor?          @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
   metodoPago        MetodoPago?         @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
   egresos           Egreso[]
   recurrentes       GastoRecurrente[]
@@ -1805,7 +1827,7 @@ model FamiliaPasoDefaults {
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   centroCosto CentroCosto? @relation(fields: [centroCostoId], references: [id], onDelete: SetNull)
-  proveedor   Proveedor?   @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  proveedor   Proveedor?   @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
 
   @@unique([tenantId, familiaCodigo])
 }
@@ -1856,7 +1878,7 @@ model PasoTenant {
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   centroCosto CentroCosto? @relation(fields: [centroCostoId], references: [id], onDelete: SetNull)
-  proveedor   Proveedor?   @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  proveedor   Proveedor?   @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
@@ -1934,7 +1956,7 @@ model MateriaPrimaVariante {
   tenant                         Tenant                                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   materiaPrima                   MateriaPrima                                      @relation(fields: [materiaPrimaId], references: [id], onDelete: Cascade)
   materialPresetVariante         MaterialPresetVariante?                           @relation(fields: [materialPresetVarianteId], references: [id], onDelete: SetNull)
-  proveedorReferencia            Proveedor?                                        @relation("MateriaPrimaVarianteProveedorReferencia", fields: [proveedorReferenciaId], references: [id], onDelete: SetNull)
+  proveedorReferencia            Proveedor?                                        @relation("MateriaPrimaVarianteProveedorReferencia", fields: [proveedorReferenciaId], references: [id], onDelete: Restrict)
   stocks                         StockMateriaPrimaVariante[]
   movimientosStock               MovimientoStockMateriaPrima[]
   maquinaConsumibles             MaquinaConsumible[]                               @relation("MaquinaConsumibleMateriaPrimaVariante")
@@ -2418,7 +2440,7 @@ model ProductoConfigPaso {
   maquinaM1                   Maquina?                             @relation("ProductoConfigPasoMaquinaM1", fields: [maquinaM1Id], references: [id])
   perfilM1                    MaquinaPerfilOperativo?              @relation("ProductoConfigPasoPerfilM1", fields: [perfilM1Id], references: [id])
   centroCosto                 CentroCosto?                         @relation("ProductoConfigPasoCentroCostoManual", fields: [centroCostoId], references: [id], onDelete: SetNull)
-  proveedor                   Proveedor?                           @relation("ProductoConfigPasoProveedor", fields: [proveedorId], references: [id], onDelete: SetNull)
+  proveedor                   Proveedor?                           @relation("ProductoConfigPasoProveedor", fields: [proveedorId], references: [id], onDelete: Restrict)
   slotsMateriales             ProductoConfigPasoSlotMaterial[]
   maquinasCandidatas          ProductoConfigPasoMaquinaCandidata[]
   cargosDirectosPaso          ProductoCargoDirectoPaso[]
@@ -3507,7 +3529,7 @@ model Valor {
   updatedAt        DateTime           @updatedAt
   tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cliente          Cliente?           @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  proveedor        Proveedor?         @relation(fields: [proveedorId], references: [id])
+  proveedor        Proveedor?         @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
   cobro            Cobro?             @relation(fields: [cobroId], references: [id])
   cuentaDeposito   CuentaFondos?      @relation(fields: [cuentaDepositoId], references: [id])
   movimientos      MovimientoFondos[]
@@ -3849,7 +3871,7 @@ model Egreso {
 
   tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   categoria    CategoriaEgreso      @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
-  proveedor    Proveedor?           @relation(fields: [proveedorId], references: [id])
+  proveedor    Proveedor?           @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
   centroCosto  CentroCosto?         @relation(fields: [centroCostoId], references: [id])
   gastoFijo    GastoFijoEstructura? @relation(fields: [gastoFijoEstructuraId], references: [id])
   recurrente   GastoRecurrente?     @relation(fields: [gastoRecurrenteId], references: [id])
@@ -3910,7 +3932,7 @@ model GastoRecurrente {
 
   tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   categoria  CategoriaEgreso      @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
-  proveedor  Proveedor?           @relation(fields: [proveedorId], references: [id])
+  proveedor  Proveedor?           @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
   metodoPago MetodoPago?          @relation(fields: [metodoPagoId], references: [id])
   gastoFijo  GastoFijoEstructura? @relation(fields: [gastoFijoEstructuraId], references: [id])
   egresos    Egreso[]
@@ -3955,7 +3977,7 @@ model Pago {
   tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   metodoPago   MetodoPago            @relation(fields: [metodoPagoId], references: [id])
   cuentaOrigen CuentaFondos          @relation(fields: [cuentaOrigenId], references: [id])
-  proveedor    Proveedor?            @relation(fields: [proveedorId], references: [id])
+  proveedor    Proveedor?            @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
   valor        Valor?                @relation(fields: [valorId], references: [id])
   imputaciones PagoImputacion[]
   movimientos  MovimientoFondos[]
@@ -4070,7 +4092,7 @@ model Archivo {
   cobro       Cobro?            @relation(fields: [cobroId], references: [id], onDelete: Cascade)
   egreso      Egreso?           @relation(fields: [egresoId], references: [id], onDelete: Cascade)
   producto    Producto?         @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  proveedor   Proveedor?        @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+  proveedor   Proveedor?        @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
 
   tenantsConEsteLogo Tenant[] @relation("TenantLogo")
 

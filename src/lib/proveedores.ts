@@ -47,8 +47,26 @@ export type ProveedorDetalle = {
   /** Días de plazo. Precarga el vencimiento al cargar su factura; null = no sabemos. */
   condicionPagoDias: number | null;
   cbuAlias: string;
+  activo: boolean;
+  updatedAt: string;
+  datosPagoCompletos: boolean;
   contactos: ProveedorContacto[];
   direcciones: ProveedorDireccion[];
+  eventos: Array<{
+    id: string;
+    tipo: string;
+    actorNombre: string;
+    createdAt: string;
+  }>;
+};
+
+export type ProveedorOpcion = {
+  id: string;
+  nombre: string;
+  cuit: string | null;
+  condicionIva: string | null;
+  condicionPagoDias: number | null;
+  cbuAlias: string | null;
 };
 
 export type ProveedorPayload = {
@@ -63,6 +81,7 @@ export type ProveedorPayload = {
   condicionPagoDias?: number;
   cbuAlias?: string;
   contactos: Array<{
+    id?: string;
     nombre: string;
     cargo?: string;
     email?: string;
@@ -71,6 +90,7 @@ export type ProveedorPayload = {
     principal: boolean;
   }>;
   direcciones: Array<{
+    id?: string;
     descripcion: string;
     pais: string;
     codigoPostal?: string;
@@ -97,6 +117,9 @@ export function createEmptyProveedor(): ProveedorDetalle {
     condicionIva: "",
     condicionPagoDias: null,
     cbuAlias: "",
+    activo: true,
+    updatedAt: new Date().toISOString(),
+    datosPagoCompletos: false,
     contactos: [
       {
         id: crypto.randomUUID(),
@@ -121,5 +144,6 @@ export function createEmptyProveedor(): ProveedorDetalle {
         principal: true,
       },
     ],
+    eventos: [],
   };
 }

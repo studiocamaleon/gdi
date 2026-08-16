@@ -1,41 +1,59 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEmail,
   IsIn,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
   Length,
   Matches,
   Max,
+  MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { PAISES_LATAM } from '../../common/paises';
 import { ProveedorContactoDto } from './contacto.dto';
 import { ProveedorDireccionDto } from './direccion.dto';
 
 export class UpsertProveedorDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(160)
   nombre: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   razonSocial?: string;
 
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== '')
   @IsEmail()
-  email: string;
+  @MaxLength(254)
+  email?: string | null;
 
+  @IsOptional()
   @IsString()
-  telefonoCodigo: string;
+  @MaxLength(8)
+  telefonoCodigo?: string;
 
+  @IsOptional()
   @IsString()
-  telefonoNumero: string;
+  @MaxLength(30)
+  telefonoNumero?: string;
 
   @IsString()
   @Length(2, 2)
+  @IsIn(PAISES_LATAM as unknown as string[], {
+    message: 'El país no pertenece al catálogo disponible.',
+  })
   pais: string;
 
   /**
@@ -60,16 +78,36 @@ export class UpsertProveedorDto {
 
   @IsOptional()
   @IsString()
-  @Length(0, 60)
+  @MaxLength(60)
   cbuAlias?: string;
 
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => ProveedorContactoDto)
   contactos: ProveedorContactoDto[];
 
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => ProveedorDireccionDto)
   direcciones: ProveedorDireccionDto[];
+}
+
+export class UpdateProveedorDto extends UpsertProveedorDto {
+  @IsISO8601()
+  updatedAt: string;
+}
+
+export class EstadoProveedorDto {
+  @IsBoolean()
+  activo: boolean;
+}
+
+export class ImportarProveedoresDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertProveedorDto)
+  proveedores: UpsertProveedorDto[];
 }

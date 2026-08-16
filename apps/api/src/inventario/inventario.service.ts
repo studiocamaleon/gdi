@@ -125,12 +125,12 @@ export class InventarioService {
     if (ids.length === 0) return;
 
     const encontrados = await client.proveedor.findMany({
-      where: { tenantId: auth.tenantId, id: { in: ids } },
+      where: { tenantId: auth.tenantId, activo: true, id: { in: ids } },
       select: { id: true },
     });
     if (encontrados.length !== ids.length) {
       throw new BadRequestException(
-        'Uno o mas proveedores referenciados no existen o no pertenecen a tu empresa.',
+        'Uno o más proveedores referenciados no existen, están inhabilitados o no pertenecen a tu empresa.',
       );
     }
   }

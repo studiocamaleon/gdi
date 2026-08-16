@@ -321,11 +321,13 @@ export class PasosTenantService implements OnModuleInit {
     }
     if (defaults.tercerizado === true && defaults.proveedorId) {
       const proveedor = await this.prisma.proveedor.findFirst({
-        where: { id: defaults.proveedorId, tenantId },
+        where: { id: defaults.proveedorId, tenantId, activo: true },
         select: { id: true },
       });
       if (!proveedor) {
-        throw new BadRequestException('El proveedor indicado no existe.');
+        throw new BadRequestException(
+          'El proveedor indicado no existe o está inhabilitado.',
+        );
       }
     }
   }

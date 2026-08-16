@@ -541,10 +541,18 @@ export class EgresosService {
     let beneficiario = dto.beneficiarioNombre?.trim() ?? '';
     if (dto.proveedorId) {
       const prov = await this.prisma.proveedor.findFirst({
-        where: { id: dto.proveedorId, tenantId: auth.tenantId },
+        where: {
+          id: dto.proveedorId,
+          tenantId: auth.tenantId,
+          activo: true,
+        },
         select: { nombre: true },
       });
-      if (!prov) throw new NotFoundException('Ese proveedor no existe.');
+      if (!prov) {
+        throw new NotFoundException(
+          'Ese proveedor no existe o está inhabilitado.',
+        );
+      }
       // El nombre se CONGELA: el proveedor puede cambiar de nombre y el
       // historial de pagos no puede mutar por eso.
       beneficiario = beneficiario || prov.nombre;

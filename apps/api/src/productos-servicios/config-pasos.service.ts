@@ -14,7 +14,7 @@ import {
   perfilCompatibleConFamilia,
   resolverFamilia,
 } from './pasos/familias';
-import type { FamiliaCodigo } from './pasos/types';
+import { exigirProveedorActivoDelTenant } from '../proveedores/proveedor-validacion';
 
 // [Etapa A] Ambas reglas viven ahora en la declaración de la familia
 // (tiposPerfilCompatibles / formulaForzada del slot). Estos alias quedan por
@@ -154,6 +154,14 @@ export class ConfigPasosService {
           'El centro de costo del paso debe estar activo y ser productivo.',
         );
       }
+    }
+
+    if (dto.tercerizado) {
+      await exigirProveedorActivoDelTenant(
+        this.prisma,
+        tenantId,
+        dto.proveedorId,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {

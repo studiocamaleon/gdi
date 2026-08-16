@@ -13,6 +13,7 @@ import type {
   CrearRecurrenteDto,
   EditarRecurrenteDto,
 } from './dto/recurrente.dto';
+import { exigirProveedorActivoDelTenant } from '../proveedores/proveedor-validacion';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const dec = (v: Prisma.Decimal | null | undefined) => (v ? Number(v) : 0);
@@ -139,6 +140,11 @@ export class RecurrentesService {
         'El período final no puede ser anterior al inicial.',
       );
     }
+    await exigirProveedorActivoDelTenant(
+      this.prisma,
+      auth.tenantId,
+      dto.proveedorId,
+    );
     return this.prisma.gastoRecurrente.create({
       data: {
         tenantId: auth.tenantId,
