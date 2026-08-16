@@ -615,6 +615,7 @@ model Tenant {
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
   cupones                                          Cupon[]
   cuponRedenciones                                 CuponRedencion[]
+  cuponEventos                                     CuponEvento[]
   estaciones                                       Estacion[]
   estacionFamilias                                 EstacionFamilia[]
   pasosTenant                                      PasoTenant[]
@@ -676,8 +677,8 @@ model Tenant {
   comprobanteContadores                            ComprobanteContador[]
   cobroImputaciones                                CobroImputacion[]
   comprobanteOrdenes                               ComprobanteOrden[]
-  familiaPasoDefaults FamiliaPasoDefaults[]
-  centroCopiadoConfig CentroCopiadoConfig?
+  familiaPasoDefaults                              FamiliaPasoDefaults[]
+  centroCopiadoConfig                              CentroCopiadoConfig?
 }
 
 /// Configuración del módulo Centro de copiado por tenant. Es CURACIÓN OPCIONAL:
@@ -698,11 +699,11 @@ model CentroCopiadoConfig {
 
   /// Máquinas del centro (override de la auto-resolución por rol). Nullable:
   /// hoy default = auto-resuelto; se aplican en un incremento posterior.
-  maquinaColorId String? @db.Uuid
-  maquinaBnId    String? @db.Uuid
+  maquinaColorId               String? @db.Uuid
+  maquinaBnId                  String? @db.Uuid
   /// Anilladora para la terminación "Anillado". null = la única ANILLADORA
   /// activa del tenant (si hay una sola). Sin anilladora, el anillado no se ofrece.
-  maquinaAnilladoraId String? @db.Uuid
+  maquinaAnilladoraId          String? @db.Uuid
   /// Materia prima de la TAPA frontal (transparente) y la CONTRATAPA (plástica
   /// de color) del anillado. El tenant las elige en Configuración; el motor
   /// consume 1 de cada una por libro. null = auto (heurística por transparencia).
@@ -818,16 +819,16 @@ model Rol {
 }
 
 model Membership {
-  id              String        @id @default(uuid()) @db.Uuid
-  userId          String        @db.Uuid
-  tenantId        String        @db.Uuid
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @db.Uuid
+  tenantId        String          @db.Uuid
   /// El rol del enum. Se mantiene mientras dure la transición a `rolId`: viaja
   /// en el JWT y lo leen los endpoints que todavía usan @Roles. Cuando todo
   /// pase por permisos, se retira.
   rol             RolSistema
   /// El rol de verdad. Null sólo en membresías que el backfill no alcanzó: ahí
   /// los permisos salen de `rol` (permisosDeRolBase).
-  rolId           String?       @db.Uuid
+  rolId           String?         @db.Uuid
   /// Desde qué IPs puede entrar esta persona A ESTA empresa. IP exacta o CIDR
   /// v4 ("190.1.2.3", "190.1.2.0/24").
   ///
@@ -838,15 +839,15 @@ model Membership {
   /// Va en Membership y no en User porque es una política de la EMPRESA: la
   /// misma persona puede entrar sin restricción a una y sólo desde la oficina
   /// a otra. Ver docs/usuarios-roles-permisos-diseno.md
-  ipsPermitidas   String[]      @default([])
-  activa          Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  rolDelTenant    Rol?          @relation(fields: [rolId], references: [id], onDelete: SetNull)
+  ipsPermitidas   String[]        @default([])
+  activa          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolDelTenant    Rol?            @relation(fields: [rolId], references: [id], onDelete: SetNull)
   authSessions    AuthSession[]
-  invitationsSent Invitation[]  @relation("InvitationSender")
+  invitationsSent Invitation[]    @relation("InvitationSender")
   credencialesMcp CredencialMcp[]
 
   @@unique([userId, tenantId])
@@ -1035,22 +1036,22 @@ model Proveedor {
   materiaPrimaVariantesReferencia MateriaPrimaVariante[] @relation("MateriaPrimaVarianteProveedorReferencia")
   configPasosTercerizados         ProductoConfigPaso[]   @relation("ProductoConfigPasoProveedor")
 
-  valores     Valor[]
-  archivos    Archivo[]
-  egresos     Egreso[]
-  pagos       Pago[]
-  recurrentes GastoRecurrente[]
+  valores             Valor[]
+  archivos            Archivo[]
+  egresos             Egreso[]
+  pagos               Pago[]
+  recurrentes         GastoRecurrente[]
+  familiaPasoDefaults FamiliaPasoDefaults[]
+  pasosTenant         PasoTenant[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
-  familiaPasoDefaults FamiliaPasoDefaults[]
-  pasosTenant         PasoTenant[]
 }
 
 model Empleado {
-  id                     String                 @id @default(uuid()) @db.Uuid
-  tenantId               String                 @db.Uuid
-  userId                 String?                @db.Uuid
+  id                     String              @id @default(uuid()) @db.Uuid
+  tenantId               String              @db.Uuid
+  userId                 String?             @db.Uuid
   nombreCompleto         String
   emailPrincipal         String
   telefonoCodigo         String
@@ -1058,18 +1059,18 @@ model Empleado {
   sector                 String
   ocupacion              String?
   sexo                   SexoEmpleado?
-  fechaIngreso           DateTime               @db.Date
-  fechaNacimiento        DateTime?              @db.Date
-  comisionesHabilitadas  Boolean                @default(false)
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
-  tenant                 Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user                   User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fechaIngreso           DateTime            @db.Date
+  fechaNacimiento        DateTime?           @db.Date
+  comisionesHabilitadas  Boolean             @default(false)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  tenant                 Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                   User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   direcciones            EmpleadoDireccion[]
   comisiones             EmpleadoComision[]
   invitations            Invitation[]
-  ordenesTrabajoVendidas OrdenTrabajo[]         @relation("OrdenTrabajoVendedor")
-  cotizacionesVendidas   Cotizacion[]           @relation("CotizacionVendedor")
+  ordenesTrabajoVendidas OrdenTrabajo[]      @relation("OrdenTrabajoVendedor")
+  cotizacionesVendidas   Cotizacion[]        @relation("CotizacionVendedor")
   estaciones             EstacionEmpleado[]
   egresos                Egreso[]
 
@@ -1205,33 +1206,32 @@ model Planta {
   @@index([tenantId, nombre])
 }
 
-
 model CentroCosto {
-  id                  String                         @id @default(uuid()) @db.Uuid
-  tenantId            String                         @db.Uuid
-  plantaId            String                         @db.Uuid
+  id                  String                        @id @default(uuid()) @db.Uuid
+  tenantId            String                        @db.Uuid
+  plantaId            String                        @db.Uuid
   codigo              String
   nombre              String
   descripcion         String?
   tipoCentro          TipoCentroCosto
-  activo              Boolean                        @default(true)
-  createdAt           DateTime                       @default(now())
-  updatedAt           DateTime                       @updatedAt
-  tenant              Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  planta              Planta                         @relation(fields: [plantaId], references: [id], onDelete: Cascade)
+  activo              Boolean                       @default(true)
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  tenant              Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planta              Planta                        @relation(fields: [plantaId], references: [id], onDelete: Cascade)
   lineas              CentroCostoLinea[]
   capacidadesPeriodo  CentroCostoCapacidadPeriodo[]
   tarifasPeriodo      CentroCostoTarifaPeriodo[]
-  maquinasPrincipales Maquina[]                      @relation("MaquinaCentroCostoPrincipal")
-  productoConfigPasos ProductoConfigPaso[]           @relation("ProductoConfigPasoCentroCostoManual")
-  productoPasosExtras ProductoPasoExtra[]            @relation("ProductoPasoExtraCentroCostoManual")
+  maquinasPrincipales Maquina[]                     @relation("MaquinaCentroCostoPrincipal")
+  productoConfigPasos ProductoConfigPaso[]          @relation("ProductoConfigPasoCentroCostoManual")
+  productoPasosExtras ProductoPasoExtra[]           @relation("ProductoPasoExtraCentroCostoManual")
   egresos             Egreso[]
+  familiaPasoDefaults FamiliaPasoDefaults[]
+  pasosTenant         PasoTenant[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantaId])
   @@index([tenantId, nombre])
-  familiaPasoDefaults FamiliaPasoDefaults[]
-  pasosTenant         PasoTenant[]
 }
 
 /// La planilla del centro de costo: una línea por gasto, por persona o por
@@ -1294,17 +1294,17 @@ model CentroCostoLinea {
 }
 
 model CentroCostoCapacidadPeriodo {
-  id               String                @id @default(uuid()) @db.Uuid
-  tenantId         String                @db.Uuid
-  centroCostoId    String                @db.Uuid
+  id               String      @id @default(uuid()) @db.Uuid
+  tenantId         String      @db.Uuid
+  centroCostoId    String      @db.Uuid
   periodo          String
   /// El "PNH" del listado: las horas que el centro puede producir en el mes,
   /// cargadas a mano. Antes se derivaban de días × horas − % no productivo.
-  horasProductivas Decimal               @db.Decimal(12, 2)
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  centroCosto      CentroCosto           @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
+  horasProductivas Decimal     @db.Decimal(12, 2)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto      CentroCosto @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, centroCostoId, periodo])
 }
@@ -1434,29 +1434,29 @@ model MaquinaPerfilOperativo {
 }
 
 model MaquinaConsumible {
-  id                     String                  @id @default(uuid()) @db.Uuid
-  tenantId               String                  @db.Uuid
-  maquinaId              String                  @db.Uuid
-  perfilOperativoId      String?                 @db.Uuid
-  materiaPrimaVarianteId String                  @db.Uuid
-  nombre                 String
-  tipo                   TipoConsumibleMaquina
-  unidad                 UnidadConsumoMaquina
-  rendimientoEstimado    Decimal?                @db.Decimal(12, 2)
-  consumoBase            Decimal?                @db.Decimal(12, 4)
+  id                      String                  @id @default(uuid()) @db.Uuid
+  tenantId                String                  @db.Uuid
+  maquinaId               String                  @db.Uuid
+  perfilOperativoId       String?                 @db.Uuid
+  materiaPrimaVarianteId  String                  @db.Uuid
+  nombre                  String
+  tipo                    TipoConsumibleMaquina
+  unidad                  UnidadConsumoMaquina
+  rendimientoEstimado     Decimal?                @db.Decimal(12, 2)
+  consumoBase             Decimal?                @db.Decimal(12, 4)
   /// Consumo g/m² por nivel de cobertura: { borrador, normal, alta }. null =
   /// usar consumoBase (que equivale a la columna Normal). Ver
   /// docs/cobertura-toner-por-nivel-diseno.md
   consumoPorCoberturaJson Json?
-  activo                 Boolean                 @default(true)
-  detalleJson            Json?
-  observaciones          String?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  maquina                Maquina                 @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
-  perfilOperativo        MaquinaPerfilOperativo? @relation(fields: [perfilOperativoId], references: [id], onDelete: SetNull)
-  materiaPrimaVariante   MateriaPrimaVariante    @relation("MaquinaConsumibleMateriaPrimaVariante", fields: [materiaPrimaVarianteId], references: [id], onDelete: Restrict)
+  activo                  Boolean                 @default(true)
+  detalleJson             Json?
+  observaciones           String?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  tenant                  Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  maquina                 Maquina                 @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  perfilOperativo         MaquinaPerfilOperativo? @relation(fields: [perfilOperativoId], references: [id], onDelete: SetNull)
+  materiaPrimaVariante    MateriaPrimaVariante    @relation("MaquinaConsumibleMateriaPrimaVariante", fields: [materiaPrimaVarianteId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, maquinaId, activo])
   @@index([tenantId, perfilOperativoId])
@@ -1590,39 +1590,39 @@ model ConfiguracionInsights {
 /// los meses entre `vigenteDesde` y `vigenteHasta` (null = indefinido).
 /// Ver docs/gastos-fijos-estructura-diseno.md
 model GastoFijoEstructura {
-  id             String              @id @default(uuid()) @db.Uuid
-  tenantId       String              @db.Uuid
-  nombre         String
+  id                String              @id @default(uuid()) @db.Uuid
+  tenantId          String              @db.Uuid
+  nombre            String
   /// Mismo catálogo que Cuentas por pagar, para que el gasto presupuestado y
   /// el pago real se clasifiquen igual. Sólo se ofrecen las de naturaleza
   /// GASTO_ESTRUCTURA: un gasto fijo de "materiales" no existe.
-  categoriaEgresoId String           @db.Uuid
+  categoriaEgresoId String              @db.Uuid
   /// Lo que el usuario carga: el valor de UNA cuota, con su frecuencia.
-  valor          Decimal             @default(0) @db.Decimal(14, 2)
-  frecuencia     FrecuenciaGastoFijo @default(MENSUAL)
+  valor             Decimal             @default(0) @db.Decimal(14, 2)
+  frecuencia        FrecuenciaGastoFijo @default(MENSUAL)
   /// Derivado de valor y frecuencia, y persistido: es lo que suma el punto de
   /// equilibrio, y no tiene que depender de recalcular en cada lectura.
-  importeMensual Decimal             @db.Decimal(14, 2)
+  importeMensual    Decimal             @db.Decimal(14, 2)
   /// A quién se le paga — el "Favorecido" del listado. Opcional: no todo gasto
   /// de estructura tiene un proveedor cargado en el sistema.
-  proveedorId    String?             @db.Uuid
-  metodoPagoId   String?             @db.Uuid
+  proveedorId       String?             @db.Uuid
+  metodoPagoId      String?             @db.Uuid
   /// Número de factura, contrato o lo que identifique al gasto.
-  documento      String?
+  documento         String?
   /// 'YYYY-MM' — primer mes de vigencia (inclusive).
-  vigenteDesde   String
+  vigenteDesde      String
   /// 'YYYY-MM' — último mes de vigencia (inclusive); null = indefinido.
-  vigenteHasta   String?
-  activo         Boolean            @default(true)
-  notas          String?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  categoria      CategoriaEgreso     @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
-  proveedor      Proveedor?          @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
-  metodoPago     MetodoPago?         @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
-  egresos        Egreso[]
-  recurrentes    GastoRecurrente[]
+  vigenteHasta      String?
+  activo            Boolean             @default(true)
+  notas             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoria         CategoriaEgreso     @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
+  proveedor         Proveedor?          @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  metodoPago        MetodoPago?         @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
+  egresos           Egreso[]
+  recurrentes       GastoRecurrente[]
 
   @@index([tenantId])
   @@index([tenantId, proveedorId])
@@ -1757,19 +1757,19 @@ model EstacionFamilia {
 /// catálogo fijo O el UUID de un PasoTenant — mismo patrón que
 /// EstacionFamilia: una sola tabla para ambos mundos.
 model FamiliaPasoDefaults {
-  id            String  @id @default(uuid()) @db.Uuid
-  tenantId      String  @db.Uuid
-  familiaCodigo String
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @db.Uuid
+  familiaCodigo     String
   /// Quién cobra el tiempo en pasos SIN máquina (con máquina lo trae ella).
-  centroCostoId String? @db.Uuid
+  centroCostoId     String?  @db.Uuid
   /// Ritmo típico (unidades/hora) para T-2. La config del producto lo pisa.
   productividadHora Decimal? @db.Decimal(12, 2)
   /// Duración típica (min) para T-1 sin máquina.
-  tiempoFijoMin Decimal? @db.Decimal(10, 2)
+  tiempoFijoMin     Decimal? @db.Decimal(10, 2)
   /// Demasía por lado típica (mm) para pasos que nestean.
-  demasiaMm Decimal? @db.Decimal(8, 2)
+  demasiaMm         Decimal? @db.Decimal(8, 2)
   /// Solape de panelizado típico (mm), gran formato sobre rollo.
-  solapePanelMm Decimal? @db.Decimal(8, 2)
+  solapePanelMm     Decimal? @db.Decimal(8, 2)
 
   /// E.2 — el paso lo hace un proveedor (bifurcación del wizard). true =
   /// las configs de producto nacen con el panel de tercerización prendido
@@ -2523,25 +2523,25 @@ model ProductoConfigPasoSlotMaterialCandidatoVariante {
 }
 
 model ProductoConfigPasoMaquinaCandidata {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  tenantId              String                  @db.Uuid
-  productoConfigPasoId  String                  @db.Uuid
-  maquinaId             String                  @db.Uuid
-  perfilDefaultId       String?                 @db.Uuid
+  id                       String                  @id @default(uuid()) @db.Uuid
+  tenantId                 String                  @db.Uuid
+  productoConfigPasoId     String                  @db.Uuid
+  maquinaId                String                  @db.Uuid
+  perfilDefaultId          String?                 @db.Uuid
   /// Desempate del perfil POR MODO de color: { "CMYK": perfilId, "CMYK+blanco": perfilId }.
   /// Con varios modos habilitados, un solo default no alcanza — el modo no-default
   /// caía a candidatos[0] (orden de carga). Claves = códigos normalizados de
   /// modo-color-comercial.ts. null = sólo el default global (comportamiento previo).
   perfilDefaultPorModoJson Json?
-  modoColorAllowedModes String[]                @default([])
-  esPreferida           Boolean                 @default(false)
-  orden                 Int                     @default(0)
-  activo                Boolean                 @default(true)
-  createdAt             DateTime                @default(now())
-  tenant                Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  productoConfigPaso    ProductoConfigPaso      @relation(fields: [productoConfigPasoId], references: [id], onDelete: Cascade)
-  maquina               Maquina                 @relation("ProductoConfigPasoMaquinaCandidata", fields: [maquinaId], references: [id])
-  perfilDefault         MaquinaPerfilOperativo? @relation("ProductoConfigPasoMaquinaCandidataPerfilDefault", fields: [perfilDefaultId], references: [id])
+  modoColorAllowedModes    String[]                @default([])
+  esPreferida              Boolean                 @default(false)
+  orden                    Int                     @default(0)
+  activo                   Boolean                 @default(true)
+  createdAt                DateTime                @default(now())
+  tenant                   Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoConfigPaso       ProductoConfigPaso      @relation(fields: [productoConfigPasoId], references: [id], onDelete: Cascade)
+  maquina                  Maquina                 @relation("ProductoConfigPasoMaquinaCandidata", fields: [maquinaId], references: [id])
+  perfilDefault            MaquinaPerfilOperativo? @relation("ProductoConfigPasoMaquinaCandidataPerfilDefault", fields: [perfilDefaultId], references: [id])
 
   @@unique([tenantId, productoConfigPasoId, maquinaId])
   @@index([tenantId, productoConfigPasoId])
@@ -2715,6 +2715,7 @@ model Cotizacion {
   ordenesTrabajo               OrdenTrabajo[]
   eventos                      CotizacionEvento[]
   archivos                     Archivo[]
+  cuponRedenciones             CuponRedencion[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -2934,6 +2935,7 @@ model OrdenTrabajo {
   comprobantes            Comprobante[]
   comprobanteOrdenes      ComprobanteOrden[]
   archivos                Archivo[]
+  cuponRedenciones        CuponRedencion[]
 
   @@unique([tenantId, numero])
   @@unique([tenantId, idempotencyKey])
@@ -3306,25 +3308,25 @@ model CuentaFondos {
 
 model MetodoPago {
   gastosFijosEstructura GastoFijoEstructura[]
-  id                    String            @id @default(uuid()) @db.Uuid
-  tenantId              String            @db.Uuid
+  id                    String                @id @default(uuid()) @db.Uuid
+  tenantId              String                @db.Uuid
   codigo                String
   nombre                String
   /// 'efectivo' | 'transferencia' | 'billetera_qr' | 'tarjeta_debito' |
   /// 'tarjeta_credito' | 'cheque_echeq' | 'debito_automatico'.
   tipo                  String
-  comisionPct           Decimal           @default(0) @db.Decimal(6, 3)
-  ivaComisionPct        Decimal           @default(0) @db.Decimal(6, 3)
-  plazoAcreditacionDias Int               @default(0)
+  comisionPct           Decimal               @default(0) @db.Decimal(6, 3)
+  ivaComisionPct        Decimal               @default(0) @db.Decimal(6, 3)
+  plazoAcreditacionDias Int                   @default(0)
   /// Sugiere cargar líneas de retención al registrar cobros con este método.
-  sufreRetencion        Boolean           @default(false)
-  cuentaDestinoId       String?           @db.Uuid
-  activo                Boolean           @default(true)
-  orden                 Int               @default(0)
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
-  tenant                Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cuentaDestino         CuentaFondos?     @relation(fields: [cuentaDestinoId], references: [id], onDelete: SetNull)
+  sufreRetencion        Boolean               @default(false)
+  cuentaDestinoId       String?               @db.Uuid
+  activo                Boolean               @default(true)
+  orden                 Int                   @default(0)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  tenant                Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cuentaDestino         CuentaFondos?         @relation(fields: [cuentaDestinoId], references: [id], onDelete: SetNull)
   cobros                Cobro[]
   pagos                 Pago[]
   recurrentes           GastoRecurrente[]
@@ -3741,21 +3743,21 @@ enum NaturalezaEgreso {
 /// hojas, y nadie lo mantiene. La AMORTIZACIÓN no está en este árbol a propósito:
 /// no es un egreso (no sale plata) y vive sólo en GastoFijoEstructura.
 model CategoriaEgreso {
-  id          String            @id @default(uuid()) @db.Uuid
-  tenantId    String            @db.Uuid
+  id          String                @id @default(uuid()) @db.Uuid
+  tenantId    String                @db.Uuid
   /// Slug estable: el nombre se puede editar, el código es la identidad.
   codigo      String
   nombre      String
   naturaleza  NaturalezaEgreso
-  padreId     String?           @db.Uuid
-  esSistema   Boolean           @default(false)
-  activo      Boolean           @default(true)
-  orden       Int               @default(0)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  padre       CategoriaEgreso?  @relation("CategoriaEgresoPadre", fields: [padreId], references: [id], onDelete: Restrict)
-  hijos       CategoriaEgreso[] @relation("CategoriaEgresoPadre")
+  padreId     String?               @db.Uuid
+  esSistema   Boolean               @default(false)
+  activo      Boolean               @default(true)
+  orden       Int                   @default(0)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  padre       CategoriaEgreso?      @relation("CategoriaEgresoPadre", fields: [padreId], references: [id], onDelete: Restrict)
+  hijos       CategoriaEgreso[]     @relation("CategoriaEgresoPadre")
   egresos     Egreso[]
   recurrentes GastoRecurrente[]
   gastosFijos GastoFijoEstructura[]
@@ -4167,58 +4169,99 @@ model EnlacePublico {
 /// Es una FUENTE AUTORIZADA del mismo descuento por línea de F1: quien lo
 /// crea (supervisor/admin) define reglas y vigencia; aplicarlo no gatea.
 model Cupon {
-  id           String    @id @default(uuid()) @db.Uuid
-  tenantId     String    @db.Uuid
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @db.Uuid
   /// Tecleable o escaneable: el QR codifica este código plano (el lector 2D
   /// lo tipea como teclado). Se guarda en MAYÚSCULAS.
-  codigo       String
-  descripcion  String?
+  codigo               String
+  descripcion          String?
   /// PORCENTAJE | MONTO — mismo contrato que el descuento manual.
-  tipo         String
-  valor        Decimal   @db.Decimal(14, 2)
+  tipo                 String
+  valor                Decimal   @db.Decimal(14, 2)
   /// ORDEN | CATEGORIA | SUBCATEGORIA | PRODUCTO | CLIENTE. Sin FK: el tipo
   /// decide a qué catálogo apunta `alcanceRef` (código de categoría/
   /// subcategoría, id de producto, id de cliente; null si ORDEN).
-  alcanceTipo  String    @default("ORDEN")
-  alcanceRef   String?
+  alcanceTipo          String    @default("ORDEN")
+  alcanceRef           String?
   /// Nombre legible de `alcanceRef`, congelado al crear el cupón: la UI
   /// muestra "Cartelería" y no el código con el que filtra el motor.
-  alcanceNombre String?
+  alcanceNombre        String?
   /// Neto mínimo de la orden para poder aplicarlo (null = sin mínimo).
-  montoMinimo  Decimal?  @db.Decimal(14, 2)
-  vigenciaDesde DateTime?
-  vigenciaHasta DateTime?
+  montoMinimo          Decimal?  @db.Decimal(14, 2)
+  /// Fechas CALENDARIO del tenant, no instantes UTC.
+  vigenciaDesde        DateTime? @db.Date
+  vigenciaHasta        DateTime? @db.Date
   /// null = ilimitado; 1 = sorteo de un solo uso.
-  usoMax       Int?
-  usoCount     Int       @default(0)
-  activo       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  usoMax               Int?
+  usoCount             Int       @default(0)
+  activo               Boolean   @default(true)
+  /// Concurrencia optimista: cada edición incrementa esta versión.
+  version              Int       @default(1)
+  creadoPorId          String?   @db.Uuid
+  creadoPorNombre      String?
+  actualizadoPorId     String?   @db.Uuid
+  actualizadoPorNombre String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   redenciones CuponRedencion[]
+  eventos     CuponEvento[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])
 }
 
-/// Redención de un cupón: auditoría + el candado del "un solo uso". Se crea
-/// en la MISMA transacción que emite la OT (reserva atómica); cancelar la
-/// orden la libera (borra la fila y decrementa el contador).
+/// Reserva/redención de un cupón. Nunca se borra: liberar cambia el estado y
+/// devuelve el contador sin perder la historia.
 model CuponRedencion {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @db.Uuid
-  cuponId       String   @db.Uuid
-  ordenId       String   @db.Uuid
-  montoAplicado Decimal  @db.Decimal(14, 2)
-  createdAt     DateTime @default(now())
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @db.Uuid
+  cuponId        String    @db.Uuid
+  /// RESERVADA (presupuesto enviado) | CONSUMIDA (OT emitida) | LIBERADA.
+  estado         String    @default("CONSUMIDA")
+  cotizacionId   String?   @db.Uuid
+  ordenId        String?   @db.Uuid
+  montoAplicado  Decimal   @db.Decimal(14, 2)
+  actorId        String?   @db.Uuid
+  actorNombre    String?
+  consumidaEl    DateTime?
+  liberadaEl     DateTime?
+  liberadaMotivo String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cupon  Cupon  @relation(fields: [cuponId], references: [id], onDelete: Cascade)
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cupon      Cupon         @relation(fields: [cuponId], references: [id], onDelete: Restrict)
+  cotizacion Cotizacion?   @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
+  orden      OrdenTrabajo? @relation(fields: [ordenId], references: [id], onDelete: SetNull)
 
   /// Un cupón se redime una sola vez por orden.
   @@unique([cuponId, ordenId])
+  @@unique([cuponId, cotizacionId])
   @@index([tenantId, cuponId])
+  @@index([tenantId, estado])
+}
+
+/// Timeline administrativo append-only. El evento sobrevive incluso si se
+/// elimina un cupón que jamás fue usado.
+model CuponEvento {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  cuponId     String?  @db.Uuid
+  codigo      String
+  tipo        String
+  descripcion String
+  actorId     String?  @db.Uuid
+  actorNombre String
+  datosJson   Json?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cupon  Cupon? @relation(fields: [cuponId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, cuponId, createdAt])
+  @@index([tenantId, codigo, createdAt])
 }
 
 /// Auditoría del control plane: todo lo que el staff ESCRIBE queda acá,
@@ -4356,19 +4399,19 @@ model Suscripcion {
 /// phone_number_id contra IntegracionTenant). Exento del tenant-guard por lo
 /// mismo que EventoCobro. Ver docs/whatsapp-tech-provider-diseno.md §3.4
 model WebhookWhatsappCrudo {
-  id         String   @id @default(uuid()) @db.Uuid
-  tenantId   String?  @db.Uuid
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String?  @db.Uuid
   /// messages | statuses | history | smb_app_state_sync | smb_message_echoes
   /// | message_template_status_update | account_update | ...
-  tipo       String
+  tipo          String
   /// wamid del mensaje cuando aplica (idempotencia de statuses/mensajes).
-  wamid      String?
+  wamid         String?
   /// phone_number_id del value.metadata: la clave de ruteo a tenant.
   phoneNumberId String?
   /// El `value` crudo del webhook, tal como llegó.
-  payload    Json
-  procesado  Boolean  @default(false)
-  recibidoEl DateTime @default(now())
+  payload       Json
+  procesado     Boolean  @default(false)
+  recibidoEl    DateTime @default(now())
 
   @@index([tenantId, tipo])
   @@index([wamid])

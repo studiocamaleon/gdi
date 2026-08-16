@@ -35,6 +35,7 @@ import {
   EnlacesPublicosService,
   generarTokenPublico,
 } from '../enlaces-publicos/enlaces-publicos.service';
+import { CuponesService } from '../cupones/cupones.service';
 
 /**
  * Presupuestos — el ciclo comercial de la cotización
@@ -98,6 +99,7 @@ export class PresupuestosService {
     private readonly avisos: NotificacionesPresupuestosService,
     private readonly enlaces: EnlacesPublicosService,
     private readonly empresa: DatosEmpresaService,
+    private readonly cupones: CuponesService,
   ) {}
 
   /**
@@ -669,6 +671,7 @@ export class PresupuestosService {
     auth: CurrentAuth,
     c: {
       id: string;
+      clienteId?: string | null;
       publicToken: string | null;
       fechaValidez?: Date | null;
       emisionJson?: Prisma.JsonValue | null;
@@ -685,6 +688,13 @@ export class PresupuestosService {
           (await this.config(auth.tenantId)).validezDiasDefault,
       ));
     await this.prisma.$transaction(async (tx) => {
+      await this.cupones.reservarParaPresupuesto(
+        tx,
+        auth,
+        c.id,
+        c.clienteId ?? null,
+        emision.items,
+      );
       const actualizada = await tx.cotizacion.updateMany({
         where: {
           id: c.id,
@@ -847,15 +857,26 @@ export class PresupuestosService {
         );
       }
     }
-    await this.prisma.cotizacion.update({
-      where: { id },
-      data: {
-        estado: dto.resultado,
-        fechaResuelto: new Date(),
-        motivoPerdida: dto.resultado === 'rechazado' ? dto.motivoPerdida : null,
-        motivoPerdidaDetalle:
-          dto.resultado === 'rechazado' ? dto.motivoPerdidaDetalle : null,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cotizacion.update({
+        where: { id },
+        data: {
+          estado: dto.resultado,
+          fechaResuelto: new Date(),
+          motivoPerdida:
+            dto.resultado === 'rechazado' ? dto.motivoPerdida : null,
+          motivoPerdidaDetalle:
+            dto.resultado === 'rechazado' ? dto.motivoPerdidaDetalle : null,
+        },
+      });
+      if (dto.resultado === 'rechazado') {
+        await this.cupones.liberarReservasPresupuesto(
+          tx,
+          auth.tenantId,
+          id,
+          'Presupuesto rechazado.',
+        );
+      }
     });
     await this.evento(auth, id, {
       tipo: dto.resultado,
@@ -1022,9 +1043,20 @@ export class PresupuestosService {
     let estado = c.estado;
     if (estado === 'enviado' && c.fechaValidez && c.fechaValidez < new Date()) {
       estado = 'vencido';
-      const vencida = await this.prisma.cotizacion.updateMany({
-        where: { id: c.id, estado: 'enviado' },
-        data: { estado },
+      const vencida = await this.prisma.$transaction(async (tx) => {
+        const cambio = await tx.cotizacion.updateMany({
+          where: { id: c.id, estado: 'enviado' },
+          data: { estado },
+        });
+        if (cambio.count === 1) {
+          await this.cupones.liberarReservasPresupuesto(
+            tx,
+            c.tenantId,
+            c.id,
+            'Presupuesto vencido.',
+          );
+        }
+        return cambio;
       });
       if (vencida.count === 1) {
         await this.eventoSistema(c.tenantId, c.id, {
@@ -1109,29 +1141,48 @@ export class PresupuestosService {
       );
     }
     if (c.fechaValidez && c.fechaValidez < new Date()) {
-      await this.prisma.cotizacion.update({
-        where: { id: c.id },
-        data: { estado: 'vencido' },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.cotizacion.update({
+          where: { id: c.id },
+          data: { estado: 'vencido' },
+        });
+        await this.cupones.liberarReservasPresupuesto(
+          tx,
+          c.tenantId,
+          c.id,
+          'Presupuesto vencido.',
+        );
       });
       throw new BadRequestException(
         'El presupuesto está vencido: pedí una actualización.',
       );
     }
-    const resuelta = await this.prisma.cotizacion.updateMany({
-      where: {
-        id: c.id,
-        estado: 'enviado',
-        ...(c.fechaValidez ? { fechaValidez: { gte: new Date() } } : {}),
-      },
-      data: {
-        estado: dto.decision,
-        fechaResuelto: new Date(),
-        motivoPerdida: dto.decision === 'rechazado' ? 'otro' : null,
-        motivoPerdidaDetalle:
-          dto.decision === 'rechazado'
-            ? (dto.comentario ?? 'Rechazado por el cliente desde el link.')
-            : null,
-      },
+    const resuelta = await this.prisma.$transaction(async (tx) => {
+      const cambio = await tx.cotizacion.updateMany({
+        where: {
+          id: c.id,
+          estado: 'enviado',
+          ...(c.fechaValidez ? { fechaValidez: { gte: new Date() } } : {}),
+        },
+        data: {
+          estado: dto.decision,
+          fechaResuelto: new Date(),
+          motivoPerdida: dto.decision === 'rechazado' ? 'otro' : null,
+          motivoPerdidaDetalle:
+            dto.decision === 'rechazado'
+              ? (dto.comentario ?? 'Rechazado por el cliente desde el link.')
+              : null,
+        },
+      });
+      if (cambio.count === 1 && dto.decision === 'rechazado') {
+        await this.cupones.liberarReservasPresupuesto(
+          tx,
+          c.tenantId,
+          c.id,
+          'Presupuesto rechazado por el cliente.',
+        );
+      }
+      return cambio;
     });
     if (resuelta.count !== 1) {
       throw new BadRequestException(
@@ -1165,9 +1216,20 @@ export class PresupuestosService {
       c.fechaValidez &&
       c.fechaValidez < new Date()
     ) {
-      const vencida = await this.prisma.cotizacion.updateMany({
-        where: { id, estado: 'enviado' },
-        data: { estado: 'vencido' },
+      const vencida = await this.prisma.$transaction(async (tx) => {
+        const cambio = await tx.cotizacion.updateMany({
+          where: { id, estado: 'enviado' },
+          data: { estado: 'vencido' },
+        });
+        if (cambio.count === 1) {
+          await this.cupones.liberarReservasPresupuesto(
+            tx,
+            c.tenantId,
+            c.id,
+            'Presupuesto vencido.',
+          );
+        }
+        return cambio;
       });
       if (vencida.count === 1) {
         await this.eventoSistema(c.tenantId, c.id, {
@@ -1198,9 +1260,20 @@ export class PresupuestosService {
     });
     if (vencidos.length === 0) return;
     for (const vencido of vencidos) {
-      const actualizado = await this.prisma.cotizacion.updateMany({
-        where: { id: vencido.id, estado: 'enviado' },
-        data: { estado: 'vencido' },
+      const actualizado = await this.prisma.$transaction(async (tx) => {
+        const cambio = await tx.cotizacion.updateMany({
+          where: { id: vencido.id, estado: 'enviado' },
+          data: { estado: 'vencido' },
+        });
+        if (cambio.count === 1) {
+          await this.cupones.liberarReservasPresupuesto(
+            tx,
+            tenantId,
+            vencido.id,
+            'Presupuesto vencido.',
+          );
+        }
+        return cambio;
       });
       if (actualizado.count === 1) {
         await this.eventoSistema(tenantId, vencido.id, {

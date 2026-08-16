@@ -58,7 +58,7 @@ import {
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
-import { evaluarCupon } from '../cupones/cupon-reglas';
+import { evaluarCupon, planDescuentoCupon } from '../cupones/cupon-reglas';
 
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
@@ -975,7 +975,22 @@ export class OrdenesTrabajoService {
       }
       return this.itemAutorizado(item, snapshot, decimales);
     });
-    items = await this.validarCupones(auth, payload.clienteId ?? null, items);
+    const reservasPresupuesto = payload.cotizacionId
+      ? await this.prisma.cuponRedencion.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            cotizacionId: payload.cotizacionId,
+            estado: { in: ['RESERVADA', 'CONSUMIDA'] },
+          },
+          select: { cuponId: true },
+        })
+      : [];
+    items = await this.validarCupones(
+      auth,
+      payload.clienteId ?? null,
+      items,
+      new Set(reservasPresupuesto.map((reserva) => reserva.cuponId)),
+    );
     this.validarMontosItems(items);
     if (emitida) {
       await this.exigirDescuentoEmitible(
@@ -2012,6 +2027,7 @@ export class OrdenesTrabajoService {
     clienteId: string | null,
     items: CrearOrdenTrabajoItemDto[],
     cuponesYaRedimidos: ReadonlySet<string> = new Set(),
+    db: PrismaService | Prisma.TransactionClient = this.prisma,
   ): Promise<CrearOrdenTrabajoItemDto[]> {
     const idsCupon = Array.from(
       new Set(
@@ -2022,11 +2038,11 @@ export class OrdenesTrabajoService {
     );
     if (idsCupon.length === 0) return items;
 
-    const [cupones, referencias] = await Promise.all([
-      this.prisma.cupon.findMany({
+    const [cupones, referencias, regional] = await Promise.all([
+      db.cupon.findMany({
         where: { tenantId: auth.tenantId, id: { in: idsCupon } },
       }),
-      this.prisma.cotizacionItem.findMany({
+      db.cotizacionItem.findMany({
         where: {
           tenantId: auth.tenantId,
           id: { in: items.map((item) => item.cotizacionItemId) },
@@ -2047,6 +2063,7 @@ export class OrdenesTrabajoService {
           },
         },
       }),
+      regionalDelTenant(db, auth.tenantId),
     ]);
     if (cupones.length !== idsCupon.length) {
       throw new BadRequestException(
@@ -2058,6 +2075,7 @@ export class OrdenesTrabajoService {
     );
     const contexto = {
       ahora: new Date(),
+      zonaHoraria: regional.zonaHoraria,
       clienteId,
       items: items.map((item) => {
         const referencia = referenciaPorId.get(item.cotizacionItemId);
@@ -2084,8 +2102,10 @@ export class OrdenesTrabajoService {
           alcanceRef: cupon.alcanceRef,
           montoMinimo:
             cupon.montoMinimo != null ? Number(cupon.montoMinimo) : null,
-          vigenciaDesde: cupon.vigenciaDesde,
-          vigenciaHasta: cupon.vigenciaHasta,
+          vigenciaDesde:
+            cupon.vigenciaDesde?.toISOString().slice(0, 10) ?? null,
+          vigenciaHasta:
+            cupon.vigenciaHasta?.toISOString().slice(0, 10) ?? null,
           usoMax: cupon.usoMax,
           // La evaluación de una edición no debe contar contra sí misma el
           // uso que esta misma orden ya reservó al emitir.
@@ -2113,26 +2133,30 @@ export class OrdenesTrabajoService {
           `El cupón ${cupon.codigo} no autoriza alguno de los descuentos aplicados.`,
         );
       }
-      if (
-        cupon.tipo === 'PORCENTAJE' &&
-        aplicados.some(
-          (item) =>
-            Math.abs(Number(item.descuentoValor ?? 0) - Number(cupon.valor)) >
-            0.001,
-        )
-      ) {
+      const decimales =
+        regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+      const plan = planDescuentoCupon(
+        { tipo: cupon.tipo, valor: Number(cupon.valor) },
+        contexto.items,
+        evaluacion.alcanzadas,
+        decimales,
+      );
+      if (aplicados.length !== plan.length) {
         throw new BadRequestException(
-          `El porcentaje aplicado no coincide con el cupón ${cupon.codigo}.`,
+          `El cupón ${cupon.codigo} debe aplicarse completo a todos los productos alcanzados.`,
         );
       }
-      if (cupon.tipo === 'MONTO') {
-        const montoAplicado = aplicados.reduce(
-          (suma, item) => suma + Number(item.descuentoMonto ?? 0),
-          0,
-        );
-        if (montoAplicado > Number(cupon.valor) + 0.01) {
+      const esperado = new Map(plan.map((linea) => [linea.key, linea]));
+      const tolerancia = 1 / 10 ** decimales / 2;
+      for (const item of aplicados) {
+        const linea = esperado.get(item.cotizacionItemId);
+        const real =
+          cupon.tipo === 'MONTO'
+            ? Number(item.descuentoMonto ?? 0)
+            : Number(item.descuentoValor ?? 0);
+        if (!linea || Math.abs(real - linea.valor) > tolerancia) {
           throw new BadRequestException(
-            `El descuento aplicado supera el monto del cupón ${cupon.codigo}.`,
+            `La distribución aplicada no coincide con el cupón ${cupon.codigo}. Volvé a aplicarlo.`,
           );
         }
       }
@@ -3240,13 +3264,69 @@ export class OrdenesTrabajoService {
           Number(item.descuentoMonto ?? 0),
       );
     }
+    if (montos.size === 0) return;
+
+    // Bloquea las reglas antes de revalidarlas dentro de ESTA transacción:
+    // ningún supervisor puede cambiar alcance/valor/vigencia entre validar y
+    // tomar el uso.
+    const idsCupon = [...montos.keys()];
+    await tx.$queryRaw`
+      SELECT "id" FROM "Cupon"
+      WHERE "tenantId" = ${auth.tenantId}::uuid
+        AND "id" IN (${Prisma.join(idsCupon.map((id) => Prisma.sql`${id}::uuid`))})
+      FOR UPDATE`;
+    const orden = await tx.ordenTrabajo.findUniqueOrThrow({
+      where: { id: ordenId },
+      select: { clienteId: true, cotizacionId: true },
+    });
+    const reservas = orden.cotizacionId
+      ? await tx.cuponRedencion.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            cotizacionId: orden.cotizacionId,
+            cuponId: { in: idsCupon },
+            estado: { in: ['RESERVADA', 'CONSUMIDA'] },
+          },
+          select: { id: true, cuponId: true, estado: true, ordenId: true },
+        })
+      : [];
+    const reservasPorCupon = new Map(
+      reservas.map((reserva) => [reserva.cuponId, reserva]),
+    );
+    await this.validarCupones(
+      auth,
+      orden.clienteId,
+      items as CrearOrdenTrabajoItemDto[],
+      new Set(reservas.map((reserva) => reserva.cuponId)),
+      tx,
+    );
+
     for (const [cuponId, monto] of montos) {
+      const reserva = reservasPorCupon.get(cuponId);
+      if (reserva) {
+        if (reserva.estado === 'RESERVADA') {
+          await tx.cuponRedencion.update({
+            where: { id: reserva.id },
+            data: {
+              estado: 'CONSUMIDA',
+              ordenId: reserva.ordenId ?? ordenId,
+              montoAplicado: monto,
+              consumidaEl: new Date(),
+            },
+          });
+        }
+        // La reserva del presupuesto ya contabilizó el uso. En conversiones
+        // parciales las OTs posteriores comparten ese mismo uso.
+        continue;
+      }
+      const anterior = await tx.cuponRedencion.findUnique({
+        where: { cuponId_ordenId: { cuponId, ordenId } },
+      });
       const tomados = await tx.$executeRaw`
         UPDATE "Cupon" SET "usoCount" = "usoCount" + 1
         WHERE "id" = ${cuponId}::uuid AND "tenantId" = ${auth.tenantId}::uuid
           AND "activo" = true
-          AND ("usoMax" IS NULL OR "usoCount" < "usoMax")
-          AND ("vigenciaHasta" IS NULL OR "vigenciaHasta" >= NOW())`;
+          AND ("usoMax" IS NULL OR "usoCount" < "usoMax")`;
       if (tomados === 0) {
         // Diagnóstico para el error: por qué no se pudo tomar.
         const cupon = await tx.cupon.findFirst({
@@ -3270,14 +3350,33 @@ export class OrdenesTrabajoService {
           `No se pudo emitir: ${motivo}. Quitá el descuento del cupón y volvé a intentar.`,
         );
       }
-      await tx.cuponRedencion.create({
-        data: {
-          tenantId: auth.tenantId,
-          cuponId,
-          ordenId,
-          montoAplicado: monto,
-        },
-      });
+      const dataRedencion = {
+        estado: 'CONSUMIDA',
+        montoAplicado: monto,
+        actorId: auth.userId,
+        actorNombre: firmaActor(
+          auth,
+          auth.mcp?.credencialNombre ?? auth.email ?? 'Usuario',
+        ),
+        consumidaEl: new Date(),
+        liberadaEl: null,
+        liberadaMotivo: null,
+      } as const;
+      if (anterior) {
+        await tx.cuponRedencion.update({
+          where: { id: anterior.id },
+          data: dataRedencion,
+        });
+      } else {
+        await tx.cuponRedencion.create({
+          data: {
+            tenantId: auth.tenantId,
+            cuponId,
+            ordenId,
+            ...dataRedencion,
+          },
+        });
+      }
     }
   }
 
@@ -3302,7 +3401,13 @@ export class OrdenesTrabajoService {
     }
     const actuales = await tx.cuponRedencion.findMany({
       where: { tenantId: auth.tenantId, ordenId },
-      select: { id: true, cuponId: true, montoAplicado: true },
+      select: {
+        id: true,
+        cuponId: true,
+        montoAplicado: true,
+        cotizacionId: true,
+        estado: true,
+      },
     });
     const actualesPorCupon = new Map(
       actuales.map((redencion) => [redencion.cuponId, redencion]),
@@ -3311,11 +3416,20 @@ export class OrdenesTrabajoService {
     for (const redencion of actuales) {
       const monto = deseadas.get(redencion.cuponId);
       if (monto === undefined) {
-        await tx.cuponRedencion.delete({ where: { id: redencion.id } });
-        await tx.$executeRaw`
-          UPDATE "Cupon" SET "usoCount" = GREATEST("usoCount" - 1, 0)
-          WHERE "id" = ${redencion.cuponId}::uuid
-            AND "tenantId" = ${auth.tenantId}::uuid`;
+        if (!redencion.cotizacionId && redencion.estado !== 'LIBERADA') {
+          await tx.cuponRedencion.update({
+            where: { id: redencion.id },
+            data: {
+              estado: 'LIBERADA',
+              liberadaEl: new Date(),
+              liberadaMotivo: 'El cupón se quitó de la orden.',
+            },
+          });
+          await tx.$executeRaw`
+            UPDATE "Cupon" SET "usoCount" = GREATEST("usoCount" - 1, 0)
+            WHERE "id" = ${redencion.cuponId}::uuid
+              AND "tenantId" = ${auth.tenantId}::uuid`;
+        }
       } else if (Number(redencion.montoAplicado) !== monto) {
         await tx.cuponRedencion.update({
           where: { id: redencion.id },
@@ -3345,10 +3459,20 @@ export class OrdenesTrabajoService {
   ) {
     const redenciones = await tx.cuponRedencion.findMany({
       where: { tenantId, ordenId },
-      select: { id: true, cuponId: true },
+      select: { id: true, cuponId: true, cotizacionId: true, estado: true },
     });
     for (const redencion of redenciones) {
-      await tx.cuponRedencion.delete({ where: { id: redencion.id } });
+      // Una reserva nacida de presupuesto ya respaldó una propuesta enviada
+      // al cliente; cancelar una OT no borra ni devuelve ese compromiso.
+      if (redencion.cotizacionId || redencion.estado === 'LIBERADA') continue;
+      await tx.cuponRedencion.update({
+        where: { id: redencion.id },
+        data: {
+          estado: 'LIBERADA',
+          liberadaEl: new Date(),
+          liberadaMotivo: 'Orden cancelada.',
+        },
+      });
       await tx.$executeRaw`
         UPDATE "Cupon" SET "usoCount" = GREATEST("usoCount" - 1, 0)
         WHERE "id" = ${redencion.cuponId}::uuid AND "tenantId" = ${tenantId}::uuid`;

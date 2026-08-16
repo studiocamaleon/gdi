@@ -64,7 +64,7 @@ import {
   emitirPresupuesto,
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
-import { validarCupon, type Cupon } from "@/lib/cupones-api";
+import { validarCupon, type ValidarCuponResultado } from "@/lib/cupones-api";
 import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
 import { parsearDniArgentino } from "@/lib/dni-argentino";
 import { esNumeroOrden } from "@/components/mostrador/entrega-escaneo-watcher";
@@ -4642,7 +4642,7 @@ function DescuentoModal({
     descuento: DescuentoInput | null,
   ) => void;
   /** Cupón validado por el backend, listo para materializar por línea. */
-  onApplyCupon: (cupon: Cupon, alcanzadas: string[]) => void;
+  onApplyCupon: (resultado: ValidarCuponResultado) => void;
   /** Los errores de cupón se muestran en el modal centrado, no en toast. */
   onAviso: (aviso: AvisoCupon) => void;
 }) {
@@ -4654,10 +4654,8 @@ function DescuentoModal({
   const [modo, setModo] = React.useState<"manual" | "cupon">("manual");
   const [codigoCupon, setCodigoCupon] = React.useState("");
   const [validandoCupon, setValidandoCupon] = React.useState(false);
-  const [cuponValidado, setCuponValidado] = React.useState<{
-    cupon: Cupon;
-    alcanzadas: string[];
-  } | null>(null);
+  const [cuponValidado, setCuponValidado] =
+    React.useState<ValidarCuponResultado | null>(null);
   // Modo ESCANEO: input invisible con foco capturando lo que tipea el lector;
   // al Enter valida y aplica directo, sin mostrar el código.
   const [escaneando, setEscaneando] = React.useState(false);
@@ -4809,7 +4807,7 @@ function DescuentoModal({
     setValidandoCupon(true);
     try {
       const resultado = await validarContraCarrito(codigo.trim());
-      onApplyCupon(resultado.cupon, resultado.alcanzadas);
+      onApplyCupon(resultado);
     } catch (error) {
       onAviso({
         tipo: "error",
@@ -5070,9 +5068,7 @@ function DescuentoModal({
               type="button"
               className="btn btn-primary"
               disabled={aplicando}
-              onClick={() =>
-                onApplyCupon(cuponValidado.cupon, cuponValidado.alcanzadas)
-              }
+              onClick={() => onApplyCupon(cuponValidado)}
             >
               <TicketPercentIcon />
               {aplicando ? "Aplicando…" : "Aplicar cupón"}
@@ -7149,18 +7145,16 @@ export function PropuestaFicha({
     [recotizarItemConDescuento, umbralDescuentoAprobacion],
   );
 
-  /**
-   * Materializa un cupón validado por el backend (F4): las líneas alcanzadas
-   * reciben el MISMO descuento por línea de siempre, marcado con `cuponId`
-   * (exento del gate; se redime al emitir). Un % va igual a cada línea; un $
-   * se prorratea por peso del neto de lista y la última absorbe el residuo.
-   * Pisa el descuento manual de las líneas alcanzadas, con aviso.
-   */
+  /** Materializa exactamente el plan por línea calculado por el backend. */
   const aplicarCupon = React.useCallback(
-    async (cupon: Cupon, alcanzadas: string[]) => {
+    async (resultado: ValidarCuponResultado) => {
+      const { cupon } = resultado;
+      const planPorItem = new Map(
+        resultado.plan.map((linea) => [linea.key, linea]),
+      );
       const objetivo = itemsRef.current.filter(
         (item) =>
-          alcanzadas.includes(item.id) && item.jobContext && item.motorCodigo,
+          planPorItem.has(item.id) && item.jobContext && item.motorCodigo,
       );
       if (objetivo.length === 0) {
         setAvisoCupon({
@@ -7175,94 +7169,73 @@ export function PropuestaFicha({
         (item) => item.descuentoInput && !item.descuentoInput.cuponId,
       ).length;
 
-      let plan: Array<{ item: PropuestaItem; descuento: DescuentoInput }>;
       const marca = { cuponId: cupon.id, cuponCodigo: cupon.codigo };
-      if (cupon.tipo === "PORCENTAJE") {
-        plan = objetivo.map((item) => ({
-          item,
-          descuento: { tipo: "PORCENTAJE", valor: cupon.valor, ...marca },
-        }));
-      } else {
-        const pesos = objetivo.map((item) => netoListaDeItem(item));
-        const totalPeso = pesos.reduce((acc, peso) => acc + peso, 0);
-        let repartido = 0;
-        plan = objetivo.map((item, index) => {
-          let share: number;
-          if (totalPeso <= 0) {
-            share = 0;
-          } else if (index === objetivo.length - 1) {
-            share = Math.max(0, Math.round(cupon.valor - repartido));
-          } else {
-            share = Math.round((cupon.valor * pesos[index]) / totalPeso);
-            repartido += share;
-          }
+      const plan: Array<{ item: PropuestaItem; descuento: DescuentoInput }> =
+        objetivo.map((item) => {
+          const linea = planPorItem.get(item.id)!;
           return {
             item,
-            descuento: { tipo: "MONTO" as const, valor: share, ...marca },
+            descuento: { tipo: linea.tipo, valor: linea.valor, ...marca },
           };
         });
-      }
 
       setDescuentoAplicando(true);
       try {
-        const results = await Promise.all(
-          plan.map(async ({ item, descuento }) => {
-            try {
-              return {
-                id: item.id,
-                updated: await recotizarItemConDescuento(item, descuento),
-              };
-            } catch {
-              return { id: item.id, updated: null as PropuestaItem | null };
-            }
-          }),
-        );
         const actualizados = new Map<string, PropuestaItem>();
-        let fallidos = 0;
-        for (const result of results) {
-          if (result.updated) actualizados.set(result.id, result.updated);
-          else fallidos += 1;
-        }
-        if (actualizados.size > 0) {
-          setItems((current) =>
-            current.map(
-              (candidate) => actualizados.get(candidate.id) ?? candidate,
-            ),
+        try {
+          for (const { item, descuento } of plan) {
+            const updated = await recotizarItemConDescuento(item, descuento);
+            if (!updated) {
+              throw new Error(`No se pudo recotizar "${item.productoNombre}".`);
+            }
+            actualizados.set(item.id, updated);
+          }
+        } catch (cause) {
+          const restauraciones = await Promise.allSettled(
+            objetivo
+              .filter((item) => actualizados.has(item.id))
+              .reverse()
+              .map((item) =>
+                recotizarItemConDescuento(item, item.descuentoInput ?? null),
+              ),
           );
+          const rollbackFallido = restauraciones.some(
+            (restauracion) => restauracion.status === "rejected",
+          );
+          setAvisoCupon({
+            tipo: "error",
+            titulo: "El cupón no se aplicó",
+            detalle: rollbackFallido
+              ? "Una recotización falló y no pudimos restaurar todas las líneas. Recargá la ficha antes de continuar."
+              : cause instanceof Error
+                ? `${cause.message} Se restauraron las líneas anteriores.`
+                : "La recotización falló y se restauraron las líneas anteriores.",
+          });
+          return;
         }
-        // Aviso en modal centrado, sin el código del cupón (el cliente está
-        // mirando la pantalla). El monto real descontado va en grande: es lo
-        // que el vendedor le canta.
+        setItems((current) =>
+          current.map(
+            (candidate) => actualizados.get(candidate.id) ?? candidate,
+          ),
+        );
         const descontado = [...actualizados.values()].reduce(
           (acc, item) => acc + descuentoMontoDeItem(item),
           0,
         );
         const alcance = `${actualizados.size} producto${actualizados.size === 1 ? "" : "s"}`;
-        if (fallidos > 0) {
-          setAvisoCupon({
-            tipo: "aviso",
-            titulo: "El cupón se aplicó parcialmente",
-            detalle: `${fallidos} producto${fallidos === 1 ? " no se pudo recotizar" : "s no se pudieron recotizar"}. Revisá los precios antes de emitir.`,
-            monto:
-              descontado > 0
-                ? `−${formatCurrency(descontado, moneda)}`
-                : undefined,
-          });
-        } else {
-          setAvisoCupon({
-            tipo: "ok",
-            titulo: "Cupón aplicado",
-            detalle:
-              `Descuento en ${alcance}. Se redime al emitir la orden.` +
-              (pisadas > 0
-                ? ` Reemplazó el descuento manual en ${pisadas} producto${pisadas === 1 ? "" : "s"}.`
-                : ""),
-            monto:
-              descontado > 0
-                ? `−${formatCurrency(descontado, moneda)}`
-                : undefined,
-          });
-        }
+        setAvisoCupon({
+          tipo: "ok",
+          titulo: "Cupón aplicado",
+          detalle:
+            `Descuento en ${alcance}. Se reserva al enviar el presupuesto o se redime al emitir la orden.` +
+            (pisadas > 0
+              ? ` Reemplazó el descuento manual en ${pisadas} producto${pisadas === 1 ? "" : "s"}.`
+              : ""),
+          monto:
+            descontado > 0
+              ? `−${formatCurrency(descontado, moneda)}`
+              : undefined,
+        });
         setDescuentoTarget(null);
       } finally {
         setDescuentoAplicando(false);
@@ -7303,7 +7276,7 @@ export function PropuestaFicha({
             neto: netoListaDeItem(item),
           })),
         });
-        await aplicarCupon(resultado.cupon, resultado.alcanzadas);
+        await aplicarCupon(resultado);
       } catch (error) {
         // El motivo del backend ya viene sin el código ("está vencido", "no
         // tiene usos disponibles"…), así que se muestra tal cual.
@@ -8446,9 +8419,7 @@ export function PropuestaFicha({
         onApply={(scope, targetItemId, descuento) =>
           void aplicarDescuento(scope, targetItemId, descuento)
         }
-        onApplyCupon={(cupon, alcanzadas) =>
-          void aplicarCupon(cupon, alcanzadas)
-        }
+        onApplyCupon={(resultado) => void aplicarCupon(resultado)}
         onAviso={setAvisoCupon}
       />
 
