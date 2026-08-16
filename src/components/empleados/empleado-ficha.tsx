@@ -439,7 +439,10 @@ export function EmpleadoFicha({
         </Alert>
       ) : null}
 
-      <fieldset disabled={!canManage || !empleado.activo} className="contents">
+      <fieldset
+        disabled={!canManage || !empleado.activo}
+        className="contents [&>*]:shrink-0"
+      >
 
       <Card className="rounded-2xl border-border/70 shadow-sm">
         <CardHeader>
