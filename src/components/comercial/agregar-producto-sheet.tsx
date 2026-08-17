@@ -146,6 +146,20 @@ type CatalogAdicional = {
   modoCalculo?: string;
 };
 
+type CargoInputDescriptor = {
+  key: string;
+  label: string;
+  unidad?: string;
+  tipo: "number" | "select";
+  opciones?: Array<{ value: string; label: string }>;
+  activaciones: Array<{
+    asociacionId: string;
+    modoActivacion: string;
+    condicionActivacionJson: unknown;
+  }>;
+  cargoNombre: string;
+};
+
 type CatalogProduct = {
   id?: string;
   real: boolean;
@@ -293,6 +307,8 @@ type MotorConfigState = {
    * Ver docs/modificaciones-fisicas-lona-diseno.md
    */
   paramsComercial: Record<string, Record<string, unknown>>;
+  /** Datos declarados por costos directos ($/km, viajes, zona, etc.). */
+  cargoInputs: Record<string, string | number>;
   modoCotizacionLineal: ModoCotizacionLineal;
   zonaInstalacion: string;
   m2Instalados: number;
@@ -537,6 +553,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionTercerizado: {},
   tercerizadoCostoManual: {},
   paramsComercial: {},
+  cargoInputs: {},
   modoCotizacionLineal: "directo",
   zonaInstalacion: "CABA",
   m2Instalados: 0,
@@ -2646,6 +2663,117 @@ function getOpcionales(
   return Array.from(opcionales.values());
 }
 
+function getCargoInputDescriptors(
+  producto: ProductoDetalle | null,
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+): CargoInputDescriptor[] {
+  if (!producto) return [];
+  const asociaciones = [
+    ...producto.cargosDirectosCotizacion,
+    ...(ruta?.configPasos ?? [])
+      .filter(includeConfig)
+      .flatMap((config) => config.cargosDirectosPaso),
+  ];
+  const porKey = new Map<string, CargoInputDescriptor>();
+
+  for (const asociacion of asociaciones) {
+    const catalogo = asociacion.cargoDirectoCatalogo;
+    const config = {
+      ...asRecord(catalogo.configJson),
+      ...asRecord(asociacion.configOverrideJson),
+    };
+    if (catalogo.modoCalculo === "POR_UNIDAD_INPUT") {
+      const key =
+        typeof config.inputCantidad === "string"
+          ? config.inputCantidad.trim()
+          : "";
+      if (!key) continue;
+      const existente = porKey.get(key);
+      if (existente) {
+        existente.activaciones.push({
+          asociacionId: asociacion.id,
+          modoActivacion: asociacion.modoActivacion,
+          condicionActivacionJson: asociacion.condicionActivacionJson,
+        });
+        continue;
+      }
+      porKey.set(key, {
+        key,
+        label: humanizeCodigo(key),
+        unidad: typeof config.unidad === "string" ? config.unidad : undefined,
+        tipo: "number",
+        activaciones: [
+          {
+            asociacionId: asociacion.id,
+            modoActivacion: asociacion.modoActivacion,
+            condicionActivacionJson: asociacion.condicionActivacionJson,
+          },
+        ],
+        cargoNombre: catalogo.nombre,
+      });
+      continue;
+    }
+
+    const zonas = Array.isArray(config.zonas) ? config.zonas : [];
+    if (catalogo.modoCalculo !== "MONTO_FIJO_PLANO" || zonas.length === 0) {
+      continue;
+    }
+    const opciones = zonas
+      .map((raw) => asRecord(raw))
+      .filter((item) => typeof item.codigo === "string")
+      .map((item) => ({
+        value: String(item.codigo),
+        label: String(item.nombre ?? item.codigo),
+      }));
+    if (opciones.length === 0) continue;
+    const existente = porKey.get("zonaInstalacion");
+    porKey.set("zonaInstalacion", {
+      key: "zonaInstalacion",
+      label: "Zona",
+      tipo: "select",
+      opciones: Array.from(
+        new Map(
+          [...(existente?.opciones ?? []), ...opciones].map((item) => [
+            item.value,
+            item,
+          ]),
+        ).values(),
+      ),
+      activaciones: [
+        ...(existente?.activaciones ?? []),
+        {
+          asociacionId: asociacion.id,
+          modoActivacion: asociacion.modoActivacion,
+          condicionActivacionJson: asociacion.condicionActivacionJson,
+        },
+      ],
+      cargoNombre: catalogo.nombre,
+    });
+  }
+  return [...porKey.values()];
+}
+
+function isCargoInputVisible(
+  input: CargoInputDescriptor,
+  motorConfig: MotorConfigState,
+  ruleContext: Record<string, unknown>,
+) {
+  return input.activaciones.some((activacion) => {
+    if (activacion.modoActivacion === "OPCIONAL") {
+      return Boolean(motorConfig.opcionalesActivados[activacion.asociacionId]);
+    }
+    if (activacion.modoActivacion === "CONDICIONAL") {
+      return evaluarJsonLogicBoolean(
+        activacion.condicionActivacionJson,
+        ruleContext,
+        false,
+      );
+    }
+    return activacion.modoActivacion === "OBLIGATORIO";
+  });
+}
+
 function mapProductoReal(
   producto: ProductoListItem | ProductoDetalle,
 ): CatalogProduct {
@@ -3192,6 +3320,10 @@ function buildJobContext(
 
   if (config.m2Instalados > 0) ctx.m2_instalados = config.m2Instalados;
   if (config.zonaInstalacion) ctx.zonaInstalacion = config.zonaInstalacion;
+  ctx.cargoInputs = config.cargoInputs;
+  for (const [key, value] of Object.entries(config.cargoInputs)) {
+    if (key && value !== "") ctx[key] = value;
+  }
 
   const slotCounts = slotsComercialElige.reduce<Record<string, number>>(
     (acc, slot) => ({
@@ -4218,6 +4350,12 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       !Array.isArray(ctx.configPasoRuntime)
         ? (ctx.configPasoRuntime as Record<string, Record<string, unknown>>)
         : {},
+    cargoInputs:
+      ctx.cargoInputs &&
+      typeof ctx.cargoInputs === "object" &&
+      !Array.isArray(ctx.cargoInputs)
+        ? (ctx.cargoInputs as Record<string, string | number>)
+        : {},
   };
 }
 
@@ -4545,6 +4683,29 @@ function ApConfigStep({
     () => opcionalesRuta.filter((opcional) => opcional.origen === "cargo"),
     [opcionalesRuta],
   );
+  const cargoInputs = React.useMemo(
+    () =>
+      getCargoInputDescriptors(productoDetalle, rutaSel, includeVisibleConfig),
+    [includeVisibleConfig, productoDetalle, rutaSel],
+  );
+  const cargoInputKeys = React.useMemo(
+    () => new Set(cargoInputs.map((input) => input.key)),
+    [cargoInputs],
+  );
+  React.useEffect(() => {
+    if (cargoInputs.length === 0) return;
+    setMotorConfig((current) => {
+      const next = { ...current.cargoInputs };
+      let changed = false;
+      for (const input of cargoInputs) {
+        if (next[input.key] !== undefined) continue;
+        next[input.key] =
+          input.tipo === "select" ? (input.opciones?.[0]?.value ?? "") : 1;
+        changed = true;
+      }
+      return changed ? { ...current, cargoInputs: next } : current;
+    });
+  }, [cargoInputs, setMotorConfig]);
   const slotsComercialElige = React.useMemo(
     () => getSlotsComercialElige(rutaSel, includeVisibleConfig),
     [includeVisibleConfig, rutaSel],
@@ -7572,35 +7733,41 @@ function ApConfigStep({
 
             {necesitaInstalacion ? (
               <>
-                <div className="ap-spec">
-                  <label>Zona de instalación</label>
-                  <select
-                    className="ap-native-select"
-                    value={motorConfig.zonaInstalacion}
-                    onChange={(event) =>
-                      updateMotorConfig({ zonaInstalacion: event.target.value })
-                    }
-                  >
-                    {ZONAS_VIATICO.map((zona) => (
-                      <option key={zona.value} value={zona.value}>
-                        {zona.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="ap-spec">
-                  <label>m² instalados</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={motorConfig.m2Instalados}
-                    onChange={(event) =>
-                      updateMotorConfig({
-                        m2Instalados: Number(event.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
+                {!cargoInputKeys.has("zonaInstalacion") ? (
+                  <div className="ap-spec">
+                    <label>Zona de instalación</label>
+                    <select
+                      className="ap-native-select"
+                      value={motorConfig.zonaInstalacion}
+                      onChange={(event) =>
+                        updateMotorConfig({
+                          zonaInstalacion: event.target.value,
+                        })
+                      }
+                    >
+                      {ZONAS_VIATICO.map((zona) => (
+                        <option key={zona.value} value={zona.value}>
+                          {zona.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                {!cargoInputKeys.has("m2Instalados") ? (
+                  <div className="ap-spec">
+                    <label>m² instalados</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={motorConfig.m2Instalados}
+                      onChange={(event) =>
+                        updateMotorConfig({
+                          m2Instalados: Number(event.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>
@@ -7760,8 +7927,8 @@ function ApConfigStep({
           <div className="ap-cs-head">
             <div className="ttl">Cargos</div>
             <div className="sub">
-              Importes extra que se suman al precio. No generan pasos de
-              producción.
+              Costos directos que se generan al ejecutar el trabajo. No crean
+              pasos de producción adicionales.
             </div>
           </div>
           <div className="ap-adicionales">
@@ -7795,6 +7962,74 @@ function ApConfigStep({
                 </div>
               );
             })}
+          </div>
+        </div>
+      ) : null}
+
+      {cargoInputs.some((input) =>
+        isCargoInputVisible(input, motorConfig, ruleContext),
+      ) ? (
+        <div className="ap-config-section">
+          <div className="ap-cs-head">
+            <div className="ttl">Datos para calcular costos directos</div>
+            <div className="sub">
+              El motor usa estos valores para calcular importes por zona o por
+              unidad.
+            </div>
+          </div>
+          <div className="ap-specs">
+            {cargoInputs
+              .filter((input) =>
+                isCargoInputVisible(input, motorConfig, ruleContext),
+              )
+              .map((input) => (
+                <div className="ap-spec" key={input.key}>
+                  <label>
+                    {input.label}
+                    {input.unidad ? ` (${input.unidad})` : ""}
+                  </label>
+                  {input.tipo === "select" ? (
+                    <select
+                      className="ap-native-select"
+                      value={String(motorConfig.cargoInputs[input.key] ?? "")}
+                      onChange={(event) =>
+                        setMotorConfig((current) => ({
+                          ...current,
+                          cargoInputs: {
+                            ...current.cargoInputs,
+                            [input.key]: event.target.value,
+                          },
+                        }))
+                      }
+                    >
+                      {(input.opciones ?? []).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      value={motorConfig.cargoInputs[input.key] ?? 0}
+                      onChange={(event) =>
+                        setMotorConfig((current) => ({
+                          ...current,
+                          cargoInputs: {
+                            ...current.cargoInputs,
+                            [input.key]: Number(event.target.value) || 0,
+                          },
+                        }))
+                      }
+                    />
+                  )}
+                  <small className="text-muted-foreground">
+                    Para calcular: {input.cargoNombre}
+                  </small>
+                </div>
+              ))}
           </div>
         </div>
       ) : null}

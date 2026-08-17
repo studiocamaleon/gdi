@@ -357,12 +357,16 @@ export interface SlotMaterialDetalle {
 export interface CargoPasoDetalle {
   id: string;
   modoActivacion: string;
+  condicionActivacionJson?: Record<string, unknown> | null;
+  configOverrideJson?: Record<string, unknown> | null;
   cargoDirectoCatalogo: CargoDirectoCatalogo;
 }
 
 export interface CargoCotizacionDetalle {
   id: string;
   modoActivacion: string;
+  condicionActivacionJson?: Record<string, unknown> | null;
+  configOverrideJson?: Record<string, unknown> | null;
   cargoDirectoCatalogo: CargoDirectoCatalogo;
 }
 

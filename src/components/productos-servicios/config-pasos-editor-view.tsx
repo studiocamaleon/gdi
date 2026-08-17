@@ -136,6 +136,7 @@ import { ParamsFamiliaFields } from "@/components/productos-servicios/params-fam
 import { EfectosPasoFields } from "@/components/productos-servicios/efectos-paso-fields";
 import { TiemposExtraPasoFields } from "@/components/productos-servicios/tiempos-extra-paso-fields";
 import { NivelesPasoFields } from "@/components/productos-servicios/niveles-paso-fields";
+import { CostosDirectosPasoPanel } from "@/components/productos-servicios/costos-directos-paso-panel";
 import {
   getLabel,
   mecanismoCantidadLabels,
@@ -167,6 +168,7 @@ interface Props {
   rutaAlternativa: RutaAlternativaDetalle;
   catalogoFamilias: CatalogoFamilias;
   lookups: LookupsConfigPaso;
+  catalogoCargos?: import("@/lib/productos-servicios").CargoDirectoCatalogo[];
   embedded?: boolean;
   configuracionBase?: {
     familiaCodigo: string;
@@ -2817,6 +2819,7 @@ export function ConfigPasosEditorView({
   rutaAlternativa,
   catalogoFamilias,
   lookups,
+  catalogoCargos = [],
   embedded = false,
   configuracionBase,
 }: Props) {
@@ -5118,6 +5121,18 @@ export function ConfigPasosEditorView({
                           )}
                         </div>
                       </div>
+
+                      {!configuracionBase && !esExtra ? (
+                        <CostosDirectosPasoPanel
+                          configPaso={configExistente ?? null}
+                          catalogoCargos={catalogoCargos}
+                          includeMeasureFields={
+                            producto.modoMedidas === "LIBRE" ||
+                            producto.modoMedidas === "MIXTA"
+                          }
+                          ruleExtraFields={technologyRuleFields}
+                        />
+                      ) : null}
 
                       <div className="config-step-content pasos-sections">
                         {vistaEditor === "guiado" ? (

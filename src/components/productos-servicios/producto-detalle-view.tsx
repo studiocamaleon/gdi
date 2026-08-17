@@ -10,7 +10,6 @@ import {
   GitBranchIcon,
   PackageIcon,
   PencilIcon,
-  ReceiptIcon,
   RulerIcon,
   TagIcon,
   WrenchIcon,
@@ -101,12 +100,6 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
               <GitBranchIcon className="mr-2 size-3" />
               Configurar rutas
             </Link>
-            <Link href={`/productos-servicios/${producto.id}/cargos`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <ReceiptIcon className="mr-2 size-3" />
-              Cargos directos
-            </Link>
             <Link href={`/productos-servicios/${producto.id}/wizard`}
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
@@ -172,8 +165,11 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
       {producto.cargosDirectosCotizacion.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Cargos directos (a nivel cotización)</CardTitle>
-            <CardDescription>Se aplican opcionalmente al cotizar este producto.</CardDescription>
+            <CardTitle className="text-base">Costos globales heredados</CardTitle>
+            <CardDescription>
+              Configuración anterior conservada por compatibilidad. Los costos
+              nuevos se modelan dentro de cada paso.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">

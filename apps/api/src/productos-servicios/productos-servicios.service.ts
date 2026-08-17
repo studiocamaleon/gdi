@@ -19,6 +19,7 @@ import type {
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
 import type {
+  ActualizarAsociacionCargoDto,
   ActualizarCargoDirectoDto,
   AsociarCargoCotizacionDto,
   AsociarCargoPasoDto,
@@ -260,12 +261,28 @@ export class ProductosServiciosService {
     return this.cargos.desasociarCargoCotizacion(tenantId, asociacionId);
   }
 
+  actualizarCargoCotizacion(
+    tenantId: string,
+    asociacionId: string,
+    dto: ActualizarAsociacionCargoDto,
+  ) {
+    return this.cargos.actualizarCargoCotizacion(tenantId, asociacionId, dto);
+  }
+
   asociarCargoPaso(
     tenantId: string,
     configPasoId: string,
     dto: AsociarCargoPasoDto,
   ) {
     return this.cargos.asociarCargoPaso(tenantId, configPasoId, dto);
+  }
+
+  actualizarCargoPaso(
+    tenantId: string,
+    asociacionId: string,
+    dto: ActualizarAsociacionCargoDto,
+  ) {
+    return this.cargos.actualizarCargoPaso(tenantId, asociacionId, dto);
   }
 
   desasociarCargoPaso(tenantId: string, asociacionId: string) {

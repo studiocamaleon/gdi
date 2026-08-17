@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * <ProductoWizard /> — flujo guiado de 5 pasos para crear/editar un producto.
+ * <ProductoWizard /> — flujo guiado para crear/editar un producto.
  *
- * Reemplaza las 6 pantallas separadas (identidad, rutas, config-pasos, cargos,
+ * Reemplaza las pantallas separadas (identidad, rutas, config-pasos,
  * precio, validar) por un wizard con barra de progreso lateral, validación
  * por step y navegación libre cuando el producto ya existe.
  *
@@ -11,8 +11,7 @@
  *   1. Identidad + Comercial — qué es y cómo se cobra.
  *   2. Rutas — elegir ruta(s) alternativa(s) con preferida.
  *   3. Configurar pasos — para cada ruta, ir al editor de config-pasos.
- *   4. Cargos extras — cargos directos a nivel cotización.
- *   5. Precio + revisar — Tab Precio + panel de validación final.
+ *   4. Precio + revisar — Tab Precio + panel de validación final.
  *
  * Modo "crear": step 1 crea el producto y redirige al wizard del recién creado.
  * Modo "editar": el producto ya existe; el wizard se abre en `?step=N` (default 1).
@@ -34,8 +33,6 @@ import {
   CircleIcon,
   CogIcon,
   GitBranchIcon,
-  PackageIcon,
-  ReceiptIcon,
   SaveIcon,
   StarIcon,
   TagIcon,
@@ -62,10 +59,8 @@ import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-c
 import {
   actualizarProducto,
   actualizarProductoRutaAlt,
-  asociarCargoCotizacion,
   crearProducto,
   crearProductoRutaAlt,
-  desasociarCargoCotizacion,
   eliminarProductoRutaAlt,
   getCatalogoComercial,
 } from "@/lib/productos-servicios-api";
@@ -85,8 +80,6 @@ import {
 } from "@/lib/producto-medidas";
 import {
   getLabel,
-  modoActivacionLabels,
-  modoCalculoCargoLabels,
   modoMedidasLabels,
   unidadComercialLabels,
 } from "@/lib/labels-humanos";
@@ -111,12 +104,6 @@ const STEPS = [
     nombre: "Configurar pasos",
     descripcion: "Máquinas y materiales",
     icon: CogIcon,
-  },
-  {
-    id: "cargos",
-    nombre: "Cargos",
-    descripcion: "Extras de cotización",
-    icon: ReceiptIcon,
   },
   {
     id: "precio",
@@ -311,11 +298,6 @@ function validarConfigPasos(producto: ProductoDetalle | undefined): ValidacionSt
   return { errores, warnings };
 }
 
-function validarCargos(): ValidacionStep {
-  // Cargos son opcionales — sin errores duros
-  return { errores: [], warnings: [] };
-}
-
 function validarPrecio(precioConfig: TabPrecioConfig | null): ValidacionStep {
   const errores: string[] = [];
   if (!precioConfig?.metodoCalculo) errores.push("Falta método de cálculo de precio");
@@ -328,7 +310,6 @@ export function ProductoWizard({
   modo,
   productoExistente,
   rutasDisponibles = [],
-  catalogoCargos = [],
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -427,14 +408,12 @@ export function ProductoWizard({
   const valIdentidad = validarIdentidad({ nombre });
   const valRutas = validarRutas(productoExistente);
   const valConfigPasos = validarConfigPasos(productoExistente);
-  const valCargos = validarCargos();
   const valPrecio = validarPrecio(precioConfig);
 
   const validaciones: Record<StepId, ValidacionStep> = {
     identidad: valIdentidad,
     rutas: valRutas,
     "config-pasos": valConfigPasos,
-    cargos: valCargos,
     precio: valPrecio,
   };
 
@@ -678,14 +657,6 @@ export function ProductoWizard({
 
           {stepActivo === "config-pasos" && productoExistente && (
             <StepConfigPasos producto={productoExistente} validacion={valConfigPasos} />
-          )}
-
-          {stepActivo === "cargos" && productoExistente && (
-            <StepCargos
-              producto={productoExistente}
-              catalogoCargos={catalogoCargos}
-              validacion={valCargos}
-            />
           )}
 
           {stepActivo === "precio" && (
@@ -1202,185 +1173,7 @@ function StepConfigPasos({
   );
 }
 
-// ─── Step 4: Cargos ───────────────────────────────────────────────
-
-function StepCargos({
-  producto,
-  catalogoCargos,
-  validacion,
-}: {
-  producto: ProductoDetalle;
-  catalogoCargos: CargoDirectoCatalogo[];
-  validacion: ValidacionStep;
-}) {
-  const router = useRouter();
-  const [cargoSel, setCargoSel] = React.useState("");
-  const [modoActivacion, setModoActivacion] = React.useState("OPCIONAL");
-  const [agregando, setAgregando] = React.useState(false);
-  const [cargoAQuitar, setCargoAQuitar] = React.useState<{ id: string; nombre: string } | null>(null);
-
-  const yaAsociados = new Set(
-    producto.cargosDirectosCotizacion.map((c) => c.cargoDirectoCatalogo.codigo),
-  );
-  const disponibles = catalogoCargos.filter((c) => c.activo && !yaAsociados.has(c.codigo));
-
-  const asociar = async () => {
-    if (!cargoSel) return;
-    setAgregando(true);
-    try {
-      await asociarCargoCotizacion(producto.id, {
-        cargoDirectoCatalogoId: cargoSel,
-        modoActivacion: modoActivacion as "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL",
-      });
-      toast.success("Cargo asociado");
-      setCargoSel("");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
-    } finally {
-      setAgregando(false);
-    }
-  };
-
-  const desasociar = (asocId: string, nombre: string) => {
-    setCargoAQuitar({ id: asocId, nombre });
-  };
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Cargos directos a nivel cotización</CardTitle>
-          <CardDescription>
-            Cargos como viático, recargo por urgencia o tercerización. Se ofrecen al comercial
-            cuando cotiza este producto. Son opcionales — podés saltar este step.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {producto.cargosDirectosCotizacion.length === 0 ? (
-            <p className="text-muted-foreground rounded border border-dashed p-3 text-center text-sm italic">
-              Sin cargos asociados (opcional).
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {producto.cargosDirectosCotizacion.map((c) => {
-                const lblCalc = getLabel(modoCalculoCargoLabels, c.cargoDirectoCatalogo.modoCalculo);
-                const lblAct = getLabel(modoActivacionLabels, c.modoActivacion);
-                return (
-                  <div
-                    key={c.id}
-                    className="bg-muted/30 flex items-start justify-between rounded border p-2"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1 text-sm font-medium">
-                        <PackageIcon className="size-3" />
-                        {c.cargoDirectoCatalogo.nombre}
-                      </div>
-                      <div className="text-muted-foreground mt-1 flex flex-wrap gap-1">
-                        <Badge variant="outline" className="text-[10px]" title={lblCalc.descripcion}>
-                          {lblCalc.label}
-                        </Badge>
-                        <Badge
-                          variant={c.modoActivacion === "OBLIGATORIO" ? "default" : "secondary"}
-                          className="text-[10px]"
-                          title={lblAct.descripcion}
-                        >
-                          {lblAct.label}
-                        </Badge>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => desasociar(c.id, c.cargoDirectoCatalogo.nombre)}
-                      className="text-red-600"
-                    >
-                      ×
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {disponibles.length > 0 && (
-            <div className="space-y-2 rounded border p-3">
-              <div className="text-sm font-medium">Asociar cargo del catálogo</div>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <HumanSelect
-                  value={cargoSel}
-                  onValueChange={(v) => setCargoSel(v || "")}
-                  options={disponibles.map((c) => {
-                    const lblCalc = getLabel(modoCalculoCargoLabels, c.modoCalculo);
-                    return {
-                      value: c.id,
-                      label: c.nombre,
-                      code: c.codigo,
-                      description: lblCalc.label,
-                    };
-                  })}
-                  placeholder="Elegí cargo"
-                />
-                <HumanSelect
-                  value={modoActivacion}
-                  onValueChange={(v) => setModoActivacion(v || "OPCIONAL")}
-                  options={["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"].map((m) =>
-                    optionFromLabel(m, modoActivacionLabels),
-                  )}
-                />
-              </div>
-              <Button size="sm" onClick={asociar} disabled={agregando || !cargoSel}>
-                {agregando ? "Asociando..." : "Asociar"}
-              </Button>
-            </div>
-          )}
-
-          {disponibles.length === 0 && producto.cargosDirectosCotizacion.length === 0 && (
-            <div className="rounded border border-dashed p-3 text-sm text-muted-foreground">
-              Sin cargos en el catálogo del tenant.{" "}
-              <Link
-                href="/productos-servicios/cargos-directos"
-                className="text-primary underline"
-              >
-                Creá cargos
-              </Link>{" "}
-              primero si necesitás.
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {(validacion.errores.length > 0 || validacion.warnings.length > 0) && (
-        <ListaValidacion validacion={validacion} />
-      )}
-
-      <ConfirmacionDestructiva
-        open={cargoAQuitar !== null}
-        onOpenChange={(open) => {
-          if (!open) setCargoAQuitar(null);
-        }}
-        titulo="Quitar cargo"
-        descripcion={`¿Quitar cargo "${cargoAQuitar?.nombre ?? ""}"?`}
-        nombreItem={cargoAQuitar?.nombre}
-        requiereTipear={false}
-        accionLabel="Quitar cargo"
-        onConfirmar={async () => {
-          if (!cargoAQuitar) return;
-          try {
-            await desasociarCargoCotizacion(cargoAQuitar.id);
-            toast.success("Cargo quitado");
-            router.refresh();
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Error");
-          }
-          setCargoAQuitar(null);
-        }}
-      />
-    </div>
-  );
-}
-
-// ─── Step 5: Precio + revisar ─────────────────────────────────────
+// ─── Step 4: Precio + revisar ─────────────────────────────────────
 
 function StepPrecio({
   producto,

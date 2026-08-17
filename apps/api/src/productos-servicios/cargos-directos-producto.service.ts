@@ -11,6 +11,7 @@ import type {
   AgregarPasoExtraDto,
 } from './dto/producto-ruta.dto';
 import type {
+  ActualizarAsociacionCargoDto,
   ActualizarCargoDirectoDto,
   AsociarCargoCotizacionDto,
   AsociarCargoPasoDto,
@@ -118,7 +119,7 @@ export class CargosDirectosProductoService {
     const [producto, cargo] = await Promise.all([
       this.prisma.producto.findFirst({ where: { id: productoId, tenantId } }),
       this.prisma.cargoDirectoCatalogo.findFirst({
-        where: { id: dto.cargoDirectoCatalogoId, tenantId },
+        where: { id: dto.cargoDirectoCatalogoId, tenantId, activo: true },
       }),
     ]);
     if (!producto)
@@ -128,17 +129,65 @@ export class CargosDirectosProductoService {
         `Cargo ${dto.cargoDirectoCatalogoId} no encontrado`,
       );
 
-    return this.prisma.productoCargoDirectoCotizacion.create({
+    this.validarAsociacion(cargo, dto);
+    try {
+      return await this.prisma.productoCargoDirectoCotizacion.create({
+        data: {
+          tenantId,
+          productoId,
+          cargoDirectoCatalogoId: dto.cargoDirectoCatalogoId,
+          modoActivacion: dto.modoActivacion,
+          condicionActivacionJson: (dto.condicionActivacionJson ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
+          configOverrideJson: (dto.configOverrideJson ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
+          activo: true,
+        },
+      });
+    } catch (err) {
+      this.rethrowAsociacionDuplicada(err);
+    }
+  }
+
+  async actualizarCargoCotizacion(
+    tenantId: string,
+    asociacionId: string,
+    dto: ActualizarAsociacionCargoDto,
+  ) {
+    const asociacion =
+      await this.prisma.productoCargoDirectoCotizacion.findFirst({
+        where: { id: asociacionId, tenantId },
+        include: { cargoDirectoCatalogo: true },
+      });
+    if (!asociacion)
+      throw new NotFoundException(`Asociación ${asociacionId} no encontrada`);
+    const merged = {
+      modoActivacion: dto.modoActivacion ?? asociacion.modoActivacion,
+      condicionActivacionJson:
+        dto.condicionActivacionJson ?? asociacion.condicionActivacionJson,
+      configOverrideJson:
+        dto.configOverrideJson !== undefined
+          ? dto.configOverrideJson
+          : asociacion.configOverrideJson,
+    };
+    this.validarAsociacion(asociacion.cargoDirectoCatalogo, merged);
+    return this.prisma.productoCargoDirectoCotizacion.update({
+      where: { id: asociacionId },
       data: {
-        tenantId,
-        productoId,
-        cargoDirectoCatalogoId: dto.cargoDirectoCatalogoId,
-        modoActivacion: dto.modoActivacion,
-        condicionActivacionJson: (dto.condicionActivacionJson ??
-          Prisma.JsonNull) as Prisma.InputJsonValue,
-        configOverrideJson: (dto.configOverrideJson ??
-          Prisma.JsonNull) as Prisma.InputJsonValue,
-        activo: true,
+        ...(dto.modoActivacion !== undefined
+          ? { modoActivacion: dto.modoActivacion }
+          : {}),
+        condicionActivacionJson:
+          merged.modoActivacion === 'CONDICIONAL'
+            ? ((merged.condicionActivacionJson ??
+                Prisma.JsonNull) as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+        ...(dto.configOverrideJson !== undefined
+          ? {
+              configOverrideJson: (dto.configOverrideJson ??
+                Prisma.JsonNull) as Prisma.InputJsonValue,
+            }
+          : {}),
       },
     });
   }
@@ -165,7 +214,7 @@ export class CargosDirectosProductoService {
         where: { id: configPasoId, tenantId },
       }),
       this.prisma.cargoDirectoCatalogo.findFirst({
-        where: { id: dto.cargoDirectoCatalogoId, tenantId },
+        where: { id: dto.cargoDirectoCatalogoId, tenantId, activo: true },
       }),
     ]);
     if (!configPaso)
@@ -175,17 +224,64 @@ export class CargosDirectosProductoService {
         `Cargo ${dto.cargoDirectoCatalogoId} no encontrado`,
       );
 
-    return this.prisma.productoCargoDirectoPaso.create({
+    this.validarAsociacion(cargo, dto);
+    try {
+      return await this.prisma.productoCargoDirectoPaso.create({
+        data: {
+          tenantId,
+          productoConfigPasoId: configPasoId,
+          cargoDirectoCatalogoId: dto.cargoDirectoCatalogoId,
+          modoActivacion: dto.modoActivacion,
+          condicionActivacionJson: (dto.condicionActivacionJson ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
+          configOverrideJson: (dto.configOverrideJson ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
+          activo: true,
+        },
+      });
+    } catch (err) {
+      this.rethrowAsociacionDuplicada(err);
+    }
+  }
+
+  async actualizarCargoPaso(
+    tenantId: string,
+    asociacionId: string,
+    dto: ActualizarAsociacionCargoDto,
+  ) {
+    const asociacion = await this.prisma.productoCargoDirectoPaso.findFirst({
+      where: { id: asociacionId, tenantId },
+      include: { cargoDirectoCatalogo: true },
+    });
+    if (!asociacion)
+      throw new NotFoundException(`Asociación ${asociacionId} no encontrada`);
+    const merged = {
+      modoActivacion: dto.modoActivacion ?? asociacion.modoActivacion,
+      condicionActivacionJson:
+        dto.condicionActivacionJson ?? asociacion.condicionActivacionJson,
+      configOverrideJson:
+        dto.configOverrideJson !== undefined
+          ? dto.configOverrideJson
+          : asociacion.configOverrideJson,
+    };
+    this.validarAsociacion(asociacion.cargoDirectoCatalogo, merged);
+    return this.prisma.productoCargoDirectoPaso.update({
+      where: { id: asociacionId },
       data: {
-        tenantId,
-        productoConfigPasoId: configPasoId,
-        cargoDirectoCatalogoId: dto.cargoDirectoCatalogoId,
-        modoActivacion: dto.modoActivacion,
-        condicionActivacionJson: (dto.condicionActivacionJson ??
-          Prisma.JsonNull) as Prisma.InputJsonValue,
-        configOverrideJson: (dto.configOverrideJson ??
-          Prisma.JsonNull) as Prisma.InputJsonValue,
-        activo: true,
+        ...(dto.modoActivacion !== undefined
+          ? { modoActivacion: dto.modoActivacion }
+          : {}),
+        condicionActivacionJson:
+          merged.modoActivacion === 'CONDICIONAL'
+            ? ((merged.condicionActivacionJson ??
+                Prisma.JsonNull) as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+        ...(dto.configOverrideJson !== undefined
+          ? {
+              configOverrideJson: (dto.configOverrideJson ??
+                Prisma.JsonNull) as Prisma.InputJsonValue,
+            }
+          : {}),
       },
     });
   }
@@ -199,6 +295,87 @@ export class CargosDirectosProductoService {
     return this.prisma.productoCargoDirectoPaso.delete({
       where: { id: asociacionId },
     });
+  }
+
+  private validarAsociacion(
+    cargo: {
+      activo: boolean;
+      nombre: string;
+      modoCalculo: string;
+      modosActivacionSoportados: string[];
+      configJson: unknown;
+    },
+    dto: {
+      modoActivacion: string;
+      condicionActivacionJson?: unknown;
+      configOverrideJson?: unknown;
+    },
+  ) {
+    if (!cargo.activo) {
+      throw new BadRequestException(`El cargo "${cargo.nombre}" está inactivo`);
+    }
+    if (
+      cargo.modosActivacionSoportados.length > 0 &&
+      !cargo.modosActivacionSoportados.includes(dto.modoActivacion)
+    ) {
+      throw new BadRequestException(
+        `El cargo "${cargo.nombre}" no admite el modo ${dto.modoActivacion}`,
+      );
+    }
+    if (
+      dto.modoActivacion === 'CONDICIONAL' &&
+      (!dto.condicionActivacionJson ||
+        typeof dto.condicionActivacionJson !== 'object')
+    ) {
+      throw new BadRequestException(
+        'Un costo directo condicional necesita una regla de activación.',
+      );
+    }
+    const base = this.asRecord(cargo.configJson);
+    const override = this.asRecord(dto.configOverrideJson);
+    const config = { ...base, ...override };
+    if (cargo.modoCalculo === 'MONTO_FIJO_PLANO') {
+      const zonas = Array.isArray(config.zonas) ? config.zonas : [];
+      if (!(Number(config.monto) > 0) && zonas.length === 0) {
+        throw new BadRequestException(
+          `El cargo "${cargo.nombre}" necesita un monto o una tabla de importes.`,
+        );
+      }
+    } else if (cargo.modoCalculo === 'PORCENTAJE_SOBRE_BASE') {
+      if (!(Number(config.porcentaje ?? config.porcentajeDefault) > 0)) {
+        throw new BadRequestException(
+          `El cargo "${cargo.nombre}" necesita un porcentaje mayor a cero.`,
+        );
+      }
+    } else if (cargo.modoCalculo === 'POR_UNIDAD_INPUT') {
+      if (
+        !(Number(config.precioPorUnidad) > 0) ||
+        typeof config.inputCantidad !== 'string' ||
+        !config.inputCantidad.trim()
+      ) {
+        throw new BadRequestException(
+          `El cargo "${cargo.nombre}" necesita precio por unidad y el dato que medirá.`,
+        );
+      }
+    }
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  }
+
+  private rethrowAsociacionDuplicada(err: unknown): never {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002'
+    ) {
+      throw new BadRequestException(
+        'Este costo directo ya está asociado en este alcance.',
+      );
+    }
+    throw err;
   }
 
   async agregarPasoExtra(
@@ -315,8 +492,7 @@ export class CargosDirectosProductoService {
     if (dto.insertarDespuesDeRutaPasoId !== undefined)
       data.insertarDespuesDeRutaPasoId = dto.insertarDespuesDeRutaPasoId;
     if (dto.ordenInterno !== undefined) data.ordenInterno = dto.ordenInterno;
-    if (dto.nombreVisible !== undefined)
-      data.nombreVisible = dto.nombreVisible;
+    if (dto.nombreVisible !== undefined) data.nombreVisible = dto.nombreVisible;
     if (dto.modoActivacion !== undefined)
       data.modoActivacion = dto.modoActivacion;
     if (dto.condicionActivacionJson !== undefined)
@@ -409,7 +585,10 @@ export class CargosDirectosProductoService {
         'La máquina M-1 seleccionada no existe o no está activa.',
       );
     }
-    if (perfilId && !maquina.perfilesOperativos.some((p) => p.id === perfilId)) {
+    if (
+      perfilId &&
+      !maquina.perfilesOperativos.some((p) => p.id === perfilId)
+    ) {
       throw new BadRequestException(
         'El perfil M-1 no pertenece a la máquina seleccionada.',
       );

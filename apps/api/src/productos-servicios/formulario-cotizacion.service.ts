@@ -203,9 +203,16 @@ export class FormularioCotizacionService {
       rutaSeleccionada: ruta.id,
       cantidad: this.bloqueCantidad(producto),
       medidas: this.bloqueMedidas(producto),
-      preguntas: this.preguntasDePasos(ejecutables),
+      preguntas: [
+        ...this.preguntasDePasos(ejecutables),
+        ...this.preguntasDeCargos(producto, ejecutables),
+      ],
       multiplicadores: this.bloqueMultiplicadores(ejecutables),
-      adicionales: this.bloqueAdicionales(producto, ejecutables, rutaPasoAConfig),
+      adicionales: this.bloqueAdicionales(
+        producto,
+        ejecutables,
+        rutaPasoAConfig,
+      ),
       personalizaciones: this.bloquePersonalizaciones(producto),
       validaciones: this.bloqueValidaciones(ejecutables),
     };
@@ -261,10 +268,7 @@ export class FormularioCotizacionService {
       modo,
       instruccion,
       unidadEntrada: 'mm',
-      jobContextKeys:
-        modo === 'FIJA'
-          ? []
-          : ['piezas', 'medidaCustomMm'], // el MCP arma ambos desde ancho×alto
+      jobContextKeys: modo === 'FIJA' ? [] : ['piezas', 'medidaCustomMm'], // el MCP arma ambos desde ancho×alto
       predefinidas,
       default: predefinidas.find((m) => m.esDefault) ?? predefinidas[0] ?? null,
     };
@@ -316,7 +320,11 @@ export class FormularioCotizacionService {
         (config.rutaPaso as { familiaNombre?: string | null } | null)
           ?.familiaNombre,
       );
-      const base = { configPasoId: config.id, paso, orden: config.rutaPaso?.orden ?? 0 };
+      const base = {
+        configPasoId: config.id,
+        paso,
+        orden: config.rutaPaso?.orden ?? 0,
+      };
 
       preguntas.push(
         ...this.preguntasParams(config, base, familia?.paramsPasoSchema ?? []),
@@ -703,7 +711,9 @@ export class FormularioCotizacionService {
           ),
           descripcion:
             'Se activa solo según los datos del trabajo: no hay que activarlo a mano.',
-          condicionadoPor: this.camposDeCondicion(config.condicionActivacionJson),
+          condicionadoPor: this.camposDeCondicion(
+            config.condicionActivacionJson,
+          ),
           jobContextKey: '',
         });
       }
@@ -721,6 +731,72 @@ export class FormularioCotizacionService {
     }
 
     return adicionales;
+  }
+
+  /** Inputs que necesita el cálculo monetario de un cargo. Evita el histórico
+   * $0 silencioso de POR_UNIDAD_INPUT y expone tablas de zona sin hardcodes. */
+  private preguntasDeCargos(producto: Detalle, ejecutables: ConfigPaso[]) {
+    const asociaciones = [
+      ...producto.cargosDirectosCotizacion.map((cargo) => ({
+        cargo,
+        config: undefined as ConfigPaso | undefined,
+      })),
+      ...ejecutables.flatMap((config) =>
+        config.cargosDirectosPaso.map((cargo) => ({ cargo, config })),
+      ),
+    ];
+    const preguntas = new Map<string, Record<string, unknown>>();
+    for (const { cargo, config } of asociaciones) {
+      const catalogo = cargo.cargoDirectoCatalogo;
+      const cfg = {
+        ...asRecord(catalogo.configJson),
+        ...asRecord(cargo.configOverrideJson),
+      };
+      const comun = {
+        cargoAsociacionId: cargo.id,
+        cargoNombre: catalogo.nombre,
+        configPasoId: config?.id ?? null,
+        dependeDeOpcional:
+          cargo.modoActivacion === 'OPCIONAL' ? cargo.id : null,
+      };
+      if (catalogo.modoCalculo === 'POR_UNIDAD_INPUT') {
+        const key =
+          typeof cfg.inputCantidad === 'string' ? cfg.inputCantidad.trim() : '';
+        if (!key || preguntas.has(key)) continue;
+        preguntas.set(key, {
+          tipo: 'cargo_numero',
+          jobContextKey: key,
+          label: nombrePaso(null, key),
+          unidad: typeof cfg.unidad === 'string' ? cfg.unidad : null,
+          minimo: 0,
+          obligatorio: cargo.modoActivacion === 'OBLIGATORIO',
+          ...comun,
+        });
+        continue;
+      }
+      const zonas = Array.isArray(cfg.zonas) ? cfg.zonas : [];
+      if (
+        catalogo.modoCalculo === 'MONTO_FIJO_PLANO' &&
+        zonas.length > 0 &&
+        !preguntas.has('zonaInstalacion')
+      ) {
+        preguntas.set('zonaInstalacion', {
+          tipo: 'cargo_opcion',
+          jobContextKey: 'zonaInstalacion',
+          label: 'Zona',
+          opciones: zonas
+            .map((raw) => asRecord(raw))
+            .filter((zona) => typeof zona.codigo === 'string')
+            .map((zona) => ({
+              value: zona.codigo,
+              label: zona.nombre ?? zona.codigo,
+            })),
+          obligatorio: cargo.modoActivacion === 'OBLIGATORIO',
+          ...comun,
+        });
+      }
+    }
+    return [...preguntas.values()];
   }
 
   /** Campos del jobContext que referencia una condición JsonLogic (aprox). */

@@ -40,6 +40,7 @@ import {
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
 import {
+  ActualizarAsociacionCargoDto,
   ActualizarCargoDirectoDto,
   AsociarCargoCotizacionDto,
   AsociarCargoPasoDto,
@@ -498,6 +499,18 @@ export class ProductosServiciosController {
   }
 
   @Permiso('costos.gestionar')
+  @Patch('productos/cargos-cotizacion/:asociacionId')
+  async actualizarCargoCotizacion(
+    @Req() req: RequestWithAuth,
+    @Param('asociacionId') asociacionId: string,
+    @Body() dto: ActualizarAsociacionCargoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.actualizarCargoCotizacion(tenantId, asociacionId, dto);
+  }
+
+  @Permiso('costos.gestionar')
   @Delete('productos/cargos-cotizacion/:asociacionId')
   @HttpCode(204)
   async desasociarCargoCotizacion(
@@ -519,6 +532,18 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.asociarCargoPaso(tenantId, configPasoId, dto);
+  }
+
+  @Permiso('costos.gestionar')
+  @Patch('productos/config-pasos/cargos/:asociacionId')
+  async actualizarCargoPaso(
+    @Req() req: RequestWithAuth,
+    @Param('asociacionId') asociacionId: string,
+    @Body() dto: ActualizarAsociacionCargoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.actualizarCargoPaso(tenantId, asociacionId, dto);
   }
 
   @Permiso('costos.gestionar')

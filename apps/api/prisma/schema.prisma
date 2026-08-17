@@ -2763,6 +2763,7 @@ model ProductoCargoDirectoPaso {
   cargoDirectoCatalogo    CargoDirectoCatalogo @relation(fields: [cargoDirectoCatalogoId], references: [id])
 
   @@index([tenantId, productoConfigPasoId])
+  @@unique([tenantId, productoConfigPasoId, cargoDirectoCatalogoId])
 }
 
 model ProductoCargoDirectoCotizacion {
@@ -2780,6 +2781,7 @@ model ProductoCargoDirectoCotizacion {
   cargoDirectoCatalogo    CargoDirectoCatalogo @relation(fields: [cargoDirectoCatalogoId], references: [id])
 
   @@index([tenantId, productoId])
+  @@unique([tenantId, productoId, cargoDirectoCatalogoId])
 }
 
 // === COTIZACIONES V2 ===

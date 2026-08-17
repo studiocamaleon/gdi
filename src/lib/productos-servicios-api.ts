@@ -595,7 +595,7 @@ export interface AsociarCargoCotizacionPayload {
   cargoDirectoCatalogoId: string;
   modoActivacion: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
   condicionActivacionJson?: Record<string, unknown>;
-  configOverrideJson?: Record<string, unknown>;
+  configOverrideJson?: Record<string, unknown> | null;
 }
 
 export async function asociarCargoCotizacion(
@@ -625,7 +625,7 @@ export interface AsociarCargoPasoPayload {
   cargoDirectoCatalogoId: string;
   modoActivacion: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
   condicionActivacionJson?: Record<string, unknown>;
-  configOverrideJson?: Record<string, unknown>;
+  configOverrideJson?: Record<string, unknown> | null;
 }
 
 export async function asociarCargoPaso(
@@ -647,6 +647,38 @@ export async function desasociarCargoPaso(asociacionId: string) {
     `/productos-servicios/productos/config-pasos/cargos/${asociacionId}`,
     {
       method: "DELETE",
+    },
+  );
+}
+
+export type ActualizarAsociacionCargoPayload = Partial<
+  Omit<AsociarCargoPasoPayload, "cargoDirectoCatalogoId">
+>;
+
+export async function actualizarCargoPaso(
+  asociacionId: string,
+  payload: ActualizarAsociacionCargoPayload,
+) {
+  return apiRequest(
+    `/productos-servicios/productos/config-pasos/cargos/${asociacionId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+export async function actualizarCargoCotizacion(
+  asociacionId: string,
+  payload: ActualizarAsociacionCargoPayload,
+) {
+  return apiRequest(
+    `/productos-servicios/productos/cargos-cotizacion/${asociacionId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
     },
   );
 }

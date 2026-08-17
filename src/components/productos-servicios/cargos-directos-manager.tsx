@@ -38,7 +38,11 @@ import {
 import type { CargoDirectoCatalogo } from "@/lib/productos-servicios";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
-import { getLabel, modoCalculoCargoLabels } from "@/lib/labels-humanos";
+import {
+  getLabel,
+  modoActivacionLabels,
+  modoCalculoCargoLabels,
+} from "@/lib/labels-humanos";
 
 type CargoModoUi =
   | "MONTO_FIJO_PLANO"
@@ -57,7 +61,7 @@ const MODOS_CARGO_UI: Array<{ value: CargoModoUi; label: string; description: st
   {
     value: "MONTO_FIJO_PLANO",
     label: "Monto fijo editable",
-    description: "Un importe sugerido que el comercial puede ajustar al agregarlo a la OT.",
+    description: "Un importe sugerido reutilizable, con override opcional por paso u orden.",
   },
   {
     value: "TABLA_IMPORTES",
@@ -67,7 +71,8 @@ const MODOS_CARGO_UI: Array<{ value: CargoModoUi; label: string; description: st
   {
     value: "PORCENTAJE_SOBRE_BASE",
     label: "Porcentaje sobre subtotal",
-    description: "Un porcentaje aplicado sobre el subtotal neto de productos.",
+    description:
+      "Un porcentaje aplicado sobre la base del alcance: paso u orden.",
   },
   {
     value: "POR_UNIDAD_INPUT",
@@ -206,6 +211,11 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
   const [precioPorUnidad, setPrecioPorUnidad] = React.useState("");
   const [inputCantidad, setInputCantidad] = React.useState("cantidad");
   const [unidad, setUnidad] = React.useState("");
+  const [modosActivacion, setModosActivacion] = React.useState<string[]>([
+    "OBLIGATORIO",
+    "OPCIONAL",
+    "CONDICIONAL",
+  ]);
 
   const abrirNuevo = () => {
     setEditando(null);
@@ -219,6 +229,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     setPrecioPorUnidad("");
     setInputCantidad("cantidad");
     setUnidad("");
+    setModosActivacion(["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"]);
     setOpenSheet(true);
   };
 
@@ -235,12 +246,22 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     setPrecioPorUnidad(asNumberString(config.precioPorUnidad));
     setInputCantidad(typeof config.inputCantidad === "string" ? config.inputCantidad : "cantidad");
     setUnidad(typeof config.unidad === "string" ? config.unidad : "");
+    setModosActivacion(
+      c.modosActivacionSoportados.length > 0
+        ? c.modosActivacionSoportados
+        : ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"],
+    );
     setOpenSheet(true);
   };
 
   const handleGuardar = async () => {
     setGuardando(true);
     try {
+      if (modosActivacion.length === 0) {
+        toast.error("Elegí al menos una forma de activación.");
+        setGuardando(false);
+        return;
+      }
       let configJson: Record<string, unknown> = {};
       if (modoCalculo === "MONTO_FIJO_PLANO") {
         const monto = Number(montoFijo);
@@ -302,7 +323,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
           nombre,
           descripcion: descripcion || undefined,
           modoCalculo: modoMotorFromUi(modoCalculo),
-          modosActivacionSoportados: ["OPCIONAL"],
+          modosActivacionSoportados: modosActivacion,
           configJson,
         });
         toast.success(`Cargo "${nombre}" actualizado`);
@@ -312,7 +333,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
           nombre,
           descripcion: descripcion || undefined,
           modoCalculo: modoMotorFromUi(modoCalculo),
-          modosActivacionSoportados: ["OPCIONAL"],
+          modosActivacionSoportados: modosActivacion,
           configJson,
         });
         toast.success(`Cargo "${nombre}" creado`);
@@ -361,9 +382,9 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Cargos directos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Costos directos</h1>
           <p className="text-muted-foreground text-sm">
-            Catálogo de cargos directos del tenant. Se asocian a productos a nivel paso o cotización.
+            Desembolsos reutilizables que pueden asociarse a un paso o agregarse a una orden.
           </p>
         </div>
         <Sheet open={openSheet} onOpenChange={setOpenSheet}>
@@ -371,17 +392,17 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
             render={(props) => (
               <Button {...props} onClick={abrirNuevo}>
                 <PlusIcon className="mr-2 size-4" />
-                Nuevo cargo
+                Nuevo costo
               </Button>
             )}
           />
           <SheetContent>
             <SheetHeader>
-              <SheetTitle>{editando ? "Editar cargo" : "Nuevo cargo directo"}</SheetTitle>
+              <SheetTitle>{editando ? "Editar costo" : "Nuevo costo directo"}</SheetTitle>
               <SheetDescription>
                 {editando
-                  ? "Editá los valores sugeridos que luego podrá aplicar el comercial."
-                  : "Creá una plantilla de cargo para usarla en órdenes de trabajo."}
+                  ? "Editá los valores sugeridos que se reutilizan en pasos y órdenes."
+                  : "Creá una plantilla de costo para asociar a pasos u órdenes de trabajo."}
               </SheetDescription>
             </SheetHeader>
             <div className="space-y-4 px-4">
@@ -429,6 +450,30 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                 <p className="text-muted-foreground text-xs">
                   {MODOS_CARGO_UI.find((modo) => modo.value === modoCalculo)?.description}
                 </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Formas de activación permitidas</Label>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"].map((modo) => (
+                    <label
+                      key={modo}
+                      className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={modosActivacion.includes(modo)}
+                        onChange={(event) =>
+                          setModosActivacion((current) =>
+                            event.target.checked
+                              ? [...current, modo]
+                              : current.filter((item) => item !== modo),
+                          )
+                        }
+                      />
+                      {getLabel(modoActivacionLabels, modo).label}
+                    </label>
+                  ))}
+                </div>
               </div>
 
               {modoCalculo === "MONTO_FIJO_PLANO" ? (
@@ -592,16 +637,16 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
             <WrenchIcon className="size-5" />
             <CardTitle>Catálogo</CardTitle>
           </div>
-          <CardDescription>{initialCargos.length} cargos directos.</CardDescription>
+          <CardDescription>{initialCargos.length} costos directos.</CardDescription>
         </CardHeader>
         <CardContent>
           {initialCargos.length === 0 ? (
             <EstadoVacio
               variant="compacto"
               icon={<WrenchIcon />}
-              titulo="Sin cargos cargados"
-              descripcion="Los cargos directos son extras que se aplican al cotizar (viático, recargo urgencia, tercerización). Empezá creando el primero."
-              cta={{ label: "Nuevo cargo", onClick: abrirNuevo, icon: PlusIcon }}
+              titulo="Sin costos directos"
+              descripcion="Usalos para desembolsos como peajes, alquileres, matrices o servicios externos. El tiempo y la tercerización completa se modelan dentro del paso."
+              cta={{ label: "Nuevo costo", onClick: abrirNuevo, icon: PlusIcon }}
             />
           ) : (
             <Table>

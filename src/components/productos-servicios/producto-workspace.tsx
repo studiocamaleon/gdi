@@ -8,7 +8,6 @@ import {
   BanknoteIcon,
   CheckIcon,
   CircleAlertIcon,
-  CirclePlusIcon,
   CogIcon,
   CopyIcon,
   Edit3Icon,
@@ -431,7 +430,6 @@ const TABS: Array<{
   { id: "identidad", label: "Identidad", icon: TagIcon },
   { id: "rutas", label: "Rutas", icon: GitBranchIcon },
   { id: "pasos", label: "Pasos", icon: FootprintsIcon },
-  { id: "cargos", label: "Cargos", icon: CirclePlusIcon },
   { id: "herramientas", label: "Herramientas", icon: WrenchIcon },
   { id: "pricing", label: "Pricing", icon: BanknoteIcon },
 ];
@@ -1487,9 +1485,11 @@ function CargosTab({
     <div className="wiz-section">
       <div className="wiz-section-head">
         <div className="body">
-          <h2>Cargos directos del producto</h2>
+          <h2>Cargos globales del producto (legado)</h2>
           <div className="helptext">
-            Cargos a nivel cotización (ej: viático, recargo urgencia). Se ofrecen al comercial al cotizar este producto.
+            Compatibilidad con configuraciones anteriores. Los costos nuevos se
+            asocian dentro del paso correspondiente; los gastos generales se
+            agregan en la orden.
           </div>
         </div>
         <button

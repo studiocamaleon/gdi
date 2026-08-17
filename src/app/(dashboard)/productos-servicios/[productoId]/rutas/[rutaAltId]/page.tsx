@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ConfigPasosEditorView } from "@/components/productos-servicios/config-pasos-editor-view";
 import {
   getCatalogoFamilias,
+  getCargosDirectosCatalogo,
   getLookupsConfigPaso,
   getProductoById,
 } from "@/lib/productos-servicios-api";
@@ -19,11 +20,13 @@ export default async function ConfigPasosFocusedPage({
   if (!(await tienePermiso("costos.gestionar"))) {
     redirect(`/productos-servicios/${productoId}?tab=pasos&rutaAltId=${rutaAltId}`);
   }
-  const [producto, catalogoFamilias, lookups] = await Promise.all([
-    getProductoById(productoId),
-    getCatalogoFamilias(),
-    getLookupsConfigPaso(),
-  ]);
+  const [producto, catalogoFamilias, lookups, catalogoCargos] =
+    await Promise.all([
+      getProductoById(productoId),
+      getCatalogoFamilias(),
+      getLookupsConfigPaso(),
+      getCargosDirectosCatalogo(true),
+    ]);
   const rutaAlternativa = producto.rutasAlternativas.find((ruta) => ruta.id === rutaAltId);
 
   if (!rutaAlternativa) {
@@ -37,6 +40,7 @@ export default async function ConfigPasosFocusedPage({
         rutaAlternativa={rutaAlternativa}
         catalogoFamilias={catalogoFamilias}
         lookups={lookups}
+        catalogoCargos={catalogoCargos}
         embedded
       />
     </div>

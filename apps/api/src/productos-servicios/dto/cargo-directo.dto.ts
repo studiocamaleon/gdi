@@ -17,6 +17,12 @@ export enum ModoCalculoCargoDto {
   POR_UNIDAD_INPUT = 'POR_UNIDAD_INPUT',
 }
 
+export enum ModoActivacionCargoDto {
+  OBLIGATORIO = 'OBLIGATORIO',
+  OPCIONAL = 'OPCIONAL',
+  CONDICIONAL = 'CONDICIONAL',
+}
+
 export class CrearCargoDirectoDto {
   @IsString()
   @IsNotEmpty()
@@ -38,8 +44,8 @@ export class CrearCargoDirectoDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  modosActivacionSoportados?: string[];
+  @IsEnum(ModoActivacionCargoDto, { each: true })
+  modosActivacionSoportados?: ModoActivacionCargoDto[];
 
   @IsOptional()
   @IsObject()
@@ -61,8 +67,8 @@ export class ActualizarCargoDirectoDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  modosActivacionSoportados?: string[];
+  @IsEnum(ModoActivacionCargoDto, { each: true })
+  modosActivacionSoportados?: ModoActivacionCargoDto[];
 
   @IsOptional()
   @IsObject()
@@ -81,8 +87,8 @@ export class AsociarCargoCotizacionDto {
   @IsUUID()
   cargoDirectoCatalogoId!: string;
 
-  @IsString()
-  modoActivacion!: string; // OBLIGATORIO | OPCIONAL | CONDICIONAL
+  @IsEnum(ModoActivacionCargoDto)
+  modoActivacion!: ModoActivacionCargoDto;
 
   @IsOptional()
   @IsObject()
@@ -90,15 +96,15 @@ export class AsociarCargoCotizacionDto {
 
   @IsOptional()
   @IsObject()
-  configOverrideJson?: Record<string, unknown>;
+  configOverrideJson?: Record<string, unknown> | null;
 }
 
 export class AsociarCargoPasoDto {
   @IsUUID()
   cargoDirectoCatalogoId!: string;
 
-  @IsString()
-  modoActivacion!: string;
+  @IsEnum(ModoActivacionCargoDto)
+  modoActivacion!: ModoActivacionCargoDto;
 
   @IsOptional()
   @IsObject()
@@ -106,5 +112,19 @@ export class AsociarCargoPasoDto {
 
   @IsOptional()
   @IsObject()
-  configOverrideJson?: Record<string, unknown>;
+  configOverrideJson?: Record<string, unknown> | null;
+}
+
+export class ActualizarAsociacionCargoDto {
+  @IsOptional()
+  @IsEnum(ModoActivacionCargoDto)
+  modoActivacion?: ModoActivacionCargoDto;
+
+  @IsOptional()
+  @IsObject()
+  condicionActivacionJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  configOverrideJson?: Record<string, unknown> | null;
 }
