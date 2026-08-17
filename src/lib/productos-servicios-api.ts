@@ -552,6 +552,7 @@ export interface CrearCargoDirectoPayload {
     "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
+  aplicaMargen?: boolean;
 }
 
 export async function crearCargoDirecto(payload: CrearCargoDirectoPayload) {
@@ -569,6 +570,7 @@ export interface ActualizarCargoDirectoPayload {
     "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
+  aplicaMargen?: boolean;
   activo?: boolean;
 }
 
@@ -596,6 +598,7 @@ export interface AsociarCargoCotizacionPayload {
   modoActivacion: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
   condicionActivacionJson?: Record<string, unknown>;
   configOverrideJson?: Record<string, unknown> | null;
+  aplicaMargenOverride?: boolean | null;
 }
 
 export async function asociarCargoCotizacion(
@@ -627,6 +630,7 @@ export interface AsociarCargoPasoPayload {
   modoActivacion: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
   condicionActivacionJson?: Record<string, unknown>;
   configOverrideJson?: Record<string, unknown> | null;
+  aplicaMargenOverride?: boolean | null;
 }
 
 export async function asociarCargoPaso(
@@ -737,6 +741,7 @@ export interface ActualizarPasoExtraPayload {
     modoActivacion: string;
     condicionActivacionJson?: Record<string, unknown> | null;
     configOverrideJson?: Record<string, unknown> | null;
+    aplicaMargenOverride?: boolean | null;
   }>;
   /** M-2: candidatas del extra (mismo shape que en pasos normales). */
   configMaquinasCandidatasJson?: UpsertMaquinaCandidataPayload[];
@@ -1106,6 +1111,7 @@ export interface CotizarResponse {
       tiempoExtraTotal?: number;
       materialesTotal: number;
       cargosDirectosTotal: number;
+      cargosSinMargenTotal?: number;
       /** Costo de pasos tercerizados (lo que se paga al proveedor). */
       tercerizadoTotal?: number;
       total: number;
@@ -1150,6 +1156,7 @@ export interface CotizarResponse {
       totalComisiones: number;
       totalImpuestos: number;
       margenEfectivoPct: number;
+      trasladoSinMargenUnitario?: number;
       precioNetoUnitario: number;
       precioBrutoUnitario: number;
       precioNetoTotal: number;
@@ -1293,6 +1300,7 @@ export interface CotizarResponse {
         cargoNombre: string;
         monto: number;
         modoCalculo: string;
+        aplicaMargen?: boolean;
       }>;
       costoTotal: number;
       /** G-M1 — Resultado del nesting cuando el paso lo invoca. */
@@ -1316,6 +1324,7 @@ export interface CotizarResponse {
       cargoCodigo: string;
       cargoNombre: string;
       monto: number;
+      aplicaMargen?: boolean;
     }>;
   };
 }

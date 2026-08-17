@@ -24,7 +24,6 @@ import {
   opcionalesActivadosEfectivos,
 } from "@/lib/arrastre-opcionales";
 import { esConfigPasoEjecutable } from "@/lib/config-paso-activacion";
-import { getLabel, modoCalculoCargoLabels } from "@/lib/labels-humanos";
 import {
   type BaseDelPaso,
   type NivelesPasoConfig,
@@ -144,6 +143,10 @@ type CatalogAdicional = {
   configPasoId?: string;
   /** Sólo cargos: 'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT'. */
   modoCalculo?: string;
+  /** Config efectiva: catálogo + override de la asociación. */
+  configCargo?: Record<string, unknown>;
+  /** Política efectiva del catálogo, eventualmente sobrescrita en la asociación. */
+  aplicaMargen?: boolean;
 };
 
 type CargoInputDescriptor = {
@@ -399,7 +402,6 @@ function getTechnologyMeta(value: string) {
     }
   );
 }
-
 // Swatch visual del modo de color: material en crudo, escala de grises, o
 // grilla CMYK con indicadores opcionales de blanco (punto) y barniz (brillo).
 function renderModoColorSwatch(value: string) {
@@ -2607,6 +2609,13 @@ function getOpcionales(
           "Cargo directo opcional de la cotización.",
         origen: "cargo",
         modoCalculo: cargo.cargoDirectoCatalogo.modoCalculo,
+        configCargo: {
+          ...asRecord(cargo.cargoDirectoCatalogo.configJson),
+          ...asRecord(cargo.configOverrideJson),
+        },
+        aplicaMargen:
+          cargo.aplicaMargenOverride ??
+          cargo.cargoDirectoCatalogo.aplicaMargen,
       });
     }
   }
@@ -2667,6 +2676,13 @@ function getOpcionales(
             origen: "cargo",
             configPasoId: config.id,
             modoCalculo: cargo.cargoDirectoCatalogo.modoCalculo,
+            configCargo: {
+              ...asRecord(cargo.cargoDirectoCatalogo.configJson),
+              ...asRecord(cargo.configOverrideJson),
+            },
+            aplicaMargen:
+              cargo.aplicaMargenOverride ??
+              cargo.cargoDirectoCatalogo.aplicaMargen,
           });
         }
       }
@@ -4666,6 +4682,33 @@ function ApConfigStep({
 }: ConfigStepProps) {
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatCurrency(v, moneda);
+  const etiquetaImpactoCargo = (cargo: CatalogAdicional) => {
+    const config = cargo.configCargo ?? {};
+    if (cargo.modoCalculo === "MONTO_FIJO_PLANO") {
+      const monto = Number(config.monto ?? 0);
+      if (Number.isFinite(monto) && monto > 0)
+        return `+ ${fmt(monto)}${cargo.aplicaMargen === false ? " · sin margen" : ""}`;
+      if (Array.isArray(config.zonas) && config.zonas.length > 0)
+        return "Según zona";
+    }
+    if (cargo.modoCalculo === "PORCENTAJE_SOBRE_BASE") {
+      const porcentaje = Number(
+        config.porcentaje ?? config.porcentajeDefault ?? 0,
+      );
+      if (Number.isFinite(porcentaje) && porcentaje > 0)
+        return `+ ${formatNumberForSpec(porcentaje)}%${cargo.aplicaMargen === false ? " · sin margen" : ""}`;
+    }
+    if (cargo.modoCalculo === "POR_UNIDAD_INPUT") {
+      const precio = Number(config.precioPorUnidad ?? 0);
+      const unidad =
+        typeof config.unidad === "string" ? config.unidad.trim() : "";
+      if (Number.isFinite(precio) && precio > 0) {
+        return `+ ${formatUnitPrice(precio, moneda)}${unidad ? ` / ${unidad}` : ""}${cargo.aplicaMargen === false ? " · sin margen" : ""}`;
+      }
+      return "Según cantidad";
+    }
+    return "Importe variable";
+  };
   const verMargenes = usePuede("finanzas.ver_margenes");
   const totals = getTotals(product, qty, adi);
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
@@ -7970,9 +8013,6 @@ function ApConfigStep({
           <div className="ap-adicionales">
             {cargosOpcionales.map((cargo) => {
               const selected = adi.includes(cargo.code);
-              const modo = cargo.modoCalculo
-                ? getLabel(modoCalculoCargoLabels, cargo.modoCalculo)
-                : null;
               return (
                 <div key={cargo.code}>
                   <button
@@ -7988,9 +8028,9 @@ function ApConfigStep({
                     <span className="cb" />
                     <span className="lb">{cargo.name}</span>
                     {product.real ? (
-                      modo ? (
-                        <span className="mt">{modo.label}</span>
-                      ) : null
+                      <span className="mt mono">
+                        {etiquetaImpactoCargo(cargo)}
+                      </span>
                     ) : (
                       <span className="mt mono">+ {fmt(cargo.monto ?? 0)}</span>
                     )}

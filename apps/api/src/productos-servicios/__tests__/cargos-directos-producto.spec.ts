@@ -44,7 +44,31 @@ describe('CargosDirectosProductoService', () => {
         cargoDirectoCatalogoId: cargo.id,
         nivelCodigo: null,
         modoActivacion: 'OBLIGATORIO',
+        aplicaMargenOverride: null,
       }),
+    });
+  });
+
+  it('permite sobrescribir la política de margen al asociar', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'asociacion' });
+    const service = serviceCon({
+      productoConfigPaso: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'config-paso', paramsPasoJson: null }),
+      },
+      cargoDirectoCatalogo: { findFirst: jest.fn().mockResolvedValue(cargo) },
+      productoCargoDirectoPaso: { create },
+    });
+
+    await service.asociarCargoPaso('tenant', 'config-paso', {
+      cargoDirectoCatalogoId: cargo.id,
+      modoActivacion: ModoActivacionCargoDto.OBLIGATORIO,
+      aplicaMargenOverride: false,
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ aplicaMargenOverride: false }),
     });
   });
 

@@ -360,6 +360,7 @@ export interface CargoPasoDetalle {
   modoActivacion: string;
   condicionActivacionJson?: Record<string, unknown> | null;
   configOverrideJson?: Record<string, unknown> | null;
+  aplicaMargenOverride?: boolean | null;
   cargoDirectoCatalogo: CargoDirectoCatalogo;
 }
 
@@ -368,6 +369,7 @@ export interface CargoCotizacionDetalle {
   modoActivacion: string;
   condicionActivacionJson?: Record<string, unknown> | null;
   configOverrideJson?: Record<string, unknown> | null;
+  aplicaMargenOverride?: boolean | null;
   cargoDirectoCatalogo: CargoDirectoCatalogo;
 }
 
@@ -670,5 +672,6 @@ export interface CargoDirectoCatalogo {
   modoCalculo: string;
   modosActivacionSoportados: string[];
   configJson: unknown;
+  aplicaMargen: boolean;
   activo: boolean;
 }

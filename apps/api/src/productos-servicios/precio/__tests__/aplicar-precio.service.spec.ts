@@ -505,6 +505,72 @@ describe('AplicarPrecioService', () => {
     });
   });
 
+  describe('costos trasladados sin margen', () => {
+    const comision10: ComisionSnapshot = {
+      catalogoId: 'com-10',
+      codigo: 'com_10',
+      nombre: 'Comisión 10%',
+      porcentaje: 10,
+      orden: 0,
+      baseCalculo: 'NETO',
+    };
+
+    it('recupera costo, comisión e IVA sin aplicar utilidad al cargo', () => {
+      const r = service.aplicar(
+        baseInput({
+          costoUnitario: 190,
+          costoSinMargenUnitario: 90,
+          cantidad: 1,
+          precioConfig: {
+            metodoCalculo: 'por_margen',
+            detalle: { marginPct: 40 },
+          },
+          impuestos: [iva21],
+          comisiones: [comision10],
+        }),
+      );
+
+      // $100 con margen: 100/(1-.40-.10) = 200.
+      // $90 trasladados: 90/(1-.10) = 100. IVA: 21% por fuera.
+      expect(r.desglose.trasladoSinMargenUnitario).toBe(100);
+      expect(r.precioNetoUnitario).toBe(300);
+      expect(r.precioBrutoUnitario).toBe(363);
+      expect(r.desglose.totalComisiones).toBe(30);
+      expect(r.desglose.precioBase).toBe(270);
+      expect(r.desglose.margenEfectivoPct).toBe(26.67);
+    });
+
+    it('el descuento comercial no reduce el componente trasladado', () => {
+      const r = service.aplicar(
+        baseInput({
+          costoUnitario: 190,
+          costoSinMargenUnitario: 90,
+          cantidad: 1,
+          precioConfig: {
+            metodoCalculo: 'por_margen',
+            detalle: { marginPct: 40 },
+          },
+          comisiones: [comision10],
+          descuento: { tipo: 'PORCENTAJE', valor: 10 },
+        }),
+      );
+
+      // Sólo descuenta 10% de los $200 marginables. Los $100 trasladados quedan.
+      expect(r.descuento.montoUnitario).toBe(20);
+      expect(r.descuento.netoListaUnitario).toBe(300);
+      expect(r.precioNetoUnitario).toBe(280);
+      expect(r.desglose.trasladoSinMargenUnitario).toBe(100);
+    });
+
+    it('rechaza un costo sin margen mayor al costo total', () => {
+      expect(() =>
+        service.aplicar(
+          baseInput({ costoUnitario: 100, costoSinMargenUnitario: 101 }),
+        ),
+      ).toThrow(BadRequestException);
+    });
+  });
+
   // ════════════════════════════════════════════════════════════════════
   // Snapshots
   // ════════════════════════════════════════════════════════════════════

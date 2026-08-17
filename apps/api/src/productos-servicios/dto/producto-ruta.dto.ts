@@ -538,6 +538,10 @@ export class PasoExtraCargoDirectoDto {
   @IsOptional()
   @IsObject()
   configOverrideJson?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsBoolean()
+  aplicaMargenOverride?: boolean | null;
 }
 
 /**

@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -246,6 +248,7 @@ export function CargosDirectosManager({
   const [precioPorUnidad, setPrecioPorUnidad] = React.useState("");
   const [inputCantidad, setInputCantidad] = React.useState("cantidad");
   const [unidad, setUnidad] = React.useState("");
+  const [aplicaMargen, setAplicaMargen] = React.useState(true);
   const [modosActivacion, setModosActivacion] = React.useState<string[]>([
     "OBLIGATORIO",
     "OPCIONAL",
@@ -264,6 +267,7 @@ export function CargosDirectosManager({
     setPrecioPorUnidad("");
     setInputCantidad("cantidad");
     setUnidad("");
+    setAplicaMargen(true);
     setModosActivacion(["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"]);
     setOpenSheet(true);
   };
@@ -287,6 +291,7 @@ export function CargosDirectosManager({
         : "cantidad",
     );
     setUnidad(typeof config.unidad === "string" ? config.unidad : "");
+    setAplicaMargen(c.aplicaMargen !== false);
     setModosActivacion(
       c.modosActivacionSoportados.length > 0
         ? c.modosActivacionSoportados
@@ -387,6 +392,7 @@ export function CargosDirectosManager({
           descripcion: descripcion.trim() || undefined,
           modoCalculo: modoMotorFromUi(modoCalculo),
           modosActivacionSoportados: modosActivacion,
+          aplicaMargen,
           configJson,
         });
         toast.success(`Cargo "${nombreLimpio}" actualizado`);
@@ -397,6 +403,7 @@ export function CargosDirectosManager({
           descripcion: descripcion.trim() || undefined,
           modoCalculo: modoMotorFromUi(modoCalculo),
           modosActivacionSoportados: modosActivacion,
+          aplicaMargen,
           configJson,
         });
         toast.success(`Cargo "${nombreLimpio}" creado`);
@@ -555,6 +562,32 @@ export function CargosDirectosManager({
                   ))}
                 </div>
               </div>
+
+              <Field>
+                <FieldLabel>Tratamiento comercial</FieldLabel>
+                <ToggleGroup
+                  multiple={false}
+                  value={[aplicaMargen ? "con_margen" : "sin_margen"]}
+                  onValueChange={(value) => {
+                    const selected = value.at(-1);
+                    if (selected) setAplicaMargen(selected === "con_margen");
+                  }}
+                  variant="outline"
+                  className="grid w-full grid-cols-2"
+                >
+                  <ToggleGroupItem value="con_margen">
+                    Aplicar margen
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="sin_margen">
+                    Trasladar sin margen
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <FieldDescription>
+                  {aplicaMargen
+                    ? "El costo integra la base sobre la que se calcula la utilidad del producto."
+                    : "Se recupera completo después de impuestos internos y comisiones, pero no genera utilidad. El IVA y demás impuestos trasladables se agregan normalmente."}
+                </FieldDescription>
+              </Field>
 
               {modoCalculo === "MONTO_FIJO_PLANO" ? (
                 <div className="space-y-2">
@@ -762,6 +795,7 @@ export function CargosDirectosManager({
                   <TableHead>Nombre</TableHead>
                   <TableHead>Modo cálculo</TableHead>
                   <TableHead>Valor sugerido</TableHead>
+                  <TableHead>Margen</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -792,6 +826,11 @@ export function CargosDirectosManager({
                       <span className="text-sm">
                         {formatConfigResumen(c, moneda)}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={c.aplicaMargen ? "secondary" : "outline"}>
+                        {c.aplicaMargen ? "Con margen" : "Sin margen"}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant={c.activo ? "default" : "secondary"}>

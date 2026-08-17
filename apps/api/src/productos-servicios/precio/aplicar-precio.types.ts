@@ -136,6 +136,8 @@ export interface DescuentoPrecio {
 export interface AplicarPrecioInput {
   /** Costo unitario comercial del producto, ya devuelto por el motor universal. */
   costoUnitario: number;
+  /** Porción del costo que se recupera sin margen, pero con gross-up de impuestos internos y comisiones. */
+  costoSinMargenUnitario?: number;
   /** Cantidad comercial — necesaria para los métodos escalonados. */
   cantidad: number;
   /** Configuración de precio del producto (o del override de cliente, si aplica). */
@@ -178,6 +180,8 @@ export interface DesglosePrecio {
   totalComisiones: number;
   /** Margen efectivo logrado: (precioBase − costo) / neto × 100. */
   margenEfectivoPct: number;
+  /** Neto necesario para recuperar el costo sin margen después de cargas internas. */
+  trasladoSinMargenUnitario: number;
 }
 
 export interface AplicarPrecioOutput {

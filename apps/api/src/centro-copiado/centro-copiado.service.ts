@@ -2043,6 +2043,11 @@ export class CentroCopiadoService {
       cargosDirectosTotal:
         validos.reduce((a, s) => a + s.cot.costos.cargosDirectosTotal, 0) +
         (anilladoCot?.costos.cargosDirectosTotal ?? 0),
+      cargosSinMargenTotal:
+        validos.reduce(
+          (a, s) => a + (s.cot.costos.cargosSinMargenTotal ?? 0),
+          0,
+        ) + (anilladoCot?.costos.cargosSinMargenTotal ?? 0),
       tercerizadoTotal:
         validos.reduce((a, s) => a + s.cot.costos.tercerizadoTotal, 0) +
         (anilladoCot?.costos.tercerizadoTotal ?? 0),
@@ -2170,6 +2175,16 @@ export class CentroCopiadoService {
         a + Number(s.cot.desglosePrecio?.totalComisiones ?? 0) * cantSeg(s.cot),
       0,
     );
+    const tomoTrasladoSinMargen =
+      validos.reduce(
+        (a, s) =>
+          a +
+          Number(s.cot.desglosePrecio?.trasladoSinMargenUnitario ?? 0) *
+            cantSeg(s.cot),
+        0,
+      ) +
+      Number(anilladoCot?.desglosePrecio?.trasladoSinMargenUnitario ?? 0) *
+        (anilladoCot ? cantSeg(anilladoCot) : 0);
 
     const base = validos[0]?.cot ?? null;
     const cotizacionSintetica = base
@@ -2185,6 +2200,7 @@ export class CentroCopiadoService {
                 ...base.desglosePrecio,
                 precioBase: tomoBase,
                 totalComisiones: tomoComisiones,
+                trasladoSinMargenUnitario: tomoTrasladoSinMargen,
                 margenEfectivoPct:
                   subtotal > 0
                     ? ((tomoBase - costos.total) / subtotal) * 100
