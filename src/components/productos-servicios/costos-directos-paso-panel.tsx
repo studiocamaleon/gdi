@@ -57,6 +57,8 @@ interface Props {
   includeMeasureFields: boolean;
   ruleExtraFields: RuleFieldDefinition[];
   niveles?: NivelesPasoConfig | null;
+  /** Persiste cambios locales del paso antes de mutar cargos por nivel. */
+  onBeforeMutate?: () => Promise<boolean>;
 }
 
 interface CargoExtraConfig {
@@ -109,6 +111,7 @@ export function CostosDirectosPasoPanel({
   includeMeasureFields,
   ruleExtraFields,
   niveles = null,
+  onBeforeMutate,
 }: Props) {
   const router = useRouter();
   const cargosExtra = React.useMemo(
@@ -252,6 +255,7 @@ export function CostosDirectosPasoPanel({
     }
     setGuardando(true);
     try {
+      if (onBeforeMutate && !(await onBeforeMutate())) return;
       const payload = {
         modoActivacion: modo,
         condicionActivacionJson:
@@ -307,6 +311,7 @@ export function CostosDirectosPasoPanel({
   const distribuirPorNiveles = async (asociacion: CargoPasoDetalle) => {
     setDistribuyendo(asociacion.id);
     try {
+      if (onBeforeMutate && !(await onBeforeMutate())) return;
       if (pasoExtra && niveles) {
         const index = Number(asociacion.id.split(":")[1]);
         const original = cargosExtra[index];
@@ -663,6 +668,7 @@ export function CostosDirectosPasoPanel({
         onConfirmar={async () => {
           if (!aQuitar) return;
           try {
+            if (onBeforeMutate && !(await onBeforeMutate())) return;
             if (pasoExtra) {
               const index = Number(aQuitar.id.split(":")[1]);
               await actualizarPasoExtra(pasoExtra.id, {

@@ -4062,13 +4062,13 @@ export function ConfigPasosEditorView({
       : ({ ok: true, value: null } as const);
     if (!paramsRes.ok) {
       toast.error(`JSON inválido en "Params del paso": ${paramsRes.error}`);
-      return;
+      return false;
     }
     if (!mecanismoRes.ok) {
       toast.error(
         `JSON inválido en "Config de cantidad": ${mecanismoRes.error}`,
       );
-      return;
+      return false;
     }
     const condicionActivacionJson =
       configs[rutaPasoId].modoActivacion === "CONDICIONAL"
@@ -4089,7 +4089,7 @@ export function ConfigPasosEditorView({
         const validation = validateRuleGroup(parsedRule.group, camposRegla);
         if (!validation.ok) {
           toast.error(validation.error ?? "Completá la regla de activación.");
-          return;
+          return false;
         }
       }
     }
@@ -4278,8 +4278,10 @@ export function ConfigPasosEditorView({
       }));
       toast.success("Configuración guardada");
       router.refresh();
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error guardando");
+      return false;
     } finally {
       setGuardando(null);
     }
@@ -6880,11 +6882,16 @@ export function ConfigPasosEditorView({
                             configPaso={esExtra ? null : (configExistente ?? null)}
                             pasoExtra={esExtra ? activeExtra : null}
                             catalogoCargos={catalogoCargos}
-                            niveles={leerNivelesPaso(
-                              esExtra
-                                ? activeExtra?.paramsPasoJson
-                                : configExistente?.paramsPasoJson,
-                            )}
+                            // Los niveles se editan primero en `configs`; el
+                            // detalle persistido sólo cambia al guardar. Leer
+                            // de `cfg` mantiene esta sección sincronizada en
+                            // el mismo render, sin guardar ni recargar.
+                            niveles={leerNivelesPaso(cfg?.paramsPasoJson)}
+                            onBeforeMutate={
+                              pasoTieneCambios
+                                ? () => guardarPaso(paso.id)
+                                : undefined
+                            }
                             includeMeasureFields={
                               producto.modoMedidas === "LIBRE" ||
                               producto.modoMedidas === "MIXTA"
@@ -6979,7 +6986,9 @@ export function ConfigPasosEditorView({
           onAddSlotFamilia={(pasoId, slotCodigo) =>
             addSlotFromFamilia(pasoId, slotCodigo)
           }
-          onGuardarPaso={(pasoId) => guardarPaso(pasoId)}
+          onGuardarPaso={async (pasoId) => {
+            await guardarPaso(pasoId);
+          }}
           guardando={guardando}
           tieneCambios={(pasoId) => hasUnsavedChanges(pasoId)}
           reglaProps={reglaPropsEsquema}
