@@ -19,6 +19,7 @@ import {
   PaintbrushIcon,
   PlusIcon,
   PrinterIcon,
+  RefreshCwIcon,
   SaveIcon,
   ScissorsIcon,
   ShieldCheckIcon,
@@ -32,6 +33,16 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Card,
   CardContent,
@@ -59,6 +70,7 @@ import {
   actualizarRuta,
   crearRuta,
   eliminarRuta,
+  migrarProductosRuta,
 } from "@/lib/productos-servicios-api";
 import type { CatalogoFamilias } from "@/lib/productos-servicios";
 
@@ -124,7 +136,6 @@ function IconoPasoPicker({
   value?: string | null;
   onChange: (value: string) => void;
 }) {
-  const SelectedIcon = getStepIcon(value);
   const selected = STEP_ICONS.find((item) => item.key === value);
   const label = selected?.label ?? "Diseño";
 
@@ -140,7 +151,7 @@ function IconoPasoPicker({
           />
         }
       >
-        <SelectedIcon />
+        {React.createElement(getStepIcon(value))}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="route-step-icon-menu">
         <div className="route-step-icon-grid" aria-label="Íconos disponibles">
@@ -175,6 +186,7 @@ interface RutaConPasos {
     id: string;
     orden: number;
     familiaCodigo: string;
+    nombreVisible?: string | null;
     icono?: string | null;
   }>;
   versiones?: Array<{
@@ -185,6 +197,7 @@ interface RutaConPasos {
   productosAlternativas?: Array<{
     id: string;
     nombre: string;
+    rutaVersion: number;
     producto: { id: string; codigo: string; nombre: string };
   }>;
 }
@@ -197,6 +210,7 @@ interface Props {
 
 interface PasoEditable {
   familiaCodigo: string;
+  nombreVisible: string;
   icono: string;
   /** ID interno solo del editor; null si es paso nuevo. */
   uiKey: string;
@@ -217,6 +231,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   const [pasos, setPasos] = React.useState<PasoEditable[]>(
     rutaExistente?.pasos.map((p) => ({
       familiaCodigo: p.familiaCodigo,
+      nombreVisible: p.nombreVisible ?? "",
       icono: p.icono ?? getDefaultStepIcon(p.familiaCodigo),
       uiKey: p.id,
     })) ?? [],
@@ -308,10 +323,36 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
       );
     });
   }, [modo, pasos]);
+  const cambioNombres = React.useMemo(() => {
+    if (modo === "crear") return false;
+    return pasos.some((paso) => {
+      const original = pasosOriginales.current.find(
+        (item) => item.id === paso.uiKey,
+      );
+      if (!original) return false;
+      return (
+        (original.nombreVisible?.trim() ?? "") !== paso.nombreVisible.trim()
+      );
+    });
+  }, [modo, pasos]);
   const productosAfectados = rutaExistente?.productosAlternativas?.length ?? 0;
-  const requiereVersionadoPorUso = cambioEstructural && productosAfectados > 0;
+  const requiereVersionadoPorUso =
+    (cambioEstructural || cambioIconos || cambioNombres) &&
+    productosAfectados > 0;
+  const productosDesactualizados = React.useMemo(
+    () =>
+      (rutaExistente?.productosAlternativas ?? []).filter(
+        (alternativa) =>
+          alternativa.rutaVersion < (rutaExistente?.versionActual ?? 1),
+      ),
+    [rutaExistente],
+  );
+  const [productosSeleccionados, setProductosSeleccionados] = React.useState<
+    string[]
+  >(() => productosDesactualizados.map((alternativa) => alternativa.id));
+  const [confirmandoMigracion, setConfirmandoMigracion] = React.useState(false);
+  const [migrando, setMigrando] = React.useState(false);
 
-  const [nuevaVersion, setNuevaVersion] = React.useState<boolean>(true);
   const [cambiosDescripcion, setCambiosDescripcion] = React.useState("");
 
   // Familias agrupadas por categoría para el selector
@@ -377,6 +418,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
       ...prev,
       {
         familiaCodigo: "pre_prensa",
+        nombreVisible: "",
         icono: getDefaultStepIcon("pre_prensa"),
         uiKey: `new-${Date.now()}-${Math.random()}`,
       },
@@ -398,6 +440,12 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
 
   const cambiarIconoPaso = (idx: number, icono: string) => {
     setPasos((prev) => prev.map((p, i) => (i === idx ? { ...p, icono } : p)));
+  };
+
+  const cambiarNombrePaso = (idx: number, nombreVisible: string) => {
+    setPasos((prev) =>
+      prev.map((p, i) => (i === idx ? { ...p, nombreVisible } : p)),
+    );
   };
 
   const eliminarPaso = (idx: number) => {
@@ -424,6 +472,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
       const pasosPayload = pasos.map((p, idx) => ({
         orden: idx + 1,
         familiaCodigo: p.familiaCodigo,
+        nombreVisible: p.nombreVisible.trim() || null,
         icono: p.icono,
       }));
       if (modo === "crear") {
@@ -439,13 +488,9 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           nombre,
           descripcion: descripcion || undefined,
           activo,
-          pasos: cambioEstructural || cambioIconos ? pasosPayload : undefined,
-          nuevaVersion: requiereVersionadoPorUso
-            ? nuevaVersion
-            : cambioEstructural
-              ? false
-            : cambioIconos
-              ? false
+          pasos:
+            cambioEstructural || cambioIconos || cambioNombres
+              ? pasosPayload
               : undefined,
           cambios: cambiosDescripcion || undefined,
         });
@@ -461,6 +506,36 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   };
 
   const [confirmandoBorrado, setConfirmandoBorrado] = React.useState(false);
+
+  const ejecutarMigracion = async () => {
+    if (!rutaExistente || productosSeleccionados.length === 0) return;
+    setMigrando(true);
+    try {
+      const resultado = await migrarProductosRuta(
+        rutaExistente.id,
+        productosSeleccionados,
+      );
+      toast.success(
+        `${resultado.migradas} asociación(es) migrada(s) a v${rutaExistente.versionActual}`,
+      );
+      if (resultado.requierenConfiguracion > 0) {
+        toast.warning(
+          `${resultado.requierenConfiguracion} producto(s) tienen pasos nuevos para configurar.`,
+        );
+      }
+      setConfirmandoMigracion(false);
+      setProductosSeleccionados([]);
+      router.refresh();
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron migrar los productos",
+      );
+    } finally {
+      setMigrando(false);
+    }
+  };
 
   const ejecutarEliminar = async () => {
     if (!rutaExistente) return;
@@ -507,7 +582,14 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
             )}
           </div>
           {modo === "editar" && (
-            <Switch checked={activo} onCheckedChange={setActivo} />
+            <div className="flex items-center gap-2">
+              <Label htmlFor="ruta-activa">Ruta activa</Label>
+              <Switch
+                id="ruta-activa"
+                checked={activo}
+                onCheckedChange={setActivo}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -518,9 +600,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           <Card className="wiz-section">
             <CardHeader>
               <CardTitle>Identidad</CardTitle>
-              <CardDescription>
-                Nombre de la ruta reusable.
-              </CardDescription>
+              <CardDescription>Nombre de la ruta reusable.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -545,7 +625,8 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                 <Card className="bg-orange-50 border-orange-300">
                   <CardContent className="pt-4">
                     <p className="text-orange-900 mb-2 text-sm font-semibold">
-                      ⚠ Cambios estructurales con {productosAfectados} producto(s) usando esta ruta
+                      ⚠ Cambios en una ruta usada por {productosAfectados}{" "}
+                      producto(s)
                     </p>
                     <ul className="mb-3 ml-4 list-disc text-xs text-foreground/80 space-y-0.5">
                       {cambiosDetectados.map((c, idx) => (
@@ -560,28 +641,19 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                             `${familiaNombre(c.familia)} cambia de paso ${c.antes} a ${c.despues}`}
                         </li>
                       ))}
+                      {cambioNombres ? (
+                        <li>Cambian nombres operativos de uno o más pasos.</li>
+                      ) : null}
+                      {cambioIconos ? (
+                        <li>Cambian íconos de uno o más pasos.</li>
+                      ) : null}
                     </ul>
                     <p className="text-orange-800 mb-3 text-xs">
-                      Crear nueva versión preserva los {productosAfectados} producto(s) como están. Para aplicar el cambio a esos productos, desactivá esta opción.
+                      Se creará obligatoriamente la versión v
+                      {(rutaExistente?.versionActual ?? 0) + 1}. Los productos
+                      asociados conservarán su versión actual hasta que elijas
+                      migrarlos desde esta ficha.
                     </p>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={nuevaVersion}
-                        onChange={(e) => setNuevaVersion(e.target.checked)}
-                      />
-                      <span>
-                        Crear nueva versión (v
-                        {(rutaExistente?.versionActual ?? 0) + 1})
-                      </span>
-                    </label>
-                    {!nuevaVersion && (
-                      <p className="mt-2 text-xs font-medium text-red-600">
-                        ⚠ Patch in-place modificará los {productosAfectados}{" "}
-                        producto(s) asociados y eliminará la configuración de
-                        los pasos quitados.
-                      </p>
-                    )}
                     <Input
                       className="mt-2"
                       value={cambiosDescripcion}
@@ -634,18 +706,40 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                       value={paso.icono}
                       onChange={(icono) => cambiarIconoPaso(idx, icono)}
                     />
-                    <HumanSelect
-                      value={paso.familiaCodigo}
-                      onValueChange={(v) => cambiarPaso(idx, v || "pre_prensa")}
-                      options={familiaOptions}
-                      triggerClassName="flex-1"
-                      contentClassName="max-h-80"
-                    />
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                      <HumanSelect
+                        value={paso.familiaCodigo}
+                        onValueChange={(v) =>
+                          cambiarPaso(idx, v || "pre_prensa")
+                        }
+                        options={familiaOptions}
+                        triggerClassName="w-full"
+                        contentClassName="max-h-80"
+                      />
+                      <Field>
+                        <FieldLabel
+                          htmlFor={`nombre-paso-${paso.uiKey}`}
+                          className="sr-only"
+                        >
+                          Nombre personalizado del paso {idx + 1}
+                        </FieldLabel>
+                        <Input
+                          id={`nombre-paso-${paso.uiKey}`}
+                          value={paso.nombreVisible}
+                          maxLength={120}
+                          onChange={(event) =>
+                            cambiarNombrePaso(idx, event.target.value)
+                          }
+                          placeholder={`Nombre personalizado (opcional) · ${familiaNombre(paso.familiaCodigo)}`}
+                        />
+                      </Field>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => moverPaso(idx, -1)}
                       disabled={idx === 0}
+                      aria-label={`Subir paso ${idx + 1}`}
                     >
                       <ChevronUpIcon className="size-4" />
                     </Button>
@@ -654,6 +748,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                       size="icon"
                       onClick={() => moverPaso(idx, 1)}
                       disabled={idx === pasos.length - 1}
+                      aria-label={`Bajar paso ${idx + 1}`}
                     >
                       <ChevronDownIcon className="size-4" />
                     </Button>
@@ -662,6 +757,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                       size="icon"
                       onClick={() => eliminarPaso(idx)}
                       className="text-red-600 hover:text-red-700"
+                      aria-label={`Eliminar paso ${idx + 1}`}
                     >
                       <XIcon className="size-4" />
                     </Button>
@@ -690,15 +786,71 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                   productosAfectados === 0 &&
                   v.cambios?.startsWith("Copia de ")
                     ? "Versión inicial"
-                    : v.cambios ?? "Versión inicial"}
+                    : (v.cambios ?? "Versión inicial")}
                 </span>
-                <span className="vdate">
-                  {fechaNumerica(v.createdAt)}
-                </span>
+                <span className="vdate">{fechaNumerica(v.createdAt)}</span>
               </div>
             ))}
           </div>
         )}
+
+        {modo === "editar" && productosDesactualizados.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Productos en versiones anteriores</CardTitle>
+              <CardDescription>
+                Elegí qué asociaciones querés llevar a la versión v
+                {rutaExistente?.versionActual}. Se preserva la configuración de
+                los pasos cuya familia continúa en la nueva versión.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {productosDesactualizados.map((alternativa) => {
+                const checked = productosSeleccionados.includes(alternativa.id);
+                const checkboxId = `migrar-ruta-${alternativa.id}`;
+                return (
+                  <Label
+                    key={alternativa.id}
+                    htmlFor={checkboxId}
+                    className="flex items-center gap-3 rounded-lg border p-3"
+                  >
+                    <Checkbox
+                      id={checkboxId}
+                      checked={checked}
+                      onCheckedChange={(next) =>
+                        setProductosSeleccionados((actuales) =>
+                          next
+                            ? [...new Set([...actuales, alternativa.id])]
+                            : actuales.filter((id) => id !== alternativa.id),
+                        )
+                      }
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate font-medium">
+                        {alternativa.producto.nombre}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {alternativa.nombre} · v{alternativa.rutaVersion} → v
+                        {rutaExistente?.versionActual}
+                      </span>
+                    </span>
+                  </Label>
+                );
+              })}
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={productosSeleccionados.length === 0}
+                  onClick={() => setConfirmandoMigracion(true)}
+                >
+                  <RefreshCwIcon data-icon="inline-start" />
+                  Migrar seleccionados ({productosSeleccionados.length})
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <div className="route-actions-bar">
           {modo === "editar" ? (
@@ -715,11 +867,12 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
             <div />
           )}
           <span className="route-actions-copy">
-            {modo === "editar" && (rutaExistente?.productosAlternativas?.length ?? 0) === 0
+            {modo === "editar" &&
+            (rutaExistente?.productosAlternativas?.length ?? 0) === 0
               ? "Los cambios se aplican sobre esta ruta. Todavía no está asociada a productos."
-              : `Los cambios se aplican al guardar. Si querés versionar, se creará v${
+              : `Los cambios estructurales crearán automáticamente v${
                   (rutaExistente?.versionActual ?? 1) + 1
-                } automáticamente.`}
+                } para preservar los productos existentes.`}
           </span>
           <button
             type="button"
@@ -744,6 +897,44 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           </button>
         </div>
       </div>
+
+      <AlertDialog
+        open={confirmandoMigracion}
+        onOpenChange={(open) => {
+          if (!migrando) setConfirmandoMigracion(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Migrar {productosSeleccionados.length} asociación(es) a v
+              {rutaExistente?.versionActual}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Se conservarán las configuraciones de familias equivalentes. Las
+              configuraciones de pasos eliminados se descartarán y los pasos
+              nuevos quedarán señalados para completar en cada producto.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={migrando}
+              onClick={() => setConfirmandoMigracion(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              loading={migrando}
+              onClick={ejecutarMigracion}
+            >
+              Confirmar migración
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {rutaExistente && (
         <ConfirmacionDestructiva

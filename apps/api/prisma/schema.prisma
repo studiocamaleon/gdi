@@ -1950,7 +1950,7 @@ model PasoTenant {
   /// Configuración reutilizable del taller. Contiene el mismo payload del
   /// editor de un paso de producto, sin rutaPasoId ni dependencias entre pasos.
   /// La DEFINICIÓN técnica sigue heredándose viva de plantillaCodigo.
-  configBaseJson         Json?
+  configBaseJson Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2312,6 +2312,9 @@ model RutaPaso {
   orden           Int
   /// Referencia a FamiliaCodigo de apps/api/src/productos-servicios/pasos/familias.ts (no FK por ser hardcoded en código).
   familiaCodigo   String
+  /// Nombre operativo sugerido por el modelador de la ruta. Al asociar la
+  /// ruta a un producto se usa como default de ProductoConfigPaso.nombreVisible.
+  nombreVisible   String?
   /// Nombre de ícono visual para vistas de producción/tablero/kanban.
   icono           String               @default("Layout")
   activo          Boolean              @default(true)

@@ -7,7 +7,9 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
+  MaxLength,
   Matches,
   Min,
   ValidateNested,
@@ -24,6 +26,12 @@ export class PasoRutaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
+  nombreVisible?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
   icono?: string;
 }
 
@@ -41,6 +49,7 @@ export class CrearRutaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   descripcion?: string;
 
   @IsArray()
@@ -72,6 +81,7 @@ export class ActualizarRutaDto {
    */
   @IsOptional()
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => PasoRutaDto)
   pasos?: PasoRutaDto[];
@@ -86,6 +96,7 @@ export class ActualizarRutaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   cambios?: string;
 }
 
@@ -104,4 +115,11 @@ export class DuplicarRutaDto {
   @IsOptional()
   @IsBoolean()
   activo?: boolean;
+}
+
+export class MigrarProductosRutaDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID(undefined, { each: true })
+  rutaAlternativaIds!: string[];
 }

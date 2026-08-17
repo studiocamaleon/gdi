@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRightIcon,
   BookOpenIcon,
   CircleDotIcon,
   CopyIcon,
@@ -16,6 +17,7 @@ import {
   PaintbrushIcon,
   PlusIcon,
   PrinterIcon,
+  RouteIcon,
   ScissorsIcon,
   SearchIcon,
   ShieldCheckIcon,
@@ -36,31 +38,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { FamiliaListItem, RutaListItem } from "@/lib/productos-servicios";
 import {
   duplicarRuta,
   getCatalogoFamilias,
 } from "@/lib/productos-servicios-api";
-
-const Ico = {
-  Arrow: (props: React.SVGProps<SVGSVGElement>) => (
-    <svg
-      viewBox="0 0 24 24"
-      width="14"
-      height="14"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
-  ),
-};
 
 const STEP_ICONS = {
   Layout: LayoutDashboardIcon,
@@ -87,40 +79,76 @@ function getStepIcon(icono?: string | null) {
   return STEP_ICONS[icono as keyof typeof STEP_ICONS] ?? LayoutDashboardIcon;
 }
 
-function StepChain({
+function RoutePreview({
   pasos,
   familiaLabel,
+  rutaNombre,
 }: {
   pasos: RutaListItem["pasos"];
   familiaLabel: (codigo: string) => string;
+  rutaNombre: string;
 }) {
   return (
-    <div className="step-chain">
-      {pasos.map((paso, index) => (
-        <React.Fragment key={paso.id}>
-          <span className="step-chip" title={paso.familiaCodigo}>
-            {React.createElement(getStepIcon(paso.icono), {
-              className: "step-chip-icon",
-            })}
-            <span className="ix">{index + 1}.</span>
-            <span className="truncate">{familiaLabel(paso.familiaCodigo)}</span>
-          </span>
-          {index < pasos.length - 1 ? (
-            <span className="step-arrow" aria-hidden="true">
-              →
-            </span>
-          ) : null}
-        </React.Fragment>
-      ))}
-    </div>
+    <Tooltip>
+      <TooltipTrigger
+        render={(props) => (
+          <Button
+            {...props}
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label={`Ver recorrido de ${rutaNombre}: ${pasos.length} ${pasos.length === 1 ? "paso" : "pasos"}`}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <RouteIcon data-icon="inline-start" />
+            {pasos.length} {pasos.length === 1 ? "paso" : "pasos"}
+          </Button>
+        )}
+      />
+      <TooltipContent
+        side="bottom"
+        align="start"
+        className="block w-80 max-w-[calc(100vw-2rem)] p-3"
+      >
+        <p className="mb-2 font-medium">Recorrido de producción</p>
+        <ol className="grid gap-1.5">
+          {pasos.map((paso, index) => {
+            const StepIcon = getStepIcon(paso.icono);
+            return (
+              <li key={paso.id} className="flex min-w-0 items-center gap-2">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background/15 text-[10px] font-semibold">
+                  {index + 1}
+                </span>
+                <StepIcon className="size-3.5 shrink-0 opacity-75" />
+                <span className="min-w-0 truncate">
+                  {paso.nombreVisible?.trim() ||
+                    familiaLabel(paso.familiaCodigo)}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
-export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
+type EstadoFiltro = "activas" | "inactivas" | "todas";
+
+export function RutasTable({
+  initialRutas,
+  puedeGestionar,
+}: {
+  initialRutas: RutaListItem[];
+  puedeGestionar: boolean;
+}) {
   const router = useRouter();
   const rutas = initialRutas;
   const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
   const [search, setSearch] = React.useState("");
+  const [estadoFiltro, setEstadoFiltro] =
+    React.useState<EstadoFiltro>("activas");
   const [duplicandoId, setDuplicandoId] = React.useState<string | null>(null);
   const [rutaADuplicar, setRutaADuplicar] = React.useState<RutaListItem | null>(
     null,
@@ -143,8 +171,10 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
 
   const rutasFiltradas = React.useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return rutas;
     return rutas.filter((r) => {
+      if (estadoFiltro === "activas" && !r.activo) return false;
+      if (estadoFiltro === "inactivas" && r.activo) return false;
+      if (!term) return true;
       const nombresPasos = r.pasos
         .map((p) => familiaLabel(p.familiaCodigo).toLowerCase())
         .join(" ");
@@ -152,7 +182,7 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
         `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresPasos}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [rutas, search, familiaLabel]);
+  }, [rutas, search, familiaLabel, estadoFiltro]);
 
   const openRuta = (id: string) => {
     router.push(`/productos-servicios/rutas/${id}`);
@@ -216,25 +246,30 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
             que los productos pueden referenciar.
           </div>
         </div>
-        <button className="btn">Importar</button>
-        <Link
-          href="/productos-servicios/rutas/nueva"
-          className="btn btn-primary"
-        >
-          <PlusIcon size={14} />
-          Nueva ruta
-        </Link>
+        {puedeGestionar ? (
+          <Link
+            href="/productos-servicios/rutas/nueva"
+            className="btn btn-primary"
+          >
+            <PlusIcon size={14} />
+            Nueva ruta
+          </Link>
+        ) : null}
       </div>
 
       {rutas.length === 0 ? (
         <EstadoVacio
           titulo="Sin rutas cargadas"
           descripcion="Las rutas son los caminos de producción reusables. Empezá creando una desde cero o ejecutá el seed."
-          cta={{
-            label: "Crear ruta",
-            href: "/productos-servicios/rutas/nueva",
-            icon: PlusIcon,
-          }}
+          cta={
+            puedeGestionar
+              ? {
+                  label: "Crear ruta",
+                  href: "/productos-servicios/rutas/nueva",
+                  icon: PlusIcon,
+                }
+              : undefined
+          }
         />
       ) : (
         <div className="card">
@@ -245,6 +280,21 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                 {rutasFiltradas.length} de {rutas.length}
               </span>
             </div>
+            <ToggleGroup
+              variant="outline"
+              size="sm"
+              spacing={1}
+              value={[estadoFiltro]}
+              onValueChange={(values) => {
+                const value = values[0] as EstadoFiltro | undefined;
+                if (value) setEstadoFiltro(value);
+              }}
+              aria-label="Filtrar rutas por estado"
+            >
+              <ToggleGroupItem value="activas">Activas</ToggleGroupItem>
+              <ToggleGroupItem value="inactivas">Inactivas</ToggleGroupItem>
+              <ToggleGroupItem value="todas">Todas</ToggleGroupItem>
+            </ToggleGroup>
             <label className="search-inline">
               <SearchIcon size={14} />
               <input
@@ -265,89 +315,116 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
               />
             </div>
           ) : (
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th style={{ width: "38%" }}>Pasos</th>
-                  <th className="right" style={{ width: 90 }}>
-                    Versión
-                  </th>
-                  <th className="right" style={{ width: 150 }}>
-                    Productos que la usan
-                  </th>
-                  <th className="right" style={{ width: 110 }}>
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rutasFiltradas.map((ruta) => (
-                  <tr
-                    key={ruta.id}
-                    role="link"
-                    tabIndex={0}
-                    onClick={() => openRuta(ruta.id)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      event.preventDefault();
-                      openRuta(ruta.id);
-                    }}
-                  >
-                    <td>
-                      <div className="name">{ruta.nombre}</div>
-                      {ruta.descripcion ? (
-                        <div className="desc">{ruta.descripcion}</div>
-                      ) : null}
-                    </td>
-                    <td>
-                      <StepChain
-                        pasos={ruta.pasos}
-                        familiaLabel={familiaLabel}
-                      />
-                    </td>
-                    <td className="right">
-                      <span className="tag version">v{ruta.versionActual}</span>
-                    </td>
-                    <td className="right">
-                      <span
-                        className={`tag usage ${ruta._count.productosAlternativas === 0 ? "zero" : ""}`}
+            <div className="overflow-x-auto">
+              <TooltipProvider delay={200}>
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th style={{ width: 140 }}>Recorrido</th>
+                      <th className="right" style={{ width: 90 }}>
+                        Versión
+                      </th>
+                      <th className="right" style={{ width: 150 }}>
+                        Productos que la usan
+                      </th>
+                      <th className="right" style={{ width: 110 }}>
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rutasFiltradas.map((ruta) => (
+                      <tr
+                        key={ruta.id}
+                        role={puedeGestionar ? "link" : undefined}
+                        tabIndex={puedeGestionar ? 0 : undefined}
+                        onClick={() => {
+                          if (puedeGestionar) openRuta(ruta.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (!puedeGestionar) return;
+                          if (event.key !== "Enter" && event.key !== " ")
+                            return;
+                          event.preventDefault();
+                          openRuta(ruta.id);
+                        }}
                       >
-                        <GitBranchIcon size={12} />
-                        {ruta._count.productosAlternativas}
-                      </span>
-                    </td>
-                    <td className="right">
-                      <span className="actions">
-                        <button
-                          type="button"
-                          className="link-action"
-                          aria-label={`Duplicar ${ruta.nombre}`}
-                          title="Duplicar"
-                          disabled={duplicandoId === ruta.id}
-                          onClick={(event) => abrirDuplicarRuta(event, ruta)}
-                        >
-                          {duplicandoId === ruta.id ? (
-                            <Loader2Icon size={13} className="animate-spin" />
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <div className="name">{ruta.nombre}</div>
+                            {!ruta.activo ? (
+                              <Badge variant="secondary">Inactiva</Badge>
+                            ) : null}
+                          </div>
+                          {ruta.descripcion ? (
+                            <div className="desc">{ruta.descripcion}</div>
+                          ) : null}
+                        </td>
+                        <td>
+                          <RoutePreview
+                            pasos={ruta.pasos}
+                            familiaLabel={familiaLabel}
+                            rutaNombre={ruta.nombre}
+                          />
+                        </td>
+                        <td className="right">
+                          <span className="tag version">
+                            v{ruta.versionActual}
+                          </span>
+                        </td>
+                        <td className="right">
+                          <span
+                            className={`tag usage ${ruta._count.productosAlternativas === 0 ? "zero" : ""}`}
+                          >
+                            <GitBranchIcon size={12} />
+                            {ruta._count.productosAlternativas}
+                          </span>
+                        </td>
+                        <td className="right">
+                          {puedeGestionar ? (
+                            <span className="actions">
+                              <button
+                                type="button"
+                                className="link-action"
+                                aria-label={`Duplicar ${ruta.nombre}`}
+                                title="Duplicar"
+                                disabled={duplicandoId === ruta.id}
+                                onClick={(event) =>
+                                  abrirDuplicarRuta(event, ruta)
+                                }
+                              >
+                                {duplicandoId === ruta.id ? (
+                                  <Loader2Icon
+                                    size={13}
+                                    className="animate-spin"
+                                  />
+                                ) : (
+                                  <CopyIcon size={13} />
+                                )}
+                              </button>
+                              <Link
+                                href={`/productos-servicios/rutas/${ruta.id}`}
+                                className="link-action"
+                                aria-label={`Ver detalle de ${ruta.nombre}`}
+                                title="Ver detalle"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <ArrowRightIcon className="size-3.5" />
+                              </Link>
+                            </span>
                           ) : (
-                            <CopyIcon size={13} />
+                            <span className="text-muted-foreground text-xs">
+                              Solo lectura
+                            </span>
                           )}
-                        </button>
-                        <Link
-                          href={`/productos-servicios/rutas/${ruta.id}`}
-                          className="link-action"
-                          aria-label={`Ver detalle de ${ruta.nombre}`}
-                          title="Ver detalle"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <Ico.Arrow />
-                        </Link>
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TooltipProvider>
+            </div>
           )}
         </div>
       )}

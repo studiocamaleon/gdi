@@ -19,10 +19,14 @@ export class RutasProduccionService {
     private readonly familias: FamiliasPasosService,
   ) {}
 
-  async listarRutas(tenantId: string) {
+  async listarRutas(tenantId: string, incluirInactivas = false) {
     const rutas = await this.prisma.ruta.findMany({
       // Las rutas de sistema (plantilla del centro de copiado) no se listan.
-      where: { tenantId, activo: true, sistemaCodigo: null },
+      where: {
+        tenantId,
+        sistemaCodigo: null,
+        ...(incluirInactivas ? {} : { activo: true }),
+      },
       orderBy: { nombre: 'asc' },
       include: {
         _count: { select: { productosAlternativas: true } },
@@ -49,6 +53,7 @@ export class RutasProduccionService {
         version: true,
         orden: true,
         familiaCodigo: true,
+        nombreVisible: true,
         icono: true,
       },
     });
@@ -70,41 +75,48 @@ export class RutasProduccionService {
   }
 
   async crearRuta(tenantId: string, dto: CrearRutaDto) {
+    this.validarOrdenPasos(dto.pasos);
     await this.familias.validarFamiliasDePasos(tenantId, dto.pasos);
-    const baseCodigo = dto.codigo?.trim() || this.codigoFromNombre(dto.nombre);
+    const nombre = dto.nombre.trim();
+    if (!nombre)
+      throw new BadRequestException('El nombre de la ruta es obligatorio.');
+    const baseCodigo = dto.codigo?.trim() || this.codigoFromNombre(nombre);
     const codigo = await this.nextCopyCode(tenantId, baseCodigo);
     try {
-      const ruta = await this.prisma.ruta.create({
-        data: {
-          tenantId,
-          codigo,
-          nombre: dto.nombre,
-          descripcion: dto.descripcion ?? null,
-          versionActual: 1,
-          activo: true,
-          pasos: {
-            create: dto.pasos.map((p) => ({
-              tenantId,
-              version: 1,
-              orden: p.orden,
-              familiaCodigo: p.familiaCodigo,
-              icono: p.icono ?? 'Layout',
-              activo: true,
-            })),
+      return await this.prisma.$transaction(async (tx) => {
+        const ruta = await tx.ruta.create({
+          data: {
+            tenantId,
+            codigo,
+            nombre,
+            descripcion: dto.descripcion?.trim() || null,
+            versionActual: 1,
+            activo: true,
+            pasos: {
+              create: dto.pasos.map((p) => ({
+                tenantId,
+                version: 1,
+                orden: p.orden,
+                familiaCodigo: p.familiaCodigo,
+                nombreVisible: p.nombreVisible?.trim() || null,
+                icono: p.icono ?? 'Layout',
+                activo: true,
+              })),
+            },
           },
-        },
-        include: { pasos: true },
+          include: { pasos: true },
+        });
+        await tx.rutaVersion.create({
+          data: {
+            tenantId,
+            rutaId: ruta.id,
+            version: 1,
+            snapshotJson: this.buildRutaSnapshot(ruta.pasos),
+            cambios: 'Versión inicial',
+          },
+        });
+        return ruta;
       });
-      await this.prisma.rutaVersion.create({
-        data: {
-          tenantId,
-          rutaId: ruta.id,
-          version: 1,
-          snapshotJson: this.buildRutaSnapshot(ruta.pasos),
-          cambios: 'Versión inicial',
-        },
-      });
-      return ruta;
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -156,6 +168,7 @@ export class RutasProduccionService {
                 version: 1,
                 orden: paso.orden,
                 familiaCodigo: paso.familiaCodigo,
+                nombreVisible: paso.nombreVisible,
                 icono: paso.icono,
                 activo: paso.activo,
               })),
@@ -205,22 +218,23 @@ export class RutasProduccionService {
     }
 
     if (dto.pasos) {
+      this.validarOrdenPasos(dto.pasos);
       await this.familias.validarFamiliasDePasos(tenantId, dto.pasos);
     }
-
-    const cambioEstructural = dto.pasos !== undefined;
-    const debeSerNuevaVersion =
-      dto.nuevaVersion === true ||
-      (cambioEstructural && dto.nuevaVersion !== false);
+    if (dto.nombre !== undefined && !dto.nombre.trim()) {
+      throw new BadRequestException('El nombre de la ruta es obligatorio.');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const dataBase: Prisma.RutaUpdateInput = {};
-      if (dto.nombre !== undefined) dataBase.nombre = dto.nombre;
-      if (dto.descripcion !== undefined) dataBase.descripcion = dto.descripcion;
+      if (dto.nombre !== undefined) dataBase.nombre = dto.nombre.trim();
+      if (dto.descripcion !== undefined) {
+        dataBase.descripcion = dto.descripcion.trim() || null;
+      }
       if (dto.activo !== undefined) dataBase.activo = dto.activo;
 
       if (dto.pasos) {
-        if (debeSerNuevaVersion && existente.productosAlternativas.length > 0) {
+        if (existente.productosAlternativas.length > 0) {
           const maxVersion = await tx.rutaPaso.aggregate({
             where: { tenantId, rutaId: id },
             _max: { version: true },
@@ -238,6 +252,7 @@ export class RutasProduccionService {
               version: nuevaVersion,
               orden: p.orden,
               familiaCodigo: p.familiaCodigo,
+              nombreVisible: p.nombreVisible?.trim() || null,
               icono: p.icono ?? 'Layout',
               activo: true,
             })),
@@ -308,7 +323,12 @@ export class RutasProduccionService {
       tenantId: string;
       rutaId: string;
       version: number;
-      pasos: Array<{ orden: number; familiaCodigo: string; icono?: string }>;
+      pasos: Array<{
+        orden: number;
+        familiaCodigo: string;
+        nombreVisible?: string | null;
+        icono?: string;
+      }>;
     },
   ) {
     const actuales = await tx.rutaPaso.findMany({
@@ -367,6 +387,7 @@ export class RutasProduccionService {
           data: {
             orden: match.paso.orden,
             familiaCodigo: match.paso.familiaCodigo,
+            nombreVisible: match.paso.nombreVisible?.trim() || null,
             icono: match.paso.icono ?? match.actual.icono,
             activo: true,
           },
@@ -381,6 +402,7 @@ export class RutasProduccionService {
           version: args.version,
           orden: match.paso.orden,
           familiaCodigo: match.paso.familiaCodigo,
+          nombreVisible: match.paso.nombreVisible?.trim() || null,
           icono: match.paso.icono ?? 'Layout',
           activo: true,
         },
@@ -388,10 +410,165 @@ export class RutasProduccionService {
     }
   }
 
+  async migrarProductosAVersionActual(
+    tenantId: string,
+    rutaId: string,
+    rutaAlternativaIds: string[],
+  ) {
+    const ids = [...new Set(rutaAlternativaIds)];
+    const ruta = await this.prisma.ruta.findFirst({
+      where: { id: rutaId, tenantId },
+      include: { pasos: { orderBy: { orden: 'asc' } } },
+    });
+    if (!ruta) throw new NotFoundException(`Ruta ${rutaId} no encontrada`);
+
+    const pasosDestino = ruta.pasos.filter(
+      (paso) => paso.version === ruta.versionActual && paso.activo,
+    );
+    if (pasosDestino.length === 0) {
+      throw new BadRequestException(
+        'La versión actual de la ruta no tiene pasos.',
+      );
+    }
+
+    const alternativas = await this.prisma.productoRutaAlternativa.findMany({
+      where: { tenantId, rutaId, id: { in: ids } },
+    });
+    if (alternativas.length !== ids.length) {
+      throw new BadRequestException(
+        'Una o más asociaciones de producto no pertenecen a esta ruta.',
+      );
+    }
+
+    const versionesOrigen = [
+      ...new Set(alternativas.map((a) => a.rutaVersion)),
+    ];
+    const pasosOrigen = await this.prisma.rutaPaso.findMany({
+      where: { tenantId, rutaId, version: { in: versionesOrigen } },
+      orderBy: { orden: 'asc' },
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      let migradas = 0;
+      let requierenConfiguracion = 0;
+
+      for (const alternativa of alternativas) {
+        if (alternativa.rutaVersion === ruta.versionActual) continue;
+        const origen = pasosOrigen.filter(
+          (paso) => paso.version === alternativa.rutaVersion,
+        );
+        const destinosUsados = new Set<string>();
+        const destinoPorOrigen = new Map<
+          string,
+          (typeof pasosDestino)[number]
+        >();
+
+        for (const pasoOrigen of origen) {
+          const destino = pasosDestino
+            .filter(
+              (paso) =>
+                !destinosUsados.has(paso.id) &&
+                paso.familiaCodigo === pasoOrigen.familiaCodigo,
+            )
+            .sort(
+              (a, b) =>
+                Math.abs(a.orden - pasoOrigen.orden) -
+                Math.abs(b.orden - pasoOrigen.orden),
+            )[0];
+          if (!destino) continue;
+          destinosUsados.add(destino.id);
+          destinoPorOrigen.set(pasoOrigen.id, destino);
+        }
+
+        const configs = await tx.productoConfigPaso.findMany({
+          where: {
+            tenantId,
+            productoRutaAlternativaId: alternativa.id,
+          },
+        });
+        const destinosConConfig = new Set<string>();
+        for (const config of configs) {
+          const destino = destinoPorOrigen.get(config.rutaPasoId);
+          if (!destino) {
+            await tx.productoConfigPaso.delete({ where: { id: config.id } });
+            continue;
+          }
+          destinosConConfig.add(destino.id);
+          const pasoOrigen = origen.find(
+            (paso) => paso.id === config.rutaPasoId,
+          );
+          const nombreEraDefaultDeRuta =
+            !config.nombreVisible?.trim() ||
+            config.nombreVisible.trim() === pasoOrigen?.nombreVisible?.trim();
+          await tx.productoConfigPaso.update({
+            where: { id: config.id },
+            data: {
+              rutaPasoId: destino.id,
+              nombreVisible:
+                (nombreEraDefaultDeRuta
+                  ? destino.nombreVisible?.trim()
+                  : config.nombreVisible?.trim()) || null,
+              requiereRutaPasoIds: config.requiereRutaPasoIds
+                .map((id) => destinoPorOrigen.get(id)?.id)
+                .filter((id): id is string => Boolean(id)),
+            },
+          });
+        }
+
+        const pasosNuevosSinConfig = pasosDestino.filter(
+          (paso) => !destinosConConfig.has(paso.id),
+        );
+        if (pasosNuevosSinConfig.length > 0) requierenConfiguracion += 1;
+        for (const paso of pasosNuevosSinConfig) {
+          if (!paso.nombreVisible?.trim()) continue;
+          await tx.productoConfigPaso.create({
+            data: {
+              tenantId,
+              productoRutaAlternativaId: alternativa.id,
+              rutaPasoId: paso.id,
+              nombreVisible: paso.nombreVisible.trim(),
+            },
+          });
+        }
+
+        for (const [origenId, destino] of destinoPorOrigen) {
+          await tx.productoPasoExtra.updateMany({
+            where: {
+              tenantId,
+              rutaAlternativaId: alternativa.id,
+              insertarDespuesDeRutaPasoId: origenId,
+            },
+            data: { insertarDespuesDeRutaPasoId: destino.id },
+          });
+        }
+        await tx.productoPasoExtra.updateMany({
+          where: {
+            tenantId,
+            rutaAlternativaId: alternativa.id,
+            insertarDespuesDeRutaPasoId: {
+              in: origen
+                .filter((paso) => !destinoPorOrigen.has(paso.id))
+                .map((paso) => paso.id),
+            },
+          },
+          data: { insertarDespuesDeRutaPasoId: null },
+        });
+
+        await tx.productoRutaAlternativa.update({
+          where: { id: alternativa.id },
+          data: { rutaVersion: ruta.versionActual },
+        });
+        migradas += 1;
+      }
+
+      return { migradas, requierenConfiguracion };
+    });
+  }
+
   async eliminarRuta(tenantId: string, id: string) {
     const existente = await this.prisma.ruta.findFirst({
       where: { id, tenantId },
-      include: { productosAlternativas: { take: 1 } },
+      include: { _count: { select: { productosAlternativas: true } } },
     });
     if (!existente) throw new NotFoundException(`Ruta ${id} no encontrada`);
     if (existente.sistemaCodigo) {
@@ -400,9 +577,9 @@ export class RutasProduccionService {
       );
     }
 
-    if (existente.productosAlternativas.length > 0) {
+    if (existente._count.productosAlternativas > 0) {
       throw new BadRequestException(
-        `Ruta "${existente.nombre}" está siendo usada por ${existente.productosAlternativas.length} producto(s). Marcala como inactiva en vez de eliminarla.`,
+        `Ruta "${existente.nombre}" está siendo usada por ${existente._count.productosAlternativas} producto(s). Marcala como inactiva en vez de eliminarla.`,
       );
     }
 
@@ -424,6 +601,15 @@ export class RutasProduccionService {
     throw new BadRequestException(
       'No se pudo generar un código de copia único.',
     );
+  }
+
+  private validarOrdenPasos(pasos: Array<{ orden: number }>) {
+    const ordenes = pasos.map((paso) => paso.orden).sort((a, b) => a - b);
+    if (ordenes.some((orden, index) => orden !== index + 1)) {
+      throw new BadRequestException(
+        'Los pasos deben tener un orden único y consecutivo desde 1.',
+      );
+    }
   }
 
   private codigoFromNombre(nombre: string) {
@@ -462,6 +648,7 @@ export class RutasProduccionService {
       id: string;
       orden: number;
       familiaCodigo: string;
+      nombreVisible?: string | null;
       icono?: string;
       version?: number;
       activo?: boolean;
@@ -476,6 +663,7 @@ export class RutasProduccionService {
           orden: paso.orden,
           familiaCodigo: paso.familiaCodigo,
           familia: paso.familiaCodigo,
+          nombreVisible: paso.nombreVisible?.trim() || null,
           icono: paso.icono ?? 'Layout',
           version: paso.version ?? 1,
           activo: paso.activo ?? true,

@@ -20,13 +20,9 @@ export type ModoMedidasProducto =
   "FIJA" | "LIBRE" | "COMERCIAL_ELIGE" | "MIXTA";
 
 export type MinimoComercialPolitica =
-  | "NONE"
-  | "ADVERTIR_FACTURAR_MINIMO"
-  | "BLOQUEAR";
+  "NONE" | "ADVERTIR_FACTURAR_MINIMO" | "BLOQUEAR";
 
-export type MinimoComercialBase =
-  | "cantidad_comercial"
-  | "pliegos_impresos";
+export type MinimoComercialBase = "cantidad_comercial" | "pliegos_impresos";
 
 export interface MedidaPredefinidaProducto {
   id: string;
@@ -160,6 +156,8 @@ export interface RutaPaso {
   /** Nombre de la familia resuelto en el server (para familias tenant el
    *  código es un UUID: nunca mostrarlo humanizado). */
   familiaNombre?: string | null;
+  /** Nombre operativo definido en la ruta; precede al nombre de familia. */
+  nombreVisible?: string | null;
   icono?: string | null;
   activo: boolean;
 }
@@ -427,6 +425,7 @@ export interface RutaListItem {
     id: string;
     orden: number;
     familiaCodigo: string;
+    nombreVisible?: string | null;
     icono?: string | null;
   }>;
   _count: { productosAlternativas: number };

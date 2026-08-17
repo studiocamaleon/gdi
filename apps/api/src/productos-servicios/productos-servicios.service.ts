@@ -113,8 +113,8 @@ export class ProductosServiciosService {
     return this.productos.obtenerProducto(tenantId, id);
   }
 
-  listarRutas(tenantId: string) {
-    return this.rutas.listarRutas(tenantId);
+  listarRutas(tenantId: string, incluirInactivas = false) {
+    return this.rutas.listarRutas(tenantId, incluirInactivas);
   }
 
   crearRuta(tenantId: string, dto: CrearRutaDto) {
@@ -127,6 +127,18 @@ export class ProductosServiciosService {
 
   duplicarRuta(tenantId: string, id: string, dto: DuplicarRutaDto) {
     return this.rutas.duplicarRuta(tenantId, id, dto);
+  }
+
+  migrarProductosRuta(
+    tenantId: string,
+    id: string,
+    rutaAlternativaIds: string[],
+  ) {
+    return this.rutas.migrarProductosAVersionActual(
+      tenantId,
+      id,
+      rutaAlternativaIds,
+    );
   }
 
   eliminarRuta(tenantId: string, id: string) {
