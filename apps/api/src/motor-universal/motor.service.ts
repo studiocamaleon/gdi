@@ -178,6 +178,7 @@ interface PasoExtraCargoJson {
   modoActivacion: string;
   condicionActivacionJson?: unknown;
   configOverrideJson?: unknown;
+  aplicaMargenOverride?: boolean | null;
 }
 
 interface PasoExtraCandidataJson {
@@ -767,8 +768,7 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            | PasoEjecutado['ojalesLayout']
-            | undefined;
+            PasoEjecutado['ojalesLayout'] | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -824,6 +824,21 @@ export class MotorUniversalService {
     );
     const cargosDirectosTotal =
       cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
+    const cargosSinMargenTotal =
+      pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.cargosDirectosPaso?.reduce(
+            (subtotal, cargo) =>
+              subtotal + (cargo.aplicaMargen ? 0 : cargo.monto),
+            0,
+          ) ?? 0),
+        0,
+      ) +
+      cargosDirectosCotizacion.reduce(
+        (acc, cargo) => acc + (cargo.aplicaMargen ? 0 : cargo.monto),
+        0,
+      );
     // Los pasos TERCERIZADOS aportan su costo directo; se suman aparte para no
     // perderlos ni duplicar el costo de los internos. Con "materiales propios"
     // el costoTotal del paso incluye los materiales del inventario — acá se
@@ -878,6 +893,13 @@ export class MotorUniversalService {
         : cantidadComercialReal,
       cantidadComercialPricing,
     );
+    const costoSinMargenUnitario = this.resolverCostoUnitarioComercial(
+      cargosSinMargenTotal,
+      minimoComercialContext.base === 'pliegos_impresos'
+        ? minimoComercialContext.cantidadReal
+        : cantidadComercialReal,
+      cantidadComercialPricing,
+    );
 
     const cotizacion: CotizacionResultado = {
       productoId: producto.productoId,
@@ -902,6 +924,7 @@ export class MotorUniversalService {
         tiempoExtraTotal,
         materialesTotal,
         cargosDirectosTotal,
+        cargosSinMargenTotal,
         tercerizadoTotal,
         total,
         unitario: costoUnitarioComercial,
@@ -929,6 +952,7 @@ export class MotorUniversalService {
         productoId: input.productoId,
         clienteId: input.clienteId ?? undefined,
         costoUnitario: cotizacion.costos.unitario,
+        costoSinMargenUnitario,
         cantidad: cantidadComercialPricing,
         descuento: input.descuento ?? null,
       });
@@ -971,6 +995,7 @@ export class MotorUniversalService {
         totalComisiones: desglose.totalComisiones,
         totalImpuestos: desglose.totalImpuestos,
         margenEfectivoPct: desglose.margenEfectivoPct,
+        trasladoSinMargenUnitario: desglose.trasladoSinMargenUnitario,
         precioNetoUnitario: desglose.precioNetoUnitario,
         precioBrutoUnitario: desglose.precioBrutoUnitario,
         precioNetoTotal: desglose.precioNetoTotal,
@@ -1281,6 +1306,7 @@ export class MotorUniversalService {
     productoId: string;
     clienteId?: string;
     costoUnitario: number;
+    costoSinMargenUnitario: number;
     cantidad: number;
     descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
   }): Promise<{
@@ -1290,6 +1316,7 @@ export class MotorUniversalService {
     totalComisiones: number;
     totalImpuestos: number;
     margenEfectivoPct: number;
+    trasladoSinMargenUnitario: number;
     precioNetoUnitario: number;
     precioBrutoUnitario: number;
     precioNetoTotal: number;
@@ -1464,6 +1491,7 @@ export class MotorUniversalService {
     const regional = await regionalDelTenant(this.prisma, args.tenantId);
     const out = this.aplicarPrecio.aplicar({
       costoUnitario: args.costoUnitario,
+      costoSinMargenUnitario: args.costoSinMargenUnitario,
       cantidad: args.cantidad,
       precioConfig: precioConfigEfectivo,
       impuestos: impuestosSnapshot,
@@ -1481,6 +1509,7 @@ export class MotorUniversalService {
       totalComisiones: out.desglose.totalComisiones,
       totalImpuestos: out.desglose.totalImpuestos,
       margenEfectivoPct: out.desglose.margenEfectivoPct,
+      trasladoSinMargenUnitario: out.desglose.trasladoSinMargenUnitario,
       precioNetoUnitario: out.precioNetoUnitario,
       precioBrutoUnitario: out.precioBrutoUnitario,
       precioNetoTotal: out.precioNetoTotal,
@@ -2828,10 +2857,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          | 'MONTO_FIJO_PLANO'
-          | 'PORCENTAJE_SOBRE_BASE'
-          | 'POR_UNIDAD_INPUT',
+          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
         monto,
+        aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
           config,
           baseCalculo: subtotalPaso,
@@ -3244,8 +3272,7 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        | { tarifa: unknown }
-        | undefined;
+        { tarifa: unknown } | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -3377,8 +3404,7 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          | { tarifa: unknown; nombre?: string | null }
-          | undefined;
+          { tarifa: unknown; nombre?: string | null } | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -4445,9 +4471,7 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          | 'HARDCODED'
-          | 'COMERCIAL_ELIGE'
-          | 'MOTOR_ELIGE_AUTO',
+          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -5797,19 +5821,16 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -5912,16 +5933,14 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              | Record<string, unknown>
-              | undefined;
+              Record<string, unknown> | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -7071,10 +7090,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          | 'MONTO_FIJO_PLANO'
-          | 'PORCENTAJE_SOBRE_BASE'
-          | 'POR_UNIDAD_INPUT',
+          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
         monto,
+        aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
       });
     }
@@ -7119,8 +7137,7 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        | Array<{ codigo: string; monto: number }>
-        | undefined;
+        Array<{ codigo: string; monto: number }> | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return Number(zona.monto);
@@ -7787,11 +7804,13 @@ export class MotorUniversalService {
           modoActivacion: c.modoActivacion,
           condicionActivacionJson: c.condicionActivacionJson,
           configOverrideJson: c.configOverrideJson,
+          aplicaMargenOverride: c.aplicaMargenOverride,
           catalogo: {
             codigo: c.cargoDirectoCatalogo.codigo,
             nombre: c.cargoDirectoCatalogo.nombre,
             modoCalculo: c.cargoDirectoCatalogo.modoCalculo,
             configJson: c.cargoDirectoCatalogo.configJson,
+            aplicaMargen: c.cargoDirectoCatalogo.aplicaMargen,
           },
         })),
       });
@@ -7843,11 +7862,13 @@ export class MotorUniversalService {
         modoActivacion: c.modoActivacion,
         condicionActivacionJson: c.condicionActivacionJson,
         configOverrideJson: c.configOverrideJson,
+        aplicaMargenOverride: c.aplicaMargenOverride,
         catalogo: {
           codigo: c.cargoDirectoCatalogo.codigo,
           nombre: c.cargoDirectoCatalogo.nombre,
           modoCalculo: c.cargoDirectoCatalogo.modoCalculo,
           configJson: c.cargoDirectoCatalogo.configJson,
+          aplicaMargen: c.cargoDirectoCatalogo.aplicaMargen,
         },
       })),
     };
@@ -8073,6 +8094,7 @@ export class MotorUniversalService {
         nombre: string;
         modoCalculo: string;
         configJson: unknown;
+        aplicaMargen: boolean;
       }
     >,
     candidataMaquinaMap: Map<
@@ -8459,6 +8481,7 @@ export class MotorUniversalService {
         nombre: string;
         modoCalculo: string;
         configJson: unknown;
+        aplicaMargen: boolean;
       }
     >,
   ): CargoPasoCargado[] {
@@ -8473,11 +8496,13 @@ export class MotorUniversalService {
           modoActivacion: c.modoActivacion,
           condicionActivacionJson: c.condicionActivacionJson ?? null,
           configOverrideJson: c.configOverrideJson ?? null,
+          aplicaMargenOverride: c.aplicaMargenOverride ?? null,
           catalogo: {
             codigo: cat.codigo,
             nombre: cat.nombre,
             modoCalculo: cat.modoCalculo,
             configJson: cat.configJson,
+            aplicaMargen: cat.aplicaMargen,
           },
         },
       ];

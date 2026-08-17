@@ -50,6 +50,10 @@ export class CrearCargoDirectoDto {
   @IsOptional()
   @IsObject()
   configJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsBoolean()
+  aplicaMargen?: boolean;
 }
 
 export class ActualizarCargoDirectoDto {
@@ -76,6 +80,10 @@ export class ActualizarCargoDirectoDto {
 
   @IsOptional()
   @IsBoolean()
+  aplicaMargen?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   activo?: boolean;
 }
 
@@ -97,6 +105,10 @@ export class AsociarCargoCotizacionDto {
   @IsOptional()
   @IsObject()
   configOverrideJson?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsBoolean()
+  aplicaMargenOverride?: boolean | null;
 }
 
 export class AsociarCargoPasoDto {
@@ -118,6 +130,10 @@ export class AsociarCargoPasoDto {
   @IsOptional()
   @IsObject()
   configOverrideJson?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsBoolean()
+  aplicaMargenOverride?: boolean | null;
 }
 
 export class ActualizarAsociacionCargoDto {
@@ -132,4 +148,8 @@ export class ActualizarAsociacionCargoDto {
   @IsOptional()
   @IsObject()
   configOverrideJson?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsBoolean()
+  aplicaMargenOverride?: boolean | null;
 }

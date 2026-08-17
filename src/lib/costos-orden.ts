@@ -16,7 +16,10 @@ import type {
   PropuestaItem,
   UnidadPropuesta,
 } from "@/lib/propuestas";
-import type { TableroItemData, TableroPasoData } from "@/lib/tablero-produccion";
+import type {
+  TableroItemData,
+  TableroPasoData,
+} from "@/lib/tablero-produccion";
 
 type CotizacionItem = PropuestaItem["cotizacion"];
 type PasoCosteo = CotizacionItem["pasos"][number];
@@ -165,6 +168,7 @@ export function calcularCostoItem(
   const materialesTotal = item.cotizacion.costos.materialesTotal;
   const tercerizadoTotal = item.cotizacion.costos.tercerizadoTotal ?? 0;
   const cargosTotal = item.cotizacion.costos.cargosDirectosTotal;
+  const cargosSinMargenTotal = item.cotizacion.costos.cargosSinMargenTotal ?? 0;
   // Tiempo extra (preparación, traslados): son horas de un centro, no un
   // desembolso. Por eso tiene fila propia y NO entra en los costos variables:
   // la contribución tiene que cubrirlo, igual que al resto del tiempo.
@@ -246,6 +250,10 @@ export function calcularCostoItem(
     {
       key: "cargos",
       label: "Cargos directos",
+      hint:
+        cargosSinMargenTotal > 0
+          ? "incluye desembolsos trasladados sin utilidad"
+          : undefined,
       tipo: "Cargo directo",
       monto: cargosTotal,
     },
@@ -377,7 +385,12 @@ export type CostosOrdenConsolidado = {
    * incluye un renglón "Sin desglosar" cuando el snapshot del item guardó el
    * total pero no sus buckets (órdenes viejas).
    */
-  composicion: Array<{ key: string; label: string; monto: number; pct: number }>;
+  composicion: Array<{
+    key: string;
+    label: string;
+    monto: number;
+    pct: number;
+  }>;
   centros: CentroCostoConsolidado[];
   minutosCotizados: number;
 };
@@ -574,7 +587,9 @@ export function tiempoRealAtipico(
  * midió. Se excluye de la comparación y se informa aparte.
  */
 export function tiempoFueMedido(fuente: string | null): boolean {
-  return fuente === "medido" || fuente === "medido_lote" || fuente === "declarado";
+  return (
+    fuente === "medido" || fuente === "medido_lote" || fuente === "declarado"
+  );
 }
 
 export type PasoRealVsCotizado = {

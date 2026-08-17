@@ -2737,6 +2737,8 @@ model CargoDirectoCatalogo {
   modosActivacionSoportados String[]                         @default([])
   /// Defaults por tipo (monto típico, base, etc.).
   configJson                Json?
+  /// true = entra al costo al que se aplica el margen; false = se traslada sin margen, pero recuperando impuestos internos y comisiones.
+  aplicaMargen              Boolean                          @default(true)
   activo                    Boolean                          @default(true)
   createdAt                 DateTime                         @default(now())
   updatedAt                 DateTime                         @updatedAt
@@ -2758,6 +2760,8 @@ model ProductoCargoDirectoPaso {
   modoActivacion          String
   condicionActivacionJson Json?
   configOverrideJson      Json?
+  /// null = hereda del catálogo; true/false = política específica de esta asociación.
+  aplicaMargenOverride    Boolean?
   activo                  Boolean              @default(true)
   createdAt               DateTime             @default(now())
   tenant                  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2776,14 +2780,16 @@ model ProductoCargoDirectoCotizacion {
   modoActivacion          String
   condicionActivacionJson Json?
   configOverrideJson      Json?
+  /// null = hereda del catálogo; true/false = política específica de esta asociación.
+  aplicaMargenOverride    Boolean?
   activo                  Boolean              @default(true)
   createdAt               DateTime             @default(now())
   tenant                  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   producto                Producto             @relation(fields: [productoId], references: [id], onDelete: Cascade)
   cargoDirectoCatalogo    CargoDirectoCatalogo @relation(fields: [cargoDirectoCatalogoId], references: [id])
 
-  @@index([tenantId, productoId])
   @@unique([tenantId, productoId, cargoDirectoCatalogoId])
+  @@index([tenantId, productoId])
 }
 
 // === COTIZACIONES V2 ===

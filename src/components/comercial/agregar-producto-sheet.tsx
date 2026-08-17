@@ -145,6 +145,8 @@ type CatalogAdicional = {
   modoCalculo?: string;
   /** Config efectiva: catálogo + override de la asociación. */
   configCargo?: Record<string, unknown>;
+  /** Política efectiva del catálogo, eventualmente sobrescrita en la asociación. */
+  aplicaMargen?: boolean;
 };
 
 type CargoInputDescriptor = {
@@ -400,7 +402,6 @@ function getTechnologyMeta(value: string) {
     }
   );
 }
-
 // Swatch visual del modo de color: material en crudo, escala de grises, o
 // grilla CMYK con indicadores opcionales de blanco (punto) y barniz (brillo).
 function renderModoColorSwatch(value: string) {
@@ -2612,6 +2613,9 @@ function getOpcionales(
           ...asRecord(cargo.cargoDirectoCatalogo.configJson),
           ...asRecord(cargo.configOverrideJson),
         },
+        aplicaMargen:
+          cargo.aplicaMargenOverride ??
+          cargo.cargoDirectoCatalogo.aplicaMargen,
       });
     }
   }
@@ -2676,6 +2680,9 @@ function getOpcionales(
               ...asRecord(cargo.cargoDirectoCatalogo.configJson),
               ...asRecord(cargo.configOverrideJson),
             },
+            aplicaMargen:
+              cargo.aplicaMargenOverride ??
+              cargo.cargoDirectoCatalogo.aplicaMargen,
           });
         }
       }
@@ -4679,7 +4686,8 @@ function ApConfigStep({
     const config = cargo.configCargo ?? {};
     if (cargo.modoCalculo === "MONTO_FIJO_PLANO") {
       const monto = Number(config.monto ?? 0);
-      if (Number.isFinite(monto) && monto > 0) return `+ ${fmt(monto)}`;
+      if (Number.isFinite(monto) && monto > 0)
+        return `+ ${fmt(monto)}${cargo.aplicaMargen === false ? " · sin margen" : ""}`;
       if (Array.isArray(config.zonas) && config.zonas.length > 0)
         return "Según zona";
     }
@@ -4688,14 +4696,14 @@ function ApConfigStep({
         config.porcentaje ?? config.porcentajeDefault ?? 0,
       );
       if (Number.isFinite(porcentaje) && porcentaje > 0)
-        return `+ ${formatNumberForSpec(porcentaje)}%`;
+        return `+ ${formatNumberForSpec(porcentaje)}%${cargo.aplicaMargen === false ? " · sin margen" : ""}`;
     }
     if (cargo.modoCalculo === "POR_UNIDAD_INPUT") {
       const precio = Number(config.precioPorUnidad ?? 0);
       const unidad =
         typeof config.unidad === "string" ? config.unidad.trim() : "";
       if (Number.isFinite(precio) && precio > 0) {
-        return `+ ${formatUnitPrice(precio, moneda)}${unidad ? ` / ${unidad}` : ""}`;
+        return `+ ${formatUnitPrice(precio, moneda)}${unidad ? ` / ${unidad}` : ""}${cargo.aplicaMargen === false ? " · sin margen" : ""}`;
       }
       return "Según cantidad";
     }

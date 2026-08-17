@@ -5,9 +5,15 @@ type AplicarCargosPaso = (
   jobContext: Record<string, unknown>,
   subtotalPaso: number,
   nivelCodigo: string | null,
-) => Array<{ cargoCodigo: string; monto: number }>;
+) => Array<{ cargoCodigo: string; monto: number; aplicaMargen: boolean }>;
 
-function cargo(id: string, nivelCodigo: string | null, monto: number) {
+function cargo(
+  id: string,
+  nivelCodigo: string | null,
+  monto: number,
+  aplicaMargen = true,
+  aplicaMargenOverride: boolean | null = null,
+) {
   return {
     id,
     cargoDirectoCatalogoId: id,
@@ -15,11 +21,13 @@ function cargo(id: string, nivelCodigo: string | null, monto: number) {
     modoActivacion: 'OBLIGATORIO',
     condicionActivacionJson: null,
     configOverrideJson: null,
+    aplicaMargenOverride,
     catalogo: {
       codigo: id,
       nombre: id,
       modoCalculo: 'MONTO_FIJO_PLANO',
       configJson: { monto },
+      aplicaMargen,
     },
   };
 }
@@ -67,5 +75,26 @@ describe('MotorUniversalService — cargos directos por nivel', () => {
     );
 
     expect(resultado.map((item) => item.cargoCodigo)).toEqual(['general']);
+  });
+
+  it('hereda la política de margen y permite sobrescribirla por nivel', () => {
+    const motor = Object.create(
+      MotorUniversalService.prototype,
+    ) as MotorUniversalService;
+    const aplicar = (
+      motor as unknown as { aplicarCargosPaso: AplicarCargosPaso }
+    ).aplicarCargosPaso.bind(motor);
+
+    const resultado = aplicar(
+      [
+        cargo('heredado-sin-margen', 'complejo', 90, false),
+        cargo('override-con-margen', 'complejo', 50, false, true),
+      ],
+      {},
+      1_000,
+      'complejo',
+    );
+
+    expect(resultado.map((item) => item.aplicaMargen)).toEqual([false, true]);
   });
 });

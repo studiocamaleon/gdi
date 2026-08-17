@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -74,7 +76,10 @@ interface CargoExtraConfig {
   modoActivacion: string;
   condicionActivacionJson?: Record<string, unknown> | null;
   configOverrideJson?: Record<string, unknown> | null;
+  aplicaMargenOverride?: boolean | null;
 }
+
+type TratamientoMargen = "HEREDAR" | "CON_MARGEN" | "SIN_MARGEN";
 
 function leerCargosExtra(value: unknown): CargoExtraConfig[] {
   if (!Array.isArray(value)) return [];
@@ -139,6 +144,7 @@ export function CostosDirectosPasoPanel({
           modoActivacion: cargo.modoActivacion,
           condicionActivacionJson: cargo.condicionActivacionJson ?? null,
           configOverrideJson: cargo.configOverrideJson ?? null,
+          aplicaMargenOverride: cargo.aplicaMargenOverride ?? null,
           cargoDirectoCatalogo: catalogo,
         },
       ];
@@ -158,6 +164,8 @@ export function CostosDirectosPasoPanel({
   const [guardando, setGuardando] = React.useState(false);
   const [aQuitar, setAQuitar] = React.useState<CargoPasoDetalle | null>(null);
   const [nivelCodigo, setNivelCodigo] = React.useState<string | null>(null);
+  const [tratamientoMargen, setTratamientoMargen] =
+    React.useState<TratamientoMargen>("HEREDAR");
   const [distribuyendo, setDistribuyendo] = React.useState<string | null>(null);
 
   const cargoSeleccionado = React.useMemo(
@@ -201,6 +209,7 @@ export function CostosDirectosPasoPanel({
     setSobrescribir(false);
     setValor("");
     setNivelCodigo(codigoNivel);
+    setTratamientoMargen("HEREDAR");
     setOpen(true);
   };
 
@@ -223,6 +232,13 @@ export function CostosDirectosPasoPanel({
           : config.precioPorUnidad;
     setValor(raw === undefined ? "" : String(raw));
     setNivelCodigo(asociacion.nivelCodigo ?? null);
+    setTratamientoMargen(
+      asociacion.aplicaMargenOverride == null
+        ? "HEREDAR"
+        : asociacion.aplicaMargenOverride
+          ? "CON_MARGEN"
+          : "SIN_MARGEN",
+    );
     setOpen(true);
   };
 
@@ -265,6 +281,10 @@ export function CostosDirectosPasoPanel({
       if (onBeforeMutate && !(await onBeforeMutate())) return;
       const payload = {
         modoActivacion: modo,
+        aplicaMargenOverride:
+          tratamientoMargen === "HEREDAR"
+            ? null
+            : tratamientoMargen === "CON_MARGEN",
         condicionActivacionJson:
           modo === "CONDICIONAL" ? (condicion ?? undefined) : undefined,
         ...(editando || configOverrideJson
@@ -381,6 +401,12 @@ export function CostosDirectosPasoPanel({
           </Badge>
           <Badge variant="secondary">
             {getLabel(modoActivacionLabels, asociacion.modoActivacion).label}
+          </Badge>
+          <Badge variant="outline">
+            {(asociacion.aplicaMargenOverride ??
+            asociacion.cargoDirectoCatalogo.aplicaMargen)
+              ? "Con margen"
+              : "Sin margen"}
           </Badge>
         </div>
       </TableCell>
@@ -621,6 +647,36 @@ export function CostosDirectosPasoPanel({
                     />
                   </div>
                 ) : null}
+
+                <Field>
+                  <FieldLabel>Tratamiento del margen</FieldLabel>
+                  <ToggleGroup
+                    multiple={false}
+                    value={[tratamientoMargen]}
+                    onValueChange={(value) => {
+                      const selected = value.at(-1);
+                      if (selected)
+                        setTratamientoMargen(selected as TratamientoMargen);
+                    }}
+                    variant="outline"
+                    className="grid w-full grid-cols-3"
+                  >
+                    <ToggleGroupItem value="HEREDAR">Heredar</ToggleGroupItem>
+                    <ToggleGroupItem value="CON_MARGEN">
+                      Con margen
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="SIN_MARGEN">
+                      Sin margen
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                  <FieldDescription>
+                    {tratamientoMargen === "HEREDAR"
+                      ? `Usa la política del catálogo: ${cargoSeleccionado.aplicaMargen ? "aplicar margen" : "trasladar sin margen"}.`
+                      : tratamientoMargen === "CON_MARGEN"
+                        ? "Este paso incorpora el costo a la base de utilidad."
+                        : "Este paso recupera el desembolso y sus cargas internas sin agregar utilidad."}
+                  </FieldDescription>
+                </Field>
 
                 <div className="rounded-lg border p-3">
                   <label className="flex cursor-pointer items-start gap-2 text-sm">

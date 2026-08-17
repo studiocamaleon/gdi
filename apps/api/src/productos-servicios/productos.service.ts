@@ -1201,6 +1201,7 @@ export class ProductosService {
       modoActivacion?: string;
       condicionActivacionJson?: Prisma.JsonValue | null;
       configOverrideJson?: Prisma.JsonValue | null;
+      aplicaMargenOverride?: boolean | null;
     };
     const parse = (json: Prisma.JsonValue | null): CargoJson[] =>
       Array.isArray(json) ? (json as CargoJson[]) : [];
@@ -1233,6 +1234,7 @@ export class ProductosService {
               modoActivacion: cargo.modoActivacion ?? 'OBLIGATORIO',
               condicionActivacionJson: cargo.condicionActivacionJson ?? null,
               configOverrideJson: cargo.configOverrideJson ?? null,
+              aplicaMargenOverride: cargo.aplicaMargenOverride ?? null,
               cargoDirectoCatalogo: catalogo,
             },
           ];

@@ -87,23 +87,30 @@ export class AplicarPrecioService {
 
     const cargas = this.normalizarCargas(input.impuestos, input.comisiones);
 
-    const netoLista = this.calcularNeto(
+    const costoSinMargen = input.costoSinMargenUnitario ?? 0;
+    const costoConMargen = Math.max(0, input.costoUnitario - costoSinMargen);
+    const netoMargenableLista = this.calcularNeto(
       input.precioConfig,
-      input.costoUnitario,
+      costoConMargen,
       input.cantidad,
       cargas,
     );
+    const trasladoSinMargen = this.netoSinMargen(costoSinMargen, cargas);
+    const netoLista = this.r(netoMargenableLista + trasladoSinMargen);
 
     // Descuento comercial: sale del neto de lista, ANTES del IVA. Como todo lo
     // de abajo (impuestos, comisiones, margen) es lineal en el neto, aplicarlo
     // acá hace que se recompute coherente solo. El costo es fijo → el descuento
     // lo absorbe el margen (puede quedar negativo; el gate vive aguas arriba).
     const descuentoUnitario = this.calcularDescuentoUnitario(
-      netoLista,
+      netoMargenableLista,
       input.descuento,
       input.cantidad,
     );
-    const neto = Math.max(0, netoLista - descuentoUnitario);
+    const neto = Math.max(
+      0,
+      netoMargenableLista - descuentoUnitario + trasladoSinMargen,
+    );
 
     const impuestosPorFuera = this.r((neto * cargas.porFueraPct) / 100);
     const brutoUnitario = this.r(neto + impuestosPorFuera);
@@ -141,6 +148,7 @@ export class AplicarPrecioService {
         totalImpuestos,
         totalComisiones,
         margenEfectivoPct,
+        trasladoSinMargenUnitario: this.r(trasladoSinMargen),
       },
       descuento: {
         aplicado: descuentoUnitario > 0,
@@ -318,7 +326,9 @@ export class AplicarPrecioService {
   ): number {
     const incluyeIva = (config.detalle?.precioIncluyeIva ?? true) !== false;
     return this.r(
-      incluyeIva ? precioConfigurado / cargas.factorPorFuera : precioConfigurado,
+      incluyeIva
+        ? precioConfigurado / cargas.factorPorFuera
+        : precioConfigurado,
     );
   }
 
@@ -473,11 +483,33 @@ export class AplicarPrecioService {
     return this.r(costo / (1 - tasaTotal));
   }
 
+  /** Recupera el costo trasladado después de cargas internas, sin utilidad. */
+  private netoSinMargen(costo: number, cargas: CargasNormalizadas): number {
+    if (costo <= 0) return 0;
+    const tasa = cargas.cargaInternaNetoPct / 100;
+    if (tasa >= 1) {
+      throw new BadRequestException(
+        'La suma de impuestos internos y comisiones debe ser menor al 100% para trasladar un costo sin margen.',
+      );
+    }
+    return this.r(costo / (1 - tasa));
+  }
+
   // ── Validaciones ────────────────────────────────────────────────────
 
   private validarInput(input: AplicarPrecioInput): void {
     if (typeof input.costoUnitario !== 'number' || input.costoUnitario < 0) {
       throw new BadRequestException('costoUnitario debe ser número >= 0');
+    }
+    const costoSinMargen = input.costoSinMargenUnitario ?? 0;
+    if (
+      !Number.isFinite(costoSinMargen) ||
+      costoSinMargen < 0 ||
+      costoSinMargen > input.costoUnitario
+    ) {
+      throw new BadRequestException(
+        'costoSinMargenUnitario debe estar entre 0 y costoUnitario',
+      );
     }
     if (typeof input.cantidad !== 'number' || input.cantidad <= 0) {
       throw new BadRequestException('cantidad debe ser número > 0');

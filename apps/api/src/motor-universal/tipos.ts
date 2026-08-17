@@ -265,6 +265,8 @@ export interface CotizacionResultado {
     tiempoExtraTotal: number;
     materialesTotal: number;
     cargosDirectosTotal: number;
+    /** Subconjunto de cargos que se recupera sin aplicar margen. */
+    cargosSinMargenTotal: number;
     /** Costo de pasos tercerizados (lo que se paga al proveedor). */
     tercerizadoTotal: number;
     total: number;
@@ -313,6 +315,7 @@ export interface CotizacionResultado {
     totalComisiones: number;
     totalImpuestos: number;
     margenEfectivoPct: number;
+    trasladoSinMargenUnitario: number;
     precioNetoUnitario: number;
     precioBrutoUnitario: number;
     precioNetoTotal: number;
@@ -714,10 +717,10 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    | 'MONTO_FIJO_PLANO'
-    | 'PORCENTAJE_SOBRE_BASE'
-    | 'POR_UNIDAD_INPUT';
+    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
   monto: number;
+  /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
+  aplicaMargen: boolean;
   detalle?: Record<string, unknown>;
 }
 
@@ -1043,11 +1046,13 @@ export interface CargoCotizacionCargado {
   modoActivacion: string;
   condicionActivacionJson: unknown;
   configOverrideJson: unknown;
+  aplicaMargenOverride: boolean | null;
   catalogo: {
     codigo: string;
     nombre: string;
     modoCalculo: string;
     configJson: unknown;
+    aplicaMargen: boolean;
   };
 }
 
@@ -1063,10 +1068,12 @@ export interface CargoPasoCargado {
   modoActivacion: string;
   condicionActivacionJson: unknown;
   configOverrideJson: unknown;
+  aplicaMargenOverride: boolean | null;
   catalogo: {
     codigo: string;
     nombre: string;
     modoCalculo: string;
     configJson: unknown;
+    aplicaMargen: boolean;
   };
 }

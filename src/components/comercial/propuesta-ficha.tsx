@@ -1929,7 +1929,10 @@ function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
           key={`${cargo.cargoCodigo}-${cargo.cargoNombre}`}
         >
           <span>{cargo.cargoNombre}</span>
-          <small>{humanizeCodigo(cargo.modoCalculo)}</small>
+          <small>
+            {humanizeCodigo(cargo.modoCalculo)} ·{" "}
+            {cargo.aplicaMargen === false ? "sin margen" : "con margen"}
+          </small>
           <strong>{formatCurrency(cargo.monto, moneda)}</strong>
         </div>
       ))}
@@ -2622,12 +2625,6 @@ function CostosItemView({
     contribucionMonto: margenContribucionMonto,
     contribucionPct: margenContribucionPct,
   } = desglose;
-  const cargosPaso = item.cotizacion.pasos
-    .flatMap((paso) => paso.cargosDirectosPaso ?? [])
-    .filter((cargo) => cargo.monto > 0);
-  const cargosCotizacion = item.cotizacion.cargosDirectosCotizacion.filter(
-    (cargo) => cargo.monto > 0,
-  );
   const visibleCostSteps = getVisibleCostSteps(item.cotizacion.pasos);
   const [expandedCostSteps, setExpandedCostSteps] = React.useState<Set<string>>(
     () => new Set(),
@@ -2895,34 +2892,6 @@ function CostosItemView({
           </table>
         </div>
       </div>
-
-      {/* Sin los bloques de tiempo extra: viven en el detalle del paso, junto
-          al tiempo y los materiales que los explican. Acá quedan los cargos en
-          PESOS —lo que sale por la puerta—, que es de lo que habla el título. */}
-      {cargosPaso.length > 0 || cargosCotizacion.length > 0 ? (
-        <div className="cost-section">
-          <div className="cost-title">Opcionales y cargos</div>
-          <div className="cost-charges">
-            {cargosPaso.map((cargo) => (
-              <div className="cost-charge" key={`paso-${cargo.cargoCodigo}`}>
-                <span>{cargo.cargoNombre}</span>
-                <small>{humanizeCodigo(cargo.modoCalculo)}</small>
-                <strong>{fmt(cargo.monto)}</strong>
-              </div>
-            ))}
-            {cargosCotizacion.map((cargo) => (
-              <div
-                className="cost-charge"
-                key={`cotizacion-${cargo.cargoCodigo}`}
-              >
-                <span>{cargo.cargoNombre}</span>
-                <small>Cotización</small>
-                <strong>{fmt(cargo.monto)}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -63,6 +63,7 @@ export class CargosDirectosProductoService {
           modosActivacionSoportados: modos,
           configJson: (dto.configJson ??
             Prisma.JsonNull) as Prisma.InputJsonValue,
+          aplicaMargen: dto.aplicaMargen ?? true,
           activo: true,
         },
       });
@@ -117,6 +118,9 @@ export class CargosDirectosProductoService {
     }
     if (dto.configJson !== undefined) {
       data.configJson = dto.configJson as Prisma.InputJsonValue;
+    }
+    if (dto.aplicaMargen !== undefined) {
+      data.aplicaMargen = dto.aplicaMargen;
     }
     if (dto.activo !== undefined) data.activo = dto.activo;
 
@@ -196,6 +200,7 @@ export class CargosDirectosProductoService {
             Prisma.JsonNull) as Prisma.InputJsonValue,
           configOverrideJson: (dto.configOverrideJson ??
             Prisma.JsonNull) as Prisma.InputJsonValue,
+          aplicaMargenOverride: dto.aplicaMargenOverride ?? null,
           activo: true,
         },
       });
@@ -242,6 +247,9 @@ export class CargosDirectosProductoService {
               configOverrideJson: (dto.configOverrideJson ??
                 Prisma.JsonNull) as Prisma.InputJsonValue,
             }
+          : {}),
+        ...(dto.aplicaMargenOverride !== undefined
+          ? { aplicaMargenOverride: dto.aplicaMargenOverride }
           : {}),
       },
     });
@@ -308,6 +316,7 @@ export class CargosDirectosProductoService {
             Prisma.JsonNull) as Prisma.InputJsonValue,
           configOverrideJson: (dto.configOverrideJson ??
             Prisma.JsonNull) as Prisma.InputJsonValue,
+          aplicaMargenOverride: dto.aplicaMargenOverride ?? null,
           activo: true,
         },
       });
@@ -353,6 +362,9 @@ export class CargosDirectosProductoService {
               configOverrideJson: (dto.configOverrideJson ??
                 Prisma.JsonNull) as Prisma.InputJsonValue,
             }
+          : {}),
+        ...(dto.aplicaMargenOverride !== undefined
+          ? { aplicaMargenOverride: dto.aplicaMargenOverride }
           : {}),
       },
     });
@@ -423,6 +435,7 @@ export class CargosDirectosProductoService {
                 asociacion.configOverrideJson === null
                   ? Prisma.JsonNull
                   : (asociacion.configOverrideJson as Prisma.InputJsonValue),
+              aplicaMargenOverride: asociacion.aplicaMargenOverride,
               activo: asociacion.activo,
             },
           }),
