@@ -65,7 +65,13 @@ describe('Ruta de producción versionada', () => {
     const ruta = await service.crearRuta(tenantId, {
       codigo: ROUTE_CODE,
       nombre: 'Ruta test versioning',
-      pasos: [{ orden: 1, familiaCodigo: 'pre_prensa' }],
+      pasos: [
+        {
+          orden: 1,
+          familiaCodigo: 'pre_prensa',
+          nombreVisible: 'Control de archivos',
+        },
+      ],
     });
     const pasoV1 = ruta.pasos[0];
     const alternativa = await service.crearProductoRutaAlternativa(
@@ -78,8 +84,21 @@ describe('Ruta de producción versionada', () => {
         esPreferida: true,
       },
     );
+    const configDefault = await prisma.productoConfigPaso.findFirstOrThrow({
+      where: {
+        tenantId,
+        productoRutaAlternativaId: alternativa.id,
+        rutaPasoId: pasoV1.id,
+      },
+    });
+    expect(configDefault.nombreVisible).toBe('Control de archivos');
+    const rutaEnListado = (await service.listarRutas(tenantId)).find(
+      (item) => item.id === ruta.id,
+    );
+    expect(rutaEnListado?.pasos[0].nombreVisible).toBe('Control de archivos');
     await service.upsertConfigPaso(tenantId, alternativa.id, {
       rutaPasoId: pasoV1.id,
+      nombreVisible: 'Control de archivos',
     });
 
     await service.actualizarRuta(tenantId, ruta.id, {
@@ -130,7 +149,7 @@ describe('Ruta de producción versionada', () => {
     ).rejects.toThrow('no pertenece a la ruta y versión');
   });
 
-  it('permite quitar un paso in-place eliminando sólo su configuración asociada', async () => {
+  it('fuerza una versión nueva y permite migrar preservando configuraciones compatibles', async () => {
     if (!tenantId) return;
     const producto = await service.crearProducto(tenantId, {
       codigo: `${PRODUCT_CODE}-INPLACE`,
@@ -144,7 +163,11 @@ describe('Ruta de producción versionada', () => {
       nombre: 'Ruta test versioning in-place',
       pasos: [
         { orden: 1, familiaCodigo: 'pre_prensa' },
-        { orden: 2, familiaCodigo: 'impresion_por_area' },
+        {
+          orden: 2,
+          familiaCodigo: 'impresion_por_area',
+          nombreVisible: 'Impresión principal',
+        },
       ],
     });
     const alternativa = await service.crearProductoRutaAlternativa(
@@ -160,27 +183,48 @@ describe('Ruta de producción versionada', () => {
     for (const paso of ruta.pasos) {
       await service.upsertConfigPaso(tenantId, alternativa.id, {
         rutaPasoId: paso.id,
+        nombreVisible: paso.nombreVisible,
       });
     }
 
     await service.actualizarRuta(tenantId, ruta.id, {
-      pasos: [{ orden: 1, familiaCodigo: 'impresion_por_area' }],
+      pasos: [
+        {
+          orden: 1,
+          familiaCodigo: 'impresion_por_area',
+          nombreVisible: 'Salida principal',
+        },
+      ],
       nuevaVersion: false,
     });
 
     const pasos = await prisma.rutaPaso.findMany({
-      where: { tenantId, rutaId: ruta.id, version: 1 },
-      orderBy: { orden: 'asc' },
+      where: { tenantId, rutaId: ruta.id },
+      orderBy: [{ version: 'asc' }, { orden: 'asc' }],
     });
-    expect(pasos.map((paso) => paso.familiaCodigo)).toEqual([
-      'impresion_por_area',
+    expect(
+      pasos.map((paso) => `${paso.version}:${paso.familiaCodigo}`),
+    ).toEqual(['1:pre_prensa', '1:impresion_por_area', '2:impresion_por_area']);
+
+    const alternativaAntes =
+      await prisma.productoRutaAlternativa.findUniqueOrThrow({
+        where: { id: alternativa.id },
+      });
+    expect(alternativaAntes.rutaVersion).toBe(1);
+
+    const resultado = await service.migrarProductosRuta(tenantId, ruta.id, [
+      alternativa.id,
     ]);
+    expect(resultado).toEqual({ migradas: 1, requierenConfiguracion: 0 });
+
     const configs = await prisma.productoConfigPaso.findMany({
       where: { tenantId, productoRutaAlternativaId: alternativa.id },
       include: { rutaPaso: true },
     });
     expect(configs).toHaveLength(1);
+    expect(configs[0].rutaPaso.version).toBe(2);
     expect(configs[0].rutaPaso.familiaCodigo).toBe('impresion_por_area');
+    expect(configs[0].nombreVisible).toBe('Salida principal');
 
     await prisma.producto.delete({ where: { id: producto.id } });
     await prisma.ruta.delete({ where: { id: ruta.id } });

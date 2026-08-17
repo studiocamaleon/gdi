@@ -2923,7 +2923,11 @@ export function ConfigPasosEditorView({
             Record<string, unknown> | null | undefined) ??
           base?.paramsPasoJson ??
           null,
-        nombreVisible: existente?.nombreVisible ?? base?.nombreVisible ?? null,
+        nombreVisible:
+          existente?.nombreVisible ??
+          paso.nombreVisible ??
+          base?.nombreVisible ??
+          null,
         maquinaM1Id: existente?.maquinaM1?.id ?? base?.maquinaM1Id ?? null,
         perfilM1Id: existente?.perfilM1?.id ?? base?.perfilM1Id ?? null,
         centroCostoId: existente?.maquinaM1

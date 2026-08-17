@@ -29,6 +29,7 @@ import {
   ActualizarRutaDto,
   CrearRutaDto,
   DuplicarRutaDto,
+  MigrarProductosRutaDto,
 } from './dto/ruta.dto';
 import {
   ActualizarPasoExtraDto,
@@ -170,10 +171,13 @@ export class ProductosServiciosController {
   }
 
   @Get('rutas')
-  async listarRutas(@Req() req: RequestWithAuth) {
+  async listarRutas(
+    @Req() req: RequestWithAuth,
+    @Query('incluirInactivas') incluirInactivas?: string,
+  ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.service.listarRutas(tenantId);
+    return this.service.listarRutas(tenantId, incluirInactivas === 'true');
   }
 
   @Get('rutas/:id')
@@ -213,6 +217,22 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.duplicarRuta(tenantId, id, dto);
+  }
+
+  @Permiso('costos.gestionar')
+  @Post('rutas/:id/migrar-productos')
+  async migrarProductosRuta(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: MigrarProductosRutaDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.migrarProductosRuta(
+      tenantId,
+      id,
+      dto.rutaAlternativaIds,
+    );
   }
 
   @Permiso('costos.gestionar')

@@ -205,7 +205,8 @@ export class ProductoRutasService {
       });
 
       for (const config of origen.configPasos) {
-        if (!pasosOrigen.some((paso) => paso.id === config.rutaPasoId)) continue;
+        if (!pasosOrigen.some((paso) => paso.id === config.rutaPasoId))
+          continue;
         const configDuplicada = await tx.productoConfigPaso.create({
           data: {
             tenantId,
@@ -269,14 +270,16 @@ export class ProductoRutasService {
                 },
               });
             if (candidato.variantes.length > 0) {
-              await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany({
-                data: candidato.variantes.map((variante) => ({
-                  tenantId,
-                  candidatoId: candidatoDuplicado.id,
-                  varianteId: variante.varianteId,
-                  orden: variante.orden,
-                })),
-              });
+              await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany(
+                {
+                  data: candidato.variantes.map((variante) => ({
+                    tenantId,
+                    candidatoId: candidatoDuplicado.id,
+                    varianteId: variante.varianteId,
+                    orden: variante.orden,
+                  })),
+                },
+              );
             }
           }
         }
@@ -342,14 +345,23 @@ export class ProductoRutasService {
   ) {
     const pasos = await this.prisma.rutaPaso.findMany({
       where: { tenantId, rutaId, version: rutaVersion, activo: true },
-      select: { id: true, familiaCodigo: true },
+      select: { id: true, familiaCodigo: true, nombreVisible: true },
     });
     const codigos = pasos.map((paso) => paso.familiaCodigo);
+    // `familiaCodigo` admite tanto códigos estables del sistema
+    // (p. ej. `pre_prensa`) como el UUID de un PasoTenant. Prisma castea todo
+    // el `in` al tipo UUID de PasoTenant.id, por lo que mezclar ambos formatos
+    // hace fallar incluso las rutas compuestas sólo por pasos del sistema.
+    const codigosPasoTenant = codigos.filter((codigo) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        codigo,
+      ),
+    );
     const [basesTenant, basesSistema] = await Promise.all([
       this.prisma.pasoTenant.findMany({
         where: {
           tenantId,
-          id: { in: codigos },
+          id: { in: codigosPasoTenant },
           configBaseJson: { not: Prisma.JsonNull },
         },
         select: { id: true, configBaseJson: true },
@@ -364,22 +376,26 @@ export class ProductoRutasService {
       }),
     ]);
     const porPaso = new Map<string, Prisma.JsonValue | null>([
-      ...basesSistema.map((fila) => [fila.familiaCodigo, fila.configBaseJson] as const),
+      ...basesSistema.map(
+        (fila) => [fila.familiaCodigo, fila.configBaseJson] as const,
+      ),
       ...basesTenant.map((fila) => [fila.id, fila.configBaseJson] as const),
     ]);
     for (const paso of pasos) {
       const base = porPaso.get(paso.familiaCodigo);
-      if (!base || typeof base !== 'object' || Array.isArray(base)) continue;
-      await this.configPasos.upsertConfigPaso(
-        tenantId,
-        rutaAlternativaId,
-        {
-          ...(base as unknown as UpsertProductoConfigPasoDto),
-          rutaPasoId: paso.id,
-          requiereRutaPasoIds: [],
-        },
-      );
+      const baseValida =
+        base && typeof base === 'object' && !Array.isArray(base)
+          ? (base as unknown as UpsertProductoConfigPasoDto)
+          : null;
+      const nombreVisible =
+        paso.nombreVisible?.trim() || baseValida?.nombreVisible?.trim() || null;
+      if (!baseValida && !nombreVisible) continue;
+      await this.configPasos.upsertConfigPaso(tenantId, rutaAlternativaId, {
+        ...(baseValida ?? {}),
+        rutaPasoId: paso.id,
+        nombreVisible,
+        requiereRutaPasoIds: [],
+      });
     }
   }
-
 }

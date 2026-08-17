@@ -200,8 +200,11 @@ export async function eliminarProducto(id: string) {
   });
 }
 
-export async function getRutas(): Promise<RutaListItem[]> {
-  return apiRequest<RutaListItem[]>("/productos-servicios/rutas");
+export async function getRutas(options?: {
+  incluirInactivas?: boolean;
+}): Promise<RutaListItem[]> {
+  const query = options?.incluirInactivas ? "?incluirInactivas=true" : "";
+  return apiRequest<RutaListItem[]>(`/productos-servicios/rutas${query}`);
 }
 
 export async function getRutaById(id: string) {
@@ -211,6 +214,7 @@ export async function getRutaById(id: string) {
 export interface PasoRutaPayload {
   orden: number;
   familiaCodigo: string;
+  nombreVisible?: string | null;
   icono?: string;
 }
 
@@ -271,6 +275,17 @@ export async function duplicarRuta(
 
 export async function eliminarRuta(id: string) {
   return apiRequest(`/productos-servicios/rutas/${id}`, { method: "DELETE" });
+}
+
+export async function migrarProductosRuta(
+  id: string,
+  rutaAlternativaIds: string[],
+): Promise<{ migradas: number; requierenConfiguracion: number }> {
+  return apiRequest(`/productos-servicios/rutas/${id}/migrar-productos`, {
+    method: "POST",
+    body: JSON.stringify({ rutaAlternativaIds }),
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 // ============================================================================
