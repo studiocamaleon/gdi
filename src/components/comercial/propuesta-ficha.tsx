@@ -3671,13 +3671,6 @@ function EmptyTab({
   );
 }
 
-function calcularCargosDirectosItems(items: PropuestaItem[]) {
-  return items.reduce(
-    (acc, item) => acc + item.cotizacion.costos.cargosDirectosTotal,
-    0,
-  );
-}
-
 type ImpuestoResumenLinea = {
   key: string;
   nombre: string;
@@ -4078,7 +4071,6 @@ export function ResumenBar({
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatCurrency(v, moneda);
   const resumen = calcularResumenOrden(items, cargosOrden);
-  const cargosImpuestos = resumen.cargosImpuestos;
   const productosVisibles = items.reduce(
     (acc, item) => {
       const amounts = getItemOrderVisibleAmounts(item);
@@ -4090,11 +4082,14 @@ export function ResumenBar({
     },
     { subtotal: 0, impuestos: 0, total: 0 },
   );
-  const subtotal = productosVisibles.subtotal + resumen.cargosSubtotal;
-  const impuestosVisibles = productosVisibles.impuestos + cargosImpuestos;
-  const cargosItems = calcularCargosDirectosItems(items);
-  const cargosOrdenTotal = resumen.cargosSubtotal;
-  const cargos = cargosItems + cargosOrdenTotal;
+  // Los cargos DEL PASO ya integran el precio neto de cada producto: volver a
+  // mostrarlos como sumando sería contarlos visualmente dos veces. Sólo los
+  // cargos cargados a nivel ORDEN viven fuera del subtotal de los ítems.
+  const subtotal = productosVisibles.subtotal;
+  const impuestosVisibles = productosVisibles.impuestos;
+  const cargosOrdenMostrados = sinComprobante
+    ? resumen.cargosSubtotal
+    : resumen.cargosTotal;
   const totalConCargos = productosVisibles.total + resumen.cargosTotal;
 
   // Las comisiones ya están dentro del subtotal (son parte del precio): no se
@@ -4107,30 +4102,30 @@ export function ResumenBar({
     0,
   );
   // Sin comprobante: se oculta el IVA y el total cae al neto (§6 del cuaderno
-  // de margen). El neto es `subtotal` directo (products+cargos sin IVA) — no
-  // `total − IVA`, que arrastra el redondeo del IVA y descuadra 1 peso. Se
-  // cumple la identidad totalConCargos = subtotal + impuestosVisibles, y este
-  // neto coincide con el `total` que persiste el backend.
+  // de margen). Se suman el subtotal neto de productos y los cargos netos DE
+  // LA ORDEN; no se usa `total − IVA`, porque arrastra redondeos.
   const impuestosMostrados = sinComprobante ? 0 : impuestosVisibles;
+  const totalSinComprobante = subtotal + resumen.cargosSubtotal;
   const totalMostrado =
     readOnly && resumenPersistido
       ? resumenPersistido.total
       : sinComprobante
-        ? subtotal
+        ? totalSinComprobante
         : totalConCargos;
   const descuentoMostrado =
     readOnly && resumenPersistido
       ? resumenPersistido.descuentoTotal
       : descuentoTotal;
+  const subtotalMostrado =
+    readOnly && resumenPersistido ? resumenPersistido.subtotal : subtotal;
   const brk = [
     {
-      k: "Subtotal",
-      v: readOnly && resumenPersistido ? resumenPersistido.subtotal : subtotal,
+      k: descuentoMostrado > 0 ? "Subtotal de lista" : "Subtotal",
+      v: subtotalMostrado + descuentoMostrado,
     },
-    {
-      k: "Descuento",
-      v: descuentoMostrado > 0 ? -descuentoMostrado : 0,
-    },
+    ...(descuentoMostrado > 0
+      ? [{ k: "Descuento", v: -descuentoMostrado }]
+      : []),
     {
       k: "Impuestos",
       v:
@@ -4138,7 +4133,9 @@ export function ResumenBar({
           ? resumenPersistido.impuestos
           : impuestosMostrados,
     },
-    { k: "Cargos", v: cargos },
+    ...(cargosOrdenMostrados > 0
+      ? [{ k: "Cargos de la orden", v: cargosOrdenMostrados }]
+      : []),
   ];
 
   // Toggle "sin comprobante fiscal" (FileX). Estado, no acción de una vez:
