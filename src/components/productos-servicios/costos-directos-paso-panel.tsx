@@ -15,14 +15,6 @@ import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +28,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import {
   actualizarCargoPaso,
   actualizarPasoExtra,
@@ -357,23 +350,42 @@ export function CostosDirectosPasoPanel({
   };
 
   const renderAsociacion = (asociacion: CargoPasoDetalle) => (
-    <Card key={asociacion.id} size="sm" className="gap-2">
-      <CardHeader>
-        <CardTitle className="flex min-w-0 items-center gap-2">
+    <TableRow key={asociacion.id}>
+      <TableCell className="w-full min-w-64 py-3">
+        <div className="flex min-w-0 items-center gap-3">
           <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-lg">
             <CircleDollarSignIcon className="size-4" aria-hidden />
           </span>
-          <span className="truncate">
-            {asociacion.cargoDirectoCatalogo.nombre}
-          </span>
-        </CardTitle>
-        <CardDescription className="pl-10 text-xs">
-          {resumenCargo(
-            asociacion.cargoDirectoCatalogo,
-            asociacion.configOverrideJson,
-          )}
-        </CardDescription>
-        <CardAction className="flex items-center gap-1">
+          <div className="min-w-0">
+            <div className="truncate font-medium">
+              {asociacion.cargoDirectoCatalogo.nombre}
+            </div>
+            <div className="text-muted-foreground text-xs">
+              {resumenCargo(
+                asociacion.cargoDirectoCatalogo,
+                asociacion.configOverrideJson,
+              )}
+            </div>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Badge variant="outline">
+            {
+              getLabel(
+                modoCalculoCargoLabels,
+                asociacion.cargoDirectoCatalogo.modoCalculo,
+              ).label
+            }
+          </Badge>
+          <Badge variant="secondary">
+            {getLabel(modoActivacionLabels, asociacion.modoActivacion).label}
+          </Badge>
+        </div>
+      </TableCell>
+      <TableCell className="w-20 pr-3 text-right">
+        <div className="flex items-center justify-end gap-1">
           <Button
             type="button"
             variant="ghost"
@@ -393,22 +405,9 @@ export function CostosDirectosPasoPanel({
           >
             <Trash2Icon />
           </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-wrap gap-1 pl-13">
-        <Badge variant="outline" className="text-[10px]">
-          {
-            getLabel(
-              modoCalculoCargoLabels,
-              asociacion.cargoDirectoCatalogo.modoCalculo,
-            ).label
-          }
-        </Badge>
-        <Badge variant="secondary" className="text-[10px]">
-          {getLabel(modoActivacionLabels, asociacion.modoActivacion).label}
-        </Badge>
-      </CardContent>
-    </Card>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 
   const generalesLegados = niveles
@@ -501,9 +500,11 @@ export function CostosDirectosPasoPanel({
                       </Button>
                     </div>
                     {cargosNivel.length > 0 ? (
-                      <div className="grid gap-2 p-3 md:grid-cols-2">
-                        {cargosNivel.map(renderAsociacion)}
-                      </div>
+                      <Table>
+                        <TableBody>
+                          {cargosNivel.map(renderAsociacion)}
+                        </TableBody>
+                      </Table>
                     ) : (
                       <p className="text-muted-foreground px-3 py-3 text-xs">
                         Sin costos adicionales para este nivel.
@@ -539,9 +540,9 @@ export function CostosDirectosPasoPanel({
               </Button>
             </div>
             {asociaciones.length > 0 ? (
-              <div className="grid gap-2 p-3 md:grid-cols-2">
-                {asociaciones.map(renderAsociacion)}
-              </div>
+              <Table>
+                <TableBody>{asociaciones.map(renderAsociacion)}</TableBody>
+              </Table>
             ) : (
               <p className="text-muted-foreground px-3 py-3 text-xs">
                 Sin costos monetarios adicionales para este paso.
