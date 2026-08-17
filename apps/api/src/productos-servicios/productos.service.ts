@@ -1132,6 +1132,10 @@ export class ProductosService {
       tenantId,
       producto.pasosExtras,
     );
+    const pasoExtraCargos = await this.hydratePasoExtraCargos(
+      tenantId,
+      producto.pasosExtras,
+    );
     return {
       ...producto,
       rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
@@ -1156,6 +1160,7 @@ export class ProductosService {
             ...pe,
             maquinasCandidatas: pasoExtraCandidatas.get(pe.id) ?? [],
             slotsMateriales: pasoExtraSlots.get(pe.id) ?? [],
+            cargosDirectosPaso: pasoExtraCargos.get(pe.id) ?? [],
           })),
         configPasos: rutaAlt.configPasos.map((configPaso) => ({
           ...configPaso,
@@ -1181,6 +1186,59 @@ export class ProductosService {
         })),
       })),
     };
+  }
+
+  private async hydratePasoExtraCargos(
+    tenantId: string,
+    pasosExtras: Array<{
+      id: string;
+      configCargosDirectosJson: Prisma.JsonValue | null;
+    }>,
+  ) {
+    type CargoJson = {
+      cargoDirectoCatalogoId?: string;
+      nivelCodigo?: string | null;
+      modoActivacion?: string;
+      condicionActivacionJson?: Prisma.JsonValue | null;
+      configOverrideJson?: Prisma.JsonValue | null;
+    };
+    const parse = (json: Prisma.JsonValue | null): CargoJson[] =>
+      Array.isArray(json) ? (json as CargoJson[]) : [];
+    const ids = new Set<string>();
+    for (const paso of pasosExtras) {
+      for (const cargo of parse(paso.configCargosDirectosJson)) {
+        if (cargo.cargoDirectoCatalogoId) {
+          ids.add(cargo.cargoDirectoCatalogoId);
+        }
+      }
+    }
+    const catalogos = ids.size
+      ? await this.prisma.cargoDirectoCatalogo.findMany({
+          where: { tenantId, id: { in: [...ids] }, activo: true },
+        })
+      : [];
+    const porId = new Map(catalogos.map((cargo) => [cargo.id, cargo]));
+    return new Map(
+      pasosExtras.map((paso) => [
+        paso.id,
+        parse(paso.configCargosDirectosJson).flatMap((cargo, index) => {
+          const catalogo = cargo.cargoDirectoCatalogoId
+            ? porId.get(cargo.cargoDirectoCatalogoId)
+            : null;
+          if (!catalogo) return [];
+          return [
+            {
+              id: `${paso.id}:cargo:${index}`,
+              nivelCodigo: cargo.nivelCodigo ?? null,
+              modoActivacion: cargo.modoActivacion ?? 'OBLIGATORIO',
+              condicionActivacionJson: cargo.condicionActivacionJson ?? null,
+              configOverrideJson: cargo.configOverrideJson ?? null,
+              cargoDirectoCatalogo: catalogo,
+            },
+          ];
+        }),
+      ]),
+    );
   }
 
   /**

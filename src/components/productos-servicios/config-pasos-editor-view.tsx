@@ -6875,12 +6875,15 @@ export function ConfigPasosEditorView({
                           </>
                         )}
 
-                        {!configuracionBase && !esExtra ? (
+                        {!configuracionBase ? (
                           <CostosDirectosPasoPanel
-                            configPaso={configExistente ?? null}
+                            configPaso={esExtra ? null : (configExistente ?? null)}
+                            pasoExtra={esExtra ? activeExtra : null}
                             catalogoCargos={catalogoCargos}
                             niveles={leerNivelesPaso(
-                              configExistente?.paramsPasoJson,
+                              esExtra
+                                ? activeExtra?.paramsPasoJson
+                                : configExistente?.paramsPasoJson,
                             )}
                             includeMeasureFields={
                               producto.modoMedidas === "LIBRE" ||

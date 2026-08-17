@@ -733,6 +733,7 @@ export interface ActualizarPasoExtraPayload {
   configSlotsMaterialesJson?: UpsertSlotMaterialPayload[];
   configCargosDirectosJson?: Array<{
     cargoDirectoCatalogoId: string;
+    nivelCodigo?: string | null;
     modoActivacion: string;
     condicionActivacionJson?: Record<string, unknown> | null;
     configOverrideJson?: Record<string, unknown> | null;

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   actualizarCargoPaso,
+  actualizarPasoExtra,
   asociarCargoPaso,
   desasociarCargoPaso,
   distribuirCargoPasoPorNiveles,
@@ -32,6 +33,7 @@ import type {
   CargoDirectoCatalogo,
   CargoPasoDetalle,
   ConfigPasoDetalle,
+  PasoExtra,
 } from "@/lib/productos-servicios";
 import {
   getRuleFields,
@@ -50,10 +52,30 @@ type ModoActivacion = "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
 
 interface Props {
   configPaso: ConfigPasoDetalle | null;
+  pasoExtra?: PasoExtra | null;
   catalogoCargos: CargoDirectoCatalogo[];
   includeMeasureFields: boolean;
   ruleExtraFields: RuleFieldDefinition[];
   niveles?: NivelesPasoConfig | null;
+}
+
+interface CargoExtraConfig {
+  cargoDirectoCatalogoId: string;
+  nivelCodigo?: string | null;
+  modoActivacion: string;
+  condicionActivacionJson?: Record<string, unknown> | null;
+  configOverrideJson?: Record<string, unknown> | null;
+}
+
+function leerCargosExtra(value: unknown): CargoExtraConfig[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is CargoExtraConfig =>
+    Boolean(
+      item &&
+      typeof item === "object" &&
+      typeof (item as CargoExtraConfig).cargoDirectoCatalogoId === "string",
+    ),
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -82,13 +104,37 @@ function resumenCargo(cargo: CargoDirectoCatalogo, override?: unknown) {
 
 export function CostosDirectosPasoPanel({
   configPaso,
+  pasoExtra = null,
   catalogoCargos,
   includeMeasureFields,
   ruleExtraFields,
   niveles = null,
 }: Props) {
   const router = useRouter();
-  const asociaciones = configPaso?.cargosDirectosPaso ?? [];
+  const cargosExtra = React.useMemo(
+    () => leerCargosExtra(pasoExtra?.configCargosDirectosJson),
+    [pasoExtra?.configCargosDirectosJson],
+  );
+  const asociaciones = React.useMemo<CargoPasoDetalle[]>(() => {
+    if (!pasoExtra) return configPaso?.cargosDirectosPaso ?? [];
+    return cargosExtra.flatMap((cargo, index) => {
+      const catalogo = catalogoCargos.find(
+        (item) => item.id === cargo.cargoDirectoCatalogoId,
+      );
+      if (!catalogo) return [];
+      return [
+        {
+          id: `extra:${index}`,
+          nivelCodigo: cargo.nivelCodigo ?? null,
+          modoActivacion: cargo.modoActivacion,
+          condicionActivacionJson: cargo.condicionActivacionJson ?? null,
+          configOverrideJson: cargo.configOverrideJson ?? null,
+          cargoDirectoCatalogo: catalogo,
+        },
+      ];
+    });
+  }, [cargosExtra, catalogoCargos, configPaso?.cargosDirectosPaso, pasoExtra]);
+  const destinoListo = Boolean(configPaso || pasoExtra);
   const [open, setOpen] = React.useState(false);
   const [editando, setEditando] = React.useState<CargoPasoDetalle | null>(null);
   const [cargoId, setCargoId] = React.useState("");
@@ -184,7 +230,7 @@ export function CostosDirectosPasoPanel({
   };
 
   const guardar = async () => {
-    if (!configPaso || !cargoSeleccionado) return;
+    if (!destinoListo || !cargoSeleccionado) return;
     const configOverrideJson = buildOverride();
     if (configOverrideJson === null) {
       toast.error("Ingresá un valor mayor a cero.");
@@ -214,9 +260,26 @@ export function CostosDirectosPasoPanel({
           ? { configOverrideJson: configOverrideJson ?? null }
           : {}),
       };
-      if (editando) {
+      if (pasoExtra) {
+        const siguiente = [...cargosExtra];
+        const cargo: CargoExtraConfig = {
+          cargoDirectoCatalogoId: cargoSeleccionado.id,
+          nivelCodigo,
+          ...payload,
+        };
+        if (editando) {
+          const index = Number(editando.id.split(":")[1]);
+          siguiente[index] = cargo;
+        } else {
+          siguiente.push(cargo);
+        }
+        await actualizarPasoExtra(pasoExtra.id, {
+          configCargosDirectosJson: siguiente,
+        });
+      } else if (editando) {
         await actualizarCargoPaso(editando.id, payload);
       } else {
+        if (!configPaso) return;
         await asociarCargoPaso(configPaso.id, {
           cargoDirectoCatalogoId: cargoSeleccionado.id,
           ...(nivelCodigo ? { nivelCodigo } : {}),
@@ -244,7 +307,23 @@ export function CostosDirectosPasoPanel({
   const distribuirPorNiveles = async (asociacion: CargoPasoDetalle) => {
     setDistribuyendo(asociacion.id);
     try {
-      await distribuirCargoPasoPorNiveles(asociacion.id);
+      if (pasoExtra && niveles) {
+        const index = Number(asociacion.id.split(":")[1]);
+        const original = cargosExtra[index];
+        const siguiente = cargosExtra.flatMap((cargo, cargoIndex) =>
+          cargoIndex === index
+            ? niveles.opciones.map((nivel) => ({
+                ...original,
+                nivelCodigo: nivel.codigo,
+              }))
+            : [cargo],
+        );
+        await actualizarPasoExtra(pasoExtra.id, {
+          configCargosDirectosJson: siguiente,
+        });
+      } else {
+        await distribuirCargoPasoPorNiveles(asociacion.id);
+      }
       toast.success("Costo separado por nivel");
       router.refresh();
     } catch (error) {
@@ -332,7 +411,7 @@ export function CostosDirectosPasoPanel({
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border bg-background p-4">
-        {!configPaso ? (
+        {!destinoListo ? (
           <Empty className="min-h-0 items-start gap-0 border p-4 text-left">
             <EmptyDescription>
               Guardá primero la configuración del paso. Después vas a poder
@@ -457,7 +536,7 @@ export function CostosDirectosPasoPanel({
                       overrides: {},
                     },
                   )}”.`
-                : "Se aplicará dentro de este paso y quedará identificado en el desglose de costos."}
+                : `Se aplicará dentro de este ${pasoExtra ? "paso extra" : "paso"} y quedará identificado en el desglose de costos.`}
             </SheetDescription>
           </SheetHeader>
           <div className="space-y-5 px-4">
@@ -584,7 +663,16 @@ export function CostosDirectosPasoPanel({
         onConfirmar={async () => {
           if (!aQuitar) return;
           try {
-            await desasociarCargoPaso(aQuitar.id);
+            if (pasoExtra) {
+              const index = Number(aQuitar.id.split(":")[1]);
+              await actualizarPasoExtra(pasoExtra.id, {
+                configCargosDirectosJson: cargosExtra.filter(
+                  (_, cargoIndex) => cargoIndex !== index,
+                ),
+              });
+            } else {
+              await desasociarCargoPaso(aQuitar.id);
+            }
             toast.success("Costo directo quitado del paso");
             setAQuitar(null);
             router.refresh();

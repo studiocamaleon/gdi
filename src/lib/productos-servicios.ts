@@ -395,6 +395,8 @@ export interface PasoExtra {
   configSlotsMaterialesJson?: unknown;
   configMaquinasCandidatasJson?: unknown;
   configCargosDirectosJson?: unknown;
+  /** Cargos embebidos hidratados por el backend para editor y cotizador. */
+  cargosDirectosPaso?: CargoPasoDetalle[];
   /** M-2: candidatas hidratadas por el detalle (mismo shape que configPasos). */
   maquinasCandidatas?: ConfigPasoDetalle["maquinasCandidatas"];
   /** G-F4: slots de material hidratados por el detalle (mismo shape que configPasos). */

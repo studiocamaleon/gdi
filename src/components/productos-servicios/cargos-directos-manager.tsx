@@ -9,9 +9,17 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HumanSelect } from "@/components/ui/human-select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Sheet,
   SheetContent,
@@ -57,11 +65,16 @@ type ZonaCargoDraft = {
   monto: string;
 };
 
-const MODOS_CARGO_UI: Array<{ value: CargoModoUi; label: string; description: string }> = [
+const MODOS_CARGO_UI: Array<{
+  value: CargoModoUi;
+  label: string;
+  description: string;
+}> = [
   {
     value: "MONTO_FIJO_PLANO",
     label: "Monto fijo editable",
-    description: "Un importe sugerido reutilizable, con override opcional por paso u orden.",
+    description:
+      "Un importe sugerido reutilizable, con override opcional por paso u orden.",
   },
   {
     value: "TABLA_IMPORTES",
@@ -88,6 +101,14 @@ const INPUT_CANTIDAD_OPTIONS = [
   { value: "viajes", label: "Viajes", unit: "viajes" },
   { value: "paradas", label: "Paradas", unit: "paradas" },
   { value: "cajas", label: "Cajas", unit: "cajas" },
+  { value: "metrosLineales", label: "Metros lineales", unit: "m" },
+  { value: "metrosCuadrados", label: "Metros cuadrados", unit: "m²" },
+  { value: "pliegos", label: "Pliegos", unit: "pliegos" },
+  { value: "hojas", label: "Hojas", unit: "hojas" },
+  { value: "unidadesCargo", label: "Unidades", unit: "u" },
+  { value: "coloresCargo", label: "Colores", unit: "colores" },
+  { value: "archivosCargo", label: "Archivos", unit: "archivos" },
+  { value: "rollosCargo", label: "Rollos", unit: "rollos" },
 ];
 
 const UNIDAD_OPTIONS = [
@@ -98,6 +119,13 @@ const UNIDAD_OPTIONS = [
   { value: "paradas", label: "Paradas" },
   { value: "cajas", label: "Cajas" },
   { value: "u", label: "Unidades" },
+  { value: "m", label: "Metros lineales" },
+  { value: "m²", label: "Metros cuadrados" },
+  { value: "pliegos", label: "Pliegos" },
+  { value: "hojas", label: "Hojas" },
+  { value: "colores", label: "Colores" },
+  { value: "archivos", label: "Archivos" },
+  { value: "rollos", label: "Rollos" },
 ];
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -152,7 +180,10 @@ function slugifyCodigo(value: string) {
   return normalized || "cargo";
 }
 
-function generarCodigoCargo(nombre: string, existentes: CargoDirectoCatalogo[]) {
+function generarCodigoCargo(
+  nombre: string,
+  existentes: CargoDirectoCatalogo[],
+) {
   const base = slugifyCodigo(nombre);
   const codigos = new Set(existentes.map((cargo) => cargo.codigo));
   if (!codigos.has(base)) return base;
@@ -166,15 +197,12 @@ function generarCodigoCargo(nombre: string, existentes: CargoDirectoCatalogo[]) 
   return `${base.slice(0, 37)}_${Date.now().toString(36)}`;
 }
 
-function selectClassName() {
-  return "border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none";
-}
-
 function formatConfigResumen(cargo: CargoDirectoCatalogo, moneda: Moneda) {
   const config = asRecord(cargo.configJson);
   if (cargo.modoCalculo === "MONTO_FIJO_PLANO") {
     const zonas = Array.isArray(config.zonas) ? config.zonas : [];
-    if (zonas.length > 0) return `${zonas.length} importe${zonas.length === 1 ? "" : "s"}`;
+    if (zonas.length > 0)
+      return `${zonas.length} importe${zonas.length === 1 ? "" : "s"}`;
     const monto = Number(config.monto ?? 0);
     return monto > 0
       ? formatearMoneda(monto, moneda, { decimales: 0 })
@@ -193,10 +221,16 @@ function formatConfigResumen(cargo: CargoDirectoCatalogo, moneda: Moneda) {
   return "Sin configuración";
 }
 
-export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoDirectoCatalogo[] }) {
+export function CargosDirectosManager({
+  initialCargos,
+}: {
+  initialCargos: CargoDirectoCatalogo[];
+}) {
   const { moneda } = useConfigRegional();
   const router = useRouter();
-  const [editando, setEditando] = React.useState<CargoDirectoCatalogo | null>(null);
+  const [editando, setEditando] = React.useState<CargoDirectoCatalogo | null>(
+    null,
+  );
   const [openSheet, setOpenSheet] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
 
@@ -204,7 +238,8 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
   const [codigo, setCodigo] = React.useState("");
   const [nombre, setNombre] = React.useState("");
   const [descripcion, setDescripcion] = React.useState("");
-  const [modoCalculo, setModoCalculo] = React.useState<CargoModoUi>("MONTO_FIJO_PLANO");
+  const [modoCalculo, setModoCalculo] =
+    React.useState<CargoModoUi>("MONTO_FIJO_PLANO");
   const [montoFijo, setMontoFijo] = React.useState("");
   const [zonas, setZonas] = React.useState<ZonaCargoDraft[]>([]);
   const [porcentaje, setPorcentaje] = React.useState("");
@@ -242,9 +277,15 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     setModoCalculo(modoUiFromCargo(c));
     setMontoFijo(asNumberString(config.monto));
     setZonas(zonasFromConfig(config));
-    setPorcentaje(asNumberString(config.porcentaje ?? config.porcentajeDefault));
+    setPorcentaje(
+      asNumberString(config.porcentaje ?? config.porcentajeDefault),
+    );
     setPrecioPorUnidad(asNumberString(config.precioPorUnidad));
-    setInputCantidad(typeof config.inputCantidad === "string" ? config.inputCantidad : "cantidad");
+    setInputCantidad(
+      typeof config.inputCantidad === "string"
+        ? config.inputCantidad
+        : "cantidad",
+    );
     setUnidad(typeof config.unidad === "string" ? config.unidad : "");
     setModosActivacion(
       c.modosActivacionSoportados.length > 0
@@ -257,6 +298,11 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
   const handleGuardar = async () => {
     setGuardando(true);
     try {
+      const nombreLimpio = nombre.trim();
+      if (!nombreLimpio) {
+        toast.error("Ingresá un nombre para el costo.");
+        return;
+      }
       if (modosActivacion.length === 0) {
         toast.error("Elegí al menos una forma de activación.");
         setGuardando(false);
@@ -279,10 +325,23 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
             nombre: zona.nombre.trim(),
             monto: Number(zona.monto),
           }))
-          .filter((zona) => zona.codigo && zona.nombre && Number.isFinite(zona.monto) && zona.monto > 0);
+          .filter(
+            (zona) =>
+              zona.codigo &&
+              zona.nombre &&
+              Number.isFinite(zona.monto) &&
+              zona.monto > 0,
+          );
         if (zonasValidas.length === 0) {
           toast.error("Agregá al menos una zona con código, nombre y monto.");
           setGuardando(false);
+          return;
+        }
+        if (
+          new Set(zonasValidas.map((zona) => zona.codigo)).size !==
+          zonasValidas.length
+        ) {
+          toast.error("Cada opción de la tabla necesita un código distinto.");
           return;
         }
         configJson = { zonas: zonasValidas };
@@ -296,7 +355,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
         }
         configJson = {
           porcentajeDefault: porcentajeValor,
-          baseDeCalculo: "SUBTOTAL_PRODUCTOS",
+          baseDeCalculo: "SUBTOTAL",
         };
       }
       if (modoCalculo === "POR_UNIDAD_INPUT") {
@@ -311,6 +370,10 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
           setGuardando(false);
           return;
         }
+        if (!unidad.trim()) {
+          toast.error("Elegí la unidad que verá el comercial.");
+          return;
+        }
         configJson = {
           precioPorUnidad: precio,
           unidad: unidad.trim(),
@@ -320,23 +383,23 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
 
       if (editando) {
         await actualizarCargoDirecto(editando.id, {
-          nombre,
-          descripcion: descripcion || undefined,
+          nombre: nombreLimpio,
+          descripcion: descripcion.trim() || undefined,
           modoCalculo: modoMotorFromUi(modoCalculo),
           modosActivacionSoportados: modosActivacion,
           configJson,
         });
-        toast.success(`Cargo "${nombre}" actualizado`);
+        toast.success(`Cargo "${nombreLimpio}" actualizado`);
       } else {
         await crearCargoDirecto({
-          codigo: generarCodigoCargo(nombre, initialCargos),
-          nombre,
-          descripcion: descripcion || undefined,
+          codigo: generarCodigoCargo(nombreLimpio, initialCargos),
+          nombre: nombreLimpio,
+          descripcion: descripcion.trim() || undefined,
           modoCalculo: modoMotorFromUi(modoCalculo),
           modosActivacionSoportados: modosActivacion,
           configJson,
         });
-        toast.success(`Cargo "${nombre}" creado`);
+        toast.success(`Cargo "${nombreLimpio}" creado`);
       }
       setOpenSheet(false);
       router.refresh();
@@ -347,7 +410,9 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     }
   };
 
-  const [aBorrar, setABorrar] = React.useState<CargoDirectoCatalogo | null>(null);
+  const [aBorrar, setABorrar] = React.useState<CargoDirectoCatalogo | null>(
+    null,
+  );
 
   const ejecutarBorrado = async () => {
     if (!aBorrar) return;
@@ -382,9 +447,12 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Costos directos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Costos directos
+          </h1>
           <p className="text-muted-foreground text-sm">
-            Desembolsos reutilizables que pueden asociarse a un paso o agregarse a una orden.
+            Desembolsos reutilizables que pueden asociarse a un paso o agregarse
+            a una orden.
           </p>
         </div>
         <Sheet open={openSheet} onOpenChange={setOpenSheet}>
@@ -396,9 +464,11 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
               </Button>
             )}
           />
-          <SheetContent>
+          <SheetContent className="overflow-y-auto sm:max-w-xl">
             <SheetHeader>
-              <SheetTitle>{editando ? "Editar costo" : "Nuevo costo directo"}</SheetTitle>
+              <SheetTitle>
+                {editando ? "Editar costo" : "Nuevo costo directo"}
+              </SheetTitle>
               <SheetDescription>
                 {editando
                   ? "Editá los valores sugeridos que se reutilizan en pasos y órdenes."
@@ -406,6 +476,13 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
               </SheetDescription>
             </SheetHeader>
             <div className="space-y-4 px-4">
+              <Alert>
+                <AlertTitle>El alcance se elige al asociarlo</AlertTitle>
+                <AlertDescription>
+                  Acá definís cómo se calcula. Después decidís si corresponde a
+                  toda la cotización, a un paso o a un nivel del paso.
+                </AlertDescription>
+              </Alert>
               {editando ? (
                 <div className="space-y-2">
                   <Label htmlFor="codigo">Código del sistema</Label>
@@ -435,20 +512,23 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
               </div>
               <div className="space-y-2">
                 <Label htmlFor="modoCalculo">Modo de cálculo *</Label>
-                <select
-                  id="modoCalculo"
+                <HumanSelect
                   value={modoCalculo}
-                  onChange={(event) => setModoCalculo(event.target.value as CargoModoUi)}
-                  className={selectClassName()}
-                >
-                  {MODOS_CARGO_UI.map((modo) => (
-                    <option key={modo.value} value={modo.value}>
-                      {modo.label}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(value) =>
+                    setModoCalculo((value ?? "MONTO_FIJO_PLANO") as CargoModoUi)
+                  }
+                  options={MODOS_CARGO_UI.map((modo) => ({
+                    value: modo.value,
+                    label: modo.label,
+                    description: modo.description,
+                  }))}
+                  placeholder="Elegí cómo se calcula"
+                />
                 <p className="text-muted-foreground text-xs">
-                  {MODOS_CARGO_UI.find((modo) => modo.value === modoCalculo)?.description}
+                  {
+                    MODOS_CARGO_UI.find((modo) => modo.value === modoCalculo)
+                      ?.description
+                  }
                 </p>
               </div>
               <div className="space-y-2">
@@ -488,7 +568,8 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                     placeholder="5000"
                   />
                   <p className="text-muted-foreground text-xs">
-                    Al aplicarlo en una OT, el comercial puede ajustar este importe.
+                    Al asociarlo a un paso o cotización podés conservar este
+                    valor o reemplazarlo.
                   </p>
                 </div>
               ) : null}
@@ -497,7 +578,12 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <Label>Zonas o importes</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={addZona}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addZona}
+                    >
                       <PlusIcon className="mr-2 size-3" />
                       Agregar zona
                     </Button>
@@ -505,20 +591,28 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                   <div className="space-y-2">
                     {zonas.length === 0 ? (
                       <div className="text-muted-foreground rounded-md border border-dashed p-3 text-xs">
-                        Agregá opciones como CABA, GBA Norte, Retiro en taller o Fuera de zona.
+                        Agregá opciones como CABA, GBA Norte, Retiro en taller o
+                        Fuera de zona.
                       </div>
                     ) : null}
                     {zonas.map((zona) => (
-                      <div key={zona.id} className="grid grid-cols-[88px_1fr_96px_32px] gap-2">
+                      <div
+                        key={zona.id}
+                        className="grid grid-cols-[88px_1fr_96px_32px] gap-2"
+                      >
                         <Input
                           value={zona.codigo}
-                          onChange={(event) => updateZona(zona.id, { codigo: event.target.value })}
+                          onChange={(event) =>
+                            updateZona(zona.id, { codigo: event.target.value })
+                          }
                           placeholder="CABA"
                           aria-label="Código de zona"
                         />
                         <Input
                           value={zona.nombre}
-                          onChange={(event) => updateZona(zona.id, { nombre: event.target.value })}
+                          onChange={(event) =>
+                            updateZona(zona.id, { nombre: event.target.value })
+                          }
                           placeholder="CABA"
                           aria-label="Nombre de zona"
                         />
@@ -526,7 +620,9 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                           type="number"
                           min="0"
                           value={zona.monto}
-                          onChange={(event) => updateZona(zona.id, { monto: event.target.value })}
+                          onChange={(event) =>
+                            updateZona(zona.id, { monto: event.target.value })
+                          }
                           placeholder="3000"
                           aria-label="Monto de zona"
                         />
@@ -558,7 +654,8 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                     placeholder="30"
                   />
                   <p className="text-muted-foreground text-xs">
-                    Se aplica sobre el subtotal neto de productos de la OT.
+                    La base será el costo del paso o el subtotal de la
+                    cotización, según dónde lo asocies.
                   </p>
                 </div>
               ) : null}
@@ -566,24 +663,26 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
               {modoCalculo === "POR_UNIDAD_INPUT" ? (
                 <div className="grid gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="inputCantidad">Dato que cargará el comercial *</Label>
-                    <select
-                      id="inputCantidad"
+                    <Label htmlFor="inputCantidad">
+                      Dato que cargará el comercial *
+                    </Label>
+                    <HumanSelect
                       value={inputCantidad}
-                      onChange={(event) => {
-                        const next = event.target.value;
+                      onValueChange={(value) => {
+                        const next = value ?? "";
                         setInputCantidad(next);
-                        const option = INPUT_CANTIDAD_OPTIONS.find((item) => item.value === next);
+                        const option = INPUT_CANTIDAD_OPTIONS.find(
+                          (item) => item.value === next,
+                        );
                         if (option) setUnidad(option.unit);
                       }}
-                      className={selectClassName()}
-                    >
-                      {INPUT_CANTIDAD_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                      options={INPUT_CANTIDAD_OPTIONS.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                        code: option.value,
+                      }))}
+                      placeholder="Elegí el dato"
+                    />
                     <p className="text-muted-foreground text-xs">
                       Este dato se pedirá al aplicar el cargo en la OT.
                     </p>
@@ -591,27 +690,25 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label htmlFor="unidad">Unidad visible</Label>
-                      <select
-                        id="unidad"
+                      <HumanSelect
                         value={unidad}
-                        onChange={(event) => setUnidad(event.target.value)}
-                        className={selectClassName()}
-                      >
-                        {UNIDAD_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={(value) => setUnidad(value ?? "")}
+                        options={UNIDAD_OPTIONS}
+                        placeholder="Elegí la unidad"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="precioPorUnidad">Precio por unidad *</Label>
+                      <Label htmlFor="precioPorUnidad">
+                        Precio por unidad *
+                      </Label>
                       <Input
                         id="precioPorUnidad"
                         type="number"
                         min="0"
                         value={precioPorUnidad}
-                        onChange={(event) => setPrecioPorUnidad(event.target.value)}
+                        onChange={(event) =>
+                          setPrecioPorUnidad(event.target.value)
+                        }
                         placeholder="80"
                       />
                     </div>
@@ -624,7 +721,11 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                 Cancelar
               </Button>
               <Button onClick={handleGuardar} disabled={guardando || !nombre}>
-                {guardando ? "Guardando..." : editando ? "Guardar cambios" : "Crear"}
+                {guardando
+                  ? "Guardando..."
+                  : editando
+                    ? "Guardar cambios"
+                    : "Crear"}
               </Button>
             </SheetFooter>
           </SheetContent>
@@ -637,7 +738,9 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
             <WrenchIcon className="size-5" />
             <CardTitle>Catálogo</CardTitle>
           </div>
-          <CardDescription>{initialCargos.length} costos directos.</CardDescription>
+          <CardDescription>
+            {initialCargos.length} costos directos.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {initialCargos.length === 0 ? (
@@ -646,7 +749,11 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
               icon={<WrenchIcon />}
               titulo="Sin costos directos"
               descripcion="Usalos para desembolsos como peajes, alquileres, matrices o servicios externos. El tiempo y la tercerización completa se modelan dentro del paso."
-              cta={{ label: "Nuevo costo", onClick: abrirNuevo, icon: PlusIcon }}
+              cta={{
+                label: "Nuevo costo",
+                onClick: abrirNuevo,
+                icon: PlusIcon,
+              }}
             />
           ) : (
             <Table>
@@ -665,19 +772,26 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                     <TableCell>
                       <div className="font-medium">{c.nombre}</div>
                       {c.descripcion && (
-                        <div className="text-muted-foreground text-xs">{c.descripcion}</div>
+                        <div className="text-muted-foreground text-xs">
+                          {c.descripcion}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
-                        title={getLabel(modoCalculoCargoLabels, c.modoCalculo).descripcion}
+                        title={
+                          getLabel(modoCalculoCargoLabels, c.modoCalculo)
+                            .descripcion
+                        }
                       >
                         {getLabel(modoCalculoCargoLabels, c.modoCalculo).label}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm">{formatConfigResumen(c, moneda)}</span>
+                      <span className="text-sm">
+                        {formatConfigResumen(c, moneda)}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <Badge variant={c.activo ? "default" : "secondary"}>
@@ -685,7 +799,11 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => abrirEditar(c)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => abrirEditar(c)}
+                      >
                         <PencilIcon className="size-3" />
                       </Button>
                       <Button
@@ -712,8 +830,9 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
         descripcion={
           aBorrar ? (
             <>
-              Vas a eliminar el cargo <strong>{aBorrar.nombre}</strong>{" "}
-              (<code className="text-xs">{aBorrar.codigo}</code>) del catálogo del tenant.
+              Vas a eliminar el cargo <strong>{aBorrar.nombre}</strong> (
+              <code className="text-xs">{aBorrar.codigo}</code>) del catálogo
+              del tenant.
             </>
           ) : null
         }

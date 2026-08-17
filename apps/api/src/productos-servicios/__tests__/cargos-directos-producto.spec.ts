@@ -150,4 +150,85 @@ describe('CargosDirectosProductoService', () => {
       data: expect.objectContaining({ configOverrideJson: expect.anything() }),
     });
   });
+
+  it('guarda cargos por nivel en un paso extra', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'paso-extra' });
+    const service = serviceCon({
+      productoPasoExtra: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'paso-extra',
+          maquinaM1Id: null,
+          perfilM1Id: null,
+          centroCostoId: null,
+          paramsPasoJson: {
+            niveles: {
+              opciones: [
+                { codigo: 'simple', nombre: 'Simple', esDefault: true },
+                { codigo: 'complejo', nombre: 'Complejo' },
+              ],
+            },
+          },
+          configCargosDirectosJson: [],
+        }),
+        update,
+      },
+      cargoDirectoCatalogo: {
+        findMany: jest.fn().mockResolvedValue([cargo]),
+      },
+    });
+
+    await service.actualizarPasoExtra('tenant', 'paso-extra', {
+      configCargosDirectosJson: [
+        {
+          cargoDirectoCatalogoId: cargo.id,
+          nivelCodigo: 'complejo',
+          modoActivacion: 'OPCIONAL',
+        },
+      ],
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'paso-extra' },
+      data: expect.objectContaining({
+        configCargosDirectosJson: expect.anything(),
+      }),
+    });
+  });
+
+  it('impide cargos generales en un paso extra que tiene niveles', async () => {
+    const service = serviceCon({
+      productoPasoExtra: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'paso-extra',
+          maquinaM1Id: null,
+          perfilM1Id: null,
+          centroCostoId: null,
+          paramsPasoJson: {
+            niveles: {
+              opciones: [
+                { codigo: 'simple', nombre: 'Simple', esDefault: true },
+                { codigo: 'complejo', nombre: 'Complejo' },
+              ],
+            },
+          },
+          configCargosDirectosJson: [],
+        }),
+        update: jest.fn(),
+      },
+      cargoDirectoCatalogo: {
+        findMany: jest.fn().mockResolvedValue([cargo]),
+      },
+    });
+
+    await expect(
+      service.actualizarPasoExtra('tenant', 'paso-extra', {
+        configCargosDirectosJson: [
+          {
+            cargoDirectoCatalogoId: cargo.id,
+            modoActivacion: 'OPCIONAL',
+          },
+        ],
+      }),
+    ).rejects.toThrow('elegí en cuál');
+  });
 });

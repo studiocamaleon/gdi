@@ -174,6 +174,7 @@ interface PasoExtraSlotJson {
 
 interface PasoExtraCargoJson {
   cargoDirectoCatalogoId: string;
+  nivelCodigo?: string | null;
   modoActivacion: string;
   condicionActivacionJson?: unknown;
   configOverrideJson?: unknown;
@@ -8468,7 +8469,7 @@ export class MotorUniversalService {
         {
           id: `${pasoExtraId}:cargo:${i}`,
           cargoDirectoCatalogoId: c.cargoDirectoCatalogoId,
-          nivelCodigo: null,
+          nivelCodigo: c.nivelCodigo ?? null,
           modoActivacion: c.modoActivacion,
           condicionActivacionJson: c.condicionActivacionJson ?? null,
           configOverrideJson: c.configOverrideJson ?? null,

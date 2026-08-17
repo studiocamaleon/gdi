@@ -523,6 +523,11 @@ export class PasoExtraCargoDirectoDto {
   @IsUUID()
   cargoDirectoCatalogoId!: string;
 
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  nivelCodigo?: string;
+
   @IsString()
   modoActivacion!: string;
 

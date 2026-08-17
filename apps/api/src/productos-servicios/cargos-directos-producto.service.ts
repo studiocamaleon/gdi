@@ -9,6 +9,7 @@ import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilida
 import type {
   ActualizarPasoExtraDto,
   AgregarPasoExtraDto,
+  PasoExtraCargoDirectoDto,
 } from './dto/producto-ruta.dto';
 import type {
   ActualizarAsociacionCargoDto,
@@ -35,6 +36,22 @@ export class CargosDirectosProductoService {
   }
 
   async crearCargoDirecto(tenantId: string, dto: CrearCargoDirectoDto) {
+    const modos = dto.modosActivacionSoportados ?? ['OPCIONAL'];
+    if (modos.length === 0) {
+      throw new BadRequestException(
+        'El costo directo necesita al menos una forma de activación.',
+      );
+    }
+    this.validarAsociacion(
+      {
+        activo: true,
+        nombre: dto.nombre,
+        modoCalculo: dto.modoCalculo,
+        modosActivacionSoportados: modos,
+        configJson: dto.configJson ?? null,
+      },
+      { modoActivacion: modos[0] },
+    );
     try {
       return await this.prisma.cargoDirectoCatalogo.create({
         data: {
@@ -43,9 +60,7 @@ export class CargosDirectosProductoService {
           nombre: dto.nombre,
           descripcion: dto.descripcion ?? null,
           modoCalculo: dto.modoCalculo,
-          modosActivacionSoportados: dto.modosActivacionSoportados ?? [
-            'OPCIONAL',
-          ],
+          modosActivacionSoportados: modos,
           configJson: (dto.configJson ??
             Prisma.JsonNull) as Prisma.InputJsonValue,
           activo: true,
@@ -74,6 +89,25 @@ export class CargosDirectosProductoService {
     });
     if (!existente) throw new NotFoundException(`Cargo ${id} no encontrado`);
 
+    const modos =
+      dto.modosActivacionSoportados ?? existente.modosActivacionSoportados;
+    if (modos.length === 0) {
+      throw new BadRequestException(
+        'El costo directo necesita al menos una forma de activación.',
+      );
+    }
+    this.validarAsociacion(
+      {
+        activo: true,
+        nombre: dto.nombre ?? existente.nombre,
+        modoCalculo: dto.modoCalculo ?? existente.modoCalculo,
+        modosActivacionSoportados: modos,
+        configJson:
+          dto.configJson !== undefined ? dto.configJson : existente.configJson,
+      },
+      { modoActivacion: modos[0] },
+    );
+
     const data: Prisma.CargoDirectoCatalogoUpdateInput = {};
     if (dto.nombre !== undefined) data.nombre = dto.nombre;
     if (dto.descripcion !== undefined) data.descripcion = dto.descripcion;
@@ -90,18 +124,38 @@ export class CargosDirectosProductoService {
   }
 
   async eliminarCargoDirecto(tenantId: string, id: string) {
-    const existente = await this.prisma.cargoDirectoCatalogo.findFirst({
-      where: { id, tenantId },
-      include: {
-        pasoCargos: { take: 1 },
-        cotizacionCargos: { take: 1 },
-      },
-    });
+    const [existente, pasosExtras] = await Promise.all([
+      this.prisma.cargoDirectoCatalogo.findFirst({
+        where: { id, tenantId },
+        include: {
+          pasoCargos: { take: 1 },
+          cotizacionCargos: { take: 1 },
+        },
+      }),
+      this.prisma.productoPasoExtra.findMany({
+        where: { tenantId, activo: true },
+        select: { configCargosDirectosJson: true },
+      }),
+    ]);
     if (!existente) throw new NotFoundException(`Cargo ${id} no encontrado`);
+
+    const usadoEnPasoExtra = pasosExtras.some((paso) =>
+      (Array.isArray(paso.configCargosDirectosJson)
+        ? paso.configCargosDirectosJson
+        : []
+      ).some(
+        (cargo) =>
+          cargo != null &&
+          typeof cargo === 'object' &&
+          !Array.isArray(cargo) &&
+          (cargo as Record<string, unknown>).cargoDirectoCatalogoId === id,
+      ),
+    );
 
     if (
       existente.pasoCargos.length > 0 ||
-      existente.cotizacionCargos.length > 0
+      existente.cotizacionCargos.length > 0 ||
+      usadoEnPasoExtra
     ) {
       return this.prisma.cargoDirectoCatalogo.update({
         where: { id },
@@ -421,6 +475,22 @@ export class CargosDirectosProductoService {
           `El cargo "${cargo.nombre}" necesita un monto o una tabla de importes.`,
         );
       }
+      if (
+        zonas.some((zona) => {
+          const item = this.asRecord(zona);
+          return (
+            typeof item.codigo !== 'string' ||
+            !item.codigo.trim() ||
+            typeof item.nombre !== 'string' ||
+            !item.nombre.trim() ||
+            !(Number(item.monto) > 0)
+          );
+        })
+      ) {
+        throw new BadRequestException(
+          `La tabla de importes de "${cargo.nombre}" tiene opciones incompletas.`,
+        );
+      }
     } else if (cargo.modoCalculo === 'PORCENTAJE_SOBRE_BASE') {
       if (!(Number(config.porcentaje ?? config.porcentajeDefault) > 0)) {
         throw new BadRequestException(
@@ -431,10 +501,12 @@ export class CargosDirectosProductoService {
       if (
         !(Number(config.precioPorUnidad) > 0) ||
         typeof config.inputCantidad !== 'string' ||
-        !config.inputCantidad.trim()
+        !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(config.inputCantidad.trim()) ||
+        typeof config.unidad !== 'string' ||
+        !config.unidad.trim()
       ) {
         throw new BadRequestException(
-          `El cargo "${cargo.nombre}" necesita precio por unidad y el dato que medirá.`,
+          `El cargo "${cargo.nombre}" necesita precio, unidad y un dato de cantidad válido.`,
         );
       }
     }
@@ -568,6 +640,27 @@ export class CargosDirectosProductoService {
       await this.assertCentroCosto(tenantId, dto.centroCostoId);
     }
 
+    const paramsPasoJsonEfectivo =
+      dto.paramsPasoJson !== undefined
+        ? dto.paramsPasoJson
+        : existente.paramsPasoJson;
+    if (
+      dto.configCargosDirectosJson !== undefined ||
+      dto.paramsPasoJson !== undefined
+    ) {
+      const cargosEfectivos =
+        dto.configCargosDirectosJson !== undefined
+          ? dto.configCargosDirectosJson
+          : ((Array.isArray(existente.configCargosDirectosJson)
+              ? existente.configCargosDirectosJson
+              : []) as unknown as PasoExtraCargoDirectoDto[]);
+      await this.validarCargosPasoExtra(
+        tenantId,
+        cargosEfectivos,
+        paramsPasoJsonEfectivo,
+      );
+    }
+
     const data: Prisma.ProductoPasoExtraUpdateInput = {};
     if (dto.insertarDespuesDeRutaPasoId !== undefined)
       data.insertarDespuesDeRutaPasoId = dto.insertarDespuesDeRutaPasoId;
@@ -636,6 +729,58 @@ export class CargosDirectosProductoService {
       where: { id: pasoExtraId },
       data,
     });
+  }
+
+  private async validarCargosPasoExtra(
+    tenantId: string,
+    cargos: PasoExtraCargoDirectoDto[],
+    paramsPasoJson: unknown,
+  ) {
+    const catalogoIds = [
+      ...new Set(cargos.map((cargo) => cargo.cargoDirectoCatalogoId)),
+    ];
+    const catalogos = await this.prisma.cargoDirectoCatalogo.findMany({
+      where: { tenantId, id: { in: catalogoIds }, activo: true },
+    });
+    const catalogoPorId = new Map(catalogos.map((cargo) => [cargo.id, cargo]));
+    const niveles = leerNivelesPaso(paramsPasoJson);
+    const claves = new Set<string>();
+
+    for (const cargo of cargos) {
+      const catalogo = catalogoPorId.get(cargo.cargoDirectoCatalogoId);
+      if (!catalogo) {
+        throw new BadRequestException(
+          'Uno de los costos directos no existe, está inactivo o pertenece a otra empresa.',
+        );
+      }
+      if (niveles) {
+        if (!cargo.nivelCodigo) {
+          throw new BadRequestException(
+            'Este paso extra tiene niveles: elegí en cuál se aplicará cada costo directo.',
+          );
+        }
+        if (
+          !niveles.opciones.some((nivel) => nivel.codigo === cargo.nivelCodigo)
+        ) {
+          throw new BadRequestException(
+            `El nivel "${cargo.nivelCodigo}" no existe en este paso extra.`,
+          );
+        }
+      } else if (cargo.nivelCodigo) {
+        throw new BadRequestException(
+          'Este paso extra no tiene niveles configurados.',
+        );
+      }
+
+      const clave = `${cargo.cargoDirectoCatalogoId}:${cargo.nivelCodigo ?? 'general'}`;
+      if (claves.has(clave)) {
+        throw new BadRequestException(
+          'El mismo costo directo no puede repetirse en un mismo nivel.',
+        );
+      }
+      claves.add(clave);
+      this.validarAsociacion(catalogo, cargo);
+    }
   }
 
   async eliminarPasoExtra(tenantId: string, pasoExtraId: string) {

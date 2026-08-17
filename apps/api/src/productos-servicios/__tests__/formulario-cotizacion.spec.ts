@@ -290,6 +290,20 @@ describe('formulario de cotización', () => {
         paramsPasoJson: {},
         multiplicadoresActivos: [],
         tercerizado: false,
+        cargosDirectosPaso: [
+          {
+            id: 'cargo-extra-montaje',
+            modoActivacion: 'OPCIONAL',
+            nivelCodigo: null,
+            configOverrideJson: null,
+            cargoDirectoCatalogo: {
+              nombre: 'Viático de instalación',
+              descripcion: 'Traslado del equipo de montaje',
+              modoCalculo: 'FIJO',
+              configCalculoJson: { monto: 12000 },
+            },
+          },
+        ],
         slotsMateriales: [
           {
             slotCodigo: 'sustrato_montaje',
@@ -333,6 +347,14 @@ describe('formulario de cotización', () => {
     expect(opciones[0].etiqueta).toBe(
       'PVC espumado · 3mm · 1220mm de ancho · Blanco',
     );
+    const cargoExtra = form.adicionales.find(
+      (a) => a.id === 'cargo-extra-montaje',
+    );
+    expect(cargoExtra).toMatchObject({
+      tipo: 'cargo_paso',
+      configPasoId: 'pe-montaje',
+      jobContextKey: 'opcionalesActivados.cargo-extra-montaje',
+    });
   });
 
   it('personalizaciones: clave de medida, no de área calculada', async () => {

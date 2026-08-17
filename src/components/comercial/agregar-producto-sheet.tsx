@@ -1001,7 +1001,7 @@ function pasoExtraToSyntheticConfig(
       : null,
     slotsMateriales: extra.slotsMateriales ?? [],
     maquinasCandidatas: extra.maquinasCandidatas ?? [],
-    cargosDirectosPaso: [],
+    cargosDirectosPaso: extra.cargosDirectosPaso ?? [],
   };
 }
 
