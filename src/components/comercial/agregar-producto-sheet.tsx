@@ -2618,6 +2618,13 @@ function getOpcionales(
     for (const ruta of rutas) {
       for (const config of ruta.configPasos) {
         if (!isExecutableConfigPaso(config)) continue;
+        const niveles = leerNivelesPaso(config.paramsPasoJson);
+        const nivelElegido = motorConfig?.seleccionNivel[config.id];
+        const nivelSeleccionado = niveles
+          ? nivelElegido === NIVEL_PERSONALIZADO
+            ? null
+            : nivelEfectivo(niveles, nivelElegido).codigo
+          : null;
         const configAvailable = isConfigPasoAvailableForOptionalToggle(
           config,
           ruleContext,
@@ -2641,6 +2648,12 @@ function getOpcionales(
         }
         for (const cargo of config.cargosDirectosPaso) {
           if (cargo.modoActivacion !== "OPCIONAL") continue;
+          if (
+            cargo.nivelCodigo &&
+            cargo.nivelCodigo !== nivelSeleccionado
+          ) {
+            continue;
+          }
           const parentActive = motorConfig
             ? isConfigPasoVisibleForContext(config, motorConfig, ruleContext)
             : configAvailable;
@@ -2667,13 +2680,26 @@ function getCargoInputDescriptors(
   producto: ProductoDetalle | null,
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean,
+  seleccionNivel: Record<string, string>,
 ): CargoInputDescriptor[] {
   if (!producto) return [];
   const asociaciones = [
     ...producto.cargosDirectosCotizacion,
     ...(ruta?.configPasos ?? [])
       .filter(includeConfig)
-      .flatMap((config) => config.cargosDirectosPaso),
+      .flatMap((config) => {
+        const niveles = leerNivelesPaso(config.paramsPasoJson);
+        const nivelSeleccionado = niveles
+          ? seleccionNivel[config.id] === NIVEL_PERSONALIZADO
+            ? null
+            : nivelEfectivo(niveles, seleccionNivel[config.id]).codigo
+          : null;
+        return config.cargosDirectosPaso.filter(
+          (asociacion) =>
+            !asociacion.nivelCodigo ||
+            asociacion.nivelCodigo === nivelSeleccionado,
+        );
+      }),
   ];
   const porKey = new Map<string, CargoInputDescriptor>();
 
@@ -4685,8 +4711,18 @@ function ApConfigStep({
   );
   const cargoInputs = React.useMemo(
     () =>
-      getCargoInputDescriptors(productoDetalle, rutaSel, includeVisibleConfig),
-    [includeVisibleConfig, productoDetalle, rutaSel],
+      getCargoInputDescriptors(
+        productoDetalle,
+        rutaSel,
+        includeVisibleConfig,
+        motorConfig.seleccionNivel,
+      ),
+    [
+      includeVisibleConfig,
+      motorConfig.seleccionNivel,
+      productoDetalle,
+      rutaSel,
+    ],
   );
   const cargoInputKeys = React.useMemo(
     () => new Set(cargoInputs.map((input) => input.key)),

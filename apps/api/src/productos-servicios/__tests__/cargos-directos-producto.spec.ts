@@ -25,7 +25,9 @@ describe('CargosDirectosProductoService', () => {
     const create = jest.fn().mockResolvedValue({ id: 'asociacion' });
     const service = serviceCon({
       productoConfigPaso: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'config-paso' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'config-paso', paramsPasoJson: null }),
       },
       cargoDirectoCatalogo: { findFirst: jest.fn().mockResolvedValue(cargo) },
       productoCargoDirectoPaso: { create },
@@ -40,6 +42,7 @@ describe('CargosDirectosProductoService', () => {
       data: expect.objectContaining({
         productoConfigPasoId: 'config-paso',
         cargoDirectoCatalogoId: cargo.id,
+        nivelCodigo: null,
         modoActivacion: 'OBLIGATORIO',
       }),
     });
@@ -48,7 +51,9 @@ describe('CargosDirectosProductoService', () => {
   it('rechaza un modo que el costo no soporta', async () => {
     const service = serviceCon({
       productoConfigPaso: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'config-paso' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'config-paso', paramsPasoJson: null }),
       },
       cargoDirectoCatalogo: { findFirst: jest.fn().mockResolvedValue(cargo) },
       productoCargoDirectoPaso: { create: jest.fn() },
@@ -61,6 +66,64 @@ describe('CargosDirectosProductoService', () => {
         condicionActivacionJson: { '>': [{ var: 'cantidad' }, 10] },
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('exige elegir un nivel cuando el paso está configurado por niveles', async () => {
+    const service = serviceCon({
+      productoConfigPaso: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'config-paso',
+          paramsPasoJson: {
+            niveles: {
+              opciones: [
+                { codigo: 'simple', nombre: 'Simple', esDefault: true },
+                { codigo: 'complejo', nombre: 'Complejo' },
+              ],
+            },
+          },
+        }),
+      },
+      cargoDirectoCatalogo: { findFirst: jest.fn().mockResolvedValue(cargo) },
+      productoCargoDirectoPaso: { create: jest.fn() },
+    });
+
+    await expect(
+      service.asociarCargoPaso('tenant', 'config-paso', {
+        cargoDirectoCatalogoId: cargo.id,
+        modoActivacion: ModoActivacionCargoDto.OBLIGATORIO,
+      }),
+    ).rejects.toThrow('elegí en cuál');
+  });
+
+  it('asocia el costo únicamente al nivel elegido', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'asociacion' });
+    const service = serviceCon({
+      productoConfigPaso: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'config-paso',
+          paramsPasoJson: {
+            niveles: {
+              opciones: [
+                { codigo: 'simple', nombre: 'Simple', esDefault: true },
+                { codigo: 'complejo', nombre: 'Complejo' },
+              ],
+            },
+          },
+        }),
+      },
+      cargoDirectoCatalogo: { findFirst: jest.fn().mockResolvedValue(cargo) },
+      productoCargoDirectoPaso: { create },
+    });
+
+    await service.asociarCargoPaso('tenant', 'config-paso', {
+      cargoDirectoCatalogoId: cargo.id,
+      nivelCodigo: 'complejo',
+      modoActivacion: ModoActivacionCargoDto.OBLIGATORIO,
+    });
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ nivelCodigo: 'complejo' }),
+    });
   });
 
   it('permite volver al valor heredado quitando el override', async () => {

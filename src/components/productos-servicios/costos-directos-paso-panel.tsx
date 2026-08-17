@@ -13,6 +13,7 @@ import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Sheet,
   SheetContent,
@@ -25,6 +26,7 @@ import {
   actualizarCargoPaso,
   asociarCargoPaso,
   desasociarCargoPaso,
+  distribuirCargoPasoPorNiveles,
 } from "@/lib/productos-servicios-api";
 import type {
   CargoDirectoCatalogo,
@@ -42,6 +44,7 @@ import {
   modoActivacionLabels,
   modoCalculoCargoLabels,
 } from "@/lib/labels-humanos";
+import { nombreNivel, type NivelesPasoConfig } from "@/lib/niveles-paso";
 
 type ModoActivacion = "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
 
@@ -50,6 +53,7 @@ interface Props {
   catalogoCargos: CargoDirectoCatalogo[];
   includeMeasureFields: boolean;
   ruleExtraFields: RuleFieldDefinition[];
+  niveles?: NivelesPasoConfig | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -81,6 +85,7 @@ export function CostosDirectosPasoPanel({
   catalogoCargos,
   includeMeasureFields,
   ruleExtraFields,
+  niveles = null,
 }: Props) {
   const router = useRouter();
   const asociaciones = configPaso?.cargosDirectosPaso ?? [];
@@ -96,6 +101,8 @@ export function CostosDirectosPasoPanel({
   const [valor, setValor] = React.useState("");
   const [guardando, setGuardando] = React.useState(false);
   const [aQuitar, setAQuitar] = React.useState<CargoPasoDetalle | null>(null);
+  const [nivelCodigo, setNivelCodigo] = React.useState<string | null>(null);
+  const [distribuyendo, setDistribuyendo] = React.useState<string | null>(null);
 
   const cargoSeleccionado = React.useMemo(
     () =>
@@ -104,12 +111,17 @@ export function CostosDirectosPasoPanel({
       null,
     [catalogoCargos, cargoId, editando],
   );
-  const asociados = new Set(
-    asociaciones.map((item) => item.cargoDirectoCatalogo.id),
-  );
-  const disponibles = catalogoCargos.filter(
-    (cargo) => cargo.activo && !asociados.has(cargo.id),
-  );
+  const disponiblesPara = (codigoNivel: string | null) =>
+    catalogoCargos.filter(
+      (cargo) =>
+        cargo.activo &&
+        !asociaciones.some(
+          (item) =>
+            item.cargoDirectoCatalogo.id === cargo.id &&
+            (item.nivelCodigo === codigoNivel || item.nivelCodigo == null),
+        ),
+    );
+  const disponibles = disponiblesPara(nivelCodigo);
 
   const modosDisponibles = React.useMemo<ModoActivacion[]>(() => {
     const soportados = cargoSeleccionado?.modosActivacionSoportados ?? [];
@@ -125,13 +137,14 @@ export function CostosDirectosPasoPanel({
     }
   }, [modo, modosDisponibles]);
 
-  const abrirNuevo = () => {
+  const abrirNuevo = (codigoNivel: string | null = null) => {
     setEditando(null);
     setCargoId("");
     setModo("OBLIGATORIO");
     setCondicion(null);
     setSobrescribir(false);
     setValor("");
+    setNivelCodigo(codigoNivel);
     setOpen(true);
   };
 
@@ -153,6 +166,7 @@ export function CostosDirectosPasoPanel({
           ? (config.porcentaje ?? config.porcentajeDefault)
           : config.precioPorUnidad;
     setValor(raw === undefined ? "" : String(raw));
+    setNivelCodigo(asociacion.nivelCodigo ?? null);
     setOpen(true);
   };
 
@@ -205,6 +219,7 @@ export function CostosDirectosPasoPanel({
       } else {
         await asociarCargoPaso(configPaso.id, {
           cargoDirectoCatalogoId: cargoSeleccionado.id,
+          ...(nivelCodigo ? { nivelCodigo } : {}),
           ...payload,
         });
       }
@@ -226,8 +241,80 @@ export function CostosDirectosPasoPanel({
     }
   };
 
+  const distribuirPorNiveles = async (asociacion: CargoPasoDetalle) => {
+    setDistribuyendo(asociacion.id);
+    try {
+      await distribuirCargoPasoPorNiveles(asociacion.id);
+      toast.success("Costo separado por nivel");
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo separar el costo por nivel",
+      );
+    } finally {
+      setDistribuyendo(null);
+    }
+  };
+
+  const renderAsociacion = (asociacion: CargoPasoDetalle) => (
+    <div
+      key={asociacion.id}
+      className="flex items-center gap-2 rounded-lg border px-3 py-2.5"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">
+          {asociacion.cargoDirectoCatalogo.nombre}
+        </div>
+        <div className="text-muted-foreground text-xs">
+          {resumenCargo(
+            asociacion.cargoDirectoCatalogo,
+            asociacion.configOverrideJson,
+          )}
+        </div>
+        <div className="mt-1 flex flex-wrap gap-1">
+          <Badge variant="outline" className="text-[10px]">
+            {
+              getLabel(
+                modoCalculoCargoLabels,
+                asociacion.cargoDirectoCatalogo.modoCalculo,
+              ).label
+            }
+          </Badge>
+          <Badge variant="secondary" className="text-[10px]">
+            {getLabel(modoActivacionLabels, asociacion.modoActivacion).label}
+          </Badge>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => abrirEditar(asociacion)}
+        aria-label={`Editar ${asociacion.cargoDirectoCatalogo.nombre}`}
+      >
+        <PencilIcon />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="text-destructive"
+        onClick={() => setAQuitar(asociacion)}
+        aria-label={`Quitar ${asociacion.cargoDirectoCatalogo.nombre}`}
+      >
+        <Trash2Icon />
+      </Button>
+    </div>
+  );
+
+  const generalesLegados = niveles
+    ? asociaciones.filter((asociacion) => !asociacion.nivelCodigo)
+    : [];
+
   return (
-    <section className="flex flex-col gap-2.5">
+    <section className="mt-6 flex flex-col gap-2.5">
       <div className="px-0.5">
         <div className="flex items-center gap-2 text-[15px] font-semibold">
           <span
@@ -245,18 +332,6 @@ export function CostosDirectosPasoPanel({
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border bg-background p-4">
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            size="sm"
-            onClick={abrirNuevo}
-            disabled={!configPaso || disponibles.length === 0}
-          >
-            <PlusIcon data-icon="inline-start" />
-            Asociar costo
-          </Button>
-        </div>
-
         {!configPaso ? (
           <Empty className="min-h-0 items-start gap-0 border p-4 text-left">
             <EmptyDescription>
@@ -264,70 +339,103 @@ export function CostosDirectosPasoPanel({
               asociarle costos directos.
             </EmptyDescription>
           </Empty>
-        ) : asociaciones.length === 0 ? (
-          <Empty className="min-h-0 items-start gap-0 border p-4 text-left">
-            <EmptyDescription>
-              Este paso no tiene costos monetarios adicionales. El tiempo, los
-              materiales y los proveedores se configuran en sus secciones
-              específicas.
-            </EmptyDescription>
-          </Empty>
+        ) : niveles ? (
+          <>
+            {generalesLegados.map((asociacion) => (
+              <Alert key={asociacion.id}>
+                <AlertTitle>
+                  {asociacion.cargoDirectoCatalogo.nombre} todavía aplica a
+                  todos los niveles
+                </AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                  <span>
+                    Es una configuración anterior. Separala para poder ajustar
+                    su importe y activación en cada nivel.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={distribuyendo === asociacion.id}
+                    onClick={() => distribuirPorNiveles(asociacion)}
+                  >
+                    {distribuyendo === asociacion.id
+                      ? "Separando..."
+                      : "Separar por nivel"}
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ))}
+
+            <div className="flex flex-col gap-3">
+              {niveles.opciones.map((nivel) => {
+                const cargosNivel = asociaciones.filter(
+                  (asociacion) => asociacion.nivelCodigo === nivel.codigo,
+                );
+                const disponiblesNivel = disponiblesPara(nivel.codigo);
+                return (
+                  <div
+                    key={nivel.codigo}
+                    className="overflow-hidden rounded-lg border"
+                  >
+                    <div className="bg-muted/30 flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {nombreNivel(nivel)}
+                        </span>
+                        {nivel.esDefault ? (
+                          <Badge variant="secondary">Predeterminado</Badge>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => abrirNuevo(nivel.codigo)}
+                        disabled={disponiblesNivel.length === 0}
+                      >
+                        <PlusIcon data-icon="inline-start" />
+                        Agregar costo
+                      </Button>
+                    </div>
+                    {cargosNivel.length > 0 ? (
+                      <div className="grid gap-2 p-3 md:grid-cols-2">
+                        {cargosNivel.map(renderAsociacion)}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground px-3 py-3 text-xs">
+                        Sin costos adicionales para este nivel.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         ) : (
-          <div className="grid gap-2 md:grid-cols-2">
-          {asociaciones.map((asociacion) => (
-            <div
-              key={asociacion.id}
-              className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">
-                  {asociacion.cargoDirectoCatalogo.nombre}
-                </div>
-                <div className="text-muted-foreground text-xs">
-                  {resumenCargo(
-                    asociacion.cargoDirectoCatalogo,
-                    asociacion.configOverrideJson,
-                  )}
-                </div>
-                <div className="mt-1 flex gap-1">
-                  <Badge variant="outline" className="text-[10px]">
-                    {
-                      getLabel(
-                        modoCalculoCargoLabels,
-                        asociacion.cargoDirectoCatalogo.modoCalculo,
-                      ).label
-                    }
-                  </Badge>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {
-                      getLabel(modoActivacionLabels, asociacion.modoActivacion)
-                        .label
-                    }
-                  </Badge>
-                </div>
-              </div>
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground text-xs">
+                {asociaciones.length === 0
+                  ? "Sin costos monetarios adicionales."
+                  : `${asociaciones.length} costo${asociaciones.length === 1 ? "" : "s"} configurado${asociaciones.length === 1 ? "" : "s"}.`}
+              </span>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => abrirEditar(asociacion)}
-                aria-label={`Editar ${asociacion.cargoDirectoCatalogo.nombre}`}
+                size="sm"
+                onClick={() => abrirNuevo(null)}
+                disabled={disponiblesPara(null).length === 0}
               >
-                <PencilIcon />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-red-600"
-                onClick={() => setAQuitar(asociacion)}
-                aria-label={`Quitar ${asociacion.cargoDirectoCatalogo.nombre}`}
-              >
-                <Trash2Icon />
+                <PlusIcon data-icon="inline-start" />
+                Asociar costo
               </Button>
             </div>
-          ))}
-          </div>
+            {asociaciones.length > 0 ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {asociaciones.map(renderAsociacion)}
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 
@@ -338,8 +446,18 @@ export function CostosDirectosPasoPanel({
               {editando ? "Editar costo directo" : "Asociar costo directo"}
             </SheetTitle>
             <SheetDescription>
-              Se aplicará dentro de este paso y quedará identificado en el
-              desglose de costos.
+              {nivelCodigo
+                ? `Se aplicará únicamente cuando el comercial elija “${nombreNivel(
+                    niveles?.opciones.find(
+                      (nivel) => nivel.codigo === nivelCodigo,
+                    ) ?? {
+                      codigo: nivelCodigo,
+                      nombre: nivelCodigo,
+                      esDefault: false,
+                      overrides: {},
+                    },
+                  )}”.`
+                : "Se aplicará dentro de este paso y quedará identificado en el desglose de costos."}
             </SheetDescription>
           </SheetHeader>
           <div className="space-y-5 px-4">
@@ -403,7 +521,8 @@ export function CostosDirectosPasoPanel({
                     />
                     <span>
                       <span className="block font-medium">
-                        Usar un valor particular en este paso
+                        Usar un valor particular en este{" "}
+                        {nivelCodigo ? "nivel" : "paso"}
                       </span>
                       <span className="text-muted-foreground block text-xs">
                         Si no, se usará el valor vigente del catálogo:{" "}

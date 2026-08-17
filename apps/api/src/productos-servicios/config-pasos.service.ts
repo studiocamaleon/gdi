@@ -9,6 +9,7 @@ import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilida
 import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { construirClaveMatch } from '../motor-universal/tercerizado-costo';
+import { leerNivelesPaso } from '../motor-universal/niveles-paso';
 import {
   estrategiaNestingDeFamilia,
   formulaEfectivaSlot,
@@ -264,6 +265,26 @@ export class ConfigPasosService {
         },
       });
 
+      if (existente) {
+        const nivelesNuevos = leerNivelesPaso(dto.paramsPasoJson);
+        const codigosNuevos =
+          nivelesNuevos?.opciones.map((nivel) => nivel.codigo) ?? [];
+        const cargosHuerfanos = await tx.productoCargoDirectoPaso.count({
+          where: {
+            productoConfigPasoId: existente.id,
+            nivelCodigo:
+              codigosNuevos.length > 0
+                ? { notIn: codigosNuevos }
+                : { not: null },
+          },
+        });
+        if (cargosHuerfanos > 0) {
+          throw new BadRequestException(
+            'No podés quitar un nivel que todavía tiene costos directos asociados. Quitá o reasigná esos costos antes de guardar el paso.',
+          );
+        }
+      }
+
       const data: Prisma.ProductoConfigPasoUncheckedCreateInput = {
         tenantId,
         productoRutaAlternativaId: rutaAltId,
@@ -373,14 +394,16 @@ export class ConfigPasosService {
                 },
               });
             if (candidate.varianteIds.length > 0) {
-              await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany({
-                data: candidate.varianteIds.map((varianteId, index) => ({
-                  tenantId,
-                  candidatoId: createdCandidate.id,
-                  varianteId,
-                  orden: index,
-                })),
-              });
+              await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany(
+                {
+                  data: candidate.varianteIds.map((varianteId, index) => ({
+                    tenantId,
+                    candidatoId: createdCandidate.id,
+                    varianteId,
+                    orden: index,
+                  })),
+                },
+              );
             }
           }
         }
@@ -423,7 +446,12 @@ export class ConfigPasosService {
         });
         const porClave = new Map<
           string,
-          { claveMatch: string; valores: Record<string, unknown>; cantidad: number; costo: number }
+          {
+            claveMatch: string;
+            valores: Record<string, unknown>;
+            cantidad: number;
+            costo: number;
+          }
         >();
         for (const e of dto.tercerizadoEntradas ?? []) {
           const claveMatch = construirClaveMatch(ejes, e.valores);
@@ -506,7 +534,9 @@ export class ConfigPasosService {
         },
       },
     });
-    const maquinasById = new Map(maquinas.map((maquina) => [maquina.id, maquina]));
+    const maquinasById = new Map(
+      maquinas.map((maquina) => [maquina.id, maquina]),
+    );
     const familia = resolverFamilia(familiaCodigo);
 
     for (const candidate of candidates) {
@@ -613,7 +643,8 @@ export class ConfigPasosService {
     const variants = new Map<string, { materiaPrimaId: string }>();
     const materialIds = new Set<string>();
     for (const slot of dto.slotsMateriales) {
-      if (slot.materialVarianteId) variants.set(slot.materialVarianteId, { materiaPrimaId: '' });
+      if (slot.materialVarianteId)
+        variants.set(slot.materialVarianteId, { materiaPrimaId: '' });
       for (const candidate of slot.candidatos ?? []) {
         materialIds.add(candidate.materiaPrimaId);
         for (const variantId of candidate.varianteIds) {
@@ -751,7 +782,10 @@ export class ConfigPasosService {
           candidate.defaultVarianteId,
         ].filter((value): value is string => Boolean(value))) {
           const variante = varianteById.get(variantId);
-          if (!variante || variante.materiaPrimaId !== candidate.materiaPrimaId) {
+          if (
+            !variante ||
+            variante.materiaPrimaId !== candidate.materiaPrimaId
+          ) {
             throw new BadRequestException(
               `La variante candidata no pertenece a la materia prima configurada en ${slot.slotCodigo}.`,
             );

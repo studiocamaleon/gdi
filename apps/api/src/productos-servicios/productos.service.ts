@@ -582,6 +582,7 @@ export class ProductosService {
                   tenantId,
                   productoConfigPasoId: configDuplicada.id,
                   cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
+                  nivelCodigo: cargo.nivelCodigo,
                   modoActivacion: cargo.modoActivacion,
                   condicionActivacionJson: this.jsonOrNull(
                     cargo.condicionActivacionJson,

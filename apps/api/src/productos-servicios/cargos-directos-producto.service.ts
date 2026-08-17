@@ -18,6 +18,7 @@ import type {
   CrearCargoDirectoDto,
 } from './dto/cargo-directo.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
+import { leerNivelesPaso } from '../motor-universal/niveles-paso';
 
 @Injectable()
 export class CargosDirectosProductoService {
@@ -224,6 +225,22 @@ export class CargosDirectosProductoService {
         `Cargo ${dto.cargoDirectoCatalogoId} no encontrado`,
       );
 
+    const niveles = leerNivelesPaso(configPaso.paramsPasoJson);
+    if (niveles) {
+      if (!dto.nivelCodigo) {
+        throw new BadRequestException(
+          'Este paso tiene niveles: elegí en cuál se aplicará el costo directo.',
+        );
+      }
+      if (!niveles.opciones.some((nivel) => nivel.codigo === dto.nivelCodigo)) {
+        throw new BadRequestException(
+          `El nivel "${dto.nivelCodigo}" no existe en este paso.`,
+        );
+      }
+    } else if (dto.nivelCodigo) {
+      throw new BadRequestException('Este paso no tiene niveles configurados.');
+    }
+
     this.validarAsociacion(cargo, dto);
     try {
       return await this.prisma.productoCargoDirectoPaso.create({
@@ -231,6 +248,7 @@ export class CargosDirectosProductoService {
           tenantId,
           productoConfigPasoId: configPasoId,
           cargoDirectoCatalogoId: dto.cargoDirectoCatalogoId,
+          nivelCodigo: dto.nivelCodigo ?? null,
           modoActivacion: dto.modoActivacion,
           condicionActivacionJson: (dto.condicionActivacionJson ??
             Prisma.JsonNull) as Prisma.InputJsonValue,
@@ -294,6 +312,68 @@ export class CargosDirectosProductoService {
       throw new NotFoundException(`Asociación ${asociacionId} no encontrada`);
     return this.prisma.productoCargoDirectoPaso.delete({
       where: { id: asociacionId },
+    });
+  }
+
+  async distribuirCargoPasoPorNiveles(tenantId: string, asociacionId: string) {
+    const asociacion = await this.prisma.productoCargoDirectoPaso.findFirst({
+      where: { id: asociacionId, tenantId },
+      include: { productoConfigPaso: true },
+    });
+    if (!asociacion) {
+      throw new NotFoundException(`Asociación ${asociacionId} no encontrada`);
+    }
+    if (asociacion.nivelCodigo) {
+      throw new BadRequestException('El costo ya pertenece a un nivel.');
+    }
+    const niveles = leerNivelesPaso(
+      asociacion.productoConfigPaso.paramsPasoJson,
+    );
+    if (!niveles) {
+      throw new BadRequestException(
+        'El paso no tiene niveles configurados para distribuir el costo.',
+      );
+    }
+    const existentes = await this.prisma.productoCargoDirectoPaso.count({
+      where: {
+        tenantId,
+        productoConfigPasoId: asociacion.productoConfigPasoId,
+        cargoDirectoCatalogoId: asociacion.cargoDirectoCatalogoId,
+        nivelCodigo: { not: null },
+      },
+    });
+    if (existentes > 0) {
+      throw new BadRequestException(
+        'Este costo ya tiene configuraciones por nivel.',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.productoCargoDirectoPaso.delete({
+        where: { id: asociacion.id },
+      });
+      return Promise.all(
+        niveles.opciones.map((nivel) =>
+          tx.productoCargoDirectoPaso.create({
+            data: {
+              tenantId,
+              productoConfigPasoId: asociacion.productoConfigPasoId,
+              cargoDirectoCatalogoId: asociacion.cargoDirectoCatalogoId,
+              nivelCodigo: nivel.codigo,
+              modoActivacion: asociacion.modoActivacion,
+              condicionActivacionJson:
+                asociacion.condicionActivacionJson === null
+                  ? Prisma.JsonNull
+                  : (asociacion.condicionActivacionJson as Prisma.InputJsonValue),
+              configOverrideJson:
+                asociacion.configOverrideJson === null
+                  ? Prisma.JsonNull
+                  : (asociacion.configOverrideJson as Prisma.InputJsonValue),
+              activo: asociacion.activo,
+            },
+          }),
+        ),
+      );
     });
   }
 

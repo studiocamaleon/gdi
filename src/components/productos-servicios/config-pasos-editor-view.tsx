@@ -137,6 +137,7 @@ import { EfectosPasoFields } from "@/components/productos-servicios/efectos-paso
 import { TiemposExtraPasoFields } from "@/components/productos-servicios/tiempos-extra-paso-fields";
 import { NivelesPasoFields } from "@/components/productos-servicios/niveles-paso-fields";
 import { CostosDirectosPasoPanel } from "@/components/productos-servicios/costos-directos-paso-panel";
+import { leerNivelesPaso } from "@/lib/niveles-paso";
 import {
   getLabel,
   mecanismoCantidadLabels,
@@ -6878,6 +6879,9 @@ export function ConfigPasosEditorView({
                           <CostosDirectosPasoPanel
                             configPaso={configExistente ?? null}
                             catalogoCargos={catalogoCargos}
+                            niveles={leerNivelesPaso(
+                              configExistente?.paramsPasoJson,
+                            )}
                             includeMeasureFields={
                               producto.modoMedidas === "LIBRE" ||
                               producto.modoMedidas === "MIXTA"

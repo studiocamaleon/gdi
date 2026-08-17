@@ -1059,6 +1059,7 @@ export interface CargoCotizacionCargado {
 export interface CargoPasoCargado {
   id: string;
   cargoDirectoCatalogoId: string;
+  nivelCodigo: string | null;
   modoActivacion: string;
   condicionActivacionJson: unknown;
   configOverrideJson: unknown;

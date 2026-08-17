@@ -725,6 +725,13 @@ export class FormularioCotizacionService {
           nombre: cargo.cargoDirectoCatalogo.nombre,
           descripcion: cargo.cargoDirectoCatalogo.descripcion ?? null,
           configPasoId: config.id,
+          nivelCodigo: cargo.nivelCodigo ?? null,
+          dependeDeNivel: cargo.nivelCodigo
+            ? {
+                jobContextKey: `nivelPaso_${config.id}`,
+                valor: cargo.nivelCodigo,
+              }
+            : null,
           jobContextKey: `opcionalesActivados.${cargo.id}`,
         });
       }
@@ -748,6 +755,10 @@ export class FormularioCotizacionService {
     const preguntas = new Map<string, Record<string, unknown>>();
     for (const { cargo, config } of asociaciones) {
       const catalogo = cargo.cargoDirectoCatalogo;
+      const nivelCodigo =
+        'nivelCodigo' in cargo && typeof cargo.nivelCodigo === 'string'
+          ? cargo.nivelCodigo
+          : null;
       const cfg = {
         ...asRecord(catalogo.configJson),
         ...asRecord(cargo.configOverrideJson),
@@ -756,6 +767,14 @@ export class FormularioCotizacionService {
         cargoAsociacionId: cargo.id,
         cargoNombre: catalogo.nombre,
         configPasoId: config?.id ?? null,
+        nivelCodigo,
+        dependeDeNivel:
+          config && nivelCodigo
+            ? {
+                jobContextKey: `nivelPaso_${config.id}`,
+                valor: nivelCodigo,
+              }
+            : null,
         dependeDeOpcional:
           cargo.modoActivacion === 'OPCIONAL' ? cargo.id : null,
       };

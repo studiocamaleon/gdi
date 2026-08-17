@@ -558,6 +558,17 @@ export class ProductosServiciosController {
     await this.service.desasociarCargoPaso(tenantId, asociacionId);
   }
 
+  @Permiso('costos.gestionar')
+  @Post('productos/config-pasos/cargos/:asociacionId/distribuir-niveles')
+  async distribuirCargoPasoPorNiveles(
+    @Req() req: RequestWithAuth,
+    @Param('asociacionId') asociacionId: string,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.distribuirCargoPasoPorNiveles(tenantId, asociacionId);
+  }
+
   // === PASOS EXTRAS INLINE (G-F3) ===
 
   @Permiso('costos.gestionar')

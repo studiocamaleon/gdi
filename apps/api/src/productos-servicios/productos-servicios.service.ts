@@ -289,6 +289,10 @@ export class ProductosServiciosService {
     return this.cargos.desasociarCargoPaso(tenantId, asociacionId);
   }
 
+  distribuirCargoPasoPorNiveles(tenantId: string, asociacionId: string) {
+    return this.cargos.distribuirCargoPasoPorNiveles(tenantId, asociacionId);
+  }
+
   agregarPasoExtra(
     tenantId: string,
     productoId: string,

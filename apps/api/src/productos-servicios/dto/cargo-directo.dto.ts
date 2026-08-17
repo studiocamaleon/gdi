@@ -103,6 +103,11 @@ export class AsociarCargoPasoDto {
   @IsUUID()
   cargoDirectoCatalogoId!: string;
 
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  nivelCodigo?: string;
+
   @IsEnum(ModoActivacionCargoDto)
   modoActivacion!: ModoActivacionCargoDto;
 

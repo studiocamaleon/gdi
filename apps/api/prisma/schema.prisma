@@ -2753,6 +2753,8 @@ model ProductoCargoDirectoPaso {
   tenantId                String               @db.Uuid
   productoConfigPasoId    String               @db.Uuid
   cargoDirectoCatalogoId  String               @db.Uuid
+  /// null = aplica al paso completo (compatibilidad). Con niveles, limita el costo a esa variante.
+  nivelCodigo             String?
   modoActivacion          String
   condicionActivacionJson Json?
   configOverrideJson      Json?
@@ -2763,7 +2765,7 @@ model ProductoCargoDirectoPaso {
   cargoDirectoCatalogo    CargoDirectoCatalogo @relation(fields: [cargoDirectoCatalogoId], references: [id])
 
   @@index([tenantId, productoConfigPasoId])
-  @@unique([tenantId, productoConfigPasoId, cargoDirectoCatalogoId])
+  @@index([tenantId, productoConfigPasoId, nivelCodigo])
 }
 
 model ProductoCargoDirectoCotizacion {

@@ -356,6 +356,7 @@ export interface SlotMaterialDetalle {
 
 export interface CargoPasoDetalle {
   id: string;
+  nivelCodigo?: string | null;
   modoActivacion: string;
   condicionActivacionJson?: Record<string, unknown> | null;
   configOverrideJson?: Record<string, unknown> | null;

@@ -623,6 +623,7 @@ export async function desasociarCargoCotizacion(asociacionId: string) {
 
 export interface AsociarCargoPasoPayload {
   cargoDirectoCatalogoId: string;
+  nivelCodigo?: string;
   modoActivacion: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
   condicionActivacionJson?: Record<string, unknown>;
   configOverrideJson?: Record<string, unknown> | null;
@@ -648,6 +649,13 @@ export async function desasociarCargoPaso(asociacionId: string) {
     {
       method: "DELETE",
     },
+  );
+}
+
+export async function distribuirCargoPasoPorNiveles(asociacionId: string) {
+  return apiRequest(
+    `/productos-servicios/productos/config-pasos/cargos/${asociacionId}/distribuir-niveles`,
+    { method: "POST" },
   );
 }
 
