@@ -29,8 +29,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
+import { ConfigPasosService } from './config-pasos.service';
 import {
   cargarRegistroPasosTenant,
+  FAMILIAS,
   quitarPasoTenantDelRegistro,
   registrarPasoTenant,
 } from './pasos/familias';
@@ -64,7 +67,10 @@ export interface UpsertPasoTenantInput extends PasoTenantInput {
 export class PasosTenantService implements OnModuleInit {
   private readonly logger = new Logger(PasosTenantService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configPasos: ConfigPasosService,
+  ) {}
 
   /** Boot: TODAS las instancias (de todos los tenants, incluidas las
    *  inhabilitadas) entran proyectadas al registro síncrono del resolver. */
@@ -101,9 +107,7 @@ export class PasosTenantService implements OnModuleInit {
         },
       }),
     ]);
-    const estacionPorCodigo = new Map(
-      reglas.map((r) => [r.valor, r.estacion]),
-    );
+    const estacionPorCodigo = new Map(reglas.map((r) => [r.valor, r.estacion]));
 
     return filas.map((fila) => {
       const proyectada = proyectarPasoTenant(fila);
@@ -127,6 +131,7 @@ export class PasosTenantService implements OnModuleInit {
           null,
         estacionHeredada: !estacionPorCodigo.has(fila.id),
         defaults: this.defaultsDeFila(fila),
+        configBase: fila.configBaseJson,
       };
     });
   }
@@ -157,6 +162,131 @@ export class PasosTenantService implements OnModuleInit {
     }
   }
 
+  async actualizarConfiguracionBase(
+    tenantId: string,
+    id: string,
+    input: UpsertProductoConfigPasoDto,
+  ) {
+    const existente = await this.prisma.pasoTenant.findFirst({
+      where: { id, tenantId },
+    });
+    if (!existente) throw new NotFoundException('Paso no encontrado.');
+    if (input.rutaPasoId !== id) {
+      throw new BadRequestException('La configuración no corresponde al paso.');
+    }
+
+    await this.configPasos.validarConfiguracionBase(
+      tenantId,
+      existente.plantillaCodigo,
+      input,
+    );
+    const {
+      rutaPasoId: _rutaPasoId,
+      requiereRutaPasoIds: _requiere,
+      ...base
+    } = input;
+    void _rutaPasoId;
+    void _requiere;
+    const fila = await this.prisma.pasoTenant.update({
+      where: { id },
+      data: {
+        configBaseJson: base as Prisma.InputJsonValue,
+      },
+    });
+    await this.materializarConfiguracionBaseEnRutas(tenantId, id, input);
+    return this.aRespuesta(fila);
+  }
+
+  async actualizarConfiguracionBaseSistema(
+    tenantId: string,
+    familiaCodigo: string,
+    input: UpsertProductoConfigPasoDto,
+  ) {
+    if (!FAMILIAS[familiaCodigo as keyof typeof FAMILIAS]) {
+      throw new NotFoundException('El paso de Grafo no existe.');
+    }
+    if (input.rutaPasoId !== familiaCodigo) {
+      throw new BadRequestException('La configuración no corresponde al paso.');
+    }
+    await this.configPasos.validarConfiguracionBase(
+      tenantId,
+      familiaCodigo,
+      input,
+    );
+    const { rutaPasoId: _rutaPasoId, requiereRutaPasoIds: _requiere, ...base } =
+      input;
+    void _rutaPasoId;
+    void _requiere;
+    const fila = await this.prisma.familiaPasoDefaults.upsert({
+      where: { tenantId_familiaCodigo: { tenantId, familiaCodigo } },
+      create: {
+        tenantId,
+        familiaCodigo,
+        configBaseJson: base as Prisma.InputJsonValue,
+      },
+      update: { configBaseJson: base as Prisma.InputJsonValue },
+    });
+    await this.materializarConfiguracionBaseEnRutas(
+      tenantId,
+      familiaCodigo,
+      input,
+    );
+    return {
+      familiaCodigo,
+      configBase: fila.configBaseJson,
+    };
+  }
+
+  /** Completa sólo configuraciones faltantes; una personalización de producto
+   * nunca se pisa al cambiar la base del tenant. */
+  private async materializarConfiguracionBaseEnRutas(
+    tenantId: string,
+    familiaCodigo: string,
+    input: UpsertProductoConfigPasoDto,
+  ) {
+    const pasosRuta = await this.prisma.rutaPaso.findMany({
+      where: { tenantId, familiaCodigo, activo: true },
+      select: { id: true, rutaId: true, version: true },
+    });
+    if (pasosRuta.length > 0) {
+      const alternativas = await this.prisma.productoRutaAlternativa.findMany({
+        where: {
+          tenantId,
+          activo: true,
+          OR: pasosRuta.map((paso) => ({
+            rutaId: paso.rutaId,
+            rutaVersion: paso.version,
+          })),
+        },
+        select: {
+          id: true,
+          rutaId: true,
+          rutaVersion: true,
+          configPasos: { select: { rutaPasoId: true } },
+        },
+      });
+      for (const alternativa of alternativas) {
+        const configurados = new Set(
+          alternativa.configPasos.map((config) => config.rutaPasoId),
+        );
+        for (const paso of pasosRuta) {
+          if (
+            paso.rutaId !== alternativa.rutaId ||
+            paso.version !== alternativa.rutaVersion ||
+            configurados.has(paso.id)
+          ) {
+            continue;
+          }
+          await this.configPasos.upsertConfigPaso(tenantId, alternativa.id, {
+            ...input,
+            rutaPasoId: paso.id,
+            requiereRutaPasoIds: [],
+          });
+        }
+      }
+    }
+  }
+
   async actualizar(
     tenantId: string,
     id: string,
@@ -175,6 +305,32 @@ export class PasosTenantService implements OnModuleInit {
     }
     await this.validarDefaults(tenantId, input.defaults);
 
+    if (plantillaCodigo !== existente.plantillaCodigo) {
+      const usos = await this.prisma.rutaPaso.count({
+        where: { familiaCodigo: id, ruta: { tenantId } },
+      });
+      if (usos > 0) {
+        throw new ConflictException(
+          'No se puede cambiar la plantilla de un paso que ya forma parte de una ruta. Creá otro paso para conservar la definición heredada y la historia de producción.',
+        );
+      }
+      if (
+        existente.configBaseJson != null &&
+        typeof existente.configBaseJson === 'object' &&
+        !Array.isArray(existente.configBaseJson)
+      ) {
+        await this.configPasos.validarConfiguracionBase(
+          tenantId,
+          plantillaCodigo,
+          {
+            ...(existente.configBaseJson as unknown as UpsertProductoConfigPasoDto),
+            rutaPasoId: id,
+            requiereRutaPasoIds: [],
+          },
+        );
+      }
+    }
+
     try {
       const fila = await this.prisma.pasoTenant.update({
         where: { id },
@@ -190,7 +346,7 @@ export class PasosTenantService implements OnModuleInit {
           activo: input.activo ?? undefined,
           ...(input.defaults === undefined
             ? {}
-            : this.defaultsAColumnas(input.defaults)),
+            : this.defaultsAColumnasParaActualizar(input.defaults)),
         },
       });
       this.registrar(fila);
@@ -237,7 +393,12 @@ export class PasosTenantService implements OnModuleInit {
 
   // ─── helpers ──────────────────────────────────────────────────────
 
-  private registrar(fila: { id: string; plantillaCodigo: string; nombre: string; descripcion: string | null }) {
+  private registrar(fila: {
+    id: string;
+    plantillaCodigo: string;
+    nombre: string;
+    descripcion: string | null;
+  }) {
     const proyectada = proyectarPasoTenant(fila);
     if (proyectada) registrarPasoTenant(proyectada);
   }
@@ -249,6 +410,7 @@ export class PasosTenantService implements OnModuleInit {
     icono: string | null;
     activo: boolean;
     plantillaCodigo: string;
+    configBaseJson?: Prisma.JsonValue | null;
   }) {
     const proyectada = proyectarPasoTenant(fila);
     return {
@@ -260,6 +422,7 @@ export class PasosTenantService implements OnModuleInit {
       plantillaCodigo: fila.plantillaCodigo,
       plantillaNombre: nombrePlantilla(fila.plantillaCodigo),
       categoria: proyectada?.categoria ?? null,
+      configBase: fila.configBaseJson ?? null,
     };
   }
 
@@ -290,7 +453,9 @@ export class PasosTenantService implements OnModuleInit {
     };
   }
 
-  private defaultsAColumnas(defaults: DefaultsPasoTenantInput | null | undefined) {
+  private defaultsAColumnas(
+    defaults: DefaultsPasoTenantInput | null | undefined,
+  ) {
     return {
       centroCostoId: defaults?.centroCostoId ?? null,
       productividadHora: defaults?.productividadHora ?? null,
@@ -302,6 +467,31 @@ export class PasosTenantService implements OnModuleInit {
       fuenteCostoTercerizado: defaults?.fuenteCostoTercerizado ?? null,
       plazoProveedorDias: defaults?.plazoProveedorDias ?? null,
     };
+  }
+
+  /** En PATCH, omitir un campo significa preservarlo; null explícito lo limpia. */
+  private defaultsAColumnasParaActualizar(
+    defaults: DefaultsPasoTenantInput | null,
+  ): Record<string, string | number | boolean | null> {
+    if (defaults === null) return this.defaultsAColumnas(null);
+
+    const columnas: Record<string, string | number | boolean | null> = {};
+    for (const campo of [
+      'centroCostoId',
+      'productividadHora',
+      'tiempoFijoMin',
+      'demasiaMm',
+      'solapePanelMm',
+      'tercerizado',
+      'proveedorId',
+      'fuenteCostoTercerizado',
+      'plazoProveedorDias',
+    ] as const) {
+      if (Object.prototype.hasOwnProperty.call(defaults, campo)) {
+        columnas[campo] = defaults[campo] ?? null;
+      }
+    }
+    return columnas;
   }
 
   /** El centro y el proveedor de los defaults tienen que ser del tenant. */
@@ -319,7 +509,7 @@ export class PasosTenantService implements OnModuleInit {
         throw new BadRequestException('El centro de costo indicado no existe.');
       }
     }
-    if (defaults.tercerizado === true && defaults.proveedorId) {
+    if (defaults.proveedorId) {
       const proveedor = await this.prisma.proveedor.findFirst({
         where: { id: defaults.proveedorId, tenantId, activo: true },
         select: { id: true },

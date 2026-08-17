@@ -1,24 +1,31 @@
 "use client";
 
-/**
- * Alta de paso propio, calcada del alta de máquina
- * (costos/maquina-editor/maquina-alta-dialog.tsx): un diálogo chico que pide
- * lo mínimo —nombre y plantilla— y crea el paso heredando la ficha entera de
- * esa plantilla. Los defaults del taller se completan después, en la ficha.
- *
- * Reemplaza al wizard de 13 pantallas que pedía declarar la FORMA (mecanismo
- * de cantidad, superficie de acomodo, outputs canónicos…): con el modelo de
- * instancias eso ya no se escribe, se hereda.
- * docs/pasos-tenant-por-plantilla-diseno.md
- */
-
 import * as React from "react";
-import { CheckIcon, SearchIcon, XIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
 import type { PasoTenant, PlantillaPaso } from "@/lib/productos-servicios";
 import { crearPasoTenant } from "@/lib/productos-servicios-api";
-import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
+import { cn } from "@/lib/utils";
+import { descripcionPasoParaUsuario } from "@/lib/pasos-presentacion";
 
 type Props = {
   open: boolean;
@@ -33,31 +40,27 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
   const [busqueda, setBusqueda] = React.useState("");
   const [creando, setCreando] = React.useState(false);
 
-  // Cada apertura arranca limpia.
   React.useEffect(() => {
-    if (open) {
-      setNombre("");
-      setPlantilla(null);
-      setBusqueda("");
-      setCreando(false);
-    }
+    if (!open) return;
+    setNombre("");
+    setPlantilla(null);
+    setBusqueda("");
+    setCreando(false);
   }, [open]);
 
   const filtradas = React.useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
+    const q = busqueda.trim().toLocaleLowerCase("es");
     if (!q) return plantillas;
-    return plantillas.filter(
-      (p) =>
-        p.nombre.toLowerCase().includes(q) ||
-        getLabel(categoriaFamiliaLabels, p.categoria)
-          .label.toLowerCase()
-          .includes(q),
-    );
+    return plantillas.filter((item) => {
+      const categoria = getLabel(categoriaFamiliaLabels, item.categoria).label;
+      return [item.nombre, descripcionPasoParaUsuario(item.descripcion), categoria].some((texto) =>
+        texto.toLocaleLowerCase("es").includes(q),
+      );
+    });
   }, [busqueda, plantillas]);
 
-  const puedeGuardar = nombre.trim().length > 0 && plantilla !== null && !creando;
-
-  const handleCrear = async () => {
+  const puedeGuardar = Boolean(nombre.trim() && plantilla && !creando);
+  const crear = async () => {
     if (!puedeGuardar || !plantilla) return;
     setCreando(true);
     try {
@@ -67,99 +70,103 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
       });
       toast.success(`"${creado.nombre}" creado`);
       onCreado(creado);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error creando el paso");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo crear el paso.",
+      );
       setCreando(false);
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="maq-backdrop show" onClick={onClose}>
-      <div
-        className="maq-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Nuevo paso"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="maq-modal-head">
-          <h2>Nuevo paso</h2>
-          <button
-            type="button"
-            className="maq-modal-cerrar"
-            aria-label="Cerrar"
-            onClick={onClose}
-          >
-            <XIcon />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-h-[min(760px,calc(100dvh-2rem))] sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Nuevo paso propio</DialogTitle>
+          <DialogDescription>
+            Elegí una plantilla del sistema. El paso heredará su comportamiento
+            completo y luego podrás configurar cómo trabaja tu empresa.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="maq-modal-body">
-          <div className="maq-alta-campo">
-            <label htmlFor="paso-alta-nombre">Nombre del paso *</label>
-            <input
+        <FieldGroup className="min-h-0">
+          <Field>
+            <FieldLabel htmlFor="paso-alta-nombre">Nombre del paso</FieldLabel>
+            <Input
               id="paso-alta-nombre"
               value={nombre}
               autoFocus
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej: Bordado"
+              maxLength={80}
+              onChange={(event) => setNombre(event.target.value)}
+              placeholder="Ej.: Bordado"
             />
-          </div>
+            <FieldDescription>El nombre operativo que verá tu equipo.</FieldDescription>
+          </Field>
 
-          <div className="maq-alta-campo">
-            <label htmlFor="paso-alta-busqueda">Tipo (plantilla de paso) *</label>
-            <div className="maq-alta-buscador">
-              <SearchIcon />
-              <input
-                id="paso-alta-busqueda"
-                type="search"
-                placeholder="Búsqueda"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
-            </div>
-            <ul
-              className="maq-alta-lista"
-              role="listbox"
-              aria-label="Tipos de paso"
+          <Field>
+            <FieldLabel htmlFor="paso-alta-busqueda">
+              Plantilla del sistema
+            </FieldLabel>
+            <Input
+              id="paso-alta-busqueda"
+              type="search"
+              placeholder="Buscar por nombre, categoría o descripción"
+              value={busqueda}
+              onChange={(event) => setBusqueda(event.target.value)}
+            />
+            <div
+              className="flex max-h-80 flex-col gap-2 overflow-y-auto rounded-lg border p-2"
+              role="group"
+              aria-label="Plantillas disponibles"
             >
               {filtradas.length === 0 ? (
-                <li className="vacio">Ningún tipo coincide con la búsqueda.</li>
+                <p className="p-4 text-center text-sm text-muted-foreground">
+                  Ninguna plantilla coincide con la búsqueda.
+                </p>
               ) : null}
-              {filtradas.map((p) => (
-                <li key={p.codigo}>
+              {filtradas.map((item) => {
+                const seleccionada = plantilla === item.codigo;
+                return (
                   <button
+                    key={item.codigo}
                     type="button"
-                    role="option"
-                    aria-selected={plantilla === p.codigo}
-                    className={plantilla === p.codigo ? "activo" : ""}
-                    onClick={() => setPlantilla(p.codigo)}
+                    aria-pressed={seleccionada}
+                    className={cn(
+                      "flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                      seleccionada && "border-foreground bg-muted",
+                    )}
+                    onClick={() => setPlantilla(item.codigo)}
                   >
-                    <span>{p.nombre}</span>
-                    <CheckIcon className="tilde" />
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{item.nombre}</span>
+                        <Badge variant="secondary">
+                          {getLabel(categoriaFamiliaLabels, item.categoria).label}
+                        </Badge>
+                      </span>
+                      {item.descripcion ? (
+                        <span className="line-clamp-2 text-sm text-muted-foreground">
+                          {descripcionPasoParaUsuario(item.descripcion)}
+                        </span>
+                      ) : null}
+                    </span>
+                    {seleccionada ? <CheckIcon aria-hidden /> : null}
                   </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+                );
+              })}
+            </div>
+          </Field>
+        </FieldGroup>
 
-        <div className="maq-modal-foot">
-          <button type="button" className="maq-btn" onClick={onClose}>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={creando}>
             Cancelar
-          </button>
-          <button
-            type="button"
-            className="maq-btn maq-btn-primario"
-            disabled={!puedeGuardar}
-            onClick={handleCrear}
-          >
-            {creando ? "Creando..." : "Guardar"}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button onClick={crear} disabled={!puedeGuardar}>
+            {creando ? "Creando…" : "Crear y configurar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

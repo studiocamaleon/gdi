@@ -12,12 +12,24 @@
  */
 
 import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
+import { descripcionPasoParaUsuario } from "@/lib/pasos-presentacion";
 import type {
   CatalogoFamilias,
   PasoTenant,
@@ -34,13 +46,21 @@ import {
 import { PasoAltaDialog } from "./paso-alta-dialog";
 import s from "./pasos-familias.module.css";
 
-export function PasosFamiliasView() {
+export function PasosFamiliasView({
+  puedeGestionar,
+}: {
+  puedeGestionar: boolean;
+}) {
+  const router = useRouter();
   const [pasos, setPasos] = React.useState<PasoTenant[]>([]);
   const [plantillas, setPlantillas] = React.useState<PlantillaPaso[]>([]);
   const [catalogo, setCatalogo] = React.useState<CatalogoFamilias | null>(null);
   const [cargando, setCargando] = React.useState(true);
   const [altaAbierta, setAltaAbierta] = React.useState(false);
   const [aEliminar, setAEliminar] = React.useState<PasoTenant | null>(null);
+  const [errorCarga, setErrorCarga] = React.useState(false);
+  const [busquedaCatalogo, setBusquedaCatalogo] = React.useState("");
+  const [categoriaCatalogo, setCategoriaCatalogo] = React.useState("todas");
 
   const recargar = React.useCallback(async () => {
     setPasos(await getPasosTenant());
@@ -50,6 +70,7 @@ export function PasosFamiliasView() {
     let vivo = true;
     (async () => {
       try {
+        setErrorCarga(false);
         const [filas, plants, cat] = await Promise.all([
           getPasosTenant(),
           getPlantillasPaso(),
@@ -60,7 +81,10 @@ export function PasosFamiliasView() {
         setPlantillas(plants);
         setCatalogo(cat);
       } catch {
-        if (vivo) toast.error("No se pudieron cargar los pasos.");
+        if (vivo) {
+          setErrorCarga(true);
+          toast.error("No se pudieron cargar los pasos.");
+        }
       } finally {
         if (vivo) setCargando(false);
       }
@@ -74,6 +98,31 @@ export function PasosFamiliasView() {
     () => (catalogo?.familias ?? []).filter((f) => f.origen === "sistema"),
     [catalogo],
   );
+  const categoriasSistema = React.useMemo(
+    () => [...new Set(sistema.map((familia) => familia.categoria))].sort(),
+    [sistema],
+  );
+  const sistemaFiltrado = React.useMemo(() => {
+    const query = busquedaCatalogo.trim().toLocaleLowerCase("es");
+    return sistema.filter((familia) => {
+      if (
+        categoriaCatalogo !== "todas" &&
+        familia.categoria !== categoriaCatalogo
+      ) {
+        return false;
+      }
+      if (!query) return true;
+      const categoria = getLabel(
+        categoriaFamiliaLabels,
+        familia.categoria,
+      ).label;
+      return [
+        familia.nombre,
+        descripcionPasoParaUsuario(familia.descripcion),
+        categoria,
+      ].some((texto) => texto.toLocaleLowerCase("es").includes(query));
+    });
+  }, [busquedaCatalogo, categoriaCatalogo, sistema]);
 
   const toggleActivo = async (paso: PasoTenant) => {
     try {
@@ -109,7 +158,7 @@ export function PasosFamiliasView() {
         </div>
         {/* Sin pasos propios manda el CTA del estado vacío ("Crear el
             primero"); con pasos, este. Nunca los dos a la vez. */}
-        {pasos.length > 0 ? (
+        {puedeGestionar && pasos.length > 0 ? (
           <Button onClick={() => setAltaAbierta(true)}>+ Nuevo paso</Button>
         ) : null}
       </div>
@@ -121,25 +170,36 @@ export function PasosFamiliasView() {
               <div className={s.seccionTitulo}>Tus pasos</div>
               <div className={s.seccionSub}>
                 Creados por tu empresa a partir de una plantilla del catálogo:
-                heredan cómo se calculan y sólo cambian el nombre y los
-                defaults de tu taller.
+                heredan cómo se calculan y agregan la configuración base de tu
+                taller.
               </div>
             </div>
           </div>
 
           {cargando ? (
             <div className={s.catalogoGrid}>Cargando…</div>
+          ) : errorCarga ? (
+            <EstadoVacio
+              variant="compacto"
+              titulo="No pudimos cargar tus pasos"
+              descripcion="Revisá la conexión y volvé a intentar."
+              cta={{ label: "Reintentar", onClick: () => window.location.reload() }}
+            />
           ) : pasos.length === 0 ? (
             <EstadoVacio
               variant="compacto"
               titulo="Todavía no creaste pasos propios"
-              cta={{
-                label: "Crear el primero",
-                onClick: () => setAltaAbierta(true),
-              }}
+              cta={
+                puedeGestionar
+                  ? {
+                      label: "Crear el primero",
+                      onClick: () => setAltaAbierta(true),
+                    }
+                  : undefined
+              }
             />
           ) : (
-            <table className="tbl">
+            <div className="overflow-x-auto"><table className="tbl min-w-[760px]">
               <thead>
                 <tr>
                   <th>Nombre</th>
@@ -194,25 +254,39 @@ export function PasosFamiliasView() {
                       </span>
                     </td>
                     <td className="right">
-                      <Button
+                      {puedeGestionar ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          nativeButton={false}
+                          render={
+                            <Link
+                              href={`/productos-servicios/pasos/${paso.id}`}
+                            />
+                          }
+                        >
+                          Configurar
+                        </Button>
+                      ) : null}
+                      {puedeGestionar ? <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleActivo(paso)}
                       >
                         {paso.activo ? "Inhabilitar" : "Reactivar"}
-                      </Button>
-                      <Button
+                      </Button> : null}
+                      {puedeGestionar ? <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setAEliminar(paso)}
                       >
                         Eliminar
-                      </Button>
+                      </Button> : null}
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </section>
 
@@ -221,45 +295,100 @@ export function PasosFamiliasView() {
             <div>
               <div className={s.seccionTitulo}>Catálogo del sistema</div>
               <div className={s.seccionSub}>
-                Los {sistema.length} tipos de paso que trae Grafo. No se
-                editan; cualquiera sirve de plantilla para un paso tuyo.
+                Los {sistema.length} tipos de paso que trae Grafo. Su definición
+                técnica se actualiza automáticamente; podés configurar cómo los
+                usa tu empresa.
               </div>
             </div>
           </div>
-          <table className="tbl">
+          <div className="flex flex-col gap-3 border-b p-4 sm:flex-row">
+            <Input
+              type="search"
+              value={busquedaCatalogo}
+              onChange={(event) => setBusquedaCatalogo(event.target.value)}
+              placeholder="Buscar un tipo de paso"
+              aria-label="Buscar en el catálogo de pasos"
+              className="sm:max-w-sm"
+            />
+            <Select value={categoriaCatalogo} onValueChange={(value) => setCategoriaCatalogo(value ?? "todas")}>
+              <SelectTrigger className="w-full sm:w-64">
+                <SelectValue>
+                  {categoriaCatalogo === "todas"
+                    ? "Todas las categorías"
+                    : getLabel(
+                        categoriaFamiliaLabels,
+                        categoriaCatalogo,
+                      ).label}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="todas">Todas las categorías</SelectItem>
+                  {categoriasSistema.map((categoria) => (
+                    <SelectItem key={categoria} value={categoria}>
+                      {getLabel(categoriaFamiliaLabels, categoria).label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="overflow-x-auto"><table className="tbl min-w-[760px]">
             <thead>
               <tr>
                 <th>Nombre</th>
                 <th>Descripción</th>
                 <th>Categoría</th>
+                <th className="right">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {sistema.map((f) => (
+              {sistemaFiltrado.map((f) => (
                 <tr key={f.codigo}>
                   <td>
                     <div className="name">{f.nombre}</div>
                   </td>
                   <td>
-                    <div className="desc">{f.descripcion}</div>
+                    <div className="desc">
+                      {descripcionPasoParaUsuario(f.descripcion)}
+                    </div>
                   </td>
                   <td>{getLabel(categoriaFamiliaLabels, f.categoria).label}</td>
+                  <td className="right">
+                    {puedeGestionar ? (
+                      <Button
+                        variant={f.configBase ? "outline" : "ghost"}
+                        size="sm"
+                        nativeButton={false}
+                        render={
+                          <Link href={`/productos-servicios/pasos/${f.codigo}`} />
+                        }
+                      >
+                        {f.configBase ? "Editar configuración" : "Configurar"}
+                      </Button>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
+          {!cargando && sistemaFiltrado.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              No hay tipos de paso que coincidan con esos filtros.
+            </p>
+          ) : null}
         </section>
       </div>
 
-      <PasoAltaDialog
+      {puedeGestionar ? <PasoAltaDialog
         open={altaAbierta}
         plantillas={plantillas}
         onClose={() => setAltaAbierta(false)}
-        onCreado={async () => {
+        onCreado={(paso) => {
           setAltaAbierta(false);
-          await recargar();
+          router.push(`/productos-servicios/pasos/${paso.id}`);
         }}
-      />
+      /> : null}
 
       <ConfirmacionDestructiva
         open={aEliminar !== null}

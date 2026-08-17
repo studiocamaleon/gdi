@@ -30,6 +30,92 @@ export class ConfigPasosService {
     private readonly familias: FamiliasPasosService,
   ) {}
 
+  /** Valida la configuración reutilizable de un PasoTenant contra la misma
+   * definición heredada que usa el editor de productos. No persiste nada. */
+  async validarConfiguracionBase(
+    tenantId: string,
+    familiaCodigo: string,
+    dto: UpsertProductoConfigPasoDto,
+  ) {
+    this.familias.validarConfigPasoContraFamilia(familiaCodigo, dto);
+    await this.validarSlotsMaterialesCompatibles(tenantId, familiaCodigo, dto);
+    await this.validarMaquinasCandidatasCompatibles(
+      tenantId,
+      familiaCodigo,
+      dto,
+    );
+
+    if (dto.maquinaM1Id) {
+      const maquina = await this.prisma.maquina.findFirst({
+        where: {
+          id: dto.maquinaM1Id,
+          tenantId,
+          ...MAQUINA_DISPONIBLE_WHERE,
+        },
+        include: {
+          perfilesOperativos: {
+            where: { activo: true },
+            select: { id: true, tipoPerfil: true },
+          },
+        },
+      });
+      if (!maquina) {
+        throw new BadRequestException(
+          'La máquina seleccionada no existe o no está activa.',
+        );
+      }
+      const familia = resolverFamilia(familiaCodigo);
+      if (
+        familia?.plantillasCompatibles.length &&
+        !familia.plantillasCompatibles.includes(maquina.plantilla)
+      ) {
+        throw new BadRequestException(
+          `La máquina ${maquina.nombre} no es compatible con este paso.`,
+        );
+      }
+      if (dto.perfilM1Id) {
+        const perfil = maquina.perfilesOperativos.find(
+          (item) => item.id === dto.perfilM1Id,
+        );
+        if (
+          !perfil ||
+          !tipoPerfilCompatibleConFamilia(
+            familiaCodigo,
+            String(perfil.tipoPerfil ?? ''),
+          )
+        ) {
+          throw new BadRequestException(
+            'El perfil seleccionado no pertenece a la máquina o no es compatible.',
+          );
+        }
+      }
+    }
+
+    if (!dto.maquinaM1Id && dto.centroCostoId) {
+      const centro = await this.prisma.centroCosto.findFirst({
+        where: {
+          id: dto.centroCostoId,
+          tenantId,
+          activo: true,
+          tipoCentro: TipoCentroCosto.PRODUCTIVO,
+        },
+        select: { id: true },
+      });
+      if (!centro) {
+        throw new BadRequestException(
+          'El centro de costo debe estar activo y ser productivo.',
+        );
+      }
+    }
+    if (dto.tercerizado) {
+      await exigirProveedorActivoDelTenant(
+        this.prisma,
+        tenantId,
+        dto.proveedorId,
+      );
+    }
+  }
+
   async upsertConfigPaso(
     tenantId: string,
     rutaAltId: string,

@@ -33,11 +33,12 @@ beforeAll(async () => {
   tenantId = tenant?.id ?? null;
   const familias = new FamiliasPasosService(prisma as never);
   const productos = new ProductosService(prisma as never);
+  const configPasos = new ConfigPasosService(prisma as never, familias);
   service = new ProductosServiciosService(
     productos,
     new RutasProduccionService(prisma as never, familias),
-    new ProductoRutasService(prisma as never),
-    new ConfigPasosService(prisma as never, familias),
+    new ProductoRutasService(prisma as never, configPasos),
+    configPasos,
     familias,
     new CargosDirectosProductoService(prisma as never, familias),
     new ProductoValidacionService(productos),

@@ -62,6 +62,9 @@ export class FamiliasPasosService {
         },
       ]),
     );
+    const configuracionBasePorFamilia = new Map(
+      defaultsRows.map((fila) => [fila.familiaCodigo, fila.configBaseJson]),
+    );
     return {
       categorias: Object.values(CATEGORIAS).sort((a, b) => a.orden - b.orden),
       // Una sola serialización para AMBOS mundos: una instancia del tenant
@@ -70,13 +73,29 @@ export class FamiliasPasosService {
       // del sistema — antes eran dos mapeos con la mitad de los campos en
       // null del lado tenant.
       familias: [
-        ...listarFamiliasCatalogo().map((codigo) =>
-          serializarFamilia(FAMILIAS[codigo], 'sistema', defaultsPorFamilia),
-        ),
+        ...listarFamiliasCatalogo().map((codigo) => ({
+          ...serializarFamilia(
+            FAMILIAS[codigo],
+            'sistema',
+            defaultsPorFamilia,
+          ),
+          configBase: configuracionBasePorFamilia.get(codigo) ?? null,
+        })),
         ...familiasTenant
-          .map((fila) => proyectarPasoTenant(fila))
-          .filter((f): f is NonNullable<typeof f> => f != null)
-          .map((f) => serializarFamilia(f, 'tenant', defaultsPorFamilia)),
+          .map((fila) => {
+            const proyectada = proyectarPasoTenant(fila);
+            return proyectada
+              ? {
+                  ...serializarFamilia(
+                    proyectada,
+                    'tenant',
+                    defaultsPorFamilia,
+                  ),
+                  configBase: fila.configBaseJson ?? null,
+                }
+              : null;
+          })
+          .filter((f): f is NonNullable<typeof f> => f != null),
       ],
     };
   }
@@ -138,6 +157,8 @@ export class FamiliasPasosService {
       subfamilias?: string[];
       templateIds?: string[];
       tipoTecnico?: string[];
+      ids?: string[];
+      varianteIds?: string[];
       limit?: number;
     },
   ) {
@@ -147,6 +168,10 @@ export class FamiliasPasosService {
       where: {
         tenantId,
         activo: true,
+        ...(query.ids?.length ? { id: { in: query.ids } } : {}),
+        ...(query.varianteIds?.length
+          ? { variantes: { some: { id: { in: query.varianteIds } } } }
+          : {}),
         ...(query.familias?.length ? { familia: { in: query.familias as never[] } } : {}),
         ...(query.subfamilias?.length ? { subfamilia: { in: query.subfamilias as never[] } } : {}),
         ...(query.templateIds?.length ? { templateId: { in: query.templateIds } } : {}),
@@ -186,17 +211,36 @@ export class FamiliasPasosService {
     });
   }
 
-  validarFamiliasDePasos(
+  async validarFamiliasDePasos(
+    tenantId: string,
     pasos: Array<{ familiaCodigo: string; orden: number }>,
   ) {
+    const codigosTenant = [
+      ...new Set(
+        pasos
+          .map((p) => p.familiaCodigo)
+          .filter((codigo) => !FAMILIAS[codigo as FamiliaCodigo]),
+      ),
+    ];
+    const propios = new Set(
+      (
+        await this.prisma.pasoTenant.findMany({
+          where: { tenantId, id: { in: codigosTenant } },
+          select: { id: true },
+        })
+      ).map((fila) => fila.id),
+    );
     const ordenes = new Set<number>();
     for (const p of pasos) {
       // Resolver, no catálogo: una FamiliaTenant (UUID) es tan válida como
       // una del sistema. Las inhabilitadas también resuelven — una ruta
       // existente que las usa tiene que poder re-guardarse (§8.6).
-      if (!resolverFamilia(p.familiaCodigo)) {
+      if (
+        !FAMILIAS[p.familiaCodigo as FamiliaCodigo] &&
+        !propios.has(p.familiaCodigo)
+      ) {
         throw new BadRequestException(
-          `Familia desconocida: "${p.familiaCodigo}"`,
+          `Familia desconocida o ajena a tu empresa: "${p.familiaCodigo}"`,
         );
       }
       if (ordenes.has(p.orden)) {
@@ -292,9 +336,16 @@ export class FamiliasPasosService {
     }
   }
 
-  assertFamiliaExiste(familiaCodigo: string) {
-    if (!resolverFamilia(familiaCodigo)) {
-      throw new BadRequestException(`Familia desconocida: ${familiaCodigo}`);
+  async assertFamiliaExiste(tenantId: string, familiaCodigo: string) {
+    if (FAMILIAS[familiaCodigo as FamiliaCodigo]) return;
+    const propia = await this.prisma.pasoTenant.findFirst({
+      where: { id: familiaCodigo, tenantId },
+      select: { id: true },
+    });
+    if (!propia) {
+      throw new BadRequestException(
+        `Familia desconocida o ajena a tu empresa: ${familiaCodigo}`,
+      );
     }
   }
 }

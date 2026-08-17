@@ -111,6 +111,8 @@ import {
 import {
   actualizarPasoExtra,
   buscarMateriasPrimasConfigPaso,
+  guardarConfiguracionBaseFamiliaSistema,
+  guardarConfiguracionBasePasoTenant,
   upsertConfigPaso,
   type LookupsConfigPaso,
   type MateriaPrimaBusquedaItem,
@@ -166,6 +168,11 @@ interface Props {
   catalogoFamilias: CatalogoFamilias;
   lookups: LookupsConfigPaso;
   embedded?: boolean;
+  configuracionBase?: {
+    familiaCodigo: string;
+    origen: "sistema" | "tenant";
+    volverHref: string;
+  };
 }
 
 type ConfigState = Record<string, UpsertConfigPasoPayload>;
@@ -2811,6 +2818,7 @@ export function ConfigPasosEditorView({
   catalogoFamilias,
   lookups,
   embedded = false,
+  configuracionBase,
 }: Props) {
   const router = useRouter();
   const familiasMap = React.useMemo(
@@ -2873,43 +2881,64 @@ export function ConfigPasosEditorView({
         (cp) => cp.rutaPasoId === paso.id,
       );
       const familia = familiasMap.get(paso.familiaCodigo);
+      const base = !existente
+        ? (familia?.configBase as Partial<UpsertConfigPasoPayload> | null)
+        : null;
       initial[paso.id] = {
         rutaPasoId: paso.id,
         modoActivacion:
           existente?.modoActivacion ??
+          base?.modoActivacion ??
           familia?.modoActivacionDefault ??
           "OBLIGATORIO",
         condicionActivacionJson:
           (existente?.condicionActivacionJson as
-            Record<string, unknown> | null | undefined) ?? null,
+            Record<string, unknown> | null | undefined) ??
+          base?.condicionActivacionJson ??
+          null,
         modoTiempo:
           existente?.modoTiempo ??
+          base?.modoTiempo ??
           (familia?.modosTiempoSoportados.length === 1
             ? familia.modosTiempoSoportados[0]
             : null),
         mecanismoCantidad:
           (existente?.mecanismoCantidad?.trim() || null) ??
+          (base?.mecanismoCantidad?.trim() || null) ??
           getDefaultMecanismoCantidad(
             familia,
             familia?.mecanismosCantidadSoportados ?? [],
           ),
         mecanismoCantidadConfigJson:
           (existente?.mecanismoCantidadConfigJson as
-            Record<string, unknown> | null | undefined) ?? null,
-        multiplicadoresActivos: existente?.multiplicadoresActivos ?? [],
+            Record<string, unknown> | null | undefined) ??
+          base?.mecanismoCantidadConfigJson ??
+          null,
+        multiplicadoresActivos:
+          existente?.multiplicadoresActivos ??
+          base?.multiplicadoresActivos ??
+          [],
         paramsPasoJson:
           (existente?.paramsPasoJson as
-            Record<string, unknown> | null | undefined) ?? null,
-        nombreVisible: existente?.nombreVisible ?? null,
-        maquinaM1Id: existente?.maquinaM1?.id ?? null,
-        perfilM1Id: existente?.perfilM1?.id ?? null,
+            Record<string, unknown> | null | undefined) ??
+          base?.paramsPasoJson ??
+          null,
+        nombreVisible: existente?.nombreVisible ?? base?.nombreVisible ?? null,
+        maquinaM1Id: existente?.maquinaM1?.id ?? base?.maquinaM1Id ?? null,
+        perfilM1Id: existente?.perfilM1?.id ?? base?.perfilM1Id ?? null,
         centroCostoId: existente?.maquinaM1
           ? null
-          : (existente?.centroCosto?.id ?? null),
-        setupOverrideMin: existente?.setupOverrideMin ?? null,
-        cleanupOverrideMin: existente?.cleanupOverrideMin ?? null,
-        tiempoFijoOverrideMin: existente?.tiempoFijoOverrideMin ?? null,
-        dotacionOperarios: existente?.dotacionOperarios ?? 1,
+          : (existente?.centroCosto?.id ?? base?.centroCostoId ?? null),
+        setupOverrideMin:
+          existente?.setupOverrideMin ?? base?.setupOverrideMin ?? null,
+        cleanupOverrideMin:
+          existente?.cleanupOverrideMin ?? base?.cleanupOverrideMin ?? null,
+        tiempoFijoOverrideMin:
+          existente?.tiempoFijoOverrideMin ??
+          base?.tiempoFijoOverrideMin ??
+          null,
+        dotacionOperarios:
+          existente?.dotacionOperarios ?? base?.dotacionOperarios ?? 1,
         requiereRutaPasoIds: existente?.requiereRutaPasoIds ?? [],
         maquinasCandidatas: normalizeMaquinasCandidatas(
           existente?.maquinasCandidatas?.map((candidata, index) => ({
@@ -2926,7 +2955,9 @@ export function ConfigPasosEditorView({
             modoColorAllowedModes: candidata.modoColorAllowedModes ?? [],
             esPreferida: candidata.esPreferida,
             orden: candidata.orden ?? index,
-          })) ?? [],
+          })) ??
+            base?.maquinasCandidatas ??
+            [],
         ),
         slotsMateriales:
           existente?.slotsMateriales.map<UpsertSlotMaterialPayload>((s) => ({
@@ -2951,16 +2982,23 @@ export function ConfigPasosEditorView({
                 : Number(s.cantidadFactor),
             cantidadBase: s.cantidadBase ?? null,
             aplicaMultiCaras: s.aplicaMultiCaras,
-          })) ?? [],
+          })) ??
+          base?.slotsMateriales ??
+          [],
         // E.2 — config NUEVA de una familia declarada tercerizada: el panel
         // nace prendido y precargado desde los defaults (el producto pisa).
         tercerizado:
-          existente?.tercerizado ?? familia?.defaults?.tercerizado ?? false,
+          existente?.tercerizado ??
+          base?.tercerizado ??
+          familia?.defaults?.tercerizado ??
+          false,
         proveedorId:
           existente?.proveedorId ??
+          base?.proveedorId ??
           (existente ? null : (familia?.defaults?.proveedorId ?? null)),
         fuenteCostoTercerizado:
           existente?.fuenteCostoTercerizado ??
+          base?.fuenteCostoTercerizado ??
           (existente
             ? null
             : (familia?.defaults?.fuenteCostoTercerizado ?? null)),
@@ -2968,16 +3006,21 @@ export function ConfigPasosEditorView({
           (existente?.tercerizadoConfigJson as
             | Record<string, unknown>
             | null
-            | undefined) ?? null,
+            | undefined) ??
+          base?.tercerizadoConfigJson ??
+          null,
         plazoProveedorDias:
           existente?.plazoProveedorDias ??
+          base?.plazoProveedorDias ??
           (existente ? null : (familia?.defaults?.plazoProveedorDias ?? null)),
         tercerizadoEntradas:
           existente?.tercerizadoEntradas?.map((e) => ({
             valores: e.valoresJson,
             cantidad: e.cantidad,
             costo: Number(e.costo),
-          })) ?? [],
+          })) ??
+          base?.tercerizadoEntradas ??
+          [],
       };
     }
     // G-F3 sub-fase 2 — borradores para los pasos extras (mismo panel).
@@ -3086,12 +3129,17 @@ export function ConfigPasosEditorView({
       const existente = rutaAlternativa.configPasos.find(
         (cp) => cp.rutaPasoId === paso.id,
       );
-      const params = existente?.paramsPasoJson as
+      const familia = familiasMap.get(paso.familiaCodigo);
+      const base = !existente
+        ? (familia?.configBase as Partial<UpsertConfigPasoPayload> | null)
+        : null;
+      const params = (existente?.paramsPasoJson ?? base?.paramsPasoJson) as
         Record<string, unknown> | null | undefined;
       map[paso.id] = {
         params: jsonToText(stripNestingConfig(params)),
         mecanismo: jsonToText(
-          existente?.mecanismoCantidadConfigJson as
+          (existente?.mecanismoCantidadConfigJson ??
+            base?.mecanismoCantidadConfigJson) as
             Record<string, unknown> | null | undefined,
         ),
       };
@@ -4188,7 +4236,7 @@ export function ConfigPasosEditorView({
           configMaquinasCandidatasJson: cfgActual.maquinasCandidatas ?? [],
         });
       } else {
-        await upsertConfigPaso(rutaAlternativa.id, {
+        const payload = {
           ...cfgActual,
           nombreVisible: cfgActual.nombreVisible?.trim() || null,
           centroCostoId: centroCostoIdEfectivo,
@@ -4196,7 +4244,25 @@ export function ConfigPasosEditorView({
           mecanismoCantidad: mecanismoCantidadEfectivo,
           paramsPasoJson: paramsPasoJsonEfectivo,
           mecanismoCantidadConfigJson: mecanismoRes.value,
-        });
+          requiereRutaPasoIds: configuracionBase
+            ? []
+            : cfgActual.requiereRutaPasoIds,
+        };
+        if (configuracionBase) {
+          if (configuracionBase.origen === "sistema") {
+            await guardarConfiguracionBaseFamiliaSistema(
+              configuracionBase.familiaCodigo,
+              payload,
+            );
+          } else {
+            await guardarConfiguracionBasePasoTenant(
+              configuracionBase.familiaCodigo,
+              payload,
+            );
+          }
+        } else {
+          await upsertConfigPaso(rutaAlternativa.id, payload);
+        }
       }
       setSavedConfigSnapshots((prev) => ({
         ...prev,
@@ -4452,11 +4518,14 @@ export function ConfigPasosEditorView({
         <aside className="editor-side">
           <div className="side-head">
             <Link
-              href={`/productos-servicios/${producto.id}?tab=pasos&rutaAltId=${rutaAlternativa.id}`}
+              href={
+                configuracionBase?.volverHref ??
+                `/productos-servicios/${producto.id}?tab=pasos&rutaAltId=${rutaAlternativa.id}`
+              }
               className="back-link"
             >
               <ArrowLeftIcon className="size-4" />
-              Volver a rutas
+              {configuracionBase ? "Volver a pasos" : "Volver a rutas"}
             </Link>
             <div
               className="route"
@@ -4481,25 +4550,31 @@ export function ConfigPasosEditorView({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Ruta predeterminada
+                  {configuracionBase
+                    ? "Configuración reutilizable"
+                    : "Ruta predeterminada"}
                 </span>
               ) : null}
             </div>
           </div>
           <div className="side-progress">
             <span>
-              {(() => {
+              {configuracionBase
+                ? doneCount === activeStepCount
+                  ? "Configuración completa"
+                  : "Configuración pendiente"
+                : `${(() => {
                 // El "Paso X de Y" vive acá (feedback 2026-08-06): antes
                 // estaba arriba de las preguntas y duplicaba este sidebar.
                 const n = pasosUnificados.indexOf(activePasoId);
                 return n >= 0
                   ? `Paso ${n + 1} de ${pasosUnificados.length} · `
                   : "";
-              })()}
-              {doneCount}/{activeStepCount} activos
-              {skippedCount > 0
-                ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}`
-                : ""}
+                  })()}${doneCount}/${activeStepCount} activos${
+                    skippedCount > 0
+                      ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}`
+                      : ""
+                  }`}
             </span>
             <div className="bar">
               <span
@@ -4645,8 +4720,9 @@ export function ConfigPasosEditorView({
               );
             })}
           </div>
-          {/* G-F3 — Pasos extras inline de esta ruta */}
-          <div className="pasos-extras-side">
+          {/* G-F3 — Pasos extras inline de esta ruta. Una configuración base
+              describe un único paso reutilizable, no una ruta concreta. */}
+          {!configuracionBase ? <div className="pasos-extras-side">
             <div className="pe-side-head">Pasos extras</div>
             {pasosExtras.map((pe) => {
               const fam = familiasMap.get(pe.familiaCodigo);
@@ -4685,13 +4761,13 @@ export function ConfigPasosEditorView({
             >
               + Agregar paso extra
             </button>
-          </div>
-          <div className="kbd-panel">
+          </div> : null}
+          {!configuracionBase ? <div className="kbd-panel">
             <span className="kbd-hint">
               Navegar pasos con <span className="k">↑</span>{" "}
               <span className="k">↓</span>
             </span>
-          </div>
+          </div> : null}
         </aside>
 
         <main className="editor-main">
@@ -5050,6 +5126,7 @@ export function ConfigPasosEditorView({
                             }}
                           >
                             <SeccionesEsquemaPaso
+                              configuracionBase={Boolean(configuracionBase)}
                               pasoActual={{
                                 id: paso.id,
                                 nombre:
@@ -5147,8 +5224,16 @@ export function ConfigPasosEditorView({
                             <div className="wiz-grid">
                               <div className="field md:col-span-full">
                                 <LabelConTooltip
-                                  label="Nombre visible del paso"
-                                  tooltip="Nombre operativo que verá comercial y producción. Si lo dejás vacío, se usa el nombre técnico de la familia."
+                                  label={
+                                    configuracionBase
+                                      ? "Nombre visible por defecto"
+                                      : "Nombre visible del paso"
+                                  }
+                                  tooltip={
+                                    configuracionBase
+                                      ? "Nombre que se propondrá al usar este paso en un producto. Cada producto puede personalizarlo después."
+                                      : "Nombre operativo que verá comercial y producción. Si lo dejás vacío, se usa el nombre técnico de la familia."
+                                  }
                                 />
                                 <Input
                                   value={cfg.nombreVisible ?? ""}
@@ -5180,7 +5265,10 @@ export function ConfigPasosEditorView({
                                         })
                                       }
                                     >
-                                      {option.label}
+                                      {configuracionBase &&
+                                      option.value === "NO_EJECUTAR"
+                                        ? "No usar por defecto"
+                                        : option.label}
                                     </button>
                                   ))}
                                 </div>
@@ -6802,22 +6890,26 @@ export function ConfigPasosEditorView({
                           boxShadow: "0 8px 24px rgba(20, 16, 12, 0.14)",
                         }}
                       >
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={goPrev}
-                          disabled={idx === 0}
-                        >
-                          <ArrowLeftIcon className="size-4" />
-                        </button>
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={goNext}
-                          disabled={idx === pasosUnificados.length - 1}
-                        >
-                          Siguiente →
-                        </button>
+                          {!configuracionBase ? (
+                            <>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={goPrev}
+                                disabled={idx === 0}
+                              >
+                                <ArrowLeftIcon className="size-4" />
+                              </button>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={goNext}
+                                disabled={idx === pasosUnificados.length - 1}
+                              >
+                                Siguiente →
+                              </button>
+                            </>
+                          ) : null}
                         <button
                           className="btn btn-primary"
                           type="button"
@@ -12805,6 +12897,7 @@ interface PasoAsistente {
  *  guiadas: el asistente flotante (Sheet) y la vista expandida del
  *  editor (toggle Detallado/Guiado). Una fuente, dos shells. */
 function SeccionesEsquemaPaso({
+  configuracionBase = false,
   pasoActual,
   cfg,
   familia,
@@ -12832,6 +12925,7 @@ function SeccionesEsquemaPaso({
   setPanelEditorPasoId,
   panelMeasures,
 }: {
+  configuracionBase?: boolean;
   pasoActual: PasoAsistente;
   cfg: UpsertConfigPasoPayload;
   familia: FamiliaListItem | undefined;
@@ -13081,7 +13175,9 @@ function SeccionesEsquemaPaso({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {MODO_ACTIVACION_LABELS[m] ?? m}
+                  {configuracionBase && m === "NO_EJECUTAR"
+                    ? "No usar por defecto"
+                    : (MODO_ACTIVACION_LABELS[m] ?? m)}
                 </button>
               );
             };

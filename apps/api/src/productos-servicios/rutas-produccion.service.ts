@@ -70,7 +70,7 @@ export class RutasProduccionService {
   }
 
   async crearRuta(tenantId: string, dto: CrearRutaDto) {
-    this.familias.validarFamiliasDePasos(dto.pasos);
+    await this.familias.validarFamiliasDePasos(tenantId, dto.pasos);
     const baseCodigo = dto.codigo?.trim() || this.codigoFromNombre(dto.nombre);
     const codigo = await this.nextCopyCode(tenantId, baseCodigo);
     try {
@@ -205,7 +205,7 @@ export class RutasProduccionService {
     }
 
     if (dto.pasos) {
-      this.familias.validarFamiliasDePasos(dto.pasos);
+      await this.familias.validarFamiliasDePasos(tenantId, dto.pasos);
     }
 
     const cambioEstructural = dto.pasos !== undefined;

@@ -8,9 +8,12 @@
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
+  Min,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -18,23 +21,27 @@ import {
 /** Defaults del taller; null limpia el campo. */
 export class DefaultsPasoTenantDto {
   @IsOptional()
-  @IsString()
+  @IsUUID()
   centroCostoId?: string | null;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   productividadHora?: number | null;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   tiempoFijoMin?: number | null;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   demasiaMm?: number | null;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   solapePanelMm?: number | null;
 
   @IsOptional()
@@ -42,15 +49,16 @@ export class DefaultsPasoTenantDto {
   tercerizado?: boolean | null;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   proveedorId?: string | null;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['tarifa_magnitud', 'matriz', 'fijo'])
   fuenteCostoTercerizado?: string | null;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   plazoProveedorDias?: number | null;
 }
 
@@ -70,6 +78,7 @@ export class CrearPasoTenantDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
   icono?: string | null;
 
   @IsOptional()
@@ -95,6 +104,7 @@ export class ActualizarPasoTenantDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
   icono?: string | null;
 
   @IsOptional()

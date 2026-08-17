@@ -204,6 +204,8 @@ export class ProductosServiciosService {
       subfamilias?: string[];
       templateIds?: string[];
       tipoTecnico?: string[];
+      ids?: string[];
+      varianteIds?: string[];
       limit?: number;
     },
   ) {

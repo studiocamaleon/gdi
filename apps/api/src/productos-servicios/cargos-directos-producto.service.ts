@@ -212,7 +212,7 @@ export class CargosDirectosProductoService {
     if (!producto)
       throw new NotFoundException(`Producto ${productoId} no encontrado`);
 
-    this.familias.assertFamiliaExiste(dto.familiaCodigo);
+    await this.familias.assertFamiliaExiste(tenantId, dto.familiaCodigo);
 
     // Validar que las FK provistas pertenezcan al tenant (evita referencias
     // cross-tenant a máquinas/perfiles/pasos de ruta ajenos).

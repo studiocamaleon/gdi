@@ -488,6 +488,32 @@ export async function actualizarPasoTenant(
   });
 }
 
+export async function guardarConfiguracionBasePasoTenant(
+  id: string,
+  input: UpsertConfigPasoPayload,
+): Promise<PasoTenant> {
+  return apiRequest<PasoTenant>(
+    `/productos-servicios/pasos-tenant/${id}/configuracion-base`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ ...input, rutaPasoId: id }),
+    },
+  );
+}
+
+export async function guardarConfiguracionBaseFamiliaSistema(
+  codigo: string,
+  input: UpsertConfigPasoPayload,
+): Promise<{ familiaCodigo: string; configBase: Record<string, unknown> }> {
+  return apiRequest(
+    `/productos-servicios/familias/${encodeURIComponent(codigo)}/configuracion-base`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ ...input, rutaPasoId: codigo }),
+    },
+  );
+}
+
 export async function eliminarPasoTenant(id: string): Promise<void> {
   await apiRequest(`/productos-servicios/pasos-tenant/${id}`, {
     method: "DELETE",
@@ -757,6 +783,8 @@ export interface BuscarMateriasPrimasParams {
   subfamilias?: string[];
   templateIds?: string[];
   tipoTecnico?: string[];
+  ids?: string[];
+  varianteIds?: string[];
   limit?: number;
 }
 
@@ -792,6 +820,9 @@ export async function buscarMateriasPrimasConfigPaso(
     search.set("templateIds", params.templateIds.join(","));
   if (params.tipoTecnico?.length)
     search.set("tipoTecnico", params.tipoTecnico.join(","));
+  if (params.ids?.length) search.set("ids", params.ids.join(","));
+  if (params.varianteIds?.length)
+    search.set("varianteIds", params.varianteIds.join(","));
   if (params.limit) search.set("limit", String(params.limit));
   const qs = search.toString();
   return apiRequest<MateriaPrimaBusquedaItem[]>(

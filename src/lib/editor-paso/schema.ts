@@ -904,11 +904,11 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     eje: "identidad",
     grupo: "identidad",
     orden: 0,
-    etiqueta: "Nombre del paso",
+    etiqueta: "Nombre visible",
     seccion: "activacion",
     pregunta: "¿Cómo se llama este paso acá?",
     ayuda:
-      "El nombre que ven el cotizador, la OT y el tablero. Vacío = el nombre del paso.",
+      "El nombre que ven el cotizador, la OT y el tablero. Vacío = el nombre configurado del paso.",
     visible: () => true,
     resumen: (ctx) =>
       ctx.cfg.nombreVisible?.trim()

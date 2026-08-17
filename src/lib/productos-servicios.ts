@@ -546,6 +546,8 @@ export interface FamiliaListItem {
   primitivaTiempo?: string | null;
   /** E.1 — defaults declarados del paso (null = sin defaults). */
   defaults?: DefaultsFamiliaPaso | null;
+  /** Configuración reutilizable del taller; la definición sigue heredada. */
+  configBase?: Record<string, unknown> | null;
   validaciones: Array<{
     codigo: string;
     tipo: string;
@@ -618,6 +620,7 @@ export interface PasoTenant {
   /** true si la estación viene de la plantilla (no tiene regla propia). */
   estacionHeredada?: boolean;
   defaults?: DefaultsFamiliaPaso | null;
+  configBase?: Record<string, unknown> | null;
 }
 
 /** Plantilla instanciable que ofrece el modal de alta. */

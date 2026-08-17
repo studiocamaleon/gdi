@@ -9,11 +9,16 @@ import type {
   ActualizarProductoRutaAlternativaDto,
   CrearProductoRutaAlternativaDto,
   DuplicarProductoRutaAlternativaDto,
+  UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
+import { ConfigPasosService } from './config-pasos.service';
 
 @Injectable()
 export class ProductoRutasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configPasos: ConfigPasosService,
+  ) {}
 
   async crearProductoRutaAlternativa(
     tenantId: string,
@@ -37,7 +42,7 @@ export class ProductoRutasService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const alternativa = await this.prisma.$transaction(async (tx) => {
         if (dto.esPreferida) {
           await tx.productoRutaAlternativa.updateMany({
             where: { tenantId, productoId, esPreferida: true },
@@ -60,6 +65,22 @@ export class ProductoRutasService {
           },
         });
       });
+      try {
+        await this.materializarConfiguracionesBase(
+          tenantId,
+          alternativa.id,
+          dto.rutaId,
+          dto.rutaVersion,
+        );
+      } catch (error) {
+        // La alternativa y sus configs forman una unidad para el usuario. Si
+        // una configuración base dejó de ser válida, no dejamos un alta a medias.
+        await this.prisma.productoRutaAlternativa.delete({
+          where: { id: alternativa.id },
+        });
+        throw error;
+      }
+      return alternativa;
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -311,6 +332,54 @@ export class ProductoRutasService {
 
   private jsonOrNull(value: Prisma.JsonValue | null) {
     return (value ?? Prisma.JsonNull) as Prisma.InputJsonValue;
+  }
+
+  private async materializarConfiguracionesBase(
+    tenantId: string,
+    rutaAlternativaId: string,
+    rutaId: string,
+    rutaVersion: number,
+  ) {
+    const pasos = await this.prisma.rutaPaso.findMany({
+      where: { tenantId, rutaId, version: rutaVersion, activo: true },
+      select: { id: true, familiaCodigo: true },
+    });
+    const codigos = pasos.map((paso) => paso.familiaCodigo);
+    const [basesTenant, basesSistema] = await Promise.all([
+      this.prisma.pasoTenant.findMany({
+        where: {
+          tenantId,
+          id: { in: codigos },
+          configBaseJson: { not: Prisma.JsonNull },
+        },
+        select: { id: true, configBaseJson: true },
+      }),
+      this.prisma.familiaPasoDefaults.findMany({
+        where: {
+          tenantId,
+          familiaCodigo: { in: codigos },
+          configBaseJson: { not: Prisma.JsonNull },
+        },
+        select: { familiaCodigo: true, configBaseJson: true },
+      }),
+    ]);
+    const porPaso = new Map<string, Prisma.JsonValue | null>([
+      ...basesSistema.map((fila) => [fila.familiaCodigo, fila.configBaseJson] as const),
+      ...basesTenant.map((fila) => [fila.id, fila.configBaseJson] as const),
+    ]);
+    for (const paso of pasos) {
+      const base = porPaso.get(paso.familiaCodigo);
+      if (!base || typeof base !== 'object' || Array.isArray(base)) continue;
+      await this.configPasos.upsertConfigPaso(
+        tenantId,
+        rutaAlternativaId,
+        {
+          ...(base as unknown as UpsertProductoConfigPasoDto),
+          rutaPasoId: paso.id,
+          requiereRutaPasoIds: [],
+        },
+      );
+    }
   }
 
 }

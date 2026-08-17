@@ -1892,6 +1892,10 @@ model FamiliaPasoDefaults {
   fuenteCostoTercerizado String?
   plazoProveedorDias     Int?
 
+  /// Configuración completa reutilizable del tenant para una familia del
+  /// sistema. La definición técnica sigue viviendo exclusivamente en Grafo.
+  configBaseJson Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1942,6 +1946,11 @@ model PasoTenant {
   /// 'tarifa_magnitud' | 'matriz' | 'fijo'
   fuenteCostoTercerizado String?
   plazoProveedorDias     Int?
+
+  /// Configuración reutilizable del taller. Contiene el mismo payload del
+  /// editor de un paso de producto, sin rutaPasoId ni dependencias entre pasos.
+  /// La DEFINICIÓN técnica sigue heredándose viva de plantillaCodigo.
+  configBaseJson         Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

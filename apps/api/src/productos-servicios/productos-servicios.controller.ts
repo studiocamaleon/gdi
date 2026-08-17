@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UnauthorizedException,
@@ -306,7 +307,7 @@ export class ProductosServiciosController {
   // administrador tiene costos.gestionar).
 
   @Get('pasos-tenant')
-  @Permiso('costos.gestionar')
+  @Permiso('costos.ver')
   listarPasosTenant(@Req() req: RequestWithAuth) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
@@ -315,7 +316,7 @@ export class ProductosServiciosController {
 
   /** Las plantillas que ofrece el modal de alta. */
   @Get('pasos-tenant/plantillas')
-  @Permiso('costos.gestionar')
+  @Permiso('costos.ver')
   listarPlantillasPaso() {
     return this.pasosTenant.listarPlantillas();
   }
@@ -343,6 +344,34 @@ export class ProductosServiciosController {
     return this.pasosTenant.actualizar(tenantId, id, dto);
   }
 
+  @Put('pasos-tenant/:id/configuracion-base')
+  @Permiso('costos.gestionar')
+  actualizarConfiguracionBasePasoTenant(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: UpsertProductoConfigPasoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.pasosTenant.actualizarConfiguracionBase(tenantId, id, dto);
+  }
+
+  @Put('familias/:codigo/configuracion-base')
+  @Permiso('costos.gestionar')
+  actualizarConfiguracionBaseFamiliaSistema(
+    @Req() req: RequestWithAuth,
+    @Param('codigo') codigo: string,
+    @Body() dto: UpsertProductoConfigPasoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.pasosTenant.actualizarConfiguracionBaseSistema(
+      tenantId,
+      codigo,
+      dto,
+    );
+  }
+
   @Delete('pasos-tenant/:id')
   @Permiso('costos.gestionar')
   eliminarPasoTenant(@Req() req: RequestWithAuth, @Param('id') id: string) {
@@ -366,6 +395,8 @@ export class ProductosServiciosController {
     @Query('subfamilias') subfamilias?: string,
     @Query('templateIds') templateIds?: string,
     @Query('tipoTecnico') tipoTecnico?: string,
+    @Query('ids') ids?: string,
+    @Query('varianteIds') varianteIds?: string,
     @Query('limit') limit?: string,
   ) {
     const tenantId = req.auth?.tenantId;
@@ -381,6 +412,8 @@ export class ProductosServiciosController {
       subfamilias: split(subfamilias),
       templateIds: split(templateIds),
       tipoTecnico: split(tipoTecnico),
+      ids: split(ids),
+      varianteIds: split(varianteIds),
       limit: limit ? Number(limit) : undefined,
     });
   }

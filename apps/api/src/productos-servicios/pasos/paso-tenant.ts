@@ -76,6 +76,11 @@ export function validarPasoTenant(input: PasoTenantInput): ErrorPasoTenant[] {
       campo: 'plantillaCodigo',
       mensaje: `La plantilla "${input.plantillaCodigo}" no existe en el catálogo.`,
     });
+  } else if (plantilla.visibleEnSelector === false) {
+    errores.push({
+      campo: 'plantillaCodigo',
+      mensaje: 'La plantilla elegida no está disponible para crear pasos propios.',
+    });
   }
 
   return errores;
