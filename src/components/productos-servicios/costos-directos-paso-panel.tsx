@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { CheckIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import {
+  CheckIcon,
+  CircleDollarSignIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -9,6 +15,14 @@ import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -343,54 +357,58 @@ export function CostosDirectosPasoPanel({
   };
 
   const renderAsociacion = (asociacion: CargoPasoDetalle) => (
-    <div
-      key={asociacion.id}
-      className="flex items-center gap-2 rounded-lg border px-3 py-2.5"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">
-          {asociacion.cargoDirectoCatalogo.nombre}
-        </div>
-        <div className="text-muted-foreground text-xs">
+    <Card key={asociacion.id} size="sm" className="gap-2">
+      <CardHeader>
+        <CardTitle className="flex min-w-0 items-center gap-2">
+          <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-lg">
+            <CircleDollarSignIcon className="size-4" aria-hidden />
+          </span>
+          <span className="truncate">
+            {asociacion.cargoDirectoCatalogo.nombre}
+          </span>
+        </CardTitle>
+        <CardDescription className="pl-10 text-xs">
           {resumenCargo(
             asociacion.cargoDirectoCatalogo,
             asociacion.configOverrideJson,
           )}
-        </div>
-        <div className="mt-1 flex flex-wrap gap-1">
-          <Badge variant="outline" className="text-[10px]">
-            {
-              getLabel(
-                modoCalculoCargoLabels,
-                asociacion.cargoDirectoCatalogo.modoCalculo,
-              ).label
-            }
-          </Badge>
-          <Badge variant="secondary" className="text-[10px]">
-            {getLabel(modoActivacionLabels, asociacion.modoActivacion).label}
-          </Badge>
-        </div>
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => abrirEditar(asociacion)}
-        aria-label={`Editar ${asociacion.cargoDirectoCatalogo.nombre}`}
-      >
-        <PencilIcon />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="text-destructive"
-        onClick={() => setAQuitar(asociacion)}
-        aria-label={`Quitar ${asociacion.cargoDirectoCatalogo.nombre}`}
-      >
-        <Trash2Icon />
-      </Button>
-    </div>
+        </CardDescription>
+        <CardAction className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => abrirEditar(asociacion)}
+            aria-label={`Editar ${asociacion.cargoDirectoCatalogo.nombre}`}
+          >
+            <PencilIcon />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-destructive"
+            onClick={() => setAQuitar(asociacion)}
+            aria-label={`Quitar ${asociacion.cargoDirectoCatalogo.nombre}`}
+          >
+            <Trash2Icon />
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-1 pl-13">
+        <Badge variant="outline" className="text-[10px]">
+          {
+            getLabel(
+              modoCalculoCargoLabels,
+              asociacion.cargoDirectoCatalogo.modoCalculo,
+            ).label
+          }
+        </Badge>
+        <Badge variant="secondary" className="text-[10px]">
+          {getLabel(modoActivacionLabels, asociacion.modoActivacion).label}
+        </Badge>
+      </CardContent>
+    </Card>
   );
 
   const generalesLegados = niveles
@@ -497,15 +515,21 @@ export function CostosDirectosPasoPanel({
             </div>
           </>
         ) : (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground text-xs">
-                {asociaciones.length === 0
-                  ? "Sin costos monetarios adicionales."
-                  : `${asociaciones.length} costo${asociaciones.length === 1 ? "" : "s"} configurado${asociaciones.length === 1 ? "" : "s"}.`}
-              </span>
+          <div className="overflow-hidden rounded-lg border">
+            <div className="bg-muted/30 flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Aplicación general</span>
+                <Badge variant="secondary">Todo el paso</Badge>
+                {asociaciones.length > 0 ? (
+                  <span className="text-muted-foreground text-xs">
+                    {asociaciones.length} costo
+                    {asociaciones.length === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </div>
               <Button
                 type="button"
+                variant="outline"
                 size="sm"
                 onClick={() => abrirNuevo(null)}
                 disabled={disponiblesPara(null).length === 0}
@@ -515,11 +539,15 @@ export function CostosDirectosPasoPanel({
               </Button>
             </div>
             {asociaciones.length > 0 ? (
-              <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-2 p-3 md:grid-cols-2">
                 {asociaciones.map(renderAsociacion)}
               </div>
-            ) : null}
-          </>
+            ) : (
+              <p className="text-muted-foreground px-3 py-3 text-xs">
+                Sin costos monetarios adicionales para este paso.
+              </p>
+            )}
+          </div>
         )}
       </div>
 
