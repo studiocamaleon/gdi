@@ -5122,18 +5122,6 @@ export function ConfigPasosEditorView({
                         </div>
                       </div>
 
-                      {!configuracionBase && !esExtra ? (
-                        <CostosDirectosPasoPanel
-                          configPaso={configExistente ?? null}
-                          catalogoCargos={catalogoCargos}
-                          includeMeasureFields={
-                            producto.modoMedidas === "LIBRE" ||
-                            producto.modoMedidas === "MIXTA"
-                          }
-                          ruleExtraFields={technologyRuleFields}
-                        />
-                      ) : null}
-
                       <div className="config-step-content pasos-sections">
                         {vistaEditor === "guiado" ? (
                           <div
@@ -6885,6 +6873,18 @@ export function ConfigPasosEditorView({
                         )}
                           </>
                         )}
+
+                        {!configuracionBase && !esExtra ? (
+                          <CostosDirectosPasoPanel
+                            configPaso={configExistente ?? null}
+                            catalogoCargos={catalogoCargos}
+                            includeMeasureFields={
+                              producto.modoMedidas === "LIBRE" ||
+                              producto.modoMedidas === "MIXTA"
+                            }
+                            ruleExtraFields={technologyRuleFields}
+                          />
+                        ) : null}
                       </div>
 
                       {/* Botonera flotante (feedback 2026-08-06): sólo los

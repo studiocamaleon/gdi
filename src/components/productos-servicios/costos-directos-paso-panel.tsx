@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { BanknoteIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Sheet,
   SheetContent,
@@ -226,45 +227,53 @@ export function CostosDirectosPasoPanel({
   };
 
   return (
-    <section className="mt-4 rounded-xl border bg-background p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
-            <BanknoteIcon className="size-4" />
+    <section className="flex flex-col gap-2.5">
+      <div className="px-0.5">
+        <div className="flex items-center gap-2 text-[15px] font-semibold">
+          <span
+            aria-hidden
+            className="flex size-4 shrink-0 items-center justify-center rounded-full text-white"
+            style={{ background: "var(--ok, #22a06b)" }}
+          >
+            <CheckIcon className="size-2.5" strokeWidth={3.2} />
           </span>
-          <div>
-            <h3 className="font-semibold">Costos directos del paso</h3>
-            <p className="text-muted-foreground max-w-2xl text-xs">
-              Desembolsos externos que se generan sólo cuando este paso se
-              ejecuta. El motor los incorpora al costo antes de calcular el
-              precio.
-            </p>
-          </div>
+          Costos directos del paso
         </div>
-        <Button
-          type="button"
-          size="sm"
-          onClick={abrirNuevo}
-          disabled={!configPaso || disponibles.length === 0}
-        >
-          <PlusIcon className="mr-1 size-4" />
-          Asociar costo
-        </Button>
+        <p className="text-muted-foreground mt-0.5 ml-6 max-w-2xl text-xs">
+          Desembolsos adicionales que se generan cuando este paso se ejecuta.
+        </p>
       </div>
 
-      {!configPaso ? (
-        <div className="mt-3 rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">
-          Guardá primero la configuración del paso. Después vas a poder
-          asociarle costos directos.
+      <div className="flex flex-col gap-3 rounded-xl border bg-background p-4">
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            onClick={abrirNuevo}
+            disabled={!configPaso || disponibles.length === 0}
+          >
+            <PlusIcon data-icon="inline-start" />
+            Asociar costo
+          </Button>
         </div>
-      ) : asociaciones.length === 0 ? (
-        <div className="mt-3 rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">
-          Este paso no tiene costos monetarios adicionales. El tiempo, los
-          materiales y los proveedores se configuran en sus secciones
-          específicas.
-        </div>
-      ) : (
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
+
+        {!configPaso ? (
+          <Empty className="min-h-0 items-start gap-0 border p-4 text-left">
+            <EmptyDescription>
+              Guardá primero la configuración del paso. Después vas a poder
+              asociarle costos directos.
+            </EmptyDescription>
+          </Empty>
+        ) : asociaciones.length === 0 ? (
+          <Empty className="min-h-0 items-start gap-0 border p-4 text-left">
+            <EmptyDescription>
+              Este paso no tiene costos monetarios adicionales. El tiempo, los
+              materiales y los proveedores se configuran en sus secciones
+              específicas.
+            </EmptyDescription>
+          </Empty>
+        ) : (
+          <div className="grid gap-2 md:grid-cols-2">
           {asociaciones.map((asociacion) => (
             <div
               key={asociacion.id}
@@ -304,7 +313,7 @@ export function CostosDirectosPasoPanel({
                 onClick={() => abrirEditar(asociacion)}
                 aria-label={`Editar ${asociacion.cargoDirectoCatalogo.nombre}`}
               >
-                <PencilIcon className="size-3.5" />
+                <PencilIcon />
               </Button>
               <Button
                 type="button"
@@ -314,12 +323,13 @@ export function CostosDirectosPasoPanel({
                 onClick={() => setAQuitar(asociacion)}
                 aria-label={`Quitar ${asociacion.cargoDirectoCatalogo.nombre}`}
               >
-                <Trash2Icon className="size-3.5" />
+                <Trash2Icon />
               </Button>
             </div>
           ))}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="overflow-y-auto sm:max-w-xl">
