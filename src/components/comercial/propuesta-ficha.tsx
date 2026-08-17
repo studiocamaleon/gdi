@@ -157,6 +157,15 @@ import {
   estadoCentroCopiado,
 } from "@/lib/centro-copiado-api";
 import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import {
   type MutacionAplicadaView,
   demasiaPorLado,
@@ -1972,11 +1981,17 @@ function ProduccionItemView({
   item,
   calculoPendiente,
   onEditPanels,
+  onExpand,
+  ampliada = false,
 }: {
   item: PropuestaItem;
   calculoPendiente: boolean;
   /** Ausente en modo lectura: el layout de paneles no se puede editar. */
   onEditPanels?: (paso: PanelEditorPaso) => void;
+  /** Abre la producción por encima del resto de la orden. */
+  onExpand?: () => void;
+  /** Aprovecha el espacio extra del diálogo para agrandar el nesting. */
+  ampliada?: boolean;
 }) {
   const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
   const pasosActivos = pasosCosteoActivos;
@@ -2062,7 +2077,22 @@ function ProduccionItemView({
       ) : null}
 
       <div className="cost-section">
-        <div className="cost-title">Ruta de producción</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="cost-title">Ruta de producción</div>
+          {onExpand ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={onExpand}
+              aria-label="Ampliar vista de producción"
+              title="Ampliar vista de producción"
+            >
+              <ExpandIcon />
+              <span className="sr-only">Ampliar vista de producción</span>
+            </Button>
+          ) : null}
+        </div>
         <div className="production-route">
           {pasosActivos.map((paso, index) => {
             const title =
@@ -2159,10 +2189,12 @@ function ProduccionItemView({
                   copias={getCopiasItem(item)}
                   costingDetails={activeNestingTab.paso.materiales ?? []}
                   maxPx={
-                    activeNestingTab.paso.nestingResult?.substrates[0]?.kind ===
-                    "sheet"
-                      ? 420
-                      : 560
+                    ampliada
+                      ? 900
+                      : activeNestingTab.paso.nestingResult?.substrates[0]
+                            ?.kind === "sheet"
+                        ? 420
+                        : 560
                   }
                   modificaciones={modificacionesOverlay}
                 />
@@ -3199,6 +3231,7 @@ export function ProductRow({
 }) {
   const { moneda, zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
+  const [produccionAmpliada, setProduccionAmpliada] = React.useState(false);
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
   const costo = calcularCostoTotal(item);
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
@@ -3618,6 +3651,7 @@ export function ProductRow({
             <ProduccionItemView
               item={item}
               calculoPendiente={calculoPendiente}
+              onExpand={() => setProduccionAmpliada(true)}
               onEditPanels={
                 readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
               }
@@ -3625,6 +3659,30 @@ export function ProductRow({
           ) : null}
         </div>
       ) : null}
+
+      <Dialog open={produccionAmpliada} onOpenChange={setProduccionAmpliada}>
+        <DialogContent className="inset-3 top-3 left-3 h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-none translate-x-0 translate-y-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-none">
+          <DialogHeader className="px-6 py-4 pr-14">
+            <DialogTitle>Producción · {item.productoNombre}</DialogTitle>
+            <DialogDescription>
+              Ruta, tiempos y disposición de piezas del ítem.
+            </DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="min-h-0 overflow-y-auto bg-muted/30 p-4 sm:p-6">
+            <div className="ot-v1 mx-auto w-full max-w-[1600px]">
+              <ProduccionItemView
+                item={item}
+                calculoPendiente={calculoPendiente}
+                ampliada
+                onEditPanels={
+                  readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
+                }
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

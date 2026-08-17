@@ -229,6 +229,8 @@ export function NestingViewer({
   className,
   modificaciones,
 }: NestingViewerProps) {
+  const reactId = React.useId();
+  const definitionIdPrefix = `nesting-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const pieceGroups = usePieceGroups(result.placements);
   const firstSubstrate = result.substrates[0];
   // Imposición de cuadernillo: si el motor publicó el plan, el canvas dibuja
@@ -351,6 +353,7 @@ export function NestingViewer({
         {result.substrates.map((sub, idx) => (
           <SubstrateView
             key={idx}
+            definitionIdPrefix={definitionIdPrefix}
             substrate={sub}
             substrateIndex={idx}
             totalSubstrates={result.substrates.length}
@@ -843,6 +846,7 @@ type MaquinaVisual = NonNullable<
 >;
 
 interface SubstrateViewProps {
+  definitionIdPrefix: string;
   substrate: NestingViewerInput["substrates"][number];
   substrateIndex: number;
   totalSubstrates: number;
@@ -860,6 +864,7 @@ interface SubstrateViewProps {
 }
 
 function SubstrateView({
+  definitionIdPrefix,
   substrate,
   substrateIndex,
   totalSubstrates,
@@ -956,6 +961,12 @@ function SubstrateView({
     printableArea.widthMm,
     printableArea.heightMm,
   );
+  const svgIdBase = `${definitionIdPrefix}-${substrateIndex}`;
+  const marginPatternId = `${svgIdBase}-margin`;
+  const printableClipId = `${svgIdBase}-printable-clip`;
+  const printerBodyId = `${svgIdBase}-printer-body`;
+  const printerSlotId = `${svgIdBase}-printer-slot`;
+  const printerShadeId = `${svgIdBase}-printer-shade`;
 
   return (
     <div className="nesting-substrate">
@@ -981,7 +992,7 @@ function SubstrateView({
         >
           <defs>
             <pattern
-              id={`margin-pattern-${substrateIndex}`}
+              id={marginPatternId}
               patternUnits="userSpaceOnUse"
               width="7"
               height="7"
@@ -989,7 +1000,7 @@ function SubstrateView({
             >
               <line x1="0" y1="0" x2="0" y2="7" stroke="#8b8277" strokeWidth="1" opacity="0.2" />
             </pattern>
-            <clipPath id={`printable-clip-${substrateIndex}`}>
+            <clipPath id={printableClipId}>
               <rect
                 x={printableClipRect.x}
                 y={printableClipRect.y}
@@ -999,16 +1010,16 @@ function SubstrateView({
             </clipPath>
             {showPrinter ? (
               <>
-                <linearGradient id={`printer-body-${substrateIndex}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={printerBodyId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0" stopColor="#f1efec" />
                   <stop offset="0.55" stopColor="#e4e1dc" />
                   <stop offset="1" stopColor="#d5d2cc" />
                 </linearGradient>
-                <linearGradient id={`printer-slot-${substrateIndex}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={printerSlotId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0" stopColor="#2c2c33" />
                   <stop offset="1" stopColor="#5b5b64" />
                 </linearGradient>
-                <linearGradient id={`printer-shade-${substrateIndex}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={printerShadeId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0" stopColor="rgba(20,20,26,.16)" />
                   <stop offset="1" stopColor="rgba(20,20,26,0)" />
                 </linearGradient>
@@ -1018,7 +1029,8 @@ function SubstrateView({
           {showPrinter && printer ? (
             <PrinterMouth
               maquina={printer}
-              substrateIndex={substrateIndex}
+              printerBodyId={printerBodyId}
+              printerSlotId={printerSlotId}
               viewBoxW={viewBoxW}
               chassisH={printerChassisH}
               mouthX={padXPx + wPx / 2 - mouthWPx / 2}
@@ -1059,7 +1071,7 @@ function SubstrateView({
               scale={scale}
               substrateWidthMm={widthMm}
               substrateHeightMm={heightMm}
-              patternId={`margin-pattern-${substrateIndex}`}
+              patternId={marginPatternId}
               displayTransform={displayTransform}
             />
           ) : null}
@@ -1076,7 +1088,7 @@ function SubstrateView({
             placements={placements}
             padPx={padPx}
             scale={scale}
-            clipPathId={`printable-clip-${substrateIndex}`}
+            clipPathId={printableClipId}
             displayTransform={placementTransform}
           />
           <DimensionLabels
@@ -1090,7 +1102,7 @@ function SubstrateView({
             kind={substrate.kind}
             hideWidthLabel={showPrinter}
           />
-          <g clipPath={substrate.kind === "roll" ? `url(#printable-clip-${substrateIndex})` : undefined}>
+          <g clipPath={substrate.kind === "roll" ? `url(#${printableClipId})` : undefined}>
             {placements.map((placement, idx) => (
               <PlacementRect
                 key={`${placement.pieceId}-${idx}`}
@@ -1121,7 +1133,7 @@ function SubstrateView({
               y={substrateRect.y}
               width={substrateRect.width}
               height={Math.min(26, 16 * (printerChassisH / 64))}
-              fill={`url(#printer-shade-${substrateIndex})`}
+              fill={`url(#${printerShadeId})`}
               pointerEvents="none"
             />
           ) : null}
@@ -1140,14 +1152,16 @@ function SubstrateView({
  */
 function PrinterMouth({
   maquina,
-  substrateIndex,
+  printerBodyId,
+  printerSlotId,
   viewBoxW,
   chassisH,
   mouthX,
   mouthW,
 }: {
   maquina: MaquinaVisual;
-  substrateIndex: number;
+  printerBodyId: string;
+  printerSlotId: string;
   viewBoxW: number;
   chassisH: number;
   mouthX: number;
@@ -1174,7 +1188,7 @@ function PrinterMouth({
   const railY = chassisH * 0.63;
   return (
     <g aria-hidden pointerEvents="none">
-      <rect x={chassisX} y={2} width={chassisW} height={chassisH - 2} rx={7 * f} fill={`url(#printer-body-${substrateIndex})`} />
+      <rect x={chassisX} y={2} width={chassisW} height={chassisH - 2} rx={7 * f} fill={`url(#${printerBodyId})`} />
       <rect x={chassisX + 7 * f} y={2} width={chassisW - 14 * f} height={2 * f} fill="#cbc7c1" />
       {/* riel + carro */}
       <rect x={chassisX + 22 * f} y={railY} width={chassisW - 44 * f} height={1.6 * f} fill="#b6b2ab" />
@@ -1205,7 +1219,7 @@ function PrinterMouth({
       {/* boca: mide el ancho útil de la MÁQUINA a escala (el rollo, más angosto,
           queda centrado debajo — se lee la proporción máquina/material) */}
       <rect x={mouthClampedX - 4 * f} y={chassisH - 13 * f} width={mouthClampedW + 8 * f} height={13 * f} fill="#cdc9c3" />
-      <rect x={mouthClampedX} y={chassisH - 9 * f} width={mouthClampedW} height={9 * f} fill={`url(#printer-slot-${substrateIndex})`} />
+      <rect x={mouthClampedX} y={chassisH - 9 * f} width={mouthClampedW} height={9 * f} fill={`url(#${printerSlotId})`} />
       {anchoM ? (
         <text
           x={mouthCenterX}
