@@ -26,6 +26,9 @@ export interface ProductosListParams {
   limit?: number;
   search?: string;
   activo?: boolean;
+  unidadComercial?: "unidad" | "m2" | "metro_lineal";
+  subcategoriaCodigo?: string;
+  orden?: "recientes" | "nombre_asc" | "nombre_desc";
 }
 
 export interface ProductosListResponse {
@@ -42,6 +45,11 @@ function buildProductosPath(params: ProductosListParams = {}) {
   if (params.limit) sp.set("limit", String(params.limit));
   if (params.search?.trim()) sp.set("search", params.search.trim());
   if (params.activo !== undefined) sp.set("activo", String(params.activo));
+  if (params.unidadComercial) sp.set("unidadComercial", params.unidadComercial);
+  if (params.subcategoriaCodigo) {
+    sp.set("subcategoriaCodigo", params.subcategoriaCodigo);
+  }
+  if (params.orden) sp.set("orden", params.orden);
   const qs = sp.toString();
   return `/productos-servicios/productos${qs ? `?${qs}` : ""}`;
 }
@@ -69,7 +77,13 @@ export async function getProductos(
     if (page >= res.pages || res.data.length === 0) break;
     page += 1;
   }
-  return all;
+  // Los selectores comerciales no deben ofrecer productos publicados de forma
+  // histórica que hoy ya no pasan la validación mínima del catálogo. Los
+  // productos nuevos, además, sólo pueden publicarse tras la validación
+  // completa del backend.
+  return activo === true
+    ? all.filter((producto) => producto.listoParaCotizar === true)
+    : all;
 }
 
 export async function getProductoById(id: string): Promise<ProductoDetalle> {
@@ -131,6 +145,7 @@ export async function crearProducto(payload: CrearProductoPayload) {
 }
 
 export interface ActualizarProductoPayload {
+  expectedUpdatedAt?: string;
   nombre?: string;
   descripcion?: string;
   subcategoriaComercialCodigo?: string;

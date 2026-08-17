@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 
 /**
  * Provisiona el producto plantilla "Impresión de documento" (SYS-IMPRESION-DOC)
@@ -106,7 +107,11 @@ export async function provisionarPlantillaCentroCopiado(
     };
 
   const laseres = (await prisma.maquina.findMany({
-    where: { tenantId, plantilla: 'IMPRESORA_LASER', activo: true },
+    where: {
+      tenantId,
+      plantilla: 'IMPRESORA_LASER',
+      ...MAQUINA_DISPONIBLE_WHERE,
+    },
     include: { componentesDesgaste: true, perfilesOperativos: true },
   })) as unknown as MaquinaConDetalle[];
   if (laseres.length === 0)
@@ -519,7 +524,11 @@ export async function asegurarPasoAnilladoCC(
     select: { maquinaAnilladoraId: true },
   });
   const anilladoras = await prisma.maquina.findMany({
-    where: { tenantId, plantilla: 'ANILLADORA', activo: true },
+    where: {
+      tenantId,
+      plantilla: 'ANILLADORA',
+      ...MAQUINA_DISPONIBLE_WHERE,
+    },
     select: {
       id: true,
       perfilesOperativos: {

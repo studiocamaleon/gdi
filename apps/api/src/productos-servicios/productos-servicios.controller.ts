@@ -7,7 +7,6 @@ import {
   Param,
   Patch,
   Post,
-  Put,
   Query,
   Req,
   UnauthorizedException,
@@ -78,12 +77,13 @@ export class ProductosServiciosController {
   ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    const filtroActivo =
-      query.activo === undefined ? undefined : query.activo !== 'false';
     return this.service.listarProductos(tenantId, {
       pagination: query,
-      activo: filtroActivo,
+      activo: query.activo,
       search: query.search?.trim() || undefined,
+      unidadComercial: query.unidadComercial,
+      subcategoriaCodigo: query.subcategoriaCodigo?.trim() || undefined,
+      orden: query.orden,
     });
   }
 
@@ -299,7 +299,6 @@ export class ProductosServiciosController {
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.listarFamilias(tenantId);
   }
-
 
   // ── Familias del tenant (pasos componibles, Etapa C) ──────────────────
   // Mismo permiso que editar rutas y productos: definir cómo se costea un

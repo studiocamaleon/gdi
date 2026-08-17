@@ -4,7 +4,9 @@ import { Suspense } from "react";
 
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getCentrosCosto, getPlantas } from "@/lib/costos-api";
-import { getMaquina } from "@/lib/maquinaria-api";
+import { getMaquina, getMaquinaHistorial } from "@/lib/maquinaria-api";
+import { tienePermiso } from "@/lib/permisos-server";
+import { ApiError } from "@/lib/api";
 
 const MaquinaFicha = dynamicImport(
   () =>
@@ -36,19 +38,28 @@ async function MaquinariaDetalleContent({
   params: Promise<{ maquinaId: string }>;
 }) {
   const { maquinaId } = await params;
-  const [maquina, plantas, centrosCosto] = await Promise.all([
-    getMaquina(maquinaId).catch(() => null),
-    getPlantas(),
-    getCentrosCosto(),
-  ]);
-
-  if (!maquina) notFound();
+  const [maquina, historial, plantas, centrosCosto, puedeGestionar] =
+    await Promise.all([
+      getMaquina(maquinaId).catch((error) => {
+        if (error instanceof ApiError && error.status === 404) notFound();
+        throw error;
+      }),
+      getMaquinaHistorial(maquinaId).catch((error) => {
+        if (error instanceof ApiError && error.status === 404) notFound();
+        throw error;
+      }),
+      getPlantas(),
+      getCentrosCosto(),
+      tienePermiso("costos.gestionar"),
+    ]);
 
   return (
     <MaquinaFicha
       maquina={maquina}
+      historial={historial}
       plantas={plantas}
       centrosCosto={centrosCosto}
+      puedeGestionar={puedeGestionar}
     />
   );
 }

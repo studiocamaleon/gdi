@@ -22,19 +22,19 @@ import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
   CentroCosto,
-  getCurrentPeriodo,
+  getPeriodoEnZona,
   type ResumenCentroCostoFila,
   type ResumenCentrosCosto,
 } from "@/lib/costos";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { CentroCostoFicha } from "@/components/costos/centro-costo-ficha";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type CostosPanelProps = {
   initialCentros: CentroCosto[];
+  puedeGestionar: boolean;
 };
-
-
-
 
 function formatPeriodoCorto(periodo: string) {
   const [anio, mes] = periodo.split("-");
@@ -51,26 +51,30 @@ function formatMoneyOrDash(value: number | null | undefined, moneda: Moneda) {
 
 export function CostosPanel({
   initialCentros,
+  puedeGestionar,
 }: CostosPanelProps) {
-  const { moneda } = useConfigRegional();
+  const { moneda, zonaHoraria } = useConfigRegional();
 
   const [centros, setCentros] = React.useState(initialCentros);
-  const [selectedCentro, setSelectedCentro] = React.useState<CentroCosto | null>(null);
-  const [centroAEliminar, setCentroAEliminar] = React.useState<CentroCosto | null>(null);
+  const [selectedCentro, setSelectedCentro] =
+    React.useState<CentroCosto | null>(null);
+  const [centroAEliminar, setCentroAEliminar] =
+    React.useState<CentroCosto | null>(null);
   const [isConfiguratorOpen, setIsConfiguratorOpen] = React.useState(false);
-  const [configuracionRefreshKey, setConfiguracionRefreshKey] = React.useState(0);
-
-
-
+  const [configuracionRefreshKey, setConfiguracionRefreshKey] =
+    React.useState(0);
 
   const [isReloading, startReloading] = React.useTransition();
   const [, startSaving] = React.useTransition();
 
-  const [periodoResumen, setPeriodoResumen] = React.useState(getCurrentPeriodo);
+  const [periodoResumen, setPeriodoResumen] = React.useState(() =>
+    getPeriodoEnZona(zonaHoraria),
+  );
   const [busquedaCentros, setBusquedaCentros] = React.useState("");
-  const [resumen, setResumen] = React.useState<ResumenCentrosCosto | null>(null);
+  const [resumen, setResumen] = React.useState<ResumenCentrosCosto | null>(
+    null,
+  );
   const [isLoadingResumen, setIsLoadingResumen] = React.useState(false);
-
 
   // La fila del resumen trae sólo lo que la tabla muestra; las acciones
   // necesitan el centro completo.
@@ -107,8 +111,10 @@ export function CostosPanel({
     };
   }, [filasResumen]);
 
-  const repartoCuadra =
-    Math.abs(totalesResumen.absorbido - totalesResumen.prorrateado) < 0.01;
+  const repartoCuadra = busquedaCentros.trim()
+    ? Math.round(totalesResumen.absorbido) ===
+      Math.round(totalesResumen.prorrateado)
+    : (resumen?.repartoCuadra ?? true);
 
   const cargarResumen = React.useCallback(async (periodo: string) => {
     setIsLoadingResumen(true);
@@ -130,40 +136,42 @@ export function CostosPanel({
     void cargarResumen(periodoResumen);
   }, [periodoResumen, cargarResumen, configuracionRefreshKey]);
 
-
-
-
-
   const reloadAll = React.useCallback(() => {
     startReloading(async () => {
       try {
-        const nextCentros = await getCentrosCosto();
+        const [nextCentros, nextResumen] = await Promise.all([
+          getCentrosCosto(),
+          getResumenCentrosCosto(periodoResumen),
+        ]);
         setCentros(nextCentros);
+        setResumen(nextResumen);
         setSelectedCentro((current) =>
           current
-            ? (nextCentros.find((centro) => centro.id === current.id) ?? current)
+            ? (nextCentros.find((centro) => centro.id === current.id) ??
+              current)
             : current,
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo refrescar costos.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo refrescar costos.",
+        );
       }
     });
-  }, []);
-
-
-
-
-
+  }, [periodoResumen]);
 
   const handleToggleCentro = (id: string) => {
     startSaving(async () => {
       try {
-        await toggleCentroCosto(id);
+        await toggleCentroCosto(id, periodoResumen);
         reloadAll();
         setConfiguracionRefreshKey((current) => current + 1);
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "No se pudo cambiar el centro.",
+          error instanceof Error
+            ? error.message
+            : "No se pudo cambiar el centro.",
         );
       }
     });
@@ -179,199 +187,243 @@ export function CostosPanel({
         <div className="title-block">
           <h1>Centros de costo</h1>
           <div className="sub">
-            Cada centro es una planilla que se carga a mano: gastos generales, empleados y activos fijos.
+            Cada centro es una planilla que se carga a mano: gastos generales,
+            empleados y activos fijos.
           </div>
         </div>
-        <button type="button" className="btn cc-refresh" onClick={reloadAll}>
-          <RefreshCcwIcon size={14} className={isReloading ? "animate-spin" : undefined} />
+        <Button type="button" variant="outline" size="sm" onClick={reloadAll}>
+          <RefreshCcwIcon
+            data-icon="inline-start"
+            className={isReloading ? "animate-spin" : undefined}
+          />
           Refrescar
-        </button>
+        </Button>
       </div>
 
-              <div className="ccosto-toolbar">
-                <div className="ccosto-buscador">
-                  <SearchIcon />
-                  <input
-                    type="search"
-                    placeholder="Búsqueda"
-                    value={busquedaCentros}
-                    onChange={(event) => setBusquedaCentros(event.target.value)}
-                    aria-label="Buscar centro de costo"
-                  />
-                </div>
-                <label className="ccosto-periodo">
-                  <span>Período</span>
-                  <input
-                    type="month"
-                    value={periodoResumen}
-                    onChange={(event) =>
-                      setPeriodoResumen(event.target.value || getCurrentPeriodo())
-                    }
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setSelectedCentro(null);
-                    setIsConfiguratorOpen(true);
-                  }}
-                >
-                  <PlusIcon />
-                  Añadir centro de costo
-                </button>
-              </div>
+      <div className="ccosto-toolbar">
+        <div className="ccosto-buscador">
+          <SearchIcon />
+          <Input
+            type="search"
+            placeholder="Búsqueda"
+            value={busquedaCentros}
+            onChange={(event) => setBusquedaCentros(event.target.value)}
+            aria-label="Buscar centro de costo"
+          />
+        </div>
+        <label className="ccosto-periodo">
+          <span>Período</span>
+          <input
+            type="month"
+            value={periodoResumen}
+            onChange={(event) =>
+              setPeriodoResumen(
+                event.target.value || getPeriodoEnZona(zonaHoraria),
+              )
+            }
+          />
+        </label>
+        {puedeGestionar ? (
+          <Button
+            type="button"
+            onClick={() => {
+              setSelectedCentro(null);
+              setIsConfiguratorOpen(true);
+            }}
+          >
+            <PlusIcon data-icon="inline-start" />
+            Añadir centro de costo
+          </Button>
+        ) : null}
+      </div>
 
-              <div className="card tbl-scroll centros-costo-table-card">
-                <table className="tbl centros-costo-table ccosto-tabla">
-                  <thead>
-                    <tr>
-                      <th>Nombre</th>
-                      <th className="right">Horas productivas</th>
-                      <th className="right">Gastos</th>
-                      <th className="right">Absorbido</th>
-                      <th className="right">Prorrateado</th>
-                      <th className="right">Gasto total</th>
-                      <th className="right">Valor de la hora</th>
-                      <th className="right sticky-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoadingResumen && filasResumen.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="ccosto-vacio">
-                          <GdiSpinner className="size-4" />
-                        </td>
-                      </tr>
-                    ) : null}
-                    {!isLoadingResumen && filasResumen.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="ccosto-vacio">
-                          {busquedaCentros.trim()
-                            ? "Ningún centro coincide con la búsqueda."
-                            : `Todavía no hay centros con datos cargados en ${formatPeriodoCorto(periodoResumen)}.`}
-                        </td>
-                      </tr>
-                    ) : null}
-                    {filasResumen.map((fila) => {
-                      const centro = centroById.get(fila.id);
-                      // Los centros que reparten su costo entero no tienen valor
-                      // hora: lo que cuestan ya se cobra dentro de los productivos
-                      // que los absorbieron.
-                      const repartePorEntero = fila.prorrateado > 0;
+      <div className="card tbl-scroll centros-costo-table-card">
+        <table className="tbl centros-costo-table ccosto-tabla">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th className="right">Horas productivas</th>
+              <th className="right">Gastos</th>
+              <th className="right">Absorbido</th>
+              <th className="right">Prorrateado</th>
+              <th className="right">Gasto total</th>
+              <th className="right">Valor de la hora</th>
+              <th className="right sticky-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoadingResumen && filasResumen.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="ccosto-vacio">
+                  <GdiSpinner className="size-4" />
+                </td>
+              </tr>
+            ) : null}
+            {!isLoadingResumen && filasResumen.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="ccosto-vacio">
+                  {busquedaCentros.trim()
+                    ? "Ningún centro coincide con la búsqueda."
+                    : `Todavía no hay centros con datos cargados en ${formatPeriodoCorto(periodoResumen)}.`}
+                </td>
+              </tr>
+            ) : null}
+            {filasResumen.map((fila) => {
+              const centro = centroById.get(fila.id);
+              // Los centros que reparten su costo entero no tienen valor
+              // hora: lo que cuestan ya se cobra dentro de los productivos
+              // que los absorbieron.
+              const repartePorEntero = fila.prorrateado > 0;
 
-                      return (
-                        <tr key={fila.id}>
-                          <td>
-                            <div className="name">{fila.nombre}</div>
-                          </td>
-                          <td className="right numeric">
-                            {fila.horasProductivas == null
-                              ? "—"
-                              : new Intl.NumberFormat("es-AR", {
-                                  minimumFractionDigits: 0,
-                                  maximumFractionDigits: 2,
-                                }).format(fila.horasProductivas)}
-                          </td>
-                          <td className="right numeric">
-                            {formatMoneyOrDash(fila.gastos, moneda) ?? "—"}
-                          </td>
-                          <td className="right numeric muted-value">
-                            {fila.absorbido > 0
-                              ? formatMoneyOrDash(fila.absorbido, moneda)
-                              : "—"}
-                          </td>
-                          <td className="right numeric muted-value">
-                            {repartePorEntero
-                              ? formatMoneyOrDash(fila.prorrateado, moneda)
-                              : "—"}
-                          </td>
-                          <td className="right numeric">
-                            {formatMoneyOrDash(fila.gastoTotal, moneda) ?? "—"}
-                          </td>
-                          <td className="right numeric strong-value">
-                            {fila.valorHora == null
-                              ? "—"
-                              : formatMoneyOrDash(fila.valorHora, moneda)}
-                          </td>
-                          <td className="right sticky-right">
-                            <span className="centros-actions">
-                              <button
-                                type="button"
-                                className="btn btn-primary configure-cost-btn"
-                                onClick={() => {
-                                  if (!centro) return;
-                                  setSelectedCentro(centro);
-                                  setIsConfiguratorOpen(true);
-                                }}
-                              >
-                                <SlidersHorizontalIcon />
-                                Configurar
-                              </button>
-                              <button
-                                type="button"
-                                className="icon-btn"
-                                title="Inactivar"
-                                aria-label={`Inactivar ${fila.nombre}`}
-                                onClick={() => handleToggleCentro(fila.id)}
-                              >
-                                <PowerIcon />
-                              </button>
-                              <button
-                                type="button"
-                                className="icon-btn"
-                                title="Eliminar"
-                                aria-label={`Eliminar ${fila.nombre}`}
-                                onClick={() => {
-                                  if (centro) handleEliminarCentro(centro);
-                                }}
-                              >
-                                <Trash2Icon />
-                              </button>
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="centros-totales-row">
-                      <td colSpan={2}>
-                        Total · {filasResumen.length}{" "}
-                        {filasResumen.length === 1 ? "centro" : "centros"}
-                      </td>
-                      <td className="right numeric">
-                        {formatMoneyOrDash(totalesResumen.gastos, moneda) ?? "—"}
-                      </td>
-                      <td className="right numeric muted-value">
-                        {formatMoneyOrDash(totalesResumen.absorbido, moneda) ?? "—"}
-                      </td>
-                      <td className="right numeric muted-value">
-                        {formatMoneyOrDash(totalesResumen.prorrateado, moneda) ?? "—"}
-                      </td>
-                      <td className="right numeric strong-value">
-                        {formatMoneyOrDash(totalesResumen.gastoTotal, moneda) ?? "—"}
-                      </td>
-                      <td className="right numeric" />
-                      <td className="right sticky-right" />
-                    </tr>
-                    {/* Lo que sale de los centros de estructura tiene que entrar
+              return (
+                <tr key={fila.id}>
+                  <td>
+                    <div className="name">{fila.nombre}</div>
+                  </td>
+                  <td className="right numeric">
+                    {fila.horasProductivas == null
+                      ? "—"
+                      : new Intl.NumberFormat("es-AR", {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        }).format(fila.horasProductivas)}
+                  </td>
+                  <td className="right numeric">
+                    {formatMoneyOrDash(fila.gastos, moneda) ?? "—"}
+                  </td>
+                  <td className="right numeric muted-value">
+                    {fila.absorbido > 0
+                      ? formatMoneyOrDash(fila.absorbido, moneda)
+                      : "—"}
+                  </td>
+                  <td className="right numeric muted-value">
+                    {repartePorEntero
+                      ? formatMoneyOrDash(fila.prorrateado, moneda)
+                      : "—"}
+                  </td>
+                  <td className="right numeric">
+                    {formatMoneyOrDash(fila.gastoTotal, moneda) ?? "—"}
+                  </td>
+                  <td className="right numeric strong-value">
+                    {fila.valorHora == null
+                      ? "—"
+                      : formatMoneyOrDash(fila.valorHora, moneda)}
+                  </td>
+                  <td className="right sticky-right">
+                    {puedeGestionar ? (
+                      <span className="centros-actions">
+                        <button
+                          type="button"
+                          className="btn btn-primary configure-cost-btn"
+                          onClick={() => {
+                            if (!centro) return;
+                            setSelectedCentro(centro);
+                            setIsConfiguratorOpen(true);
+                          }}
+                        >
+                          <SlidersHorizontalIcon />
+                          Configurar
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Inactivar"
+                          aria-label={`Inactivar ${fila.nombre}`}
+                          onClick={() => handleToggleCentro(fila.id)}
+                        >
+                          <PowerIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Eliminar"
+                          aria-label={`Eliminar ${fila.nombre}`}
+                          onClick={() => {
+                            if (centro) handleEliminarCentro(centro);
+                          }}
+                        >
+                          <Trash2Icon />
+                        </button>
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="centros-totales-row">
+              <td colSpan={2}>
+                Total · {filasResumen.length}{" "}
+                {filasResumen.length === 1 ? "centro" : "centros"}
+              </td>
+              <td className="right numeric">
+                {formatMoneyOrDash(totalesResumen.gastos, moneda) ?? "—"}
+              </td>
+              <td className="right numeric muted-value">
+                {formatMoneyOrDash(totalesResumen.absorbido, moneda) ?? "—"}
+              </td>
+              <td className="right numeric muted-value">
+                {formatMoneyOrDash(totalesResumen.prorrateado, moneda) ?? "—"}
+              </td>
+              <td className="right numeric strong-value">
+                {formatMoneyOrDash(totalesResumen.gastoTotal, moneda) ?? "—"}
+              </td>
+              <td className="right numeric" />
+              <td className="right sticky-right" />
+            </tr>
+            {/* Lo que sale de los centros de estructura tiene que entrar
                         entero a los productivos. Si las dos columnas no dan
                         igual, el reparto perdió plata en el camino. */}
-                    {totalesResumen.prorrateado > 0 ? (
-                      <tr className="ccosto-cuadre">
-                        <td colSpan={8}>
-                          {repartoCuadra
-                            ? `El prorrateo cuadra: los ${formatMoneyOrDash(totalesResumen.prorrateado, moneda)} que reparte la estructura entran completos a los centros productivos.`
-                            : `El prorrateo no cuadra: se reparten ${formatMoneyOrDash(totalesResumen.prorrateado, moneda)} pero se absorben ${formatMoneyOrDash(totalesResumen.absorbido, moneda)}.`}
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tfoot>
-                </table>
-              </div>
+            {totalesResumen.prorrateado > 0 ? (
+              <tr className="ccosto-cuadre">
+                <td colSpan={8}>
+                  {repartoCuadra
+                    ? `El prorrateo cuadra: los ${formatMoneyOrDash(totalesResumen.prorrateado, moneda)} que reparte la estructura entran completos a los centros productivos.`
+                    : `El prorrateo no cuadra: se reparten ${formatMoneyOrDash(totalesResumen.prorrateado, moneda)} pero se absorben ${formatMoneyOrDash(totalesResumen.absorbido, moneda)}.`}
+                </td>
+              </tr>
+            ) : null}
+          </tfoot>
+        </table>
+      </div>
+
+      {puedeGestionar && centros.some((centro) => !centro.activo) ? (
+        <section
+          className="ccosto-inactivos"
+          aria-labelledby="centros-inactivos-titulo"
+        >
+          <h2 id="centros-inactivos-titulo">Centros inactivos</h2>
+          <p>
+            Se conservan para no perder su historial. Podés reactivarlos cuando
+            vuelvan a utilizarse.
+          </p>
+          <div className="ccosto-inactivos-lista">
+            {centros
+              .filter((centro) => !centro.activo)
+              .map((centro) => (
+                <div key={centro.id} className="ccosto-inactivo-item">
+                  <span>
+                    <strong>{centro.nombre}</strong> · {centro.codigo}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleToggleCentro(centro.id)}
+                  >
+                    <PowerIcon data-icon="inline-start" />
+                    Reactivar
+                  </Button>
+                </div>
+              ))}
+          </div>
+        </section>
+      ) : null}
 
       <CentroCostoFicha
+        key={`${selectedCentro?.id ?? "nuevo"}-${periodoResumen}`}
         open={isConfiguratorOpen}
         onOpenChange={(next) => {
           setIsConfiguratorOpen(next);
@@ -392,7 +444,7 @@ export function CostosPanel({
         titulo="Eliminar centro de costo"
         descripcion={`¿Eliminar definitivamente el centro "${centroAEliminar?.nombre ?? ""}"?`}
         impacto={[
-          "Se borran también sus tarifas y recursos de cada período.",
+          "Sólo se permite si nunca tuvo movimientos, planillas ni tarifas.",
           "Esta acción no se puede deshacer.",
         ]}
         nombreItem={centroAEliminar?.nombre}
@@ -410,7 +462,9 @@ export function CostosPanel({
               setConfiguracionRefreshKey((current) => current + 1);
             } catch (error) {
               toast.error(
-                error instanceof Error ? error.message : "No se pudo eliminar el centro.",
+                error instanceof Error
+                  ? error.message
+                  : "No se pudo eliminar el centro.",
               );
             }
           });

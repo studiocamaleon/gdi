@@ -12,15 +12,20 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRightIcon, CircleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CentroCosto, Planta } from "@/lib/costos";
 import { fechaHora } from "@/lib/fecha";
 import {
   getEstadoMaquinaLabel,
   type Maquina,
+  type MaquinaHistorialEvento,
 } from "@/lib/maquinaria";
 import { updateMaquina } from "@/lib/maquinaria-api";
 import { getPlantillaMaquinariaLabel } from "@/lib/maquinaria-templates";
@@ -41,18 +46,29 @@ const TABS: Array<{ id: TabFicha; label: string }> = [
 
 type MaquinaFichaProps = {
   maquina: Maquina;
+  historial: MaquinaHistorialEvento[];
   plantas: Planta[];
   centrosCosto: CentroCosto[];
+  puedeGestionar: boolean;
 };
 
-export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaProps) {
+export function MaquinaFicha({
+  maquina,
+  historial,
+  plantas,
+  centrosCosto,
+  puedeGestionar,
+}: MaquinaFichaProps) {
   const router = useRouter();
   const [tab, setTab] = React.useState<TabFicha>("descripcion");
   const [saving, setSaving] = React.useState(false);
   // El nombre del header no sigue al input: es el de la máquina guardada.
   const [nombreGuardado, setNombreGuardado] = React.useState(maquina.nombre);
 
-  const editor = useMaquinaEditor({ maquina });
+  const editor = useMaquinaEditor({
+    maquina,
+    cargarMaterias: tab === "ajustes",
+  });
 
   const handleGuardar = async (): Promise<boolean> => {
     if (!editor.form.nombre.trim()) {
@@ -62,34 +78,21 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
     setSaving(true);
     try {
       const payload = editor.buildPayload();
-      const esBorrador = payload.estadoConfiguracion === "borrador";
-      let updated;
-      if (!esBorrador) {
-        updated = await updateMaquina(maquina.id, payload);
-      } else {
-        // Un borrador intenta graduarse: sin la marca, el API deriva el
-        // estado (incompleta/lista) validando los campos de la plantilla.
-        // Si todavía faltan, se guarda igual COMO borrador — la gracia del
-        // flujo es poder completar la ficha de a poco.
-        try {
-          updated = await updateMaquina(maquina.id, {
-            ...payload,
-            estadoConfiguracion: undefined,
-          });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "";
-          if (!msg.includes("debe completar los campos")) throw err;
-          updated = await updateMaquina(maquina.id, payload);
-          toast.info(
-            `Guardada como borrador. ${msg.replace("La maquina debe", "Para dejarla operativa debe")}`,
-          );
-        }
-      }
+      const updated = await updateMaquina(maquina.id, {
+        ...payload,
+        // El backend deriva incompleta/lista en cada guardado. Así el flujo no
+        // depende de interpretar mensajes de error ni necesita dos PUT.
+        estadoConfiguracion: undefined,
+      });
       setNombreGuardado(updated.nombre);
       // Lo guardado pasa a ser el nuevo punto de comparación.
-      editor.marcarGuardado(payload);
-      if (updated.estadoConfiguracion !== "borrador") {
+      editor.marcarGuardado(updated);
+      if (updated.estadoConfiguracion === "lista") {
         toast.success(`"${updated.nombre}" actualizada`);
+      } else {
+        toast.info(
+          `"${updated.nombre}" guardada como incompleta. No estará disponible para producción hasta completar su configuración.`,
+        );
       }
       router.refresh();
       return true;
@@ -133,13 +136,20 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
     // Tres franjas: título+tabs fijos, cuerpo con scroll propio, pie fijo.
     // La barra de acciones NO flota sobre el contenido: el área visible
     // termina justo arriba de ella.
-    <div className="maq-ficha">
+    <Tabs
+      value={tab}
+      onValueChange={(value) => setTab(value as TabFicha)}
+      className="maq-ficha"
+    >
       <div className="maq-ficha-top">
         <div className="page-head">
           <div className="title-block">
             <h1>{nombreGuardado}</h1>
             <nav className="maq-migas" aria-label="Ubicación">
-              <button type="button" onClick={() => salir("/costos/centros-de-costo")}>
+              <button
+                type="button"
+                onClick={() => salir("/costos/centros-de-costo")}
+              >
                 Costos
               </button>
               <span className="sep">/</span>
@@ -152,41 +162,68 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
           </div>
         </div>
 
-        <div className="maq-ficha-tabs" role="tablist">
+        <TabsList variant="line" className="maq-ficha-tabs">
           {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              className={`maq-ficha-tab ${tab === t.id ? "activo" : ""}`}
-              onClick={() => setTab(t.id)}
-            >
+            <TabsTrigger key={t.id} value={t.id} className="maq-ficha-tab">
               {t.label}
-            </button>
+            </TabsTrigger>
           ))}
-        </div>
+        </TabsList>
       </div>
 
       <div className="maq-ficha-cuerpo">
-        {tab === "descripcion" ? (
-          <div className="space-y-4">
+        {tab !== "historial" &&
+        maquina.diagnosticoConfiguracion.faltantes.length > 0 ? (
+          <Alert>
+            <CircleAlertIcon />
+            <AlertTitle>
+              {maquina.diagnosticoConfiguracion.faltantes.length === 1
+                ? "Falta 1 dato para activar esta máquina"
+                : `Faltan ${maquina.diagnosticoConfiguracion.faltantes.length} datos para activar esta máquina`}
+            </AlertTitle>
+            <AlertDescription className="flex flex-col gap-3">
+              <ul className="list-disc pl-4">
+                {maquina.diagnosticoConfiguracion.faltantes.map((faltante) => (
+                  <li key={faltante.codigo}>{faltante.mensaje}</li>
+                ))}
+              </ul>
+              {tab !== "ajustes" &&
+              maquina.diagnosticoConfiguracion.faltantes.some(
+                (faltante) => faltante.seccion === "ajustes",
+              ) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => setTab("ajustes")}
+                >
+                  Ir a Ajustes
+                  <ArrowRightIcon data-icon="inline-end" />
+                </Button>
+              ) : null}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <TabsContent value="descripcion">
+          <fieldset disabled={!puedeGestionar} className="flex flex-col gap-4">
             <MaquinaEditorIdentidad
               editor={editor}
               plantas={plantas}
               centrosCosto={centrosCosto}
             />
-          </div>
-        ) : null}
+          </fieldset>
+        </TabsContent>
 
-        {tab === "ajustes" ? (
-          <div className="space-y-4">
+        <TabsContent value="ajustes">
+          <fieldset disabled={!puedeGestionar} className="flex flex-col gap-4">
             <MaquinaEditorSecciones editor={editor} />
-          </div>
-        ) : null}
+          </fieldset>
+        </TabsContent>
 
-        {tab === "historial" ? (
-          <div className="card maq-historial">
+        <TabsContent value="historial">
+          <div className="card maq-historial space-y-5">
             <dl>
               <div className="fila">
                 <dt>Alta en el sistema</dt>
@@ -205,15 +242,46 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
                 <dd>{getPlantillaMaquinariaLabel(maquina.plantilla)}</dd>
               </div>
             </dl>
-            <p className="nota">
-              Todavía no se registra el detalle de cambios campo por campo; acá
-              van a aparecer cuando exista esa auditoría.
-            </p>
+            <div>
+              <h2 className="text-sm font-semibold">Actividad registrada</h2>
+              {historial.length > 0 ? (
+                <ol className="mt-3 divide-y" aria-label="Historial de cambios">
+                  {historial.map((evento) => (
+                    <li key={evento.id} className="flex gap-3 py-3 first:pt-0">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="capitalize">
+                            {evento.accion}
+                          </Badge>
+                          <span className="text-sm font-medium">
+                            {evento.actorNombre}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {evento.descripcion}
+                        </p>
+                      </div>
+                      <time
+                        dateTime={evento.createdAt}
+                        className="shrink-0 text-xs text-muted-foreground"
+                      >
+                        {fechaHora(evento.createdAt)}
+                      </time>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Todavía no hay cambios registrados. La auditoría comienza con
+                  la próxima edición o cambio de disponibilidad.
+                </p>
+              )}
+            </div>
           </div>
-        ) : null}
+        </TabsContent>
       </div>
 
-      {tab !== "historial" ? (
+      {tab !== "historial" && puedeGestionar ? (
         <div className="maq-ficha-pie">
           <Button variant="outline" onClick={() => salir("/costos/maquinaria")}>
             Cancelar
@@ -221,9 +289,20 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
           <Button
             onClick={() => void handleGuardar()}
             disabled={saving || !editor.hayCambios}
-            title={editor.hayCambios ? undefined : "No hay cambios para guardar"}
+            title={
+              editor.hayCambios ? undefined : "No hay cambios para guardar"
+            }
           >
             {saving ? "Guardando..." : "Guardar"}
+          </Button>
+        </div>
+      ) : null}
+
+      {!puedeGestionar && tab !== "historial" ? (
+        <div className="maq-ficha-pie">
+          <Badge variant="secondary">Sólo lectura</Badge>
+          <Button variant="outline" onClick={() => salir("/costos/maquinaria")}>
+            Volver
           </Button>
         </div>
       ) : null}
@@ -246,6 +325,6 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
         }}
         onSeguirEditando={() => setSalidaPendiente(null)}
       />
-    </div>
+    </Tabs>
   );
 }

@@ -36,11 +36,7 @@ export type EstadoMaquina = "activa" | "inactiva" | "mantenimiento" | "baja";
 export type EstadoConfiguracionMaquina = "borrador" | "incompleta" | "lista";
 
 export type GeometriaTrabajoMaquina =
-  | "pliego"
-  | "rollo"
-  | "plano"
-  | "cilindrico"
-  | "volumen";
+  "pliego" | "rollo" | "plano" | "cilindrico" | "volumen";
 
 export type UnidadProduccionMaquina =
   | "hora"
@@ -121,6 +117,7 @@ export type TipoComponenteDesgasteMaquina =
 
 export type UnidadDesgasteMaquina =
   | "copias_a4_equiv"
+  | "ml_tinta"
   | "m2"
   | "metros_lineales"
   | "horas"
@@ -139,18 +136,10 @@ export type MaquinariaTemplateSectionId =
   | "documentacion_observaciones";
 
 export type MaquinariaTemplateFieldScope =
-  | "maquina"
-  | "perfil_operativo"
-  | "consumible"
-  | "desgaste";
+  "maquina" | "perfil_operativo" | "consumible" | "desgaste";
 
 export type MaquinariaTemplateFieldKind =
-  | "text"
-  | "textarea"
-  | "number"
-  | "select"
-  | "multiselect"
-  | "boolean";
+  "text" | "textarea" | "number" | "select" | "multiselect" | "boolean";
 
 export type MaquinariaTemplateFieldUnit =
   | "cm"
@@ -240,7 +229,10 @@ export const familiaPlantillaMaquinariaItems: Array<{
   { label: "Terminación", value: "terminacion" },
 ];
 
-export const estadoMaquinaItems: Array<{ label: string; value: EstadoMaquina }> = [
+export const estadoMaquinaItems: Array<{
+  label: string;
+  value: EstadoMaquina;
+}> = [
   { label: "Activa", value: "activa" },
   { label: "Inactiva", value: "inactiva" },
   { label: "Mantenimiento", value: "mantenimiento" },
@@ -278,10 +270,12 @@ export const tecnologiaMaquinaItems = [
   { label: "Inkjet", value: "inkjet" },
 ] as const;
 
-export type TecnologiaMaquina = (typeof tecnologiaMaquinaItems)[number]["value"];
+export type TecnologiaMaquina =
+  (typeof tecnologiaMaquinaItems)[number]["value"];
 
 function normalizeTecnologiaMaquinaValue(value: unknown) {
-  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  const normalized =
+    typeof value === "string" ? value.trim().toLowerCase() : "";
   if (normalized === "solvente") {
     return "eco_solvente";
   }
@@ -296,7 +290,8 @@ export function getMaquinaGeometriasCompatibles(input: {
   capacidadesAvanzadas?: Record<string, unknown> | null;
 }) {
   const raw =
-    input.capacidadesAvanzadas && Array.isArray(input.capacidadesAvanzadas.geometriasCompatibles)
+    input.capacidadesAvanzadas &&
+    Array.isArray(input.capacidadesAvanzadas.geometriasCompatibles)
       ? input.capacidadesAvanzadas.geometriasCompatibles
       : [];
   const normalized = raw
@@ -337,7 +332,9 @@ export function getMaquinaTecnologia(input: {
     return tecnologiaExplicita.toLowerCase();
   }
   // 2. Compat: legacy capacidadesAvanzadas.tecnologiaMaquina.
-  const explicit = normalizeTecnologiaMaquinaValue(input.capacidadesAvanzadas?.tecnologiaMaquina);
+  const explicit = normalizeTecnologiaMaquinaValue(
+    input.capacidadesAvanzadas?.tecnologiaMaquina,
+  );
   if (explicit) {
     return explicit;
   }
@@ -449,6 +446,7 @@ export const unidadDesgasteMaquinaItems: Array<{
   value: UnidadDesgasteMaquina;
 }> = [
   { label: "Copias A4 equivalentes", value: "copias_a4_equiv" },
+  { label: "Mililitros de tinta procesada", value: "ml_tinta" },
   { label: "Metro cuadrado", value: "m2" },
   { label: "Metros lineales", value: "metros_lineales" },
   { label: "Horas", value: "horas" },
@@ -468,26 +466,46 @@ export const maquinariaBaseSectionOrder: MaquinariaTemplateSectionId[] = [
   "documentacion_observaciones",
 ];
 
-export function getFamiliaPlantillaMaquinariaLabel(value: FamiliaPlantillaMaquinaria) {
-  return familiaPlantillaMaquinariaItems.find((item) => item.value === value)?.label ?? value;
-}
-
-export function getEstadoMaquinaLabel(value: EstadoMaquina) {
-  return estadoMaquinaItems.find((item) => item.value === value)?.label ?? value;
-}
-
-export function getEstadoConfiguracionMaquinaLabel(value: EstadoConfiguracionMaquina) {
+export function getFamiliaPlantillaMaquinariaLabel(
+  value: FamiliaPlantillaMaquinaria,
+) {
   return (
-    estadoConfiguracionMaquinaItems.find((item) => item.value === value)?.label ?? value
+    familiaPlantillaMaquinariaItems.find((item) => item.value === value)
+      ?.label ?? value
   );
 }
 
-export function getGeometriaTrabajoMaquinaLabel(value: GeometriaTrabajoMaquina) {
-  return geometriaTrabajoMaquinaItems.find((item) => item.value === value)?.label ?? value;
+export function getEstadoMaquinaLabel(value: EstadoMaquina) {
+  return (
+    estadoMaquinaItems.find((item) => item.value === value)?.label ?? value
+  );
 }
 
-export function getUnidadProduccionMaquinaLabel(value: UnidadProduccionMaquina) {
-  return unidadProduccionMaquinaItems.find((item) => item.value === value)?.label ?? value;
+export function getEstadoConfiguracionMaquinaLabel(
+  value: EstadoConfiguracionMaquina,
+) {
+  return (
+    estadoConfiguracionMaquinaItems.find((item) => item.value === value)
+      ?.label ?? value
+  );
+}
+
+export function getGeometriaTrabajoMaquinaLabel(
+  value: GeometriaTrabajoMaquina,
+) {
+  return (
+    geometriaTrabajoMaquinaItems.find((item) => item.value === value)?.label ??
+    value
+  );
+}
+
+export function getUnidadProduccionMaquinaLabel(
+  value: UnidadProduccionMaquina,
+) {
+  return (
+    unidadProduccionMaquinaItems.find((item) => item.value === value)?.label ??
+    value
+  );
 }
 
 /**
@@ -554,6 +572,19 @@ export type MaquinaComponenteDesgaste = {
   observaciones: string;
 };
 
+export type MaquinaConfiguracionFaltante = {
+  codigo: string;
+  seccion: "descripcion" | "ajustes";
+  mensaje: string;
+  campo?: string;
+  perfilId?: string;
+};
+
+export type MaquinaDiagnosticoConfiguracion = {
+  estado: EstadoConfiguracionMaquina;
+  faltantes: MaquinaConfiguracionFaltante[];
+};
+
 export type Maquina = {
   id: string;
   codigo: string;
@@ -585,11 +616,13 @@ export type Maquina = {
   perfilesOperativos: MaquinaPerfilOperativo[];
   consumibles: MaquinaConsumible[];
   componentesDesgaste: MaquinaComponenteDesgaste[];
+  diagnosticoConfiguracion: MaquinaDiagnosticoConfiguracion;
   createdAt: string;
   updatedAt: string;
 };
 
 export type MaquinaPayload = {
+  expectedUpdatedAt?: string;
   codigo?: string;
   nombre: string;
   plantilla: PlantillaMaquinaria;
@@ -657,6 +690,56 @@ export type MaquinaPayload = {
     detalle?: Record<string, unknown>;
     observaciones?: string;
   }>;
+};
+
+export type MaquinaResumen = Pick<
+  Maquina,
+  | "id"
+  | "codigo"
+  | "nombre"
+  | "plantilla"
+  | "plantillaVersion"
+  | "fabricante"
+  | "modelo"
+  | "numeroSerie"
+  | "plantaId"
+  | "plantaNombre"
+  | "centroCostoPrincipalId"
+  | "centroCostoPrincipalNombre"
+  | "estado"
+  | "estadoConfiguracion"
+  | "geometriaTrabajo"
+  | "unidadProduccionPrincipal"
+  | "activo"
+  | "parametrosTecnicos"
+  | "capacidadesAvanzadas"
+  | "createdAt"
+  | "updatedAt"
+  | "diagnosticoConfiguracion"
+> & {
+  perfilesCount: number;
+};
+
+export type MaquinasPage = {
+  data: MaquinaResumen[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+};
+
+export type MaquinaHistorialEvento = {
+  id: string;
+  accion: "creada" | "actualizada" | "activada" | "desactivada" | string;
+  actorNombre: string;
+  descripcion: string;
+  cambios: {
+    secciones?: string[];
+    estado?: EstadoMaquina;
+    estadoConfiguracion?: EstadoConfiguracionMaquina;
+    activo?: boolean;
+  } | null;
+  createdAt: string;
 };
 
 // v3.0: items legacy (printModeItems, printSidesItems) eliminados.

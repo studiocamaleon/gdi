@@ -61,7 +61,16 @@ export async function loadTarifasHorarias(
   const where: Prisma.CentroCostoTarifaPeriodoWhereInput = {
     tenantId: input.tenantId,
     periodo: { lte: input.periodo },
-    estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+    estado: {
+      in: [
+        EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+        EstadoTarifaCentroCostoPeriodo.BORRADOR,
+      ],
+    },
+    // Un centro inactivo no puede seguir costando por arrastre de una tarifa
+    // histórica. Reactivarlo vuelve a habilitarlo y el guardado del período
+    // vuelve a publicar el conjunto completo.
+    centroCosto: { activo: true },
   };
   if (input.centroCostoIds) {
     where.centroCostoId = { in: input.centroCostoIds };
@@ -74,6 +83,7 @@ export async function loadTarifasHorarias(
       periodo: true,
       tarifaCalculada: true,
       tarifaManoObra: true,
+      estado: true,
     },
     // Mayor período primero: el primero que vemos por centro es el vigente
     // (el del período pedido si existe, si no el último anterior).
@@ -81,13 +91,28 @@ export async function loadTarifasHorarias(
   });
 
   const map: TarifaByCentroId = new Map();
-  for (const t of tarifas) {
-    if (!map.has(t.centroCostoId)) {
-      map.set(t.centroCostoId, {
-        tarifa: t.tarifaCalculada,
-        manoObra: t.tarifaManoObra,
-      });
-    }
+  const resueltos = new Set<string>();
+  const porCentroPeriodo = new Map<string, typeof tarifas>();
+  for (const tarifa of tarifas) {
+    const key = `${tarifa.centroCostoId}:${tarifa.periodo}`;
+    const grupo = porCentroPeriodo.get(key) ?? [];
+    grupo.push(tarifa);
+    porCentroPeriodo.set(key, grupo);
+  }
+  for (const grupo of porCentroPeriodo.values()) {
+    const centroId = grupo[0].centroCostoId;
+    if (resueltos.has(centroId)) continue;
+    resueltos.add(centroId);
+    const publicada = grupo.find(
+      (tarifa) => tarifa.estado === EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+    );
+    // Si el período más reciente sólo tiene borrador, fue guardado pero quedó
+    // inválido. No se cae silenciosamente a una publicación anterior.
+    if (!publicada) continue;
+    map.set(centroId, {
+      tarifa: publicada.tarifaCalculada,
+      manoObra: publicada.tarifaManoObra,
+    });
   }
   return map;
 }

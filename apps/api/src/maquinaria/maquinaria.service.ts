@@ -23,39 +23,35 @@ import {
   PrismaClientUnknownRequestError,
 } from '@prisma/client/runtime/library';
 import type { CurrentAuth } from '../auth/auth.types';
-import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
+import { paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   EstadoConfiguracionMaquinaDto,
   GeometriaTrabajoMaquinaDto,
   PlantillaMaquinariaDto,
+  TipoComponenteDesgasteMaquinaDto,
   UnidadProduccionMaquinaDto,
-  type EstadoMaquinaDto,
+  UnidadDesgasteMaquinaDto,
+  EstadoMaquinaDto,
   type MaquinaComponenteDesgasteItemDto,
   type MaquinaConsumibleItemDto,
   type MaquinaPerfilOperativoItemDto,
-  type TipoComponenteDesgasteMaquinaDto,
   type TipoConsumibleMaquinaDto,
   type TipoPerfilOperativoMaquinaDto,
   type UnidadConsumoMaquinaDto,
-  type UnidadDesgasteMaquinaDto,
   UpsertMaquinaDto,
 } from './dto/upsert-maquina.dto';
-import {
-  hasRequiredMachineDataByTemplate,
-  validateMachinePayloadByTemplate,
-} from './maquinaria-template-machine-rules';
+import { ListMaquinasQueryDto } from './dto/list-maquinas-query.dto';
 import { validatePerfilOperativoByTemplate } from './maquinaria-template-profile-rules';
 import { deriveProductividadPlanchaTermica } from './plancha-termica';
 import {
   consumableTypeForChannel,
   consumableUnitForTemplate,
   getConsumableChannelFromDetail,
-  getPerfilConsumableChannels,
   isConsumableChannel,
   PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES,
-  requiredConsumableChannelsFromColorMode,
 } from './consumibles-impresion';
+import { getMaquinaDiagnosticoConfiguracion } from './maquinaria-configuracion';
 
 type MaquinaCompleta = Prisma.MaquinaGetPayload<{
   include: {
@@ -81,6 +77,25 @@ type MaquinaCompleta = Prisma.MaquinaGetPayload<{
         };
       };
     };
+  };
+}>;
+
+type MaquinaListado = Prisma.MaquinaGetPayload<{
+  include: {
+    planta: true;
+    centroCostoPrincipal: true;
+    perfilesOperativos: true;
+    consumibles: true;
+    componentesDesgaste: true;
+    _count: { select: { perfilesOperativos: true } };
+  };
+}>;
+
+type MaquinaDiagnosticoSource = Prisma.MaquinaGetPayload<{
+  include: {
+    perfilesOperativos: true;
+    consumibles: true;
+    componentesDesgaste: true;
   };
 }>;
 
@@ -348,8 +363,45 @@ export class MaquinariaService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(auth: CurrentAuth, pagination: PaginationDto) {
-    const where = { tenantId: auth.tenantId };
+  async findAll(auth: CurrentAuth, pagination: ListMaquinasQueryDto) {
+    const search = pagination.search?.trim();
+    const where: Prisma.MaquinaWhereInput = {
+      tenantId: auth.tenantId,
+      ...(pagination.plantilla
+        ? {
+            plantilla: this.toPrismaEnum<PlantillaMaquinaria>(
+              pagination.plantilla,
+            ),
+          }
+        : {}),
+      ...(pagination.estado
+        ? { estado: this.toPrismaEnum<EstadoMaquina>(pagination.estado) }
+        : {}),
+      ...(pagination.estadoConfiguracion
+        ? {
+            estadoConfiguracion: this.toPrismaEnum<EstadoConfiguracionMaquina>(
+              pagination.estadoConfiguracion,
+            ),
+          }
+        : {}),
+      ...(pagination.activo !== undefined ? { activo: pagination.activo } : {}),
+      ...(search
+        ? {
+            OR: [
+              { nombre: { contains: search, mode: 'insensitive' } },
+              { codigo: { contains: search, mode: 'insensitive' } },
+              { fabricante: { contains: search, mode: 'insensitive' } },
+              { modelo: { contains: search, mode: 'insensitive' } },
+              { planta: { nombre: { contains: search, mode: 'insensitive' } } },
+              {
+                centroCostoPrincipal: {
+                  nombre: { contains: search, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
 
     const [maquinas, total] = await this.prisma.$transaction([
       this.prisma.maquina.findMany({
@@ -358,25 +410,9 @@ export class MaquinariaService {
           planta: true,
           centroCostoPrincipal: true,
           perfilesOperativos: true,
-          consumibles: {
-            include: {
-              perfilOperativo: true,
-              materiaPrimaVariante: {
-                include: {
-                  materiaPrima: true,
-                },
-              },
-            },
-          },
-          componentesDesgaste: {
-            include: {
-              materiaPrimaVariante: {
-                include: {
-                  materiaPrima: true,
-                },
-              },
-            },
-          },
+          consumibles: true,
+          componentesDesgaste: true,
+          _count: { select: { perfilesOperativos: true } },
         },
         orderBy: [{ nombre: 'asc' }],
         skip: pagination.skip,
@@ -386,7 +422,7 @@ export class MaquinariaService {
     ]);
 
     return paginatedResponse(
-      maquinas.map((maquina) => this.toMaquinaResponse(maquina)),
+      maquinas.map((maquina) => this.toMaquinaListadoResponse(maquina)),
       total,
       pagination,
     );
@@ -395,6 +431,24 @@ export class MaquinariaService {
   async findOne(auth: CurrentAuth, id: string) {
     const maquina = await this.findMaquinaOrThrow(auth, id);
     return this.toMaquinaResponse(maquina);
+  }
+
+  async historial(auth: CurrentAuth, id: string) {
+    await this.findMaquinaBaseOrThrow(auth, id);
+    const eventos = await this.prisma.maquinaHistorial.findMany({
+      where: { tenantId: auth.tenantId, maquinaId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    return eventos.map((evento) => ({
+      id: evento.id,
+      accion: evento.accion.toLowerCase(),
+      actorNombre: evento.actorNombre,
+      descripcion: evento.descripcion,
+      cambios: evento.cambiosJson,
+      createdAt: evento.createdAt.toISOString(),
+    }));
   }
 
   async create(auth: CurrentAuth, payload: UpsertMaquinaDto) {
@@ -415,7 +469,7 @@ export class MaquinariaService {
 
           await this.replaceNestedData(tx, auth.tenantId, created.id, payload);
 
-          return tx.maquina.findUniqueOrThrow({
+          const complete = await tx.maquina.findUniqueOrThrow({
             where: { id: created.id },
             include: {
               planta: true,
@@ -442,6 +496,25 @@ export class MaquinariaService {
               },
             },
           });
+
+          await tx.maquinaHistorial.create({
+            data: {
+              tenantId: auth.tenantId,
+              maquinaId: created.id,
+              accion: 'CREADA',
+              ...this.auditActor(auth),
+              descripcion: `Creó la máquina ${complete.nombre}.`,
+              cambiosJson: {
+                secciones: ['Alta inicial'],
+                estado: this.toApiEnum(complete.estado),
+                estadoConfiguracion: this.toApiEnum(
+                  complete.estadoConfiguracion,
+                ),
+              },
+            },
+          });
+
+          return complete;
         });
 
         return this.toMaquinaResponse(maquina);
@@ -461,6 +534,15 @@ export class MaquinariaService {
 
   async update(auth: CurrentAuth, id: string, payload: UpsertMaquinaDto) {
     const existing = await this.findMaquinaOrThrow(auth, id);
+    if (
+      payload.expectedUpdatedAt &&
+      new Date(payload.expectedUpdatedAt).getTime() !==
+        existing.updatedAt.getTime()
+    ) {
+      throw new ConflictException(
+        'La máquina cambió desde que abriste la ficha. Recargá antes de guardar para no sobrescribir cambios de otra persona.',
+      );
+    }
     await this.validateReferences(auth, payload);
 
     try {
@@ -472,7 +554,7 @@ export class MaquinariaService {
 
         await this.replaceNestedData(tx, auth.tenantId, id, payload);
 
-        return tx.maquina.findUniqueOrThrow({
+        const complete = await tx.maquina.findUniqueOrThrow({
           where: { id },
           include: {
             planta: true,
@@ -499,6 +581,27 @@ export class MaquinariaService {
             },
           },
         });
+
+        const secciones = this.auditChangedSections(existing, complete);
+        await tx.maquinaHistorial.create({
+          data: {
+            tenantId: auth.tenantId,
+            maquinaId: id,
+            accion: 'ACTUALIZADA',
+            ...this.auditActor(auth),
+            descripcion:
+              secciones.length > 0
+                ? `Actualizó: ${secciones.join(', ')}.`
+                : 'Guardó la configuración de la máquina.',
+            cambiosJson: {
+              secciones,
+              estado: this.toApiEnum(complete.estado),
+              estadoConfiguracion: this.toApiEnum(complete.estadoConfiguracion),
+            },
+          },
+        });
+
+        return complete;
       });
 
       return this.toMaquinaResponse(maquina);
@@ -510,38 +613,230 @@ export class MaquinariaService {
   async toggle(auth: CurrentAuth, id: string) {
     const maquina = await this.findMaquinaBaseOrThrow(auth, id);
 
-    const updated = await this.prisma.maquina.update({
-      where: { id },
-      data: {
-        activo: !maquina.activo,
-      },
-      include: {
-        planta: true,
-        centroCostoPrincipal: true,
-        perfilesOperativos: true,
-        consumibles: {
-          include: {
-            perfilOperativo: true,
-            materiaPrimaVariante: {
-              include: {
-                materiaPrima: true,
+    return this.setActivo(auth, id, !maquina.activo);
+  }
+
+  async setActivo(auth: CurrentAuth, id: string, activo: boolean) {
+    const maquina = await this.findMaquinaBaseOrThrow(auth, id);
+
+    if (
+      activo &&
+      maquina.estadoConfiguracion !== EstadoConfiguracionMaquina.LISTA
+    ) {
+      throw new ConflictException(
+        'Completá la configuración de la máquina antes de activarla.',
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const complete = await tx.maquina.update({
+        where: { id },
+        data: {
+          activo,
+          estado: activo ? EstadoMaquina.ACTIVA : EstadoMaquina.INACTIVA,
+        },
+        include: {
+          planta: true,
+          centroCostoPrincipal: true,
+          perfilesOperativos: true,
+          consumibles: {
+            include: {
+              perfilOperativo: true,
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: true,
+                },
+              },
+            },
+          },
+          componentesDesgaste: {
+            include: {
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: true,
+                },
               },
             },
           },
         },
-        componentesDesgaste: {
-          include: {
-            materiaPrimaVariante: {
-              include: {
-                materiaPrima: true,
-              },
-            },
+      });
+
+      await tx.maquinaHistorial.create({
+        data: {
+          tenantId: auth.tenantId,
+          maquinaId: id,
+          accion: activo ? 'ACTIVADA' : 'DESACTIVADA',
+          ...this.auditActor(auth),
+          descripcion: activo
+            ? 'Activó la máquina para productos y producción.'
+            : 'Desactivó la máquina para productos y producción.',
+          cambiosJson: {
+            secciones: ['Disponibilidad'],
+            activo,
+            estado: activo ? 'activa' : 'inactiva',
           },
         },
-      },
+      });
+
+      return complete;
     });
 
     return this.toMaquinaResponse(updated);
+  }
+
+  private auditActor(auth: CurrentAuth) {
+    return {
+      actorId:
+        auth.impersonacion?.actorUserId ??
+        auth.mcp?.credencialId ??
+        auth.userId ??
+        null,
+      actorNombre:
+        auth.impersonacion?.actorNombre ??
+        auth.mcp?.credencialNombre ??
+        auth.email ??
+        'Usuario del sistema',
+    };
+  }
+
+  private auditChangedSections(
+    before: MaquinaCompleta,
+    after: MaquinaCompleta,
+  ) {
+    const sections: string[] = [];
+    const changed = (left: unknown, right: unknown) =>
+      JSON.stringify(left) !== JSON.stringify(right);
+
+    if (
+      changed(
+        [
+          before.nombre,
+          before.fabricante,
+          before.modelo,
+          before.numeroSerie,
+          before.fechaAlta,
+          before.observaciones,
+        ],
+        [
+          after.nombre,
+          after.fabricante,
+          after.modelo,
+          after.numeroSerie,
+          after.fechaAlta,
+          after.observaciones,
+        ],
+      )
+    )
+      sections.push('Datos generales');
+    if (
+      changed(
+        [before.plantaId, before.centroCostoPrincipalId],
+        [after.plantaId, after.centroCostoPrincipalId],
+      )
+    )
+      sections.push('Ubicación y costos');
+    if (
+      changed(
+        [before.estado, before.estadoConfiguracion, before.activo],
+        [after.estado, after.estadoConfiguracion, after.activo],
+      )
+    )
+      sections.push('Estado');
+    if (
+      changed(
+        [
+          before.geometriaTrabajo,
+          before.unidadProduccionPrincipal,
+          before.anchoUtil,
+          before.largoUtil,
+          before.altoUtil,
+          before.espesorMaximo,
+          before.pesoMaximo,
+          before.gramajeMaxGr,
+          before.parametrosTecnicosJson,
+          before.capacidadesAvanzadasJson,
+        ],
+        [
+          after.geometriaTrabajo,
+          after.unidadProduccionPrincipal,
+          after.anchoUtil,
+          after.largoUtil,
+          after.altoUtil,
+          after.espesorMaximo,
+          after.pesoMaximo,
+          after.gramajeMaxGr,
+          after.parametrosTecnicosJson,
+          after.capacidadesAvanzadasJson,
+        ],
+      )
+    )
+      sections.push('Capacidades y parámetros');
+    const perfilesAuditables = (items: MaquinaCompleta['perfilesOperativos']) =>
+      items.map((item) => [
+        item.nombre,
+        item.tipoPerfil,
+        item.activo,
+        item.productivityValue,
+        item.productivityUnit,
+        item.setupMin,
+        item.cleanupMin,
+        item.feedReloadMin,
+        item.detalleJson,
+        item.reglaSeleccionJson,
+      ]);
+    if (
+      changed(
+        perfilesAuditables(before.perfilesOperativos),
+        perfilesAuditables(after.perfilesOperativos),
+      )
+    )
+      sections.push('Perfiles operativos');
+    const consumiblesAuditables = (items: MaquinaCompleta['consumibles']) =>
+      items.map((item) => [
+        item.perfilOperativoId,
+        item.materiaPrimaVarianteId,
+        item.nombre,
+        item.tipo,
+        item.unidad,
+        item.rendimientoEstimado,
+        item.consumoBase,
+        item.consumoPorCoberturaJson,
+        item.activo,
+        item.detalleJson,
+        item.observaciones,
+      ]);
+    if (
+      changed(
+        consumiblesAuditables(before.consumibles),
+        consumiblesAuditables(after.consumibles),
+      )
+    )
+      sections.push('Consumibles');
+    const desgastesAuditables = (
+      items: MaquinaCompleta['componentesDesgaste'],
+    ) =>
+      items.map((item) => [
+        item.materiaPrimaVarianteId,
+        item.precioUnitario,
+        item.soloColor,
+        item.nombre,
+        item.tipo,
+        item.vidaUtilEstimada,
+        item.unidadDesgaste,
+        item.modoProrrateo,
+        item.activo,
+        item.detalleJson,
+        item.observaciones,
+      ]);
+    if (
+      changed(
+        desgastesAuditables(before.componentesDesgaste),
+        desgastesAuditables(after.componentesDesgaste),
+      )
+    )
+      sections.push('Desgaste y repuestos');
+
+    return sections;
   }
 
   private async replaceNestedData(
@@ -716,6 +1011,15 @@ export class MaquinariaService {
       payload,
       parametrosTecnicos,
     );
+    const estadoSolicitado = this.toPrismaEnum<EstadoMaquina>(payload.estado);
+    const configuracionLista =
+      this.toPrismaEnum<EstadoConfiguracionMaquina>(estadoConfiguracion) ===
+      EstadoConfiguracionMaquina.LISTA;
+    const estado =
+      estadoSolicitado === EstadoMaquina.ACTIVA && !configuracionLista
+        ? EstadoMaquina.INACTIVA
+        : estadoSolicitado;
+    const activo = estado === EstadoMaquina.ACTIVA && configuracionLista;
 
     return {
       tenantId: auth.tenantId,
@@ -728,7 +1032,7 @@ export class MaquinariaService {
       numeroSerie: payload.numeroSerie?.trim() || null,
       plantaId: payload.plantaId,
       centroCostoPrincipalId: payload.centroCostoPrincipalId ?? null,
-      estado: this.toPrismaEnum<EstadoMaquina>(payload.estado),
+      estado,
       estadoConfiguracion:
         this.toPrismaEnum<EstadoConfiguracionMaquina>(estadoConfiguracion),
       geometriaTrabajo: this.toPrismaEnum<GeometriaTrabajoMaquina>(
@@ -744,7 +1048,9 @@ export class MaquinariaService {
       pesoMaximo: this.toDecimal(payload.pesoMaximo),
       gramajeMaxGr: this.toDecimal(payload.gramajeMaxGr),
       fechaAlta: payload.fechaAlta ? new Date(payload.fechaAlta) : null,
-      activo: payload.activo,
+      // `activo` es una proyección de estado + configuración; no puede
+      // divergir de ellos aunque un cliente antiguo envíe otro valor.
+      activo,
       observaciones: payload.observaciones?.trim() || null,
       parametrosTecnicosJson: this.toNullableJson(parametrosTecnicos),
       capacidadesAvanzadasJson: this.toNullableJson(
@@ -880,19 +1186,7 @@ export class MaquinariaService {
   private getDerivedEstadoConfiguracion(
     payload: UpsertMaquinaDto,
   ): EstadoConfiguracionMaquinaDto {
-    if (!this.hasMinimumBaseData(payload)) {
-      return EstadoConfiguracionMaquinaDto.borrador;
-    }
-
-    if (!this.hasCoreCostingData(payload)) {
-      return EstadoConfiguracionMaquinaDto.incompleta;
-    }
-
-    if (!this.hasTemplateSpecificData(payload)) {
-      return EstadoConfiguracionMaquinaDto.incompleta;
-    }
-
-    return EstadoConfiguracionMaquinaDto.lista;
+    return getMaquinaDiagnosticoConfiguracion(payload).estado;
   }
 
   private resolvePersistedEstadoConfiguracion(
@@ -906,157 +1200,10 @@ export class MaquinariaService {
     return this.getDerivedEstadoConfiguracion(payload);
   }
 
-  private hasMinimumBaseData(payload: UpsertMaquinaDto) {
-    return Boolean(
-      payload.nombre?.trim() &&
-      payload.plantaId &&
-      payload.plantilla &&
-      payload.estado &&
-      payload.unidadProduccionPrincipal,
-    );
-  }
-
-  private hasCoreCostingData(payload: UpsertMaquinaDto) {
-    const hasPerfilValido = payload.perfilesOperativos.some((perfil) => {
-      if (!perfil.nombre?.trim()) {
-        return false;
-      }
-      // v3.0 (doc §7): GUILLOTINA usa fórmula no lineal — productividad NULL
-      // y `pliegosMaxPorTanda` (ahora en detalleJson) es el dato crítico.
-      if (payload.plantilla === PlantillaMaquinariaDto.guillotina) {
-        const detalle = perfil.detalle ?? {};
-        const pliegosMax = Number(detalle.pliegosMaxPorTanda ?? 0);
-        return Number.isFinite(pliegosMax) && pliegosMax > 0;
-      }
-      return (
-        perfil.productivityValue !== undefined &&
-        Boolean(perfil.productivityUnit)
-      );
-    });
-    const requireConsumibles = PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(
-      payload.plantilla,
-    );
-    const hasConsumibleValido = this.hasRequiredPrinterConsumibles(payload);
-    // Gran formato por área no registra piezas de desgaste (decisión
-    // 2026-07-28): la plantilla ya no trae la sección y exigirlas dejaría
-    // a esas máquinas "incompletas" para siempre.
-    // Las plantillas que ya no tienen la sección de desgaste no pueden
-    // exigirlo: quedarían "incompletas" sin dónde cargarlo (2026-07-28).
-    const SIN_DESGASTE = new Set<PlantillaMaquinariaDto>([
-      PlantillaMaquinariaDto.impresora_gran_formato_por_area,
-      PlantillaMaquinariaDto.guillotina,
-    ]);
-    const requireDesgaste = !SIN_DESGASTE.has(payload.plantilla);
-    const hasDesgasteValido = payload.componentesDesgaste.some(
-      (componente) =>
-        Boolean(componente.nombre?.trim()) &&
-        Boolean(componente.tipo) &&
-        Boolean(componente.unidadDesgaste) &&
-        componente.vidaUtilEstimada !== undefined,
-    );
-
-    return (
-      hasPerfilValido &&
-      (!requireConsumibles || hasConsumibleValido) &&
-      (!requireDesgaste || hasDesgasteValido)
-    );
-  }
-
-  private hasTemplateSpecificData(payload: UpsertMaquinaDto) {
-    if (!hasRequiredMachineDataByTemplate(payload)) {
-      return false;
-    }
-
-    if (
-      PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(payload.plantilla) &&
-      !this.hasRequiredPrinterConsumibles(payload)
-    ) {
-      return false;
-    }
-
-    return true;
-  }
-
-  private hasRequiredPrinterConsumibles(payload: UpsertMaquinaDto) {
-    if (!PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(payload.plantilla)) {
-      return true;
-    }
-
-    const consumiblesActivos = payload.consumibles.filter(
-      (item) => item.activo,
-    );
-    if (consumiblesActivos.length === 0) return false;
-
-    if (payload.plantilla === PlantillaMaquinariaDto.impresora_laser) {
-      const channelsFromMachine = requiredConsumableChannelsFromColorMode(
-        payload.parametrosTecnicos?.coloresSoportados ??
-          payload.parametrosTecnicos?.configuracionColor ??
-          payload.parametrosTecnicos?.configuracionCanales,
-      );
-      const channels =
-        channelsFromMachine.length > 0
-          ? channelsFromMachine
-          : Array.from(
-              new Set(
-                payload.perfilesOperativos
-                  .filter((item) => item.activo)
-                  .flatMap((perfil) =>
-                    getPerfilConsumableChannels(
-                      perfil.detalle ?? {},
-                      payload.parametrosTecnicos ?? {},
-                    ),
-                  ),
-              ),
-            );
-
-      if (channels.length === 0) return false;
-      return channels.every((channel) =>
-        consumiblesActivos.some((consumible) => {
-          const detalle = consumible.detalle ?? {};
-          const channelMatches =
-            getConsumableChannelFromDetail(detalle) === channel;
-          const hasConsumableData =
-            Boolean(consumible.materiaPrimaVarianteId) &&
-            Number(consumible.consumoBase ?? 0) > 0;
-          return channelMatches && hasConsumableData;
-        }),
-      );
-    }
-
-    for (const perfil of payload.perfilesOperativos.filter(
-      (item) => item.activo,
-    )) {
-      if (!perfil.id) return false;
-      const channels = getPerfilConsumableChannels(
-        perfil.detalle ?? {},
-        payload.parametrosTecnicos ?? {},
-      );
-      if (channels.length === 0) return false;
-
-      for (const channel of channels) {
-        const match = consumiblesActivos.find((consumible) => {
-          const detalle = consumible.detalle ?? {};
-          return (
-            consumible.perfilOperativoId === perfil.id &&
-            getConsumableChannelFromDetail(detalle) === channel &&
-            Boolean(consumible.materiaPrimaVarianteId) &&
-            Number(consumible.consumoBase ?? 0) > 0
-          );
-        });
-        if (!match) return false;
-      }
-    }
-
-    return true;
-  }
-
   private async validateReferences(
     auth: CurrentAuth,
     payload: UpsertMaquinaDto,
   ) {
-    const isDraft =
-      this.resolvePersistedEstadoConfiguracion(payload) ===
-      EstadoConfiguracionMaquinaDto.borrador;
     const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
     if (!templateRule) {
       throw new BadRequestException(
@@ -1085,17 +1232,8 @@ export class MaquinariaService {
     }
 
     this.validateTechnicalPayload(payload);
-    if (!isDraft) {
-      try {
-        validateMachinePayloadByTemplate(payload);
-      } catch (error) {
-        throw new BadRequestException(
-          error instanceof Error
-            ? error.message
-            : `Maquina invalida para la plantilla ${payload.plantilla}.`,
-        );
-      }
-    }
+    // Los campos requeridos determinan `estadoConfiguracion`; no deben impedir
+    // guardar una ficha parcial. La disponibilidad operativa exige LISTA.
 
     const planta = await this.prisma.planta.findFirst({
       where: {
@@ -1342,6 +1480,27 @@ export class MaquinariaService {
         }
       }
     }
+
+    if (payload.plantilla === PlantillaMaquinariaDto.plotter_cad) {
+      const cabezalesActivos = payload.componentesDesgaste.filter(
+        (item) => item.activo,
+      );
+      if (cabezalesActivos.length > 1) {
+        throw new BadRequestException(
+          'El Plotter CAD admite un único cabezal de impresión activo.',
+        );
+      }
+      for (const cabezal of cabezalesActivos) {
+        if (
+          cabezal.tipo !== TipoComponenteDesgasteMaquinaDto.cabezal ||
+          cabezal.unidadDesgaste !== UnidadDesgasteMaquinaDto.ml_tinta
+        ) {
+          throw new BadRequestException(
+            'El componente del Plotter CAD debe ser un cabezal con vida útil medida en ml de tinta.',
+          );
+        }
+      }
+    }
   }
 
   private validateGeometryDiscriminator(payload: UpsertMaquinaDto) {
@@ -1429,6 +1588,110 @@ export class MaquinariaService {
     return maquina;
   }
 
+  private getDiagnosticoConfiguracion(maquina: MaquinaDiagnosticoSource) {
+    return getMaquinaDiagnosticoConfiguracion({
+      codigo: maquina.codigo,
+      nombre: maquina.nombre,
+      plantilla: this.toApiEnum(maquina.plantilla) as PlantillaMaquinariaDto,
+      plantillaVersion: maquina.plantillaVersion,
+      fabricante: maquina.fabricante ?? undefined,
+      modelo: maquina.modelo ?? undefined,
+      numeroSerie: maquina.numeroSerie ?? undefined,
+      plantaId: maquina.plantaId,
+      centroCostoPrincipalId: maquina.centroCostoPrincipalId ?? undefined,
+      estado: this.toApiEnum(maquina.estado) as EstadoMaquinaDto,
+      estadoConfiguracion: this.toApiEnum(
+        maquina.estadoConfiguracion,
+      ) as EstadoConfiguracionMaquinaDto,
+      geometriaTrabajo: this.toApiEnum(
+        maquina.geometriaTrabajo,
+      ) as GeometriaTrabajoMaquinaDto,
+      unidadProduccionPrincipal: this.toApiEnum(
+        maquina.unidadProduccionPrincipal,
+      ) as UnidadProduccionMaquinaDto,
+      anchoUtil: this.toNumber(maquina.anchoUtil) ?? undefined,
+      largoUtil: this.toNumber(maquina.largoUtil) ?? undefined,
+      altoUtil: this.toNumber(maquina.altoUtil) ?? undefined,
+      espesorMaximo: this.toNumber(maquina.espesorMaximo) ?? undefined,
+      pesoMaximo: this.toNumber(maquina.pesoMaximo) ?? undefined,
+      gramajeMaxGr: this.toNumber(maquina.gramajeMaxGr) ?? undefined,
+      fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10),
+      activo: maquina.activo,
+      observaciones: maquina.observaciones ?? undefined,
+      parametrosTecnicos:
+        (maquina.parametrosTecnicosJson as Record<string, unknown> | null) ??
+        undefined,
+      capacidadesAvanzadas:
+        (maquina.capacidadesAvanzadasJson as Record<string, unknown> | null) ??
+        undefined,
+      perfilesOperativos: maquina.perfilesOperativos.map((perfil) => ({
+        id: perfil.id,
+        nombre: perfil.nombre,
+        tipoPerfil: this.toApiEnum(
+          perfil.tipoPerfil,
+        ) as TipoPerfilOperativoMaquinaDto,
+        activo: perfil.activo,
+        productivityValue: this.toNumber(perfil.productivityValue) ?? undefined,
+        productivityUnit: perfil.productivityUnit
+          ? (this.toApiEnum(
+              perfil.productivityUnit,
+            ) as UnidadProduccionMaquinaDto)
+          : undefined,
+        setupMin: this.toNumber(perfil.setupMin) ?? undefined,
+        cleanupMin: this.toNumber(perfil.cleanupMin) ?? undefined,
+        feedReloadMin: this.toNumber(perfil.feedReloadMin) ?? undefined,
+        detalle:
+          (perfil.detalleJson as Record<string, unknown> | null) ?? undefined,
+        reglaSeleccionJson:
+          (perfil.reglaSeleccionJson as Record<string, unknown> | null) ??
+          undefined,
+      })),
+      consumibles: maquina.consumibles.map((consumible) => ({
+        id: consumible.id,
+        materiaPrimaVarianteId: consumible.materiaPrimaVarianteId,
+        nombre: consumible.nombre,
+        tipo: this.toApiEnum(consumible.tipo) as TipoConsumibleMaquinaDto,
+        unidad: this.toApiEnum(consumible.unidad) as UnidadConsumoMaquinaDto,
+        rendimientoEstimado:
+          this.toNumber(consumible.rendimientoEstimado) ?? undefined,
+        consumoBase: this.toNumber(consumible.consumoBase) ?? undefined,
+        consumoPorCobertura:
+          (consumible.consumoPorCoberturaJson as {
+            borrador?: number;
+            normal?: number;
+            alta?: number;
+          } | null) ?? undefined,
+        perfilOperativoId: consumible.perfilOperativoId ?? undefined,
+        activo: consumible.activo,
+        detalle:
+          (consumible.detalleJson as Record<string, unknown> | null) ??
+          undefined,
+        observaciones: consumible.observaciones ?? undefined,
+      })),
+      componentesDesgaste: maquina.componentesDesgaste.map((componente) => ({
+        id: componente.id,
+        materiaPrimaVarianteId: componente.materiaPrimaVarianteId ?? undefined,
+        precioUnitario: this.toNumber(componente.precioUnitario) ?? undefined,
+        soloColor: componente.soloColor,
+        nombre: componente.nombre,
+        tipo: this.toApiEnum(
+          componente.tipo,
+        ) as TipoComponenteDesgasteMaquinaDto,
+        vidaUtilEstimada:
+          this.toNumber(componente.vidaUtilEstimada) ?? undefined,
+        unidadDesgaste: this.toApiEnum(
+          componente.unidadDesgaste,
+        ) as UnidadDesgasteMaquinaDto,
+        modoProrrateo: componente.modoProrrateo ?? undefined,
+        activo: componente.activo,
+        detalle:
+          (componente.detalleJson as Record<string, unknown> | null) ??
+          undefined,
+        observaciones: componente.observaciones ?? undefined,
+      })),
+    });
+  }
+
   private toMaquinaResponse(maquina: MaquinaCompleta) {
     const parametrosTecnicos =
       (maquina.parametrosTecnicosJson as Record<string, unknown> | null) ??
@@ -1436,6 +1699,24 @@ export class MaquinariaService {
     const anchoImprimibleMaximo =
       this.toNumeric(parametrosTecnicos?.anchoImprimibleMaximo) ??
       this.toNumber(maquina.anchoUtil);
+    const diagnosticoConfiguracion = this.getDiagnosticoConfiguracion(maquina);
+    const estadoConfiguracionPersistido = this.toApiEnum(
+      maquina.estadoConfiguracion,
+    ) as EstadoConfiguracionMaquinaDto;
+    const estadoConfiguracion =
+      estadoConfiguracionPersistido === EstadoConfiguracionMaquinaDto.borrador
+        ? estadoConfiguracionPersistido
+        : diagnosticoConfiguracion.estado;
+    const estadoPersistido = this.toApiEnum(maquina.estado) as EstadoMaquinaDto;
+    const estado =
+      estadoPersistido === EstadoMaquinaDto.activa &&
+      estadoConfiguracion !== EstadoConfiguracionMaquinaDto.lista
+        ? EstadoMaquinaDto.inactiva
+        : estadoPersistido;
+    const activo =
+      maquina.activo &&
+      estado === EstadoMaquinaDto.activa &&
+      estadoConfiguracion === EstadoConfiguracionMaquinaDto.lista;
 
     return {
       id: maquina.id,
@@ -1450,10 +1731,8 @@ export class MaquinariaService {
       plantaNombre: maquina.planta.nombre,
       centroCostoPrincipalId: maquina.centroCostoPrincipalId ?? '',
       centroCostoPrincipalNombre: maquina.centroCostoPrincipal?.nombre ?? '',
-      estado: this.toApiEnum(maquina.estado) as EstadoMaquinaDto,
-      estadoConfiguracion: this.toApiEnum(
-        maquina.estadoConfiguracion,
-      ) as EstadoConfiguracionMaquinaDto,
+      estado,
+      estadoConfiguracion,
       geometriaTrabajo: this.toApiEnum(
         maquina.geometriaTrabajo,
       ) as GeometriaTrabajoMaquinaDto,
@@ -1467,7 +1746,7 @@ export class MaquinariaService {
       pesoMaximo: this.toNumber(maquina.pesoMaximo),
       gramajeMaxGr: this.toNumber(maquina.gramajeMaxGr),
       fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10) ?? '',
-      activo: maquina.activo,
+      activo,
       observaciones: maquina.observaciones ?? '',
       parametrosTecnicos,
       capacidadesAvanzadas:
@@ -1550,6 +1829,62 @@ export class MaquinariaService {
           (componente.detalleJson as Record<string, unknown> | null) ?? null,
         observaciones: componente.observaciones ?? '',
       })),
+      diagnosticoConfiguracion,
+      createdAt: maquina.createdAt.toISOString(),
+      updatedAt: maquina.updatedAt.toISOString(),
+    };
+  }
+
+  private toMaquinaListadoResponse(maquina: MaquinaListado) {
+    const parametrosTecnicos =
+      (maquina.parametrosTecnicosJson as Record<string, unknown> | null) ??
+      null;
+    const diagnosticoConfiguracion = this.getDiagnosticoConfiguracion(maquina);
+    const estadoConfiguracionPersistido = this.toApiEnum(
+      maquina.estadoConfiguracion,
+    ) as EstadoConfiguracionMaquinaDto;
+    const estadoConfiguracion =
+      estadoConfiguracionPersistido === EstadoConfiguracionMaquinaDto.borrador
+        ? estadoConfiguracionPersistido
+        : diagnosticoConfiguracion.estado;
+    const estadoPersistido = this.toApiEnum(maquina.estado) as EstadoMaquinaDto;
+    const estado =
+      estadoPersistido === EstadoMaquinaDto.activa &&
+      estadoConfiguracion !== EstadoConfiguracionMaquinaDto.lista
+        ? EstadoMaquinaDto.inactiva
+        : estadoPersistido;
+    const activo =
+      maquina.activo &&
+      estado === EstadoMaquinaDto.activa &&
+      estadoConfiguracion === EstadoConfiguracionMaquinaDto.lista;
+    return {
+      id: maquina.id,
+      codigo: maquina.codigo,
+      nombre: maquina.nombre,
+      plantilla: this.toApiEnum(maquina.plantilla) as PlantillaMaquinariaDto,
+      plantillaVersion: maquina.plantillaVersion,
+      fabricante: maquina.fabricante ?? '',
+      modelo: maquina.modelo ?? '',
+      numeroSerie: maquina.numeroSerie ?? '',
+      plantaId: maquina.plantaId,
+      plantaNombre: maquina.planta.nombre,
+      centroCostoPrincipalId: maquina.centroCostoPrincipalId ?? '',
+      centroCostoPrincipalNombre: maquina.centroCostoPrincipal?.nombre ?? '',
+      estado,
+      estadoConfiguracion,
+      geometriaTrabajo: this.toApiEnum(
+        maquina.geometriaTrabajo,
+      ) as GeometriaTrabajoMaquinaDto,
+      unidadProduccionPrincipal: this.toApiEnum(
+        maquina.unidadProduccionPrincipal,
+      ) as UnidadProduccionMaquinaDto,
+      activo,
+      parametrosTecnicos,
+      capacidadesAvanzadas:
+        (maquina.capacidadesAvanzadasJson as Record<string, unknown> | null) ??
+        null,
+      perfilesCount: maquina._count.perfilesOperativos,
+      diagnosticoConfiguracion,
       createdAt: maquina.createdAt.toISOString(),
       updatedAt: maquina.updatedAt.toISOString(),
     };

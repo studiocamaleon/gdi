@@ -5,6 +5,7 @@ import { UpsertPlantaDto } from './dto/upsert-planta.dto';
 import { UpsertCentroConfiguracionBaseDto } from './dto/upsert-centro-configuracion-base.dto';
 import { ReplaceCentroLineasDto } from './dto/replace-centro-lineas.dto';
 import { UpsertCentroCapacidadDto } from './dto/upsert-centro-capacidad.dto';
+import { GuardarCentroPlanillaDto } from './dto/guardar-centro-planilla.dto';
 import { CostosCatalogoService } from './costos-catalogo.service';
 import { CostosConfiguracionPeriodoService } from './costos-configuracion-periodo.service';
 import { CostosTarifasService } from './costos-tarifas.service';
@@ -33,10 +34,6 @@ export class CostosService {
     return this.catalogo.togglePlanta(auth, id);
   }
 
-
-
-
-
   findCentros(auth: CurrentAuth) {
     return this.catalogo.findCentros(auth);
   }
@@ -49,8 +46,8 @@ export class CostosService {
     return this.catalogo.updateCentro(auth, id, payload);
   }
 
-  toggleCentro(auth: CurrentAuth, id: string) {
-    return this.catalogo.toggleCentro(auth, id);
+  toggleCentro(auth: CurrentAuth, id: string, periodo: string) {
+    return this.configuracion.toggleCentro(auth, id, periodo);
   }
 
   eliminarCentro(auth: CurrentAuth, id: string) {
@@ -69,11 +66,12 @@ export class CostosService {
     return this.configuracion.updateCentroConfiguracionBase(auth, id, payload);
   }
 
-
-
-
   getResumenCentros(auth: CurrentAuth, periodo: string) {
     return this.configuracion.getResumenCentros(auth, periodo);
+  }
+
+  guardarCentroPlanilla(auth: CurrentAuth, payload: GuardarCentroPlanillaDto) {
+    return this.configuracion.guardarCentroPlanilla(auth, payload);
   }
 
   replaceCentroLineas(
@@ -93,8 +91,6 @@ export class CostosService {
   ) {
     return this.configuracion.upsertCentroCapacidad(auth, id, periodo, payload);
   }
-
-
 
   calcularTarifaCentro(auth: CurrentAuth, id: string, periodo: string) {
     return this.tarifas.calcularTarifaCentro(auth, id, periodo);

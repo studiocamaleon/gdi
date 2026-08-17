@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 
@@ -24,14 +25,17 @@ export class UpsertCentroCostoDto {
 
   @IsString()
   @MinLength(1)
+  @MaxLength(32)
   codigo: string;
 
   @IsString()
   @MinLength(1)
+  @MaxLength(120)
   nombre: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   descripcion?: string;
 
   @IsEnum(TipoCentroCostoDto)

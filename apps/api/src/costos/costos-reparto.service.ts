@@ -15,8 +15,9 @@ export class CostosRepartoService {
   async computeRepartoPeriodo(
     auth: CurrentAuth,
     periodo: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<RepartoPeriodo> {
-    const centros = await this.prisma.centroCosto.findMany({
+    const centros = await db.centroCosto.findMany({
       where: {
         tenantId: auth.tenantId,
         activo: true,

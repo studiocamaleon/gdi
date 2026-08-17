@@ -1,13 +1,16 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { buildModoColorOptionsFromProfiles } from './modo-color-comercial';
 import { PrismaService } from '../prisma/prisma.service';
+import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { resolverFamilia } from './pasos/familias';
+import { OrdenProductosDto } from './dto/list-productos-query.dto';
 import type {
   ActualizarProductoDto,
   CrearProductoDto,
@@ -31,15 +34,33 @@ export class ProductosService {
 
   async listarProductos(
     tenantId: string,
-    opts: { pagination: PaginationDto; activo?: boolean; search?: string },
+    opts: {
+      pagination: PaginationDto;
+      activo?: boolean;
+      search?: string;
+      unidadComercial?: 'unidad' | 'm2' | 'metro_lineal';
+      subcategoriaCodigo?: string;
+      orden?: OrdenProductosDto;
+    },
   ) {
-    const { pagination, activo, search } = opts;
+    const {
+      pagination,
+      activo,
+      search,
+      unidadComercial,
+      subcategoriaCodigo,
+      orden = OrdenProductosDto.recientes,
+    } = opts;
     const where: Prisma.ProductoWhereInput = {
       tenantId,
       // Los productos de sistema (ej. la plantilla del centro de copiado) no se
       // listan en el catálogo: los gestiona su módulo, no el usuario.
       sistemaCodigo: null,
       ...(activo !== undefined ? { activo } : {}),
+      ...(unidadComercial ? { unidadComercial } : {}),
+      ...(subcategoriaCodigo
+        ? { subcategoriaComercial: { codigo: subcategoriaCodigo } }
+        : {}),
       // Búsqueda por título (nombre) y código, no por la descripción.
       ...(search
         ? {
@@ -54,7 +75,12 @@ export class ProductosService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.producto.findMany({
         where,
-        orderBy: { nombre: 'asc' },
+        orderBy:
+          orden === OrdenProductosDto.nombre_asc
+            ? { nombre: 'asc' }
+            : orden === OrdenProductosDto.nombre_desc
+              ? { nombre: 'desc' }
+              : { createdAt: 'desc' },
         skip: pagination.skip,
         take: pagination.limit,
         include: {
@@ -67,11 +93,17 @@ export class ProductosService {
               id: true,
               nombre: true,
               esPreferida: true,
-              ruta: { select: { id: true, codigo: true, nombre: true } },
+              rutaVersion: true,
+              ruta: {
+                select: {
+                  id: true,
+                  codigo: true,
+                  nombre: true,
+                  pasos: { select: { id: true, version: true } },
+                },
+              },
               configPasos: {
-                where: { tercerizado: true },
-                select: { id: true },
-                take: 1,
+                select: { id: true, rutaPasoId: true, tercerizado: true },
               },
             },
             orderBy: { orden: 'asc' },
@@ -82,12 +114,40 @@ export class ProductosService {
     ]);
 
     // Flag derivado: ¿algún paso tercerizado en alguna ruta? (para el badge)
-    const conFlag = data.map((producto) => ({
-      ...producto,
-      tercerizado: producto.rutasAlternativas.some(
-        (ra) => ra.configPasos.length > 0,
-      ),
-    }));
+    const conFlag = data.map((producto) => {
+      const rutasCompletas =
+        producto.rutasAlternativas.length > 0 &&
+        producto.rutasAlternativas.every((ra) => {
+          const configurados = new Set(
+            ra.configPasos.map((paso) => paso.rutaPasoId),
+          );
+          return ra.ruta.pasos
+            .filter((paso) => paso.version === ra.rutaVersion)
+            .every((paso) => configurados.has(paso.id));
+        });
+      const precio = producto.precioConfigJson;
+      const precioCompleto =
+        precio !== null &&
+        typeof precio === 'object' &&
+        !Array.isArray(precio) &&
+        typeof (precio as Record<string, unknown>).metodoCalculo === 'string';
+      const listoParaCotizar = rutasCompletas && precioCompleto;
+
+      return {
+        ...producto,
+        tercerizado: producto.rutasAlternativas.some((ra) =>
+          ra.configPasos.some((paso) => paso.tercerizado),
+        ),
+        listoParaCotizar,
+        estadoCatalogo: producto.activo
+          ? listoParaCotizar
+            ? 'activo'
+            : 'incompleto'
+          : listoParaCotizar
+            ? 'listo'
+            : 'borrador',
+      };
+    });
 
     return paginatedResponse(conFlag, total, pagination);
   }
@@ -148,7 +208,7 @@ export class ProductosService {
               Prisma.JsonNull) as Prisma.InputJsonValue,
             atributosComercialesJson: (dto.atributosComercialesJson ??
               Prisma.JsonNull) as Prisma.InputJsonValue,
-            activo: true,
+            activo: false,
           },
           include: {
             subcategoriaComercial: { include: { categoria: true } },
@@ -187,6 +247,15 @@ export class ProductosService {
     if (existente.sistemaCodigo) {
       throw new BadRequestException(
         'Este producto lo gestiona un módulo del sistema y no se edita desde el catálogo.',
+      );
+    }
+    if (
+      dto.expectedUpdatedAt &&
+      new Date(dto.expectedUpdatedAt).getTime() !==
+        existente.updatedAt.getTime()
+    ) {
+      throw new ConflictException(
+        'El producto cambió desde que abriste la pantalla. Recargá antes de guardar para no sobrescribir cambios de otra persona.',
       );
     }
 
@@ -376,12 +445,15 @@ export class ProductosService {
             atributosComercialesJson: this.jsonOrNull(
               origen.atributosComercialesJson,
             ),
+            categoriaFiscal: origen.categoriaFiscal,
             activo: dto.activo ?? false,
           },
           include: {
             subcategoriaComercial: { include: { categoria: true } },
           },
         });
+
+        const rutaDuplicadaPorOrigen = new Map<string, string>();
 
         for (const rutaAlt of origen.rutasAlternativas) {
           const rutaDuplicada = await tx.productoRutaAlternativa.create({
@@ -399,6 +471,7 @@ export class ProductosService {
               activo: rutaAlt.activo,
             },
           });
+          rutaDuplicadaPorOrigen.set(rutaAlt.id, rutaDuplicada.id);
 
           for (const config of rutaAlt.configPasos) {
             const configDuplicada = await tx.productoConfigPaso.create({
@@ -425,6 +498,13 @@ export class ProductosService {
                 cleanupOverrideMin: config.cleanupOverrideMin,
                 tiempoFijoOverrideMin: config.tiempoFijoOverrideMin,
                 dotacionOperarios: config.dotacionOperarios,
+                tercerizado: config.tercerizado,
+                proveedorId: config.proveedorId,
+                fuenteCostoTercerizado: config.fuenteCostoTercerizado,
+                tercerizadoConfigJson: this.jsonOrNull(
+                  config.tercerizadoConfigJson,
+                ),
+                plazoProveedorDias: config.plazoProveedorDias,
                 requiereRutaPasoIds: config.requiereRutaPasoIds,
                 activo: config.activo,
               },
@@ -511,6 +591,20 @@ export class ProductosService {
                 })),
               });
             }
+
+            if (config.tercerizadoEntradas.length > 0) {
+              await tx.pasoTercerizadoEntrada.createMany({
+                data: config.tercerizadoEntradas.map((entrada) => ({
+                  tenantId,
+                  productoConfigPasoId: configDuplicada.id,
+                  valoresJson: this.jsonOrNull(entrada.valoresJson),
+                  claveMatch: entrada.claveMatch,
+                  cantidad: entrada.cantidad,
+                  costo: entrada.costo,
+                  activo: entrada.activo,
+                })),
+              });
+            }
           }
         }
 
@@ -519,9 +613,13 @@ export class ProductosService {
             data: origen.pasosExtras.map((paso) => ({
               tenantId,
               productoId: productoDuplicado.id,
+              rutaAlternativaId: paso.rutaAlternativaId
+                ? (rutaDuplicadaPorOrigen.get(paso.rutaAlternativaId) ?? null)
+                : null,
               insertarDespuesDeRutaPasoId: paso.insertarDespuesDeRutaPasoId,
               ordenInterno: paso.ordenInterno,
               familiaCodigo: paso.familiaCodigo,
+              nombreVisible: paso.nombreVisible,
               modoActivacion: paso.modoActivacion,
               condicionActivacionJson: this.jsonOrNull(
                 paso.condicionActivacionJson,
@@ -532,9 +630,13 @@ export class ProductosService {
                 paso.mecanismoCantidadConfigJson,
               ),
               multiplicadoresActivos: paso.multiplicadoresActivos,
+              setupOverrideMin: paso.setupOverrideMin,
+              cleanupOverrideMin: paso.cleanupOverrideMin,
+              tiempoFijoOverrideMin: paso.tiempoFijoOverrideMin,
               paramsPasoJson: this.jsonOrNull(paso.paramsPasoJson),
               maquinaM1Id: paso.maquinaM1Id,
               perfilM1Id: paso.perfilM1Id,
+              centroCostoId: paso.centroCostoId,
               configSlotsMaterialesJson: this.jsonOrNull(
                 paso.configSlotsMaterialesJson,
               ),
@@ -1115,7 +1217,11 @@ export class ProductosService {
       maquinaIds.size === 0
         ? []
         : await this.prisma.maquina.findMany({
-            where: { tenantId, id: { in: [...maquinaIds] }, activo: true },
+            where: {
+              tenantId,
+              id: { in: [...maquinaIds] },
+              ...MAQUINA_DISPONIBLE_WHERE,
+            },
             select: {
               id: true,
               codigo: true,

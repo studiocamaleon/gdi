@@ -28,6 +28,7 @@ import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
@@ -63,6 +64,7 @@ const fmtTarifa = new Intl.NumberFormat("es-AR", {
   currency: "ARS",
   maximumFractionDigits: 2,
 });
+const SIN_CENTRO = "sin_centro";
 
 type MaquinaEditorIdentidadProps = {
   editor: MaquinaEditorState;
@@ -78,6 +80,10 @@ export function MaquinaEditorIdentidad({
   const { form, setForm } = editor;
   const centroSeleccionado = centrosCosto.find(
     (centroCosto) => centroCosto.id === form.centroCostoPrincipalId,
+  );
+  const centrosDeLaPlanta = centrosCosto.filter(
+    (centroCosto) =>
+      centroCosto.plantaId === form.plantaId && centroCosto.activo,
   );
 
   return (
@@ -155,11 +161,13 @@ export function MaquinaEditorIdentidad({
                 <SelectDisplay label={getEstadoMaquinaLabel(form.estado)} />
               </SelectTrigger>
               <SelectContent>
-                {estadoMaquinaItems.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {estadoMaquinaItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -167,28 +175,47 @@ export function MaquinaEditorIdentidad({
             <Label>Planta</Label>
             <Select
               value={form.plantaId}
-              onValueChange={(v) => setForm({ ...form, plantaId: v ?? "" })}
+              onValueChange={(v) => {
+                const plantaId = v ?? "";
+                setForm({
+                  ...form,
+                  plantaId,
+                  centroCostoPrincipalId:
+                    centroSeleccionado?.plantaId === plantaId
+                      ? form.centroCostoPrincipalId
+                      : undefined,
+                });
+              }}
             >
               <SelectTrigger className="w-full min-w-0">
                 <SelectDisplay
-                  label={plantas.find((planta) => planta.id === form.plantaId)?.nombre}
+                  label={
+                    plantas.find((planta) => planta.id === form.plantaId)
+                      ?.nombre
+                  }
                 />
               </SelectTrigger>
               <SelectContent>
-                {plantas.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nombre}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {plantas.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
           <div className="min-w-0 space-y-1">
             <Label>Centro de costo</Label>
             <Select
-              value={form.centroCostoPrincipalId ?? ""}
+              value={form.centroCostoPrincipalId ?? SIN_CENTRO}
               onValueChange={(v) =>
-                setForm({ ...form, centroCostoPrincipalId: v || undefined })
+                setForm({
+                  ...form,
+                  centroCostoPrincipalId:
+                    !v || v === SIN_CENTRO ? undefined : v,
+                })
               }
             >
               <SelectTrigger className="w-full min-w-0">
@@ -198,11 +225,14 @@ export function MaquinaEditorIdentidad({
                 />
               </SelectTrigger>
               <SelectContent>
-                {centrosCosto.map((cc) => (
-                  <SelectItem key={cc.id} value={cc.id}>
-                    {cc.nombre}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectItem value={SIN_CENTRO}>Sin asignar</SelectItem>
+                  {centrosDeLaPlanta.map((cc) => (
+                    <SelectItem key={cc.id} value={cc.id}>
+                      {cc.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -231,19 +261,26 @@ export function MaquinaEditorIdentidad({
                 onValueChange={(v) =>
                   setForm({
                     ...form,
-                    geometriaTrabajo: (v ?? "pliego") as MaquinaPayload["geometriaTrabajo"],
+                    geometriaTrabajo: (v ??
+                      "pliego") as MaquinaPayload["geometriaTrabajo"],
                   })
                 }
               >
                 <SelectTrigger className="w-full min-w-0">
-                  <SelectDisplay label={getGeometriaTrabajoMaquinaLabel(form.geometriaTrabajo)} />
+                  <SelectDisplay
+                    label={getGeometriaTrabajoMaquinaLabel(
+                      form.geometriaTrabajo,
+                    )}
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {geometriaTrabajoMaquinaItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    {geometriaTrabajoMaquinaItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
@@ -266,7 +303,11 @@ export function MaquinaEditorIdentidad({
   );
 }
 
-export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState }) {
+export function MaquinaEditorSecciones({
+  editor,
+}: {
+  editor: MaquinaEditorState;
+}) {
   const {
     form,
     setForm,
@@ -299,25 +340,30 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
             ) : null}
           </CardHeader>
           <CardContent className="space-y-3">
-              {sec.id === "perfiles_operativos" ? (
-                <PerfilesOperativosEditor
-                  perfiles={perfiles}
-                  setPerfiles={setPerfiles}
-                  sectionFields={sec.fields}
-                  form={form}
-                  setForm={setForm}
-                  materiasPrimas={materiasPrimas}
-                  loadingMaterias={loadingMaterias}
-                  onAgregar={handleAgregarPerfil}
-                  onEliminar={handleEliminarPerfil}
-                  onDuplicar={handleDuplicarPerfil}
-                />
-              ) : sec.id === "desgaste_repuestos" ? (
-                <DesgasteEditor form={form} setForm={setForm} />
-              ) : (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {sec.fields.filter((field) => shouldShowMaquinaField(field, form)).map((field) => {
-                    const displayInCm = shouldDisplayGranFormatoFieldInCm(field, form);
+            {sec.id === "perfiles_operativos" ? (
+              <PerfilesOperativosEditor
+                perfiles={perfiles}
+                setPerfiles={setPerfiles}
+                sectionFields={sec.fields}
+                form={form}
+                setForm={setForm}
+                materiasPrimas={materiasPrimas}
+                loadingMaterias={loadingMaterias}
+                onAgregar={handleAgregarPerfil}
+                onEliminar={handleEliminarPerfil}
+                onDuplicar={handleDuplicarPerfil}
+              />
+            ) : sec.id === "desgaste_repuestos" ? (
+              <DesgasteEditor form={form} setForm={setForm} />
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {sec.fields
+                  .filter((field) => shouldShowMaquinaField(field, form))
+                  .map((field) => {
+                    const displayInCm = shouldDisplayGranFormatoFieldInCm(
+                      field,
+                      form,
+                    );
                     const displayField: MaquinariaTemplateField = displayInCm
                       ? { ...field, unit: "cm" }
                       : field;
@@ -343,15 +389,26 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                             iconSize="sm"
                           />
                         ) : (
-                          <Label htmlFor={`field-${field.scope}-${field.key}`} className="text-sm">
+                          <Label
+                            htmlFor={`field-${field.scope}-${field.key}`}
+                            className="text-sm"
+                          >
                             {field.label}
-                            {field.required && <span className="text-destructive"> *</span>}
+                            {field.required && (
+                              <span className="text-destructive"> *</span>
+                            )}
                           </Label>
                         )}
                         <FieldInput
                           field={displayField}
-                          value={displayInCm ? mmToCmForInput(fieldValue) : fieldValue}
-                          renderColorModeCards={field.key === "coloresSoportados"}
+                          value={
+                            displayInCm
+                              ? mmToCmForInput(fieldValue)
+                              : fieldValue
+                          }
+                          renderColorModeCards={
+                            field.key === "coloresSoportados"
+                          }
                           onChange={(v) =>
                             handleMaquinaFieldChange(
                               field,
@@ -362,12 +419,11 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                       </div>
                     );
                   })}
-                </div>
-              )}
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}
     </>
   );
 }
-

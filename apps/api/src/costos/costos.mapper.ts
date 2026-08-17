@@ -37,7 +37,6 @@ export class CostosMapper {
     };
   }
 
-
   toCentroResponse(centro: CentroCompleto) {
     const tarifas = centro.tarifasPeriodo ?? [];
     const compareTarifas = (
@@ -110,6 +109,7 @@ export class CostosMapper {
       codigo: centro.codigo,
       nombre: centro.nombre,
       descripcion: centro.descripcion ?? '',
+      updatedAt: centro.updatedAt.toISOString(),
       tipoCentro: this.fromPrismaTipoCentro(centro.tipoCentro),
       activo: centro.activo,
       estadoConfiguracion,
@@ -124,8 +124,6 @@ export class CostosMapper {
         capacidadPracticaResumen ?? capacidadPracticaPersistida,
     };
   }
-
-
 
   toCapacidadResponse(
     capacidad: Prisma.CentroCostoCapacidadPeriodoGetPayload<object>,
@@ -152,7 +150,6 @@ export class CostosMapper {
       updatedAt: tarifa.updatedAt.toISOString(),
     };
   }
-
 
   buildCreateCentroData(
     auth: CurrentAuth,
@@ -199,7 +196,9 @@ export class CostosMapper {
       // Ausente significa 100%, no 0%: así una fila a la que todavía no se le
       // cargó la dedicación cuesta lo que costaba, en vez de desaparecer del
       // costo del centro sin que nadie lo note.
-      const dedicacion = new Prisma.Decimal(linea.dedicacionPct ?? 100).div(100);
+      const dedicacion = new Prisma.Decimal(linea.dedicacionPct ?? 100).div(
+        100,
+      );
       return salario.mul(cargas.plus(1)).mul(dedicacion).toDecimalPlaces(2);
     }
     if (linea.seccion === SeccionCentroCostoLineaDto.activo_fijo) {
@@ -234,7 +233,7 @@ export class CostosMapper {
       categoria: linea.categoria
         ? this.toPrismaCategoriaComponente(linea.categoria)
         : null,
-      ocupacion: esEmpleado ? (linea.ocupacion?.trim() || null) : null,
+      ocupacion: esEmpleado ? linea.ocupacion?.trim() || null : null,
       dedicacionPct: esEmpleado ? (linea.dedicacionPct ?? null) : null,
       salarioMensual: esEmpleado ? (linea.salarioMensual ?? 0) : null,
       cargasPct: esEmpleado ? (linea.cargasPct ?? 0) : null,
@@ -258,9 +257,7 @@ export class CostosMapper {
         ? this.fromPrismaCategoriaComponente(linea.categoria)
         : null,
       ocupacion: linea.ocupacion,
-      dedicacionPct: linea.dedicacionPct
-        ? Number(linea.dedicacionPct)
-        : null,
+      dedicacionPct: linea.dedicacionPct ? Number(linea.dedicacionPct) : null,
       salarioMensual: linea.salarioMensual
         ? this.decimalToNumber(linea.salarioMensual)
         : null,
@@ -322,16 +319,6 @@ export class CostosMapper {
     return mapping[tipo];
   }
 
-
-
-
-
-
-
-
-
-
-
   toPrismaCategoriaComponente(categoria: CategoriaComponenteCostoCentroDto) {
     const mapping: Record<
       CategoriaComponenteCostoCentroDto,
@@ -385,9 +372,6 @@ export class CostosMapper {
     };
     return mapping[categoria];
   }
-
-
-
 
   fromPrismaEstadoTarifa(estado: EstadoTarifaCentroCostoPeriodo) {
     const mapping: Record<

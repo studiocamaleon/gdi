@@ -43,7 +43,20 @@ export class CostosTarifasService {
    */
   async recalcularYPublicarPeriodo(auth: CurrentAuth, periodo: string) {
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
-    const centros = await this.prisma.centroCosto.findMany({
+    return this.prisma.$transaction(
+      (tx) => this.recalcularYPublicarPeriodoEnTx(auth, normalizedPeriodo, tx),
+      { timeout: 15_000 },
+    );
+  }
+
+  async recalcularYPublicarPeriodoEnTx(
+    auth: CurrentAuth,
+    periodo: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`${auth.tenantId}:${normalizedPeriodo}`}))`;
+    const centros = await tx.centroCosto.findMany({
       where: { tenantId: auth.tenantId, activo: true },
       select: { id: true, tipoCentro: true },
     });
@@ -54,6 +67,7 @@ export class CostosTarifasService {
         auth,
         centro.id,
         normalizedPeriodo,
+        tx,
       );
       const valores = {
         costoMensualTotal: snapshot.costoMensualTotal,
@@ -79,7 +93,20 @@ export class CostosTarifasService {
       }
 
       for (const estado of estados) {
-        await this.prisma.centroCostoTarifaPeriodo.upsert({
+        const anterior =
+          estado === EstadoTarifaCentroCostoPeriodo.PUBLICADA
+            ? await tx.centroCostoTarifaPeriodo.findUnique({
+                where: {
+                  tenantId_centroCostoId_periodo_estado: {
+                    tenantId: auth.tenantId,
+                    centroCostoId: centro.id,
+                    periodo: normalizedPeriodo,
+                    estado,
+                  },
+                },
+              })
+            : null;
+        await tx.centroCostoTarifaPeriodo.upsert({
           where: {
             tenantId_centroCostoId_periodo_estado: {
               tenantId: auth.tenantId,
@@ -96,6 +123,48 @@ export class CostosTarifasService {
             ...valores,
           },
           update: valores,
+        });
+        if (
+          estado === EstadoTarifaCentroCostoPeriodo.PUBLICADA &&
+          (!anterior ||
+            !anterior.costoMensualTotal.equals(valores.costoMensualTotal) ||
+            !anterior.capacidadPractica.equals(valores.capacidadPractica) ||
+            !anterior.tarifaCalculada.equals(valores.tarifaCalculada) ||
+            !anterior.tarifaManoObra.equals(valores.tarifaManoObra))
+        ) {
+          const ultima = await tx.centroCostoTarifaRevision.aggregate({
+            where: {
+              tenantId: auth.tenantId,
+              centroCostoId: centro.id,
+              periodo: normalizedPeriodo,
+            },
+            _max: { revision: true },
+          });
+          await tx.centroCostoTarifaRevision.create({
+            data: {
+              tenantId: auth.tenantId,
+              centroCostoId: centro.id,
+              periodo: normalizedPeriodo,
+              revision: (ultima._max.revision ?? 0) + 1,
+              ...valores,
+              publicadaPorUserId: auth.userId,
+              publicadaPor: auth.impersonacion?.actorNombre ?? auth.email,
+            },
+          });
+        }
+      }
+
+      // Un borrador inválido en este período corta el carry-forward: si no se
+      // elimina la publicación anterior del mismo mes, el motor continúa
+      // cotizando con una tarifa que ya no representa la planilla.
+      if (!estados.includes(EstadoTarifaCentroCostoPeriodo.PUBLICADA)) {
+        await tx.centroCostoTarifaPeriodo.deleteMany({
+          where: {
+            tenantId: auth.tenantId,
+            centroCostoId: centro.id,
+            periodo: normalizedPeriodo,
+            estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+          },
         });
       }
     }
@@ -184,30 +253,78 @@ export class CostosTarifasService {
   async getCentroTarifas(auth: CurrentAuth, id: string) {
     await this.validaciones.findCentroOrThrow(auth, id);
 
-    const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-      },
-      orderBy: [{ periodo: 'desc' }, { createdAt: 'desc' }],
+    const [revisiones, borradores] = await Promise.all([
+      this.prisma.centroCostoTarifaRevision.findMany({
+        where: { tenantId: auth.tenantId, centroCostoId: id },
+        orderBy: [{ periodo: 'desc' }, { revision: 'desc' }],
+      }),
+      this.prisma.centroCostoTarifaPeriodo.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          centroCostoId: id,
+          estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
+        },
+        orderBy: [{ periodo: 'desc' }, { createdAt: 'desc' }],
+      }),
+    ]);
+
+    const revisionesPorPeriodo = new Map(
+      revisiones.map((revision) => [revision.periodo, revision]),
+    );
+    const borradoresPendientes = borradores.filter((borrador) => {
+      const publicada = revisionesPorPeriodo.get(borrador.periodo);
+      return !publicada || borrador.updatedAt > publicada.publicadaEl;
     });
 
-    return tarifas.map((tarifa) => this.mapper.toTarifaResponse(tarifa));
+    return [
+      ...revisiones.map((revision) => ({
+        id: revision.id,
+        periodo: revision.periodo,
+        revision: revision.revision,
+        costoMensualTotal: this.mapper.decimalToNumber(
+          revision.costoMensualTotal,
+        ),
+        capacidadPractica: this.mapper.decimalToNumber(
+          revision.capacidadPractica,
+        ),
+        tarifaCalculada: this.mapper.decimalToNumber(revision.tarifaCalculada),
+        costoMensualManoObra: this.mapper.decimalToNumber(
+          revision.costoMensualManoObra,
+        ),
+        tarifaManoObra: this.mapper.decimalToNumber(revision.tarifaManoObra),
+        estado: 'publicada' as const,
+        resumen: revision.resumenJson,
+        createdAt: revision.publicadaEl.toISOString(),
+        updatedAt: revision.publicadaEl.toISOString(),
+        publicadaPorUserId: revision.publicadaPorUserId,
+        publicadaPor: revision.publicadaPor,
+      })),
+      ...borradoresPendientes.map((tarifa) =>
+        this.mapper.toTarifaResponse(tarifa),
+      ),
+    ].sort(
+      (a, b) =>
+        b.periodo.localeCompare(a.periodo) ||
+        b.updatedAt.localeCompare(a.updatedAt),
+    );
   }
 
   async buildTarifaSnapshot(
     auth: CurrentAuth,
     centroCostoId: string,
     periodo: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<TarifaSnapshot> {
     const repartoPeriodo = await this.reparto.computeRepartoPeriodo(
       auth,
       periodo,
+      db,
     );
     const centro = await this.getCentroConfiguracionEntity(
       auth,
       centroCostoId,
       periodo,
+      db,
     );
     // Una sola planilla, tres secciones. Antes esto sumaba cuatro orígenes
     // distintos —componentes, maquinaria, gastos generales y activos fijos—,
@@ -215,7 +332,10 @@ export class CostosTarifasService {
     const sumar = (seccion: SeccionCentroCostoLinea) =>
       centro.lineas
         .filter((linea) => linea.seccion === seccion)
-        .reduce((acc, linea) => acc.plus(linea.importeMensual), new Prisma.Decimal(0));
+        .reduce(
+          (acc, linea) => acc.plus(linea.importeMensual),
+          new Prisma.Decimal(0),
+        );
 
     const costoMensualGastosGenerales = sumar(
       SeccionCentroCostoLinea.GASTO_GENERAL,
@@ -226,9 +346,7 @@ export class CostosTarifasService {
     // dependía de que la nómina hubiera etiquetado bien.
     // Ver docs/hora-hombre-setup-cleanup-diseno.md
     const costoMensualManoObra = sumar(SeccionCentroCostoLinea.EMPLEADO);
-    const costoMensualActivosFijos = sumar(
-      SeccionCentroCostoLinea.ACTIVO_FIJO,
-    );
+    const costoMensualActivosFijos = sumar(SeccionCentroCostoLinea.ACTIVO_FIJO);
     const costoMensualTotal = costoMensualGastosGenerales
       .plus(costoMensualManoObra)
       .plus(costoMensualActivosFijos);
@@ -248,7 +366,8 @@ export class CostosTarifasService {
     // Las horas del período, cargadas a mano. `capacidadPractica` se conserva
     // como nombre en el snapshot porque es el contrato con el motor y el ETA.
     const capacidad = centro.capacidadesPeriodo[0];
-    const capacidadPractica = capacidad?.horasProductivas ?? new Prisma.Decimal(0);
+    const capacidadPractica =
+      capacidad?.horasProductivas ?? new Prisma.Decimal(0);
     const tarifaCalculada =
       costoMensualTotalConReparto.gt(0) && capacidadPractica.gt(0)
         ? costoMensualTotalConReparto.div(capacidadPractica)
@@ -266,7 +385,10 @@ export class CostosTarifasService {
         ? costoMensualAbsorbidoReparto.div(capacidadPractica)
         : new Prisma.Decimal(0);
     const validaParaPublicar =
-      costoMensualTotalConReparto.gt(0) && capacidadPractica.gt(0);
+      centro.activo &&
+      centro.tipoCentro === TipoCentroCosto.PRODUCTIVO &&
+      costoMensualTotalConReparto.gt(0) &&
+      capacidadPractica.gt(0);
 
     return {
       centro,
@@ -304,8 +426,7 @@ export class CostosTarifasService {
         ),
         capacidadPractica: this.mapper.decimalToNumber(capacidadPractica),
         tarifaCalculada: this.mapper.decimalToNumber(tarifaCalculada),
-        costoMensualManoObra:
-          this.mapper.decimalToNumber(costoMensualManoObra),
+        costoMensualManoObra: this.mapper.decimalToNumber(costoMensualManoObra),
         tarifaManoObra: this.mapper.decimalToNumber(tarifaManoObra),
         advertencias,
       },
@@ -316,8 +437,9 @@ export class CostosTarifasService {
     auth: CurrentAuth,
     id: string,
     periodo: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    const centro = await this.prisma.centroCosto.findFirst({
+    const centro = await db.centroCosto.findFirst({
       where: {
         id,
         tenantId: auth.tenantId,
@@ -366,6 +488,10 @@ export class CostosTarifasService {
       advertencias.push(
         'El costo mensual total debe ser mayor a 0 para calcular una tarifa util.',
       );
+    }
+
+    if (centro.tipoCentro === TipoCentroCosto.NO_PRODUCTIVO) {
+      return advertencias;
     }
 
     if (!capacidad) {

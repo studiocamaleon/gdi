@@ -3,7 +3,8 @@ import { Suspense } from "react";
 
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getPlantas } from "@/lib/costos-api";
-import { getMaquinas } from "@/lib/maquinaria-api";
+import { getMaquinasPage } from "@/lib/maquinaria-api";
+import { tienePermiso } from "@/lib/permisos-server";
 
 const MaquinariaPanel = dynamicImport(
   () =>
@@ -26,16 +27,19 @@ export default function NuevaMaquinariaPage() {
 }
 
 async function NuevaMaquinariaContent() {
-  const [maquinas, plantas] = await Promise.all([
-    getMaquinas(),
+  const [maquinasPage, plantas, puedeGestionar] = await Promise.all([
+    getMaquinasPage({ limit: 50 }),
     getPlantas(),
+    tienePermiso("costos.gestionar"),
   ]);
 
   return (
     <MaquinariaPanel
-      initialMaquinas={maquinas}
+      initialPage={maquinasPage}
       plantas={plantas}
-      initialCreate
+      puedeGestionar={puedeGestionar}
+      initialFilters={{}}
+      initialCreate={puedeGestionar}
     />
   );
 }

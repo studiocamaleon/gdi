@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 import {
   estrategiaNestingDeFamilia,
   fallbackSinLayoutDeFamilia,
@@ -132,10 +133,7 @@ import {
   aplicarMutacionPre,
   calcularMetrosLinealesUnion,
 } from './modificaciones-pre';
-import {
-  declaraEfectoDemasia,
-  leerEfectoDemasia,
-} from './efectos-paso';
+import { declaraEfectoDemasia, leerEfectoDemasia } from './efectos-paso';
 import { calcularBarrasNecesarias } from './estructura-bastidor';
 import { runDerivador } from './derivadores';
 import {
@@ -2158,7 +2156,11 @@ export class MotorUniversalService {
         materialDerivador?.atributosVarianteJson ?? null,
       );
       derivacionesDelJobContext(jobContext)[paso.configPasoId] = derivacionPaso;
-      this.promoverCanonDerivador(jobContext, familia.derivador, derivacionPaso);
+      this.promoverCanonDerivador(
+        jobContext,
+        familia.derivador,
+        derivacionPaso,
+      );
     }
     const seleccionMatriz =
       ((jobContext as Record<string, unknown>)[
@@ -2238,7 +2240,12 @@ export class MotorUniversalService {
     // OUTPUTS CANÓNICOS — el paso publica sus drivers geométricos igual que
     // uno interno (ml_estructura, cenefa_m2, pintura_m2…): los pasos
     // siguientes heredan de ahí sin importar quién lo fabrica.
-    const cantidadEfectiva = this.resolverCantidad(paso, jobContext, null, null);
+    const cantidadEfectiva = this.resolverCantidad(
+      paso,
+      jobContext,
+      null,
+      null,
+    );
     const outputsCanonicos = calcularOutputsCanonicos(familia, {
       paso,
       jobContext,
@@ -2452,7 +2459,11 @@ export class MotorUniversalService {
         materialDerivador?.atributosVarianteJson ?? null,
       );
       derivacionesDelJobContext(jobContext)[paso.configPasoId] = derivacionPaso;
-      this.promoverCanonDerivador(jobContext, familia.derivador, derivacionPaso);
+      this.promoverCanonDerivador(
+        jobContext,
+        familia.derivador,
+        derivacionPaso,
+      );
     }
 
     // d) NESTING (G-M1 — F.2.13): si el paso usa CALCULADO_POR_PASO y la familia
@@ -3154,7 +3165,9 @@ export class MotorUniversalService {
         // recorrido, grabado por área), la resolvemos con el resolver
         // magnitud-aware; el resto sigue por `resolverCantidad` (comportamiento
         // idéntico al histórico para impresión/guillotina/laminado/etc.).
-        let cantidadEfectiva = magnitudTiempoDefaultDeFamilia(paso.familiaCodigo)
+        let cantidadEfectiva = magnitudTiempoDefaultDeFamilia(
+          paso.familiaCodigo,
+        )
           ? this.resolverCantidadProductividadPropia(
               paso,
               jobContext,
@@ -3731,8 +3744,7 @@ export class MotorUniversalService {
     const attrs = materialResuelto?.atributosVarianteJson ?? null;
     const hojaAnchoMm = Number(attrs?.anchoMm ?? 0);
     const hojaAltoMm = Number(attrs?.altoMm ?? attrs?.largoMm ?? 0);
-    const sinMedidas =
-      attrs != null && !(hojaAnchoMm > 0 && hojaAltoMm > 0);
+    const sinMedidas = attrs != null && !(hojaAnchoMm > 0 && hojaAltoMm > 0);
 
     // Pieza más grande que la hoja (ni rotada entra): el montaje todavía no
     // sabe partir en paños — decirlo con la medida real es accionable;
@@ -4089,8 +4101,7 @@ export class MotorUniversalService {
     const piezas = ctx.piezas ?? [];
     if (piezas.length > 0) {
       const mayor = [...piezas].sort(
-        (a, b) =>
-          Math.max(b.anchoMm, b.altoMm) - Math.max(a.anchoMm, a.altoMm),
+        (a, b) => Math.max(b.anchoMm, b.altoMm) - Math.max(a.anchoMm, a.altoMm),
       )[0];
       return { anchoMm: mayor.anchoMm, altoMm: mayor.altoMm };
     }
@@ -4113,7 +4124,9 @@ export class MotorUniversalService {
     const pliegoAltoMm = Math.round(config.sheetHeightMm ?? 0);
     const utilAnchoMm = Math.max(
       0,
-      Math.round(pliegoAnchoMm - config.margins.leftMm - config.margins.rightMm),
+      Math.round(
+        pliegoAnchoMm - config.margins.leftMm - config.margins.rightMm,
+      ),
     );
     const utilAltoMm = Math.max(
       0,
@@ -4408,8 +4421,7 @@ export class MotorUniversalService {
         precioUnitario,
         costoTotal,
         estrategiaCosto:
-          costeoNesting?.strategy ??
-          this.resolverEstrategiaCosteoNesting(paso),
+          costeoNesting?.strategy ?? this.resolverEstrategiaCosteoNesting(paso),
         detalleCosteoNesting: costeoNesting
           ? {
               strategy: costeoNesting.strategy,
@@ -4443,7 +4455,12 @@ export class MotorUniversalService {
     ejecutados.push(
       ...(this.esModoSinImpresion(paso, jobContext)
         ? []
-        : this.calcularDesgasteMaquina(paso, jobContext, nestingDispatch)),
+        : this.calcularDesgasteMaquina(
+            paso,
+            jobContext,
+            nestingDispatch,
+            materialPreliminar,
+          )),
     );
 
     return ejecutados;
@@ -4767,17 +4784,19 @@ export class MotorUniversalService {
   }
 
   /**
-   * Costo por click: las piezas que se gastan con el uso de la máquina
-   * (drum, fusor, cuchilla de limpieza, barra de cera…).
+   * Prorratea las piezas que se gastan con el uso de la máquina. Las piezas de
+   * una impresora por hoja se miden en clicks A4 equivalentes; el cabezal del
+   * Plotter CAD, en los ml de tinta que atraviesan el cabezal.
    *
-   * A diferencia del tóner, el desgaste NO depende de la cobertura: una hoja
-   * al 2% gasta el cilindro igual que una al 60%, porque dio la misma vuelta.
-   * El driver es la cantidad de páginas —clicks A4-equivalentes—, que es como
-   * el fabricante declara la vida útil de cada pieza.
+   * En las impresoras por hoja, el desgaste NO depende de la cobertura: una
+   * hoja al 2% gasta el cilindro igual que una al 60%. En el Plotter CAD, el
+   * fabricante declara la vida del cabezal por ml y el driver sale de sumar el
+   * consumo de los canales de tinta configurados para el perfil seleccionado.
    *
    *   clicks = pliegos × caras × factorA4   (A4 = 1, A3 = 2; entero, como
    *                                          cuenta el contador del equipo)
-   *   costo  = Σ (precio del repuesto / vida útil) × clicks
+   *   cabezal = área × caras × Σ consumo_ml_m2_de_canales
+   *   costo   = (precio del repuesto / vida útil) × driver
    *
    * Ver docs/costo-por-click-desgaste-diseno.md
    */
@@ -4785,24 +4804,84 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
     nestingDispatch: NestingDispatchResult | null,
+    materialPreliminar: {
+      id: string;
+      atributosVarianteJson?: Record<string, unknown> | null;
+      unidadStock?: string | null;
+      subfamilia?: string | null;
+    } | null,
   ): MaterialEjecutado[] {
     const maquina = paso.maquina;
     const componentes = maquina?.componentesDesgaste ?? [];
     if (!maquina || componentes.length === 0) return [];
-    // [P2] El desgaste lo declara la ficha (`primitivas.desgaste`); una
-    // familia sin el gancho no clickea — antes era el gate por familia.
-    const codigoDesgaste = primitivasDeFamilia(paso.familiaCodigo)?.desgaste;
-    const primitivaDesgaste = codigoDesgaste
-      ? REGISTRO_DESGASTE[codigoDesgaste]
-      : undefined;
-    if (!primitivaDesgaste) return [];
 
-    const clicks = primitivaDesgaste(paso, jobContext, nestingDispatch, {
-      resolverCantidad: (p, jc, nd) => this.resolverCantidad(p, jc, nd),
-      carasConsumible: (p, jc) => this.resolverCarasConsumible(p, jc),
-      factorVelocidad: (p, jc, nd) => this.factorVelocidadDelPaso(p, jc, nd),
-    });
-    if (clicks <= 0) return [];
+    let tintaProcesadaMl: number | null = null;
+    if (
+      componentes.some((componente) => componente.unidadDesgaste === 'ml_tinta')
+    ) {
+      const detallePerfil =
+        (paso.perfil?.detalleJson as Record<string, unknown> | null) ??
+        ((paso.perfilesDisponibles?.find((p) => p.id === paso.perfilM1Id)
+          ?.detalleJson ?? null) as Record<string, unknown> | null);
+      const perfilId = paso.perfil?.id ?? paso.perfilM1Id;
+      const channels = getPerfilConsumableChannels(
+        detallePerfil,
+        maquina.parametrosTecnicosJson ?? null,
+        this.resolverModoColorEfectivoConsumibles(paso, jobContext),
+      );
+      const nivelCobertura = this.resolverCoberturaComercial(paso, jobContext);
+      let consumoTintaMlM2 = 0;
+      let consumosCompletos = channels.length > 0;
+      for (const channel of channels) {
+        const consumible = this.findConsumibleMaquina(
+          maquina.consumibles ?? [],
+          perfilId,
+          channel,
+        );
+        if (!consumible) {
+          consumosCompletos = false;
+          break;
+        }
+        const consumo = consumoGm2DeCobertura(consumible, nivelCobertura);
+        if (!Number.isFinite(consumo) || consumo <= 0) {
+          consumosCompletos = false;
+          break;
+        }
+        consumoTintaMlM2 += consumo;
+      }
+      const areaImpresaM2 = this.calcularAreaImpresaConsumiblesM2(
+        paso,
+        jobContext,
+        nestingDispatch,
+        materialPreliminar,
+      );
+      if (consumosCompletos && consumoTintaMlM2 > 0 && areaImpresaM2 > 0) {
+        tintaProcesadaMl =
+          consumoTintaMlM2 *
+          areaImpresaM2 *
+          this.resolverCarasConsumible(paso, jobContext);
+      }
+    }
+
+    let clicks: number | null = null;
+    const getClicks = () => {
+      if (clicks !== null) return clicks;
+      // El desgaste tradicional lo declara la familia: impresión por hoja
+      // usa clicks A4. El cabezal por ml no necesita esa primitiva.
+      const codigoDesgaste = primitivasDeFamilia(paso.familiaCodigo)?.desgaste;
+      const primitivaDesgaste = codigoDesgaste
+        ? REGISTRO_DESGASTE[codigoDesgaste]
+        : undefined;
+      clicks = primitivaDesgaste
+        ? primitivaDesgaste(paso, jobContext, nestingDispatch, {
+            resolverCantidad: (p, jc, nd) => this.resolverCantidad(p, jc, nd),
+            carasConsumible: (p, jc) => this.resolverCarasConsumible(p, jc),
+            factorVelocidad: (p, jc, nd) =>
+              this.factorVelocidadDelPaso(p, jc, nd),
+          })
+        : 0;
+      return clicks;
+    };
 
     // Un trabajo en blanco y negro mueve sólo el drum negro: las piezas de
     // color no giran y no se cobran.
@@ -4827,8 +4906,11 @@ export class MotorUniversalService {
         ) ?? this.numeroPositivo(componente.precioUnitario);
       if (!precioRepuesto) continue;
 
-      const costoPorClick = precioRepuesto / vidaUtil;
-      const costoTotal = costoPorClick * clicks;
+      const porMlTinta = componente.unidadDesgaste === 'ml_tinta';
+      const cantidad = porMlTinta ? tintaProcesadaMl : getClicks();
+      if (!cantidad || cantidad <= 0) continue;
+      const costoPorUnidad = precioRepuesto / vidaUtil;
+      const costoTotal = costoPorUnidad * cantidad;
 
       ejecutados.push({
         slotCodigo: `desgaste_${componente.id}`,
@@ -4840,11 +4922,11 @@ export class MotorUniversalService {
         materialDisplayName: componente.nombre,
         materiaPrimaNombre: componente.nombre,
         tipoLineaCosto: 'DESGASTE_MAQUINA',
-        cantidad: clicks,
-        unidad: 'a4_equiv',
-        precioUnitario: costoPorClick,
+        cantidad,
+        unidad: porMlTinta ? 'ml' : 'a4_equiv',
+        precioUnitario: costoPorUnidad,
         costoTotal,
-        estrategiaCosto: 'costo_por_click',
+        estrategiaCosto: porMlTinta ? 'costo_por_ml_tinta' : 'costo_por_click',
         // La pieza la declara la máquina, no un slot que alguien elija.
         modoSeleccion: 'MAQUINA_DESGASTE',
       });
@@ -6004,7 +6086,10 @@ export class MotorUniversalService {
     if (decl.cantidadFija !== undefined) {
       // `cantidadFija` es POR CARTEL, no por trabajo: dos backlights llevan
       // dos fuentes (cada uno la suya, elegida por SUS watts), no una.
-      const unidades = Math.max(1, Math.round(Number(jobContext.cantidad) || 1));
+      const unidades = Math.max(
+        1,
+        Math.round(Number(jobContext.cantidad) || 1),
+      );
       return decl.cantidadFija * unidades;
     }
     if (!decl.magnitudDerivada) return null;
@@ -6908,7 +6993,10 @@ export class MotorUniversalService {
         carasEfectivas: (p, jc) => this.carasEfectivasPaso(p, jc),
         perfilEsDobleFaz: (perfil) => this.perfilEsDobleFaz(perfil),
         perfilesCompatibles: (p) =>
-          this.filtrarPerfilesCompatibles(p.familiaCodigo, p.perfilesDisponibles),
+          this.filtrarPerfilesCompatibles(
+            p.familiaCodigo,
+            p.perfilesDisponibles,
+          ),
       });
     }
   }
@@ -7847,7 +7935,7 @@ export class MotorUniversalService {
           where: {
             tenantId,
             id: { in: [...candidataMaquinaIds] },
-            activo: true,
+            ...MAQUINA_DISPONIBLE_WHERE,
           },
           include: {
             centroCostoPrincipal: { select: { id: true, nombre: true } },

@@ -7,6 +7,7 @@ import {
   type ProductoWorkspaceTab,
 } from "@/components/productos-servicios/producto-workspace";
 import { ApiError } from "@/lib/api";
+import { tienePermiso } from "@/lib/permisos-server";
 import {
   getCargosDirectosCatalogo,
   getCatalogoFamilias,
@@ -54,11 +55,12 @@ async function ProductoDetalleContent({
       redirect(`/productos-servicios/${productoId}?tab=pasos&rutaAltId=${rutaDefault}`);
     }
 
-    const [rutasDisponibles, catalogoFamilias, lookups, catalogoCargos] = await Promise.all([
+    const [rutasDisponibles, catalogoFamilias, lookups, catalogoCargos, canManage] = await Promise.all([
       tab === "rutas" ? getRutas() : Promise.resolve(undefined),
       tab === "rutas" || tab === "pasos" ? getCatalogoFamilias() : Promise.resolve(undefined),
       tab === "pasos" ? getLookupsConfigPaso() : Promise.resolve(undefined),
       tab === "cargos" ? getCargosDirectosCatalogo(true) : Promise.resolve(undefined),
+      tienePermiso("costos.gestionar"),
     ]);
 
     return (
@@ -70,6 +72,7 @@ async function ProductoDetalleContent({
         catalogoFamilias={catalogoFamilias}
         lookups={lookups}
         catalogoCargos={catalogoCargos}
+        canManage={canManage}
       />
     );
   } catch (err) {

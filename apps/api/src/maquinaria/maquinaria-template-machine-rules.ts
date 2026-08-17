@@ -157,13 +157,14 @@ function getMachineFieldValue(payload: UpsertMaquinaDto, key: string) {
 }
 
 export function hasRequiredMachineDataByTemplate(payload: UpsertMaquinaDto) {
-  const rule = RULES[payload.plantilla];
-  if (!rule) {
-    return false;
-  }
+  return getMissingMachineDataByTemplate(payload).length === 0;
+}
 
-  return rule.requiredMachineKeys.every((key) =>
-    hasValue(getMachineFieldValue(payload, key)),
+export function getMissingMachineDataByTemplate(payload: UpsertMaquinaDto) {
+  const rule = RULES[payload.plantilla];
+  if (!rule) return ['plantilla'];
+  return rule.requiredMachineKeys.filter(
+    (key) => !hasValue(getMachineFieldValue(payload, key)),
   );
 }
 
@@ -173,9 +174,7 @@ export function validateMachinePayloadByTemplate(payload: UpsertMaquinaDto) {
     return;
   }
 
-  const missing = rule.requiredMachineKeys.filter(
-    (key) => !hasValue(getMachineFieldValue(payload, key)),
-  );
+  const missing = getMissingMachineDataByTemplate(payload);
 
   if (missing.length > 0) {
     throw new Error(

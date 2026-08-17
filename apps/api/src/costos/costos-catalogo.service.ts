@@ -75,10 +75,6 @@ export class CostosCatalogoService {
     });
   }
 
-
-
-
-
   async findCentros(auth: CurrentAuth) {
     const centros = await this.prisma.centroCosto.findMany({
       where: { tenantId: auth.tenantId },
@@ -191,16 +187,42 @@ export class CostosCatalogoService {
     // apuntan (FK SetNull) y quedarían sin centro → romperían el costeo.
     // Las tarifas/recursos/componentes/capacidad de período se borran en
     // cascada (onDelete: Cascade en el schema), así que no bloquean.
-    const [maquinas, configPasos, pasosExtra] = await Promise.all([
+    const [
+      maquinas,
+      configPasos,
+      pasosExtra,
+      lineas,
+      capacidades,
+      tarifas,
+      revisiones,
+      egresos,
+    ] = await Promise.all([
       this.prisma.maquina.count({ where: { centroCostoPrincipalId: id } }),
       this.prisma.productoConfigPaso.count({ where: { centroCostoId: id } }),
       this.prisma.productoPasoExtra.count({ where: { centroCostoId: id } }),
+      this.prisma.centroCostoLinea.count({ where: { centroCostoId: id } }),
+      this.prisma.centroCostoCapacidadPeriodo.count({
+        where: { centroCostoId: id },
+      }),
+      this.prisma.centroCostoTarifaPeriodo.count({
+        where: { centroCostoId: id },
+      }),
+      this.prisma.centroCostoTarifaRevision.count({
+        where: { centroCostoId: id },
+      }),
+      this.prisma.egreso.count({ where: { centroCostoId: id } }),
     ]);
 
     const referencias: string[] = [];
     if (maquinas > 0) referencias.push(`${maquinas} máquina(s)`);
     if (configPasos > 0) referencias.push(`${configPasos} paso(s) de producto`);
     if (pasosExtra > 0) referencias.push(`${pasosExtra} paso(s) extra`);
+    if (lineas > 0) referencias.push(`${lineas} línea(s) de costo`);
+    if (capacidades > 0) referencias.push(`${capacidades} capacidad(es)`);
+    if (tarifas > 0) referencias.push(`${tarifas} tarifa(s) histórica(s)`);
+    if (revisiones > 0)
+      referencias.push(`${revisiones} revisión(es) publicada(s)`);
+    if (egresos > 0) referencias.push(`${egresos} egreso(s)`);
 
     if (referencias.length > 0) {
       throw new ConflictException(

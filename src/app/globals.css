@@ -6259,27 +6259,6 @@ body {
   .ccosto-seccion .ccosto-segmentado {
     display: inline-flex;
     align-self: flex-start;
-    padding: 3px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-2);
-  }
-
-  .ccosto-seccion .ccosto-segmentado button {
-    padding: 7px 14px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .ccosto-seccion .ccosto-segmentado button.activo {
-    background: #111114;
-    color: #fff;
   }
 
   .ccosto-seccion .ccosto-ayuda {
@@ -6359,6 +6338,90 @@ body {
     gap: 8px;
     padding: 14px 24px;
     border-top: 1px solid var(--border);
+  }
+
+  .cost-centers-content .ccosto-inactivos {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-2);
+  }
+
+  .cost-centers-content .ccosto-inactivos h2,
+  .cost-centers-content .ccosto-inactivos p {
+    margin: 0;
+  }
+
+  .cost-centers-content .ccosto-inactivos h2 {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .cost-centers-content .ccosto-inactivos p {
+    color: var(--text-muted);
+    font-size: 12.5px;
+  }
+
+  .cost-centers-content .ccosto-inactivos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .cost-centers-content .ccosto-inactivo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--surface);
+  }
+
+  @media (max-width: 760px) {
+    .ccosto-ficha {
+      width: 100vw;
+      max-width: 100vw;
+    }
+
+    .ccosto-tabs {
+      overflow-x: auto;
+      padding-inline: 12px;
+    }
+
+    .ccosto-cuerpo {
+      padding: 14px 12px;
+    }
+
+    .ccosto-seccion .ccosto-filas {
+      overflow-x: auto;
+    }
+
+    .ccosto-seccion .ccosto-fila-gasto_general {
+      min-width: 620px;
+    }
+
+    .ccosto-seccion .ccosto-fila-empleado {
+      min-width: 980px;
+    }
+
+    .ccosto-seccion .ccosto-fila-activo_fijo {
+      min-width: 820px;
+    }
+
+    .ccosto-acciones {
+      flex-wrap: wrap;
+      padding: 12px;
+    }
+
+    .cost-centers-content .ccosto-inactivo-item {
+      align-items: flex-start;
+      flex-direction: column;
+    }
   }
 
   /* ── Gastos fijos de estructura ─────────────────────────────────────────
@@ -6844,11 +6907,6 @@ body {
     height: 16px;
   }
 
-  /* La fila entera navega al detalle (hoy: abre el editor). */
-  .maq-tabla tbody tr {
-    cursor: pointer;
-  }
-
   .maq-tabla .maq-vacio {
     padding: 40px 16px;
     text-align: center;
@@ -6937,6 +6995,8 @@ body {
 
   .maq-ficha-tabs {
     display: flex;
+    width: fit-content;
+    height: auto;
     gap: 4px;
     border-bottom: 1px solid var(--border);
   }
@@ -6952,9 +7012,16 @@ body {
     cursor: pointer;
   }
 
-  .maq-ficha-tabs .maq-ficha-tab.activo {
+  .maq-ficha-tabs .maq-ficha-tab[data-active] {
     color: var(--text);
     border-bottom-color: #111114;
+  }
+
+  .maq-ficha fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
 
   /* El único que scrollea. */

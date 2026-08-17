@@ -6,14 +6,10 @@ import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
-  calcularTarifaCentroCosto,
-  createCentroCosto,
   getCentroCostoConfiguracion,
   getCentroCostoTarifas,
+  guardarCentroCostoPlanilla,
   publicarTarifaCentroCosto,
-  replaceCentroCostoLineas,
-  updateCentroCosto,
-  upsertCentroCostoCapacidad,
 } from "@/lib/costos-api";
 import {
   categoriaComponenteCostoItems,
@@ -24,7 +20,7 @@ import {
   CentroCostoTarifaPeriodo,
   type CategoriaComponenteCostoCentro,
   getCategoriaComponenteCostoLabel,
-  getCurrentPeriodo,
+  getPeriodoEnZona,
   periodoAnterior,
   getTipoCentroLabel,
   SeccionCentroCostoLinea,
@@ -38,6 +34,7 @@ import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -50,6 +47,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 /**
  * La ficha del centro de costo con carga manual.
@@ -133,8 +132,7 @@ function nuevaLinea(seccion: SeccionCentroCostoLinea): LineaLocal {
 
 function desdeServidor(linea: CentroCostoLinea): LineaLocal {
   contadorFilas += 1;
-  const texto = (valor: number | null) =>
-    valor == null ? "" : String(valor);
+  const texto = (valor: number | null) => (valor == null ? "" : String(valor));
   return {
     key: linea.id,
     seccion: linea.seccion,
@@ -235,26 +233,29 @@ export function CentroCostoFicha({
   periodo: periodoInicial,
   onSaved,
 }: CentroCostoFichaProps) {
-  const { moneda } = useConfigRegional();
-  const fmt = (valor: number) => formatearMoneda(valor, moneda, { decimales: 2 });
+  const { moneda, zonaHoraria } = useConfigRegional();
+  const fmt = (valor: number) =>
+    formatearMoneda(valor, moneda, { decimales: 2 });
   const esAlta = centro === null;
 
   const [periodo, setPeriodo] = React.useState(
-    periodoInicial ?? getCurrentPeriodo(),
+    periodoInicial ?? getPeriodoEnZona(zonaHoraria),
   );
   /**
    * Guardar publica las tarifas del período que se está editando, pero el
    * motor cotiza siempre con el mes en curso. Sólo acá, entonces, lo que se
    * guarda pasa a cotizar en el acto — y el botón tiene que decirlo.
    */
-  const esPeriodoEnCurso = periodo === getCurrentPeriodo();
+  const esPeriodoEnCurso = periodo === getPeriodoEnZona(zonaHoraria);
   const [tab, setTab] = React.useState<Tab>("datos");
+  const [codigo, setCodigo] = React.useState("");
   const [nombre, setNombre] = React.useState("");
   const [tipoCentro, setTipoCentro] =
     React.useState<TipoCentroCosto>("productivo");
   const [horasProductivas, setHorasProductivas] = React.useState("");
   const [lineas, setLineas] = React.useState<LineaLocal[]>([]);
   const [absorbido, setAbsorbido] = React.useState(0);
+  const [distribuido, setDistribuido] = React.useState(0);
   const [tarifas, setTarifas] = React.useState<CentroCostoTarifaPeriodo[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -265,11 +266,13 @@ export function CentroCostoFicha({
 
   const cargar = React.useCallback(async () => {
     if (!centro) {
+      setCodigo("");
       setNombre("");
       setTipoCentro("productivo");
       setHorasProductivas("");
       setLineas([]);
       setAbsorbido(0);
+      setDistribuido(0);
       setTarifas([]);
       setSucio(false);
       return;
@@ -280,6 +283,7 @@ export function CentroCostoFicha({
         getCentroCostoConfiguracion(centro.id, periodo),
         getCentroCostoTarifas(centro.id),
       ]);
+      setCodigo(detalle.centro.codigo);
       setNombre(detalle.centro.nombre);
       setTipoCentro(detalle.centro.tipoCentro);
       setHorasProductivas(
@@ -287,6 +291,7 @@ export function CentroCostoFicha({
       );
       setLineas(detalle.lineas.map(desdeServidor));
       setAbsorbido(detalle.repartoAbsorbido?.total ?? 0);
+      setDistribuido(detalle.repartoDistribuido?.total ?? 0);
       setTarifas(historial);
       setSucio(false);
     } catch (error) {
@@ -390,53 +395,43 @@ export function CentroCostoFicha({
 
     setIsSaving(true);
     try {
-      let centroId = centro?.id ?? "";
-
-      if (esAlta) {
-        // El área y la categoría gráfica ya no se piden: el backend resuelve
-        // un área por defecto de la planta.
-        const payload: CentroCostoPayload = {
-          codigo: nombre.trim().slice(0, 12).toUpperCase().replace(/\s+/g, "-"),
+      const codigoNormalizado = (codigo.trim() || nombre.trim())
+        .slice(0, 24)
+        .toUpperCase()
+        .replace(/\s+/g, "-");
+      const resultado = await guardarCentroCostoPlanilla({
+        id: centro?.id,
+        periodo,
+        centro: {
+          codigo: codigoNormalizado,
           nombre: nombre.trim(),
-          descripcion: "",
+          descripcion: centro?.descripcion ?? "",
           tipoCentro,
-          activo: true,
-        } as CentroCostoPayload;
-        const creado = await createCentroCosto(payload);
-        centroId = creado.id;
-      } else {
-        await updateCentroCosto(centro.id, {
-          codigo: centro.codigo,
-          nombre: nombre.trim(),
-          descripcion: centro.descripcion,
-          tipoCentro,
-          activo: centro.activo,
-        } as CentroCostoPayload);
-      }
-
-      await replaceCentroCostoLineas(centroId, periodo, lineas.map(aPayload));
-      if (horas > 0) {
-        await upsertCentroCostoCapacidad(centroId, periodo, {
-          horasProductivas: horas,
-        });
-      }
-      // Deja el borrador al día con lo que se acaba de cargar, para que el
-      // listado y el motor no queden mirando un cálculo viejo. Recalcula y
-      // publica TODO el período: el reparto de la estructura ata los centros
-      // entre sí, así que tocar uno mueve la tarifa de los demás.
-      await calcularTarifaCentroCosto(centroId, periodo);
+          activo: centro?.activo ?? true,
+        } as CentroCostoPayload,
+        lineas: lineas.map(aPayload),
+        horasProductivas: tipoCentro === "productivo" ? horas : 0,
+        expectedUpdatedAt: centro?.updatedAt,
+      });
 
       setSucio(false);
-      toast.success(
-        esPeriodoEnCurso
-          ? `${esAlta ? "Centro creado" : "Centro guardado"}: las tarifas del período quedaron publicadas.`
-          : `${esAlta ? "Centro creado" : "Centro guardado"} en ${periodo}.`,
-      );
+      const accion = esAlta ? "Centro creado" : "Centro guardado";
+      if (resultado.publicacion.centrosPublicados > 0) {
+        toast.success(
+          `${accion}: se recalcularon ${resultado.publicacion.centrosPublicados} tarifa(s) productiva(s).`,
+        );
+      } else {
+        toast.warning(`${accion}, pero no hay tarifas válidas para publicar.`, {
+          description: resultado.advertencias.join(" ") || undefined,
+        });
+      }
       await onSaved();
       onOpenChange(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "No se pudo guardar el centro.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar el centro.",
       );
     } finally {
       setIsSaving(false);
@@ -488,7 +483,9 @@ export function CentroCostoFicha({
         </header>
 
         <div className="ccosto-filas">
-          <div className={`ccosto-fila ccosto-fila-head ccosto-fila-${seccion}`}>
+          <div
+            className={`ccosto-fila ccosto-fila-head ccosto-fila-${seccion}`}
+          >
             <span>Nombre</span>
             {seccion === "gasto_general" ? (
               <>
@@ -558,16 +555,19 @@ export function CentroCostoFicha({
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {categoriaComponenteCostoItems
-                        .filter(
-                          (item) =>
-                            item.value !== "sueldos" && item.value !== "cargas",
-                        )
-                        .map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {getCategoriaComponenteCostoLabel(item.value)}
-                          </SelectItem>
-                        ))}
+                      <SelectGroup>
+                        {categoriaComponenteCostoItems
+                          .filter(
+                            (item) =>
+                              item.value !== "sueldos" &&
+                              item.value !== "cargas",
+                          )
+                          .map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {getCategoriaComponenteCostoLabel(item.value)}
+                            </SelectItem>
+                          ))}
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                   <input
@@ -724,15 +724,23 @@ export function CentroCostoFicha({
         </div>
         <div>
           <span className="ccosto-lbl">Horas productivas</span>
-          <strong>{horas > 0 ? horas : "—"}</strong>
+          <strong>
+            {tipoCentro === "productivo" && horas > 0 ? horas : "—"}
+          </strong>
         </div>
         <div>
           <span className="ccosto-lbl">Gasto principal</span>
           <strong>{fmt(gastoPrincipal)}</strong>
         </div>
         <div>
-          <span className="ccosto-lbl">Total prorrateado</span>
-          <strong>{fmt(absorbido)}</strong>
+          <span className="ccosto-lbl">
+            {tipoCentro === "productivo"
+              ? "Estructura absorbida"
+              : "Estructura distribuida"}
+          </span>
+          <strong>
+            {fmt(tipoCentro === "productivo" ? absorbido : distribuido)}
+          </strong>
         </div>
         <div>
           <span className="ccosto-lbl">Gasto total</span>
@@ -741,7 +749,9 @@ export function CentroCostoFicha({
         <div>
           <span className="ccosto-lbl">Valor de la hora</span>
           <strong className="ccosto-destacado">
-            {valorHora == null ? "—" : fmt(valorHora)}
+            {tipoCentro !== "productivo" || valorHora == null
+              ? "—"
+              : fmt(valorHora)}
           </strong>
         </div>
       </div>
@@ -754,6 +764,17 @@ export function CentroCostoFicha({
         <h3>Introduzca el nombre y el tipo</h3>
       </header>
       <div className="ccosto-identidad">
+        <label>
+          <span>Código *</span>
+          <input
+            value={codigo}
+            onChange={(event) => {
+              setCodigo(event.target.value);
+              marcar();
+            }}
+            placeholder="ACABADO"
+          />
+        </label>
         <label>
           <span>Nombre *</span>
           <input
@@ -769,22 +790,24 @@ export function CentroCostoFicha({
           <span>Tipo *</span>
           {/* Son dos y se excluyen: mostrarlos como botones deja la decisión a
               la vista en vez de esconderla detrás de un desplegable. */}
-          <div className="ccosto-segmentado" role="group">
+          <ToggleGroup
+            className="ccosto-segmentado"
+            variant="outline"
+            spacing={1}
+            value={[tipoCentro]}
+            onValueChange={(values) => {
+              const siguiente = values[0] as TipoCentroCosto | undefined;
+              if (!siguiente) return;
+              setTipoCentro(siguiente);
+              marcar();
+            }}
+          >
             {tipoCentroItems.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                className={tipoCentro === item.value ? "activo" : ""}
-                aria-pressed={tipoCentro === item.value}
-                onClick={() => {
-                  setTipoCentro(item.value);
-                  marcar();
-                }}
-              >
+              <ToggleGroupItem key={item.value} value={item.value}>
                 {getTipoCentroLabel(item.value)}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
           <span className="ccosto-ayuda">
             {tipoCentro === "productivo"
               ? "Produce lo que se vende: tiene valor hora y absorbe parte de la estructura."
@@ -814,25 +837,26 @@ export function CentroCostoFicha({
           </SheetHeader>
 
           {!esAlta ? (
-            <nav className="ccosto-tabs">
-              {(
-                [
-                  ["datos", "Datos generales"],
-                  ["gastos", "Gastos"],
-                  ["ajustes", "Ajustes"],
-                  ["historial", "Historial"],
-                ] as [Tab, string][]
-              ).map(([valor, etiqueta]) => (
-                <button
-                  key={valor}
-                  type="button"
-                  className={`ccosto-tab ${tab === valor ? "activa" : ""}`}
-                  onClick={() => setTab(valor)}
-                >
-                  {etiqueta}
-                </button>
-              ))}
-            </nav>
+            <Tabs
+              className="ccosto-tabs"
+              value={tab}
+              onValueChange={(value) => setTab(value as Tab)}
+            >
+              <TabsList variant="line">
+                {(
+                  [
+                    ["datos", "Datos generales"],
+                    ["gastos", "Gastos"],
+                    ["ajustes", "Ajustes"],
+                    ["historial", "Historial"],
+                  ] as [Tab, string][]
+                ).map(([valor, etiqueta]) => (
+                  <TabsTrigger key={valor} value={valor}>
+                    {etiqueta}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           ) : null}
 
           <div className="ccosto-cuerpo">
@@ -883,41 +907,52 @@ export function CentroCostoFicha({
                         <input
                           type="month"
                           value={periodo}
-                          onChange={(event) =>
-                            setPeriodo(event.target.value || getCurrentPeriodo())
-                          }
+                          onChange={(event) => {
+                            const siguiente =
+                              event.target.value ||
+                              getPeriodoEnZona(zonaHoraria);
+                            if (sucio) {
+                              toast.info(
+                                "Guardá o descartá los cambios antes de cambiar de período.",
+                              );
+                              return;
+                            }
+                            setPeriodo(siguiente);
+                          }}
                         />
                       </label>
                       {centro?.id ? (
                         <label>
                           <span>Arrancar del período anterior</span>
-                          <button
+                          <Button
                             type="button"
-                            className="ccosto-agregar"
-                            style={{ alignSelf: "flex-start" }}
+                            variant="outline"
+                            size="sm"
                             disabled={copiando || isLoading}
                             onClick={() => void copiarDelAnterior()}
                             title={`Traer la planilla de ${periodoAnterior(periodo)} a este período`}
                           >
-                            <CopyIcon className="size-4" />
+                            <CopyIcon data-icon="inline-start" />
                             {copiando
                               ? "Copiando…"
                               : `Copiar de ${periodoAnterior(periodo)}`}
-                          </button>
+                          </Button>
                         </label>
                       ) : null}
-                      <label>
-                        <span>Horas productivas</span>
-                        <input
-                          inputMode="decimal"
-                          value={horasProductivas}
-                          placeholder="176"
-                          onChange={(event) => {
-                            setHorasProductivas(event.target.value);
-                            marcar();
-                          }}
-                        />
-                      </label>
+                      {tipoCentro === "productivo" ? (
+                        <label>
+                          <span>Horas productivas</span>
+                          <input
+                            inputMode="decimal"
+                            value={horasProductivas}
+                            placeholder="176"
+                            onChange={(event) => {
+                              setHorasProductivas(event.target.value);
+                              marcar();
+                            }}
+                          />
+                        </label>
+                      ) : null}
                     </div>
                   </section>
                 ) : null}
@@ -927,8 +962,9 @@ export function CentroCostoFicha({
                     <header className="ccosto-seccion-head">
                       <h3>Historial de tarifas</h3>
                       <p>
-                        Cada período queda congelado al publicarse: es lo que
-                        impide que una orden vieja cambie de costo.
+                        Se muestra el snapshot vigente de cada período y cuándo
+                        fue actualizado. Las órdenes conservan su propio
+                        snapshot.
                       </p>
                     </header>
                     {tarifas.length === 0 ? (
@@ -940,26 +976,42 @@ export function CentroCostoFicha({
                         <thead>
                           <tr>
                             <th>Período</th>
+                            <th>Revisión</th>
                             <th>Estado</th>
                             <th className="ccosto-num">Costo mensual</th>
                             <th className="ccosto-num">Horas</th>
                             <th className="ccosto-num">Valor hora</th>
+                            <th>Actualizada</th>
+                            <th>Publicada por</th>
                           </tr>
                         </thead>
                         <tbody>
                           {tarifas.map((tarifa) => (
                             <tr key={tarifa.id}>
                               <td>{tarifa.periodo}</td>
+                              <td>
+                                {tarifa.revision ? `v${tarifa.revision}` : "—"}
+                              </td>
                               <td>{tarifa.estado}</td>
                               <td className="ccosto-num">
                                 {fmt(tarifa.costoMensualTotal)}
                               </td>
                               <td className="ccosto-num">
-                                {tarifa.capacidadPractica}
+                                {tipoCentro === "productivo"
+                                  ? tarifa.capacidadPractica
+                                  : "—"}
                               </td>
                               <td className="ccosto-num">
-                                {fmt(tarifa.tarifaCalculada)}
+                                {tipoCentro === "productivo"
+                                  ? fmt(tarifa.tarifaCalculada)
+                                  : "—"}
                               </td>
+                              <td>
+                                {new Date(tarifa.updatedAt).toLocaleString(
+                                  "es-AR",
+                                )}
+                              </td>
+                              <td>{tarifa.publicadaPor ?? "—"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -972,7 +1024,7 @@ export function CentroCostoFicha({
           </div>
 
           <SheetFooter className="ccosto-acciones">
-            {!esAlta && tab === "historial" ? (
+            {!esAlta && tab === "historial" && tipoCentro === "productivo" ? (
               <Button variant="outline" onClick={publicar} disabled={isSaving}>
                 Publicar tarifa del período
               </Button>
@@ -1001,7 +1053,11 @@ export function CentroCostoFicha({
               }
             >
               {isSaving ? <GdiSpinner className="size-4" /> : null}
-              {esPeriodoEnCurso ? "Guardar y publicar" : "Guardar"}
+              {tipoCentro === "productivo" && esPeriodoEnCurso
+                ? "Guardar y publicar"
+                : tipoCentro === "no_productivo"
+                  ? "Guardar y recalcular"
+                  : "Guardar"}
             </Button>
           </SheetFooter>
         </SheetContent>

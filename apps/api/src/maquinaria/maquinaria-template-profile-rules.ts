@@ -136,11 +136,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // complejidad no es un "modo", la elige el comercial al cotizar (Fase 2).
   [PlantillaMaquinariaDto.plotter_de_corte]: buildRule({
     detalleKeys: ['tipoCorte', 'modoOperacion', 'factorComplejidad'],
-    requiredFieldKeys: [
-      'nombre',
-      'productivityValue',
-      'productivityUnit',
-    ],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
 
@@ -243,7 +239,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // un mismo perfil suele cubrir PLA y PETG al mismo caudal.
   [PlantillaMaquinariaDto.impresora_3d]: buildRule({
     detalleKeys: ['material', 'calidad', 'alturaCapaMm'],
-    requiredFieldKeys: ['nombre'],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
   }),
 };
@@ -262,11 +258,6 @@ function hasValue(value: unknown) {
   }
 
   return true;
-}
-
-function toFiniteNumber(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function getPerfilFieldValue(
@@ -339,4 +330,52 @@ export function validatePerfilOperativoByTemplate(
       );
     }
   }
+}
+
+export function getPerfilOperativoConfigurationIssues(
+  plantilla: PlantillaMaquinariaDto,
+  perfil: MaquinaPerfilOperativoItemDto,
+  parametrosTecnicos?: Record<string, unknown>,
+) {
+  const rule = RULES[plantilla];
+  if (!rule) return [{ tipo: 'plantilla' as const }];
+
+  const allowedProfileTypes = new Set(rule.allowedProfileTypes);
+  if (
+    plantilla === PlantillaMaquinariaDto.impresora_gran_formato_por_area &&
+    parametrosTecnicos?.soportaCorteIntegrado !== true
+  ) {
+    allowedProfileTypes.delete(TipoPerfilOperativoMaquinaDto.corte);
+  }
+
+  const issues: Array<
+    | { tipo: 'tipo_perfil' }
+    | { tipo: 'campo'; fieldKey: string }
+    | { tipo: 'modo' }
+    | { tipo: 'plantilla' }
+  > = [];
+  if (!allowedProfileTypes.has(perfil.tipoPerfil)) {
+    issues.push({ tipo: 'tipo_perfil' });
+  }
+
+  for (const requiredKey of rule.requiredProfileKeys) {
+    if (!hasValue(getPerfilFieldValue(perfil, requiredKey))) {
+      issues.push({ tipo: 'campo', fieldKey: requiredKey });
+    }
+  }
+
+  if (
+    rule.modeSourceKeys.size > 0 &&
+    !Array.from(rule.modeSourceKeys).some((key) =>
+      hasValue(getPerfilFieldValue(perfil, key)),
+    ) &&
+    !issues.some(
+      (issue) =>
+        issue.tipo === 'campo' && rule.modeSourceKeys.has(issue.fieldKey),
+    )
+  ) {
+    issues.push({ tipo: 'modo' });
+  }
+
+  return issues;
 }

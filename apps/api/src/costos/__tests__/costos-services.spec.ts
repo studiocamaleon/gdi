@@ -41,9 +41,7 @@ describe('Costos services', () => {
             nombre: 'Fuente productiva',
             tipoCentro: TipoCentroCosto.NO_PRODUCTIVO,
             lineas: [linea(1000)],
-            capacidadesPeriodo: [
-              { horasProductivas: new Prisma.Decimal(100) },
-            ],
+            capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(100) }],
           },
           {
             id: 'target',
@@ -51,9 +49,7 @@ describe('Costos services', () => {
             nombre: 'Destino productivo',
             tipoCentro: TipoCentroCosto.PRODUCTIVO,
             lineas: [linea(400)],
-            capacidadesPeriodo: [
-              { horasProductivas: new Prisma.Decimal(50) },
-            ],
+            capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(50) }],
           },
         ]),
       },
@@ -101,6 +97,7 @@ describe('Costos services', () => {
       codigo: 'IMP',
       nombre: 'Impresión',
       descripcion: null,
+      updatedAt: new Date('2026-04-15T00:00:00Z'),
       tipoCentro: TipoCentroCosto.PRODUCTIVO,
       activo: true,
       capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(160) }],
@@ -137,6 +134,21 @@ describe('Costos services', () => {
       ultimaTarifaTotal: 12,
       ultimaCapacidadPractica: 160,
     });
+  });
+
+  it('un centro de estructura no exige capacidad ni publica una tarifa propia', () => {
+    const { tarifas } = createTarifasService({});
+    const advertencias = tarifas.buildAdvertencias(
+      {
+        tipoCentro: TipoCentroCosto.NO_PRODUCTIVO,
+        lineas: [linea(100)],
+        capacidadesPeriodo: [],
+      } as any,
+      '2026-04',
+    );
+
+    expect(advertencias.join(' ')).not.toContain('horas');
+    expect(advertencias.join(' ')).not.toContain('capacidad');
   });
 
   it('tarifa publicada conserva total con reparto absorbido', async () => {
@@ -248,7 +260,7 @@ describe('Costos services', () => {
 
   it('las validaciones de la planilla atajan lo que el DTO no puede ver solo', () => {
     const validaciones = new CostosValidacionesService({} as any);
-    const fija = (extra: any) => ({
+    const fija = (extra: Record<string, unknown>) => ({
       seccion: SeccionCentroCostoLineaDto.activo_fijo,
       nombre: 'Guillotina',
       vidaUtilRestanteMeses: 12,

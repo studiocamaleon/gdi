@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { getCentrosCosto } from "@/lib/costos-api";
 import { CostosPanel } from "@/components/costos/costos-panel";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
+import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +16,12 @@ export default function CentrosDeCostoPage() {
 }
 
 async function CentrosDeCostoPageContent() {
-  const centros = await getCentrosCosto();
+  const [centros, puedeGestionar] = await Promise.all([
+    getCentrosCosto(),
+    tienePermiso("costos.gestionar"),
+  ]);
 
   return (
-    <CostosPanel
-      initialCentros={centros}
-    />
+    <CostosPanel initialCentros={centros} puedeGestionar={puedeGestionar} />
   );
 }

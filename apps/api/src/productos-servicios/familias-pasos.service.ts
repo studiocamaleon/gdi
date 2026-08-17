@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { TipoCentroCosto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 import { CATEGORIAS } from './pasos/categorias';
 import {
   FAMILIAS,
@@ -83,7 +84,7 @@ export class FamiliasPasosService {
   async listarLookupsConfigPaso(tenantId: string) {
     const [maquinas, centrosCosto] = await Promise.all([
       this.prisma.maquina.findMany({
-        where: { tenantId, activo: true },
+        where: { tenantId, ...MAQUINA_DISPONIBLE_WHERE },
         select: {
           id: true,
           codigo: true,

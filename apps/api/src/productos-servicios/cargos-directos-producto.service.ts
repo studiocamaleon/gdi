@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 import type {
   ActualizarPasoExtraDto,
   AgregarPasoExtraDto,
@@ -398,7 +399,7 @@ export class CargosDirectosProductoService {
     perfilId?: string | null,
   ) {
     const maquina = await this.prisma.maquina.findFirst({
-      where: { id: maquinaId, tenantId, activo: true },
+      where: { id: maquinaId, tenantId, ...MAQUINA_DISPONIBLE_WHERE },
       include: {
         perfilesOperativos: { where: { activo: true }, select: { id: true } },
       },

@@ -1,137 +1,210 @@
 "use client";
 
-/**
- * Panel de gestión de máquinas — la lista, estilo Holdprint (2026-07-28).
- *
- * Acá vive sólo la tabla con sus filtros y las acciones rápidas. Editar
- * navega a la ficha por máquina (/costos/maquinaria/[id]) y el alta es un
- * diálogo chico (nombre + tipo) que crea y te manda a la ficha; el editor
- * completo vive en ./maquina-editor/.
- */
-
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CheckCircle2Icon,
-  CircleIcon,
   FilterIcon,
   PlusIcon,
+  PowerIcon,
+  RotateCcwIcon,
   SearchIcon,
-  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { MaquinaAltaDialog } from "./maquina-editor/maquina-alta-dialog";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { toggleMaquina } from "@/lib/maquinaria-api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { Planta } from "@/lib/costos";
 import {
+  estadoConfiguracionMaquinaItems,
+  estadoMaquinaItems,
+  getEstadoConfiguracionMaquinaLabel,
   getEstadoMaquinaLabel,
-  type Maquina,
+  type EstadoConfiguracionMaquina,
+  type EstadoMaquina,
+  type MaquinaResumen,
+  type MaquinasPage,
   type PlantillaMaquinaria,
 } from "@/lib/maquinaria";
+import { setMaquinaActiva } from "@/lib/maquinaria-api";
 import {
   getPlantillaMaquinariaLabel,
   maquinariaTemplates,
 } from "@/lib/maquinaria-templates";
-
+import { cn } from "@/lib/utils";
 import {
   getMachineTechColor,
   getMachineTechnologyLabel,
+  SelectDisplay,
 } from "./maquina-editor/helpers";
-import { MaquinaAltaDialog } from "./maquina-editor/maquina-alta-dialog";
 
-// ─── Props ──────────────────────────────────────────────────────────
+type MaquinariaFilters = {
+  search?: string;
+  plantilla?: PlantillaMaquinaria;
+  estado?: EstadoMaquina;
+  estadoConfiguracion?: EstadoConfiguracionMaquina;
+};
 
 type MaquinariaPanelProps = {
-  initialMaquinas: Maquina[];
+  initialPage: MaquinasPage;
   plantas: Planta[];
+  puedeGestionar: boolean;
+  initialFilters: MaquinariaFilters;
   initialCreate?: boolean;
 };
 
-// ─── Componente principal ──────────────────────────────────────────
+const ALL = "all";
 
 export function MaquinariaPanel({
-  initialMaquinas,
+  initialPage,
   plantas,
+  puedeGestionar,
+  initialFilters,
   initialCreate = false,
 }: MaquinariaPanelProps) {
   const router = useRouter();
-  const [maquinas, setMaquinas] = React.useState(initialMaquinas);
-  const [altaAbierta, setAltaAbierta] = React.useState(false);
-  const [filterText, setFilterText] = React.useState("");
-  const [filterPlantilla, setFilterPlantilla] = React.useState<PlantillaMaquinaria | "all">("all");
-  const [filterEstado, setFilterEstado] = React.useState<"todas" | "activas" | "inactivas">("todas");
-  const [filtroAbierto, setFiltroAbierto] = React.useState(false);
-  const [maquinaADesactivar, setMaquinaADesactivar] = React.useState<Maquina | null>(null);
+  const [maquinas, setMaquinas] = React.useState(initialPage.data);
+  const [altaAbierta, setAltaAbierta] = React.useState(initialCreate);
+  const [filterText, setFilterText] = React.useState(
+    initialFilters.search ?? "",
+  );
+  const [filterPlantilla, setFilterPlantilla] = React.useState<
+    PlantillaMaquinaria | typeof ALL
+  >(initialFilters.plantilla ?? ALL);
+  const [filterEstado, setFilterEstado] = React.useState<
+    EstadoMaquina | typeof ALL
+  >(initialFilters.estado ?? ALL);
+  const [filterConfiguracion, setFilterConfiguracion] = React.useState<
+    EstadoConfiguracionMaquina | typeof ALL
+  >(initialFilters.estadoConfiguracion ?? ALL);
+  const [filtroAbierto, setFiltroAbierto] = React.useState(
+    Boolean(
+      initialFilters.plantilla ||
+      initialFilters.estado ||
+      initialFilters.estadoConfiguracion,
+    ),
+  );
+  const [maquinaADesactivar, setMaquinaADesactivar] =
+    React.useState<MaquinaResumen | null>(null);
+  const [cambiandoId, setCambiandoId] = React.useState<string | null>(null);
+  const firstSearchRender = React.useRef(true);
+
+  React.useEffect(() => setMaquinas(initialPage.data), [initialPage.data]);
+
+  const navegarConFiltros = React.useCallback(
+    (next: MaquinariaFilters, page = 1) => {
+      const params = new URLSearchParams();
+      if (next.search?.trim()) params.set("search", next.search.trim());
+      if (next.plantilla) params.set("plantilla", next.plantilla);
+      if (next.estado) params.set("estado", next.estado);
+      if (next.estadoConfiguracion)
+        params.set("config", next.estadoConfiguracion);
+      if (page > 1) params.set("page", String(page));
+      const query = params.toString();
+      router.replace(`/costos/maquinaria${query ? `?${query}` : ""}`);
+    },
+    [router],
+  );
+
+  const filtrosActuales = React.useCallback(
+    (search = filterText): MaquinariaFilters => ({
+      search: search.trim() || undefined,
+      plantilla: filterPlantilla === ALL ? undefined : filterPlantilla,
+      estado: filterEstado === ALL ? undefined : filterEstado,
+      estadoConfiguracion:
+        filterConfiguracion === ALL ? undefined : filterConfiguracion,
+    }),
+    [filterConfiguracion, filterEstado, filterPlantilla, filterText],
+  );
 
   React.useEffect(() => {
-    setMaquinas(initialMaquinas);
-  }, [initialMaquinas]);
-
-  // Filtros aplicados. La tabla lista alfabético (como Holdprint): el
-  // agrupado por plantilla que tenían las cards ahora es la columna Tipo.
-  const filteredMaquinas = React.useMemo(() => {
-    let result = maquinas;
-    if (filterText) {
-      const q = filterText.toLowerCase();
-      result = result.filter(
-        (m) =>
-          m.nombre.toLowerCase().includes(q),
-      );
+    if (firstSearchRender.current) {
+      firstSearchRender.current = false;
+      return;
     }
-    if (filterPlantilla !== "all") {
-      result = result.filter((m) => m.plantilla === filterPlantilla);
-    }
-    if (filterEstado !== "todas") {
-      result = result.filter((m) =>
-        filterEstado === "activas" ? m.activo : !m.activo,
-      );
-    }
-    return [...result].sort((a, b) =>
-      a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
+    const timeout = window.setTimeout(
+      () => navegarConFiltros(filtrosActuales(filterText)),
+      350,
     );
-  }, [maquinas, filterText, filterPlantilla, filterEstado]);
+    return () => window.clearTimeout(timeout);
+  }, [filterText, filtrosActuales, navegarConFiltros]);
 
-  const updateMaquinariaUrl = React.useCallback((path: string) => {
-    window.history.pushState(null, "", path);
-  }, []);
-
-  React.useEffect(() => {
-    if (initialCreate) {
-      setAltaAbierta(true);
-    }
-  }, [initialCreate]);
-
-  // Fase D: el alta es un diálogo chico (nombre + tipo); el resto se
-  // completa en la ficha.
-  const handleNueva = () => {
-    setAltaAbierta(true);
-    updateMaquinariaUrl("/costos/maquinaria/nueva");
+  const abrirAlta = () => {
+    if (puedeGestionar) setAltaAbierta(true);
   };
 
   const cerrarAlta = () => {
     setAltaAbierta(false);
-    updateMaquinariaUrl("/costos/maquinaria");
+    if (initialCreate) navegarConFiltros(filtrosActuales());
   };
 
-  // Fase C: editar es una página, no el sheet.
-  const handleEditar = (maquina: Maquina) => {
-    router.push(`/costos/maquinaria/${maquina.id}`);
-  };
-
-  const handleToggle = async (maquina: Maquina) => {
+  const cambiarActivo = async (maquina: MaquinaResumen, activo: boolean) => {
+    setCambiandoId(maquina.id);
     try {
-      const updated = await toggleMaquina(maquina.id);
-      setMaquinas((prev) => prev.map((m) => (m.id === maquina.id ? updated : m)));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
+      const updated = await setMaquinaActiva(maquina.id, activo);
+      setMaquinas((current) =>
+        current.map((item) =>
+          item.id === maquina.id
+            ? {
+                ...item,
+                activo: updated.activo,
+                estado: updated.estado,
+                estadoConfiguracion: updated.estadoConfiguracion,
+                updatedAt: updated.updatedAt,
+              }
+            : item,
+        ),
+      );
+      toast.success(
+        activo
+          ? `"${updated.nombre}" activada`
+          : `"${updated.nombre}" desactivada`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cambiar la máquina",
+      );
+    } finally {
+      setCambiandoId(null);
     }
   };
 
-  const handleDesactivar = (maquina: Maquina) => {
-    setMaquinaADesactivar(maquina);
+  const limpiarFiltros = () => {
+    setFilterPlantilla(ALL);
+    setFilterEstado(ALL);
+    setFilterConfiguracion(ALL);
+    setFilterText("");
+    setFiltroAbierto(false);
+    navegarConFiltros({});
   };
+
+  const sinResultadosPorFiltros = Boolean(
+    filterText.trim() ||
+    filterPlantilla !== ALL ||
+    filterEstado !== ALL ||
+    filterConfiguracion !== ALL,
+  );
 
   return (
     <div className="content">
@@ -147,211 +220,362 @@ export function MaquinariaPanel({
       <div className="maq-toolbar">
         <div className="maq-buscador">
           <SearchIcon />
-          <input
+          <Input
             type="search"
-            placeholder="Búsqueda"
+            placeholder="Buscar por nombre, código, fabricante, modelo o ubicación"
             value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
+            onChange={(event) => setFilterText(event.target.value)}
             aria-label="Buscar máquina"
           />
         </div>
         <div className="maq-acciones">
-          <button
+          <Button
             type="button"
-            className={`maq-btn ${filtroAbierto ? "activo" : ""}`}
-            onClick={() => setFiltroAbierto((v) => !v)}
+            variant="outline"
+            aria-expanded={filtroAbierto}
+            onClick={() => setFiltroAbierto((current) => !current)}
           >
-            <FilterIcon />
+            <FilterIcon data-icon="inline-start" />
             Filtrar
-          </button>
-          <button
-            type="button"
-            className="maq-btn maq-btn-primario"
-            onClick={handleNueva}
-          >
-            <PlusIcon />
-            Nueva máquina
-          </button>
+          </Button>
+          {puedeGestionar ? (
+            <Button type="button" onClick={abrirAlta}>
+              <PlusIcon data-icon="inline-start" />
+              Nueva máquina
+            </Button>
+          ) : null}
         </div>
       </div>
 
       {filtroAbierto ? (
         <div className="maq-filtros">
           <div className="maq-filtros-grupo">
-            <label className="maq-chip">
-              <span>Tipo</span>
-              <select
-                value={filterPlantilla}
-                onChange={(event) =>
-                  setFilterPlantilla(event.target.value as PlantillaMaquinaria | "all")
-                }
-              >
-                <option value="all">Todos</option>
-                {maquinariaTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="maq-chip">
-              <span>Estado</span>
-              <select
-                value={filterEstado}
-                onChange={(e) =>
-                  setFilterEstado(e.target.value as "todas" | "activas" | "inactivas")
-                }
-              >
-                <option value="todas">Todas</option>
-                <option value="activas">Activas</option>
-                <option value="inactivas">Inactivas</option>
-              </select>
-            </label>
+            <Select
+              value={filterPlantilla}
+              onValueChange={(value) => {
+                const plantilla = (value ?? ALL) as
+                  PlantillaMaquinaria | typeof ALL;
+                setFilterPlantilla(plantilla);
+                navegarConFiltros({
+                  ...filtrosActuales(),
+                  plantilla: plantilla === ALL ? undefined : plantilla,
+                });
+              }}
+            >
+              <SelectTrigger aria-label="Tipo de máquina">
+                <SelectDisplay
+                  label={
+                    filterPlantilla === ALL
+                      ? "Todos los tipos"
+                      : getPlantillaMaquinariaLabel(filterPlantilla)
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value={ALL}>Todos los tipos</SelectItem>
+                  {maquinariaTemplates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filterEstado}
+              onValueChange={(value) => {
+                const estado = (value ?? ALL) as EstadoMaquina | typeof ALL;
+                setFilterEstado(estado);
+                navegarConFiltros({
+                  ...filtrosActuales(),
+                  estado: estado === ALL ? undefined : estado,
+                });
+              }}
+            >
+              <SelectTrigger aria-label="Estado operativo">
+                <SelectDisplay
+                  label={
+                    filterEstado === ALL
+                      ? "Todos los estados"
+                      : getEstadoMaquinaLabel(filterEstado)
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value={ALL}>Todos los estados</SelectItem>
+                  {estadoMaquinaItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filterConfiguracion}
+              onValueChange={(value) => {
+                const config = (value ?? ALL) as
+                  EstadoConfiguracionMaquina | typeof ALL;
+                setFilterConfiguracion(config);
+                navegarConFiltros({
+                  ...filtrosActuales(),
+                  estadoConfiguracion: config === ALL ? undefined : config,
+                });
+              }}
+            >
+              <SelectTrigger aria-label="Estado de configuración">
+                <SelectDisplay
+                  label={
+                    filterConfiguracion === ALL
+                      ? "Cualquier configuración"
+                      : getEstadoConfiguracionMaquinaLabel(filterConfiguracion)
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value={ALL}>Cualquier configuración</SelectItem>
+                  {estadoConfiguracionMaquinaItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
-          <button
+          <Button
             type="button"
-            className="maq-cerrar-filtros"
+            variant="ghost"
+            size="icon-sm"
             aria-label="Quitar filtros"
-            onClick={() => {
-              setFilterPlantilla("all");
-              setFilterEstado("todas");
-              setFiltroAbierto(false);
-            }}
+            onClick={limpiarFiltros}
           >
             <XIcon />
-          </button>
+          </Button>
         </div>
       ) : null}
 
-      <div className="card tbl-scroll">
-        <table className="tbl maq-tabla">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Tipo</th>
-              <th>Planta</th>
-              <th>Centro de costos</th>
-              <th>Estado</th>
-              <th className="right">Perfiles</th>
-              <th className="right sticky-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredMaquinas.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="maq-vacio">
-                  <div>No hay máquinas registradas</div>
-                  <button type="button" onClick={handleNueva}>
-                    Haga clic aquí
-                  </button>{" "}
-                  para añadir
-                </td>
-              </tr>
+      <div className="card">
+        <Table className="maq-tabla">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Planta</TableHead>
+              <TableHead>Centro de costos</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Configuración</TableHead>
+              <TableHead className="text-right">Perfiles</TableHead>
+              <TableHead className="sticky-right text-right">
+                Acciones
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {maquinas.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="maq-vacio">
+                  <div>
+                    {sinResultadosPorFiltros
+                      ? "Ninguna máquina coincide con los filtros."
+                      : "Todavía no hay máquinas registradas."}
+                  </div>
+                  {sinResultadosPorFiltros ? (
+                    <Button variant="link" onClick={limpiarFiltros}>
+                      Quitar filtros
+                    </Button>
+                  ) : puedeGestionar ? (
+                    <Button variant="link" onClick={abrirAlta}>
+                      Crear la primera máquina
+                    </Button>
+                  ) : null}
+                </TableCell>
+              </TableRow>
             ) : null}
-            {filteredMaquinas.map((m) => {
-              return (
-                <tr
-                  key={m.id}
-                  className={m.activo ? "" : "maq-inactiva"}
-                  onClick={() => handleEditar(m)}
+            {maquinas.map((maquina) => (
+              <TableRow
+                key={maquina.id}
+                className={cn(!maquina.activo && "maq-inactiva")}
+              >
+                <TableCell>
+                  <Link
+                    href={`/costos/maquinaria/${maquina.id}`}
+                    className="name hover:underline"
+                  >
+                    {maquina.nombre}
+                  </Link>
+                  {maquina.fabricante || maquina.modelo ? (
+                    <div className="text-xs text-muted-foreground">
+                      {[maquina.fabricante, maquina.modelo]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  ) : null}
+                </TableCell>
+                <TableCell
+                  className="maq-tipo"
+                  title={getMachineTechnologyLabel(maquina)}
                 >
-                  <td>
-                    <div className="name">{m.nombre}</div>
-                  </td>
-                  <td className="maq-tipo" title={getMachineTechnologyLabel(m)}>
-                    <span
-                      className="maq-punto"
-                      style={{ background: getMachineTechColor(m) }}
-                    />
-                    {getPlantillaMaquinariaLabel(m.plantilla)}
-                  </td>
-                  <td>{m.plantaNombre || "—"}</td>
-                  <td>{m.centroCostoPrincipalNombre || "—"}</td>
-                  <td>
-                    <span
-                      className={m.estado === "activa" ? "tag ok" : "tag muted"}
-                      title={`código: ${m.estado}`}
+                  <span
+                    className="maq-punto"
+                    style={{ background: getMachineTechColor(maquina) }}
+                  />
+                  {getPlantillaMaquinariaLabel(maquina.plantilla)}
+                </TableCell>
+                <TableCell>{maquina.plantaNombre || "—"}</TableCell>
+                <TableCell>
+                  {maquina.centroCostoPrincipalNombre || "—"}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={
+                      maquina.estado === "activa" ? "secondary" : "outline"
+                    }
+                  >
+                    {getEstadoMaquinaLabel(maquina.estado)}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div
+                    className="flex flex-col items-start gap-1"
+                    title={maquina.diagnosticoConfiguracion.faltantes
+                      .map((faltante) => faltante.mensaje)
+                      .join("\n")}
+                  >
+                    <Badge
+                      variant={
+                        maquina.estadoConfiguracion === "lista"
+                          ? "secondary"
+                          : "destructive"
+                      }
                     >
-                      <span className="d" />
-                      {getEstadoMaquinaLabel(m.estado)}
-                    </span>
-                  </td>
-                  <td className="right numeric">{m.perfilesOperativos.length}</td>
-                  <td className="right sticky-right">
-                    <span
-                      className="centros-actions"
-                      onClick={(event) => event.stopPropagation()}
+                      {getEstadoConfiguracionMaquinaLabel(
+                        maquina.estadoConfiguracion,
+                      )}
+                    </Badge>
+                    {maquina.diagnosticoConfiguracion.faltantes.length > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {maquina.diagnosticoConfiguracion.faltantes.length}{" "}
+                        {maquina.diagnosticoConfiguracion.faltantes.length === 1
+                          ? "pendiente"
+                          : "pendientes"}
+                      </span>
+                    ) : null}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right numeric">
+                  {maquina.perfilesCount}
+                </TableCell>
+                <TableCell className="sticky-right text-right">
+                  <div className="centros-actions justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      render={
+                        <Link href={`/costos/maquinaria/${maquina.id}`} />
+                      }
+                      nativeButton={false}
                     >
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => handleEditar(m)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title={m.activo ? "Desactivar rápido" : "Activar rápido"}
-                        aria-label={
-                          m.activo
-                            ? `Desactivar ${m.nombre}`
-                            : `Activar ${m.nombre}`
-                        }
-                        onClick={() => handleToggle(m)}
-                      >
-                        {m.activo ? (
-                          <CheckCircle2Icon size={14} />
-                        ) : (
-                          <CircleIcon size={14} />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Desactivar"
-                        aria-label={`Desactivar ${m.nombre}`}
-                        onClick={() => handleDesactivar(m)}
-                      >
-                        <Trash2Icon size={14} />
-                      </button>
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      {puedeGestionar ? "Editar" : "Ver"}
+                    </Button>
+                    {puedeGestionar ? (
+                      maquina.activo ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Desactivar ${maquina.nombre}`}
+                          title="Desactivar"
+                          disabled={cambiandoId === maquina.id}
+                          onClick={() => setMaquinaADesactivar(maquina)}
+                        >
+                          <PowerIcon />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Activar ${maquina.nombre}`}
+                          title={
+                            maquina.estadoConfiguracion === "lista"
+                              ? "Activar"
+                              : (maquina.diagnosticoConfiguracion.faltantes[0]
+                                  ?.mensaje ??
+                                "Completá la configuración antes de activar")
+                          }
+                          disabled={
+                            cambiandoId === maquina.id ||
+                            maquina.estadoConfiguracion !== "lista"
+                          }
+                          onClick={() => void cambiarActivo(maquina, true)}
+                        >
+                          <RotateCcwIcon />
+                        </Button>
+                      )
+                    ) : null}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
+
+      {initialPage.pages > 1 ? (
+        <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+          <span>
+            {initialPage.total} máquinas · página {initialPage.page} de{" "}
+            {initialPage.pages}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={initialPage.page <= 1}
+              onClick={() =>
+                navegarConFiltros(filtrosActuales(), initialPage.page - 1)
+              }
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={initialPage.page >= initialPage.pages}
+              onClick={() =>
+                navegarConFiltros(filtrosActuales(), initialPage.page + 1)
+              }
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <MaquinaAltaDialog
         open={altaAbierta}
         onClose={cerrarAlta}
         plantas={plantas}
       />
-
       <ConfirmacionDestructiva
         open={maquinaADesactivar !== null}
         onOpenChange={(open) => {
           if (!open) setMaquinaADesactivar(null);
         }}
         titulo="Desactivar máquina"
-        descripcion={`¿Desactivar "${maquinaADesactivar?.nombre ?? ""}"? (no se elimina, queda inactiva)`}
+        descripcion={`¿Desactivar "${maquinaADesactivar?.nombre ?? ""}"? Dejará de estar disponible para productos y producción.`}
         nombreItem={maquinaADesactivar?.nombre}
         requiereTipear={false}
         accionLabel="Desactivar"
         onConfirmar={async () => {
-          if (!maquinaADesactivar) return;
-          try {
-            const updated = await toggleMaquina(maquinaADesactivar.id);
-            setMaquinas((prev) =>
-              prev.map((m) => (m.id === maquinaADesactivar.id ? updated : m)),
-            );
-            toast.success("Máquina desactivada");
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Error");
-          }
+          const maquina = maquinaADesactivar;
+          if (!maquina) return;
           setMaquinaADesactivar(null);
+          await cambiarActivo(maquina, false);
         }}
       />
     </div>

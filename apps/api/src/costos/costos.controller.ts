@@ -9,9 +9,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
-import { Roles } from '../auth/roles.decorator';
 import { CostosService } from './costos.service';
 import { UpsertCentroCostoDto } from './dto/upsert-centro-costo.dto';
 import { UpsertPlantaDto } from './dto/upsert-planta.dto';
@@ -20,10 +18,10 @@ import { UpsertCentroConfiguracionBaseDto } from './dto/upsert-centro-configurac
 import { ReplaceCentroLineasDto } from './dto/replace-centro-lineas.dto';
 import { UpsertCentroCapacidadDto } from './dto/upsert-centro-capacidad.dto';
 import { Permiso } from '../auth/permiso.decorator';
+import { GuardarCentroPlanillaDto } from './dto/guardar-centro-planilla.dto';
 
 @Permiso('costos.ver')
 @Controller('costos')
-@Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
 export class CostosController {
   constructor(private readonly costosService: CostosService) {}
 
@@ -57,13 +55,18 @@ export class CostosController {
     return this.costosService.togglePlanta(auth, id);
   }
 
-
-
-
-
   @Get('centros-costo')
   findCentros(@CurrentSession() auth: CurrentAuth) {
     return this.costosService.findCentros(auth);
+  }
+
+  @Permiso('costos.gestionar')
+  @Post('centros-costo/planilla')
+  guardarCentroPlanilla(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: GuardarCentroPlanillaDto,
+  ) {
+    return this.costosService.guardarCentroPlanilla(auth, payload);
   }
 
   @Permiso('costos.gestionar')
@@ -87,8 +90,12 @@ export class CostosController {
 
   @Permiso('costos.gestionar')
   @Patch('centros-costo/:id/toggle')
-  toggleCentro(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
-    return this.costosService.toggleCentro(auth, id);
+  toggleCentro(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Query('periodo') periodo: string,
+  ) {
+    return this.costosService.toggleCentro(auth, id, periodo);
   }
 
   @Permiso('costos.gestionar')
@@ -115,9 +122,6 @@ export class CostosController {
   ) {
     return this.costosService.updateCentroConfiguracionBase(auth, id, payload);
   }
-
-
-
 
   @Get('centros-costo/resumen')
   getResumenCentros(
@@ -148,8 +152,6 @@ export class CostosController {
   ) {
     return this.costosService.upsertCentroCapacidad(auth, id, periodo, payload);
   }
-
-
 
   @Permiso('costos.gestionar')
   @Post('centros-costo/:id/calcular-tarifa')

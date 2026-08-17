@@ -15,6 +15,7 @@ import {
   type MaquinariaTemplateField,
 } from "@/lib/maquinaria";
 import type { MateriaPrima } from "@/lib/materias-primas";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 
 import { PerfilTintasModal } from "./consumibles-editor";
 import {
@@ -63,15 +64,19 @@ export function PerfilesOperativosEditor({
   onDuplicar,
 }: PerfilesProps) {
   const [tintasDeUiKey, setTintasDeUiKey] = React.useState<string | null>(null);
+  const [perfilAEliminar, setPerfilAEliminar] =
+    React.useState<LocalPerfil | null>(null);
 
-  const allowedProfileTypeItems = tipoPerfilOperativoMaquinaItems.filter((item) =>
-    getAllowedProfileTypes(form).includes(item.value),
+  const allowedProfileTypeItems = tipoPerfilOperativoMaquinaItems.filter(
+    (item) => getAllowedProfileTypes(form).includes(item.value),
   );
   // La columna Tipo sólo aparece si hay algo que elegir.
   const conColumnaTipo = allowedProfileTypeItems.length > 1;
   // Tintas por perfil en todas las impresoras de la familia, láser incluida:
   // el consumo de tóner cambia con el papel, igual que la productividad.
-  const conColumnaTinta = PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(form.plantilla);
+  const conColumnaTinta = PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(
+    form.plantilla,
+  );
   // Plancha térmica: la productividad se DERIVA del ciclo, se muestra en vivo.
   const conColumnaProductividad = form.plantilla === "plancha_termica";
 
@@ -115,13 +120,19 @@ export function PerfilesOperativosEditor({
                   >
                     {field.label}
                     {field.unit ? (
-                      <span className="unidad"> ({getTemplateUnitLabel(field.unit)})</span>
+                      <span className="unidad">
+                        {" "}
+                        ({getTemplateUnitLabel(field.unit)})
+                      </span>
                     ) : null}
                     {field.required ? <span className="req"> *</span> : null}
                   </th>
                 ))}
                 {conColumnaProductividad ? (
-                  <th className="num" title="Se calcula desde los segundos del ciclo (pre + planchado + post).">
+                  <th
+                    className="num"
+                    title="Se calcula desde los segundos del ciclo (pre + planchado + post)."
+                  >
                     Productividad<span className="unidad"> (piezas/h)</span>
                   </th>
                 ) : null}
@@ -165,7 +176,10 @@ export function PerfilesOperativosEditor({
                       const esNum = field.kind === "number";
                       if (!shouldShowPerfilField(field, form, perfil)) {
                         return (
-                          <td key={field.key} className={esNum ? "na num" : "na"}>
+                          <td
+                            key={field.key}
+                            className={esNum ? "na num" : "na"}
+                          >
                             —
                           </td>
                         );
@@ -182,7 +196,10 @@ export function PerfilesOperativosEditor({
                         valor,
                       );
                       return (
-                        <td key={field.key} className={esNum ? "num" : undefined}>
+                        <td
+                          key={field.key}
+                          className={esNum ? "num" : undefined}
+                        >
                           <FieldInput
                             field={cellField}
                             value={valor}
@@ -202,20 +219,20 @@ export function PerfilesOperativosEditor({
                         </td>
                       );
                     })}
-                    {conColumnaProductividad ? (
-                      (() => {
-                        const prod = productividadPlanchaEnVivo(perfil);
-                        return (
-                          <td className="num">
-                            {prod === null ? (
-                              <span className="na">—</span>
-                            ) : (
-                              <strong>{Math.round(prod)}</strong>
-                            )}
-                          </td>
-                        );
-                      })()
-                    ) : null}
+                    {conColumnaProductividad
+                      ? (() => {
+                          const prod = productividadPlanchaEnVivo(perfil);
+                          return (
+                            <td className="num">
+                              {prod === null ? (
+                                <span className="na">—</span>
+                              ) : (
+                                <strong>{Math.round(prod)}</strong>
+                              )}
+                            </td>
+                          );
+                        })()
+                      : null}
                     {conColumnaTinta ? (
                       <td className="tinta">
                         {perfil.tipoPerfil === "corte" ? (
@@ -255,7 +272,7 @@ export function PerfilesOperativosEditor({
                           className="del"
                           title="Eliminar perfil"
                           aria-label={`Eliminar perfil ${perfil.nombre || idx + 1}`}
-                          onClick={() => onEliminar(perfil.uiKey)}
+                          onClick={() => setPerfilAEliminar(perfil)}
                         >
                           <XIcon />
                         </button>
@@ -269,7 +286,11 @@ export function PerfilesOperativosEditor({
         </div>
       )}
 
-      <button type="button" className="maq-btn maq-perfiles-agregar" onClick={onAgregar}>
+      <button
+        type="button"
+        className="maq-btn maq-perfiles-agregar"
+        onClick={onAgregar}
+      >
         <PlusIcon />
         Agregar perfil
       </button>
@@ -284,6 +305,23 @@ export function PerfilesOperativosEditor({
           onClose={() => setTintasDeUiKey(null)}
         />
       ) : null}
+
+      <ConfirmacionDestructiva
+        open={perfilAEliminar !== null}
+        onOpenChange={(open) => {
+          if (!open) setPerfilAEliminar(null);
+        }}
+        titulo="Eliminar perfil operativo"
+        descripcion={`¿Eliminar "${perfilAEliminar?.nombre || "este perfil"}"? También se quitarán sus consumibles vinculados al guardar.`}
+        nombreItem={perfilAEliminar?.nombre}
+        requiereTipear={false}
+        accionLabel="Eliminar perfil"
+        onConfirmar={() => {
+          if (!perfilAEliminar) return;
+          onEliminar(perfilAEliminar.uiKey);
+          setPerfilAEliminar(null);
+        }}
+      />
     </div>
   );
 }

@@ -235,6 +235,7 @@ enum TipoComponenteDesgasteMaquina {
 
 enum UnidadDesgasteMaquina {
   COPIAS_A4_EQUIV
+  ML_TINTA
   M2
   METROS_LINEALES
   HORAS
@@ -595,10 +596,12 @@ model Tenant {
   gastosFijosEstructura                            GastoFijoEstructura[]
   centroCostoCapacidadesPeriodo                    CentroCostoCapacidadPeriodo[]
   centroCostoTarifasPeriodo                        CentroCostoTarifaPeriodo[]
+  centroCostoTarifaRevisiones                      CentroCostoTarifaRevision[]
   maquinas                                         Maquina[]
   maquinaPerfilesOperativos                        MaquinaPerfilOperativo[]
   maquinaConsumibles                               MaquinaConsumible[]
   maquinaComponentesDesgaste                       MaquinaComponenteDesgaste[]
+  maquinaHistorial                                 MaquinaHistorial[]
   materiasPrimas                                   MateriaPrima[]
   materiaPrimaVariantes                            MateriaPrimaVariante[]
   almacenesMateriaPrima                            AlmacenMateriaPrima[]
@@ -1285,6 +1288,7 @@ model CentroCosto {
   lineas              CentroCostoLinea[]
   capacidadesPeriodo  CentroCostoCapacidadPeriodo[]
   tarifasPeriodo      CentroCostoTarifaPeriodo[]
+  tarifaRevisiones    CentroCostoTarifaRevision[]
   maquinasPrincipales Maquina[]                     @relation("MaquinaCentroCostoPrincipal")
   productoConfigPasos ProductoConfigPaso[]          @relation("ProductoConfigPasoCentroCostoManual")
   productoPasosExtras ProductoPasoExtra[]           @relation("ProductoPasoExtraCentroCostoManual")
@@ -1396,6 +1400,30 @@ model CentroCostoTarifaPeriodo {
   @@index([tenantId, centroCostoId, periodo])
 }
 
+/// Registro inmutable de cada publicación. La fila PUBLICADA representa la
+/// tarifa vigente para lectura rápida; esta tabla conserva quién publicó qué.
+model CentroCostoTarifaRevision {
+  id                   String      @id @default(uuid()) @db.Uuid
+  tenantId             String      @db.Uuid
+  centroCostoId        String      @db.Uuid
+  periodo              String
+  revision             Int
+  costoMensualTotal    Decimal     @db.Decimal(12, 2)
+  capacidadPractica    Decimal     @db.Decimal(12, 2)
+  tarifaCalculada      Decimal     @db.Decimal(12, 2)
+  costoMensualManoObra Decimal     @default(0) @db.Decimal(12, 2)
+  tarifaManoObra       Decimal     @default(0) @db.Decimal(12, 2)
+  resumenJson          Json
+  publicadaPorUserId   String?     @db.Uuid
+  publicadaPor         String?
+  publicadaEl          DateTime    @default(now())
+  tenant               Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto          CentroCosto @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, centroCostoId, periodo, revision])
+  @@index([tenantId, centroCostoId, periodo])
+}
+
 model Maquina {
   id                           String                               @id @default(uuid()) @db.Uuid
   tenantId                     String                               @db.Uuid
@@ -1438,6 +1466,7 @@ model Maquina {
   perfilesOperativos           MaquinaPerfilOperativo[]
   consumibles                  MaquinaConsumible[]
   componentesDesgaste          MaquinaComponenteDesgaste[]
+  historial                    MaquinaHistorial[]
   // === Modelo Universal V2 ===
   productoConfigPasosM1        ProductoConfigPaso[]                 @relation("ProductoConfigPasoMaquinaM1")
   productoPasosExtrasM1        ProductoPasoExtra[]                  @relation("ProductoPasoExtraMaquinaM1")
@@ -1449,6 +1478,25 @@ model Maquina {
   @@index([tenantId, estado])
   @@index([tenantId, centroCostoPrincipalId])
   @@index([tenantId, estacionId])
+}
+
+/// Auditoría funcional visible desde la ficha de la máquina. El nombre del
+/// actor y la descripción se congelan para que el historial siga siendo
+/// comprensible aunque luego cambien usuarios o datos de la máquina.
+model MaquinaHistorial {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  maquinaId   String   @db.Uuid
+  accion      String
+  actorId     String?
+  actorNombre String
+  descripcion String
+  cambiosJson Json?
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  maquina     Maquina  @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, maquinaId, createdAt])
 }
 
 /// Perfil operativo de una máquina. Modelo universal alineado a doc §5–§13:

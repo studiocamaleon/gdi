@@ -1,0 +1,1 @@
+ALTER TYPE "UnidadDesgasteMaquina" ADD VALUE IF NOT EXISTS 'ML_TINTA';

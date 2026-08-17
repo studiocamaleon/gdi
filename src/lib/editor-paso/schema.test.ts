@@ -54,7 +54,6 @@ const CENSO: Record<string, string[]> = {
     "tiempo.cantidad_operativa",
     "tiempo.herencia",
     "tiempo.calcular_segun",
-    "tiempo.piezas_montar",
     "tiempo.comercial",
     "tiempo.comercial_ayudas",
     // El "fijo + variable" del oficio y las variantes del mismo paso
@@ -69,6 +68,7 @@ const CENSO: Record<string, string[]> = {
   maquina: [
     "maquina.maquina",
     "maquina.perfil",
+    "maquina.complejidad",
     "maquina.candidatas",
     "maquina.cobertura",
     "maquina.modo_color",
@@ -85,6 +85,7 @@ const CENSO: Record<string, string[]> = {
     "materiales.criterio",
     "materiales.consumo",
     "materiales.base",
+    "materiales.fuente_medida",
     "materiales.caras",
   ],
   // Sub-fase D — oficio: setup/cleanup declarativos; el acomodado
@@ -635,13 +636,14 @@ describe("sección Máquina y perfil", () => {
     });
     expect(maquina.visible(conCandidatas)).toBe(false);
     expect(perfil.visible(conCandidatas)).toBe(false);
-    // Sin candidatas todavía, las preguntas M-1 siguen.
+    // Sin candidatas todavía, M-2 mantiene una única UI: la lista de
+    // candidatas. Mostrar además los selectores M-1 duplicaría el concepto.
     const sinCandidatas = ctxBase({
       familia: { relacionMaquinaSoportada: ["M-1", "M-2"] },
       cfg: { maquinaM1Id: "mq-1" },
     });
-    expect(maquina.visible(sinCandidatas)).toBe(true);
-    expect(perfil.visible(sinCandidatas)).toBe(true);
+    expect(maquina.visible(sinCandidatas)).toBe(false);
+    expect(perfil.visible(sinCandidatas)).toBe(false);
   });
 
   it("candidatas: visible sólo en M-2, resume por nombre y su pendiente es 'candidatas'", () => {

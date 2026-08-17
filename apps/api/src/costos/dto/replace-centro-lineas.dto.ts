@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMaxSize,
   IsEnum,
   IsInt,
   IsNumber,
@@ -9,6 +10,7 @@ import {
   Max,
   Min,
   MinLength,
+  MaxLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -50,6 +52,7 @@ export class CentroCostoLineaItemDto {
 
   @IsString()
   @MinLength(1)
+  @MaxLength(120)
   nombre: string;
 
   @IsOptional()
@@ -61,12 +64,14 @@ export class CentroCostoLineaItemDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(9_999_999_999.99)
   valorMensual?: number;
 
   // ── Empleado ─────────────────────────────────────────────────────────────
   @ValidateIf(esEmpleado)
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   ocupacion?: string;
 
   /**
@@ -88,12 +93,14 @@ export class CentroCostoLineaItemDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(9_999_999_999.99)
   salarioMensual?: number;
 
   @ValidateIf(esEmpleado)
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 6 })
   @Min(0)
+  @Max(1_000)
   cargasPct?: number;
 
   // ── Activo fijo ──────────────────────────────────────────────────────────
@@ -107,21 +114,25 @@ export class CentroCostoLineaItemDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(9_999_999_999.99)
   valorActual?: number;
 
   @ValidateIf(esActivoFijo)
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(9_999_999_999.99)
   valorFinalVida?: number;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   notas?: string;
 }
 
 export class ReplaceCentroLineasDto {
   @IsArray()
+  @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => CentroCostoLineaItemDto)
   lineas: CentroCostoLineaItemDto[];

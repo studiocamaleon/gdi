@@ -1,24 +1,41 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangleIcon, CheckCircle2Icon, RefreshCwIcon, XCircleIcon } from "lucide-react";
+import {
+  AlertTriangleIcon,
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  RefreshCwIcon,
+  XCircleIcon,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import { validarProducto, type ValidacionProducto } from "@/lib/productos-servicios-api";
 
 export function ProductoValidacionPanel({ productoId }: { productoId: string }) {
   const [resultado, setResultado] = React.useState<ValidacionProducto | null>(null);
   const [cargando, setCargando] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [detallesAbiertos, setDetallesAbiertos] = React.useState(false);
 
   const ejecutar = React.useCallback(async () => {
     setCargando(true);
+    setError(null);
+    setDetallesAbiertos(false);
     try {
       const r = await validarProducto(productoId);
       setResultado(r);
-    } catch {
+    } catch (err) {
       setResultado(null);
+      setError(err instanceof Error ? err.message : "No se pudo validar el producto.");
     } finally {
       setCargando(false);
     }
@@ -28,84 +45,84 @@ export function ProductoValidacionPanel({ productoId }: { productoId: string }) 
     void ejecutar();
   }, [ejecutar]);
 
-  if (cargando) return null;
-  if (!resultado) return null;
+  if (cargando) return <Skeleton className="mb-4 h-14 w-full" />;
+  if (error || !resultado) {
+    return (
+      <Alert variant="destructive" className="mb-4">
+        <XCircleIcon />
+        <AlertTitle>No se pudo validar el producto</AlertTitle>
+        <AlertDescription>{error ?? "Intentá nuevamente."}</AlertDescription>
+        <AlertAction><Button variant="outline" size="sm" onClick={ejecutar}>Reintentar</Button></AlertAction>
+      </Alert>
+    );
+  }
 
   const errores = resultado.errores.filter((e) => e.severidad === "ERROR");
   const warnings = resultado.errores.filter((e) => e.severidad === "WARNING");
 
   if (resultado.exitoso && warnings.length === 0) {
     return (
-      <Card className="border-green-200 bg-green-50">
-        <CardContent className="flex items-center gap-2 py-3">
-          <CheckCircle2Icon className="size-5 text-green-600" />
-          <span className="text-sm text-green-900">
-            Producto válido. Listo para cotizar.
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={ejecutar}
-            className="ml-auto h-7 px-2 text-green-900"
-          >
-            <RefreshCwIcon className="size-3" />
-          </Button>
-        </CardContent>
-      </Card>
+      <Alert className="mb-4">
+        <CheckCircle2Icon />
+        <AlertTitle>Listo para cotizar</AlertTitle>
+        <AlertDescription>La configuración del producto está completa.</AlertDescription>
+        <AlertAction><Button variant="ghost" size="icon-sm" onClick={ejecutar} aria-label="Revalidar producto"><RefreshCwIcon /></Button></AlertAction>
+      </Alert>
     );
   }
 
+  const cantidadPendiente = errores.length > 0 ? errores.length : warnings.length;
+  const problemas = [...errores, ...warnings];
+
   return (
-    <Card
-      className={
-        errores.length > 0 ? "border-red-200 bg-red-50" : "border-yellow-200 bg-yellow-50"
-      }
-    >
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
-            {errores.length > 0 ? (
-              <XCircleIcon className="size-5 text-red-600" />
-            ) : (
-              <AlertTriangleIcon className="size-5 text-yellow-600" />
-            )}
-            <span className={errores.length > 0 ? "text-red-900" : "text-yellow-900"}>
-              {errores.length > 0
-                ? `${errores.length} error(es) que impiden cotizar`
-                : `${warnings.length} advertencia(s)`}
-            </span>
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={ejecutar} className="h-7 px-2">
-            <RefreshCwIcon className="size-3" />
+    <Collapsible open={detallesAbiertos} onOpenChange={setDetallesAbiertos}>
+      <Alert className="mb-4">
+        {errores.length > 0 ? (
+          <XCircleIcon className="text-destructive" />
+        ) : (
+          <AlertTriangleIcon className="text-muted-foreground" />
+        )}
+        <AlertTitle>
+          <span className="flex flex-wrap items-center gap-2">
+            {errores.length > 0 ? "Configuración incompleta" : "Configuración para revisar"}
+            <Badge variant={errores.length > 0 ? "destructive" : "secondary"}>
+              {cantidadPendiente} {cantidadPendiente === 1 ? "pendiente" : "pendientes"}
+            </Badge>
+          </span>
+        </AlertTitle>
+        <AlertDescription>
+          <p>
+            {errores.length > 0
+              ? "Completá los ajustes pendientes antes de usar este producto en una cotización."
+              : "El producto puede cotizarse, pero conviene revisar estas recomendaciones."}
+          </p>
+          <CollapsibleTrigger
+            render={
+              <Button variant="ghost" size="sm" className="mt-1 -ml-2" />
+            }
+          >
+            <ChevronDownIcon data-icon="inline-start" />
+            {detallesAbiertos ? "Ocultar detalles" : "Ver detalles"}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            <ul className="flex list-disc flex-col gap-1.5 pl-5 text-foreground">
+              {problemas.map((problema, idx) => (
+                <li key={`${problema.severidad}-${idx}`}>{problema.mensaje}</li>
+              ))}
+            </ul>
+            {errores.length > 0 && warnings.length > 0 ? (
+              <p className="mt-2 text-xs">
+                También hay {warnings.length} {warnings.length === 1 ? "recomendación" : "recomendaciones"} para revisar.
+              </p>
+            ) : null}
+          </CollapsibleContent>
+        </AlertDescription>
+        <AlertAction>
+          <Button variant="ghost" size="icon-sm" onClick={ejecutar} aria-label="Revalidar producto">
+            <RefreshCwIcon />
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-2 text-sm">
-          {errores.map((e, idx) => (
-            <li key={`e-${idx}`} className="bg-white/60 rounded p-2">
-              <div className="flex items-center gap-1">
-                <Badge variant="destructive" className="text-[10px]">
-                  ERROR
-                </Badge>
-                <span className="text-muted-foreground font-mono text-xs">{e.codigo}</span>
-              </div>
-              <div className="mt-1 text-red-900">{e.mensaje}</div>
-            </li>
-          ))}
-          {warnings.map((w, idx) => (
-            <li key={`w-${idx}`} className="bg-white/60 rounded p-2">
-              <div className="flex items-center gap-1">
-                <Badge variant="secondary" className="text-[10px]">
-                  WARNING
-                </Badge>
-                <span className="text-muted-foreground font-mono text-xs">{w.codigo}</span>
-              </div>
-              <div className="mt-1 text-yellow-900">{w.mensaje}</div>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+        </AlertAction>
+      </Alert>
+    </Collapsible>
   );
 }

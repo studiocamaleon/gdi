@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, TipoCentroCosto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { construirClaveMatch } from '../motor-universal/tercerizado-costo';
@@ -69,7 +70,11 @@ export class ConfigPasosService {
 
     if (dto.maquinaM1Id) {
       const maquina = await this.prisma.maquina.findFirst({
-        where: { id: dto.maquinaM1Id, tenantId, activo: true },
+        where: {
+          id: dto.maquinaM1Id,
+          tenantId,
+          ...MAQUINA_DISPONIBLE_WHERE,
+        },
         include: {
           perfilesOperativos: {
             where: { activo: true },
@@ -405,7 +410,7 @@ export class ConfigPasosService {
     const maquinas = await this.prisma.maquina.findMany({
       where: {
         tenantId,
-        activo: true,
+        ...MAQUINA_DISPONIBLE_WHERE,
         id: { in: candidates.map((candidate) => candidate.maquinaId) },
       },
       include: {

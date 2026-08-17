@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -9,6 +10,9 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
+  MaxLength,
+  Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -137,6 +141,7 @@ export enum TipoComponenteDesgasteMaquinaDto {
 
 export enum UnidadDesgasteMaquinaDto {
   copias_a4_equiv = 'copias_a4_equiv',
+  ml_tinta = 'ml_tinta',
   m2 = 'm2',
   metros_lineales = 'metros_lineales',
   horas = 'horas',
@@ -151,6 +156,7 @@ export class MaquinaPerfilOperativoItemDto {
 
   @IsString()
   @MinLength(1)
+  @MaxLength(120)
   nombre: string;
 
   @IsEnum(TipoPerfilOperativoMaquinaDto)
@@ -162,6 +168,8 @@ export class MaquinaPerfilOperativoItemDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   productivityValue?: number;
 
   @IsOptional()
@@ -171,16 +179,22 @@ export class MaquinaPerfilOperativoItemDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(100_000)
   setupMin?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(100_000)
   cleanupMin?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(100_000)
   feedReloadMin?: number;
 
   /**
@@ -212,6 +226,7 @@ export class MaquinaConsumibleItemDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
+  @MaxLength(120)
   nombre?: string;
 
   @IsOptional()
@@ -225,11 +240,15 @@ export class MaquinaConsumibleItemDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   rendimientoEstimado?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   consumoBase?: number;
 
   /** g/m² de tóner por nivel de cobertura. Vacío = usar consumoBase (Normal). */
@@ -250,6 +269,7 @@ export class MaquinaConsumibleItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2_000)
   observaciones?: string;
 }
 
@@ -272,6 +292,8 @@ export class MaquinaComponenteDesgasteItemDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000_000)
   precioUnitario?: number;
 
   /** La pieza sólo gira imprimiendo en color (drums/reveladores CMY). */
@@ -281,6 +303,7 @@ export class MaquinaComponenteDesgasteItemDto {
 
   @IsString()
   @MinLength(1)
+  @MaxLength(120)
   nombre: string;
 
   @IsEnum(TipoComponenteDesgasteMaquinaDto)
@@ -289,6 +312,8 @@ export class MaquinaComponenteDesgasteItemDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   vidaUtilEstimada?: number;
 
   @IsEnum(UnidadDesgasteMaquinaDto)
@@ -296,6 +321,7 @@ export class MaquinaComponenteDesgasteItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   modoProrrateo?: string;
 
   @IsBoolean()
@@ -307,6 +333,7 @@ export class MaquinaComponenteDesgasteItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(2_000)
   observaciones?: string;
 }
 
@@ -314,10 +341,12 @@ export class UpsertMaquinaDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
+  @MaxLength(40)
   codigo?: string;
 
   @IsString()
   @MinLength(1)
+  @MaxLength(120)
   nombre: string;
 
   @IsEnum(PlantillaMaquinariaDto)
@@ -330,15 +359,22 @@ export class UpsertMaquinaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   fabricante?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   modelo?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   numeroSerie?: string;
+
+  @IsOptional()
+  @IsDateString()
+  expectedUpdatedAt?: string;
 
   @IsUUID()
   plantaId: string;
@@ -363,31 +399,43 @@ export class UpsertMaquinaDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   anchoUtil?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   largoUtil?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   altoUtil?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   espesorMaximo?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
   pesoMaximo?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
   gramajeMaxGr?: number;
 
   @IsOptional()
@@ -399,6 +447,7 @@ export class UpsertMaquinaDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5_000)
   observaciones?: string;
 
   @IsOptional()
@@ -410,16 +459,19 @@ export class UpsertMaquinaDto {
   capacidadesAvanzadas?: Record<string, unknown>;
 
   @IsArray()
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => MaquinaPerfilOperativoItemDto)
   perfilesOperativos: MaquinaPerfilOperativoItemDto[];
 
   @IsArray()
+  @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => MaquinaConsumibleItemDto)
   consumibles: MaquinaConsumibleItemDto[];
 
   @IsArray()
+  @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => MaquinaComponenteDesgasteItemDto)
   componentesDesgaste: MaquinaComponenteDesgasteItemDto[];

@@ -11,6 +11,7 @@ import {
   Planta,
   PlantaPayload,
   ResumenCentrosCosto,
+  GuardarCentroPlanillaPayload,
 } from "@/lib/costos";
 
 export async function getPlantas() {
@@ -69,10 +70,13 @@ export async function updateCentroCosto(
   });
 }
 
-export async function toggleCentroCosto(id: string) {
-  return apiRequest<void>(`/costos/centros-costo/${id}/toggle`, {
-    method: "PATCH",
-  });
+export async function toggleCentroCosto(id: string, periodo: string) {
+  return apiRequest<void>(
+    `/costos/centros-costo/${id}/toggle?periodo=${encodeURIComponent(periodo)}`,
+    {
+      method: "PATCH",
+    },
+  );
 }
 
 export async function eliminarCentroCosto(id: string) {
@@ -86,6 +90,20 @@ export async function getCentroCostoConfiguracion(id: string, periodo: string) {
   return apiRequest<CentroCostoConfiguracionDetalle>(
     `/costos/centros-costo/${id}/configuracion?periodo=${encodeURIComponent(periodo)}`,
   );
+}
+
+export async function guardarCentroCostoPlanilla(
+  payload: GuardarCentroPlanillaPayload,
+) {
+  return apiRequest<{
+    centro: CentroCosto;
+    publicacion: { periodo: string; centrosPublicados: number };
+    advertencias: string[];
+    publicada: boolean;
+  }>("/costos/centros-costo/planilla", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateCentroCostoConfiguracionBase(

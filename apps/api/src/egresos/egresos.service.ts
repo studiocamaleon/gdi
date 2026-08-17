@@ -313,7 +313,11 @@ export class EgresosService {
   async borrarCategoria(auth: CurrentAuth, id: string) {
     const cat = await this.prisma.categoriaEgreso.findFirst({
       where: { id, tenantId: auth.tenantId },
-      select: { id: true, esSistema: true, _count: { select: { egresos: true } } },
+      select: {
+        id: true,
+        esSistema: true,
+        _count: { select: { egresos: true } },
+      },
     });
     if (!cat) throw new NotFoundException('No encontramos esa categoría.');
     if (cat.esSistema) {
@@ -509,6 +513,17 @@ export class EgresosService {
    * o sea algo que nadie va a cobrar nunca y que ensucia el saldo para siempre.
    */
   async crear(auth: CurrentAuth, dto: CrearEgresoDto) {
+    if (dto.centroCostoId) {
+      const centro = await this.prisma.centroCosto.findFirst({
+        where: { id: dto.centroCostoId, tenantId: auth.tenantId, activo: true },
+        select: { id: true },
+      });
+      if (!centro) {
+        throw new BadRequestException(
+          'El centro de costo no existe, está inactivo o pertenece a otra empresa.',
+        );
+      }
+    }
     await this.asegurarCategorias(auth.tenantId);
 
     const categoria = await this.prisma.categoriaEgreso.findFirst({
@@ -613,7 +628,9 @@ export class EgresosService {
             const netoCuota = esPrimera
               ? r2(neto - netoBase * (cuotas - 1))
               : netoBase;
-            const ivaCuota = esPrimera ? r2(iva - ivaBase * (cuotas - 1)) : ivaBase;
+            const ivaCuota = esPrimera
+              ? r2(iva - ivaBase * (cuotas - 1))
+              : ivaBase;
             const otrosCuota = esPrimera
               ? r2(otros - otrosBase * (cuotas - 1))
               : otrosBase;
@@ -768,7 +785,8 @@ export class EgresosService {
       );
     }
     const data: Prisma.EgresoUpdateInput = {};
-    if (dto.descripcion !== undefined) data.descripcion = dto.descripcion.trim();
+    if (dto.descripcion !== undefined)
+      data.descripcion = dto.descripcion.trim();
     if (dto.categoriaEgresoId !== undefined) {
       data.categoria = { connect: { id: dto.categoriaEgresoId } };
     }
@@ -779,6 +797,15 @@ export class EgresosService {
       data.fechaVencimiento = soloFecha(dto.fechaVencimiento);
     }
     if (dto.centroCostoId !== undefined) {
+      const centro = await this.prisma.centroCosto.findFirst({
+        where: { id: dto.centroCostoId, tenantId: auth.tenantId, activo: true },
+        select: { id: true },
+      });
+      if (!centro) {
+        throw new BadRequestException(
+          'El centro de costo no existe, está inactivo o pertenece a otra empresa.',
+        );
+      }
       data.centroCosto = { connect: { id: dto.centroCostoId } };
     }
     if (dto.notas !== undefined) data.notas = dto.notas.trim() || null;

@@ -1,6 +1,8 @@
 import {
+  ArrayMaxSize,
   IsBoolean,
   IsEnum,
+  IsISO8601,
   IsArray,
   IsNotEmpty,
   IsNumber,
@@ -8,9 +10,13 @@ import {
   IsOptional,
   IsString,
   Length,
+  Max,
+  MaxLength,
   Matches,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum UnidadComercialDto {
   unidad = 'unidad',
@@ -36,15 +42,37 @@ export enum MinimoComercialBaseDto {
   pliegos_impresos = 'pliegos_impresos',
 }
 
-export interface MedidaPredefinidaDto {
+export class MedidaPredefinidaDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
   id?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   nombre?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
   anchoMm?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
   altoMm?: number;
+
+  @IsOptional()
+  @IsBoolean()
   esDefault?: boolean;
   /** "pliego_util" = plancha completa: la pieza se deriva del pliego del paso
    *  de impresión en el sheet (área útil). Ausente = medida fija. */
-  tipo?: "fija" | "pliego_util";
+  @IsOptional()
+  @IsEnum(['fija', 'pliego_util'])
+  tipo?: 'fija' | 'pliego_util';
 }
 
 export class CrearProductoDto {
@@ -64,10 +92,12 @@ export class CrearProductoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descripcion?: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   subcategoriaComercialCodigo!: string;
 
   @IsEnum(UnidadComercialDto)
@@ -101,10 +131,14 @@ export class CrearProductoDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => MedidaPredefinidaDto)
   medidasPredefinidasJson?: MedidaPredefinidaDto[];
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   personalizacionesJson?: Record<string, unknown>[];
 
   @IsOptional()
@@ -118,17 +152,23 @@ export class CrearProductoDto {
 
 export class ActualizarProductoDto {
   @IsOptional()
+  @IsISO8601()
+  expectedUpdatedAt?: string;
+
+  @IsOptional()
   @IsString()
   @Length(1, 200)
   nombre?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   descripcion?: string;
 
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   subcategoriaComercialCodigo?: string;
 
   @IsOptional()
@@ -164,10 +204,14 @@ export class ActualizarProductoDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => MedidaPredefinidaDto)
   medidasPredefinidasJson?: MedidaPredefinidaDto[] | null;
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   personalizacionesJson?: Record<string, unknown>[] | null;
 
   @IsOptional()

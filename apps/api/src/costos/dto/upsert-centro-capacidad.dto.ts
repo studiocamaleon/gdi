@@ -11,34 +11,6 @@ export class UpsertCentroCapacidadDto {
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(1_000_000)
   horasProductivas?: number;
-
-  @Type(() => Number)
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  diasPorMes?: number;
-
-  @Type(() => Number)
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  horasPorDia?: number;
-
-  /**
-   * % de tiempo NO productivo (descansos, setup general, limpieza, ausentismo,
-   * paradas). La capacidad práctica = teórica × (1 − %/100).
-   */
-  @Type(() => Number)
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  @Max(100)
-  porcentajeNoProductivo?: number;
-
-  @Type(() => Number)
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  overrideManualCapacidad?: number;
 }

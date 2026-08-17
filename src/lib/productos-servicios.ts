@@ -93,6 +93,8 @@ export type MetodoCalculoPrecioProducto =
 
 export interface ProductoListItem {
   id: string;
+  createdAt: string;
+  updatedAt: string;
   codigo: string;
   nombre: string;
   descripcion: string | null;
@@ -110,6 +112,8 @@ export interface ProductoListItem {
   minimoComercialCantidad: string | null;
   minimoComercialBase: MinimoComercialBase;
   activo: boolean;
+  listoParaCotizar?: boolean;
+  estadoCatalogo?: "activo" | "incompleto" | "listo" | "borrador";
   /** Derivado: algún paso de alguna ruta es tercerizado (para el badge). */
   tercerizado?: boolean;
   subcategoriaComercial: ProductoSubcategoriaComercial & {

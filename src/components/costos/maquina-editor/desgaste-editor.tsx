@@ -1,10 +1,7 @@
 /**
- * Piezas que se gastan con el uso de la máquina: el "costo por click".
- *
- * A diferencia del tóner, el desgaste no depende de la cobertura sino de
- * cuántas páginas pasaron —una hoja al 2% gasta el cilindro igual que una
- * al 60%—, así que cada pieza declara su vida útil en clicks A4 y el motor
- * prorratea. Ver docs/costo-por-click-desgaste-diseno.md
+ * Piezas que se gastan con el uso de la máquina. Las impresoras por hoja las
+ * prorratean por clicks A4; el Plotter CAD prorratea su cabezal por los ml que
+ * suman las tintas configuradas en el perfil.
  */
 
 import * as React from "react";
@@ -40,7 +37,8 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
     formatearMoneda(valor, moneda, { decimales: 2 });
 
   const componentes = form.componentesDesgaste;
-  const conColumnaColor = admiteColor(form);
+  const esCabezalCad = form.plantilla === "plotter_cad";
+  const conColumnaColor = !esCabezalCad && admiteColor(form);
 
   const actualizar = (
     indice: number,
@@ -60,9 +58,9 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
       componentesDesgaste: [
         ...actual.componentesDesgaste,
         {
-          nombre: "",
-          tipo: "drum",
-          unidadDesgaste: "copias_a4_equiv",
+          nombre: esCabezalCad ? "Cabezal de impresión" : "",
+          tipo: esCabezalCad ? "cabezal" : "drum",
+          unidadDesgaste: esCabezalCad ? "ml_tinta" : "copias_a4_equiv",
           soloColor: false,
           activo: true,
         },
@@ -103,7 +101,9 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
     <div className="maq-perfiles maq-desgaste">
       {componentes.length === 0 ? (
         <p className="maq-perfiles-vacio">
-          Sin piezas cargadas: la máquina no suma costo por click.
+          {esCabezalCad
+            ? "Sin cabezal cargado: todavía no se prorratea su reemplazo por tinta procesada."
+            : "Sin piezas cargadas: la máquina no suma costo por click."}
         </p>
       ) : (
         <div className="maq-perfiles-scroll">
@@ -111,17 +111,24 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
             <thead>
               <tr>
                 <th className="nombre">
-                  Componente<span className="req"> *</span>
+                  {esCabezalCad ? "Cabezal" : "Componente"}
+                  <span className="req"> *</span>
                 </th>
                 <th className="tipo">Tipo</th>
                 <th className="num precio">
                   Precio del repuesto
+                  <span className="req"> *</span>
                   <span className="unidad"> ({moneda.simbolo})</span>
                 </th>
                 <th className="num rinde">
-                  Rinde<span className="unidad"> (clicks A4)</span>
+                  Rinde<span className="req"> *</span>
+                  <span className="unidad">
+                    {esCabezalCad ? " (ml de tinta)" : " (clicks A4)"}
+                  </span>
                 </th>
-                <th className="num costo">Costo por click</th>
+                <th className="num costo">
+                  {esCabezalCad ? "Costo por ml" : "Costo por click"}
+                </th>
                 {conColumnaColor ? <th className="color">Sólo color</th> : null}
                 <th className="relleno" />
                 <th className="acciones" aria-label="Acciones" />
@@ -135,7 +142,9 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                     <td className="nombre">
                       <Input
                         value={item.nombre}
-                        placeholder="Drum negro"
+                        placeholder={
+                          esCabezalCad ? "Cabezal de impresión" : "Drum negro"
+                        }
                         aria-label={`Nombre del componente ${indice + 1}`}
                         onChange={(e) =>
                           actualizar(indice, { nombre: e.target.value })
@@ -143,22 +152,26 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                       />
                     </td>
                     <td className="tipo">
-                      <select
-                        value={item.tipo}
-                        aria-label={`Tipo del componente ${indice + 1}`}
-                        onChange={(e) =>
-                          actualizar(indice, {
-                            tipo: e.target
-                              .value as (typeof componentes)[number]["tipo"],
-                          })
-                        }
-                      >
-                        {tipoComponenteDesgasteMaquinaItems.map((opcion) => (
-                          <option key={opcion.value} value={opcion.value}>
-                            {opcion.label}
-                          </option>
-                        ))}
-                      </select>
+                      {esCabezalCad ? (
+                        <span>Cabezal</span>
+                      ) : (
+                        <select
+                          value={item.tipo}
+                          aria-label={`Tipo del componente ${indice + 1}`}
+                          onChange={(e) =>
+                            actualizar(indice, {
+                              tipo: e.target
+                                .value as (typeof componentes)[number]["tipo"],
+                            })
+                          }
+                        >
+                          {tipoComponenteDesgasteMaquinaItems.map((opcion) => (
+                            <option key={opcion.value} value={opcion.value}>
+                              {opcion.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td className="num">
                       <Input
@@ -251,14 +264,20 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
         </div>
       )}
 
-      <button type="button" className="maq-btn maq-perfiles-agregar" onClick={agregar}>
-        <PlusIcon />
-        Agregar pieza
-      </button>
+      {!esCabezalCad || componentes.length === 0 ? (
+        <button
+          type="button"
+          className="maq-btn maq-perfiles-agregar"
+          onClick={agregar}
+        >
+          <PlusIcon />
+          {esCabezalCad ? "Agregar cabezal" : "Agregar pieza"}
+        </button>
+      ) : null}
 
       {totales.mono > 0 || totales.color > 0 ? (
         <p className="maq-desgaste-total">
-          Costo por click:{" "}
+          {esCabezalCad ? "Costo por ml: " : "Costo por click: "}
           {conColumnaColor ? (
             <>
               <strong>{fmt(totales.mono)}</strong> en blanco y negro ·{" "}

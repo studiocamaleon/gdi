@@ -369,7 +369,7 @@ export function ProductoWizard({
             },
           ],
   );
-  const [activo, setActivo] = React.useState(productoExistente?.activo ?? true);
+  const [activo, setActivo] = React.useState(productoExistente?.activo ?? false);
   // Producto por unidad sin medida (merchandising comprado: taza, remera). Se
   // persiste como modoMedidas FIJA + medidas vacías; el motor cotiza por unidad
   // y la estampa la maneja la personalización.
@@ -484,11 +484,15 @@ export function ProductoWizard({
       };
       if (modo === "crear") {
         const creado = (await crearProducto(payload)) as { id: string };
-        toast.success("Producto creado · seguí con las rutas");
+        toast.success("Borrador creado · completá las rutas antes de publicarlo");
         router.push(`/productos-servicios/${creado.id}?tab=${avanzar ? "rutas" : "identidad"}`);
         router.refresh();
       } else if (productoExistente) {
-        await actualizarProducto(productoExistente.id, { ...payload, activo });
+        await actualizarProducto(productoExistente.id, {
+          ...payload,
+          activo,
+          expectedUpdatedAt: productoExistente.updatedAt,
+        });
         toast.success("Identidad guardada");
         router.refresh();
         if (avanzar) irAStep("rutas");
@@ -523,6 +527,7 @@ export function ProductoWizard({
         medidasPredefinidasJson: medidasNormalizadas,
         precioConfigJson: precioConfig as unknown as Record<string, unknown>,
         activo,
+        expectedUpdatedAt: productoExistente.updatedAt,
       });
       setPrecioPersistido(precioConfig);
       router.refresh();
@@ -729,7 +734,7 @@ export function ProductoWizard({
                   onClick={() => guardarIdentidad(true)}
                   disabled={guardandoStep || valIdentidad.errores.length > 0}
                 >
-                  {guardandoStep ? "Guardando..." : modo === "crear" ? "Crear y continuar" : "Continuar"}
+                  {guardandoStep ? "Guardando..." : modo === "crear" ? "Crear borrador y continuar" : "Continuar"}
                   <ArrowRightIcon className="ml-2 size-4" />
                 </Button>
               </div>
@@ -845,9 +850,9 @@ function StepIdentidad(props: StepIdentidadProps) {
           {props.modo === "editar" && (
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="activo">Activo</Label>
+                <Label htmlFor="activo">Publicado</Label>
                 <p className="text-muted-foreground text-xs">
-                  Si está inactivo no aparece en el cotizador.
+                  Al publicar, el backend verificará que el producto esté listo para cotizar.
                 </p>
               </div>
               <Switch id="activo" checked={props.activo} onCheckedChange={props.setActivo} />

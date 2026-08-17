@@ -32,11 +32,14 @@ import type {
 import { getGeometriaTrabajoMaquinaLabel } from "@/lib/maquinaria";
 import { getMaquinariaTemplate } from "@/lib/maquinaria-templates";
 
-export type LocalPerfil = NonNullable<MaquinaPayload["perfilesOperativos"]>[number] & {
+export type LocalPerfil = NonNullable<
+  MaquinaPayload["perfilesOperativos"]
+>[number] & {
   uiKey: string;
 };
 
-export type ConsumibleCanal = "cian" | "magenta" | "amarillo" | "negro" | "blanco" | "barniz";
+export type ConsumibleCanal =
+  "cian" | "magenta" | "amarillo" | "negro" | "blanco" | "barniz";
 
 export const PRINTER_TEMPLATES_WITH_CONSUMIBLES = new Set<PlantillaMaquinaria>([
   "impresora_laser",
@@ -81,7 +84,9 @@ export function normalizeCanal(value: unknown): ConsumibleCanal | null {
   return aliases[normalized] ?? null;
 }
 
-export function requiredChannelsFromColorMode(rawMode: unknown): ConsumibleCanal[] {
+export function requiredChannelsFromColorMode(
+  rawMode: unknown,
+): ConsumibleCanal[] {
   if (Array.isArray(rawMode)) {
     return Array.from(
       new Set(
@@ -103,9 +108,11 @@ export function requiredChannelsFromColorMode(rawMode: unknown): ConsumibleCanal
   if (!normalized) return [];
   if (["BN", "B/N", "NEGRO", "K"].includes(normalized)) return ["negro"];
   const channels: ConsumibleCanal[] = [];
-  if (normalized.includes("CMYK")) channels.push("cian", "magenta", "amarillo", "negro");
+  if (normalized.includes("CMYK"))
+    channels.push("cian", "magenta", "amarillo", "negro");
   if (normalized.includes("BLANCO")) channels.push("blanco");
-  if (normalized.includes("BARNIZ") || normalized.includes("VARNISH")) channels.push("barniz");
+  if (normalized.includes("BARNIZ") || normalized.includes("VARNISH"))
+    channels.push("barniz");
   return Array.from(new Set(channels));
 }
 
@@ -114,7 +121,9 @@ export function requiredChannelsForPerfil(
   parametrosTecnicos: Record<string, unknown> | undefined,
 ): ConsumibleCanal[] {
   const detalle = (perfil.detalle ?? {}) as Record<string, unknown>;
-  const byPerfil = requiredChannelsFromColorMode(detalle.colores ?? detalle.modoColor);
+  const byPerfil = requiredChannelsFromColorMode(
+    detalle.colores ?? detalle.modoColor,
+  );
   if (byPerfil.length > 0) return byPerfil;
   const byMachine = requiredChannelsFromColorMode(
     parametrosTecnicos?.coloresSoportados ??
@@ -147,25 +156,38 @@ export function requiredChannelsForLaserMachine(
   );
 }
 
-export function canalFromConsumible(consumible: Pick<MaquinaConsumible, "detalle"> | MaquinaPayload["consumibles"][number]) {
+export function canalFromConsumible(
+  consumible:
+    Pick<MaquinaConsumible, "detalle"> | MaquinaPayload["consumibles"][number],
+) {
   const detalle = (consumible.detalle ?? {}) as Record<string, unknown>;
   return normalizeCanal(detalle.color ?? detalle.canal);
 }
 
-export function consumibleTipoFor(plantilla: PlantillaMaquinaria, canal: ConsumibleCanal): TipoConsumibleMaquina {
+export function consumibleTipoFor(
+  plantilla: PlantillaMaquinaria,
+  canal: ConsumibleCanal,
+): TipoConsumibleMaquina {
   if (canal === "barniz") return "barniz";
   return plantilla === "impresora_laser" ? "toner" : "tinta";
 }
 
-export function consumibleUnidadFor(plantilla: PlantillaMaquinaria): UnidadConsumoMaquina {
+export function consumibleUnidadFor(
+  plantilla: PlantillaMaquinaria,
+): UnidadConsumoMaquina {
   return plantilla === "impresora_laser" ? "gramo" : "ml";
 }
 
 export function cloneRecord(value: Record<string, unknown> | undefined | null) {
-  return value ? (structuredClone(value) as Record<string, unknown>) : undefined;
+  return value
+    ? (structuredClone(value) as Record<string, unknown>)
+    : undefined;
 }
 
-export function defaultConsumoBase(plantilla: PlantillaMaquinaria, canal: ConsumibleCanal) {
+export function defaultConsumoBase(
+  plantilla: PlantillaMaquinaria,
+  canal: ConsumibleCanal,
+) {
   if (plantilla === "impresora_laser") return 1.73;
   if (canal === "blanco") return 5;
   if (canal === "barniz") return 3;
@@ -194,21 +216,23 @@ export function emptyMaquina(plantaId: string): MaquinaPayload {
  * una clave que su plantilla no reconoce: se limpian al cargar la máquina,
  * así el primer guardado las deja atrás.
  */
-const PERFIL_DETALLE_RETIRADO: Partial<Record<PlantillaMaquinaria, string[]>> = {
-  // gramajeMaxGr volvió al perfil láser como escalón: acá sólo queda el
-  // mínimo, que ya no existe en ninguna plantilla.
-  impresora_laser: ["gramajeMinGr"],
-  guillotina: ["gramajeMinGr"],
-};
+const PERFIL_DETALLE_RETIRADO: Partial<Record<PlantillaMaquinaria, string[]>> =
+  {
+    // gramajeMaxGr volvió al perfil láser como escalón: acá sólo queda el
+    // mínimo, que ya no existe en ninguna plantilla.
+    impresora_laser: ["gramajeMinGr"],
+    guillotina: ["gramajeMinGr"],
+  };
 
 /**
  * Claves que se mudaron de la máquina al perfil: si el perfil todavía no
  * las trae, se siembran con el valor de la máquina para que el primer
  * guardado las deje escritas donde corresponde.
  */
-const PERFIL_DETALLE_HEREDADO: Partial<Record<PlantillaMaquinaria, string[]>> = {
-  guillotina: ["tiempoPorCorteSeg"],
-};
+const PERFIL_DETALLE_HEREDADO: Partial<Record<PlantillaMaquinaria, string[]>> =
+  {
+    guillotina: ["tiempoPorCorteSeg"],
+  };
 
 function prepararDetallePerfil(
   plantilla: PlantillaMaquinaria,
@@ -259,7 +283,9 @@ function repartirConsumiblesDeMaquinaEnPerfiles(
 
   const copias = perfiles.flatMap((perfil) =>
     deMaquina
-      .filter((item) => !yaTiene.has(`${perfil.id}::${canalFromConsumible(item)}`))
+      .filter(
+        (item) => !yaTiene.has(`${perfil.id}::${canalFromConsumible(item)}`),
+      )
       .map((item) => ({
         ...item,
         // Sin id: es un consumible nuevo del perfil, no una edición del de
@@ -276,6 +302,7 @@ function repartirConsumiblesDeMaquinaEnPerfiles(
 
 export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
   return {
+    expectedUpdatedAt: maquina.updatedAt,
     nombre: maquina.nombre,
     plantilla: maquina.plantilla,
     plantillaVersion: maquina.plantillaVersion,
@@ -296,7 +323,8 @@ export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
     gramajeMaxGr: maquina.gramajeMaxGr ?? undefined,
     activo: maquina.activo,
     observaciones: maquina.observaciones || undefined,
-    parametrosTecnicos: (maquina.parametrosTecnicos as Record<string, unknown> | null) ?? {},
+    parametrosTecnicos:
+      (maquina.parametrosTecnicos as Record<string, unknown> | null) ?? {},
     perfilesOperativos: maquina.perfilesOperativos.map((p) => ({
       id: p.id,
       nombre: p.nombre,
@@ -361,14 +389,21 @@ export const MAQUINA_DIRECT_FIELDS = new Set([
   "gramajeMaxGr",
 ]);
 
-export function getMaquinaFieldValue(form: MaquinaPayload, key: string): unknown {
+export function getMaquinaFieldValue(
+  form: MaquinaPayload,
+  key: string,
+): unknown {
   if (MAQUINA_DIRECT_FIELDS.has(key)) {
     return (form as unknown as Record<string, unknown>)[key];
   }
   return (form.parametrosTecnicos ?? {})[key];
 }
 
-export function setMaquinaFieldValue(form: MaquinaPayload, key: string, value: unknown): MaquinaPayload {
+export function setMaquinaFieldValue(
+  form: MaquinaPayload,
+  key: string,
+  value: unknown,
+): MaquinaPayload {
   if (MAQUINA_DIRECT_FIELDS.has(key)) {
     return { ...form, [key]: value } as MaquinaPayload;
   }
@@ -396,7 +431,11 @@ export function getPerfilFieldValue(perfil: LocalPerfil, key: string): unknown {
   return (perfil.detalle ?? {})[key];
 }
 
-export function setPerfilFieldValue(perfil: LocalPerfil, key: string, value: unknown): LocalPerfil {
+export function setPerfilFieldValue(
+  perfil: LocalPerfil,
+  key: string,
+  value: unknown,
+): LocalPerfil {
   if (PERFIL_DIRECT_FIELDS.has(key)) {
     return { ...perfil, [key]: value } as LocalPerfil;
   }
@@ -416,24 +455,33 @@ export function productividadPlanchaEnVivo(perfil: LocalPerfil): number | null {
   };
   const planchado = num("tiempoPrensadoSeg");
   if (planchado === null) return null;
-  const seg = (num("tiempoPreplanchadoSeg") ?? 0) + planchado + (num("tiempoPostplanchadoSeg") ?? 0);
+  const seg =
+    (num("tiempoPreplanchadoSeg") ?? 0) +
+    planchado +
+    (num("tiempoPostplanchadoSeg") ?? 0);
   if (seg <= 0) return null;
   return 3600 / seg;
 }
 
-export function getDefaultProductivityUnit(form: MaquinaPayload): UnidadProduccionMaquina {
+export function getDefaultProductivityUnit(
+  form: MaquinaPayload,
+): UnidadProduccionMaquina {
   return (
     getMaquinariaTemplate(form.plantilla)?.defaultProductionUnit ??
     form.unidadProduccionPrincipal
   );
 }
 
-export function getAllowedProductivityUnits(form: MaquinaPayload): UnidadProduccionMaquina[] {
+export function getAllowedProductivityUnits(
+  form: MaquinaPayload,
+): UnidadProduccionMaquina[] {
   const template = getMaquinariaTemplate(form.plantilla);
   return template?.allowedProductionUnits ?? [getDefaultProductivityUnit(form)];
 }
 
-export function normalizeProductionUnitForTemplate(form: MaquinaPayload): UnidadProduccionMaquina {
+export function normalizeProductionUnitForTemplate(
+  form: MaquinaPayload,
+): UnidadProduccionMaquina {
   const allowedUnits = getAllowedProductivityUnits(form);
   return allowedUnits.includes(form.unidadProduccionPrincipal)
     ? form.unidadProduccionPrincipal
@@ -448,15 +496,26 @@ export function SelectDisplay({
   placeholder?: string;
 }) {
   return (
-    <span className={label ? "flex flex-1 truncate text-left" : "flex flex-1 truncate text-left text-muted-foreground"}>
+    <span
+      className={
+        label
+          ? "flex flex-1 truncate text-left"
+          : "flex flex-1 truncate text-left text-muted-foreground"
+      }
+    >
       {label || placeholder}
     </span>
   );
 }
 
-export function getOptionLabel(options: MaquinariaTemplateOption[] | undefined, value: unknown) {
+export function getOptionLabel(
+  options: MaquinariaTemplateOption[] | undefined,
+  value: unknown,
+) {
   if (typeof value !== "string") return "";
-  return options?.find((optionItem) => optionItem.value === value)?.label ?? value;
+  return (
+    options?.find((optionItem) => optionItem.value === value)?.label ?? value
+  );
 }
 
 /**
@@ -549,7 +608,9 @@ export function shouldDisplayGranFormatoFieldInCm(
 
 export function getTemplateUnitLabel(unit: MaquinariaTemplateField["unit"]) {
   if (!unit) return "";
-  const labels: Partial<Record<NonNullable<MaquinariaTemplateField["unit"]>, string>> = {
+  const labels: Partial<
+    Record<NonNullable<MaquinariaTemplateField["unit"]>, string>
+  > = {
     mm_s: "mm/seg",
     mm_min: "mm/min",
     g_h: "g/h",
@@ -565,12 +626,15 @@ export function getTemplateUnitLabel(unit: MaquinariaTemplateField["unit"]) {
   return labels[unit] ?? unit;
 }
 
-export function getMachineTechnologyLabel(maquina: Maquina) {
+type MaquinaTecnologia = Pick<
+  Maquina,
+  "parametrosTecnicos" | "plantilla" | "geometriaTrabajo"
+>;
+
+export function getMachineTechnologyLabel(maquina: MaquinaTecnologia) {
   const tecnologia = maquina.parametrosTecnicos?.tecnologia;
   if (typeof tecnologia === "string" && tecnologia.trim()) {
-    return tecnologia
-      .replaceAll("_", " ")
-      .toUpperCase();
+    return tecnologia.replaceAll("_", " ").toUpperCase();
   }
   // Tecnologías fijas por plantilla (no se cargan en parametrosTecnicos).
   if (maquina.plantilla === "impresora_laser") return "LÁSER";
@@ -579,11 +643,12 @@ export function getMachineTechnologyLabel(maquina: Maquina) {
 }
 
 // Color del punto de la tecnología (columna Tipo de la tabla).
-export function getMachineTechColor(maquina: Maquina) {
+export function getMachineTechColor(maquina: MaquinaTecnologia) {
   const tech = getMachineTechnologyLabel(maquina).toUpperCase();
   if (tech.includes("DTF") && tech.includes("UV")) return "#3b74f0";
   if (tech.includes("DTF")) return "#8b5cf6";
-  if (tech.includes("SOLVENTE") || tech.includes("ECOSOLVENTE")) return "#0d9488";
+  if (tech.includes("SOLVENTE") || tech.includes("ECOSOLVENTE"))
+    return "#0d9488";
   if (tech.includes("UV")) return "#7c3aed";
   if (tech.includes("INKJET") || tech.includes("LATEX")) return "#0ea5e9";
   return "var(--ink, #14141a)";
@@ -638,7 +703,9 @@ export function normalizeRequiredPrinterConsumibles(
   });
 }
 
-export function getAllowedProfileTypes(form: MaquinaPayload): TipoPerfilOperativoMaquina[] {
+export function getAllowedProfileTypes(
+  form: MaquinaPayload,
+): TipoPerfilOperativoMaquina[] {
   const template = getMaquinariaTemplate(form.plantilla);
   const baseTypes = template?.allowedProfileTypes ?? ["impresion"];
   if (
@@ -650,19 +717,25 @@ export function getAllowedProfileTypes(form: MaquinaPayload): TipoPerfilOperativ
   return baseTypes;
 }
 
-export function getDefaultProfileType(form: MaquinaPayload): TipoPerfilOperativoMaquina {
+export function getDefaultProfileType(
+  form: MaquinaPayload,
+): TipoPerfilOperativoMaquina {
   return getAllowedProfileTypes(form)[0] ?? "impresion";
 }
 
 export function cleanPerfilDetailsForType(perfil: LocalPerfil): LocalPerfil {
-  if (perfil.tipoPerfil === "corte" || perfil.tipoPerfil === "mixto") return perfil;
+  if (perfil.tipoPerfil === "corte" || perfil.tipoPerfil === "mixto")
+    return perfil;
   const detalle = { ...(perfil.detalle ?? {}) };
   delete detalle.tipoCorte;
   delete detalle.factorComplejidad;
   return { ...perfil, detalle };
 }
 
-export function normalizePlotterCortePerfil(perfil: LocalPerfil, form: MaquinaPayload): LocalPerfil {
+export function normalizePlotterCortePerfil(
+  perfil: LocalPerfil,
+  form: MaquinaPayload,
+): LocalPerfil {
   if (form.plantilla !== "plotter_de_corte") return perfil;
   // `tipoCorte` y `factorComplejidad` fueron retirados (eran inertes): no se
   // re-guardan desde el editor. La complejidad ahora es UN PERFIL por nivel,
@@ -702,7 +775,10 @@ export function normalizePerfilTypeForTemplate(
         : defaultUnit,
   };
   if (allowedTypes.includes(perfilWithDefaults.tipoPerfil)) {
-    return normalizePlotterCortePerfil(cleanPerfilDetailsForType(perfilWithDefaults), form);
+    return normalizePlotterCortePerfil(
+      cleanPerfilDetailsForType(perfilWithDefaults),
+      form,
+    );
   }
   return normalizePlotterCortePerfil(
     cleanPerfilDetailsForType({
@@ -713,13 +789,21 @@ export function normalizePerfilTypeForTemplate(
   );
 }
 
-export function shouldShowMaquinaField(field: MaquinariaTemplateField, form: MaquinaPayload) {
+export function shouldShowMaquinaField(
+  field: MaquinariaTemplateField,
+  form: MaquinaPayload,
+) {
   if (form.plantilla !== "impresora_gran_formato_por_area") return true;
   const geometria = getGranFormatoGeometria(form);
   const mesaOnly = new Set(["largoUtil", "anchoMesaMm", "largoMesaMm"]);
   const rolloOnly = new Set(["anchoMaxRolloMm"]);
   if (mesaOnly.has(field.key)) return geometria === "MESA_EXTENSORA";
-  if (rolloOnly.has(field.key)) return geometria === "" || geometria === "ROLLO" || geometria === "MESA_EXTENSORA";
+  if (rolloOnly.has(field.key))
+    return (
+      geometria === "" ||
+      geometria === "ROLLO" ||
+      geometria === "MESA_EXTENSORA"
+    );
   return true;
 }
 
@@ -786,9 +870,13 @@ export function shouldShowPerfilField(
   return true;
 }
 
-export function cleanGranFormatoGeometryFields(form: MaquinaPayload, nextGeometria: unknown): MaquinaPayload {
+export function cleanGranFormatoGeometryFields(
+  form: MaquinaPayload,
+  nextGeometria: unknown,
+): MaquinaPayload {
   if (form.plantilla !== "impresora_gran_formato_por_area") return form;
-  if (nextGeometria !== "ROLLO" && nextGeometria !== "MESA_EXTENSORA") return form;
+  if (nextGeometria !== "ROLLO" && nextGeometria !== "MESA_EXTENSORA")
+    return form;
   const parametrosTecnicos = { ...(form.parametrosTecnicos ?? {}) };
   if (nextGeometria === "ROLLO") {
     delete parametrosTecnicos.anchoMesaMm;
@@ -805,7 +893,10 @@ export function cleanGranFormatoGeometryFields(form: MaquinaPayload, nextGeometr
   return { ...form, geometriaTrabajo: "plano", parametrosTecnicos };
 }
 
-export const STRUCTURED_MARGIN_FIELDS = new Set(["margenesNoImprimiblesMm", "margenesDesperdicioMm"]);
+export const STRUCTURED_MARGIN_FIELDS = new Set([
+  "margenesNoImprimiblesMm",
+  "margenesDesperdicioMm",
+]);
 
 export const marginFieldDefinitions: Record<
   string,
@@ -825,7 +916,9 @@ export const marginFieldDefinitions: Record<
   ],
 };
 
-export function normalizeMarginValue(value: unknown): Record<string, number | undefined> {
+export function normalizeMarginValue(
+  value: unknown,
+): Record<string, number | undefined> {
   if (typeof value === "string" && value.trim()) {
     try {
       const parsed = JSON.parse(value) as unknown;
@@ -903,7 +996,8 @@ export function FieldInput({
                   const nextValue = event.target.value;
                   onChange({
                     ...current,
-                    [definition.key]: nextValue === "" ? undefined : Number(nextValue),
+                    [definition.key]:
+                      nextValue === "" ? undefined : Number(nextValue),
                   });
                 }}
               />
@@ -958,7 +1052,9 @@ export function FieldInput({
             type="number"
             inputMode="decimal"
             max={max}
-            value={typeof value === "number" ? value : value ? Number(value) : ""}
+            value={
+              typeof value === "number" ? value : value ? Number(value) : ""
+            }
             placeholder={field.placeholder}
             onChange={(e) => {
               const v = e.target.value;

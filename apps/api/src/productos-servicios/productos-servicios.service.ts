@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import type {
   ActualizarProductoDto,
@@ -31,6 +31,7 @@ import { ConfigPasosService } from './config-pasos.service';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { CargosDirectosProductoService } from './cargos-directos-producto.service';
 import { ProductoValidacionService } from './producto-validacion.service';
+import type { OrdenProductosDto } from './dto/list-productos-query.dto';
 
 @Injectable()
 export class ProductosServiciosService {
@@ -46,7 +47,14 @@ export class ProductosServiciosService {
 
   listarProductos(
     tenantId: string,
-    opts: { pagination: PaginationDto; activo?: boolean; search?: string },
+    opts: {
+      pagination: PaginationDto;
+      activo?: boolean;
+      search?: string;
+      unidadComercial?: 'unidad' | 'm2' | 'metro_lineal';
+      subcategoriaCodigo?: string;
+      orden?: OrdenProductosDto;
+    },
   ) {
     return this.productos.listarProductos(tenantId, opts);
   }
@@ -59,8 +67,38 @@ export class ProductosServiciosService {
     return this.productos.crearProducto(tenantId, dto);
   }
 
-  actualizarProducto(tenantId: string, id: string, dto: ActualizarProductoDto) {
-    return this.productos.actualizarProducto(tenantId, id, dto);
+  async actualizarProducto(
+    tenantId: string,
+    id: string,
+    dto: ActualizarProductoDto,
+  ) {
+    const { activo, ...cambios } = dto;
+    const actualizado = await this.productos.actualizarProducto(
+      tenantId,
+      id,
+      cambios,
+    );
+
+    if (activo !== true) {
+      if (activo === false) {
+        return this.productos.actualizarProducto(tenantId, id, {
+          activo: false,
+        });
+      }
+      return actualizado;
+    }
+
+    const resultado = await this.validacion.validarProducto(tenantId, id);
+    if (!resultado.exitoso) {
+      await this.productos.actualizarProducto(tenantId, id, { activo: false });
+      throw new BadRequestException({
+        message:
+          'El producto se guardó como borrador porque todavía no está listo para cotizar.',
+        errores: resultado.errores,
+      });
+    }
+
+    return this.productos.actualizarProducto(tenantId, id, { activo: true });
   }
 
   duplicarProducto(tenantId: string, id: string, dto: DuplicarProductoDto) {
@@ -153,7 +191,6 @@ export class ProductosServiciosService {
   listarFamilias(tenantId: string) {
     return this.familias.listarFamilias(tenantId);
   }
-
 
   listarLookupsConfigPaso(tenantId: string) {
     return this.familias.listarLookupsConfigPaso(tenantId);

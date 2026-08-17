@@ -38,21 +38,30 @@ import {
 
 export function useMaquinaEditor({
   maquina,
+  cargarMaterias = false,
 }: {
   /** La ficha edita una máquina existente desde el primer render. */
   maquina: Maquina;
+  cargarMaterias?: boolean;
 }) {
   const [form, setForm] = React.useState<MaquinaPayload>(() =>
     maquinaToPayload(maquina),
   );
+  const formRef = React.useRef(form);
+  React.useEffect(() => {
+    formRef.current = form;
+  }, [form]);
   const [perfiles, setPerfiles] = React.useState<LocalPerfil[]>(() => {
     const payload = maquinaToPayload(maquina);
     return payload.perfilesOperativos.map((p, i) =>
       normalizePerfilTypeForTemplate({ ...p, uiKey: `p-${i}-init` }, payload),
     );
   });
-  const [materiasPrimas, setMateriasPrimas] = React.useState<MateriaPrima[]>([]);
+  const [materiasPrimas, setMateriasPrimas] = React.useState<MateriaPrima[]>(
+    [],
+  );
   const [loadingMaterias, setLoadingMaterias] = React.useState(false);
+  const materiasIntentadas = React.useRef(false);
 
   const template: MaquinariaTemplateDefinition | null = React.useMemo(
     () => getMaquinariaTemplate(form.plantilla),
@@ -60,17 +69,27 @@ export function useMaquinaEditor({
   );
 
   React.useEffect(() => {
-    if (materiasPrimas.length > 0 || loadingMaterias) return;
+    if (
+      !cargarMaterias ||
+      materiasPrimas.length > 0 ||
+      loadingMaterias ||
+      materiasIntentadas.current
+    ) {
+      return;
+    }
+    materiasIntentadas.current = true;
     setLoadingMaterias(true);
     getMateriasPrimas()
       .then(setMateriasPrimas)
       .catch((err) => {
         toast.error(
-          err instanceof Error ? err.message : "No se pudieron cargar materias primas",
+          err instanceof Error
+            ? err.message
+            : "No se pudieron cargar materias primas",
         );
       })
       .finally(() => setLoadingMaterias(false));
-  }, [loadingMaterias, materiasPrimas.length]);
+  }, [cargarMaterias, loadingMaterias, materiasPrimas.length]);
 
   const handleMaquinaFieldChange = (
     field: MaquinariaTemplateField,
@@ -83,9 +102,11 @@ export function useMaquinaEditor({
         : next;
     });
     if (field.key === "soportaCorteIntegrado" && value !== true) {
-      const nextForm = setMaquinaFieldValue(form, field.key, value);
+      const nextForm = setMaquinaFieldValue(formRef.current, field.key, value);
       setPerfiles((current) =>
-        current.map((perfil) => normalizePerfilTypeForTemplate(perfil, nextForm)),
+        current.map((perfil) =>
+          normalizePerfilTypeForTemplate(perfil, nextForm),
+        ),
       );
     }
     if (field.key === "geometria" && value !== "MESA_EXTENSORA") {
@@ -113,10 +134,7 @@ export function useMaquinaEditor({
         },
         form,
       );
-      return [
-        ...prev,
-        nuevoPerfil,
-      ];
+      return [...prev, nuevoPerfil];
     });
   };
 
@@ -219,8 +237,32 @@ export function useMaquinaEditor({
   );
   const hayCambios = JSON.stringify(payloadActual) !== snapshotGuardado;
 
+  React.useEffect(() => {
+    const payload = maquinaToPayload(maquina);
+    setForm(payload);
+    setPerfiles(
+      payload.perfilesOperativos.map((perfil, index) =>
+        normalizePerfilTypeForTemplate(
+          { ...perfil, uiKey: `p-${index}-${maquina.updatedAt}` },
+          payload,
+        ),
+      ),
+    );
+    setSnapshotGuardado(JSON.stringify(payload));
+  }, [maquina]);
+
   /** Tras guardar, lo guardado pasa a ser el nuevo punto de comparación. */
-  const marcarGuardado = (payload: MaquinaPayload) => {
+  const marcarGuardado = (maquinaGuardada: Maquina) => {
+    const payload = maquinaToPayload(maquinaGuardada);
+    setForm(payload);
+    setPerfiles(
+      payload.perfilesOperativos.map((perfil, index) =>
+        normalizePerfilTypeForTemplate(
+          { ...perfil, uiKey: `p-${index}-${maquinaGuardada.updatedAt}` },
+          payload,
+        ),
+      ),
+    );
     setSnapshotGuardado(JSON.stringify(payload));
   };
 

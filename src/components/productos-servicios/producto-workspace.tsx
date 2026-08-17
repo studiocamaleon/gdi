@@ -25,10 +25,12 @@ import {
 import { toast } from "sonner";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
+import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
 import {
   precioConfigKey,
   type TabPrecioConfig,
@@ -94,6 +96,7 @@ interface Props {
   catalogoFamilias?: CatalogoFamilias;
   lookups?: LookupsConfigPaso;
   catalogoCargos?: CargoDirectoCatalogo[];
+  canManage: boolean;
 }
 
 interface ValidacionTab {
@@ -498,6 +501,7 @@ export function ProductoWorkspace({
   rutasDisponibles = [],
   catalogoFamilias,
   catalogoCargos = [],
+  canManage,
 }: Props) {
   const router = useRouter();
   const validaciones = React.useMemo(() => tabValidaciones(producto), [producto]);
@@ -532,7 +536,7 @@ export function ProductoWorkspace({
               {producto.nombre}
               <span className={producto.activo ? "tag ok" : "tag muted"}>
                 <span className="d" />
-                {producto.activo ? "Activo" : "Inactivo"}
+                {producto.activo ? "Publicado" : "Borrador"}
               </span>
             </h1>
             {producto.descripcion ? (
@@ -543,11 +547,14 @@ export function ProductoWorkspace({
           </div>
         </div>
 
-        <div className="wiz-status">
-          <span className="ok-dot"><CheckIcon className="size-3" /></span>
-          <div><strong>Producto válido. </strong>Listo para cotizar.</div>
-          <span className="refresh" title="Revalidar">↻</span>
-        </div>
+        <ProductoValidacionPanel productoId={producto.id} />
+        {!canManage ? (
+          <Alert className="mb-4">
+            <CircleAlertIcon />
+            <AlertTitle>Modo de solo lectura</AlertTitle>
+            <AlertDescription>Podés consultar toda la configuración, pero necesitás el permiso de gestión de costos para modificarla.</AlertDescription>
+          </Alert>
+        ) : null}
 
         <Tabs value={activeTab} onValueChange={(value) => irATab(value as ProductoWorkspaceTab)}>
           <div
@@ -577,12 +584,12 @@ export function ProductoWorkspace({
           </div>
 
         <TabsContent value={activeTab}>
+          <fieldset disabled={!canManage} className="contents">
           {activeTab === "identidad" && <IdentidadTab producto={producto} />}
           {activeTab === "rutas" && (
             <RutasTab
               producto={producto}
               rutasDisponibles={rutasDisponibles}
-              catalogoFamilias={catalogoFamilias}
             />
           )}
           {activeTab === "pasos" && (
@@ -600,6 +607,7 @@ export function ProductoWorkspace({
           )}
           {activeTab === "herramientas" && <HerramientasTab producto={producto} />}
           {activeTab === "pricing" && <PricingTab producto={producto} />}
+          </fieldset>
         </TabsContent>
       </Tabs>
       </div>
@@ -766,6 +774,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     setGuardando(true);
     try {
       await actualizarProducto(producto.id, {
+        expectedUpdatedAt: producto.updatedAt,
         nombre,
         descripcion: descripcion || undefined,
         subcategoriaComercialCodigo,
@@ -853,9 +862,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
             <div>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>Activo</div>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>Publicado</div>
               <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
-                Si está inactivo no aparece en el cotizador.
+                Al publicar, el backend valida que esté listo para cotizar.
               </div>
             </div>
             <button
@@ -1023,11 +1032,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
 function RutasTab({
   producto,
   rutasDisponibles,
-  catalogoFamilias,
 }: {
   producto: ProductoDetalle;
   rutasDisponibles: RutaListItem[];
-  catalogoFamilias?: CatalogoFamilias;
 }) {
   const router = useRouter();
   const [agregando, setAgregando] = React.useState(false);

@@ -27,7 +27,7 @@ import {
   type SubfamiliaMateriaPrima,
   type UnidadMateriaPrima,
 } from "@/lib/materias-primas";
-import type { Maquina } from "@/lib/maquinaria";
+import type { MaquinaResumen } from "@/lib/maquinaria";
 import { getMateriaPrimaVarianteLabel } from "@/lib/materias-primas-variantes-display";
 import {
   SUSTRATO_HOJA_FORMATOS_PRESET,
@@ -199,7 +199,7 @@ type FormState = {
 type MateriaPrimaFichaProps = {
   materiaPrima: MateriaPrima;
   proveedores: ProveedorOpcion[];
-  maquinas: Maquina[];
+  maquinas: MaquinaResumen[];
 };
 
 type InventarioVarianteResumen = {

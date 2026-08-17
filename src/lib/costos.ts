@@ -54,6 +54,7 @@ export type CentroCosto = {
   codigo: string;
   nombre: string;
   descripcion: string;
+  updatedAt: string;
   tipoCentro: TipoCentroCosto;
   activo: boolean;
   estadoConfiguracion: EstadoConfiguracionCentroCosto;
@@ -137,6 +138,7 @@ export type ResumenCentroCostoFila = {
 export type ResumenCentrosCosto = {
   periodo: string;
   centros: ResumenCentroCostoFila[];
+  repartoCuadra: boolean;
   totales: {
     gastos: number;
     absorbido: number;
@@ -219,6 +221,7 @@ export type CentroCostoCapacidad = {
 export type CentroCostoTarifaPeriodo = {
   id: string;
   periodo: string;
+  revision?: number;
   costoMensualTotal: number;
   capacidadPractica: number;
   tarifaCalculada: number;
@@ -226,6 +229,17 @@ export type CentroCostoTarifaPeriodo = {
   resumen: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  publicadaPorUserId?: string | null;
+  publicadaPor?: string | null;
+};
+
+export type GuardarCentroPlanillaPayload = {
+  id?: string;
+  periodo: string;
+  centro: CentroCostoPayload;
+  lineas: CentroCostoLineaPayload[];
+  horasProductivas: number;
+  expectedUpdatedAt?: string;
 };
 
 export type RepartoAbsorbidoCentroCosto = {
@@ -250,6 +264,7 @@ export type CentroCostoConfiguracionDetalle = {
   tarifaBorrador: CentroCostoTarifaPeriodo | null;
   tarifaPublicada: CentroCostoTarifaPeriodo | null;
   repartoAbsorbido?: RepartoAbsorbidoCentroCosto;
+  repartoDistribuido?: { total: number };
   advertencias: string[];
   empleadosDisponibilidad: EmpleadoDisponibilidadCentroCosto[];
 };
@@ -452,10 +467,22 @@ export function getEstadoConfiguracionLabel(
   return estadoConfiguracionLabels.get(value) ?? value;
 }
 
+export function getPeriodoEnZona(
+  zonaHoraria = "America/Argentina/Buenos_Aires",
+  fecha = new Date(),
+) {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zonaHoraria,
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(fecha);
+  const anio = partes.find((parte) => parte.type === "year")?.value;
+  const mes = partes.find((parte) => parte.type === "month")?.value;
+  return anio && mes ? `${anio}-${mes}` : fecha.toISOString().slice(0, 7);
+}
+
 export function getCurrentPeriodo() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  return `${now.getFullYear()}-${month}`;
+  return getPeriodoEnZona();
 }
 
 /** Período "YYYY-MM" inmediatamente anterior (retrocede de enero a diciembre). */
@@ -468,4 +495,3 @@ export function periodoAnterior(periodo: string): string {
   const prevAnio = mes === 1 ? anio - 1 : anio;
   return `${prevAnio}-${String(prevMes).padStart(2, "0")}`;
 }
-

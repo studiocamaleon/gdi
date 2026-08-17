@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import {
   EstadoTarifaCentroCostoPeriodo,
   Prisma,
@@ -6,6 +10,7 @@ import {
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { CostosCatalogoService } from './costos-catalogo.service';
 import { CostosMapper } from './costos.mapper';
 import { CostosRepartoService } from './costos-reparto.service';
@@ -14,6 +19,7 @@ import { CostosValidacionesService } from './costos-validaciones.service';
 import { ReplaceCentroLineasDto } from './dto/replace-centro-lineas.dto';
 import { UpsertCentroCapacidadDto } from './dto/upsert-centro-capacidad.dto';
 import { UpsertCentroConfiguracionBaseDto } from './dto/upsert-centro-configuracion-base.dto';
+import { GuardarCentroPlanillaDto } from './dto/guardar-centro-planilla.dto';
 
 @Injectable()
 export class CostosConfiguracionPeriodoService {
@@ -60,6 +66,11 @@ export class CostosConfiguracionPeriodoService {
       repartoAbsorbido: {
         total: this.mapper.decimalToNumber(costoMensualAbsorbidoReparto),
         desglose: repartoPeriodo.desgloseByCentroId.get(id) ?? [],
+      },
+      repartoDistribuido: {
+        total: this.mapper.decimalToNumber(
+          repartoPeriodo.distribuidoByCentroId.get(id) ?? new Prisma.Decimal(0),
+        ),
       },
       advertencias: this.tarifas.buildAdvertencias(
         centro,
@@ -110,7 +121,8 @@ export class CostosConfiguracionPeriodoService {
       // Un centro que reparte su costo entero no tiene valor hora: lo que cuesta
       // ya se cobra dentro de los productivos que lo absorbieron. Mostrarle una
       // tarifa invitaría a cobrarlo dos veces.
-      const esFuenteDeReparto = centro.tipoCentro === TipoCentroCosto.NO_PRODUCTIVO;
+      const esFuenteDeReparto =
+        centro.tipoCentro === TipoCentroCosto.NO_PRODUCTIVO;
       const horas = centro.capacidadesPeriodo[0]?.horasProductivas ?? null;
       const tieneHoras = !esFuenteDeReparto && horas != null && horas.gt(0);
 
@@ -136,6 +148,14 @@ export class CostosConfiguracionPeriodoService {
     return {
       periodo: normalizedPeriodo,
       centros: filas,
+      repartoCuadra: Array.from(reparto.absorbidoByCentroId.values())
+        .reduce((acc, valor) => acc.plus(valor), new Prisma.Decimal(0))
+        .equals(
+          Array.from(reparto.distribuidoByCentroId.values()).reduce(
+            (acc, valor) => acc.plus(valor),
+            new Prisma.Decimal(0),
+          ),
+        ),
       totales: {
         gastos: filas.reduce((acc, fila) => acc + fila.gastos, 0),
         absorbido: filas.reduce((acc, fila) => acc + fila.absorbido, 0),
@@ -143,6 +163,180 @@ export class CostosConfiguracionPeriodoService {
         gastoTotal: filas.reduce((acc, fila) => acc + fila.gastoTotal, 0),
       },
     };
+  }
+
+  /**
+   * Guarda toda la ficha y publica el período dentro de una única transacción.
+   * O queda todo consistente, o no cambia nada.
+   */
+  async guardarCentroPlanilla(
+    auth: CurrentAuth,
+    payload: GuardarCentroPlanillaDto,
+  ) {
+    const periodo = this.validaciones.normalizePeriodo(payload.periodo);
+    this.validaciones.validateLineas(payload.lineas);
+
+    return this.prisma
+      .$transaction(
+        async (tx) => {
+          let centroId = payload.id;
+          let plantaId = payload.centro.plantaId;
+          if (!plantaId) {
+            const planta = await tx.planta.findFirst({
+              where: { tenantId: auth.tenantId },
+              orderBy: { createdAt: 'asc' },
+              select: { id: true },
+            });
+            plantaId = planta?.id;
+            if (!plantaId) {
+              const creada = await tx.planta.create({
+                data: {
+                  tenantId: auth.tenantId,
+                  codigo: 'PLT-001',
+                  nombre: 'Planta principal',
+                },
+                select: { id: true },
+              });
+              plantaId = creada.id;
+            }
+          }
+
+          const plantaValida = await tx.planta.findFirst({
+            where: { id: plantaId, tenantId: auth.tenantId },
+            select: { id: true },
+          });
+          if (!plantaValida) {
+            throw new BadRequestException(
+              'La planta no pertenece a la empresa actual.',
+            );
+          }
+
+          const centroPayload = { ...payload.centro, plantaId };
+          if (centroId) {
+            const existente = await tx.centroCosto.findFirst({
+              where: { id: centroId, tenantId: auth.tenantId },
+              select: { id: true, updatedAt: true },
+            });
+            if (!existente) {
+              throw new BadRequestException('El centro de costo no existe.');
+            }
+            if (
+              payload.expectedUpdatedAt &&
+              existente.updatedAt.getTime() !==
+                new Date(payload.expectedUpdatedAt).getTime()
+            ) {
+              throw new ConflictException(
+                'Otra persona modificó este centro mientras lo tenías abierto. Recargá la ficha antes de guardar.',
+              );
+            }
+            await tx.centroCosto.update({
+              where: { id: centroId },
+              data: this.mapper.buildUpdateCentroData(centroPayload),
+            });
+          } else {
+            const creado = await tx.centroCosto.create({
+              data: this.mapper.buildCreateCentroData(auth, centroPayload),
+              select: { id: true },
+            });
+            centroId = creado.id;
+          }
+
+          await tx.centroCostoLinea.deleteMany({
+            where: {
+              tenantId: auth.tenantId,
+              centroCostoId: centroId,
+              periodo,
+            },
+          });
+          const lineas = payload.lineas.map((linea, index) =>
+            this.mapper.buildLineaData(auth, centroId, periodo, linea, index),
+          );
+          if (lineas.length > 0)
+            await tx.centroCostoLinea.createMany({ data: lineas });
+
+          await tx.centroCostoCapacidadPeriodo.upsert({
+            where: {
+              tenantId_centroCostoId_periodo: {
+                tenantId: auth.tenantId,
+                centroCostoId: centroId,
+                periodo,
+              },
+            },
+            create: {
+              tenantId: auth.tenantId,
+              centroCostoId: centroId,
+              periodo,
+              horasProductivas: payload.horasProductivas,
+            },
+            update: { horasProductivas: payload.horasProductivas },
+          });
+
+          const publicacion = await this.tarifas.recalcularYPublicarPeriodoEnTx(
+            auth,
+            periodo,
+            tx,
+          );
+          const snapshot = await this.tarifas.buildTarifaSnapshot(
+            auth,
+            centroId,
+            periodo,
+            tx,
+          );
+          const centro = await tx.centroCosto.findUniqueOrThrow({
+            where: { id: centroId },
+            include: {
+              planta: true,
+              capacidadesPeriodo: true,
+              tarifasPeriodo: true,
+            },
+          });
+
+          return {
+            centro: this.mapper.toCentroResponse(centro),
+            publicacion,
+            advertencias: snapshot.advertencias,
+            publicada: snapshot.validaParaPublicar,
+          };
+        },
+        { timeout: 15_000 },
+      )
+      .catch((error: unknown) => {
+        if (
+          error instanceof PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new ConflictException(
+            'Ya existe un centro de costo con ese código en la empresa.',
+          );
+        }
+        throw error;
+      });
+  }
+
+  async toggleCentro(auth: CurrentAuth, id: string, periodo: string) {
+    const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const centro = await tx.centroCosto.findFirst({
+          where: { id, tenantId: auth.tenantId },
+          select: { id: true, activo: true },
+        });
+        if (!centro)
+          throw new BadRequestException('El centro de costo no existe.');
+        const actualizado = await tx.centroCosto.update({
+          where: { id },
+          data: { activo: !centro.activo },
+          select: { id: true, activo: true },
+        });
+        await this.tarifas.recalcularYPublicarPeriodoEnTx(
+          auth,
+          normalizedPeriodo,
+          tx,
+        );
+        return actualizado;
+      },
+      { timeout: 15_000 },
+    );
   }
 
   /**
@@ -164,13 +358,7 @@ export class CostosConfiguracionPeriodoService {
     this.validaciones.validateLineas(payload.lineas);
 
     const data = payload.lineas.map((linea, index) =>
-      this.mapper.buildLineaData(
-        auth,
-        id,
-        normalizedPeriodo,
-        linea,
-        index,
-      ),
+      this.mapper.buildLineaData(auth, id, normalizedPeriodo, linea, index),
     );
 
     const lineas = await this.prisma.$transaction(async (tx) => {
@@ -208,7 +396,7 @@ export class CostosConfiguracionPeriodoService {
     payload: UpsertCentroCapacidadDto,
   ) {
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
-    const centro = await this.validaciones.findCentroOrThrow(auth, id);
+    await this.validaciones.findCentroOrThrow(auth, id);
     const horasProductivas = new Prisma.Decimal(payload.horasProductivas ?? 0);
 
     const result = await this.prisma.centroCostoCapacidadPeriodo.upsert({
@@ -232,5 +420,4 @@ export class CostosConfiguracionPeriodoService {
 
     return this.mapper.toCapacidadResponse(result);
   }
-
 }

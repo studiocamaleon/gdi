@@ -10,8 +10,11 @@ import {
 } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
-import { PaginationDto } from '../common/dto/pagination.dto';
 import { UpsertMaquinaDto } from './dto/upsert-maquina.dto';
+import {
+  ListMaquinasQueryDto,
+  SetMaquinaActivaDto,
+} from './dto/list-maquinas-query.dto';
 import { MaquinariaService } from './maquinaria.service';
 import { Permiso } from '../auth/permiso.decorator';
 
@@ -23,7 +26,7 @@ export class MaquinariaController {
   @Get()
   findAll(
     @CurrentSession() auth: CurrentAuth,
-    @Query() pagination: PaginationDto,
+    @Query() pagination: ListMaquinasQueryDto,
   ) {
     return this.maquinariaService.findAll(auth, pagination);
   }
@@ -31,6 +34,11 @@ export class MaquinariaController {
   @Get(':id')
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.maquinariaService.findOne(auth, id);
+  }
+
+  @Get(':id/historial')
+  historial(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.maquinariaService.historial(auth, id);
   }
 
   @Permiso('costos.gestionar')
@@ -52,6 +60,17 @@ export class MaquinariaController {
     return this.maquinariaService.update(auth, id, payload);
   }
 
+  @Permiso('costos.gestionar')
+  @Patch(':id/activo')
+  setActivo(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: SetMaquinaActivaDto,
+  ) {
+    return this.maquinariaService.setActivo(auth, id, payload.activo);
+  }
+
+  /** Compatibilidad temporal para clientes antiguos. */
   @Permiso('costos.gestionar')
   @Patch(':id/toggle')
   toggle(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {

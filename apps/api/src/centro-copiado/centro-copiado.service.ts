@@ -6,6 +6,7 @@ import {
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 import {
   esImpresionDeFamilia,
   familiaPublicaOutput,
@@ -399,12 +400,20 @@ export class CentroCopiadoService {
     const config = await this.configDe(tenantId);
     const precios = await this.preciosYTiemposCC(tenantId);
     const laseres = await this.prisma.maquina.findMany({
-      where: { tenantId, plantilla: 'IMPRESORA_LASER', activo: true },
+      where: {
+        tenantId,
+        plantilla: 'IMPRESORA_LASER',
+        ...MAQUINA_DISPONIBLE_WHERE,
+      },
       include: { componentesDesgaste: { select: { soloColor: true } } },
       orderBy: { nombre: 'asc' },
     });
     const anilladoras = await this.prisma.maquina.findMany({
-      where: { tenantId, plantilla: 'ANILLADORA', activo: true },
+      where: {
+        tenantId,
+        plantilla: 'ANILLADORA',
+        ...MAQUINA_DISPONIBLE_WHERE,
+      },
       select: { id: true, nombre: true },
       orderBy: { nombre: 'asc' },
     });
@@ -577,7 +586,7 @@ export class CentroCopiadoService {
 
     const ids = [colorId, bnId].filter((x): x is string => !!x);
     const maquinas = await this.prisma.maquina.findMany({
-      where: { id: { in: ids }, tenantId },
+      where: { id: { in: ids }, tenantId, ...MAQUINA_DISPONIBLE_WHERE },
       include: { perfilesOperativos: { select: { id: true, nombre: true } } },
     });
     const perfilId = (mid: string | null): string | null => {

@@ -105,12 +105,19 @@ import {
 } from "@/lib/producto-medidas";
 import { resolverPlanchaUtil } from "@/lib/medida-plancha";
 import {
+  prioridadIdsVarianteRollo,
+  resolverAnchoRolloLineal,
+} from "@/lib/medida-rollo-lineal";
+import {
   getSlotMaterialVariantDisplay,
   getSlotMaterialVariantSortValue,
   sortSlotMaterialVariantsByThickness,
 } from "@/lib/materiales-slot-display";
 import { evaluarJsonLogicBoolean } from "@/lib/json-logic";
-import { getMachineTechnology, machineTechnologyLabel } from "@/lib/maquinaria-tecnologias";
+import {
+  getMachineTechnology,
+  machineTechnologyLabel,
+} from "@/lib/maquinaria-tecnologias";
 import { getCurrentPeriodo } from "@/lib/costos";
 import {
   getPersonalizaciones,
@@ -223,11 +230,6 @@ type SlotMaterialCandidato = {
       lineasMax: number;
     } | null;
   }>;
-};
-
-type MachineMarginsMm = {
-  leftMm: number;
-  rightMm: number;
 };
 
 type ModoColorComercial = {
@@ -350,13 +352,25 @@ const TECHNOLOGY_META: Record<
   string,
   { abbr: string; color: string; desc: string }
 > = {
-  uv: { abbr: "UV", color: "#6d4bd8", desc: "Rígidos y flexibles · seca al instante" },
-  eco_solvente: { abbr: "ES", color: "#2f8fd6", desc: "Vinilos y lonas · exterior" },
+  uv: {
+    abbr: "UV",
+    color: "#6d4bd8",
+    desc: "Rígidos y flexibles · seca al instante",
+  },
+  eco_solvente: {
+    abbr: "ES",
+    color: "#2f8fd6",
+    desc: "Vinilos y lonas · exterior",
+  },
   latex: { abbr: "LX", color: "#1f9d6b", desc: "Interior/exterior · sin olor" },
   laser: { abbr: "LS", color: "#4a4a52", desc: "Papelería · corto tiraje" },
   dtf_uv: { abbr: "DU", color: "#c9599a", desc: "Transfer sobre objetos" },
   dtf_textil: { abbr: "DT", color: "#d9803a", desc: "Estampado en telas" },
-  sublimacion: { abbr: "SB", color: "#db2777", desc: "Sublimación sobre poliéster" },
+  sublimacion: {
+    abbr: "SB",
+    color: "#db2777",
+    desc: "Sublimación sobre poliéster",
+  },
   inkjet: { abbr: "IJ", color: "#0ea5e9", desc: "Inyección de tinta" },
 };
 
@@ -398,19 +412,63 @@ function renderModoColorSwatch(value: string) {
 
 const CARAS_ICONS: Record<string, React.ReactNode> = {
   "1": (
-    <svg className="ap-sheet-ico" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-      <rect x="6" y="3" width="14" height="20" rx="2" fill="#fff" stroke="#14141a" strokeWidth="1.6" />
+    <svg
+      className="ap-sheet-ico"
+      viewBox="0 0 26 26"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="6"
+        y="3"
+        width="14"
+        height="20"
+        rx="2"
+        fill="#fff"
+        stroke="#14141a"
+        strokeWidth="1.6"
+      />
       <line x1="9" y1="8" x2="17" y2="8" stroke="#14141a" strokeWidth="1.4" />
       <line x1="9" y1="12" x2="17" y2="12" stroke="#b8b6b1" strokeWidth="1.4" />
       <line x1="9" y1="16" x2="14" y2="16" stroke="#b8b6b1" strokeWidth="1.4" />
     </svg>
   ),
   "2": (
-    <svg className="ap-sheet-ico" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-      <rect x="3" y="5" width="13" height="18" rx="2" fill="#fff" stroke="#b8b6b1" strokeWidth="1.5" />
-      <rect x="10" y="3" width="13" height="18" rx="2" fill="#fff" stroke="#14141a" strokeWidth="1.6" />
+    <svg
+      className="ap-sheet-ico"
+      viewBox="0 0 26 26"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="3"
+        y="5"
+        width="13"
+        height="18"
+        rx="2"
+        fill="#fff"
+        stroke="#b8b6b1"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="10"
+        y="3"
+        width="13"
+        height="18"
+        rx="2"
+        fill="#fff"
+        stroke="#14141a"
+        strokeWidth="1.6"
+      />
       <line x1="13" y1="8" x2="20" y2="8" stroke="#14141a" strokeWidth="1.4" />
-      <line x1="13" y1="12" x2="20" y2="12" stroke="#b8b6b1" strokeWidth="1.4" />
+      <line
+        x1="13"
+        y1="12"
+        x2="20"
+        y2="12"
+        stroke="#b8b6b1"
+        strokeWidth="1.4"
+      />
     </svg>
   ),
 };
@@ -501,9 +559,15 @@ function materialSelectionKey(configPasoId: string, slotCodigo: string) {
 }
 
 function defaultSlotCandidateId(slot: SlotComercialElige) {
-  const firstWithDefault = slot.candidatos.find((candidate) => candidate.defaultVarianteId);
-  if (firstWithDefault?.defaultVarianteId) return firstWithDefault.defaultVarianteId;
-  if (slot.candidatos.length === 1 && slot.candidatos[0]?.variantes.length === 1) {
+  const firstWithDefault = slot.candidatos.find(
+    (candidate) => candidate.defaultVarianteId,
+  );
+  if (firstWithDefault?.defaultVarianteId)
+    return firstWithDefault.defaultVarianteId;
+  if (
+    slot.candidatos.length === 1 &&
+    slot.candidatos[0]?.variantes.length === 1
+  ) {
     return slot.candidatos[0].variantes[0]?.variantId;
   }
   return undefined;
@@ -565,7 +629,9 @@ function getExactPricingQuantitiesFromConfig(precioConfigJson: unknown) {
   ) {
     return [];
   }
-  const tiers = Array.isArray(config.detalle?.tiers) ? config.detalle.tiers : [];
+  const tiers = Array.isArray(config.detalle?.tiers)
+    ? config.detalle.tiers
+    : [];
   return Array.from(
     new Set(
       tiers
@@ -580,17 +646,24 @@ function getExactPricingQuantitiesFromConfig(precioConfigJson: unknown) {
 }
 
 function getExactPricingQuantities(product: CatalogProduct | null) {
-  return product ? getExactPricingQuantitiesFromConfig(product.precioConfigJson) : [];
+  return product
+    ? getExactPricingQuantitiesFromConfig(product.precioConfigJson)
+    : [];
 }
 
-function coerceQtyToPricingOptions(qty: number, product: CatalogProduct | null) {
+function coerceQtyToPricingOptions(
+  qty: number,
+  product: CatalogProduct | null,
+) {
   const exactQuantities = getExactPricingQuantities(product);
   if (exactQuantities.length === 0) return qty;
   return exactQuantities.includes(qty) ? qty : (exactQuantities[0] ?? qty);
 }
 
 function getCantidadDefault(producto: ProductoListItem) {
-  const exactQuantities = getExactPricingQuantitiesFromConfig(producto.precioConfigJson);
+  const exactQuantities = getExactPricingQuantitiesFromConfig(
+    producto.precioConfigJson,
+  );
   if (exactQuantities.length > 0) return exactQuantities[0] ?? 1;
   if (producto.unidadComercial === "m2") return 1;
   if (producto.unidadComercial === "metro_lineal") return 1;
@@ -624,7 +697,9 @@ function modoMedidasUsaPredefinidas(modoMedidas: string | null | undefined) {
   );
 }
 
-function modoMedidasPermitePersonalizada(modoMedidas: string | null | undefined) {
+function modoMedidasPermitePersonalizada(
+  modoMedidas: string | null | undefined,
+) {
   return modoMedidas === "LIBRE" || modoMedidas === "MIXTA";
 }
 
@@ -652,14 +727,20 @@ function getPliegoActivoDeImpresion(
   ];
   const porId = (id: string | null | undefined) =>
     id ? variantes.find((variante) => variante.id === id) : undefined;
+  // HARDCODED significa exactamente la variante vinculada al slot. Algunos
+  // productos viejos conservan candidatos residuales; tomar su default hacía
+  // que el sheet sintetizara una medida distinta de la que costea el motor.
   const variante =
-    porId(seleccionadaId) ??
-    porId(
-      slot.candidatos
-        .map((candidato) => candidato.defaultVarianteId)
-        .find(Boolean),
-    ) ??
-    slot.materialVariante ??
+    prioridadIdsVarianteRollo({
+      selectionMode: slot.modoSeleccion,
+      hardcodedId: slot.materialVariante?.id,
+      selectedId: seleccionadaId,
+      candidateDefaultIds: slot.candidatos.map(
+        (candidato) => candidato.defaultVarianteId,
+      ),
+    })
+      .map(porId)
+      .find(Boolean) ??
     variantes[0] ??
     null;
   const attrs = getRecord(variante?.atributosVarianteJson);
@@ -725,7 +806,8 @@ function getSelectedPredefinedMeasure(
   medidaPredefinidaId: string,
   medidasResueltas?: MedidaPredefinidaProducto[],
 ) {
-  if (!producto || !modoMedidasUsaPredefinidas(producto.modoMedidas)) return null;
+  if (!producto || !modoMedidasUsaPredefinidas(producto.modoMedidas))
+    return null;
   const medidas = medidasResueltas ?? getMedidasPredefinidas(producto);
   return (
     medidas.find((medida) => medida.id === medidaPredefinidaId) ??
@@ -741,7 +823,11 @@ function formatMedidaPredefinidaSpec(
   if (!medida) return "";
   const size = formatMedidasCm(medida.anchoMm, medida.altoMm);
   const label = medidaLabel(medida);
-  if (!label || label.includes(" mm") || label === `${medida.anchoMm} x ${medida.altoMm} mm`) {
+  if (
+    !label ||
+    label.includes(" mm") ||
+    label === `${medida.anchoMm} x ${medida.altoMm} mm`
+  ) {
     return size;
   }
   return label === size ? size : `${label} · ${size}`;
@@ -761,7 +847,8 @@ function stringFromAttributes(
   for (const key of keys) {
     const value = atributos[key];
     if (typeof value === "string" && value.trim().length > 0) return value;
-    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    if (typeof value === "number" && Number.isFinite(value))
+      return String(value);
   }
   return fallback;
 }
@@ -934,9 +1021,14 @@ function isConfigPasoVisibleForContext(
 ) {
   if (!isExecutableConfigPaso(config)) return false;
   const modo = config.modoActivacion ?? "OBLIGATORIO";
-  if (modo === "OPCIONAL") return Boolean(motorConfig.opcionalesActivados[config.id]);
+  if (modo === "OPCIONAL")
+    return Boolean(motorConfig.opcionalesActivados[config.id]);
   if (modo === "CONDICIONAL") {
-    return evaluarJsonLogicBoolean(config.condicionActivacionJson, ruleContext, false);
+    return evaluarJsonLogicBoolean(
+      config.condicionActivacionJson,
+      ruleContext,
+      false,
+    );
   }
   return modo === "OBLIGATORIO";
 }
@@ -947,7 +1039,11 @@ function isConfigPasoAvailableForOptionalToggle(
 ) {
   if (!isExecutableConfigPaso(config)) return false;
   if (config.modoActivacion === "CONDICIONAL") {
-    return evaluarJsonLogicBoolean(config.condicionActivacionJson, ruleContext, false);
+    return evaluarJsonLogicBoolean(
+      config.condicionActivacionJson,
+      ruleContext,
+      false,
+    );
   }
   return true;
 }
@@ -1083,7 +1179,9 @@ function getCarteleriaDeRuta(
   }
   if (!estructura) return null;
   const paramsEstructura = asRecord(estructura.paramsPasoJson);
-  const tipoBastidor = String(paramsEstructura.tipoBastidor ?? "doble").toLowerCase();
+  const tipoBastidor = String(
+    paramsEstructura.tipoBastidor ?? "doble",
+  ).toLowerCase();
   return {
     tipoCartel: tipoBastidor === "simple" ? "frontlight" : "backlight",
     estructuraConfigPasoId: estructura.id,
@@ -1141,10 +1239,8 @@ function mapSlotMaterial(
                       sku: v.sku,
                       nombreVariante: v.nombreVariante,
                       precioReferencia: v.precioReferencia,
-                      atributosVarianteJson: (v.atributosVarianteJson ?? null) as Record<
-                        string,
-                        unknown
-                      > | null,
+                atributosVarianteJson: (v.atributosVarianteJson ??
+                  null) as Record<string, unknown> | null,
                     },
                   }))
                 : candidate.variantes
@@ -1166,8 +1262,7 @@ function mapSlotMaterial(
                   details: display.details,
                   sku: display.fallbackCode,
                   isFallbackLabel: display.details.length === 0,
-                  atributosVarianteJson:
-                    item.variante.atributosVarianteJson ?? null,
+            atributosVarianteJson: item.variante.atributosVarianteJson ?? null,
                   sortEspesor: getSlotMaterialVariantSortValue(variante),
                   espesorLabel: getVariantThicknessLabel(
                     item.variante.atributosVarianteJson,
@@ -1175,9 +1270,7 @@ function mapSlotMaterial(
                   anchoLabel: getVariantWidthLabel(
                     item.variante.atributosVarianteJson,
                   ),
-                  anchoMm: getVariantWidthMm(
-                    item.variante.atributosVarianteJson,
-                  ),
+            anchoMm: getVariantWidthMm(item.variante.atributosVarianteJson),
                   colorLabel: getVariantColorLabel(
                     item.variante.atributosVarianteJson,
                   ),
@@ -1222,7 +1315,9 @@ function getSelloModelDeRuta(
     const { variant } = findSelectedCandidateVariant(slot, config);
     if (variant?.sello) return variant.sello;
   }
-  const configPasos = ruta?.configPasos.filter(isExecutableConfigPaso).filter(includeConfig) ?? [];
+  const configPasos =
+    ruta?.configPasos.filter(isExecutableConfigPaso).filter(includeConfig) ??
+    [];
   for (const configPaso of configPasos) {
     for (const slot of configPaso.slotsMateriales) {
       const sello = getSelloModelDeVariante(
@@ -1339,7 +1434,9 @@ function normalizeModoColor(value: unknown): string | undefined {
   return value.trim();
 }
 
-type MaquinaCandidataComercial = NonNullable<ConfigPasoDetalle["maquinasCandidatas"]>[number];
+type MaquinaCandidataComercial = NonNullable<
+  ConfigPasoDetalle["maquinasCandidatas"]
+>[number];
 
 type TecnologiaCandidataComercial = {
   value: string;
@@ -1348,7 +1445,11 @@ type TecnologiaCandidataComercial = {
 };
 
 function getPreferredCandidate(candidates: MaquinaCandidataComercial[]) {
-  return candidates.find((candidate) => candidate.esPreferida) ?? candidates[0] ?? null;
+  return (
+    candidates.find((candidate) => candidate.esPreferida) ??
+    candidates[0] ??
+    null
+  );
 }
 
 /** Un paso de plotter de corte cuya máquina declara varios perfiles de
@@ -1527,7 +1628,8 @@ function getModoColorOptionsForConfig(
       tecnologias.size > 1 && activa
         ? candidatas.filter(
             (candidate) =>
-              getCandidateTechnology(candidate) === getCandidateTechnology(activa),
+              getCandidateTechnology(candidate) ===
+              getCandidateTechnology(activa),
           )
         : candidatas;
     const preferida = getPreferredCandidate(pool);
@@ -1537,7 +1639,13 @@ function getModoColorOptionsForConfig(
     ];
     const union = new Map<
       string,
-      { value: string; label: string; perfilIds: string[]; maquinaId: string; maquinaNombre: string }
+      {
+        value: string;
+        label: string;
+        perfilIds: string[];
+        maquinaId: string;
+        maquinaNombre: string;
+      }
     >();
     for (const candidate of ordenadas) {
       const derived = buildModoColorOptionsFromCandidate(candidate).length
@@ -1589,7 +1697,9 @@ function resolveModoColorSeleccionado(
   return values[0] ?? null;
 }
 
-function getModoColorsFromPerfil(perfil: { detalleJson?: Record<string, unknown> | null } | null | undefined) {
+function getModoColorsFromPerfil(
+  perfil: { detalleJson?: Record<string, unknown> | null } | null | undefined,
+) {
   const detalle =
     perfil?.detalleJson && typeof perfil.detalleJson === "object"
       ? perfil.detalleJson
@@ -1605,7 +1715,9 @@ function getModoColorsFromPerfil(perfil: { detalleJson?: Record<string, unknown>
   );
 }
 
-function buildModoColorOptionsFromCandidate(candidate: MaquinaCandidataComercial) {
+function buildModoColorOptionsFromCandidate(
+  candidate: MaquinaCandidataComercial,
+) {
   const allowedValues = Array.isArray(candidate.modoColorAllowedModes)
     ? candidate.modoColorAllowedModes
         .map((mode) => normalizeModoColor(mode))
@@ -1643,11 +1755,16 @@ function getModosColorComercial(
       .filter(includeConfig)
       .map((config) => {
         const modoConfig = getModoColorConfig(config.paramsPasoJson);
-        const usaModosPorCandidata = (config.maquinasCandidatas?.length ?? 0) > 0;
-        const allowedModes = !usaModosPorCandidata && Array.isArray(modoConfig.allowedModes)
+        const usaModosPorCandidata =
+          (config.maquinasCandidatas?.length ?? 0) > 0;
+        const allowedModes =
+          !usaModosPorCandidata && Array.isArray(modoConfig.allowedModes)
           ? modoConfig.allowedModes.map(normalizeModoColor).filter(Boolean)
           : [];
-        const options = getModoColorOptionsForConfig(config, motorConfig).filter(
+        const options = getModoColorOptionsForConfig(
+          config,
+          motorConfig,
+        ).filter(
           (option) =>
             allowedModes.length === 0 ||
             allowedModes.includes(normalizeModoColor(option.value) ?? ""),
@@ -1820,8 +1937,7 @@ function getTiemposManualesComercial(
       .map((config) => {
         const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
         const tiempoManual = params.tiempoManual as
-          | Record<string, unknown>
-          | undefined;
+          Record<string, unknown> | undefined;
         if (
           !tiempoManual ||
           typeof tiempoManual !== "object" ||
@@ -1937,7 +2053,8 @@ function getPasosConTecnologias(
         familiaCodigo: config.rutaPaso.familiaCodigo,
         nombreVisible: config.nombreVisible ?? null,
         tecnologias: Array.from(
-          (config.maquinasCandidatas ?? []).reduce((map, candidate) => {
+          (config.maquinasCandidatas ?? [])
+            .reduce((map, candidate) => {
             const value = getCandidateTechnology(candidate);
             const current = map.get(value);
             if (current) {
@@ -1950,7 +2067,8 @@ function getPasosConTecnologias(
               });
             }
             return map;
-          }, new Map<string, TecnologiaCandidataComercial>()).values(),
+            }, new Map<string, TecnologiaCandidataComercial>())
+            .values(),
         ),
       })) ?? []
   );
@@ -1960,7 +2078,10 @@ function getActiveMachineForConfig(
   config: ConfigPasoDetalle,
   motorConfig: MotorConfigState,
 ) {
-  return getActiveCandidateForConfig(config, motorConfig)?.maquina ?? config.maquinaM1;
+  return (
+    getActiveCandidateForConfig(config, motorConfig)?.maquina ??
+    config.maquinaM1
+  );
 }
 
 function getProductoNecesitaInstalacion(producto: ProductoDetalle | null) {
@@ -1993,7 +2114,11 @@ function getActiveConfigPasos(
   motorConfig: MotorConfigState,
   ruleContext: Record<string, unknown>,
 ) {
-  return ruta?.configPasos.filter((config) => isActiveConfigPaso(config, motorConfig, ruleContext)) ?? [];
+  return (
+    ruta?.configPasos.filter((config) =>
+      isActiveConfigPaso(config, motorConfig, ruleContext),
+    ) ?? []
+  );
 }
 
 function formatNumberForSpec(value: number) {
@@ -2032,7 +2157,10 @@ function parseDecimalInput(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getTextAttr(attrs: Record<string, unknown> | null | undefined, keys: string[]) {
+function getTextAttr(
+  attrs: Record<string, unknown> | null | undefined,
+  keys: string[],
+) {
   for (const key of keys) {
     const raw = attrs?.[key];
     if (typeof raw === "string" && raw.trim()) return raw.trim();
@@ -2041,7 +2169,9 @@ function getTextAttr(attrs: Record<string, unknown> | null | undefined, keys: st
   return null;
 }
 
-function getVariantThicknessLabel(attrs: Record<string, unknown> | null | undefined) {
+function getVariantThicknessLabel(
+  attrs: Record<string, unknown> | null | undefined,
+) {
   const entries = [
     { value: attrs?.espesor, unit: "mm" },
     { value: attrs?.espesorMm, unit: "mm" },
@@ -2058,7 +2188,9 @@ function getVariantThicknessLabel(attrs: Record<string, unknown> | null | undefi
   return `${formatNumberForSpec(value)} ${entry?.unit ?? "mm"}`;
 }
 
-function getVariantWidthLabel(attrs: Record<string, unknown> | null | undefined) {
+function getVariantWidthLabel(
+  attrs: Record<string, unknown> | null | undefined,
+) {
   const value = getVariantWidthMm(attrs);
   return value ? `${formatNumberForSpec(value / 10)} cm` : null;
 }
@@ -2070,7 +2202,12 @@ function getVariantWidthLabel(attrs: Record<string, unknown> | null | undefined)
 function getSelloModelDeVariante(
   attrs: Record<string, unknown> | null | undefined,
   fallbackNombre: string,
-): { nombre: string; widthMm: number; heightMm: number; lineasMax: number } | null {
+): {
+  nombre: string;
+  widthMm: number;
+  heightMm: number;
+  lineasMax: number;
+} | null {
   if (!attrs) return null;
   const num = (v: unknown) => {
     const n = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
@@ -2084,7 +2221,12 @@ function getSelloModelDeVariante(
     typeof attrs.modelo === "string" && attrs.modelo.trim()
       ? attrs.modelo.trim()
       : fallbackNombre;
-  return { nombre: modelo, widthMm: w, heightMm: h, lineasMax: Math.round(lineas) };
+  return {
+    nombre: modelo,
+    widthMm: w,
+    heightMm: h,
+    lineasMax: Math.round(lineas),
+  };
 }
 
 function getVariantWidthMm(attrs: Record<string, unknown> | null | undefined) {
@@ -2126,39 +2268,16 @@ function getRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function getMachineMarginsMm(
-  machine: NonNullable<ConfigPasoDetalle["maquinaM1"]> | null | undefined,
-): MachineMarginsMm {
-  const params = getRecord(machine?.parametrosTecnicosJson);
-  const source = getRecord(params.margenesNoImprimiblesMm);
-  const uniform =
-    getNumberFromUnknown(params.margenNoImprimibleMm) ??
-    getNumberFromUnknown(params.margenNoImprimible);
-  const left =
-    getNumberFromUnknown(source.leftMm) ??
-    getNumberFromUnknown(source.izq) ??
-    getNumberFromUnknown(source.left) ??
-    uniform ??
-    0;
-  const right =
-    getNumberFromUnknown(source.rightMm) ??
-    getNumberFromUnknown(source.der) ??
-    getNumberFromUnknown(source.right) ??
-    uniform ??
-    0;
-
-  return {
-    leftMm: Math.max(0, left),
-    rightMm: Math.max(0, right),
-  };
-}
-
-function getVariantColorLabel(attrs: Record<string, unknown> | null | undefined) {
+function getVariantColorLabel(
+  attrs: Record<string, unknown> | null | undefined,
+) {
   return getTextAttr(attrs, ["colorBase", "color", "colorMaterial"]);
 }
 
 function candidateUsesColorThickness(candidate: SlotMaterialCandidato) {
-  return candidate.variantes.some((variant) => variant.colorLabel && variant.espesorLabel);
+  return candidate.variantes.some(
+    (variant) => variant.colorLabel && variant.espesorLabel,
+  );
 }
 
 type VariantCardDisplay = {
@@ -2340,7 +2459,8 @@ function findSelectedCandidateVariant(
   config: Pick<MotorConfigState, "seleccionMaterial">,
 ) {
   const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
-  const selected = config.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
+  const selected =
+    config.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
   const candidate =
     slot.candidatos.find((item) =>
       item.variantes.some((variant) => variant.variantId === selected),
@@ -2373,15 +2493,20 @@ function getSelectedMaterialSummaries(
   return slotsForSummary
     .map((slot) => {
       const selectedId =
-        config.seleccionMaterial[materialSelectionKey(slot.configPasoId, slot.slotCodigo)] ||
-        defaultSlotCandidateId(slot);
+        config.seleccionMaterial[
+          materialSelectionKey(slot.configPasoId, slot.slotCodigo)
+        ] || defaultSlotCandidateId(slot);
       const selectedCandidate =
         slot.candidatos.find(
           (candidate) =>
-            candidate.variantes.some((variant) => variant.variantId === selectedId) ||
+            candidate.variantes.some(
+              (variant) => variant.variantId === selectedId,
+            ) ||
             Boolean(selectedId && candidate.defaultVarianteId === selectedId),
         ) ??
-        (!selectedId && slot.candidatos.length === 1 ? slot.candidatos[0] : null);
+        (!selectedId && slot.candidatos.length === 1
+          ? slot.candidatos[0]
+          : null);
       const selectedVariant = selectedCandidate?.variantes.find(
         (variant) => variant.variantId === selectedId,
       );
@@ -2403,7 +2528,10 @@ function getMachineTemplate(
   config: RutaAlternativaDetalle["configPasos"][number],
   motorConfig: MotorConfigState,
 ) {
-  return getActiveMachineForConfig(config, motorConfig)?.plantilla?.toUpperCase() ?? "";
+  return (
+    getActiveMachineForConfig(config, motorConfig)?.plantilla?.toUpperCase() ??
+    ""
+  );
 }
 
 function getImpressionProcessLabel(
@@ -2421,13 +2549,14 @@ function getProcessLabels(
   ruleContext: Record<string, unknown>,
 ) {
   const labels: string[] = [];
-  for (const paso of getActiveConfigPasos(rutaSeleccionada, config, ruleContext)) {
+  for (const paso of getActiveConfigPasos(
+    rutaSeleccionada,
+    config,
+    ruleContext,
+  )) {
     const familia = paso.rutaPaso.familiaCodigo;
     const template = getMachineTemplate(paso, config);
-    if (
-      familia.startsWith("impresion_") ||
-      template.includes("IMPRESORA")
-    ) {
+    if (familia.startsWith("impresion_") || template.includes("IMPRESORA")) {
       labels.push(getImpressionProcessLabel(paso, config));
       continue;
     }
@@ -2517,14 +2646,22 @@ function getOpcionales(
   return Array.from(opcionales.values());
 }
 
-function mapProductoReal(producto: ProductoListItem | ProductoDetalle): CatalogProduct {
+function mapProductoReal(
+  producto: ProductoListItem | ProductoDetalle,
+): CatalogProduct {
   const categoria = producto.subcategoriaComercial.categoria;
   const subcategoria = producto.subcategoriaComercial;
   const atributos = producto.atributosComercialesJson ?? {};
   const schema = subcategoria.atributosSchemaJson.length
     ? subcategoria.atributosSchemaJson
     : [
-        { key: "detalle", label: "Detalle", tipo: "text", visible: true, orden: 10 },
+        {
+          key: "detalle",
+          label: "Detalle",
+          tipo: "text",
+          visible: true,
+          orden: 10,
+        },
       ];
   const unidad =
     producto.unidadComercial === "m2"
@@ -2556,7 +2693,8 @@ function mapProductoReal(producto: ProductoListItem | ProductoDetalle): CatalogP
     precioBase: 0,
     precioConfigJson: producto.precioConfigJson,
     minimoComercialPolitica: producto.minimoComercialPolitica ?? "NONE",
-    minimoComercialCantidad: Number(producto.minimoComercialCantidad ?? 0) || null,
+    minimoComercialCantidad:
+      Number(producto.minimoComercialCantidad ?? 0) || null,
     minimoComercialBase: producto.minimoComercialBase ?? "cantidad_comercial",
     descripcion: producto.descripcion ?? categoria.nombre,
     specs: schema
@@ -2567,11 +2705,15 @@ function mapProductoReal(producto: ProductoListItem | ProductoDetalle): CatalogP
         return {
           key: spec.key,
           label: spec.label,
-          type: (spec.tipo === "select" ? "select" : "text") as CatalogSpec["type"],
+          type: (spec.tipo === "select"
+            ? "select"
+            : "text") as CatalogSpec["type"],
           def,
         };
       })
-      .filter((spec) => shouldShowCommercialSpec(spec, spec.def, { real: true })),
+      .filter((spec) =>
+        shouldShowCommercialSpec(spec, spec.def, { real: true }),
+      ),
     adicionales: getOpcionales(producto),
     qtyDefault: getCantidadDefault(producto),
     costoUnitario: 0,
@@ -2593,7 +2735,9 @@ function getTotals(product: CatalogProduct, qty: number, adi: string[]) {
   }
   const subtotal = Math.round(qty * product.precioBase);
   const adicionalesMonto = adi.reduce((sum, code) => {
-    const item = product.adicionales.find((adicional) => adicional.code === code);
+    const item = product.adicionales.find(
+      (adicional) => adicional.code === code,
+    );
     return sum + (item?.monto ?? 0);
   }, 0);
   const subtotalConAdi = subtotal + adicionalesMonto;
@@ -2605,7 +2749,15 @@ function getTotals(product: CatalogProduct, qty: number, adi: string[]) {
       ? ((subtotalConAdi - costoEstimado) / subtotalConAdi) * 100
       : 0;
 
-  return { subtotal, adicionalesMonto, subtotalConAdi, impuestos, costoEstimado, total, margen };
+  return {
+    subtotal,
+    adicionalesMonto,
+    subtotalConAdi,
+    impuestos,
+    costoEstimado,
+    total,
+    margen,
+  };
 }
 
 function getCotizacionExitosa(res: CotizarResponse | null) {
@@ -2659,7 +2811,8 @@ function getCotizacionImpuestos(cotizacion: CotizacionExitosa) {
 }
 
 function getCotizacionMargen(cotizacion: CotizacionExitosa) {
-  if (cotizacion.desglosePrecio) return cotizacion.desglosePrecio.margenEfectivoPct;
+  if (cotizacion.desglosePrecio)
+    return cotizacion.desglosePrecio.margenEfectivoPct;
   const neto = getCotizacionNeto(cotizacion);
   return neto > 0 ? ((neto - cotizacion.costos.total) / neto) * 100 : 0;
 }
@@ -2670,7 +2823,9 @@ function labelPrecioUnitario(unidad: string) {
   return "Precio por unidad";
 }
 
-function isMetroLinealConMedidasVariables(productoDetalle: ProductoDetalle | null) {
+function isMetroLinealConMedidasVariables(
+  productoDetalle: ProductoDetalle | null,
+) {
   return (
     productoDetalle?.unidadComercial === "metro_lineal" &&
     (modoMedidasPermitePersonalizada(productoDetalle.modoMedidas) ||
@@ -2690,7 +2845,9 @@ function usaPiezasParaCotizar(
   );
 }
 
-function usaCantidadComercialParaPiezas(productoDetalle: ProductoDetalle | null) {
+function usaCantidadComercialParaPiezas(
+  productoDetalle: ProductoDetalle | null,
+) {
   return (
     productoDetalle?.unidadComercial === "unidad" &&
     modoMedidasPermitePersonalizada(productoDetalle.modoMedidas) &&
@@ -2729,7 +2886,9 @@ function medidasPersonalizadasIncompletas(
   );
 }
 
-function getCotizacionPasos(cotizacion: CotizacionExitosa): PasoProduccionPropuesta[] {
+function getCotizacionPasos(
+  cotizacion: CotizacionExitosa,
+): PasoProduccionPropuesta[] {
   return cotizacion.pasos
     .filter((paso) => paso.activado)
     .map((paso) => ({
@@ -2750,50 +2909,53 @@ function getSelectedLinearMaterialMetrics(
   config: MotorConfigState,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
 ) {
-  const rutaSel = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
+  const rutaSel = getRutaSeleccionada(
+    productoDetalle,
+    config.rutaAlternativaId,
+  );
   for (const slot of slotsComercialElige) {
     if (slot.formula !== "por_metro_lineal") continue;
-    const configPaso = rutaSel?.configPasos.find((paso) => paso.id === slot.configPasoId);
+    const configPaso = rutaSel?.configPasos.find(
+      (paso) => paso.id === slot.configPasoId,
+    );
     if (configPaso && !includeConfig(configPaso)) continue;
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
-    const selected = config.seleccionMaterial[key] || defaultSlotCandidateId(slot);
+    const selected =
+      config.seleccionMaterial[key] || defaultSlotCandidateId(slot);
     if (!selected) continue;
     for (const candidate of slot.candidatos) {
-      const variant = candidate.variantes.find((item) => item.variantId === selected);
+      const variant = candidate.variantes.find(
+        (item) => item.variantId === selected,
+      );
       if (!variant?.anchoMm) continue;
-      const margins = getMachineMarginsMm(
-        configPaso ? getActiveMachineForConfig(configPaso, config) : null,
-      );
-      const usableWidthMm = Math.max(
-        0,
-        variant.anchoMm - margins.leftMm - margins.rightMm,
-      );
-      return {
+      const machine = configPaso
+        ? getActiveMachineForConfig(configPaso, config)
+        : null;
+      const resolved = resolverAnchoRolloLineal({
         materialWidthMm: variant.anchoMm,
-        usableWidthMm: usableWidthMm > 0 ? usableWidthMm : variant.anchoMm,
-        margins,
-      };
+        machineWidthMm: machine?.anchoUtil,
+        machineParams: getRecord(machine?.parametrosTecnicosJson),
+        stepParams: getRecord(configPaso?.paramsPasoJson),
+      });
+      if (resolved) return resolved;
     }
   }
-  // Fallback: si no hay un slot de material por metro lineal (ej: plotter CAD,
-  // impresión por área sobre rollo), el ancho lo aporta el rollo de la máquina
-  // de impresión (anchoUtil). El motor sintetiza la pieza = ancho útil × ml.
+  // Si el slot del sustrato no usa fórmula por metro lineal (ej. Plotter CAD),
+  // igual se toma su rollo HARDCODED. El material real manda sobre la boca de
+  // la máquina: un papel de 914 mm en una máquina de 920 mm tiene 904 mm útiles
+  // después de descontar márgenes de 5 + 5 mm.
   for (const configPaso of rutaSel?.configPasos ?? []) {
     if (configPaso.rutaPaso.familiaCodigo !== "impresion_por_area") continue;
     if (!includeConfig(configPaso)) continue;
     const machine = getActiveMachineForConfig(configPaso, config);
-    const anchoRolloMm = getNumberFromUnknown(machine?.anchoUtil);
-    if (!anchoRolloMm || anchoRolloMm <= 0) continue;
-    const margins = getMachineMarginsMm(machine);
-    const usableWidthMm = Math.max(
-      0,
-      anchoRolloMm - margins.leftMm - margins.rightMm,
-    );
-    return {
-      materialWidthMm: anchoRolloMm,
-      usableWidthMm: usableWidthMm > 0 ? usableWidthMm : anchoRolloMm,
-      margins,
-    };
+    const sustrato = getPliegoActivoDeImpresion(configPaso, config);
+    const resolved = resolverAnchoRolloLineal({
+      materialWidthMm: sustrato?.anchoMm,
+      machineWidthMm: machine?.anchoUtil,
+      machineParams: getRecord(machine?.parametrosTecnicosJson),
+      stepParams: getRecord(configPaso.paramsPasoJson),
+    });
+    if (resolved) return resolved;
   }
   // Fallback: corte sobre rollo (plotter de corte con sustrato propio, ej.
   // vinilo). El slot de sustrato es HARDCODED — no lo elige el comercial, así
@@ -2806,18 +2968,14 @@ function getSelectedLinearMaterialMetrics(
     if (!includeConfig(configPaso)) continue;
     const sustrato = getPliegoActivoDeImpresion(configPaso, config);
     if (!sustrato || sustrato.anchoMm <= 0) continue;
-    const margins = getMachineMarginsMm(
-      getActiveMachineForConfig(configPaso, config),
-    );
-    const usableWidthMm = Math.max(
-      0,
-      sustrato.anchoMm - margins.leftMm - margins.rightMm,
-    );
-    return {
+    const machine = getActiveMachineForConfig(configPaso, config);
+    const resolved = resolverAnchoRolloLineal({
       materialWidthMm: sustrato.anchoMm,
-      usableWidthMm: usableWidthMm > 0 ? usableWidthMm : sustrato.anchoMm,
-      margins,
-    };
+      machineWidthMm: machine?.anchoUtil,
+      machineParams: getRecord(machine?.parametrosTecnicosJson),
+      stepParams: getRecord(configPaso.paramsPasoJson),
+    });
+    if (resolved) return resolved;
   }
   return null;
 }
@@ -2833,7 +2991,7 @@ function personalizacionEstadoEfectivo(
   config: MotorConfigState,
 ): { activa: boolean; anchoMm: number; altoMm: number } {
   const estado = config.personalizaciones?.[p.codigo];
-  const activa = p.obligatoria ? true : estado?.activa ?? false;
+  const activa = p.obligatoria ? true : (estado?.activa ?? false);
   if (p.modoMedida === "FIJA") {
     return { activa, anchoMm: p.anchoMm, altoMm: p.altoMm };
   }
@@ -2869,9 +3027,9 @@ function buildJobContext(
     config.modoCotizacionLineal === "directo";
   const piezasUsanCantidadComercial =
     cotizaConPiezas && usaCantidadComercialParaPiezas(productoDetalle);
-  const usaMedidaPersonalizadaReal = cotizaConPiezas && config.piezas.length > 0;
-  const cantidadTrabajo =
-    cotizaLinealDirecto
+  const usaMedidaPersonalizadaReal =
+    cotizaConPiezas && config.piezas.length > 0;
+  const cantidadTrabajo = cotizaLinealDirecto
       ? 1
       : piezasUsanCantidadComercial
       ? qty
@@ -2922,8 +3080,7 @@ function buildJobContext(
       ctx[`caras_${configPasoId}`] = carasPaso;
     }
   }
-  const materialLinealMetrics =
-    cotizaLinealDirecto
+  const materialLinealMetrics = cotizaLinealDirecto
       ? getSelectedLinearMaterialMetrics(
           productoDetalle,
           slotsComercialElige,
@@ -2954,7 +3111,9 @@ function buildJobContext(
     productoDetalle?.personalizacionesJson,
   )
     .map((p) => personalizacionEstadoEfectivo(p, config))
-    .filter((estado) => estado.activa && estado.anchoMm > 0 && estado.altoMm > 0)
+    .filter(
+      (estado) => estado.activa && estado.anchoMm > 0 && estado.altoMm > 0,
+    )
     .map((estado, index) => ({
       uiKey: `pers-pieza-${index}`,
       cantidad: cantidadTrabajo,
@@ -2962,8 +3121,7 @@ function buildJobContext(
       altoMm: estado.altoMm,
     }));
 
-  const piezasContexto =
-    usaMedidaPersonalizadaReal
+  const piezasContexto = usaMedidaPersonalizadaReal
       ? config.piezas
       : piezaLinealDirecta.length > 0
         ? piezaLinealDirecta
@@ -2986,8 +3144,12 @@ function buildJobContext(
       anchoMm: pieza.anchoMm,
       altoMm: pieza.altoMm,
     }));
-    ctx.piezaAnchoMaxMm = Math.max(...piezasContexto.map((pieza) => pieza.anchoMm));
-    ctx.piezaAltoMaxMm = Math.max(...piezasContexto.map((pieza) => pieza.altoMm));
+    ctx.piezaAnchoMaxMm = Math.max(
+      ...piezasContexto.map((pieza) => pieza.anchoMm),
+    );
+    ctx.piezaAltoMaxMm = Math.max(
+      ...piezasContexto.map((pieza) => pieza.altoMm),
+    );
     ctx.piezaAreaTotalM2 = piezasContexto.reduce(
       (total, pieza) =>
         total +
@@ -3041,7 +3203,8 @@ function buildJobContext(
   const slotMateriales: Record<string, string> = {};
   for (const slot of slotsComercialElige) {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
-    const variantId = config.seleccionMaterial[key] || defaultSlotCandidateId(slot);
+    const variantId =
+      config.seleccionMaterial[key] || defaultSlotCandidateId(slot);
     if (!variantId) continue;
     slotMateriales[key] = variantId;
     ctx[`slotMaterial_${key}`] = variantId;
@@ -3050,26 +3213,36 @@ function buildJobContext(
       ctx[`slotMaterial_${slot.slotCodigo}`] = variantId;
     }
   }
-  if (Object.keys(slotMateriales).length > 0) ctx.slotMateriales = slotMateriales;
+  if (Object.keys(slotMateriales).length > 0)
+    ctx.slotMateriales = slotMateriales;
 
-  for (const [configPasoId, maquinaId] of Object.entries(config.seleccionMaquina)) {
+  for (const [configPasoId, maquinaId] of Object.entries(
+    config.seleccionMaquina,
+  )) {
     if (maquinaId) ctx[`maquinaSeleccionada_${configPasoId}`] = maquinaId;
   }
 
   // Override explícito de perfil de impresión elegido por el comercial
   // ("Modificar perfil"). El motor lo valida contra la máquina activa.
-  for (const [configPasoId, perfilId] of Object.entries(config.seleccionPerfil)) {
+  for (const [configPasoId, perfilId] of Object.entries(
+    config.seleccionPerfil,
+  )) {
     if (perfilId) ctx[`perfilSeleccionado_${configPasoId}`] = perfilId;
   }
 
-  const rutaSel = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
+  const rutaSel = getRutaSeleccionada(
+    productoDetalle,
+    config.rutaAlternativaId,
+  );
 
   // Valores de eje de un paso tercerizado con matriz → el motor hace el lookup.
   // El eje `cantidad` se toma de `qty` (la cantidad del ítem es la fuente única),
   // no de un campo aparte; los demás ejes vienen de la selección del comercial.
   for (const cp of tercerizadoMatrizPasos(rutaSel?.configPasos ?? [])) {
     const elegidos = config.seleccionTercerizado?.[cp.id] ?? {};
-    const usaCantidad = tercerizadoEjes(cp).some((eje) => eje.clave === "cantidad");
+    const usaCantidad = tercerizadoEjes(cp).some(
+      (eje) => eje.clave === "cantidad",
+    );
     const valores = usaCantidad
       ? { ...elegidos, cantidad: String(qty) }
       : elegidos;
@@ -3097,7 +3270,8 @@ function buildJobContext(
     rutaSel?.configPasos ?? [],
     config.paramsComercial ?? {},
     (configPasoId, modoActivacion) =>
-      modoActivacion !== "OPCIONAL" || Boolean(opcionalesEfectivos[configPasoId]),
+      modoActivacion !== "OPCIONAL" ||
+      Boolean(opcionalesEfectivos[configPasoId]),
   );
   // (El merge espejo de cartelería murió con la Etapa 3 de derivadores:
   // `buildConfigPasoRuntime` ya no filtra campos client-side — la autoridad
@@ -3128,8 +3302,9 @@ function buildJobContext(
   if (!ctx.tecnologia) {
     for (const configPaso of rutaSel?.configPasos ?? []) {
       if (!configPaso.tercerizado || !includeConfig(configPaso)) continue;
-      const tec = (configPaso.tercerizadoConfigJson as { tecnologia?: unknown } | null)
-        ?.tecnologia;
+      const tec = (
+        configPaso.tercerizadoConfigJson as { tecnologia?: unknown } | null
+      )?.tecnologia;
       if (typeof tec === "string" && tec) {
         ctx.tecnologia = tec;
         break;
@@ -3244,7 +3419,11 @@ function calcularCantidadComercial(
   config: MotorConfigState | undefined,
   qty: number,
 ) {
-  if (config && usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length) {
+  if (
+    config &&
+    usaPiezasParaCotizar(productoDetalle, config) &&
+    config.piezas.length
+  ) {
     if (usaCantidadComercialParaPiezas(productoDetalle)) {
       return qty;
     }
@@ -3297,7 +3476,10 @@ function getMinimumCommercialStatus(
     if (aplicado?.base === "pliegos_impresos") {
       const realLabel = `${formatCommercialQuantity(aplicado.cantidadReal)} ${aplicado.unidadLabel}`;
       const minimoLabel = `${formatCommercialQuantity(aplicado.cantidadMinima)} ${aplicado.unidadLabel}`;
-      if (aplicado.politica === "BLOQUEAR" && aplicado.cantidadReal < aplicado.cantidadMinima) {
+      if (
+        aplicado.politica === "BLOQUEAR" &&
+        aplicado.cantidadReal < aplicado.cantidadMinima
+      ) {
         return {
           kind: "blocked" as const,
           message: `Se necesitan ${realLabel}, pero este producto requiere un mínimo de ${minimoLabel}.`,
@@ -3322,7 +3504,12 @@ function getMinimumCommercialStatus(
       minimo,
     };
   }
-  const cantidadReal = calcularCantidadComercial(product, productoDetalle, config, qty);
+  const cantidadReal = calcularCantidadComercial(
+    product,
+    productoDetalle,
+    config,
+    qty,
+  );
   if (cantidadReal >= minimo) return null;
   const minimoLabel = `${formatCommercialQuantity(minimo)} ${product.unidad}`;
   if (product.minimoComercialPolitica === "BLOQUEAR") {
@@ -3353,18 +3540,22 @@ function buildPresentableSpecs(
   const base = Object.fromEntries(
     product.specs.map((spec) => [spec.key, specs[spec.key] ?? spec.def]),
   );
-  const hasSpec = (key: string) => product.specs.some((spec) => spec.key === key);
+  const hasSpec = (key: string) =>
+    product.specs.some((spec) => spec.key === key);
   const setSpec = (key: string, value: string | undefined) => {
     if (!value) return;
     if (!hasSpec(key) && !ENRICHED_SPEC_LABELS[key]) return;
     if (!hasUsefulSpecValue(value)) return;
     base[key] = value;
   };
-  const rutaSeleccionada = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
+  const rutaSeleccionada = getRutaSeleccionada(
+    productoDetalle,
+    config.rutaAlternativaId,
+  );
   const hardcodedMaterials =
     rutaSeleccionada?.configPasos
-      .filter(
-        (paso) => isConfigPasoVisibleForContext(paso, config, ruleContext),
+      .filter((paso) =>
+        isConfigPasoVisibleForContext(paso, config, ruleContext),
       )
       .flatMap((paso) => paso.slotsMateriales)
       .filter(
@@ -3372,7 +3563,10 @@ function buildPresentableSpecs(
           slot.modoSeleccion === "HARDCODED" &&
           MATERIAL_BASE_SLOT_CODES.has(slot.slotCodigo),
       )
-      .map((slot) => slot.materialVariante?.nombreVariante ?? slot.materialVariante?.sku)
+      .map(
+        (slot) =>
+          slot.materialVariante?.nombreVariante ?? slot.materialVariante?.sku,
+      )
       .filter((value): value is string => Boolean(value)) ?? [];
   const selectedMaterialSummaries = getSelectedMaterialSummaries(
     slotsComercialElige,
@@ -3405,7 +3599,8 @@ function buildPresentableSpecs(
     // "u." para que no se lea como una dimensión más ("100 × 2 × 2 cm").
     // Espejo de buildJobContext: para productos por unidad la cantidad que
     // cotiza el motor es la comercial (qty), no la de la fila de pieza.
-    const piezasUsanCantidadComercial = usaCantidadComercialParaPiezas(productoDetalle);
+    const piezasUsanCantidadComercial =
+      usaCantidadComercialParaPiezas(productoDetalle);
     const grupos = new Map<string, number>();
     for (const pieza of config.piezas) {
       const medida = formatMedidasCm(pieza.anchoMm, pieza.altoMm);
@@ -3417,7 +3612,10 @@ function buildPresentableSpecs(
       grupos.set(medida, (grupos.get(medida) ?? 0) + cantidad);
     }
     const medidas = Array.from(grupos.entries())
-      .map(([medida, cantidad]) => `${cantidad.toLocaleString("es-AR")} u. × ${medida}`)
+      .map(
+        ([medida, cantidad]) =>
+          `${cantidad.toLocaleString("es-AR")} u. × ${medida}`,
+      )
       .join("\n");
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
@@ -3473,10 +3671,7 @@ function buildPresentableSpecs(
           return `${nombre}: ${caras === 2 ? "doble" : "simple"} faz`;
         });
       const resto = `Resto: ${config.caras === 2 ? "doble" : "simple"} faz`;
-      setSpec(
-        "caras",
-        [...(detallePorPaso ?? []), resto].join(" · "),
-      );
+      setSpec("caras", [...(detallePorPaso ?? []), resto].join(" · "));
     } else {
       setSpec("caras", config.caras === 2 ? "Doble faz" : "Simple faz");
     }
@@ -3499,8 +3694,9 @@ function buildPresentableSpecs(
         normalizeModoColor(modo.options[0]?.value);
       if (!value) return null;
       const label =
-        modo.options.find((option) => normalizeModoColor(option.value) === value)?.label ??
-        value;
+        modo.options.find(
+          (option) => normalizeModoColor(option.value) === value,
+        )?.label ?? value;
       return modosColor.length > 1
         ? `${modo.nombreVisible?.trim() || humanizeCodigo(modo.familiaCodigo)}: ${label}`
         : label;
@@ -3512,7 +3708,8 @@ function buildPresentableSpecs(
     base.modo_color = selectedModoColorLabels.join(" · ");
   }
   const processLabels = getProcessLabels(rutaSeleccionada, config, ruleContext);
-  const tecnologiaLabel = processLabels.length > 0 ? processLabels.join(" / ") : "";
+  const tecnologiaLabel =
+    processLabels.length > 0 ? processLabels.join(" / ") : "";
   if (tecnologiaLabel) {
     setSpec("tecnologia", tecnologiaLabel);
     setSpec("tecnologia_proceso", tecnologiaLabel);
@@ -3537,7 +3734,9 @@ function buildPresentableSpecs(
   > = [
     // Slots HARDCODED (material fijo del paso).
     ...(rutaSeleccionada?.configPasos ?? [])
-      .filter((paso) => isConfigPasoVisibleForContext(paso, config, ruleContext))
+      .filter((paso) =>
+        isConfigPasoVisibleForContext(paso, config, ruleContext),
+      )
       .flatMap((paso) => paso.slotsMateriales)
       .map((slot) => slot.materialVariante?.atributosVarianteJson),
     // Slots COMERCIAL_ELIGE: el comercial eligió la variante al cotizar (vive en
@@ -3665,7 +3864,8 @@ function isModoColorDuplicateSpec(
 ) {
   if (!["impresion", "impresion_color", "color"].includes(key)) return false;
   const modoColor = specs?.modo_color;
-  if (!hasUsefulSpecValue(value) || !hasUsefulSpecValue(modoColor)) return false;
+  if (!hasUsefulSpecValue(value) || !hasUsefulSpecValue(modoColor))
+    return false;
   return value.trim().toLowerCase() === modoColor.trim().toLowerCase();
 }
 
@@ -3678,7 +3878,10 @@ function shouldShowCommercialSpec(
   const hiddenKeys = new Set(["tipo_pieza", "tipoPieza", "tipo_de_pieza"]);
   if (hiddenKeys.has(spec.key)) return false;
   if (isModoColorDuplicateSpec(spec.key, value, specs)) return false;
-  if (spec.key === "uso_aplicacion" && value?.trim().toLowerCase() === "interior / exterior") {
+  if (
+    spec.key === "uso_aplicacion" &&
+    value?.trim().toLowerCase() === "interior / exterior"
+  ) {
     return false;
   }
   return product.real ? hasUsefulSpecValue(value) : true;
@@ -3702,14 +3905,19 @@ function buildItem(
 ) {
   const cotizacion = getCotizacionExitosa(options?.cotizacion ?? null);
   if (!cotizacion) {
-    throw new Error("La propuesta solo puede agregar productos cotizados por el Motor Universal.");
+    throw new Error(
+      "La propuesta solo puede agregar productos cotizados por el Motor Universal.",
+    );
   }
   const selectedAdicionales = product.adicionales
     .filter((adicional) => adi.includes(adicional.code))
     .map((adicional) => adicional.name);
   const cargosCotizados =
-    cotizacion?.cargosDirectosCotizacion.map((cargo) => cargo.cargoNombre) ?? [];
-  const adicionales = Array.from(new Set([...selectedAdicionales, ...cargosCotizados]));
+    cotizacion?.cargosDirectosCotizacion.map((cargo) => cargo.cargoNombre) ??
+    [];
+  const adicionales = Array.from(
+    new Set([...selectedAdicionales, ...cargosCotizados]),
+  );
   const especificaciones = options
     ? buildPresentableSpecs(
         product,
@@ -3765,7 +3973,12 @@ function buildItem(
     key: spec.key,
     label: spec.label,
     tipo: spec.type,
-    visible: shouldShowCommercialSpec(spec, especificaciones[spec.key], product, especificaciones),
+    visible: shouldShowCommercialSpec(
+      spec,
+      especificaciones[spec.key],
+      product,
+      especificaciones,
+    ),
     orden: (index + 1) * 10,
   }));
   if (
@@ -3796,7 +4009,8 @@ function buildItem(
     id: options?.itemId ?? crypto.randomUUID(),
     productoNombre: product.name,
     productoCodigo: product.code,
-    motorCodigo: product.id ?? product.family.toLowerCase().replaceAll(" ", "_"),
+    motorCodigo:
+      product.id ?? product.family.toLowerCase().replaceAll(" ", "_"),
     categoriaComercialCodigo: product.categoriaComercialCodigo,
     categoriaComercialNombre: product.categoriaComercialNombre,
     subcategoriaComercialCodigo: product.subcategoriaComercialCodigo,
@@ -3842,7 +4056,10 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       : {};
   const seleccionMaquina = Object.fromEntries(
     Object.entries(ctx)
-      .filter(([key, value]) => key.startsWith("maquinaSeleccionada_") && typeof value === "string")
+      .filter(
+        ([key, value]) =>
+          key.startsWith("maquinaSeleccionada_") && typeof value === "string",
+      )
       .map(([key, value]) => [
         key.replace("maquinaSeleccionada_", ""),
         value as string,
@@ -3850,7 +4067,10 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
   );
   const seleccionModoColor = Object.fromEntries(
     Object.entries(ctx)
-      .filter(([key, value]) => key.startsWith("modoColor_") && typeof value === "string")
+      .filter(
+        ([key, value]) =>
+          key.startsWith("modoColor_") && typeof value === "string",
+      )
       .map(([key, value]) => [key.replace("modoColor_", ""), value as string]),
   );
   const seleccionPerfil = Object.fromEntries(
@@ -3892,7 +4112,11 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       const cantidad = Number(current.cantidad ?? 0);
       const anchoMm = Number(current.anchoMm ?? 0);
       const altoMm = Number(current.altoMm ?? 0);
-      if (!Number.isFinite(cantidad) || !Number.isFinite(anchoMm) || !Number.isFinite(altoMm)) {
+      if (
+        !Number.isFinite(cantidad) ||
+        !Number.isFinite(anchoMm) ||
+        !Number.isFinite(altoMm)
+      ) {
         return null;
       }
       return {
@@ -3905,8 +4129,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     .filter((pieza): pieza is PiezaInput => pieza != null);
   const medidaPredefinidaId =
     typeof ctx.medidaPredefinidaId === "string" ? ctx.medidaPredefinidaId : "";
-  const medidaModo =
-    typeof ctx.medidaModo === "string" ? ctx.medidaModo : "";
+  const medidaModo = typeof ctx.medidaModo === "string" ? ctx.medidaModo : "";
   const restaurarPiezasPersonalizadas =
     medidaModo === "personalizada" ||
     (!medidaModo && !medidaPredefinidaId && piezas.length > 0);
@@ -3943,12 +4166,16 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     tipoCopia:
       Number(ctx.tipoCopia) === 3 ? 3 : Number(ctx.tipoCopia) === 2 ? 2 : 1,
     numerosXTalonario:
-      Number.isFinite(Number(ctx.numerosXTalonario)) && Number(ctx.numerosXTalonario) > 0
+      Number.isFinite(Number(ctx.numerosXTalonario)) &&
+      Number(ctx.numerosXTalonario) > 0
         ? Number(ctx.numerosXTalonario)
         : DEFAULT_MOTOR_CONFIG.numerosXTalonario,
     piezas: restaurarPiezasPersonalizadas ? piezas : [],
     opcionalesActivados: Object.fromEntries(
-      Object.entries(opcionalesRaw).map(([key, value]) => [key, Boolean(value)]),
+      Object.entries(opcionalesRaw).map(([key, value]) => [
+        key,
+        Boolean(value),
+      ]),
     ),
     seleccionMaterial: Object.fromEntries(
       Object.entries(slotMaterialesRaw)
@@ -3969,7 +4196,8 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         ? ctx.zonaInstalacion
         : DEFAULT_MOTOR_CONFIG.zonaInstalacion,
     m2Instalados:
-      Number.isFinite(Number(ctx.m2_instalados)) && Number(ctx.m2_instalados) > 0
+      Number.isFinite(Number(ctx.m2_instalados)) &&
+      Number(ctx.m2_instalados) > 0
         ? Number(ctx.m2_instalados)
         : DEFAULT_MOTOR_CONFIG.m2Instalados,
     personalizaciones: personalizacionesGuardadas,
@@ -3980,7 +4208,8 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         ? Number(ctx.paginas)
         : null,
     profundidadCm:
-      Number.isFinite(Number(ctx.profundidadMm)) && Number(ctx.profundidadMm) > 0
+      Number.isFinite(Number(ctx.profundidadMm)) &&
+      Number(ctx.profundidadMm) > 0
         ? Number(ctx.profundidadMm) / 10
         : null,
     paramsComercial:
@@ -4033,7 +4262,10 @@ function ApSelectStep({
   const [filtrosAbiertos, setFiltrosAbiertos] = React.useState(false);
   const activeResultRef = React.useRef<HTMLButtonElement | null>(null);
   const families = React.useMemo(
-    () => ["Todos", ...Array.from(new Set(products.map((product) => product.family)))],
+    () => [
+      "Todos",
+      ...Array.from(new Set(products.map((product) => product.family))),
+    ],
     [products],
   );
 
@@ -4143,7 +4375,10 @@ function ApSelectStep({
                 {item}
                 {item !== "Todos" ? (
                   <span className="ct">
-                    {products.filter((product) => product.family === item).length}
+                    {
+                      products.filter((product) => product.family === item)
+                        .length
+                    }
                   </span>
                 ) : null}
               </button>
@@ -4158,11 +4393,17 @@ function ApSelectStep({
             {filtered.length} producto{filtered.length === 1 ? "" : "s"}
           </span>
         </div>
-        <div className="ap-list" role="listbox" aria-label="Productos del catálogo">
+        <div
+          className="ap-list"
+          role="listbox"
+          aria-label="Productos del catálogo"
+        >
           {filtered.map((product, index) => (
             <button
               key={product.code}
-              ref={activeProduct?.code === product.code ? activeResultRef : null}
+              ref={
+                activeProduct?.code === product.code ? activeResultRef : null
+              }
               type="button"
               role="option"
               className={`ap-prod ${activeProduct?.code === product.code ? "is-keyboard-target" : ""}`}
@@ -4172,7 +4413,9 @@ function ApSelectStep({
             >
               <span className="ap-prod-main">
                 <span className="ap-prod-head">
-                  <span className={`tipo-chip tipo-${familyColor(product.family)}`}>
+                  <span
+                    className={`tipo-chip tipo-${familyColor(product.family)}`}
+                  >
                     <span className="d" />
                     {product.family}
                   </span>
@@ -4190,8 +4433,10 @@ function ApSelectStep({
                 {!product.real ? (
                   <span className="ap-precio">
                     Referencia{" "}
-                    <strong>{formatCurrency(product.precioBase, moneda)}</strong> /{" "}
-                    {product.unidad}
+                    <strong>
+                      {formatCurrency(product.precioBase, moneda)}
+                    </strong>{" "}
+                    / {product.unidad}
                   </span>
                 ) : null}
               </span>
@@ -4204,7 +4449,8 @@ function ApSelectStep({
             <div className="ap-empty">
               <div className="ttl">Sin resultados</div>
               <div className="sub">
-                Probá quitar el filtro <strong>{family}</strong> o ajustar la búsqueda.
+                Probá quitar el filtro <strong>{family}</strong> o ajustar la
+                búsqueda.
               </div>
             </div>
           ) : null}
@@ -4259,8 +4505,12 @@ function ApConfigStep({
   const verMargenes = usePuede("finanzas.ver_margenes");
   const totals = getTotals(product, qty, adi);
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
-  const cotizacionErrores = cotizacion && !cotizacion.exitoso ? cotizacion.errores : [];
-  const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+  const cotizacionErrores =
+    cotizacion && !cotizacion.exitoso ? cotizacion.errores : [];
+  const rutaSel = getRutaSeleccionada(
+    productoDetalle,
+    motorConfig.rutaAlternativaId,
+  );
   const slotsParaReglas = React.useMemo(
     () =>
       getSlotsParaCotizacion(rutaSel, productoDetalle, {
@@ -4330,7 +4580,13 @@ function ApConfigStep({
       motorConfig,
       includeVisibleConfig,
     );
-  }, [editorSelloHabilitado, rutaSel, slotsComercialElige, motorConfig, includeVisibleConfig]);
+  }, [
+    editorSelloHabilitado,
+    rutaSel,
+    slotsComercialElige,
+    motorConfig,
+    includeVisibleConfig,
+  ]);
   const [selloEditorAbierto, setSelloEditorAbierto] = React.useState(false);
   const slotsMaterialesOpcionalesPorPaso = React.useMemo(
     () => getSlotsOpcionalesPorPaso(slotsComercialElige),
@@ -4366,7 +4622,8 @@ function ApConfigStep({
     [rutaSel, includeVisibleConfig],
   );
   const nivelesPorConfigPaso = React.useMemo(
-    () => new Map(nivelesComercialRuta.map((item) => [item.configPasoId, item])),
+    () =>
+      new Map(nivelesComercialRuta.map((item) => [item.configPasoId, item])),
     [nivelesComercialRuta],
   );
   const nivelesPrincipales = nivelesComercialRuta.filter(
@@ -4402,7 +4659,9 @@ function ApConfigStep({
     getCatalogoFamilias()
       .then((catalogo) => {
         if (cancelado) return;
-        setFamiliasCatalogo(new Map(catalogo.familias.map((f) => [f.codigo, f])));
+        setFamiliasCatalogo(
+          new Map(catalogo.familias.map((f) => [f.codigo, f])),
+        );
       })
       .catch(() => {
         // Sin catálogo no se ofrecen los campos editables; el motor sigue
@@ -4427,9 +4686,7 @@ function ApConfigStep({
   );
   const paramsComercialPorConfigPaso = React.useMemo(
     () =>
-      new Map(
-        pasosConParamsComercial.map((paso) => [paso.configPasoId, paso]),
-      ),
+      new Map(pasosConParamsComercial.map((paso) => [paso.configPasoId, paso])),
     [pasosConParamsComercial],
   );
   // Activación EFECTIVA en el sheet: un paso puede estar encendido porque OTRO
@@ -4531,8 +4788,11 @@ function ApConfigStep({
   const usaMedidaPersonalizada =
     modoMedidasPermitePersonalizada(productoDetalle?.modoMedidas) &&
     (productoDetalle?.modoMedidas !== "MIXTA" || motorConfig.piezas.length > 0);
-  const piezasUsanCantidadComercial = usaCantidadComercialParaPiezas(productoDetalle);
-  const piezaFocusRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
+  const piezasUsanCantidadComercial =
+    usaCantidadComercialParaPiezas(productoDetalle);
+  const piezaFocusRefs = React.useRef<Record<string, HTMLInputElement | null>>(
+    {},
+  );
   const focusPiezaCantidadKey = React.useRef<string | null>(null);
   const planosInputRef = React.useRef<HTMLInputElement | null>(null);
   const [piezaMeasureDrafts, setPiezaMeasureDrafts] = React.useState<
@@ -4614,7 +4874,8 @@ function ApConfigStep({
   );
 
   const herramientaMedidasArchivo = React.useMemo(
-    () => getHerramientaMedidasArchivo(productoDetalle?.atributosComercialesJson),
+    () =>
+      getHerramientaMedidasArchivo(productoDetalle?.atributosComercialesJson),
     [productoDetalle],
   );
   const [leyendoPlanos, setLeyendoPlanos] = React.useState(false);
@@ -4671,7 +4932,9 @@ function ApConfigStep({
               piezas: [...previas, ...nuevas],
             };
           });
-          const archivosOk = resultados.filter((resultado) => resultado.ok).length;
+          const archivosOk = resultados.filter(
+            (resultado) => resultado.ok,
+          ).length;
           toast.success(
             `${nuevas.length} ${nuevas.length === 1 ? "medida leída" : "medidas leídas"} de ${archivosOk} ${archivosOk === 1 ? "archivo" : "archivos"}`,
           );
@@ -4690,13 +4953,20 @@ function ApConfigStep({
     (pieza: PiezaInput, field: "anchoCm" | "altoCm") => {
       const draft = piezaMeasureDrafts[pieza.uiKey]?.[field];
       if (draft !== undefined) return draft;
-      return formatCmInputFromMm(field === "anchoCm" ? pieza.anchoMm : pieza.altoMm);
+      return formatCmInputFromMm(
+        field === "anchoCm" ? pieza.anchoMm : pieza.altoMm,
+      );
     },
     [piezaMeasureDrafts],
   );
 
   const updatePiezaMeasure = React.useCallback(
-    (index: number, pieza: PiezaInput, field: "anchoCm" | "altoCm", value: string) => {
+    (
+      index: number,
+      pieza: PiezaInput,
+      field: "anchoCm" | "altoCm",
+      value: string,
+    ) => {
       setPiezaMeasureDrafts((current) => ({
         ...current,
         [pieza.uiKey]: { ...current[pieza.uiKey], [field]: value },
@@ -4716,7 +4986,8 @@ function ApConfigStep({
     [updatePieza],
   );
 
-  const commitPiezaMeasure = React.useCallback((pieza: PiezaInput, field: "anchoCm" | "altoCm") => {
+  const commitPiezaMeasure = React.useCallback(
+    (pieza: PiezaInput, field: "anchoCm" | "altoCm") => {
     setPiezaMeasureDrafts((current) => {
       const currentDraft = current[pieza.uiKey];
       if (!currentDraft || currentDraft[field] === undefined) return current;
@@ -4730,7 +5001,9 @@ function ApConfigStep({
       }
       return next;
     });
-  }, []);
+    },
+    [],
+  );
 
   const setOpcional = React.useCallback(
     (id: string, checked: boolean) => {
@@ -4752,7 +5025,9 @@ function ApConfigStep({
 
   React.useEffect(() => {
     if (!product.real) return;
-    const codigosValidos = new Set(opcionalesRuta.map((opcional) => opcional.code));
+    const codigosValidos = new Set(
+      opcionalesRuta.map((opcional) => opcional.code),
+    );
     const codigosInvalidos = adi.filter((code) => !codigosValidos.has(code));
     if (codigosInvalidos.length === 0) return;
 
@@ -4770,14 +5045,20 @@ function ApConfigStep({
 
   React.useEffect(() => {
     if (!product.real) return;
-    const optionalCodes = new Set(opcionalesRuta.map((opcional) => opcional.code));
+    const optionalCodes = new Set(
+      opcionalesRuta.map((opcional) => opcional.code),
+    );
     const materialKeys = new Set(
       slotsComercialElige.map((slot) =>
         materialSelectionKey(slot.configPasoId, slot.slotCodigo),
       ),
     );
-    const machineKeys = new Set(pasosConTecnologias.map((paso) => paso.configPasoId));
-    const colorKeys = new Set(modosColorComercial.map((modo) => modo.configPasoId));
+    const machineKeys = new Set(
+      pasosConTecnologias.map((paso) => paso.configPasoId),
+    );
+    const colorKeys = new Set(
+      modosColorComercial.map((modo) => modo.configPasoId),
+    );
 
     setMotorConfig((current) => {
       const opcionalesActivados = Object.fromEntries(
@@ -4810,7 +5091,9 @@ function ApConfigStep({
         ),
       );
       for (const modo of modosColorComercial) {
-        const selected = normalizeModoColor(seleccionModoColor[modo.configPasoId]);
+        const selected = normalizeModoColor(
+          seleccionModoColor[modo.configPasoId],
+        );
         const validValues = new Set(
           modo.options
             .map((option) => normalizeModoColor(option.value))
@@ -5111,7 +5394,8 @@ function ApConfigStep({
       slotCodigosDuplicados.has(slot.slotCodigo) && slot.nombrePaso
         ? `${slot.nombrePaso} · ${humanizeCodigo(slot.slotCodigo)}`
         : humanizeCodigo(slot.slotCodigo);
-    const selected = motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
+    const selected =
+      motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
     const selectedCandidate =
       slot.candidatos.find((candidate) =>
         candidate.variantes.some((variant) => variant.variantId === selected),
@@ -5130,12 +5414,14 @@ function ApConfigStep({
       const usaColorEspesor =
         candidate.variantes.length > 1 &&
         candidateUsesColorThickness(candidate);
-      const cards = usaColorEspesor ? null : describeCandidateVariants(candidate);
+      const cards = usaColorEspesor
+        ? null
+        : describeCandidateVariants(candidate);
       for (const variant of candidate.variantes) {
         const card = cards?.get(variant.variantId);
         const title = usaColorEspesor
-          ? variant.espesorLabel ?? variant.label
-          : card?.title ?? variant.label;
+          ? (variant.espesorLabel ?? variant.label)
+          : (card?.title ?? variant.label);
         const spec =
           !usaColorEspesor && card && card.specs.length > 0
             ? card.specs.map((s) => s.value).join(" · ")
@@ -5183,7 +5469,7 @@ function ApConfigStep({
       !alerta && options?.showHint !== false && totalOpciones <= 1
         ? selectedVariant?.isFallbackLabel
           ? `Sin atributos descriptivos. Código interno: ${selectedVariant.sku}`
-          : selectedVariant?.description ?? null
+          : (selectedVariant?.description ?? null)
         : null;
 
     return (
@@ -5202,7 +5488,8 @@ function ApConfigStep({
 
   const renderLinearMaterialWidthSelect = (slot: SlotComercialElige) => {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
-    const selected = motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
+    const selected =
+      motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
     const selectedCandidate =
       slot.candidatos.find((candidate) =>
         candidate.variantes.some((variant) => variant.variantId === selected),
@@ -5211,10 +5498,14 @@ function ApConfigStep({
       (variant) => variant.variantId === selected,
     );
     const selectMaterial = (materiaPrimaId: string) => {
-      const candidate = slot.candidatos.find((item) => item.materiaPrimaId === materiaPrimaId);
+      const candidate = slot.candidatos.find(
+        (item) => item.materiaPrimaId === materiaPrimaId,
+      );
       const variantId =
         candidate?.defaultVarianteId ??
-        (candidate?.variantes.length === 1 ? candidate.variantes[0]?.variantId : undefined) ??
+        (candidate?.variantes.length === 1
+          ? candidate.variantes[0]?.variantId
+          : undefined) ??
         candidate?.variantes[0]?.variantId ??
         "";
       setMaterial(key, variantId);
@@ -5236,7 +5527,10 @@ function ApConfigStep({
               <option value="">Elegí material</option>
             ) : null}
             {slot.candidatos.map((candidate) => (
-              <option key={candidate.materiaPrimaId} value={candidate.materiaPrimaId}>
+              <option
+                key={candidate.materiaPrimaId}
+                value={candidate.materiaPrimaId}
+              >
                 {candidate.label}
               </option>
             ))}
@@ -5251,9 +5545,7 @@ function ApConfigStep({
               variantOptions.map((variant) => ({
                 value: variant.variantId,
                 label:
-                  variant.anchoLabel ??
-                  variant.espesorLabel ??
-                  variant.label,
+                  variant.anchoLabel ?? variant.espesorLabel ?? variant.label,
               })),
               (value) => setMaterial(key, value),
             )
@@ -5297,7 +5589,11 @@ function ApConfigStep({
       return { ...prev, carasPorPaso: next };
     });
   };
-  const setTiempoManualPaso = (configPasoId: string, rawValue: string, unidad: "min" | "h") => {
+  const setTiempoManualPaso = (
+    configPasoId: string,
+    rawValue: string,
+    unidad: "min" | "h",
+  ) => {
     setMotorConfig((prev) => {
       const parsed = Number(rawValue.replace(",", "."));
       const minutos =
@@ -5378,7 +5674,9 @@ function ApConfigStep({
           {seleccion.length === 0 ? (
             <div className="ap-minimum-alert is-blocked">
               <CircleAlertIcon />
-              <span>Elegí al menos uno o la cotización no va a poder calcularse.</span>
+              <span>
+                Elegí al menos uno o la cotización no va a poder calcularse.
+              </span>
             </div>
           ) : null}
         </div>
@@ -5524,7 +5822,8 @@ function ApConfigStep({
                   <div className={plS.alert}>
                     <CircleAlertIcon />
                     <span>
-                      Elegí al menos uno o la cotización no va a poder calcularse.
+                      Elegí al menos uno o la cotización no va a poder
+                      calcularse.
                     </span>
                   </div>
                 ) : null}
@@ -5732,7 +6031,10 @@ function ApConfigStep({
     rutaSel,
     isExecutableConfigPaso,
   );
-  const profundidadCartel = getProfundidadDeRuta(rutaSel, isExecutableConfigPaso);
+  const profundidadCartel = getProfundidadDeRuta(
+    rutaSel,
+    isExecutableConfigPaso,
+  );
   // Con una sola pieza, la profundidad se muestra INLINE como tercer input
   // junto a Ancho × Alto (deja de ser un campo colgado). Con varias piezas cae
   // al bloque aparte (es product-level, no per-pieza).
@@ -5772,14 +6074,20 @@ function ApConfigStep({
       sepRefuerzoHcm: num(overrides.sepRefuerzoHcm ?? base.sepRefuerzoHcm, 0),
       // §15: los toggles activan PASOS OPCIONALES de la ruta real.
       cenefa: carteleriaInfo.cenefaConfigPasoId
-        ? Boolean(motorConfig.opcionalesActivados[carteleriaInfo.cenefaConfigPasoId])
+        ? Boolean(
+            motorConfig.opcionalesActivados[carteleriaInfo.cenefaConfigPasoId],
+          )
         : false,
       solapaCenefaCm: num(overrides.solapaCenefaCm ?? base.solapaCenefaCm, 2),
       pintura: carteleriaInfo.pinturaConfigPasoId
-        ? Boolean(motorConfig.opcionalesActivados[carteleriaInfo.pinturaConfigPasoId])
+        ? Boolean(
+            motorConfig.opcionalesActivados[carteleriaInfo.pinturaConfigPasoId],
+          )
         : false,
       fondo: carteleriaInfo.fondoConfigPasoId
-        ? Boolean(motorConfig.opcionalesActivados[carteleriaInfo.fondoConfigPasoId])
+        ? Boolean(
+            motorConfig.opcionalesActivados[carteleriaInfo.fondoConfigPasoId],
+          )
         : false,
       dobleFaz:
         carteleriaInfo.impresionConfigPasoId != null &&
@@ -5797,7 +6105,11 @@ function ApConfigStep({
         const piezas = prev.piezas.length
           ? prev.piezas.map((p, i) =>
               i === 0
-                ? { ...p, anchoMm: valor.anchoCm * 10, altoMm: valor.altoCm * 10 }
+                ? {
+                    ...p,
+                    anchoMm: valor.anchoCm * 10,
+                    altoMm: valor.altoCm * 10,
+                  }
                 : p,
             )
           : [{ anchoMm: valor.anchoCm * 10, altoMm: valor.altoCm * 10 }];
@@ -5844,8 +6156,12 @@ function ApConfigStep({
     },
     [carteleriaInfo, setMotorConfig],
   );
-  const metroLinealConMedidasVariables = isMetroLinealConMedidasVariables(productoDetalle);
-  const mostrarEditorPiezas = usaPiezasParaCotizar(productoDetalle, motorConfig);
+  const metroLinealConMedidasVariables =
+    isMetroLinealConMedidasVariables(productoDetalle);
+  const mostrarEditorPiezas = usaPiezasParaCotizar(
+    productoDetalle,
+    motorConfig,
+  );
   const mostrarMaterialLinealDirecto =
     metroLinealConMedidasVariables && !mostrarEditorPiezas;
   const slotsMaterialesLinealDirecto = mostrarMaterialLinealDirecto
@@ -5857,13 +6173,20 @@ function ApConfigStep({
     ),
   );
   const slotsMaterialesGenerales = slotsMaterialesPrincipales.filter(
-    (slot) => !slotKeysLinealDirecto.has(materialSelectionKey(slot.configPasoId, slot.slotCodigo)),
+    (slot) =>
+      !slotKeysLinealDirecto.has(
+        materialSelectionKey(slot.configPasoId, slot.slotCodigo),
+      ),
   );
-  const hasQuantityShortcuts = !["m²", "m2", "ml"].includes(product.unidad.toLowerCase());
+  const hasQuantityShortcuts = !["m²", "m2", "ml"].includes(
+    product.unidad.toLowerCase(),
+  );
   // Un producto tercerizado con matriz define su cantidad por el eje `cantidad`:
   // esas cantidades manejan el campo de cantidad del ítem (botones fijos), igual
   // que un producto con precios por cantidad exacta. Así hay un solo campo.
-  const tercerizadoCantidades = getTercerizadoCantidades(rutaSel?.configPasos ?? []);
+  const tercerizadoCantidades = getTercerizadoCantidades(
+    rutaSel?.configPasos ?? [],
+  );
   const pricingQuantities =
     tercerizadoCantidades.length > 0
       ? tercerizadoCantidades
@@ -5982,7 +6305,11 @@ function ApConfigStep({
           <div
             className="ap-qty-shortcuts ap-qty-options ap-qty-options-equal"
             aria-label="Cantidades permitidas"
-            style={{ "--ap-qty-count": pricingQuantities.length } as React.CSSProperties}
+            style={
+              {
+                "--ap-qty-count": pricingQuantities.length,
+              } as React.CSSProperties
+            }
           >
             {pricingQuantities.map((value) => (
               <button
@@ -6018,7 +6345,11 @@ function ApConfigStep({
             onChange={(event) => setQty(parseDecimalInput(event.target.value))}
           />
           <span className="ap-qty-unit">{product.unidad}</span>
-          <button type="button" className="ap-qty-btn" onClick={() => setQty(qty + 1)}>
+          <button
+            type="button"
+            className="ap-qty-btn"
+            onClick={() => setQty(qty + 1)}
+          >
             <PlusIcon />
           </button>
         </div>
@@ -6129,7 +6460,9 @@ function ApConfigStep({
                   min="1"
                   value={pieza.cantidad}
                   onChange={(event) =>
-                    updatePieza(index, { cantidad: Number(event.target.value) || 0 })
+                            updatePieza(index, {
+                              cantidad: Number(event.target.value) || 0,
+                            })
                   }
                   aria-label="Cantidad de piezas"
                 />
@@ -6139,13 +6472,19 @@ function ApConfigStep({
             <label className="ap-input-unit">
               <input
                 ref={(node) => {
-                  if (options?.hideCantidad) piezaFocusRefs.current[pieza.uiKey] = node;
+                          if (options?.hideCantidad)
+                            piezaFocusRefs.current[pieza.uiKey] = node;
                 }}
                 type="text"
                 inputMode="decimal"
                 value={getPiezaMeasureValue(pieza, "anchoCm")}
                 onChange={(event) =>
-                  updatePiezaMeasure(index, pieza, "anchoCm", event.target.value)
+                          updatePiezaMeasure(
+                            index,
+                            pieza,
+                            "anchoCm",
+                            event.target.value,
+                          )
                 }
                 onBlur={() => commitPiezaMeasure(pieza, "anchoCm")}
                 aria-label="Ancho en cm"
@@ -6159,7 +6498,12 @@ function ApConfigStep({
                 inputMode="decimal"
                 value={getPiezaMeasureValue(pieza, "altoCm")}
                 onChange={(event) =>
-                  updatePiezaMeasure(index, pieza, "altoCm", event.target.value)
+                          updatePiezaMeasure(
+                            index,
+                            pieza,
+                            "altoCm",
+                            event.target.value,
+                          )
                 }
                 onBlur={() => commitPiezaMeasure(pieza, "altoCm")}
                 onKeyDown={(event) => {
@@ -6196,7 +6540,8 @@ function ApConfigStep({
                 <span className="adj">· ajustada</span>
               ) : (
                 <span className="det">
-                  · leída {formatCmFromMm(pieza.origen.anchoDetectadoMm)} ×{" "}
+                          · leída{" "}
+                          {formatCmFromMm(pieza.origen.anchoDetectadoMm)} ×{" "}
                   {formatCmFromMm(pieza.origen.altoDetectadoMm)} cm
                 </span>
               )}
@@ -6214,7 +6559,10 @@ function ApConfigStep({
               if (!leyendoPlanos) planosInputRef.current?.click();
             }}
             onKeyDown={(event) => {
-              if ((event.key === "Enter" || event.key === " ") && !leyendoPlanos) {
+                  if (
+                    (event.key === "Enter" || event.key === " ") &&
+                    !leyendoPlanos
+                  ) {
                 event.preventDefault();
                 planosInputRef.current?.click();
               }
@@ -6252,7 +6600,8 @@ function ApConfigStep({
               className="ap-planos-input"
               style={{ display: "none" }}
               onChange={(event) => {
-                if (event.target.files) handleAdjuntarPlanos(event.target.files);
+                    if (event.target.files)
+                      handleAdjuntarPlanos(event.target.files);
                 event.target.value = "";
               }}
             />
@@ -6266,8 +6615,8 @@ function ApConfigStep({
                     : "Adjuntar archivos para medir"}
               </span>
               <span className="ap-planos-hint">
-                Arrastrá los PDF acá o hacé clic. Cada página se agrega como una
-                fila con su medida.
+                    Arrastrá los PDF acá o hacé clic. Cada página se agrega como
+                    una fila con su medida.
               </span>
             </div>
           </div>
@@ -6279,8 +6628,8 @@ function ApConfigStep({
       </div>
       {mostrarProf ? (
         <span className="ap-section-hint">
-          La profundidad define los metros de perfil, la cenefa y los conectores
-          del bastidor.
+              La profundidad define los metros de perfil, la cenefa y los
+              conectores del bastidor.
         </span>
       ) : null}
       </div>
@@ -6348,7 +6697,10 @@ function ApConfigStep({
               ] ?? ""
             }
             setMaterial={(configPasoId, slotCodigo, variantId) =>
-              setMaterial(materialSelectionKey(configPasoId, slotCodigo), variantId)
+              setMaterial(
+                materialSelectionKey(configPasoId, slotCodigo),
+                variantId,
+              )
             }
             estructuraConfigPasoId={carteleriaInfo.estructuraConfigPasoId}
             ledConfigPasoId={carteleriaInfo.ledConfigPasoId}
@@ -6370,7 +6722,8 @@ function ApConfigStep({
                 ...current,
                 seleccionMaquina: {
                   ...current.seleccionMaquina,
-                  [carteleriaInfo.impresionConfigPasoId as string]: tec.maquinaId,
+                  [carteleriaInfo.impresionConfigPasoId as string]:
+                    tec.maquinaId,
                 },
               }));
             }}
@@ -6480,7 +6833,9 @@ function ApConfigStep({
                           {infoRolloLineal.anchoUtilCm
                             ? ` · ${infoRolloLineal.anchoUtilCm.toLocaleString(
                                 "es-AR",
-                                { maximumFractionDigits: 1 },
+                                {
+                                  maximumFractionDigits: 1,
+                                },
                               )} cm útil`
                             : ""}
                         </span>
@@ -6513,7 +6868,9 @@ function ApConfigStep({
               </>
             ) : usaMedidaPersonalizada && !usaMedidaMixta ? (
               <>
-                {renderPiezasEditor({ hideCantidad: piezasUsanCantidadComercial })}
+                {renderPiezasEditor({
+                  hideCantidad: piezasUsanCantidadComercial,
+                })}
                 {piezasUsanCantidadComercial ? renderCantidadCard() : null}
               </>
             ) : (
@@ -6525,11 +6882,11 @@ function ApConfigStep({
                     {renderMedidaCards(
                       usaMedidaMixta && motorConfig.piezas.length > 0
                         ? CUSTOM_MEASURE_ID
-                        : getSelectedPredefinedMeasure(
+                          : (getSelectedPredefinedMeasure(
                             productoDetalle,
                             motorConfig.medidaPredefinidaId,
                             medidasPredefinidas,
-                          )?.id ?? "",
+                            )?.id ?? ""),
                       medidasPredefinidas,
                       (value) => {
                         if (value === CUSTOM_MEASURE_ID) {
@@ -6542,7 +6899,10 @@ function ApConfigStep({
                           });
                           return;
                         }
-                        updateMotorConfig({ medidaPredefinidaId: value, piezas: [] });
+                          updateMotorConfig({
+                            medidaPredefinidaId: value,
+                            piezas: [],
+                          });
                       },
                       usaMedidaMixta,
                     )}
@@ -6567,7 +6927,9 @@ function ApConfigStep({
               {minimoComercialStatus ? (
                 <div
                   className={`ap-minimum-alert ${
-                    minimoComercialStatus.kind === "blocked" ? "is-blocked" : "is-warning"
+                      minimoComercialStatus.kind === "blocked"
+                        ? "is-blocked"
+                        : "is-warning"
                   }`}
                 >
                   <CircleAlertIcon />
@@ -6623,7 +6985,8 @@ function ApConfigStep({
                       glyph: CARAS_ICONS["2"],
                     },
                   ],
-                  (value) => updateMotorConfig({ caras: Number(value) as 1 | 2 }),
+                    (value) =>
+                      updateMotorConfig({ caras: Number(value) as 1 | 2 }),
                   { columns: 2, layout: "row" },
                 )}
                 {pasosConCaras.length > 1 ? (
@@ -6693,7 +7056,10 @@ function ApConfigStep({
                 </div>
                 <div className="ap-personalizaciones">
                   {personalizaciones.map((p) => {
-                    const estado = personalizacionEstadoEfectivo(p, motorConfig);
+                    const estado = personalizacionEstadoEfectivo(
+                      p,
+                      motorConfig,
+                    );
                     const esCliente = p.modoMedida === "CLIENTE";
                     const toggle = p.obligatoria
                       ? undefined
@@ -6866,7 +7232,8 @@ function ApConfigStep({
                   onChange={(event) => {
                     const value = Number(event.target.value);
                     updateMotorConfig({
-                      paginas: Number.isFinite(value) && value > 0 ? value : null,
+                      paginas:
+                        Number.isFinite(value) && value > 0 ? value : null,
                     });
                   }}
                 />
@@ -6904,23 +7271,29 @@ function ApConfigStep({
                   }}
                 />
                 <span className="ap-section-hint">
-                  En cm. Define los metros de perfil, la cenefa y los
-                  conectores del bastidor.
+                  En cm. Define los metros de perfil, la cenefa y los conectores
+                  del bastidor.
                 </span>
               </div>
             ) : null}
 
             {pasosConTecnologias.map((paso) => {
-              const allCandidates = paso.tecnologias.flatMap((tech) => tech.candidatas);
-              const selectedId = motorConfig.seleccionMaquina[paso.configPasoId] || "";
+              const allCandidates = paso.tecnologias.flatMap(
+                (tech) => tech.candidatas,
+              );
+              const selectedId =
+                motorConfig.seleccionMaquina[paso.configPasoId] || "";
               const selectedCandidate =
-                allCandidates.find((candidate) => candidate.maquinaId === selectedId) ?? null;
+                allCandidates.find(
+                  (candidate) => candidate.maquinaId === selectedId,
+                ) ?? null;
               const selectedTechnologyValue = selectedCandidate
                 ? getCandidateTechnology(selectedCandidate)
                 : "";
               const selectedTechnology =
-                paso.tecnologias.find((tech) => tech.value === selectedTechnologyValue) ??
-                null;
+                paso.tecnologias.find(
+                  (tech) => tech.value === selectedTechnologyValue,
+                ) ?? null;
               // Si el selector de modo de color de este paso ya trae la máquina
               // en cada opción, la elección de máquina es implícita: no hace
               // falta ni el selector de tecnología (cuando hay una sola) ni el
@@ -6954,12 +7327,18 @@ function ApConfigStep({
                 };
               });
               const setTechnology = (technologyValue: string) => {
-                const tech = paso.tecnologias.find((item) => item.value === technologyValue);
-                const candidate = tech ? getPreferredCandidate(tech.candidatas) : null;
-                if (candidate) setMaquina(paso.configPasoId, candidate.maquinaId);
+                const tech = paso.tecnologias.find(
+                  (item) => item.value === technologyValue,
+                );
+                const candidate = tech
+                  ? getPreferredCandidate(tech.candidatas)
+                  : null;
+                if (candidate)
+                  setMaquina(paso.configPasoId, candidate.maquinaId);
               };
               const labelPaso =
-                paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
+                paso.nombreVisible?.trim() ||
+                humanizeCodigo(paso.familiaCodigo);
               return (
                 <div className={seC.card} key={paso.configPasoId}>
                   <div className={seC.gh}>
@@ -6990,7 +7369,10 @@ function ApConfigStep({
                         }
                       >
                         {selectedTechnology.candidatas.map((candidata) => (
-                          <option key={candidata.maquinaId} value={candidata.maquinaId}>
+                          <option
+                            key={candidata.maquinaId}
+                            value={candidata.maquinaId}
+                          >
                             {candidata.maquina.nombre}
                             {candidata.esPreferida ? " · preferida" : ""}
                           </option>
@@ -7017,7 +7399,8 @@ function ApConfigStep({
               );
               const multiMaquina = maquinasEnOpciones.size > 1;
               const modoOptions = modo.options.map((option) => {
-                const optionValue = normalizeModoColor(option.value) ?? option.value;
+                const optionValue =
+                  normalizeModoColor(option.value) ?? option.value;
                 return {
                   value: optionValue,
                   label: option.label,
@@ -7031,7 +7414,8 @@ function ApConfigStep({
               const seleccionarModo = (nextValue: string) => {
                 const opcion = modo.options.find(
                   (option) =>
-                    (normalizeModoColor(option.value) ?? option.value) === nextValue,
+                    (normalizeModoColor(option.value) ?? option.value) ===
+                    nextValue,
                 );
                 if (opcion?.maquinaId) {
                   setMaquina(modo.configPasoId, opcion.maquinaId);
@@ -7051,7 +7435,10 @@ function ApConfigStep({
                     value,
                     modoOptions,
                     seleccionarModo,
-                    { columns: modoOptions.length <= 2 ? 2 : 3, layout: "row" },
+                      {
+                        columns: modoOptions.length <= 2 ? 2 : 3,
+                        layout: "row",
+                      },
                   )}
                   {(() => {
                     // Avanzado: override explícito del perfil de impresión.
@@ -7106,9 +7493,7 @@ function ApConfigStep({
                             setPerfil(modo.configPasoId, event.target.value)
                           }
                         >
-                          <option value="">
-                            Automático (recomendado)
-                          </option>
+                            <option value="">Automático (recomendado)</option>
                           {perfilesDelModo.map((perfil) => (
                             <option key={perfil.id} value={perfil.id}>
                               {perfil.nombre}
@@ -7142,7 +7527,9 @@ function ApConfigStep({
 
             {slotsMaterialesGenerales.length > 0 ? (
               <div className={matS.list}>
-                {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
+                {slotsMaterialesGenerales.map((slot) =>
+                  renderMaterialSelect(slot),
+                )}
               </div>
             ) : null}
 
@@ -7208,7 +7595,9 @@ function ApConfigStep({
                     min="0"
                     value={motorConfig.m2Instalados}
                     onChange={(event) =>
-                      updateMotorConfig({ m2Instalados: Number(event.target.value) || 0 })
+                      updateMotorConfig({
+                        m2Instalados: Number(event.target.value) || 0,
+                      })
                     }
                   />
                 </div>
@@ -7220,9 +7609,7 @@ function ApConfigStep({
             {renderCantidadCard()}
             {minimoComercialStatus ? (
               <div
-                className={`ap-minimum-alert ${
-                  minimoComercialStatus.kind === "blocked" ? "is-blocked" : "is-warning"
-                }`}
+                className={`ap-minimum-alert ${minimoComercialStatus.kind === "blocked" ? "is-blocked" : "is-warning"}`}
               >
                 <CircleAlertIcon />
                 <span>{minimoComercialStatus.message}</span>
@@ -7236,7 +7623,8 @@ function ApConfigStep({
         <div className="ap-cs-head">
           <div className="ttl">Opcionales</div>
           <div className="sub">
-            Pasos de producción que el comercial puede activar para este producto.
+            Pasos de producción que el comercial puede activar para este
+            producto.
           </div>
         </div>
         {opcionalesPasos.length > 0 ? (
@@ -7294,7 +7682,8 @@ function ApConfigStep({
                     ? arrastradosSheet.has(opcional.configPasoId)
                     : false;
                 const tiempoPendiente = Boolean(
-                  tiempoManual && getTiempoManualError(tiempoManual, motorConfig),
+                    tiempoManual &&
+                    getTiempoManualError(tiempoManual, motorConfig),
                 );
                 return (
                   // UNA tarjeta por opcional: el nombre del paso VA en la barra
@@ -7359,7 +7748,8 @@ function ApConfigStep({
                         material ya muestra en su propia fila. */}
                   </div>
                 );
-              })}
+                },
+              )}
             </div>
           </div>
         ) : null}
@@ -7412,7 +7802,9 @@ function ApConfigStep({
       <div className="ap-config-section">
         <div className="ap-cs-head">
           <div className="ttl">Notas para producción</div>
-          <div className="sub">Información extra para el taller (opcional).</div>
+          <div className="sub">
+            Información extra para el taller (opcional).
+          </div>
         </div>
         <textarea
           className="ap-notas"
@@ -7441,11 +7833,20 @@ function ApConfigStep({
       ) : null}
 
       {product.real ? (
-        <div className={`ap-summary${cotizando && cotizacionExitosa ? " is-updating" : ""}`}>
+        <div
+          className={`ap-summary${cotizando && cotizacionExitosa ? " is-updating" : ""}`}
+        >
           <div className="ap-sum-head">
-            {cotizacionExitosa ? "Detalle del cálculo" : cotizando ? "Calculando" : "Precio"}
+            {cotizacionExitosa
+              ? "Detalle del cálculo"
+              : cotizando
+                ? "Calculando"
+                : "Precio"}
             {cotizacionExitosa?.desglosePrecio?.precioEspecialCliente ? (
-              <span className="ap-sum-especial" title="Este producto tiene un precio especial configurado para el cliente de la orden.">
+              <span
+                className="ap-sum-especial"
+                title="Este producto tiene un precio especial configurado para el cliente de la orden."
+              >
                 <StarIcon aria-hidden="true" />
                 Precio especial del cliente
               </span>
@@ -7457,14 +7858,20 @@ function ApConfigStep({
             ) : null}
           </div>
           {cotizando && !cotizacionExitosa ? (
-            <div className="ap-empty ap-calculating" aria-live="polite" aria-busy="true">
+            <div
+              className="ap-empty ap-calculating"
+              aria-live="polite"
+              aria-busy="true"
+            >
               <div className="ap-calc-loader" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </div>
               <div className="ttl">Calculando con el Motor Universal</div>
-              <div className="sub">Estamos procesando cantidad, opciones y ruta seleccionada.</div>
+              <div className="sub">
+                Estamos procesando cantidad, opciones y ruta seleccionada.
+              </div>
             </div>
           ) : cotizacionError || cotizacionErrores.length > 0 ? (
             <div className="ap-empty ap-empty-error">
@@ -7479,15 +7886,23 @@ function ApConfigStep({
             <>
               <div className="ap-sum-grid">
                 <div className="row">
-                  <span className="lbl">{labelPrecioUnitario(product.unidad)}</span>
+                  <span className="lbl">
+                    {labelPrecioUnitario(product.unidad)}
+                  </span>
                   <span className="val mono">
-                    {formatUnitPrice(getCotizacionUnitario(cotizacionExitosa), moneda)}
+                    {formatUnitPrice(
+                      getCotizacionUnitario(cotizacionExitosa),
+                      moneda,
+                    )}
                   </span>
                 </div>
                 <div className="row">
                   <span className="lbl">Cantidad cotizada</span>
                   <span className="val mono">
-                    {(cotizacionExitosa.cantidadComercialPricing ?? cotizacionExitosa.cantidadEfectiva).toLocaleString("es-AR")}{" "}
+                    {(
+                      cotizacionExitosa.cantidadComercialPricing ??
+                      cotizacionExitosa.cantidadEfectiva
+                    ).toLocaleString("es-AR")}{" "}
                     {product.unidad}
                   </span>
                 </div>
@@ -7537,8 +7952,8 @@ function ApConfigStep({
             <div className="ap-empty">
               <div className="ttl">Completá los datos para ver el precio</div>
               <div className="sub">
-                El precio se calcula automáticamente con el Motor Universal a medida
-                que cargás cantidad, medidas y opcionales.
+                El precio se calcula automáticamente con el Motor Universal a
+                medida que cargás cantidad, medidas y opcionales.
               </div>
             </div>
           )}
@@ -7582,7 +7997,11 @@ function ApConfigStep({
                 </span>
               </div>
               <div className="m-track">
-                <span style={{ width: `${Math.min(100, Math.max(0, totals.margen))}%` }} />
+                <span
+                  style={{
+                    width: `${Math.min(100, Math.max(0, totals.margen))}%`,
+                  }}
+                />
               </div>
             </div>
           )}
@@ -7613,7 +8032,8 @@ export function AgregarProductoSheet({
   React.useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
   }, [step, product?.id]);
-  const [productoDetalle, setProductoDetalle] = React.useState<ProductoDetalle | null>(null);
+  const [productoDetalle, setProductoDetalle] =
+    React.useState<ProductoDetalle | null>(null);
   const [query, setQuery] = React.useState("");
   const [family, setFamily] = React.useState("Todos");
   const [qty, setQty] = React.useState(0);
@@ -7625,10 +8045,16 @@ export function AgregarProductoSheet({
   // del lector de planos). Transitorio; ver docs/planos-persistir-diseno.md.
   const [planosAdjuntos, setPlanosAdjuntos] = React.useState<File[]>([]);
   const [notaProduccion, setNotaProduccion] = React.useState("");
-  const [loadingProductId, setLoadingProductId] = React.useState<string | null>(null);
-  const [cotizacion, setCotizacion] = React.useState<CotizarResponse | null>(null);
+  const [loadingProductId, setLoadingProductId] = React.useState<string | null>(
+    null,
+  );
+  const [cotizacion, setCotizacion] = React.useState<CotizarResponse | null>(
+    null,
+  );
   const [cotizando, setCotizando] = React.useState(false);
-  const [cotizacionError, setCotizacionError] = React.useState<string | null>(null);
+  const [cotizacionError, setCotizacionError] = React.useState<string | null>(
+    null,
+  );
   // La respuesta anterior puede seguir mostrándose durante el debounce, pero
   // deja de ser confirmable apenas cambia cualquier input cotizable.
   const [cotizacionDesactualizada, setCotizacionDesactualizada] =
@@ -7646,7 +8072,13 @@ export function AgregarProductoSheet({
   const totals = product ? getTotals(product, qty, adi) : null;
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
   const minimoComercialStatus = product
-    ? getMinimumCommercialStatus(product, productoDetalle, motorConfig, qty, cotizacionExitosa)
+    ? getMinimumCommercialStatus(
+        product,
+        productoDetalle,
+        motorConfig,
+        qty,
+        cotizacionExitosa,
+      )
     : null;
   const isBlockedByMinimum = minimoComercialStatus?.kind === "blocked";
   // Tiempo estimado por el comercial: bloquea el alta si un paso obligatorio
@@ -7671,7 +8103,8 @@ export function AgregarProductoSheet({
     );
     return getTiempoManualBloqueo(
       rutaSel,
-      (config) => isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
+      (config) =>
+        isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
       motorConfig,
     );
   }, [motorConfig, product, productoDetalle, qty]);
@@ -7688,9 +8121,13 @@ export function AgregarProductoSheet({
   // con una cantidad fuera de la lista y deja la cotización lista de una).
   React.useEffect(() => {
     if (!productoDetalle) return;
-    const ruta = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+    const ruta = getRutaSeleccionada(
+      productoDetalle,
+      motorConfig.rutaAlternativaId,
+    );
     const cantidades = getTercerizadoCantidades(ruta?.configPasos ?? []);
-    if (cantidades.length > 0 && !cantidades.includes(qty)) setQty(cantidades[0]);
+    if (cantidades.length > 0 && !cantidades.includes(qty))
+      setQty(cantidades[0]);
   }, [productoDetalle, motorConfig.rutaAlternativaId, qty]);
 
   React.useEffect(() => {
@@ -7723,28 +8160,36 @@ export function AgregarProductoSheet({
       }
 
       if (!nextProduct) {
-        toast.error("No pude encontrar el producto original para editar este item.");
+        toast.error(
+          "No pude encontrar el producto original para editar este item.",
+        );
         return;
       }
 
       if (cancelled) return;
       suppressNextCotizacionClear.current = true;
       const nextMotorConfig = motorConfigFromItem(itemToEdit);
-      const activeOptionCodes = Object.entries(nextMotorConfig.opcionalesActivados)
+      const activeOptionCodes = Object.entries(
+        nextMotorConfig.opcionalesActivados,
+      )
         .filter(([, value]) => value)
         .map(([key]) => key);
       const selectedAdicionales = Array.from(
         new Set([
           ...activeOptionCodes,
           ...nextProduct.adicionales
-            .filter((adicional) => itemToEdit.adicionales.includes(adicional.name))
+            .filter((adicional) =>
+              itemToEdit.adicionales.includes(adicional.name),
+            )
             .map((adicional) => adicional.code),
         ]),
       );
 
       setProduct(nextProduct);
       setProductoDetalle(detalle);
-      setQty(coerceQtyToPricingOptions(getQtyFromItem(itemToEdit), nextProduct));
+      setQty(
+        coerceQtyToPricingOptions(getQtyFromItem(itemToEdit), nextProduct),
+      );
       setSpecs({
         ...defaultSpecs(nextProduct),
         ...itemToEdit.especificaciones,
@@ -7774,7 +8219,9 @@ export function AgregarProductoSheet({
     if (picked.real && picked.id) {
       setLoadingProductId(picked.id);
       try {
-        detalle = augmentDetalleConPasosExtras(await getProductoById(picked.id));
+        detalle = augmentDetalleConPasosExtras(
+          await getProductoById(picked.id),
+        );
         next = mapProductoReal(detalle);
       } catch {
         toast.error("No pude cargar los opcionales completos del producto.");
@@ -7799,23 +8246,24 @@ export function AgregarProductoSheet({
       null;
     const medidaDefault = detalle ? getMedidaDefault(detalle) : null;
     const iniciaConPiezas =
-      detalle?.modoMedidas === "LIBRE" || isMetroLinealConMedidasVariables(detalle);
+      detalle?.modoMedidas === "LIBRE" ||
+      isMetroLinealConMedidasVariables(detalle);
     setMotorConfig({
       ...DEFAULT_MOTOR_CONFIG,
       rutaAlternativaId: rutaPreferida?.id ?? "",
       medidaPredefinidaId: medidaDefault?.id ?? "",
-      piezas:
-        iniciaConPiezas
-          ? [createDefaultPiezaInput()]
-          : [],
-      numerosXTalonario: next.subcategoriaComercialCodigo === "talonarios" ? 50 : 50,
+      piezas: iniciaConPiezas ? [createDefaultPiezaInput()] : [],
+      numerosXTalonario:
+        next.subcategoriaComercialCodigo === "talonarios" ? 50 : 50,
     });
     setStep("config");
   }, []);
 
   const toggleAdi = React.useCallback((code: string) => {
     setAdi((prev) =>
-      prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code],
+      prev.includes(code)
+        ? prev.filter((item) => item !== code)
+        : [...prev, code],
     );
   }, []);
 
@@ -7833,18 +8281,27 @@ export function AgregarProductoSheet({
       setQty(coercedQty);
       return;
     }
-    const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+    const rutaSel = getRutaSeleccionada(
+      productoDetalle,
+      motorConfig.rutaAlternativaId,
+    );
     const slotsParaReglas = getSlotsParaCotizacion(
       rutaSel,
       productoDetalle,
       motorConfig,
     );
-    const ruleContext = buildJobContext(productoDetalle, motorConfig, qty, slotsParaReglas);
+    const ruleContext = buildJobContext(
+      productoDetalle,
+      motorConfig,
+      qty,
+      slotsParaReglas,
+    );
     const slotsComercialElige = getSlotsParaCotizacion(
       rutaSel,
       productoDetalle,
       motorConfig,
-      (config) => isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
+      (config) =>
+        isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
     );
     const includeVisibleConfig = (config: ConfigPasoDetalle) =>
       isConfigPasoVisibleForContext(config, motorConfig, ruleContext);
@@ -7871,14 +8328,18 @@ export function AgregarProductoSheet({
       if (seq !== cotizacionSeqRef.current) return; // llegó una cotización más nueva
       setCotizacion(res);
       if (!res.exitoso) {
-        setCotizacionError(res.errores[0]?.mensaje ?? "El motor no pudo cotizar este producto.");
+        setCotizacionError(
+          res.errores[0]?.mensaje ?? "El motor no pudo cotizar este producto.",
+        );
       } else {
         setCotizacionDesactualizada(false);
       }
     } catch (error) {
       if (seq !== cotizacionSeqRef.current) return;
       setCotizacionError(
-        error instanceof Error ? error.message : "No se pudo conectar con el motor.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo conectar con el motor.",
       );
     } finally {
       if (seq === cotizacionSeqRef.current) setCotizando(false);
@@ -7914,7 +8375,9 @@ export function AgregarProductoSheet({
     (keepOpen: boolean) => {
       if (!product) return;
       if (product.real && (!cotizacionExitosa || cotizacionDesactualizada)) {
-        toast.error("Esperá a que termine la cotización actualizada del producto.");
+        toast.error(
+          "Esperá a que termine la cotización actualizada del producto.",
+        );
         return;
       }
       const minimumStatus = getMinimumCommercialStatus(
@@ -7932,18 +8395,27 @@ export function AgregarProductoSheet({
         toast.error(tiempoManualBloqueo);
         return;
       }
-      const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+      const rutaSel = getRutaSeleccionada(
+        productoDetalle,
+        motorConfig.rutaAlternativaId,
+      );
       const slotsParaReglas = getSlotsParaCotizacion(
         rutaSel,
         productoDetalle,
         motorConfig,
       );
-      const ruleContext = buildJobContext(productoDetalle, motorConfig, qty, slotsParaReglas);
+      const ruleContext = buildJobContext(
+        productoDetalle,
+        motorConfig,
+        qty,
+        slotsParaReglas,
+      );
       const slotsComercialElige = getSlotsParaCotizacion(
         rutaSel,
         productoDetalle,
         motorConfig,
-        (config) => isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
+        (config) =>
+          isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
       );
       const construido = buildItem(product, qty, specs, adi, {
         productoDetalle,
@@ -8173,7 +8645,10 @@ export function AgregarProductoSheet({
                     ? cotizando || cotizacionDesactualizada
                       ? "Cotizando..."
                       : cotizacionExitosa
-                        ? formatCurrency(getCotizacionTotal(cotizacionExitosa), moneda)
+                        ? formatCurrency(
+                            getCotizacionTotal(cotizacionExitosa),
+                            moneda,
+                          )
                         : "Pendiente"
                     : formatCurrency(totals.total, moneda)}
                 </span>

@@ -150,6 +150,7 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
   // F1 cartelería (2026-08-04):
   ml_estructura: { capacidad: 'metros_lineales', etiqueta: 'metros de perfil' },
   puntos_soldadura: { capacidad: 'unidades_procesadas', etiqueta: 'puntos de soldadura', atributo: true },
+  uniones_estructura: { capacidad: 'unidades_procesadas', etiqueta: 'uniones de estructura', atributo: true },
   cenefa_m2: { capacidad: 'm2_consumidos', etiqueta: 'm² de cenefa', atributo: true },
   pintura_m2: { capacidad: 'm2_consumidos', etiqueta: 'm² a pintar', atributo: true },
   fondo_m2: { capacidad: 'm2_consumidos', etiqueta: 'm² de chapa trasera', atributo: true },
