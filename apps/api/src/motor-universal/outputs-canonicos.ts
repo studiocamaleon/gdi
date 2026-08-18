@@ -238,6 +238,17 @@ function computeOutput(
     return nestingDispatch?.talonarioGrouping?.pilas ?? null;
   }
 
+  if (key === 'talonario_modo_incompleto') {
+    // Sólo el paso que modela el agrupado (el original) publica el modo. Las
+    // capas siguientes lo consumen para repetir la tirada, pero no vuelven a
+    // emitirlo ni pisan la fuente en el JobContext.
+    const modo = (paso.paramsPasoJson as Record<string, unknown> | null)
+      ?.modoTalonarioIncompleto;
+    return modo === 'aprovechar_pliego' || modo === 'pose_completa'
+      ? modo
+      : null;
+  }
+
   if (key === 'pliego_impresion_mp_variante_id') {
     // MP propia del candidato ganador (origen de costo 'por_candidato').
     // La publica pre_prensa para que el paso de impresión (HEREDAR) costee

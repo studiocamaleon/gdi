@@ -232,9 +232,8 @@ export async function runNestingForPaso(
     opts,
   );
   if (!resultado) return null;
-  // El agrupamiento de talonario es post-nesting y lo activa el paso que
-  // declara `modoTalonarioIncompleto` — el del original. Para el resto es un
-  // no-op. [antes colgaba del look-ahead de pre-prensa]
+  // El agrupamiento de talonario es post-nesting. El original declara el modo
+  // y las capas siguientes lo heredan para repetir la misma tirada.
   return aplicarTalonarioGroupingSiCorresponde(resultado, paso, jobContext);
 }
 
@@ -2003,13 +2002,15 @@ function getPiezasParaNesting(jobContext: JobContext) {
 }
 
 /**
- * Si el paso declara `paramsPaso.modoTalonarioIncompleto` y el JobContext es
- * de talonario (`numerosXTalonario` declarado), aplica el grouping al
- * resultado del nesting base. Sino, devuelve baseResult sin tocar.
+ * Si el paso declara `paramsPaso.modoTalonarioIncompleto`, o lo heredó de una
+ * capa anterior mediante `talonario_modo_incompleto`, y el JobContext es de
+ * talonario (`numerosXTalonario` declarado), aplica el grouping al resultado
+ * del nesting base. Sino, devuelve baseResult sin tocar.
  *
- * El param lo lleva el paso que define el armado —el del original—, así que
- * es ese el que publica las pilas que después usa el abrochado para contar
- * broches. El duplicado y el triplicado calculan sus pliegos sin tocarlas.
+ * El param propio lo lleva el paso que define el armado —el del original— y
+ * sólo ese conserva `talonarioGrouping`, por lo que es el único que publica
+ * las pilas para abrochado. Duplicado y triplicado repiten la cantidad real de
+ * hojas sin volver a emitir ni sobrescribir esas pilas.
  */
 function aplicarTalonarioGroupingSiCorresponde(
   baseResult: NestingDispatchResult,
@@ -2017,7 +2018,12 @@ function aplicarTalonarioGroupingSiCorresponde(
   jobContext: JobContext,
 ): NestingDispatchResult {
   const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-  const modo = params.modoTalonarioIncompleto;
+  const modoPropio = params.modoTalonarioIncompleto;
+  const modoHeredado = (jobContext as Record<string, unknown>)
+    .talonario_modo_incompleto;
+  const tieneModoPropio =
+    modoPropio === 'aprovechar_pliego' || modoPropio === 'pose_completa';
+  const modo = tieneModoPropio ? modoPropio : modoHeredado;
   if (modo !== 'aprovechar_pliego' && modo !== 'pose_completa') {
     return baseResult; // no es talonario
   }
@@ -2047,7 +2053,9 @@ function aplicarTalonarioGroupingSiCorresponde(
   return {
     ...baseResult,
     cantidadCalculada: grouping.pliegosXCapa,
-    talonarioGrouping: grouping,
+    // La traza completa (y por lo tanto `talonario_pilas`) pertenece al paso
+    // modelador. Las capas heredadas sólo necesitan la cantidad y el visual.
+    ...(tieneModoPropio ? { talonarioGrouping: grouping } : {}),
     ...buildTalonarioVisualPatch(baseResult, grouping, jobContext),
   };
 }

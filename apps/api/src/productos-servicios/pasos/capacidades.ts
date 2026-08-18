@@ -204,7 +204,11 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
  * era el único caso. La traza de la demasía vive en
  * `jobContext.mutacionesAplicadas`, que no es un output canónico.
  */
-export const KEYS_INTERNAS: ReadonlySet<string> = new Set<string>();
+export const KEYS_INTERNAS: ReadonlySet<string> = new Set<string>([
+  // Configuración que el paso original deja a las capas siguientes del
+  // talonario. No es una magnitud heredable ni debe aparecer en la UI.
+  'talonario_modo_incompleto',
+]);
 
 /**
  * Podadas por decisión de diseño (§B.2): "no se usa y no se va a usar".
