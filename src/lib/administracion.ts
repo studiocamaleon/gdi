@@ -517,7 +517,8 @@ export function estadoVisual(c: Pick<Comprobante, "estado" | "cae">): {
   clave: string;
   label: string;
 } {
-  if (c.estado === "emitido" && c.cae) return { clave: "cae", label: "Con CAE" };
+  if (c.estado === "emitido" && c.cae)
+    return { clave: "cae", label: "Con CAE" };
   if (c.estado === "emitido") return { clave: "emitido", label: "Sin CAE" };
   return {
     clave: c.estado,
@@ -604,18 +605,22 @@ export type CuentaFondos = {
   cbuAlias: string | null;
   moneda: string;
   saldo: number;
+  permiteSaldoNegativo: boolean;
   ultimoMovimiento: string | null;
   activo: boolean;
 };
 
 export type TesoreriaKpis = {
-  posicionArs: number;
-  posicionUsd: number;
+  posicionLocal: number;
+  posiciones: Record<string, number>;
   efectivo: number;
   bancos: number;
   cajasActivas: number;
-  cuentasArs: number;
+  cuentasLocales: number;
   aAcreditar: number;
+  aAcreditarPorMoneda: Record<string, number>;
+  valoresEnCartera: number;
+  valoresPorMoneda: Record<string, number>;
 };
 
 /** Una fila del detalle de "A acreditar": qué cobro es y cuándo entra. */
@@ -625,12 +630,14 @@ export type CobroPendienteAcreditacion = {
   fechaAcreditacionEstimada: string | null;
   metodoNombre: string;
   metodoTipo: string;
-  cuentaDestinoNombre: string;
+  cuentaDestinoNombre: string | null;
   clienteNombre: string | null;
   ordenId: string | null;
   ordenNumero: string | null;
   montoBruto: number;
   netoAcreditado: number;
+  disponibleReal: number;
+  moneda: string;
   esCheque: boolean;
   valorEstado: string | null;
   valorNumero: string | null;
@@ -642,10 +649,81 @@ export type MovimientoFondos = {
   tipo: "entrada" | "salida";
   monto: number;
   concepto: string;
-  origenTipo: "cobro" | "pago" | "transferencia" | "valor" | "ajuste_arqueo";
+  origenTipo:
+    | "cobro"
+    | "pago"
+    | "transferencia"
+    | "valor"
+    | "ajuste_arqueo"
+    | "ajuste_manual"
+    | "saldo_inicial";
   ordenId: string | null;
   ordenNumero: string | null;
   saldoPosterior: number;
+  createdAt: string;
+  estadoConciliacion: "pendiente" | "conciliado" | "diferencia";
+  conciliadoEl: string | null;
+  conciliadoPorNombre: string | null;
+  referencia: string | null;
+  notas: string | null;
+  actorNombre: string | null;
+  operacionId: string | null;
+  tipoCambio: number | null;
+};
+
+export type MovimientosFondosPagina = {
+  items: MovimientoFondos[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+};
+
+export type ValorTesoreria = {
+  id: string;
+  origen: "tercero" | "propio";
+  formato: string;
+  modalidad: string;
+  numero: string;
+  banco: string;
+  identificadorBancario: string | null;
+  importe: number;
+  moneda: string;
+  fechaEmision: string | null;
+  fechaPago: string | null;
+  estado:
+    | "cartera"
+    | "depositado"
+    | "acreditado"
+    | "endosado"
+    | "rechazado"
+    | "debitado"
+    | "emitido"
+    | "anulado";
+  motivoRechazo: string | null;
+  depositadoEl: string | null;
+  acreditadoEl: string | null;
+  endosadoEl: string | null;
+  debitadoEl: string | null;
+  anuladoEl: string | null;
+  rechazadoEl: string | null;
+  clienteNombre: string | null;
+  proveedorNombre: string | null;
+  cobroId: string | null;
+  numeroRecibo: string | null;
+  cobroAnulado: boolean;
+  cuentaDeposito: { id: string; nombre: string } | null;
+  pagoId: string | null;
+  pagoNumero: string | null;
+  pagoAnulado: boolean;
+  cuentaOrigen: { id: string; nombre: string } | null;
+  eventos: Array<{
+    id: string;
+    tipo: string;
+    actorNombre: string;
+    detalle: unknown;
+    createdAt: string;
+  }>;
 };
 
 // ── Cobros ─────────────────────────────────────────────────────────────
@@ -690,7 +768,7 @@ export type Cobro = {
   referencia: string | null;
   metodoNombre: string;
   metodoTipo: string;
-  cuentaDestinoNombre: string;
+  cuentaDestinoNombre: string | null;
   montoBruto: number;
   comisionPctAplicada: number;
   comisionMonto: number;
@@ -698,8 +776,12 @@ export type Cobro = {
   netoAcreditado: number;
   retencionesTotal: number;
   disponibleReal: number;
+  moneda: string;
   fechaAcreditacionEstimada: string | null;
-  estadoAcreditacion: "pendiente" | "acreditado";
+  estadoAcreditacion: "pendiente" | "acreditado" | "rechazado" | "anulado";
+  anuladoEl: string | null;
+  anuladoPorNombre: string | null;
+  motivoAnulacion: string | null;
   notas: string | null;
   retenciones: RetencionLinea[];
   valor: { id: string; estado: string; numero: string } | null;

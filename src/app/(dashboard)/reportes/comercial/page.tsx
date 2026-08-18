@@ -1,7 +1,7 @@
 import { TabComercial, MetaPie } from "@/components/panel/panel-general";
 import { getPanelComercial } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
-import { leerPeriodo, rangoDe } from "@/lib/panel-periodo";
+import { rangoDeParametros, type ParametrosPeriodo } from "@/lib/panel-periodo";
 
 export const dynamic = "force-dynamic";
 
@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<ParametrosPeriodo>;
 }) {
-  const { periodo } = await searchParams;
-  const d = await getPanelComercial(rangoDe(leerPeriodo(periodo), await zonaHorariaDelTenant()));
+  const parametros = await searchParams;
+  const d = await getPanelComercial(rangoDeParametros(parametros, await zonaHorariaDelTenant()));
   return (
     <>
-      <TabComercial d={d as never} />
+      <TabComercial d={d} />
       <MetaPie meta={d.meta} />
     </>
   );

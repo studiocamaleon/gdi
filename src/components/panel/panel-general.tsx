@@ -374,12 +374,31 @@ const SEG_COLORS = ["var(--ink)", "#4b4b55", "#6e6e76", "#a8a6a0", "#c8c6c0", "#
 function StackedRing({ segments, size = 150, stroke = 20, label, sub }: { segments: number[]; size?: number; stroke?: number; label: string; sub?: string }) {
   const total = segments.reduce((a, s) => a + s, 0) || 1;
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  let off = 0;
+  const arcos = segments.map((segmento, indice) => ({
+    largo: (c * segmento) / total,
+    offset: segments.slice(0, indice).reduce(
+      (acumulado, valor) => acumulado + (c * valor) / total,
+      0,
+    ),
+  }));
   return (
     <div className="d-donut" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(20,20,26,.06)" strokeWidth={stroke} />
-        {segments.map((s, i) => { const len = (c * s) / total; const el = <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={SEG_COLORS[i % SEG_COLORS.length]} strokeWidth={stroke} strokeDasharray={`${len} ${c}`} strokeDashoffset={-off + c / 4} transform={`rotate(-90 ${size / 2} ${size / 2})`} />; off += len; return el; })}
+        {arcos.map((arco, indice) => (
+          <circle
+            key={indice}
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={SEG_COLORS[indice % SEG_COLORS.length]}
+            strokeWidth={stroke}
+            strokeDasharray={`${arco.largo} ${c}`}
+            strokeDashoffset={-arco.offset + c / 4}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        ))}
       </svg>
       <div className="d-donut-mid"><div className="d-donut-val">{label}</div>{sub ? <div className="d-donut-sub">{sub}</div> : null}</div>
     </div>
@@ -818,10 +837,10 @@ export function TabProduccion({ d }: { d: ProduccionPanel }) {
     <>
       <div className="d-kpi-row">
         <Kpi label="Entregas a tiempo" value={pct(k.otdPct)} sub={`${d.otd.aTiempo}/${d.otd.total} órdenes`} />
-        <Kpi label="Trabajos en cola" value={fmtAR(k.trabajosEnCola)} sub={k.diasDeCarga != null ? `${fmtAR(k.diasDeCarga, 1)} días de carga` : "sin capacidad cargada"} />
+        <Kpi label="Cola actual" value={fmtAR(k.trabajosEnCola)} sub={k.diasDeCarga != null ? `${fmtAR(k.diasDeCarga, 1)} días de carga ahora` : "sin capacidad cargada"} />
         <Kpi label="Lead time" value={k.leadTimeDias != null ? `${fmtAR(k.leadTimeDias, 1)}` : "—"} sub="días · emisión→entrega" />
         <Kpi label="Eficiencia de tiempo" value={pct(k.eficienciaPct)} sub="real vs. cotizado" hint="Tiempo real de los pasos sobre el cotizado" />
-        <Kpi label="Bloqueados" value={fmtAR(k.bloqueados)} deltaTone="signal" delta={k.bloqueados > 0 ? k.bloqueados : undefined} sub="requieren intervención" />
+        <Kpi label="Bloqueados ahora" value={fmtAR(k.bloqueados)} deltaTone="signal" delta={k.bloqueados > 0 ? k.bloqueados : undefined} sub="requieren intervención" />
       </div>
       <div className="dash-grid">
         <Card span={5} title="Throughput diario" sub="pasos completados por día" action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{d.throughput.reduce((a, t) => a + t.cantidad, 0)}</span>}>
@@ -951,7 +970,7 @@ export function TabFinanzas({ d }: { d: FinanzasData }) {
         <Kpi label="Ventas" currency={moneda.simbolo} value={abreviarNumero(r.ventas, moneda)} delta={r.ventasDeltaPct} sub="órdenes emitidas · sin IVA" />
         <Kpi label="Contribución" value={pct(r.contribucionPct)} sub="margen de contribución" />
         <Kpi label="Punto de equilibrio" currency={moneda.simbolo} value={r.puntoEquilibrio != null ? abreviarNumero(r.puntoEquilibrio, moneda) : "—"} sub={r.avancePct != null ? `avance ${pct(r.avancePct)}` : undefined} />
-        <Kpi label="Cuentas por cobrar" currency={moneda.simbolo} value={abreviarNumero(co.agingTotal, moneda)} sub={`DSO ${co.dso != null ? fmtAR(co.dso) : "—"} días`} />
+        <Kpi label="Cuentas por cobrar hoy" currency={moneda.simbolo} value={abreviarNumero(co.agingTotal, moneda)} sub={`DSO estimado ${co.dso != null ? fmtAR(co.dso) : "—"} días`} />
         <Kpi label="Costo de cobrar" currency={moneda.simbolo} value={abreviarNumero(co.comisionTotal, moneda)} deltaTone="signal" sub="comisiones del período" />
       </div>
       <div className="dash-grid">
@@ -959,7 +978,7 @@ export function TabFinanzas({ d }: { d: FinanzasData }) {
           action={<div className="d-legend"><LegendDot color="var(--ink)" label="Ventas" value={abreviarMoneda(r.ventas, moneda)} /><LegendDot color="#c8c6c0" label="Costo" value={abreviarMoneda(r.costoTotal ?? 0, moneda)} /></div>}>
           <FacturacionVsCosto rentabilidad={r} meta={d.meta} />
         </Card>
-        <Card span={4} title="Cuentas por cobrar" sub="por antigüedad" foot={<><span className="d-pip warn" />Vencido <strong style={{ color: "var(--signal)" }}>{formatearMoneda(co.vencido, moneda, { decimales: 0 })}</strong></>}>
+        <Card span={4} title="Cuentas por cobrar hoy" sub="saldo actual por antigüedad" foot={<><span className="d-pip warn" />Vencido <strong style={{ color: "var(--signal)" }}>{formatearMoneda(co.vencido, moneda, { decimales: 0 })}</strong></>}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
             <span className="mono" style={{ fontSize: 22, fontWeight: 600, color: "var(--ink)" }}>{formatearMoneda(co.agingTotal, moneda, { decimales: 0 })}</span>
             <span style={{ fontSize: 11.5, color: "var(--muted-text)" }}>total a cobrar</span>
@@ -1098,14 +1117,14 @@ export function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel 
   return (
     <div className="dash-grid">
       <MixEvolutivoCard d={d} rango={rango} />
-      <Card span={6} title="Ventas por categoría" sub="margen y contribución · sin IVA" flush>
-        <table className="d-tbl"><thead><tr><th>Categoría</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
-          <tbody>{d.porCategoria.map((c) => (<tr key={c.nombre}><td><div className="nm">{c.nombre}</div></td><td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 44 }}><HBar value={c.margenPct} max={70} tone={c.margenPct >= 50 ? "ok" : c.margenPct >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span></div></td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(c.contribucionPct)}</td><td className="right mono">{abreviarMoneda(c.ventas, moneda)}</td></tr>))}</tbody>
+      <Card span={6} title="Ventas por categoría" sub={d.margenesVisibles ? "margen y contribución · sin IVA" : "volumen vendido · sin IVA"} flush>
+        <table className="d-tbl"><thead><tr><th>Categoría</th>{d.margenesVisibles ? <><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th></> : null}<th className="right">Ventas</th></tr></thead>
+          <tbody>{d.porCategoria.map((c) => (<tr key={c.nombre}><td><div className="nm">{c.nombre}</div></td>{d.margenesVisibles ? <><td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 44 }}><HBar value={c.margenPct ?? 0} max={70} tone={(c.margenPct ?? 0) >= 50 ? "ok" : (c.margenPct ?? 0) >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span></div></td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(c.contribucionPct)}</td></> : null}<td className="right mono">{abreviarMoneda(c.ventas, moneda)}</td></tr>))}</tbody>
         </table>
       </Card>
-      <Card span={6} title="Productos más vendidos" sub="volumen, margen y MC · sin IVA" flush>
-        <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
-          <tbody>{d.porProducto.slice(0, 8).map((p) => (<tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td><td className="right mono">{p.items}</td><td className="right mono">{pct(p.margenPct)}</td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(p.contribucionPct)}</td><td className="right mono">{abreviarMoneda(p.ventas, moneda)}</td></tr>))}</tbody>
+      <Card span={6} title="Productos más vendidos" sub={d.margenesVisibles ? "volumen, margen y MC · sin IVA" : "volumen vendido · sin IVA"} flush>
+        <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th>{d.margenesVisibles ? <><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th></> : null}<th className="right">Ventas</th></tr></thead>
+          <tbody>{d.porProducto.slice(0, 8).map((p) => (<tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td><td className="right mono">{p.items}</td>{d.margenesVisibles ? <><td className="right mono">{pct(p.margenPct)}</td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(p.contribucionPct)}</td></> : null}<td className="right mono">{abreviarMoneda(p.ventas, moneda)}</td></tr>))}</tbody>
         </table>
       </Card>
       <Card span={7} title="Adicionales más pedidos" sub="qué se agrega a los trabajos y cuánto suma al ticket · sin IVA"
@@ -1142,8 +1161,8 @@ export function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel 
         )}
       </Card>
       <Card span={7} title="Uso de papel y material" sub="consumo teórico del período" flush>
-        <table className="d-tbl"><thead><tr><th>Material</th><th className="right">Cantidad</th><th className="right">Trabajos</th><th className="right">Costo</th></tr></thead>
-          <tbody>{d.porPapel.map((m) => (<tr key={`${m.material}|${m.formato ?? ""}`}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtCantidadMaterial(m)}</td><td className="right mono">{m.items}</td><td className="right mono">{abreviarMoneda(m.costo, moneda)}</td></tr>))}</tbody>
+        <table className="d-tbl"><thead><tr><th>Material</th><th className="right">Cantidad</th><th className="right">Trabajos</th>{d.margenesVisibles ? <th className="right">Costo</th> : null}</tr></thead>
+          <tbody>{d.porPapel.map((m) => (<tr key={`${m.material}|${m.formato ?? ""}`}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtCantidadMaterial(m)}</td><td className="right mono">{m.items}</td>{d.margenesVisibles ? <td className="right mono">{abreviarMoneda(m.costo ?? 0, moneda)}</td> : null}</tr>))}</tbody>
         </table>
       </Card>
       <Card span={5} title="Medida estándar vs. a medida" sub={`cómo se cotizó cada item · ${fmtAR(d.totalM2, 1)} m² vendidos`}>
@@ -1315,15 +1334,15 @@ export function TabEquipo({ d }: { d: EquipoPanel }) {
           ) : null}
           <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted-text)" }}>Más oscuro = más tiempo. Una familia con una sola persona es un riesgo de cobertura.</div>
         </Card>
-        <Card span={12} title="Vendedores" sub={d.comisionesVisibles ? "venta, margen y comisión estimada del período · sin IVA" : "venta y margen del período · sin IVA"} flush>
+        <Card span={12} title="Vendedores" sub={d.comisionesVisibles ? "venta y comisión estimada del período · sin IVA" : d.margenesVisibles ? "venta y margen del período · sin IVA" : "venta del período · sin IVA"} flush>
           {d.vendedores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
-            <table className="d-tbl"><thead><tr><th>Vendedor</th><th className="right">Órdenes</th><th className="right">Ticket</th><th className="right">Margen</th><th className="right">Ventas</th>{d.comisionesVisibles ? <th className="right" title="Reglas de comisión configuradas aplicadas a la venta; no es liquidación">Comisión est.</th> : null}</tr></thead>
+            <table className="d-tbl"><thead><tr><th>Vendedor</th><th className="right">Órdenes</th><th className="right">Ticket</th>{d.margenesVisibles ? <th className="right">Margen</th> : null}<th className="right">Ventas</th>{d.comisionesVisibles ? <th className="right" title="Reglas de comisión configuradas aplicadas a la venta; no es liquidación">Comisión est.</th> : null}</tr></thead>
               <tbody>{d.vendedores.map((v) => (
                 <tr key={v.empleadoId ?? v.nombre}>
-                  <td><div className="nm">{v.nombre}</div>{v.itemsSinCosto > 0 ? <div className="sub">{v.itemsSinCosto} item{v.itemsSinCosto === 1 ? "" : "s"} sin costo (fuera del margen)</div> : null}</td>
+                  <td><div className="nm">{v.nombre}</div>{d.margenesVisibles && v.itemsSinCosto > 0 ? <div className="sub">{v.itemsSinCosto} item{v.itemsSinCosto === 1 ? "" : "s"} sin costo (fuera del margen)</div> : null}</td>
                   <td className="right mono">{v.ordenes}</td>
                   <td className="right mono">{abreviarMoneda(v.ticketPromedio, moneda)}</td>
-                  <td className="right mono" style={{ color: "var(--ok)" }}>{v.margenPct != null ? pct(v.margenPct) : "—"}</td>
+                  {d.margenesVisibles ? <td className="right mono" style={{ color: "var(--ok)" }}>{v.margenPct != null ? pct(v.margenPct) : "—"}</td> : null}
                   <td className="right mono" style={{ fontWeight: 600 }}>{abreviarMoneda(v.facturado, moneda)}</td>
                   {d.comisionesVisibles ? <td className="right mono">{v.comisionEstimada != null ? abreviarMoneda(v.comisionEstimada, moneda) : <span style={{ color: "var(--muted-text)" }}>sin regla</span>}</td> : null}
                 </tr>
@@ -1423,10 +1442,10 @@ export function TabClientes({ d }: { d: ClientesPanel }) {
             </table>
           )}
         </Card>
-        <Card span={12} title="Margen por cliente" sub="quién vende mucho y margina poco · sin IVA" flush>
-          {d.margenClientes.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
+        {d.margenesVisibles ? <Card span={12} title="Margen por cliente" sub="quién vende mucho y margina poco · sin IVA" flush>
+          {(d.margenClientes ?? []).length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
             <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Órdenes</th><th className="right">Ventas</th><th className="right">Margen</th><th className="right">Margen %</th></tr></thead>
-              <tbody>{d.margenClientes.map((c) => (
+              <tbody>{(d.margenClientes ?? []).map((c) => (
                 <tr key={c.clienteId ?? c.cliente}>
                   <td><div className="nm">{c.cliente}</div>{c.itemsSinCosto > 0 ? <div className="sub">{c.itemsSinCosto} item{c.itemsSinCosto === 1 ? "" : "s"} sin costo snapshoteado (fuera del margen)</div> : null}</td>
                   <td className="right mono">{c.ordenes}</td>
@@ -1442,7 +1461,7 @@ export function TabClientes({ d }: { d: ClientesPanel }) {
               ))}</tbody>
             </table>
           )}
-        </Card>
+        </Card> : null}
       </div>
     </>
   );
@@ -1455,10 +1474,11 @@ export function TabClientes({ d }: { d: ClientesPanel }) {
  * límites antes que quede lindo — un dato sin contexto se lee como verdad.
  */
 export function MetaPie({ meta }: { meta: MetaPanel | undefined }) {
-  if (!meta || meta.limites.length === 0) return null;
+  if (!meta) return null;
   return (
-    <div style={{ fontSize: 11, color: "var(--muted-text)", lineHeight: 1.5, marginTop: 4 }}>
-      <strong>Fuente:</strong> {meta.fuente}. {meta.limites.join(" ")}
+    <div className="d-meta" style={{ fontSize: 11, color: "var(--muted-text)", lineHeight: 1.5, marginTop: 4 }}>
+      <strong>Fuente:</strong> {meta.fuente}.
+      {meta.limites.length > 0 ? ` ${meta.limites.join(" ")}` : ""}
       {meta.sinComparativa ? " Sin período anterior para comparar." : ""}
     </div>
   );

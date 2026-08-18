@@ -5,299 +5,1042 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
+  BanknoteIcon,
   CheckIcon,
+  ChevronDownIcon,
   ClockIcon,
+  HandCoinsIcon,
+  LandmarkIcon,
   SearchIcon,
-  WalletIcon,
+  ShieldAlertIcon,
+  Undo2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
-import type { CobroPendienteAcreditacion } from "@/lib/administracion";
-import { acreditarCobro } from "@/lib/administracion-api";
-import { formatearMoneda } from "@/lib/moneda";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import {
+  useConfigRegional,
+  useFecha,
+} from "@/components/navigation/config-regional-provider";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import type {
+  CobroPendienteAcreditacion,
+  CuentaFondos,
+  ValorTesoreria,
+} from "@/lib/administracion";
+import {
+  acreditarCobro,
+  acreditarValor,
+  depositarValor,
+  rechazarValor,
+  revertirAcreditacionValor,
+  revertirDepositoValor,
+} from "@/lib/administracion-api";
+import {
+  anularPagoEgreso,
+  debitarValorPropio,
+  rechazarValorPropio,
+} from "@/lib/egresos-api";
+import { formatearMoneda, monedaDe } from "@/lib/moneda";
 
-/** Días calendario hasta la acreditación, en texto corto. */
-function cuandoAcredita(iso: string | null) {
-  if (!iso) return { texto: "Sin fecha", tono: "neutro" as const, dias: null };
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const objetivo = new Date(iso);
-  objetivo.setHours(0, 0, 0, 0);
-  const dias = Math.round((objetivo.getTime() - hoy.getTime()) / 86400000);
-  if (dias < 0)
-    return { texto: `Venció hace ${-dias} d`, tono: "warn" as const, dias };
-  if (dias === 0) return { texto: "Hoy", tono: "hoy" as const, dias };
-  if (dias === 1) return { texto: "Mañana", tono: "pronto" as const, dias };
-  if (dias <= 7)
-    return { texto: `En ${dias} días`, tono: "pronto" as const, dias };
-  return { texto: `En ${dias} días`, tono: "neutro" as const, dias };
+type OperacionValor =
+  | { tipo: "depositar"; valor: ValorTesoreria }
+  | { tipo: "acreditar"; valor: ValorTesoreria }
+  | { tipo: "debitar"; valor: ValorTesoreria }
+  | { tipo: "rechazar"; valor: ValorTesoreria }
+  | { tipo: "rechazar_propio"; valor: ValorTesoreria }
+  | { tipo: "anular_propio"; valor: ValorTesoreria }
+  | { tipo: "revertir_deposito"; valor: ValorTesoreria }
+  | { tipo: "revertir_acreditacion"; valor: ValorTesoreria }
+  | null;
+
+const ESTADOS: Record<string, string> = {
+  recibido: "Recibido del cliente",
+  cartera: "En cartera",
+  depositado: "Depositado",
+  acreditado: "Acreditado",
+  endosado: "Endosado",
+  rechazado: "Rechazado",
+  debitado: "Debitado",
+  emitido: "Emitido",
+  anulado: "Anulado",
+  deposito_revertido: "Depósito corregido",
+  acreditacion_revertida: "Acreditación corregida",
+  endoso_revertido: "Endoso anulado",
+};
+
+function detalleEvento(detalle: unknown): string | null {
+  if (!detalle || typeof detalle !== "object") return null;
+  const datos = detalle as Record<string, unknown>;
+  const partes = [
+    typeof datos.proveedorNombre === "string"
+      ? `Proveedor: ${datos.proveedorNombre}`
+      : null,
+    typeof datos.cuentaNombre === "string"
+      ? `Cuenta: ${datos.cuentaNombre}`
+      : null,
+    typeof datos.pagoNumero === "string"
+      ? `Orden de pago: ${datos.pagoNumero}`
+      : null,
+    typeof datos.motivo === "string" ? `Motivo: ${datos.motivo}` : null,
+  ].filter(Boolean);
+  return partes.length ? partes.join(" · ") : null;
 }
 
-const CHIPS = [
-  ["todos", "Todos"],
-  ["electronico", "Electrónicos"],
-  ["cheque", "Cheques"],
-] as const;
+function hoyEnZona(zonaHoraria: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: zonaHoraria,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
-type Chip = (typeof CHIPS)[number][0];
+function sumarPorMoneda<T>(
+  items: T[],
+  getMoneda: (item: T) => string,
+  getImporte: (item: T) => number,
+) {
+  const totales = new Map<string, number>();
+  for (const item of items) {
+    const codigo = getMoneda(item);
+    totales.set(codigo, (totales.get(codigo) ?? 0) + getImporte(item));
+  }
+  return [...totales.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+function selectorCuenta(
+  value: string,
+  onValueChange: (value: string) => void,
+  cuentas: CuentaFondos[],
+) {
+  const seleccionada = cuentas.find((cuenta) => cuenta.id === value);
+  return (
+    <Select value={value} onValueChange={(next) => onValueChange(next ?? "")}>
+      <SelectTrigger className="w-full" aria-label="Cuenta de depósito">
+        <SelectValue>
+          {seleccionada
+            ? `${seleccionada.nombre} · ${seleccionada.moneda}`
+            : "Seleccionar cuenta"}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {cuentas.map((cuenta) => (
+            <SelectItem key={cuenta.id} value={cuenta.id}>
+              {cuenta.nombre} · {cuenta.moneda}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ValorOperacionDialog({
+  operacion,
+  cuentas,
+  hoy,
+  ocupado,
+  onClose,
+  onConfirmar,
+}: {
+  operacion: Exclude<OperacionValor, null>;
+  cuentas: CuentaFondos[];
+  hoy: string;
+  ocupado: boolean;
+  onClose: () => void;
+  onConfirmar: (payload: {
+    cuentaDestinoId?: string;
+    fecha?: string;
+    referencia?: string;
+    notas?: string;
+    motivo?: string;
+  }) => void;
+}) {
+  const compatibles = cuentas.filter(
+    (cuenta) =>
+      cuenta.activo &&
+      cuenta.moneda === operacion.valor.moneda &&
+      (cuenta.tipo === "banco" || cuenta.tipo === "billetera"),
+  );
+  const [cuentaId, setCuentaId] = React.useState(
+    operacion.valor.cuentaDeposito?.id ?? compatibles[0]?.id ?? "",
+  );
+  const [fecha, setFecha] = React.useState(hoy);
+  const [referencia, setReferencia] = React.useState("");
+  const [notas, setNotas] = React.useState("");
+  const [motivo, setMotivo] = React.useState("");
+  const esCorreccion =
+    operacion.tipo === "revertir_deposito" ||
+    operacion.tipo === "revertir_acreditacion";
+  const requiereMotivo =
+    operacion.tipo === "rechazar" ||
+    operacion.tipo === "rechazar_propio" ||
+    operacion.tipo === "anular_propio" ||
+    esCorreccion;
+  const titulo =
+    operacion.tipo === "depositar"
+      ? "Depositar cheque"
+      : operacion.tipo === "acreditar"
+        ? "Confirmar acreditación"
+        : operacion.tipo === "debitar"
+          ? "Confirmar débito bancario"
+          : operacion.tipo === "revertir_deposito"
+            ? "Deshacer depósito"
+            : operacion.tipo === "revertir_acreditacion"
+              ? "Deshacer acreditación"
+              : operacion.tipo === "anular_propio"
+                ? "Anular cheque emitido"
+                : operacion.tipo === "rechazar_propio"
+                  ? "Registrar rechazo bancario"
+                  : "Registrar rechazo";
+  const invalido =
+    (operacion.tipo === "depositar" && !cuentaId) ||
+    (requiereMotivo && motivo.trim().length < 3);
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{titulo}</DialogTitle>
+          <DialogDescription>
+            Cheque {operacion.valor.numero} · {operacion.valor.banco} ·{" "}
+            {formatearMoneda(
+              operacion.valor.importe,
+              monedaDe(operacion.valor.moneda),
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <FieldGroup>
+          {operacion.tipo === "depositar" ? (
+            <Field>
+              <FieldLabel>Cuenta bancaria</FieldLabel>
+              {selectorCuenta(cuentaId, setCuentaId, compatibles)}
+              {compatibles.length === 0 ? (
+                <p className="text-sm text-destructive">
+                  No hay una cuenta activa en {operacion.valor.moneda}.
+                </p>
+              ) : null}
+            </Field>
+          ) : null}
+          {operacion.tipo !== "anular_propio" ? (
+            <Field>
+              <FieldLabel htmlFor="valor-fecha">
+                {operacion.tipo === "depositar"
+                  ? "Fecha de depósito"
+                  : operacion.tipo === "acreditar"
+                    ? "Fecha de acreditación"
+                    : operacion.tipo === "debitar"
+                      ? "Fecha del débito"
+                      : esCorreccion
+                        ? "Fecha de corrección"
+                        : "Fecha de rechazo"}
+              </FieldLabel>
+              <Input
+                id="valor-fecha"
+                type="date"
+                value={fecha}
+                onChange={(event) => setFecha(event.target.value)}
+              />
+            </Field>
+          ) : null}
+          {operacion.tipo === "acreditar" || operacion.tipo === "debitar" ? (
+            <Field>
+              <FieldLabel htmlFor="valor-referencia">
+                Referencia bancaria
+              </FieldLabel>
+              <Input
+                id="valor-referencia"
+                value={referencia}
+                onChange={(event) => setReferencia(event.target.value)}
+              />
+            </Field>
+          ) : null}
+          {requiereMotivo ? (
+            <Field data-invalid={motivo.length > 0 && motivo.trim().length < 3}>
+              <FieldLabel htmlFor="valor-motivo">
+                {esCorreccion
+                  ? "Motivo de la corrección"
+                  : operacion.tipo === "anular_propio"
+                    ? "Motivo de la anulación"
+                    : "Motivo del rechazo"}
+              </FieldLabel>
+              <Textarea
+                id="valor-motivo"
+                value={motivo}
+                onChange={(event) => setMotivo(event.target.value)}
+                placeholder={
+                  esCorreccion
+                    ? "Se seleccionó una cuenta incorrecta, se confirmó antes de tiempo…"
+                    : operacion.tipo === "anular_propio"
+                      ? "Se reemplazó el medio de pago, se anuló la emisión…"
+                      : "Fondos insuficientes, firma, orden de no pagar…"
+                }
+              />
+            </Field>
+          ) : (
+            <Field>
+              <FieldLabel htmlFor="valor-notas">Notas</FieldLabel>
+              <Textarea
+                id="valor-notas"
+                value={notas}
+                onChange={(event) => setNotas(event.target.value)}
+              />
+            </Field>
+          )}
+        </FieldGroup>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant={
+              operacion.tipo === "rechazar" ||
+              operacion.tipo === "rechazar_propio" ||
+              operacion.tipo === "anular_propio"
+                ? "destructive"
+                : "default"
+            }
+            loading={ocupado}
+            loadingText="Registrando…"
+            disabled={invalido}
+            onClick={() =>
+              onConfirmar({
+                cuentaDestinoId:
+                  operacion.tipo === "depositar" ? cuentaId : undefined,
+                fecha,
+                referencia: referencia.trim() || undefined,
+                notas: notas.trim() || undefined,
+                motivo: motivo.trim() || undefined,
+              })
+            }
+          >
+            Confirmar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function AcreditacionesView({
   initialFilas,
+  initialValores,
+  cuentas,
 }: {
   initialFilas: CobroPendienteAcreditacion[];
+  initialValores: ValorTesoreria[];
+  cuentas: CuentaFondos[];
 }) {
   const router = useRouter();
-  const { moneda } = useConfigRegional();
-  const { fechaCorta } = useFecha();
-  // "25-jul" sin año: la vista mira la semana que viene, el año sobra.
-  const fechaLarga = (iso: string | null) =>
-    iso ? fechaCorta(iso).replace(/-\d{4}$/, "") : "—";
-  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
-  const [filas, setFilas] = React.useState(initialFilas);
-  const [chip, setChip] = React.useState<Chip>("todos");
-  const [q, setQ] = React.useState("");
-  const [acreditando, setAcreditando] = React.useState<string | null>(null);
-
-  React.useEffect(() => setFilas(initialFilas), [initialFilas]);
-
-  const counts = React.useMemo(
-    () => ({
-      todos: filas.length,
-      electronico: filas.filter((f) => !f.esCheque).length,
-      cheque: filas.filter((f) => f.esCheque).length,
-    }),
-    [filas],
+  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeAnular = usePuede("administracion.anular");
+  const { zonaHoraria } = useConfigRegional();
+  const { fechaNumerica } = useFecha();
+  const hoy = React.useMemo(() => hoyEnZona(zonaHoraria), [zonaHoraria]);
+  const [filas, setFilas] = React.useState(
+    initialFilas.filter((fila) => !fila.esCheque),
   );
+  const [valores, setValores] = React.useState(initialValores);
+  const [busqueda, setBusqueda] = React.useState("");
+  const [estado, setEstado] = React.useState("activos");
+  const [ocupadoId, setOcupadoId] = React.useState<string | null>(null);
+  const [operacion, setOperacion] = React.useState<OperacionValor>(null);
+  const fmt = (importe: number, codigo: string) =>
+    formatearMoneda(importe, monedaDe(codigo), { decimales: 0 });
 
-  const lista = React.useMemo(() => {
-    const texto = q.trim().toLowerCase();
-    return filas.filter((f) => {
-      if (chip === "electronico" && f.esCheque) return false;
-      if (chip === "cheque" && !f.esCheque) return false;
-      if (!texto) return true;
-      return [
-        f.metodoNombre,
-        f.clienteNombre,
-        f.ordenNumero,
-        f.cuentaDestinoNombre,
-        f.valorNumero,
-      ]
-        .filter(Boolean)
-        .some((v) => (v as string).toLowerCase().includes(texto));
-    });
-  }, [filas, chip, q]);
+  React.useEffect(() => {
+    setFilas(initialFilas.filter((fila) => !fila.esCheque));
+  }, [initialFilas]);
+  React.useEffect(() => setValores(initialValores), [initialValores]);
 
-  const totalNeto = filas.reduce((s, f) => s + f.netoAcreditado, 0);
-  const estaSemana = filas.filter((f) => {
-    const d = cuandoAcredita(f.fechaAcreditacionEstimada).dias;
-    return d !== null && d <= 7;
-  });
-  const enCartera = filas.filter((f) => f.esCheque);
-
-  const acreditar = async (fila: CobroPendienteAcreditacion) => {
-    setAcreditando(fila.id);
+  const acreditarElectronico = async (fila: CobroPendienteAcreditacion) => {
+    setOcupadoId(fila.id);
     try {
       await acreditarCobro(fila.id);
-      toast.success(`Acreditado ${fmt(fila.netoAcreditado)} en ${fila.cuentaDestinoNombre}.`);
-      setFilas((prev) => prev.filter((f) => f.id !== fila.id));
+      setFilas((actuales) => actuales.filter((item) => item.id !== fila.id));
+      toast.success("Cobro acreditado.");
       router.refresh();
-    } catch (error) {
+    } catch (reason) {
       toast.error(
-        error instanceof Error ? error.message : "No se pudo acreditar.",
+        reason instanceof Error ? reason.message : "No se pudo acreditar.",
       );
     } finally {
-      setAcreditando(null);
+      setOcupadoId(null);
     }
   };
 
+  const operarValor = async (payload: {
+    cuentaDestinoId?: string;
+    fecha?: string;
+    referencia?: string;
+    notas?: string;
+    motivo?: string;
+  }) => {
+    if (!operacion) return;
+    const actual = operacion;
+    setOcupadoId(actual.valor.id);
+    try {
+      if (actual.tipo === "depositar") {
+        await depositarValor(actual.valor.id, {
+          cuentaDestinoId: payload.cuentaDestinoId!,
+          fecha: payload.fecha!,
+          notas: payload.notas,
+        });
+      } else if (actual.tipo === "acreditar") {
+        await acreditarValor(actual.valor.id, {
+          fecha: payload.fecha,
+          referencia: payload.referencia,
+          notas: payload.notas,
+          idempotencyKey: crypto.randomUUID(),
+        });
+      } else if (actual.tipo === "debitar") {
+        await debitarValorPropio(actual.valor.id, {
+          fecha: payload.fecha,
+          referencia: payload.referencia,
+          notas: payload.notas,
+          idempotencyKey: crypto.randomUUID(),
+        });
+      } else if (actual.tipo === "revertir_deposito") {
+        await revertirDepositoValor(actual.valor.id, {
+          fecha: payload.fecha,
+          motivo: payload.motivo!,
+        });
+      } else if (actual.tipo === "revertir_acreditacion") {
+        await revertirAcreditacionValor(actual.valor.id, {
+          fecha: payload.fecha,
+          motivo: payload.motivo!,
+          idempotencyKey: crypto.randomUUID(),
+        });
+      } else if (actual.tipo === "rechazar_propio") {
+        await rechazarValorPropio(actual.valor.id, {
+          fecha: payload.fecha,
+          motivo: payload.motivo!,
+          idempotencyKey: crypto.randomUUID(),
+        });
+      } else if (actual.tipo === "anular_propio" && actual.valor.pagoId) {
+        await anularPagoEgreso(actual.valor.pagoId, payload.motivo!);
+      } else {
+        await rechazarValor(actual.valor.id, {
+          motivo: payload.motivo!,
+          fecha: payload.fecha,
+          idempotencyKey: crypto.randomUUID(),
+        });
+      }
+      setValores((actuales) =>
+        actuales.map((valor) =>
+          valor.id === actual.valor.id
+            ? {
+                ...valor,
+                estado:
+                  actual.tipo === "depositar"
+                    ? "depositado"
+                    : actual.tipo === "acreditar"
+                      ? "acreditado"
+                      : actual.tipo === "debitar"
+                        ? "debitado"
+                        : actual.tipo === "revertir_deposito"
+                          ? "cartera"
+                          : actual.tipo === "revertir_acreditacion"
+                            ? "depositado"
+                            : actual.tipo === "rechazar_propio"
+                              ? "rechazado"
+                              : actual.tipo === "anular_propio"
+                                ? "anulado"
+                                : "rechazado",
+                cuentaDeposito:
+                  actual.tipo === "depositar"
+                    ? (cuentas
+                        .filter(
+                          (cuenta) => cuenta.id === payload.cuentaDestinoId,
+                        )
+                        .map((cuenta) => ({
+                          id: cuenta.id,
+                          nombre: cuenta.nombre,
+                        }))[0] ?? null)
+                    : actual.tipo === "revertir_deposito"
+                      ? null
+                      : valor.cuentaDeposito,
+                motivoRechazo:
+                  actual.tipo === "rechazar"
+                    ? (payload.motivo ?? null)
+                    : actual.tipo === "rechazar_propio"
+                      ? (payload.motivo ?? null)
+                      : valor.motivoRechazo,
+              }
+            : valor,
+        ),
+      );
+      toast.success(
+        actual.tipo === "depositar"
+          ? "Cheque depositado."
+          : actual.tipo === "acreditar"
+            ? "Cheque acreditado y fondos ingresados."
+            : actual.tipo === "debitar"
+              ? "Débito bancario confirmado."
+              : actual.tipo === "revertir_deposito"
+                ? "El cheque volvió a cartera."
+                : actual.tipo === "revertir_acreditacion"
+                  ? "La acreditación se revirtió y el cheque volvió a depositado."
+                  : actual.tipo === "rechazar_propio"
+                    ? "El rechazo reabrió la deuda y corrigió los fondos si correspondía."
+                    : actual.tipo === "anular_propio"
+                      ? "El cheque propio quedó anulado."
+                      : "Rechazo registrado.",
+      );
+      setOperacion(null);
+      router.refresh();
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo operar el valor.",
+      );
+    } finally {
+      setOcupadoId(null);
+    }
+  };
+
+  const q = busqueda.trim().toLowerCase();
+  const valoresFiltrados = valores.filter((valor) => {
+    const coincide =
+      !q ||
+      `${valor.numero} ${valor.banco} ${valor.clienteNombre ?? ""} ${valor.proveedorNombre ?? ""}`
+        .toLowerCase()
+        .includes(q);
+    const estadoCoincide =
+      estado === "todos" ||
+      (estado === "activos"
+        ? ["cartera", "depositado", "emitido"].includes(valor.estado)
+        : valor.estado === estado);
+    return coincide && estadoCoincide;
+  });
+  const valoresRecibidosActivos = valores.filter(
+    (valor) =>
+      valor.origen === "tercero" &&
+      ["cartera", "depositado"].includes(valor.estado),
+  );
+  const totalElectronico = sumarPorMoneda(
+    filas,
+    (fila) => fila.moneda,
+    (fila) => fila.disponibleReal,
+  );
+  const totalValores = sumarPorMoneda(
+    valoresRecibidosActivos,
+    (valor) => valor.moneda,
+    (valor) => valor.importe,
+  );
+
   return (
-    <div
-      className="aac-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        padding: "32px 28px 90px",
-      }}
-    >
-      <div className="aac-wrap">
-        <div className="aac-head">
-          <div>
-            <Link href="/administracion/tesoreria" className="aac-back">
-              <ArrowLeftIcon />
-              Tesorería
-            </Link>
-            <h1>Acreditaciones pendientes</h1>
-            <div className="sub">
-              Plata ya cobrada que todavía no entró a la cuenta. Acredita sola
-              al llegar la fecha; desde acá podés adelantarla.
-            </div>
-          </div>
+    <main className="mx-auto flex w-full max-w-[1320px] flex-1 self-start flex-col gap-6 p-4 pb-20 sm:p-6 lg:p-8">
+      <header className="flex flex-col gap-3">
+        <Link
+          href="/administracion/tesoreria"
+          className={buttonVariants({ variant: "ghost", className: "w-fit" })}
+        >
+          <ArrowLeftIcon data-icon="inline-start" />
+          Volver a Tesorería
+        </Link>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Acreditaciones y valores
+          </h1>
+          <p className="text-muted-foreground">
+            Confirmá fondos electrónicos y administrá el ciclo completo de
+            cheques.
+          </p>
         </div>
+      </header>
 
-        <div className="aac-kpis">
-          <div className="aac-kpi info">
-            <div className="l">Total a acreditar</div>
-            <div className="v">{fmt(totalNeto)}</div>
-            <div className="s">Neto de comisiones</div>
-          </div>
-          <div className="aac-kpi">
-            <div className="l">Cobros en tránsito</div>
-            <div className="v">{filas.length}</div>
-            <div className="s">Esperando fecha</div>
-          </div>
-          <div className="aac-kpi">
-            <div className="l">Entra esta semana</div>
-            <div className="v">
-              {fmt(estaSemana.reduce((s, f) => s + f.netoAcreditado, 0))}
-            </div>
-            <div className="s">
-              {estaSemana.length} cobro{estaSemana.length === 1 ? "" : "s"} en 7
-              días
-            </div>
-          </div>
-          <div className="aac-kpi">
-            <div className="l">Cheques en cartera</div>
-            <div className="v">
-              {fmt(enCartera.reduce((s, f) => s + f.netoAcreditado, 0))}
-            </div>
-            <div className="s">
-              {enCartera.length} valor{enCartera.length === 1 ? "" : "es"} sin
-              depositar
-            </div>
-          </div>
-        </div>
+      <section className="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardDescription>Cobros electrónicos pendientes</CardDescription>
+            <CardTitle className="flex flex-wrap gap-x-4 gap-y-1 text-2xl">
+              {totalElectronico.length
+                ? totalElectronico.map(([codigo, total]) => (
+                    <span key={codigo}>{fmt(total, codigo)}</span>
+                  ))
+                : "Sin pendientes"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {filas.length} operaciones
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Cheques en cartera o depositados</CardDescription>
+            <CardTitle className="flex flex-wrap gap-x-4 gap-y-1 text-2xl">
+              {totalValores.length
+                ? totalValores.map(([codigo, total]) => (
+                    <span key={codigo}>{fmt(total, codigo)}</span>
+                  ))
+                : "Sin valores"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {valoresRecibidosActivos.length} recibidos ·{" "}
+            {
+              valores.filter(
+                (valor) =>
+                  valor.origen === "propio" && valor.estado === "emitido",
+              ).length
+            }{" "}
+            propios por debitar
+          </CardContent>
+        </Card>
+      </section>
 
-        {filas.length === 0 ? (
-          <div className="aac-empty">
-            <div className="ico">
-              <WalletIcon />
-            </div>
-            <h3>No hay nada esperando acreditación</h3>
-            <p>
-              Todo lo que cobraste ya está disponible en tus cuentas. Los cobros
-              con plazo (débito, QR, crédito) van a aparecer acá hasta que
-              llegue su fecha.
-            </p>
-            <Link
-              className="btn btn-primary"
-              style={{ margin: "0 auto" }}
-              href="/administracion/tesoreria"
-            >
-              Volver a Tesorería
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="aac-toolbar">
-              <div className="aac-chips">
-                {CHIPS.map(([k, l]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    className={`aac-chip ${chip === k ? "on" : ""}`}
-                    onClick={() => setChip(k)}
-                  >
-                    {l}
-                    <span className="ct">{counts[k]}</span>
-                  </button>
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Cobros electrónicos</CardTitle>
+          <CardDescription>
+            El importe disponible ya descuenta comisiones y retenciones.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filas.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha estimada</TableHead>
+                  <TableHead>Cliente / operación</TableHead>
+                  <TableHead>Cuenta</TableHead>
+                  <TableHead className="text-right">Bruto</TableHead>
+                  <TableHead className="text-right">Disponible</TableHead>
+                  {puedeGestionar ? <TableHead /> : null}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filas.map((fila) => (
+                  <TableRow key={fila.id}>
+                    <TableCell>
+                      {fechaNumerica(
+                        fila.fechaAcreditacionEstimada ?? fila.fecha,
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      <div className="font-medium">
+                        {fila.clienteNombre ?? "Sin cliente"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {fila.metodoNombre}
+                        {fila.ordenNumero ? ` · ${fila.ordenNumero}` : ""}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {fila.cuentaDestinoNombre ?? "Sin cuenta asignada"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {fmt(fila.montoBruto, fila.moneda)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {fmt(fila.disponibleReal, fila.moneda)}
+                    </TableCell>
+                    {puedeGestionar ? (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          loading={ocupadoId === fila.id}
+                          loadingText="Acreditando…"
+                          onClick={() => void acreditarElectronico(fila)}
+                        >
+                          <CheckIcon data-icon="inline-start" />
+                          Acreditar
+                        </Button>
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
                 ))}
-              </div>
-              <div className="aac-search">
-                <SearchIcon />
-                <input
-                  placeholder="Método, cliente, orden, cuenta…"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-              </div>
-            </div>
+              </TableBody>
+            </Table>
+          ) : (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ClockIcon />
+                </EmptyMedia>
+                <EmptyTitle>No hay cobros electrónicos pendientes</EmptyTitle>
+                <EmptyDescription>
+                  Los que vencen se acreditan automáticamente y también pueden
+                  confirmarse manualmente.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </CardContent>
+      </Card>
 
-            <div className="aac-tbl">
-              <div className="aac-tr aac-th">
-                <span>Acredita</span>
-                <span>Método</span>
-                <span>Cliente</span>
-                <span>Orden</span>
-                <span>Cuenta destino</span>
-                <span className="r">Bruto</span>
-                <span className="r">Neto</span>
-                <span />
-              </div>
-              {lista.map((fila) => {
-                const cuando = cuandoAcredita(fila.fechaAcreditacionEstimada);
-                return (
-                  <div key={fila.id} className="aac-tr aac-row">
-                    <span className="aac-fecha">
-                      <span className="d">
-                        {fechaLarga(fila.fechaAcreditacionEstimada)}
-                      </span>
-                      <span className={`aac-when ${cuando.tono}`}>
-                        {cuando.texto}
-                      </span>
-                    </span>
-                    <span className="aac-metodo">
-                      <span className="nm">{fila.metodoNombre}</span>
-                      <span className="mt">
-                        {fila.esCheque && fila.valorNumero
-                          ? `Cheque ${fila.valorNumero}`
-                          : `Cobrado ${fechaLarga(fila.fecha)}`}
-                      </span>
-                    </span>
-                    <span className="aac-trunc">
-                      {fila.clienteNombre ?? "—"}
-                    </span>
-                    <span>
-                      {fila.ordenNumero ? (
-                        <Link
-                          className="aac-ot"
-                          href={`/produccion/ordenes/${fila.ordenId}`}
-                        >
-                          {fila.ordenNumero}
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </span>
-                    <span className="aac-trunc">{fila.cuentaDestinoNombre}</span>
-                    <span className="r aac-bruto">{fmt(fila.montoBruto)}</span>
-                    <span className="r aac-neto">
-                      {fmt(fila.netoAcreditado)}
-                    </span>
-                    <span className="r">
-                      {fila.esCheque ? (
-                        <span
-                          className="aac-cartera"
-                          title="Los cheques se acreditan desde la cartera de valores."
-                        >
-                          <ClockIcon />
-                          En cartera
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn aac-btn"
-                          disabled={acreditando === fila.id}
-                          onClick={() => void acreditar(fila)}
-                        >
-                          <CheckIcon />
-                          {acreditando === fila.id ? "…" : "Acreditar"}
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-              {lista.length === 0 ? (
-                <div className="aac-sin-resultados">
-                  Ningún cobro coincide con el filtro.
-                </div>
-              ) : null}
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Cartera de valores</CardTitle>
+          <CardDescription>
+            Depósito, acreditación, rechazo e historial de cheques y eCheq.
+          </CardDescription>
+          <CardAction className="flex gap-2">
+            <div className="relative hidden sm:block">
+              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="w-56 pl-8"
+                value={busqueda}
+                onChange={(event) => setBusqueda(event.target.value)}
+                placeholder="Cheque, banco, cliente"
+              />
             </div>
-          </>
-        )}
-      </div>
-    </div>
+            <Select
+              value={estado}
+              onValueChange={(next) => setEstado(next ?? "activos")}
+            >
+              <SelectTrigger aria-label="Estado de los valores">
+                <SelectValue>
+                  {estado === "activos"
+                    ? "Activos"
+                    : estado === "todos"
+                      ? "Todos"
+                      : (ESTADOS[estado] ?? "Seleccionar estado")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="activos">Activos</SelectItem>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {Object.entries(ESTADOS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="relative sm:hidden">
+            <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              value={busqueda}
+              onChange={(event) => setBusqueda(event.target.value)}
+              placeholder="Cheque, banco, cliente"
+            />
+          </div>
+          {valoresFiltrados.length ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {valoresFiltrados.map((valor) => (
+                <Card key={valor.id} size="sm">
+                  <CardHeader>
+                    <CardTitle>
+                      {valor.origen === "propio" ? "Cheque propio" : "Cheque"}{" "}
+                      {valor.numero}
+                    </CardTitle>
+                    <CardDescription className="flex flex-col gap-0.5">
+                      <span>
+                        {valor.banco} ·{" "}
+                        {valor.formato === "echeq" ? "eCheq" : "Cheque físico"}
+                      </span>
+                      <span>
+                        {valor.origen === "propio"
+                          ? `Emitido a ${valor.proveedorNombre ?? "proveedor sin identificar"}`
+                          : valor.estado === "endosado"
+                            ? `Recibido de ${valor.clienteNombre ?? "cliente sin identificar"} · endosado a ${valor.proveedorNombre ?? "proveedor sin identificar"}`
+                            : `Recibido de ${valor.clienteNombre ?? "cliente sin identificar"}`}
+                      </span>
+                    </CardDescription>
+                    <CardAction>
+                      <Badge
+                        variant={
+                          valor.estado === "rechazado"
+                            ? "destructive"
+                            : valor.estado === "acreditado"
+                              ? "secondary"
+                              : "outline"
+                        }
+                      >
+                        {ESTADOS[valor.estado] ?? valor.estado}
+                      </Badge>
+                    </CardAction>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <div className="text-xs text-muted-foreground">
+                          Importe
+                        </div>
+                        <div className="text-xl font-semibold">
+                          {fmt(valor.importe, valor.moneda)}
+                        </div>
+                      </div>
+                      <div className="text-right text-xs text-muted-foreground">
+                        {valor.fechaPago
+                          ? `Pago ${fechaNumerica(valor.fechaPago)}`
+                          : "Cheque común"}
+                        {valor.cuentaDeposito ? (
+                          <div>{valor.cuentaDeposito.nombre}</div>
+                        ) : null}
+                        {valor.identificadorBancario ? (
+                          <div>ID banco: {valor.identificadorBancario}</div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {puedeGestionar &&
+                      valor.origen === "tercero" &&
+                      valor.estado === "cartera" ? (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setOperacion({ tipo: "depositar", valor })
+                          }
+                        >
+                          <LandmarkIcon data-icon="inline-start" />
+                          Depositar
+                        </Button>
+                      ) : null}
+                      {puedeGestionar &&
+                      valor.origen === "tercero" &&
+                      valor.estado === "cartera" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            router.push(
+                              `/administracion/cuentas-por-pagar?endosarValorId=${valor.id}`,
+                            )
+                          }
+                        >
+                          <HandCoinsIcon data-icon="inline-start" />
+                          Endosar
+                        </Button>
+                      ) : null}
+                      {puedeGestionar &&
+                      valor.origen === "tercero" &&
+                      valor.estado === "depositado" ? (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setOperacion({ tipo: "acreditar", valor })
+                          }
+                        >
+                          <BanknoteIcon data-icon="inline-start" />
+                          Acreditar
+                        </Button>
+                      ) : null}
+                      {puedeAnular &&
+                      valor.origen === "tercero" &&
+                      valor.estado === "depositado" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setOperacion({ tipo: "revertir_deposito", valor })
+                          }
+                        >
+                          <Undo2Icon data-icon="inline-start" />
+                          Deshacer depósito
+                        </Button>
+                      ) : null}
+                      {puedeAnular &&
+                      valor.origen === "tercero" &&
+                      valor.estado === "acreditado" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setOperacion({
+                              tipo: "revertir_acreditacion",
+                              valor,
+                            })
+                          }
+                        >
+                          <Undo2Icon data-icon="inline-start" />
+                          Deshacer acreditación
+                        </Button>
+                      ) : null}
+                      {puedeGestionar &&
+                      valor.origen === "propio" &&
+                      valor.estado === "emitido" ? (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setOperacion({ tipo: "debitar", valor })
+                          }
+                        >
+                          <BanknoteIcon data-icon="inline-start" />
+                          Confirmar débito
+                        </Button>
+                      ) : null}
+                      {puedeAnular &&
+                      valor.origen === "propio" &&
+                      ["emitido", "debitado"].includes(valor.estado) ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() =>
+                            setOperacion({ tipo: "rechazar_propio", valor })
+                          }
+                        >
+                          <ShieldAlertIcon data-icon="inline-start" />
+                          Informar rechazo
+                        </Button>
+                      ) : null}
+                      {puedeAnular &&
+                      ((valor.origen === "tercero" &&
+                        ["cartera", "depositado", "acreditado"].includes(
+                          valor.estado,
+                        )) ||
+                        (valor.origen === "propio" &&
+                          valor.estado === "emitido" &&
+                          valor.pagoId)) ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() =>
+                            setOperacion({
+                              tipo:
+                                valor.origen === "propio"
+                                  ? "anular_propio"
+                                  : "rechazar",
+                              valor,
+                            })
+                          }
+                        >
+                          <ShieldAlertIcon data-icon="inline-start" />
+                          {valor.origen === "propio"
+                            ? "Anular emisión"
+                            : "Rechazar"}
+                        </Button>
+                      ) : null}
+                    </div>
+                    {valor.motivoRechazo ? (
+                      <p className="text-sm text-destructive">
+                        {valor.motivoRechazo}
+                      </p>
+                    ) : null}
+                    {valor.eventos.length ? (
+                      <Collapsible>
+                        <Separator />
+                        <CollapsibleTrigger
+                          className={buttonVariants({
+                            variant: "ghost",
+                            size: "sm",
+                            className: "mt-2 w-fit",
+                          })}
+                        >
+                          <ChevronDownIcon data-icon="inline-start" />
+                          Historial ({valor.eventos.length})
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <ol className="mt-2 flex flex-col gap-3">
+                            {valor.eventos.map((evento) => {
+                              const detalle = detalleEvento(evento.detalle);
+                              return (
+                                <li
+                                  key={evento.id}
+                                  className="flex flex-col gap-0.5 text-xs"
+                                >
+                                  <span className="font-medium">
+                                    {ESTADOS[evento.tipo] ?? evento.tipo}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {evento.actorNombre
+                                      ? `${evento.actorNombre} · `
+                                      : ""}
+                                    {fechaNumerica(evento.createdAt)}
+                                  </span>
+                                  {detalle ? (
+                                    <span className="text-muted-foreground">
+                                      {detalle}
+                                    </span>
+                                  ) : null}
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <BanknoteIcon />
+                </EmptyMedia>
+                <EmptyTitle>No hay valores para este filtro</EmptyTitle>
+                <EmptyDescription>
+                  Los cheques recibidos aparecen acá desde el momento del cobro.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </CardContent>
+      </Card>
+
+      {operacion ? (
+        <ValorOperacionDialog
+          key={`${operacion.tipo}-${operacion.valor.id}`}
+          operacion={operacion}
+          cuentas={cuentas}
+          hoy={hoy}
+          ocupado={ocupadoId === operacion.valor.id}
+          onClose={() => setOperacion(null)}
+          onConfirmar={(payload) => void operarValor(payload)}
+        />
+      ) : null}
+    </main>
   );
 }

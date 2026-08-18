@@ -75,16 +75,8 @@ async function seedRutasYProductos(
   const viniloBlanco152VarId = viniloBlanco152.id;
   const mdf9 = await fetchVariante(prisma, tenantId, 'MDF-9MM-183X275');
   const mdf9VarId = mdf9.id;
-  const filmMate = await fetchVariante(
-    prisma,
-    tenantId,
-    'BOPP-MATE-650',
-  );
-  const filmBrillo = await fetchVariante(
-    prisma,
-    tenantId,
-    'BOPP-BRILLO-650',
-  );
+  const filmMate = await fetchVariante(prisma, tenantId, 'BOPP-MATE-650');
+  const filmBrillo = await fetchVariante(prisma, tenantId, 'BOPP-BRILLO-650');
   const filmMateVarId = filmMate.id;
   const filmBrilloVarId = filmBrillo.id;
   const bolsaVarId = await fetchVarianteId(prisma, tenantId, 'BOLSA-100');
@@ -533,7 +525,7 @@ async function seedRutasYProductos(
       Object.assign(config, {
         modoActivacion: 'OBLIGATORIO',
         modoTiempo: 'T-3',
-        mecanismoCantidad: 'HEREDAR_DEL_OUTPUT_CANONICO',
+        mecanismoCantidad: 'CALCULADO_POR_PASO',
         multiplicadoresActivos: ['caras'],
         maquinaM1Id: maquinas.ricoh.id,
         perfilM1Id: ricohSimpleFazPerfil.id,
@@ -542,7 +534,7 @@ async function seedRutasYProductos(
       Object.assign(config, {
         modoActivacion: 'OPCIONAL',
         modoTiempo: 'T-3',
-        mecanismoCantidad: 'HEREDAR_DEL_OUTPUT_CANONICO',
+        mecanismoCantidad: 'CALCULADO_POR_PASO',
         multiplicadoresActivos: ['caras'],
         maquinaM1Id: maquinas.laminadora.id,
         perfilM1Id: laminadoraPerfil.id,
@@ -887,7 +879,6 @@ async function seedRutasYProductos(
         modoTiempo: 'T-1',
         centroCostoId: centroTrabajoManual.id,
         tiempoFijoOverrideMin: '12',
-        paramsPasoJson: { modoTalonarioIncompleto: 'aprovechar_pliego' },
       });
     } else if (paso.familiaCodigo === 'impresion_por_hoja') {
       // 3 pasos de impresión: capa 1 (obligatorio), capa 2 (CONDICIONAL >=2), capa 3 (CONDICIONAL ==3)
@@ -905,6 +896,13 @@ async function seedRutasYProductos(
               };
       Object.assign(config, {
         ...config1,
+        ...(paso.orden === 3
+          ? {
+              paramsPasoJson: {
+                modoTalonarioIncompleto: 'aprovechar_pliego',
+              },
+            }
+          : {}),
         modoTiempo: 'T-3',
         mecanismoCantidad: 'HEREDAR_DEL_OUTPUT_CANONICO',
         maquinaM1Id: maquinas.ricoh.id,

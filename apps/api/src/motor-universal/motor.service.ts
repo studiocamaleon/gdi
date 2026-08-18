@@ -1,9 +1,11 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 import {
@@ -24,14 +26,12 @@ import {
 } from './primitivas';
 import type {
   DefinicionFamiliaResuelta,
-  FamiliaCodigo,
   GuardSinLayoutNesting,
 } from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
 import { centrosDeTiemposExtra, leerTiemposExtra } from './tiempo-extra';
 import { aplicarNivelAlPaso, resolverNivelPaso } from './niveles-paso';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
-import { calcularPrecio, type PrecioConfig } from './calculador-precio';
 import { resolverCostoTercerizado } from './tercerizado-costo';
 import { AplicarPrecioService } from '../productos-servicios/precio/aplicar-precio.service';
 import { PreciosEspecialesClientesService } from '../productos-servicios/precio/precios-especiales-clientes/precios-especiales-clientes.service';
@@ -99,7 +99,6 @@ import {
   applyCostingStrategy,
   type CostingStrategyKind,
 } from '../productos-servicios/nesting/costing';
-import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import { MAX_HOJAS_CABALLETE_DEFAULT } from '../productos-servicios/nesting/helpers/cuadernillo-imposicion';
 import {
   getModoColorsFromPerfil,
@@ -128,6 +127,42 @@ import {
 } from '../productos-servicios/pasos/familias';
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import { paramsEfectivos } from './params-runtime';
+import { MotorCotizacionError } from './motor-error';
+import { jobContextCotizacionValido } from './cotizar.dto';
+
+const MOTOR_CONTRACT_VERSION = 'motor-universal-v4';
+
+function hashCotizacionInput(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function textoPrimitivo(value: unknown): string {
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return String(value);
+  }
+  return '';
+}
+
+function descuentoCotizacionValido(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value !== 'object' || Array.isArray(value)) return false;
+  const descuento = value as Record<string, unknown>;
+  if (descuento.tipo !== 'PORCENTAJE' && descuento.tipo !== 'MONTO') {
+    return false;
+  }
+  if (
+    typeof descuento.valor !== 'number' ||
+    !Number.isFinite(descuento.valor) ||
+    descuento.valor < 0
+  ) {
+    return false;
+  }
+  return descuento.tipo !== 'PORCENTAJE' || descuento.valor <= 100;
+}
 import { regionalDelTenant } from '../common/regional';
 import {
   aplicarMutacionPre,
@@ -427,6 +462,8 @@ function defaultOutputParaHeredar(familiaCodigo: string): string | null {
  */
 @Injectable()
 export class MotorUniversalService {
+  private readonly logger = new Logger(MotorUniversalService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly aplicarPrecio: AplicarPrecioService,
@@ -481,7 +518,62 @@ export class MotorUniversalService {
       productoPrecargado?: ProductoCargado;
     },
   ): Promise<CotizarOutput> {
+    const quoteRunId = randomUUID();
+    const startedAt = Date.now();
     const errores: ErrorMotor[] = [];
+    const fallar = (issues: ErrorMotor[]): CotizarOutput => {
+      const durationMs = Date.now() - startedAt;
+      this.logger.warn({
+        event: 'motor_cotizacion_rechazada',
+        quoteRunId,
+        durationMs,
+        tenantId: input.tenantId,
+        productoId: input.productoId,
+        errorCodes: issues.map((issue) => issue.codigo),
+        motorVersion: MOTOR_CONTRACT_VERSION,
+      });
+      return {
+        exitoso: false,
+        errores: issues,
+        metadata: {
+          quoteRunId,
+          motorVersion: MOTOR_CONTRACT_VERSION,
+          durationMs,
+        },
+      };
+    };
+
+    if (!jobContextCotizacionValido(input.jobContext)) {
+      return fallar([
+        {
+          codigo: 'job_context_invalido',
+          severidad: 'ERROR',
+          mensaje:
+            'La cantidad, las medidas o algún valor de la cotización no son válidos.',
+          sugerencia:
+            'Usar cantidades enteras positivas, medidas mayores a cero y números finitos.',
+        },
+      ]);
+    }
+    if (input.periodo && !/^\d{4}-(0[1-9]|1[0-2])$/.test(input.periodo)) {
+      return fallar([
+        {
+          codigo: 'periodo_tarifario_invalido',
+          severidad: 'ERROR',
+          mensaje: 'El período tarifario debe tener formato YYYY-MM.',
+        },
+      ]);
+    }
+    if (!descuentoCotizacionValido(input.descuento)) {
+      return fallar([
+        {
+          codigo: 'descuento_invalido',
+          severidad: 'ERROR',
+          mensaje:
+            'El descuento debe ser un monto no negativo o un porcentaje entre 0 y 100.',
+        },
+      ]);
+    }
 
     // 1. INICIALIZACIÓN
     let producto: ProductoCargado;
@@ -494,18 +586,14 @@ export class MotorUniversalService {
           input.rutaAlternativaId ?? null,
         ));
     } catch (err) {
-      return {
-        exitoso: false,
-        errores: [
-          {
-            codigo: 'producto_no_encontrado',
-            severidad: 'ERROR',
-            mensaje: err instanceof Error ? err.message : String(err),
-            sugerencia:
-              'Verificar que el producto y la ruta alternativa existen.',
-          },
-        ],
-      };
+      if (!(err instanceof MotorCotizacionError)) {
+        this.logger.error(
+          `Fallo inesperado cargando el producto ${input.productoId} para cotizar`,
+          err instanceof Error ? err.stack : String(err),
+        );
+        throw err;
+      }
+      return fallar([err.toErrorMotor()]);
     }
 
     // JobContext mutable (los pasos PRE pueden mutarlo) + defaults sensatos
@@ -549,6 +637,13 @@ export class MotorUniversalService {
     // el material y sí crecen con la demasía.
     // Ver docs/modificaciones-fisicas-lona-diseno.md §3.
     congelarMedidaVisible(jobContext);
+
+    errores.push(
+      ...this.validarSeleccionesExplicitas(producto.pasos, jobContext),
+    );
+    if (errores.some((error) => error.severidad === 'ERROR')) {
+      return fallar(errores);
+    }
 
     await this.enriquecerJobContextConGramajePrincipal(
       input.tenantId,
@@ -671,6 +766,7 @@ export class MotorUniversalService {
      * validaciones COMPARE/REQUIRES_INPUT puedan referenciarlos.
      */
     const outputsAcumulados = new Set<string>();
+    const outputsAmbiguosAdvertidos = new Set<string>();
     // Derivadores geométricos: el cache por paso se crea en el JobContext
     // ANTES del bucle, así el duplicado por caras (shallow copy) comparte la
     // MISMA referencia y lo que un paso deriva adentro se ve acá afuera.
@@ -719,6 +815,23 @@ export class MotorUniversalService {
       if (ejecucion.outputsCanonicos) {
         for (const [key, value] of Object.entries(ejecucion.outputsCanonicos)) {
           if (value === null || value === undefined) continue;
+          if (
+            outputsAcumulados.has(key) &&
+            !outputsAmbiguosAdvertidos.has(key)
+          ) {
+            outputsAmbiguosAdvertidos.add(key);
+            errores.push({
+              codigo: 'output_canonico_ambiguo',
+              severidad: 'WARNING',
+              mensaje: `Más de un paso publicó el output "${key}"; la compatibilidad legacy conserva el último valor.`,
+              rutaPasoId: paso.rutaPasoId,
+              rutaPasoOrden: paso.rutaPasoOrden,
+              familiaCodigo: paso.familiaCodigo,
+              contexto: { outputCanonico: key },
+              sugerencia:
+                'Configurar los consumidores con un origen explícito por paso y capacidad.',
+            });
+          }
           (jobContext as Record<string, unknown>)[key] = value;
           outputsAcumulados.add(key);
         }
@@ -768,7 +881,8 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            PasoEjecutado['ojalesLayout'] | undefined;
+            | PasoEjecutado['ojalesLayout']
+            | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -779,8 +893,8 @@ export class MotorUniversalService {
     }
 
     // 3. SI HAY ERRORES, NO COMPONER COTIZACIÓN
-    if (errores.length > 0) {
-      return { exitoso: false, errores };
+    if (errores.some((error) => error.severidad === 'ERROR')) {
+      return fallar(errores);
     }
 
     // 4. F.2.7 — Aplicar cargos directos a nivel COTIZACIÓN
@@ -792,7 +906,11 @@ export class MotorUniversalService {
       producto.cargosDirectosCotizacion,
       jobContext,
       subtotalSinCargosCotizacion,
+      errores,
     );
+    if (errores.some((error) => error.severidad === 'ERROR')) {
+      return fallar(errores);
+    }
 
     // 5. COMPONER RESULTADO
     const tiempoTotal = pasosEjecutados.reduce(
@@ -871,14 +989,14 @@ export class MotorUniversalService {
       pasosEjecutados,
     );
     if (minimoComercialContext.error) {
-      return { exitoso: false, errores: [minimoComercialContext.error] };
+      return fallar([minimoComercialContext.error]);
     }
     const errorMinimo = this.validarMinimoComercial(
       producto,
       minimoComercialContext,
     );
     if (errorMinimo) {
-      return { exitoso: false, errores: [errorMinimo] };
+      return fallar([errorMinimo]);
     }
     const cantidadComercialPricing = this.resolverCantidadComercialPricing(
       producto,
@@ -906,6 +1024,7 @@ export class MotorUniversalService {
       productoNombre: producto.productoNombre,
       rutaAlternativaId: producto.rutaAlternativaId,
       rutaNombre: producto.rutaAlternativaNombre,
+      periodoTarifario: periodo,
       cantidadEfectiva,
       cantidadPedida: input.jobContext.cantidad,
       cantidadComercialReal,
@@ -935,15 +1054,6 @@ export class MotorUniversalService {
 
     let desglose: Awaited<ReturnType<typeof this.calcularPrecioConSnapshots>>;
     try {
-      // F.2.12 — Calcular precio a partir del costo + Tab Precio del producto
-      if (producto.precioConfigJson) {
-        cotizacion.precio = calcularPrecio(
-          cotizacion.costos.unitario,
-          cantidadComercialPricing,
-          producto.precioConfigJson as PrecioConfig,
-        );
-      }
-
       // Sprint 5.a — Desglose completo (impuestos + comisiones + override cliente).
       // Se calcula en cualquier caso (no sólo al guardar) para que el cotizador en
       // preview muestre el precio bruto real.
@@ -957,27 +1067,30 @@ export class MotorUniversalService {
         descuento: input.descuento ?? null,
       });
     } catch (error) {
-      return {
-        exitoso: false,
-        errores: [
-          {
-            codigo: 'PRECIO_NO_CALCULABLE',
-            severidad: 'ERROR',
-            mensaje:
-              error instanceof Error
-                ? error.message
-                : 'No se pudo calcular el precio comercial del producto.',
-            contexto: {
-              productoId: producto.productoId,
-              unidadComercial: producto.unidadComercial,
-              cantidadComercialPricing,
-              costoUnitario: cotizacion.costos.unitario,
-            },
-            sugerencia:
-              'Revisá el margen objetivo, impuestos y comisiones configurados en Pricing.',
+      const esperado = error instanceof BadRequestException;
+      if (!esperado) {
+        this.logger.error(
+          `Fallo inesperado calculando precio [quoteRunId=${quoteRunId}]`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+      return fallar([
+        {
+          codigo: 'PRECIO_NO_CALCULABLE',
+          severidad: 'ERROR',
+          mensaje: esperado
+            ? error.message
+            : 'No se pudo calcular el precio comercial del producto.',
+          contexto: {
+            productoId: producto.productoId,
+            unidadComercial: producto.unidadComercial,
+            cantidadComercialPricing,
+            costoUnitario: cotizacion.costos.unitario,
           },
-        ],
-      };
+          sugerencia:
+            'Revisá el margen objetivo, impuestos y comisiones configurados en Pricing.',
+        },
+      ]);
     }
     if (desglose) {
       cotizacion.desglosePrecio = {
@@ -1002,6 +1115,15 @@ export class MotorUniversalService {
         precioBrutoTotal: desglose.precioBrutoTotal,
         descuento: desglose.descuento,
       };
+      // Compatibilidad del contrato anterior, proyectada desde la MISMA fuente
+      // autoritativa. Ya no se ejecuta un segundo algoritmo de precio.
+      cotizacion.precio = {
+        metodoUsado: desglose.snapshots.precioConfig.metodoCalculo,
+        precioUnitario: desglose.precioNetoUnitario,
+        precioTotal: desglose.precioNetoTotal,
+        margenAplicadoPct: desglose.margenEfectivoPct,
+        margenNegativo: desglose.margenEfectivoPct < 0,
+      };
     }
 
     const cotizacionReferenciaMinimo =
@@ -1018,7 +1140,29 @@ export class MotorUniversalService {
       cotizacion.desglosePrecio = cotizacionReferenciaMinimo.desglosePrecio;
     }
 
-    return { exitoso: true, errores: [], cotizacion };
+    this.logger.log({
+      event: 'motor_cotizacion_completada',
+      quoteRunId,
+      durationMs: Date.now() - startedAt,
+      tenantId: input.tenantId,
+      productoId: input.productoId,
+      rutaAlternativaId: cotizacion.rutaAlternativaId,
+      pasos: cotizacion.pasos.length,
+      warningCodes: errores
+        .filter((error) => error.severidad === 'WARNING')
+        .map((error) => error.codigo),
+      motorVersion: MOTOR_CONTRACT_VERSION,
+    });
+    return {
+      exitoso: true,
+      errores,
+      metadata: {
+        quoteRunId,
+        motorVersion: MOTOR_CONTRACT_VERSION,
+        durationMs: Date.now() - startedAt,
+      },
+      cotizacion,
+    };
   }
 
   /**
@@ -1083,6 +1227,22 @@ export class MotorUniversalService {
               'Solo se pueden agregar items a una cotización en borrador.',
             );
           }
+          // Toma un lock de escritura sobre el borrador hasta insertar el
+          // item. Si otro proceso lo emitió entre el SELECT y este punto, el
+          // predicado se reevalúa al obtener el lock y no se persiste nada.
+          const lock = await tx.cotizacion.updateMany({
+            where: {
+              id: cid,
+              tenantId: input.tenantId,
+              estado: 'borrador',
+            },
+            data: { updatedAt: new Date() },
+          });
+          if (lock.count !== 1) {
+            throw new BadRequestException(
+              'La cotización dejó de estar en borrador mientras se agregaba el item.',
+            );
+          }
         } else {
           // El cliente asociado debe pertenecer al tenant.
           if (input.clienteId) {
@@ -1113,6 +1273,8 @@ export class MotorUniversalService {
             producto: productoCargado,
             cotizacion: result.cotizacion!,
             descuento: input.descuento ?? null,
+            inputHash: hashCotizacionInput(input),
+            periodo: result.cotizacion!.periodoTarifario,
           }),
         });
 
@@ -1151,36 +1313,73 @@ export class MotorUniversalService {
       );
     }
 
-    const result = await this.cotizar({
-      tenantId: input.tenantId,
-      productoId: item.productoId,
-      rutaAlternativaId: input.rutaAlternativaId ?? item.rutaAlternativaId,
-      jobContext: input.jobContext,
-      clienteId: input.clienteId ?? item.cotizacion.clienteId ?? null,
-      periodo: input.periodo ?? null,
-      descuento: input.descuento ?? null,
-    });
-    if (!result.exitoso || !result.cotizacion) {
+    const rutaAlternativaId =
+      input.rutaAlternativaId ?? item.rutaAlternativaId ?? null;
+    let producto: ProductoCargado | null = null;
+    try {
+      producto = await this.cargarProductoYRuta(
+        input.tenantId,
+        item.productoId,
+        rutaAlternativaId,
+      );
+    } catch {
+      producto = null;
+    }
+    const result = await this.cotizar(
+      {
+        tenantId: input.tenantId,
+        productoId: item.productoId,
+        rutaAlternativaId,
+        jobContext: input.jobContext,
+        clienteId: input.clienteId ?? item.cotizacion.clienteId ?? null,
+        periodo: input.periodo ?? null,
+        descuento: input.descuento ?? null,
+      },
+      producto ? { productoPrecargado: producto } : undefined,
+    );
+    if (!result.exitoso || !result.cotizacion || !producto) {
       return { result };
     }
 
-    const producto = await this.cargarProductoYRuta(
-      input.tenantId,
-      item.productoId,
-      result.cotizacion.rutaAlternativaId ?? input.rutaAlternativaId ?? null,
-    );
-
-    await this.prisma.cotizacionItem.update({
-      where: { id: item.id },
-      data: this.buildCotizacionItemData({
-        tenantId: input.tenantId,
-        cotizacionId: item.cotizacionId,
-        productoId: item.productoId,
-        jobContext: input.jobContext,
-        producto,
-        cotizacion: result.cotizacion,
-        descuento: input.descuento ?? null,
-      }),
+    await this.prisma.$transaction(async (tx) => {
+      const lock = await tx.cotizacion.updateMany({
+        where: {
+          id: item.cotizacionId,
+          tenantId: input.tenantId,
+          estado: 'borrador',
+        },
+        data: { updatedAt: new Date() },
+      });
+      if (lock.count !== 1) {
+        throw new BadRequestException(
+          'La cotización dejó de estar en borrador mientras se recotizaba. No se modificó el item.',
+        );
+      }
+      const updateResult = await tx.cotizacionItem.updateMany({
+        where: {
+          id: item.id,
+          tenantId: input.tenantId,
+          cotizacionId: item.cotizacionId,
+        },
+        data: this.buildCotizacionItemData({
+          tenantId: input.tenantId,
+          cotizacionId: item.cotizacionId,
+          productoId: item.productoId,
+          jobContext: input.jobContext,
+          producto,
+          cotizacion: result.cotizacion!,
+          descuento: input.descuento ?? null,
+          inputHash: hashCotizacionInput({
+            ...input,
+            productoId: item.productoId,
+            rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
+          }),
+          periodo: result.cotizacion!.periodoTarifario,
+        }),
+      });
+      if (updateResult.count !== 1) {
+        throw new NotFoundException('No se encontró el item de cotización.');
+      }
     });
 
     return {
@@ -1198,6 +1397,8 @@ export class MotorUniversalService {
     producto: ProductoCargado;
     cotizacion: CotizacionResultado;
     descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
+    inputHash: string;
+    periodo: string;
   }) {
     const desglosePrecio = args.cotizacion.desglosePrecio;
     const precioResultado = desglosePrecio
@@ -1221,6 +1422,14 @@ export class MotorUniversalService {
       cantidad: args.cotizacion.cantidadComercialReal.toString(),
       jobContextJson: args.jobContext as never,
       snapshotJson: {
+        motor: {
+          contractVersion: MOTOR_CONTRACT_VERSION,
+          buildSha:
+            process.env.BUILD_SHA ?? process.env.GIT_SHA ?? 'development',
+          inputHash: args.inputHash,
+          periodoTarifario: args.periodo,
+          generadoAt: new Date().toISOString(),
+        },
         producto: {
           id: args.producto.productoId,
           codigo: args.producto.productoCodigo,
@@ -1231,14 +1440,19 @@ export class MotorUniversalService {
         },
         ruta: {
           id: args.producto.rutaId,
+          version: args.producto.rutaVersion,
           codigo: args.producto.rutaCodigo,
           nombre: args.producto.rutaNombre,
           alternativa: args.producto.rutaAlternativaNombre,
           pasos: args.producto.pasos.map((p) => ({
+            rutaPasoId: p.rutaPasoId,
+            configPasoId: p.configPasoId,
             orden: p.rutaPasoOrden,
             familia: p.familiaCodigo,
             maquina: p.maquina?.codigo,
+            maquinaId: p.maquina?.id,
             perfil: p.perfil?.nombre,
+            perfilId: p.perfil?.id,
             materialesEnSlots: p.slots.map((s) => ({
               slot: s.slotCodigo,
               modo: s.modoSeleccion,
@@ -2029,6 +2243,107 @@ export class MotorUniversalService {
     }
   }
 
+  /** Las decisiones explícitas del comercial nunca se sustituyen por defaults. */
+  private validarSeleccionesExplicitas(
+    pasos: PasoCargado[],
+    jobContext: JobContext,
+  ): ErrorMotor[] {
+    const errores: ErrorMotor[] = [];
+    const ctx = jobContext as Record<string, unknown>;
+
+    for (const paso of pasos) {
+      const maquinaRaw =
+        ctx[`maquinaSeleccionada_${paso.configPasoId}`] ??
+        ctx[`maquinaSeleccionada_${paso.rutaPasoId}`];
+      const maquinaId =
+        typeof maquinaRaw === 'string' && maquinaRaw.trim()
+          ? maquinaRaw.trim()
+          : null;
+      const candidatas = paso.maquinasCandidatas ?? [];
+      let maquinaActiva = paso.maquina;
+      let perfilesActivos = paso.perfilesDisponibles ?? [];
+
+      if (maquinaId) {
+        const candidata = candidatas.find(
+          (item) => item.id === maquinaId || item.maquinaId === maquinaId,
+        );
+        if (candidatas.length > 0 && candidata) {
+          const compatibles = this.filtrarPerfilesCompatibles(
+            paso.familiaCodigo,
+            candidata.perfilesOperativos,
+          );
+          if (compatibles.length === 0) {
+            errores.push(
+              this.errorSeleccionExplicita(
+                paso,
+                'maquina_explicita_sin_perfil_compatible',
+                `La máquina elegida para el paso ${paso.rutaPasoOrden} no tiene perfiles activos compatibles.`,
+                { maquinaId },
+              ),
+            );
+          } else {
+            maquinaActiva = candidata.maquina;
+            perfilesActivos = compatibles;
+          }
+        } else if (paso.maquina?.id !== maquinaId) {
+          errores.push(
+            this.errorSeleccionExplicita(
+              paso,
+              'maquina_explicita_invalida',
+              `La máquina elegida para el paso ${paso.rutaPasoOrden} no pertenece a sus candidatas activas.`,
+              { maquinaId },
+            ),
+          );
+        }
+      }
+
+      const perfilRaw =
+        ctx[`perfilSeleccionado_${paso.configPasoId}`] ??
+        ctx[`perfilSeleccionado_${paso.rutaPasoId}`];
+      const perfilId =
+        typeof perfilRaw === 'string' && perfilRaw.trim()
+          ? perfilRaw.trim()
+          : null;
+      if (perfilId) {
+        const compatibles = this.filtrarPerfilesCompatibles(
+          paso.familiaCodigo,
+          perfilesActivos,
+        );
+        if (!compatibles.some((perfil) => perfil.id === perfilId)) {
+          errores.push(
+            this.errorSeleccionExplicita(
+              paso,
+              'perfil_explicito_invalido',
+              `El perfil elegido para el paso ${paso.rutaPasoOrden} no está activo o no pertenece a la máquina seleccionada.`,
+              { perfilId, maquinaId: maquinaActiva?.id ?? null },
+            ),
+          );
+        }
+      }
+    }
+
+    return errores;
+  }
+
+  private errorSeleccionExplicita(
+    paso: PasoCargado,
+    codigo: string,
+    mensaje: string,
+    contexto: Record<string, unknown>,
+  ): ErrorMotor {
+    return {
+      codigo,
+      severidad: 'ERROR',
+      mensaje,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto,
+      sugerencia:
+        'Actualizar la selección con una opción activa disponible para este paso.',
+    };
+  }
+
   private resolverTecnologiaMaquina(
     maquina: PasoCargado['maquina'] | undefined,
   ) {
@@ -2119,7 +2434,7 @@ export class MotorUniversalService {
         eje: (typeof eje.label === 'string' && eje.label) || clave,
         valor:
           (match && typeof match.label === 'string' && match.label) ||
-          String(valorClave),
+          textoPrimitivo(valorClave),
       });
     }
     return filas;
@@ -2327,7 +2642,6 @@ export class MotorUniversalService {
       pasoBase.configPasoId,
       jobContext as unknown as Record<string, unknown>,
     );
-    // eslint-disable-next-line prefer-const -- se reasigna al resolver la M-2
     let paso = aplicarNivelAlPaso(
       pasoBase,
       jobContext as unknown as Record<string, unknown>,
@@ -2336,6 +2650,18 @@ export class MotorUniversalService {
     // a) ACTIVACIÓN (D.1)
     const activacion = this.evaluarActivacion(paso, jobContext);
     if (!activacion.activado) {
+      if (activacion.error) {
+        errores.push({
+          codigo: 'regla_activacion_invalida',
+          severidad: 'ERROR',
+          mensaje: `No se pudo evaluar la activación del paso ${paso.rutaPasoOrden}: ${activacion.error}`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          sugerencia:
+            'Corregir la regla condicional antes de volver a cotizar.',
+        });
+      }
       return {
         rutaPasoId: paso.rutaPasoId,
         rutaPasoOrden: paso.rutaPasoOrden,
@@ -2343,6 +2669,19 @@ export class MotorUniversalService {
         configPasoId: paso.configPasoId,
         activado: false,
         razonNoActivado: activacion.razon,
+        costoTotal: 0,
+      };
+    }
+
+    const errorHerencia = this.validarHerenciaExplicita(paso, jobContext);
+    if (errorHerencia) {
+      errores.push(errorHerencia);
+      return {
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        configPasoId: paso.configPasoId,
+        activado: true,
         costoTotal: 0,
       };
     }
@@ -2735,6 +3074,7 @@ export class MotorUniversalService {
           jobContext,
           subtotalPaso,
           nivelPaso?.codigo ?? null,
+          errores,
         );
     const cargosPasoTotal = cargosDirectosPaso.reduce(
       (acc, c) => acc + c.monto,
@@ -2834,30 +3174,55 @@ export class MotorUniversalService {
     jobContext: JobContext,
     subtotalPaso: number,
     nivelCodigo: string | null,
+    errores: ErrorMotor[],
   ): CargoDirectoEjecutado[] {
     const ejecutados: CargoDirectoEjecutado[] = [];
     for (const cargo of cargos) {
       if (cargo.nivelCodigo && cargo.nivelCodigo !== nivelCodigo) continue;
-      const activado = this.evaluarActivacionCargo(cargo, jobContext);
-      if (!activado) continue;
+      const activacion = this.evaluarActivacionCargo(cargo, jobContext);
+      if (activacion.error) {
+        errores.push({
+          codigo: 'regla_cargo_invalida',
+          severidad: 'ERROR',
+          mensaje: `No se pudo evaluar el cargo "${cargo.catalogo.nombre}": ${activacion.error}`,
+          sugerencia: 'Corregir la activación o configuración del cargo.',
+          contexto: { cargoId: cargo.id, cargoCodigo: cargo.catalogo.codigo },
+        });
+        continue;
+      }
+      if (!activacion.activado) continue;
 
       const config = this.combinarConfigCargo(
         cargo.catalogo.configJson,
         cargo.configOverrideJson,
       );
-      const monto = this.calcularMontoCargo(
-        cargo.catalogo.modoCalculo,
-        config,
-        jobContext,
-        subtotalPaso,
-      );
+      let monto: number;
+      try {
+        monto = this.calcularMontoCargo(
+          cargo.catalogo.modoCalculo,
+          config,
+          jobContext,
+          subtotalPaso,
+        );
+      } catch (error) {
+        errores.push({
+          codigo: 'config_cargo_invalida',
+          severidad: 'ERROR',
+          mensaje: `El cargo "${cargo.catalogo.nombre}" no se puede calcular: ${error instanceof Error ? error.message : String(error)}`,
+          sugerencia: 'Completar la configuración monetaria del cargo.',
+          contexto: { cargoId: cargo.id, cargoCodigo: cargo.catalogo.codigo },
+        });
+        continue;
+      }
 
       ejecutados.push({
         cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -3021,7 +3386,7 @@ export class MotorUniversalService {
   private evaluarActivacion(
     paso: PasoCargado,
     jobContext: JobContext,
-  ): { activado: boolean; razon?: string } {
+  ): { activado: boolean; razon?: string; error?: string } {
     const modo = paso.modoActivacion ?? 'OBLIGATORIO';
 
     if (modo === 'NO_EJECUTAR') {
@@ -3056,6 +3421,7 @@ export class MotorUniversalService {
         return {
           activado: false,
           razon: `Error evaluando regla CONDICIONAL: ${evaluacion.error}`,
+          error: evaluacion.error,
         };
       }
       return {
@@ -3069,6 +3435,51 @@ export class MotorUniversalService {
     return {
       activado: false,
       razon: `Modo de activación desconocido: ${modo}`,
+      error: `Modo de activación desconocido: ${modo}`,
+    };
+  }
+
+  /** Una herencia modelada explícitamente nunca cae al output plano legacy. */
+  private validarHerenciaExplicita(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): ErrorMotor | null {
+    if (paso.mecanismoCantidad !== 'HEREDAR_DEL_OUTPUT_CANONICO') return null;
+    const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<
+      string,
+      unknown
+    >;
+    if (!Object.prototype.hasOwnProperty.call(config, 'origen')) return null;
+    const origen = config.origen as {
+      rutaPasoId?: unknown;
+      capacidad?: unknown;
+    } | null;
+    const rutaPasoId =
+      origen && typeof origen.rutaPasoId === 'string'
+        ? origen.rutaPasoId.trim()
+        : '';
+    const capacidad =
+      origen && typeof origen.capacidad === 'string'
+        ? origen.capacidad.trim()
+        : 'unidades_procesadas';
+    const valor = resolverHerenciaExplicita(
+      config,
+      jobContext as Record<string, unknown>,
+    );
+    if (rutaPasoId && valor !== null) return null;
+
+    return {
+      codigo: 'herencia_explicita_no_resoluble',
+      severidad: 'ERROR',
+      mensaje: rutaPasoId
+        ? `El paso ${paso.rutaPasoOrden} debe heredar "${capacidad}" del paso configurado, pero ese origen no la publicó.`
+        : `El paso ${paso.rutaPasoOrden} tiene una herencia explícita incompleta.`,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: { origenRutaPasoId: rutaPasoId || null, capacidad },
+      sugerencia:
+        'Elegir un paso anterior activo que publique esa capacidad, o quitar el origen explícito.',
     };
   }
 
@@ -3272,7 +3683,8 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        { tarifa: unknown } | undefined;
+        | { tarifa: unknown }
+        | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -3404,7 +3816,8 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          { tarifa: unknown; nombre?: string | null } | undefined;
+          | { tarifa: unknown; nombre?: string | null }
+          | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -3696,7 +4109,7 @@ export class MotorUniversalService {
         : null;
     const esRollo = anchoUtilRolloMm != null && anchoUtilRolloMm > 0;
     const limiteAnchoMm = esRollo
-      ? (anchoUtilRolloMm as number)
+      ? anchoUtilRolloMm
       : (config.sheetWidthMm ?? 0);
     const limiteAltoMm = esRollo ? null : (config.sheetHeightMm ?? null);
 
@@ -3993,7 +4406,7 @@ export class MotorUniversalService {
     const params = this.asRecord(paso.paramsPasoJson);
     const nestingConfig = this.asRecord(params.nestingConfig);
     const pliego = this.asRecord(nestingConfig.pliegoImpresion);
-    const modo = String(pliego.modo ?? pliego.mode ?? '').toLowerCase();
+    const modo = textoPrimitivo(pliego.modo ?? pliego.mode).toLowerCase();
     return modo === 'automatico' || modo === 'automatic';
   }
 
@@ -4233,13 +4646,8 @@ export class MotorUniversalService {
         paso,
       );
       if (!materialSlot) {
-        if (
-          slot.modoSeleccion === 'COMERCIAL_ELIGE' &&
-          !slotsOpcionales.has(slot.slotCodigo)
-        ) {
-          errores.push(
-            this.errorMaterialComercialRequerido(slot, paso, jobContext),
-          );
+        if (!slotsOpcionales.has(slot.slotCodigo)) {
+          errores.push(this.errorMaterialRequerido(slot, paso, jobContext));
         }
         continue;
       }
@@ -4391,12 +4799,54 @@ export class MotorUniversalService {
         slot.formula,
         materialResuelto.unidadStock,
       );
+      const precioReferencia = Number(materialResuelto.precioReferencia);
+      if (!Number.isFinite(precioReferencia) || precioReferencia <= 0) {
+        errores.push({
+          codigo: 'material_sin_precio_valido',
+          severidad: 'ERROR',
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          mensaje: `El material ${materialResuelto.sku} no tiene un precio de referencia válido.`,
+          contexto: {
+            materialVarianteId: materialResuelto.id,
+            slotCodigo: slot.slotCodigo,
+          },
+          sugerencia:
+            'Activar la variante y completar un precio de referencia mayor a cero.',
+        });
+        continue;
+      }
       const precioUnitario = precioMaterialPorUnidadDeConsumo(
-        Number(materialResuelto.precioReferencia ?? 0),
+        precioReferencia,
         materialResuelto.unidadStock,
         unidadConsumo,
         materialResuelto.atributosVarianteJson,
       );
+      if (
+        !Number.isFinite(cantidad) ||
+        cantidad < 0 ||
+        !Number.isFinite(precioUnitario) ||
+        precioUnitario <= 0
+      ) {
+        errores.push({
+          codigo: 'costeo_material_invalido',
+          severidad: 'ERROR',
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          mensaje: `No se pudo calcular de forma segura el material ${materialResuelto.sku}.`,
+          contexto: {
+            materialVarianteId: materialResuelto.id,
+            slotCodigo: slot.slotCodigo,
+            cantidad,
+            precioUnitario,
+          },
+          sugerencia:
+            'Revisar la fórmula del slot, las medidas y la unidad de stock del material.',
+        });
+        continue;
+      }
       const costeoNesting = this.calcularCosteoNestingMaterial(
         this.resolverEstrategiaCosteoNesting(paso),
         precioUnitario,
@@ -4471,7 +4921,9 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
+          | 'HARDCODED'
+          | 'COMERCIAL_ELIGE'
+          | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -4624,7 +5076,7 @@ export class MotorUniversalService {
     }
     for (const campo of ['piezaAreaTotalM2', 'piezaPerimetroTotalM'] as const) {
       if (typeof jc[campo] === 'number') {
-        dup[campo] = (jc[campo] as number) * caras;
+        dup[campo] = jc[campo] * caras;
       }
     }
     return dup as JobContext;
@@ -4936,9 +5388,12 @@ export class MotorUniversalService {
       // El precio de la variante manda; el suelto es para el repuesto que
       // todavía no está dado de alta en inventario.
       const precioRepuesto =
-        this.numeroPositivo(
-          componente.materiaPrimaVariante?.precioReferencia,
-        ) ?? this.numeroPositivo(componente.precioUnitario);
+        (componente.materiaPrimaVariante?.activo === false ||
+        componente.materiaPrimaVariante?.materiaPrimaActiva === false
+          ? null
+          : this.numeroPositivo(
+              componente.materiaPrimaVariante?.precioReferencia,
+            )) ?? this.numeroPositivo(componente.precioUnitario);
       if (!precioRepuesto) continue;
 
       const porMlTinta = componente.unidadDesgaste === 'ml_tinta';
@@ -5114,7 +5569,27 @@ export class MotorUniversalService {
       }
 
       const precioReferencia = consumible.materialVariante.precioReferencia;
-      if (precioReferencia == null) {
+      if (
+        consumible.materialVariante.activo === false ||
+        consumible.materialVariante.materiaPrimaActiva === false
+      ) {
+        errores.push({
+          codigo: 'consumible_maquina_inactivo',
+          severidad: 'ERROR',
+          mensaje: `La variante ${consumible.materialVariante.sku} vinculada a la máquina está inactiva.`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          sugerencia:
+            'Vincular un consumible cuya variante y materia prima estén activas.',
+        });
+        continue;
+      }
+      if (
+        precioReferencia == null ||
+        !Number.isFinite(precioReferencia) ||
+        precioReferencia <= 0
+      ) {
         errores.push({
           codigo: 'consumible_maquina_sin_precio',
           severidad: 'ERROR',
@@ -5387,7 +5862,17 @@ export class MotorUniversalService {
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
     if (slot.modoSeleccion === 'HARDCODED') {
-      return slot.materialVariante ?? null;
+      const variante = slot.materialVariante;
+      if (
+        !variante ||
+        variante.activo === false ||
+        variante.materiaPrimaActiva === false ||
+        !Number.isFinite(Number(variante.precioReferencia)) ||
+        Number(variante.precioReferencia) <= 0
+      ) {
+        return null;
+      }
+      return variante;
     }
 
     const candidatoVarianteIds = this.getSlotCandidatoVarianteIds(slot);
@@ -5407,10 +5892,8 @@ export class MotorUniversalService {
     }
 
     if (slot.modoSeleccion === 'MOTOR_ELIGE_AUTO') {
-      if (
-        eleccionExplicita &&
-        candidatoVarianteIds.includes(eleccionExplicita)
-      ) {
+      if (eleccionExplicita) {
+        if (!candidatoVarianteIds.includes(eleccionExplicita)) return null;
         return await this.cargarVariantePorId(tenantId, eleccionExplicita);
       }
 
@@ -5434,11 +5917,11 @@ export class MotorUniversalService {
       const validos =
         filtroCampo && filtroValor != null && filtroValor !== ''
           ? todos.filter((v) => {
-              const attrs = (v.atributosVarianteJson ?? {}) as Record<
-                string,
-                unknown
-              >;
-              return String(attrs[filtroCampo] ?? '') === String(filtroValor);
+              const attrs = v.atributosVarianteJson ?? {};
+              return (
+                textoPrimitivo(attrs[filtroCampo]) ===
+                textoPrimitivo(filtroValor)
+              );
             })
           : todos;
       if (validos.length === 0) return null;
@@ -5459,8 +5942,7 @@ export class MotorUniversalService {
 
       if (criterio === 'MENOR_COSTO') {
         return validos.sort(
-          (a, b) =>
-            Number(a.precioReferencia ?? 0) - Number(b.precioReferencia ?? 0),
+          (a, b) => Number(a.precioReferencia) - Number(b.precioReferencia),
         )[0];
       }
 
@@ -5489,14 +5971,8 @@ export class MotorUniversalService {
         }
         // Heurística (fallback): el más ancho gana (favorece rollos grandes).
         return validos.sort((a, b) => {
-          const attrsA = (a.atributosVarianteJson ?? {}) as Record<
-            string,
-            unknown
-          >;
-          const attrsB = (b.atributosVarianteJson ?? {}) as Record<
-            string,
-            unknown
-          >;
+          const attrsA = a.atributosVarianteJson ?? {};
+          const attrsB = b.atributosVarianteJson ?? {};
           const anchoA = Number(attrsA.anchoMm ?? attrsA.ancho ?? 0);
           const anchoB = Number(attrsB.anchoMm ?? attrsB.ancho ?? 0);
           return anchoB - anchoA;
@@ -5581,7 +6057,7 @@ export class MotorUniversalService {
       : null;
   }
 
-  private errorMaterialComercialRequerido(
+  private errorMaterialRequerido(
     slot: PasoCargado['slots'][number],
     paso: PasoCargado,
     jobContext: JobContext,
@@ -5608,6 +6084,26 @@ export class MotorUniversalService {
         mensaje: `La selección de material ${slotLabel} no es válida para el paso ${paso.rutaPasoOrden}.`,
         sugerencia:
           'Elegir uno de los materiales candidatos configurados para el paso.',
+      };
+    }
+
+    if (slot.modoSeleccion === 'HARDCODED') {
+      return {
+        ...base,
+        codigo: 'material_hardcoded_no_disponible',
+        mensaje: `El material fijo ${slotLabel} del paso ${paso.rutaPasoOrden} no existe, está inactivo o no tiene precio.`,
+        sugerencia:
+          'Elegir una variante activa con precio de referencia mayor a cero.',
+      };
+    }
+
+    if (slot.modoSeleccion === 'MOTOR_ELIGE_AUTO') {
+      return {
+        ...base,
+        codigo: 'material_auto_no_resoluble',
+        mensaje: `El motor no encontró un material activo y con precio para ${slotLabel} en el paso ${paso.rutaPasoOrden}.`,
+        sugerencia:
+          'Revisar los candidatos del slot, sus precios y el criterio de selección automática.',
       };
     }
 
@@ -5642,11 +6138,18 @@ export class MotorUniversalService {
   } | null> {
     // Scope obligatorio por tenant: la variante debe pertenecer al tenant.
     const v = await this.prisma.materiaPrimaVariante.findFirst({
-      where: { id: variantId, tenantId },
+      where: {
+        id: variantId,
+        tenantId,
+        activo: true,
+        precioReferencia: { gt: 0 },
+        materiaPrima: { activo: true },
+      },
       include: {
         materiaPrima: {
           select: {
             nombre: true,
+            activo: true,
             unidadStock: true,
             subfamilia: true,
             templateId: true,
@@ -5821,16 +6324,19 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -5933,14 +6439,16 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              Record<string, unknown> | undefined;
+              | Record<string, unknown>
+              | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -6133,8 +6641,7 @@ export class MotorUniversalService {
     const despiece = derivacion.despieces?.[slot.slotCodigo];
     if (despiece && despiece.length > 0) {
       const attrs = materialResuelto?.atributosVarianteJson ?? {};
-      const largoBarraMm =
-        Number((attrs as Record<string, unknown>).largoBarra ?? 0) * 1000;
+      const largoBarraMm = Number(attrs.largoBarra ?? 0) * 1000;
       if (largoBarraMm > 0) {
         const barras = calcularBarrasNecesarias(despiece, largoBarraMm);
         if (barras) return barras.barras;
@@ -7067,30 +7574,55 @@ export class MotorUniversalService {
     cargos: ProductoCargado['cargosDirectosCotizacion'],
     jobContext: JobContext,
     subtotalCotizacion: number,
+    errores: ErrorMotor[],
   ): CargoDirectoEjecutado[] {
     const ejecutados: CargoDirectoEjecutado[] = [];
     for (const cargo of cargos) {
       // Activación
-      const activado = this.evaluarActivacionCargo(cargo, jobContext);
-      if (!activado) continue;
+      const activacion = this.evaluarActivacionCargo(cargo, jobContext);
+      if (activacion.error) {
+        errores.push({
+          codigo: 'regla_cargo_invalida',
+          severidad: 'ERROR',
+          mensaje: `No se pudo evaluar el cargo "${cargo.catalogo.nombre}": ${activacion.error}`,
+          sugerencia: 'Corregir la activación o configuración del cargo.',
+          contexto: { cargoId: cargo.id, cargoCodigo: cargo.catalogo.codigo },
+        });
+        continue;
+      }
+      if (!activacion.activado) continue;
 
       const config = this.combinarConfigCargo(
         cargo.catalogo.configJson,
         cargo.configOverrideJson,
       );
-      const monto = this.calcularMontoCargo(
-        cargo.catalogo.modoCalculo,
-        config,
-        jobContext,
-        subtotalCotizacion,
-      );
+      let monto: number;
+      try {
+        monto = this.calcularMontoCargo(
+          cargo.catalogo.modoCalculo,
+          config,
+          jobContext,
+          subtotalCotizacion,
+        );
+      } catch (error) {
+        errores.push({
+          codigo: 'config_cargo_invalida',
+          severidad: 'ERROR',
+          mensaje: `El cargo "${cargo.catalogo.nombre}" no se puede calcular: ${error instanceof Error ? error.message : String(error)}`,
+          sugerencia: 'Completar la configuración monetaria del cargo.',
+          contexto: { cargoId: cargo.id, cargoCodigo: cargo.catalogo.codigo },
+        });
+        continue;
+      }
 
       ejecutados.push({
         cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -7106,20 +7638,25 @@ export class MotorUniversalService {
       id: string;
     },
     jobContext: JobContext,
-  ): boolean {
-    if (cargo.modoActivacion === 'OBLIGATORIO') return true;
+  ): { activado: boolean; error?: string } {
+    if (cargo.modoActivacion === 'OBLIGATORIO') return { activado: true };
     if (cargo.modoActivacion === 'OPCIONAL') {
       const opcionales = jobContext.opcionalesActivados ?? {};
-      return opcionales[cargo.id] === true;
+      return { activado: opcionales[cargo.id] === true };
     }
     if (cargo.modoActivacion === 'CONDICIONAL') {
       const r = evaluarRegla(
         cargo.condicionActivacionJson,
         jobContext as unknown as Record<string, unknown>,
       );
-      return r.resultado;
+      return r.error
+        ? { activado: false, error: r.error }
+        : { activado: r.resultado };
     }
-    return false;
+    return {
+      activado: false,
+      error: `Modo de activación desconocido: ${cargo.modoActivacion}`,
+    };
   }
 
   /**
@@ -7132,36 +7669,63 @@ export class MotorUniversalService {
     jobContext: JobContext,
     subtotalBase: number,
   ): number {
-    if (!config) return 0;
+    if (!config) throw new Error('falta configJson');
+
+    const numeroNoNegativo = (value: unknown, campo: string): number => {
+      const numero = Number(value);
+      if (!Number.isFinite(numero) || numero < 0) {
+        throw new Error(`${campo} debe ser un número finito mayor o igual a 0`);
+      }
+      return numero;
+    };
 
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        Array<{ codigo: string; monto: number }> | undefined;
+        | Array<{ codigo: string; monto: number }>
+        | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
-        if (zona) return Number(zona.monto);
+        if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');
       }
       // Sino, usar el monto fijo
-      return Number(config.monto ?? 0);
+      if (config.monto === undefined || config.monto === null) {
+        throw new Error('falta monto');
+      }
+      return numeroNoNegativo(config.monto, 'monto');
     }
 
     if (modoCalculo === 'PORCENTAJE_SOBRE_BASE') {
-      const pct = Number(config.porcentaje ?? config.porcentajeDefault ?? 0);
+      const valorPct = config.porcentaje ?? config.porcentajeDefault;
+      if (valorPct === undefined || valorPct === null) {
+        throw new Error('falta porcentaje');
+      }
+      const pct = numeroNoNegativo(valorPct, 'porcentaje');
       return (subtotalBase * pct) / 100;
     }
 
     if (modoCalculo === 'POR_UNIDAD_INPUT') {
-      const precioPorUnidad = Number(config.precioPorUnidad ?? 0);
+      if (
+        config.precioPorUnidad === undefined ||
+        config.precioPorUnidad === null
+      ) {
+        throw new Error('falta precioPorUnidad');
+      }
+      const precioPorUnidad = numeroNoNegativo(
+        config.precioPorUnidad,
+        'precioPorUnidad',
+      );
       const inputCantidad =
         typeof config.inputCantidad === 'string' ? config.inputCantidad : '';
-      const valorInput = Number(
-        (jobContext as Record<string, unknown>)[inputCantidad] ?? 0,
+      if (!inputCantidad) throw new Error('falta inputCantidad');
+      const valorInput = numeroNoNegativo(
+        (jobContext as Record<string, unknown>)[inputCantidad],
+        inputCantidad,
       );
       return precioPorUnidad * valorInput;
     }
 
-    return 0;
+    throw new Error(`modoCalculo desconocido: ${modoCalculo}`);
   }
 
   /** El override de una asociación pisa sólo las claves que declara. Antes
@@ -7238,7 +7802,9 @@ export class MotorUniversalService {
     materiaPrimaVariante?: {
       id: string;
       sku: string;
+      activo: boolean;
       precioReferencia: unknown;
+      materiaPrima?: { activo: boolean } | null;
     } | null;
   }): ComponenteDesgasteCargado {
     return {
@@ -7261,6 +7827,9 @@ export class MotorUniversalService {
         ? {
             id: componente.materiaPrimaVariante.id,
             sku: componente.materiaPrimaVariante.sku,
+            activo: componente.materiaPrimaVariante.activo,
+            materiaPrimaActiva:
+              componente.materiaPrimaVariante.materiaPrima?.activo ?? false,
             precioReferencia:
               componente.materiaPrimaVariante.precioReferencia == null
                 ? null
@@ -7284,12 +7853,14 @@ export class MotorUniversalService {
     materiaPrimaVariante: {
       id: string;
       sku: string;
+      activo: boolean;
       nombreVariante?: string | null;
       precioReferencia: unknown;
       unidadStock?: string | null;
       atributosVarianteJson: unknown;
       materiaPrima?: {
         nombre: string;
+        activo: boolean;
         unidadStock: string;
         templateId: string;
         tipoTecnico: string;
@@ -7314,6 +7885,9 @@ export class MotorUniversalService {
       materialVariante: {
         id: consumible.materiaPrimaVariante.id,
         sku: consumible.materiaPrimaVariante.sku,
+        activo: consumible.materiaPrimaVariante.activo,
+        materiaPrimaActiva:
+          consumible.materiaPrimaVariante.materiaPrima?.activo ?? false,
         nombreVariante: consumible.materiaPrimaVariante.nombreVariante ?? null,
         materiaPrimaNombre:
           consumible.materiaPrimaVariante.materiaPrima?.nombre ?? null,
@@ -7344,7 +7918,12 @@ export class MotorUniversalService {
       where: { id: productoId, tenantId, activo: true },
       include: {
         rutasAlternativas: {
-          where: { activo: true },
+          where: {
+            activo: true,
+            ...(rutaAlternativaIdInput ? { id: rutaAlternativaIdInput } : {}),
+          },
+          orderBy: [{ esPreferida: 'desc' }, { orden: 'asc' }],
+          take: 1,
           include: {
             ruta: true,
             configPasos: {
@@ -7358,7 +7937,13 @@ export class MotorUniversalService {
                     perfilesOperativos: true,
                     componentesDesgaste: {
                       where: { activo: true },
-                      include: { materiaPrimaVariante: true },
+                      include: {
+                        materiaPrimaVariante: {
+                          include: {
+                            materiaPrima: { select: { activo: true } },
+                          },
+                        },
+                      },
                     },
                     consumibles: {
                       where: { activo: true },
@@ -7368,6 +7953,7 @@ export class MotorUniversalService {
                             materiaPrima: {
                               select: {
                                 nombre: true,
+                                activo: true,
                                 unidadStock: true,
                                 templateId: true,
                                 tipoTecnico: true,
@@ -7389,6 +7975,7 @@ export class MotorUniversalService {
                         materiaPrima: {
                           select: {
                             nombre: true,
+                            activo: true,
                             unidadStock: true,
                             subfamilia: true,
                             templateId: true,
@@ -7425,6 +8012,7 @@ export class MotorUniversalService {
                                 materiaPrima: {
                                   select: {
                                     nombre: true,
+                                    activo: true,
                                     unidadStock: true,
                                     templateId: true,
                                     tipoTecnico: true,
@@ -7451,7 +8039,13 @@ export class MotorUniversalService {
                         perfilesOperativos: true,
                         componentesDesgaste: {
                           where: { activo: true },
-                          include: { materiaPrimaVariante: true },
+                          include: {
+                            materiaPrimaVariante: {
+                              include: {
+                                materiaPrima: { select: { activo: true } },
+                              },
+                            },
+                          },
                         },
                         consumibles: {
                           where: { activo: true },
@@ -7461,6 +8055,7 @@ export class MotorUniversalService {
                                 materiaPrima: {
                                   select: {
                                     nombre: true,
+                                    activo: true,
                                     unidadStock: true,
                                     templateId: true,
                                     tipoTecnico: true,
@@ -7497,23 +8092,37 @@ export class MotorUniversalService {
     });
 
     if (!producto) {
-      throw new Error(`Producto no encontrado: ${productoId}`);
+      throw new MotorCotizacionError(
+        'producto_no_encontrado',
+        `Producto no encontrado: ${productoId}`,
+        'Verificar que el producto existe, está activo y pertenece al tenant.',
+      );
+    }
+    if (rutaAlternativaIdInput && producto.rutasAlternativas.length === 0) {
+      throw new MotorCotizacionError(
+        'ruta_alternativa_no_encontrada',
+        `La ruta alternativa ${rutaAlternativaIdInput} no pertenece al producto ${producto.codigo} o no está activa.`,
+        'Elegir una ruta activa del producto y volver a cotizar.',
+        { productoId, rutaAlternativaId: rutaAlternativaIdInput },
+      );
     }
     if (producto.rutasAlternativas.length === 0) {
-      throw new Error(
-        `Producto ${producto.codigo} no tiene rutas alternativas`,
+      throw new MotorCotizacionError(
+        'producto_sin_rutas_activas',
+        `Producto ${producto.codigo} no tiene rutas alternativas activas`,
+        'Configurar y activar al menos una ruta de producción.',
       );
     }
 
-    // Elegir ruta alternativa: explícita > preferida > primera
-    let rutaAlt = rutaAlternativaIdInput
-      ? producto.rutasAlternativas.find((r) => r.id === rutaAlternativaIdInput)
-      : producto.rutasAlternativas.find((r) => r.esPreferida);
-    if (!rutaAlt) rutaAlt = producto.rutasAlternativas[0];
+    // Una selección explícita es un contrato: nunca se reemplaza
+    // silenciosamente por otra ruta porque eso cotizaría un proceso distinto.
+    const rutaAlt = producto.rutasAlternativas[0];
 
     if (!rutaAlt) {
-      throw new Error(
+      throw new MotorCotizacionError(
+        'ruta_alternativa_no_resoluble',
         `No se pudo elegir ruta alternativa para producto ${producto.codigo}`,
+        'Marcar una ruta como preferida o activar una ruta del producto.',
       );
     }
 
@@ -7525,8 +8134,10 @@ export class MotorUniversalService {
       },
     });
     if (!rutaVersion) {
-      throw new Error(
+      throw new MotorCotizacionError(
+        'ruta_version_no_encontrada',
         `La ruta ${rutaAlt.ruta.codigo} no tiene snapshot de versión ${rutaAlt.rutaVersion}`,
+        'Volver a publicar o sincronizar la ruta de producción.',
       );
     }
     const snapshotPasos = this.parseRutaVersionSnapshot(
@@ -7561,13 +8172,33 @@ export class MotorUniversalService {
 
     const pasos: PasoCargado[] = configPasosVersionados.map((cp) => {
       const snapshotPaso = snapshotById.get(cp.rutaPasoId);
-      const defaultsFamilia = defaultsPorFamilia.get(
-        snapshotPaso?.familiaCodigo ?? cp.rutaPaso.familiaCodigo,
+      const ordenPaso = snapshotPaso?.orden ?? cp.rutaPaso.orden;
+      const familiaCodigo =
+        snapshotPaso?.familiaCodigo ?? cp.rutaPaso.familiaCodigo;
+      if (cp.maquinaM1 && !this.maquinaDisponible(cp.maquinaM1)) {
+        throw new MotorCotizacionError(
+          'maquina_configurada_no_disponible',
+          `La máquina configurada en el paso ${ordenPaso} no está activa, lista o disponible.`,
+          'Elegir una máquina activa y con configuración lista para este paso.',
+          { rutaPasoId: cp.rutaPasoId, maquinaId: cp.maquinaM1Id },
+        );
+      }
+      if (cp.perfilM1 && !cp.perfilM1.activo) {
+        throw new MotorCotizacionError(
+          'perfil_configurado_no_disponible',
+          `El perfil configurado en el paso ${ordenPaso} ya no está activo.`,
+          'Elegir un perfil operativo activo para este paso.',
+          { rutaPasoId: cp.rutaPasoId, perfilId: cp.perfilM1Id },
+        );
+      }
+      const maquinasCandidatasDisponibles = cp.maquinasCandidatas.filter(
+        (candidata) => this.maquinaDisponible(candidata.maquina),
       );
+      const defaultsFamilia = defaultsPorFamilia.get(familiaCodigo);
       return aplicarCentroDefault({
         rutaPasoId: cp.rutaPaso.id,
-        rutaPasoOrden: snapshotPaso?.orden ?? cp.rutaPaso.orden,
-        familiaCodigo: snapshotPaso?.familiaCodigo ?? cp.rutaPaso.familiaCodigo,
+        rutaPasoOrden: ordenPaso,
+        familiaCodigo,
         nombreVisible: cp.nombreVisible,
         configPasoId: cp.id,
         modoActivacion: cp.modoActivacion,
@@ -7668,7 +8299,7 @@ export class MotorUniversalService {
           feedReloadMin: p.feedReloadMin ? Number(p.feedReloadMin) : null,
           detalleJson: p.detalleJson,
         })),
-        maquinasCandidatas: cp.maquinasCandidatas.map((mc) => ({
+        maquinasCandidatas: maquinasCandidatasDisponibles.map((mc) => ({
           id: mc.id,
           maquinaId: mc.maquinaId,
           perfilDefaultId: mc.perfilDefaultId,
@@ -7777,6 +8408,9 @@ export class MotorUniversalService {
             ? {
                 id: s.materialVariante.id,
                 sku: s.materialVariante.sku,
+                activo: s.materialVariante.activo,
+                materiaPrimaActiva:
+                  s.materialVariante.materiaPrima?.activo ?? false,
                 nombreVariante: s.materialVariante.nombreVariante,
                 materiaPrimaNombre:
                   s.materialVariante.materiaPrima?.nombre ?? null,
@@ -7853,6 +8487,7 @@ export class MotorUniversalService {
       rutaAlternativaId: rutaAlt.id,
       rutaAlternativaNombre: rutaAlt.nombre,
       rutaId: rutaAlt.ruta.id,
+      rutaVersion: rutaAlt.rutaVersion,
       rutaCodigo: rutaAlt.ruta.codigo,
       rutaNombre: rutaAlt.ruta.nombre,
       pasos: pasosConExtras,
@@ -7934,7 +8569,11 @@ export class MotorUniversalService {
             perfilesOperativos: true,
             componentesDesgaste: {
               where: { activo: true },
-              include: { materiaPrimaVariante: true },
+              include: {
+                materiaPrimaVariante: {
+                  include: { materiaPrima: { select: { activo: true } } },
+                },
+              },
             },
             consumibles: {
               where: { activo: true },
@@ -7944,6 +8583,7 @@ export class MotorUniversalService {
                     materiaPrima: {
                       select: {
                         nombre: true,
+                        activo: true,
                         unidadStock: true,
                         templateId: true,
                         tipoTecnico: true,
@@ -7999,7 +8639,11 @@ export class MotorUniversalService {
             perfilesOperativos: true,
             componentesDesgaste: {
               where: { activo: true },
-              include: { materiaPrimaVariante: true },
+              include: {
+                materiaPrimaVariante: {
+                  include: { materiaPrima: { select: { activo: true } } },
+                },
+              },
             },
             consumibles: {
               where: { activo: true },
@@ -8009,6 +8653,7 @@ export class MotorUniversalService {
                     materiaPrima: {
                       select: {
                         nombre: true,
+                        activo: true,
                         unidadStock: true,
                         templateId: true,
                         tipoTecnico: true,
@@ -8024,6 +8669,25 @@ export class MotorUniversalService {
     const candidataMaquinaMap = new Map(
       candidataMaquinas.map((m) => [m.id, m]),
     );
+
+    for (const row of rows) {
+      if (row.maquinaM1 && !this.maquinaDisponible(row.maquinaM1)) {
+        throw new MotorCotizacionError(
+          'maquina_configurada_no_disponible',
+          `La máquina configurada en el paso extra "${row.nombreVisible}" no está activa, lista o disponible.`,
+          'Elegir una máquina activa y con configuración lista para este paso.',
+          { pasoExtraId: row.id, maquinaId: row.maquinaM1Id },
+        );
+      }
+      if (row.perfilM1 && !row.perfilM1.activo) {
+        throw new MotorCotizacionError(
+          'perfil_configurado_no_disponible',
+          `El perfil configurado en el paso extra "${row.nombreVisible}" ya no está activo.`,
+          'Elegir un perfil operativo activo para este paso.',
+          { pasoExtraId: row.id, perfilId: row.perfilM1Id },
+        );
+      }
+    }
 
     return Promise.all(
       rows.map(async (row) => ({
@@ -8044,6 +8708,18 @@ export class MotorUniversalService {
     return Array.isArray(json) ? (json as PasoExtraCandidataJson[]) : [];
   }
 
+  private maquinaDisponible(maquina: {
+    activo: boolean;
+    estado: string;
+    estadoConfiguracion: string;
+  }): boolean {
+    return (
+      maquina.activo &&
+      maquina.estado === 'ACTIVA' &&
+      maquina.estadoConfiguracion === 'LISTA'
+    );
+  }
+
   /** Parseo defensivo de configSlotsMaterialesJson de un paso extra. */
   private parsePasoExtraSlots(json: unknown): PasoExtraSlotJson[] {
     return Array.isArray(json) ? (json as PasoExtraSlotJson[]) : [];
@@ -8062,7 +8738,15 @@ export class MotorUniversalService {
           include: {
             centroCostoPrincipal: { select: { id: true; nombre: true } };
             perfilesOperativos: true;
-            componentesDesgaste: { include: { materiaPrimaVariante: true } };
+            componentesDesgaste: {
+              include: {
+                materiaPrimaVariante: {
+                  include: {
+                    materiaPrima: { select: { activo: true } };
+                  };
+                };
+              };
+            };
             consumibles: {
               include: {
                 materiaPrimaVariante: {
@@ -8070,6 +8754,7 @@ export class MotorUniversalService {
                     materiaPrima: {
                       select: {
                         nombre: true;
+                        activo: true;
                         unidadStock: true;
                         templateId: true;
                         tipoTecnico: true;
@@ -8103,7 +8788,15 @@ export class MotorUniversalService {
         include: {
           centroCostoPrincipal: { select: { id: true; nombre: true } };
           perfilesOperativos: true;
-          componentesDesgaste: { include: { materiaPrimaVariante: true } };
+          componentesDesgaste: {
+            include: {
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: { select: { activo: true } };
+                };
+              };
+            };
+          };
           consumibles: {
             include: {
               materiaPrimaVariante: {
@@ -8111,6 +8804,7 @@ export class MotorUniversalService {
                   materiaPrima: {
                     select: {
                       nombre: true;
+                      activo: true;
                       unidadStock: true;
                       templateId: true;
                       tipoTecnico: true;
@@ -8294,7 +8988,15 @@ export class MotorUniversalService {
         include: {
           centroCostoPrincipal: { select: { id: true; nombre: true } };
           perfilesOperativos: true;
-          componentesDesgaste: { include: { materiaPrimaVariante: true } };
+          componentesDesgaste: {
+            include: {
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: { select: { activo: true } };
+                };
+              };
+            };
+          };
           consumibles: {
             include: {
               materiaPrimaVariante: {
@@ -8302,6 +9004,7 @@ export class MotorUniversalService {
                   materiaPrima: {
                     select: {
                       nombre: true;
+                      activo: true;
                       unidadStock: true;
                       templateId: true;
                       tipoTecnico: true;

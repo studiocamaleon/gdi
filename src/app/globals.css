@@ -14158,15 +14158,20 @@ body {
 
 .tablero-produccion .kan-col-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 10px;
+  min-width: 0;
   min-height: 420px;
   padding: 12px;
 }
 
 .tablero-produccion .kan-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
   padding: 12px;
   border: 1px solid var(--border);
@@ -14176,6 +14181,7 @@ body {
   text-align: left;
   box-shadow: var(--shadow-card);
   cursor: pointer;
+  overflow-wrap: anywhere;
 }
 
 .tablero-produccion .kan-card:hover {
@@ -14266,8 +14272,10 @@ body {
   flex-shrink: 0;
 }
 
-/* …y el texto es el que absorbe la falta de espacio. */
+/* …y el texto es el que absorbe la falta de espacio. `flex: 1` evita que
+   nombres largos vuelvan a imponerle a la tarjeta su ancho intrínseco. */
 .tablero-produccion .kan-step > div {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -14299,6 +14307,7 @@ body {
 
 .tablero-produccion .kan-foot {
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   border-top: 1px solid var(--hairline);
   padding-top: 9px;
@@ -14314,18 +14323,28 @@ body {
   min-width: 0;
 }
 
+.tablero-produccion .kan-foot .due {
+  flex: 1 1 150px;
+}
+
+.tablero-produccion .kan-foot .op {
+  flex: 0 1 auto;
+}
+
 .tablero-produccion .kan-foot .warn {
   color: #b45309;
   font-weight: 650;
 }
 
 .tablero-produccion .kan-empty {
+  min-width: 0;
   padding: 26px 12px;
   border: 1px dashed var(--border);
   border-radius: var(--r-2);
   color: var(--muted-text);
   font-size: 12px;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .tablero-produccion .tab-row.delayed,

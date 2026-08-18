@@ -20,7 +20,12 @@ export const dynamic = "force-dynamic";
  * Ruta propia y no un `?tab=`: se linkea, se comparte y el sidebar la marca
  * como activa, igual que Cuentas por cobrar.
  */
-export default async function CuentasPorPagarPage() {
+export default async function CuentasPorPagarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ endosarValorId?: string }>;
+}) {
+  const { endosarValorId } = await searchParams;
   const [egresos, resumen, categorias, proveedores, metodosPago, cuentas] =
     await Promise.all([
       getEgresos({ soloPendientes: true }).then(
@@ -58,6 +63,7 @@ export default async function CuentasPorPagarPage() {
       proveedores={proveedores}
       metodosPago={metodosPago.filter((m) => m.activo)}
       cuentas={cuentas}
+      valorEndosoInicialId={endosarValorId}
     />
   );
 }

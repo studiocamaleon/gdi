@@ -57,8 +57,13 @@ export class ValorCobroDto {
   @IsIn(['fisico', 'echeq'])
   formato: string;
 
-  @IsIn(['tercero', 'propio'])
-  origen: string;
+  @IsOptional()
+  @IsIn(['comun', 'diferido'])
+  modalidad?: 'comun' | 'diferido';
+
+  /** En un cobro siempre es de tercero respecto de la empresa. */
+  @IsIn(['tercero'])
+  origen: 'tercero';
 
   @IsString()
   @MinLength(1)
@@ -69,6 +74,12 @@ export class ValorCobroDto {
   @MinLength(1)
   @MaxLength(80)
   banco: string;
+
+  /** ID que informa el banco para un eCheq. No reemplaza al número visible. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  identificadorBancario?: string;
 
   /** ISO date. */
   @IsOptional()
@@ -84,6 +95,9 @@ export class ValorCobroDto {
 export class CrearCobroDto {
   @IsOptional()
   @IsUUID()
+  idempotencyKey?: string;
+  @IsOptional()
+  @IsUUID()
   ordenId?: string;
 
   @IsOptional()
@@ -97,8 +111,10 @@ export class CrearCobroDto {
   @IsUUID()
   metodoPagoId: string;
 
+  /** Requerida para dinero; los cheques la reciben al ser depositados. */
+  @IsOptional()
   @IsUUID()
-  cuentaDestinoId: string;
+  cuentaDestinoId?: string | null;
 
   @IsNumber()
   @Min(0.01)
@@ -132,4 +148,15 @@ export class CrearCobroDto {
   @IsString()
   @MaxLength(500)
   notas?: string;
+}
+
+export class AnularCobroDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(300)
+  motivo: string;
+
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }

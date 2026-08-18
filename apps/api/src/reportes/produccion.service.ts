@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { finExclusivo, fraccionMesEnRango, mesesDelRango, type Rango } from './periodo';
 import { resolverFamilia } from '../productos-servicios/pasos/familias';
-import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { etiquetaMotivoFin } from '../ordenes-trabajo/ordenes-trabajo.types';
 
 /**
@@ -460,6 +459,7 @@ export class ReporteProduccionService {
   limites(prod: Awaited<ReturnType<ReporteProduccionService['produccion']>>): string[] {
     const l = [
       'Utilización según el tiempo asentado por paso (medido o estimado); la eficiencia usa sólo tiempos medidos.',
+      'Trabajos en cola y pasos bloqueados son una foto actual del taller; el resto corresponde al período elegido.',
     ];
     if (prod.registroTiempos.confiablePct !== null && prod.registroTiempos.confiablePct < 50) {
       l.push(

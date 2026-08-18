@@ -1,6 +1,8 @@
 import { PanelSaludEta } from "@/components/produccion/panel-salud-eta";
-import { getEtaPrecision, getEtaSalud } from "@/lib/eta-api";
-import { getFamiliasPasos } from "@/lib/estaciones-api";
+import { MetaPie } from "@/components/panel/panel-general";
+import { zonaHorariaDelTenant } from "@/lib/auth-server";
+import { getPanelSaludEta } from "@/lib/panel-api";
+import { rangoDeParametros, type ParametrosPeriodo } from "@/lib/panel-periodo";
 
 export const dynamic = "force-dynamic";
 
@@ -10,21 +12,24 @@ export const dynamic = "force-dynamic";
  * como un reporte más. El cromo (título, período, tabs) lo pone el shell.
  * Ver docs/eta-metricas-historicas-diseno.md
  */
-export default async function SaludEtaReportePage() {
-  const [precision, salud, familias] = await Promise.all([
-    getEtaPrecision(),
-    getEtaSalud(),
-    getFamiliasPasos(),
-  ]);
-  const familiaNombres: Record<string, string> = {};
-  for (const f of familias) familiaNombres[f.codigo] = f.nombre;
+export default async function SaludEtaReportePage({
+  searchParams,
+}: {
+  searchParams: Promise<ParametrosPeriodo>;
+}) {
+  const parametros = await searchParams;
+  const rango = rangoDeParametros(parametros, await zonaHorariaDelTenant());
+  const data = await getPanelSaludEta(rango);
 
   return (
-    <PanelSaludEta
-      enReportes
-      initialPrecision={precision}
-      initialSalud={salud}
-      familiaNombres={familiaNombres}
-    />
+    <>
+      <PanelSaludEta
+        enReportes
+        initialPrecision={data.precision}
+        initialSalud={data.salud}
+        rango={rango}
+      />
+      <MetaPie meta={data.meta} />
+    </>
   );
 }

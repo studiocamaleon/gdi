@@ -91,4 +91,13 @@ describe('podar la plata', () => {
     const salida = podarPlata([[{ costo: 1, nombre: 'x' }]]);
     expect(salida).toEqual([[{ nombre: 'x' }]]);
   });
+
+  it('conserva la bandera de UI aunque quite el detalle de márgenes', () => {
+    expect(
+      podarPlata({
+        margenesVisibles: false,
+        margenClientes: [{ cliente: 'Imprenta Sur', margen: 45000 }],
+      }),
+    ).toEqual({ margenesVisibles: false });
+  });
 });

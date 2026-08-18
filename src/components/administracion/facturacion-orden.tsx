@@ -7,6 +7,7 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   ReceiptTextIcon,
+  RotateCcwIcon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ import {
   getCobros,
   getComprobantes,
   getFacturacionHabilitada,
+  anularCobro,
   notaCreditoOrden,
   reciboPdfUrl,
 } from "@/lib/administracion-api";
@@ -30,8 +32,8 @@ import { useConfigRegional } from "@/components/navigation/config-regional-provi
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 
-/** Fecha · método · recibo · acreditación · monto. */
-const COLS_COBRO = "84px 1fr 118px 96px 108px";
+/** Fecha · método · recibo · acreditación · monto · acción. */
+const COLS_COBRO = "84px 1fr 118px 96px 108px 40px";
 
 /**
  * Facturación desde la ficha de la orden. La factura es OPCIONAL y "sigue"
@@ -81,7 +83,9 @@ export function FacturarOrdenModal({
   onFacturada: (comprobante: Comprobante) => void;
 }) {
   const { moneda } = useConfigRegional();
-  const [monto, setMonto] = React.useState(String(Math.round(saldoSinFacturar)));
+  const [monto, setMonto] = React.useState(
+    String(Math.round(saldoSinFacturar)),
+  );
   const [concepto, setConcepto] = React.useState(
     `Trabajos de impresión — ${numero}`,
   );
@@ -133,8 +137,8 @@ export function FacturarOrdenModal({
           </button>
           <h2>Facturar {numero}</h2>
           <div className="s">
-            Saldo sin facturar: {formatMonedaOrden(saldoSinFacturar, moneda)} · la
-            factura queda vinculada a la orden
+            Saldo sin facturar: {formatMonedaOrden(saldoSinFacturar, moneda)} ·
+            la factura queda vinculada a la orden
           </div>
         </div>
         <div className="acc-modal-body">
@@ -156,7 +160,9 @@ export function FacturarOrdenModal({
                   <button
                     className="cf-max"
                     type="button"
-                    onClick={() => setMonto(String(Math.round(saldoSinFacturar)))}
+                    onClick={() =>
+                      setMonto(String(Math.round(saldoSinFacturar)))
+                    }
                   >
                     100% del saldo
                   </button>
@@ -244,8 +250,10 @@ function EjesOrden({
   const { moneda } = useConfigRegional();
   const fiscal = estadoFiscalOrden(total, facturado);
   const cobranza = estadoCobranzaOrden(total, cobrado);
-  const pctF = total > 0 ? Math.min(100, Math.round((facturado / total) * 100)) : 0;
-  const pctC = total > 0 ? Math.min(100, Math.round((cobrado / total) * 100)) : 0;
+  const pctF =
+    total > 0 ? Math.min(100, Math.round((facturado / total) * 100)) : 0;
+  const pctC =
+    total > 0 ? Math.min(100, Math.round((cobrado / total) * 100)) : 0;
   return (
     <div className="pagos-kpis" style={{ marginBottom: 14 }}>
       <div className="pk">
@@ -308,6 +316,9 @@ export function ComprobantesOrdenTab({
   const [refrescos, setRefrescos] = React.useState(0);
   /** La factura que se está por acreditar, o null. */
   const [ncPara, setNcPara] = React.useState<Comprobante | null>(null);
+  const [cobroParaAnular, setCobroParaAnular] = React.useState<Cobro | null>(
+    null,
+  );
   // Anular es otro permiso que facturar: emitir y deshacer no son lo mismo.
   const puedeAnular = usePuede("administracion.anular");
   // El botón Facturar sólo aparece con la integración AFIP activa. null =
@@ -356,7 +367,11 @@ export function ComprobantesOrdenTab({
 
   return (
     <div className="pagos-tab">
-      <EjesOrden total={total} facturado={Math.max(0, facturado)} cobrado={cobrado} />
+      <EjesOrden
+        total={total}
+        facturado={Math.max(0, facturado)}
+        cobrado={cobrado}
+      />
 
       <div className="otd-card">
         <div className="otd-card-head">
@@ -475,7 +490,10 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Cobros <span className="ct">{listaCobros.length}</span>
           </span>
-          <Link className="btn sm" href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}>
+          <Link
+            className="btn sm"
+            href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}
+          >
             Registrar cobro
           </Link>
         </div>
@@ -494,9 +512,14 @@ export function ComprobantesOrdenTab({
               <span>Recibo</span>
               <span>Acreditación</span>
               <span className="r">Monto</span>
+              <span aria-label="Acciones" />
             </div>
             {listaCobros.map((c) => (
-              <div key={c.id} className="mov-row" style={{ gridTemplateColumns: COLS_COBRO }}>
+              <div
+                key={c.id}
+                className="mov-row"
+                style={{ gridTemplateColumns: COLS_COBRO }}
+              >
                 <span className="mov-fecha">{formatFechaOrden(c.fecha)}</span>
                 <span className="mov-metodo">{c.metodoNombre}</span>
                 <span className="mov-comp">
@@ -521,6 +544,19 @@ export function ComprobantesOrdenTab({
                 </span>
                 <span className="mov-monto">
                   {formatMonedaOrden(c.montoBruto, moneda)}
+                </span>
+                <span className="fo-comp-acc">
+                  {puedeAnular ? (
+                    <button
+                      type="button"
+                      className="fo-nc-btn"
+                      onClick={() => setCobroParaAnular(c)}
+                      title="Anular este cobro y revertir su movimiento"
+                    >
+                      <RotateCcwIcon aria-hidden="true" />
+                      <span className="sr-only">Anular cobro</span>
+                    </button>
+                  ) : null}
                 </span>
               </div>
             ))}
@@ -556,6 +592,44 @@ export function ComprobantesOrdenTab({
       ) : null}
 
       <ConfirmacionDestructiva
+        open={cobroParaAnular !== null}
+        onOpenChange={(open) => {
+          if (!open) setCobroParaAnular(null);
+        }}
+        titulo={`Anular cobro ${cobroParaAnular?.numeroRecibo ?? ""}`}
+        descripcion={`Se conserva el historial y se registra un contramovimiento por ${formatMonedaOrden(cobroParaAnular?.disponibleReal ?? 0, moneda)}.`}
+        impacto={[
+          "El importe vuelve a quedar pendiente en la cuenta corriente.",
+          "Si ya ingresó a una cuenta, Tesorería registra la salida de reversión.",
+          "El recibo queda anulado y no se elimina del historial.",
+        ]}
+        requiereTipear={false}
+        motivo={{
+          label: "Motivo de la anulación",
+          placeholder: "Ej.: cobro duplicado · medio de pago incorrecto",
+        }}
+        accionLabel="Anular cobro"
+        onConfirmar={async (motivo) => {
+          if (!cobroParaAnular) return;
+          try {
+            await anularCobro(cobroParaAnular.id, {
+              motivo,
+              idempotencyKey: crypto.randomUUID(),
+            });
+            setCobroParaAnular(null);
+            setRefrescos((n) => n + 1);
+            toast.success("Cobro anulado y fondos revertidos.");
+          } catch (error) {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : "No se pudo anular el cobro.",
+            );
+          }
+        }}
+      />
+
+      <ConfirmacionDestructiva
         open={ncPara !== null}
         onOpenChange={(open) => {
           if (!open) setNcPara(null);
@@ -570,7 +644,8 @@ export function ComprobantesOrdenTab({
         requiereTipear={false}
         motivo={{
           label: "¿Por qué se anula? Va en el detalle del comprobante.",
-          placeholder: "Ej.: error en el importe · el cliente canceló el trabajo",
+          placeholder:
+            "Ej.: error en el importe · el cliente canceló el trabajo",
         }}
         accionLabel="Emitir nota de crédito"
         onConfirmar={async (motivo) => {

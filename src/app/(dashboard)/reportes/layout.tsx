@@ -8,8 +8,8 @@ import { tienePermiso } from "@/lib/permisos-server";
  * Puerta del módulo + cromo compartido. El sidebar ya esconde Reportes para
  * quien no lo tiene, pero una URL pegada en un chat no pasa por el sidebar.
  *
- * El shell va acá y no en cada página para que el título, el período y la tira
- * de reportes no se remonten al saltar de un reporte a otro.
+ * El shell va acá y no en cada página para que el título, el período y el
+ * selector de reportes no se remonten al saltar de uno a otro.
  * Ver docs/usuarios-roles-permisos-diseno.md
  */
 export default async function ReportesLayout({

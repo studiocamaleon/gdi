@@ -10,4 +10,5 @@ export const OCULTA_MARGENES_KEY = 'ocultaMargenes';
  * entero, la orden trae el costeo de cada paso— y no en el módulo Costos, donde
  * el costo ES el contenido y el permiso del módulo ya decide quién entra.
  */
-export const OcultaMargenes = () => SetMetadata(OCULTA_MARGENES_KEY, true);
+export const OcultaMargenes = (ocultar = true) =>
+  SetMetadata(OCULTA_MARGENES_KEY, ocultar);

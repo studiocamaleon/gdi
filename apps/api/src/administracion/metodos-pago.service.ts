@@ -95,7 +95,6 @@ const CATALOGO_SUGERIDO: Array<{
     ivaComisionPct: 0,
     plazoAcreditacionDias: 30,
     sufreRetencion: false,
-    cuentaSugerida: { nombre: 'Cartera de valores', tipo: 'cartera_valores' },
   },
   {
     codigo: 'debin',
@@ -132,7 +131,9 @@ export class MetodosPagoService {
   }
 
   async create(auth: CurrentAuth, payload: UpsertMetodoPagoDto) {
-    await this.validarCuentaDestino(auth, payload.cuentaDestinoId);
+    const cuentaDestinoId =
+      payload.tipo === 'cheque_echeq' ? null : payload.cuentaDestinoId;
+    await this.validarCuentaDestino(auth, cuentaDestinoId);
     const codigo = await this.codigoDisponible(auth, slugify(payload.nombre));
     const ultimo = await this.prisma.metodoPago.aggregate({
       where: { tenantId: auth.tenantId },
@@ -148,7 +149,7 @@ export class MetodosPagoService {
         ivaComisionPct: payload.ivaComisionPct,
         plazoAcreditacionDias: payload.plazoAcreditacionDias,
         sufreRetencion: payload.sufreRetencion,
-        cuentaDestinoId: payload.cuentaDestinoId ?? null,
+        cuentaDestinoId: cuentaDestinoId ?? null,
         activo: payload.activo ?? true,
         orden: (ultimo._max.orden ?? -1) + 1,
       },
@@ -164,7 +165,9 @@ export class MetodosPagoService {
     if (!existente) {
       throw new NotFoundException('No se encontró el método de pago.');
     }
-    await this.validarCuentaDestino(auth, payload.cuentaDestinoId);
+    const cuentaDestinoId =
+      payload.tipo === 'cheque_echeq' ? null : payload.cuentaDestinoId;
+    await this.validarCuentaDestino(auth, cuentaDestinoId);
     const actualizado = await this.prisma.metodoPago.update({
       where: { id: existente.id },
       data: {
@@ -174,7 +177,7 @@ export class MetodosPagoService {
         ivaComisionPct: payload.ivaComisionPct,
         plazoAcreditacionDias: payload.plazoAcreditacionDias,
         sufreRetencion: payload.sufreRetencion,
-        cuentaDestinoId: payload.cuentaDestinoId ?? null,
+        cuentaDestinoId: cuentaDestinoId ?? null,
         ...(payload.activo !== undefined ? { activo: payload.activo } : {}),
       },
       include: { cuentaDestino: { select: { id: true, nombre: true } } },
@@ -199,7 +202,7 @@ export class MetodosPagoService {
 
   /**
    * Instala el catálogo sugerido: crea los métodos que falten (por código)
-   * y las cuentas genéricas seguras (Caja mostrador, Cartera de valores).
+   * y las cuentas genéricas seguras (actualmente, Caja mostrador).
    * Idempotente: correrlo dos veces no duplica nada.
    */
   async instalarCatalogo(auth: CurrentAuth) {
@@ -251,7 +254,11 @@ export class MetodosPagoService {
 
   async listarCuentas(auth: CurrentAuth) {
     const cuentas = await this.prisma.cuentaFondos.findMany({
-      where: { tenantId: auth.tenantId, activo: true },
+      where: {
+        tenantId: auth.tenantId,
+        activo: true,
+        tipo: { notIn: ['cartera_valores', 'cartera_valores_legacy'] },
+      },
       orderBy: { nombre: 'asc' },
       select: { id: true, nombre: true, tipo: true, moneda: true },
     });
@@ -264,7 +271,12 @@ export class MetodosPagoService {
   ) {
     if (!cuentaDestinoId) return;
     const cuenta = await this.prisma.cuentaFondos.count({
-      where: { id: cuentaDestinoId, tenantId: auth.tenantId },
+      where: {
+        id: cuentaDestinoId,
+        tenantId: auth.tenantId,
+        activo: true,
+        tipo: { notIn: ['cartera_valores', 'cartera_valores_legacy'] },
+      },
     });
     if (!cuenta) {
       throw new BadRequestException('La cuenta destino no existe.');

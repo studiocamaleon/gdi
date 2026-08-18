@@ -245,8 +245,17 @@ export class ChequePropioDto {
   @MaxLength(80)
   banco: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  identificadorBancario?: string;
+
   @IsIn(['fisico', 'echeq'])
   formato: string;
+
+  @IsOptional()
+  @IsIn(['comun', 'diferido'])
+  modalidad?: 'comun' | 'diferido';
 
   @IsOptional()
   @IsISO8601()
@@ -259,11 +268,17 @@ export class ChequePropioDto {
 }
 
 export class RegistrarPagoDto {
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
+
   @IsUUID()
   metodoPagoId: string;
 
+  /** No corresponde al endosar un cheque de tercero. */
+  @IsOptional()
   @IsUUID()
-  cuentaOrigenId: string;
+  cuentaOrigenId?: string;
 
   @IsOptional()
   @IsISO8601()
@@ -309,6 +324,42 @@ export class RegistrarPagoDto {
   @IsOptional()
   @IsUUID()
   valorId?: string;
+}
+
+export class DebitarValorDto {
+  @IsOptional()
+  @IsISO8601()
+  fecha?: string;
+
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  referencia?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notas?: string;
+}
+
+export class RechazarValorPropioDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  motivo: string;
+
+  @IsOptional()
+  @IsISO8601()
+  fecha?: string;
+
+  /** Identifica el contramovimiento si el cheque ya se había debitado. */
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }
 
 export class CrearCategoriaEgresoDto {

@@ -498,7 +498,7 @@ export class AplicarPrecioService {
   // ── Validaciones ────────────────────────────────────────────────────
 
   private validarInput(input: AplicarPrecioInput): void {
-    if (typeof input.costoUnitario !== 'number' || input.costoUnitario < 0) {
+    if (!Number.isFinite(input.costoUnitario) || input.costoUnitario < 0) {
       throw new BadRequestException('costoUnitario debe ser número >= 0');
     }
     const costoSinMargen = input.costoSinMargenUnitario ?? 0;
@@ -511,7 +511,7 @@ export class AplicarPrecioService {
         'costoSinMargenUnitario debe estar entre 0 y costoUnitario',
       );
     }
-    if (typeof input.cantidad !== 'number' || input.cantidad <= 0) {
+    if (!Number.isFinite(input.cantidad) || input.cantidad <= 0) {
       throw new BadRequestException('cantidad debe ser número > 0');
     }
     if (!input.precioConfig?.metodoCalculo) {

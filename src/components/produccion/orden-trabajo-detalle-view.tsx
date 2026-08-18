@@ -572,7 +572,7 @@ export function PagosTab({
                     {c.metodoNombre}
                   </span>
                   <span className="mov-ref">
-                    {c.cuentaDestinoNombre}
+                    {c.cuentaDestinoNombre ?? "Valor en cartera"}
                     {c.valor ? (
                       <span className="mov-who">
                         · {c.valor.numero} ({c.valor.estado})

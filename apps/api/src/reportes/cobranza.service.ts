@@ -78,6 +78,7 @@ export class CobranzaService {
           FROM "Cobro" co
           JOIN "MetodoPago" mp ON mp.id = co."metodoPagoId"
           WHERE co."tenantId" = ${tenantId}::uuid
+            AND co."anuladoEl" IS NULL
             AND co.fecha >= ${desde} AND co.fecha < ${hastaExcl}
           GROUP BY mp.nombre
           ORDER BY comision DESC
@@ -206,6 +207,8 @@ export class CobranzaService {
   limites(): string[] {
     return [
       'Deuda comercial por orden (vendido − cobrado), envejecida desde la finalización; al día de hoy.',
+      'Cuentas por cobrar, cheques y saldos de fondos son una foto actual; ventas y comisiones sí corresponden al período elegido.',
+      'El DSO es una estimación que compara la deuda actual con las ventas finalizadas del período seleccionado.',
     ];
   }
 }

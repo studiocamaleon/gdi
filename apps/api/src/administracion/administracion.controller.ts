@@ -30,7 +30,7 @@ import { RecibosService } from './recibos.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
-import { CrearCobroDto } from './dto/cobro.dto';
+import { AnularCobroDto, CrearCobroDto } from './dto/cobro.dto';
 import {
   CargarCaeDto,
   CrearComprobanteDto,
@@ -46,7 +46,15 @@ import {
 } from './dto/configuracion-fiscal.dto';
 import type { CondicionFiscalReceptor } from './letra-comprobante';
 import {
+  AcreditarValorDto,
+  AjusteFondosDto,
   ArqueoDto,
+  ConciliarMovimientoDto,
+  DepositarValorDto,
+  EditarCuentaFondosDto,
+  MovimientosFondosQueryDto,
+  RechazarValorDto,
+  RevertirOperacionValorDto,
   TransferenciaDto,
   UpsertCuentaFondosDto,
 } from './dto/tesoreria.dto';
@@ -406,8 +414,19 @@ export class AdministracionController {
   movimientosCuenta(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
+    @Query() filtros: MovimientosFondosQueryDto,
   ) {
-    return this.tesoreriaService.movimientos(auth, id);
+    return this.tesoreriaService.movimientos(auth, id, filtros);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Patch('cuentas/:id')
+  editarCuenta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: EditarCuentaFondosDto,
+  ) {
+    return this.tesoreriaService.editarCuenta(auth, id, payload);
   }
 
   @Permiso('administracion.gestionar')
@@ -427,6 +446,87 @@ export class AdministracionController {
     @Body() payload: ArqueoDto,
   ) {
     return this.tesoreriaService.arqueo(auth, id, payload);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Post('cuentas/:id/ajustes')
+  ajustarFondos(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: AjusteFondosDto,
+  ) {
+    return this.tesoreriaService.ajustar(auth, id, payload);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Patch('cuentas/:cuentaId/movimientos/:movimientoId/conciliacion')
+  conciliarMovimiento(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('cuentaId', ParseUUIDPipe) cuentaId: string,
+    @Param('movimientoId', ParseUUIDPipe) movimientoId: string,
+    @Body() payload: ConciliarMovimientoDto,
+  ) {
+    return this.tesoreriaService.conciliar(
+      auth,
+      cuentaId,
+      movimientoId,
+      payload,
+    );
+  }
+
+  @Get('valores')
+  valores(@CurrentSession() auth: CurrentAuth) {
+    return this.tesoreriaService.valores(auth);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Post('valores/:id/depositar')
+  depositarValor(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: DepositarValorDto,
+  ) {
+    return this.tesoreriaService.depositarValor(auth, id, payload);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Post('valores/:id/acreditar')
+  acreditarValor(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: AcreditarValorDto,
+  ) {
+    return this.tesoreriaService.acreditarValor(auth, id, payload);
+  }
+
+  @Permiso('administracion.anular')
+  @Post('valores/:id/revertir-deposito')
+  revertirDepositoValor(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: RevertirOperacionValorDto,
+  ) {
+    return this.tesoreriaService.revertirDepositoValor(auth, id, payload);
+  }
+
+  @Permiso('administracion.anular')
+  @Post('valores/:id/revertir-acreditacion')
+  revertirAcreditacionValor(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: RevertirOperacionValorDto,
+  ) {
+    return this.tesoreriaService.revertirAcreditacionValor(auth, id, payload);
+  }
+
+  @Permiso('administracion.anular')
+  @Post('valores/:id/rechazar')
+  rechazarValor(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: RechazarValorDto,
+  ) {
+    return this.tesoreriaService.rechazarValor(auth, id, payload);
   }
 
   // ── Cobros ───────────────────────────────────────────────────────────
@@ -483,6 +583,16 @@ export class AdministracionController {
   @Post('cobros/:id/acreditar')
   acreditarCobro(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.cobrosService.acreditar(auth, id);
+  }
+
+  @Permiso('administracion.anular')
+  @Delete('cobros/:id')
+  anularCobro(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: AnularCobroDto,
+  ) {
+    return this.cobrosService.anular(auth, id, payload);
   }
 
   // El formulario de cobro los necesita para pintarse, así que quien puede

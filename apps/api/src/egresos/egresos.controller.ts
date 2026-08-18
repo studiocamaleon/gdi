@@ -17,16 +17,15 @@ import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 import { EgresosService } from './egresos.service';
 import { RecurrentesService } from './recurrentes.service';
-import {
-  CrearRecurrenteDto,
-  EditarRecurrenteDto,
-} from './dto/recurrente.dto';
+import { CrearRecurrenteDto, EditarRecurrenteDto } from './dto/recurrente.dto';
 import {
   AnularDto,
   CrearCategoriaEgresoDto,
   CrearEgresoDto,
+  DebitarValorDto,
   EditarCategoriaEgresoDto,
   EditarEgresoDto,
+  RechazarValorPropioDto,
   RegistrarPagoDto,
 } from './dto/egreso.dto';
 
@@ -155,6 +154,26 @@ export class EgresosController {
   @Get('valores-en-cartera')
   valoresEnCartera(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.valoresEnCartera(auth);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Post('valores/:id/debitar')
+  debitarValor(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() body: DebitarValorDto,
+  ) {
+    return this.egresos.debitarValor(auth, id, body);
+  }
+
+  @Permiso('administracion.anular')
+  @Post('valores/:id/rechazar')
+  rechazarValorPropio(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() body: RechazarValorPropioDto,
+  ) {
+    return this.egresos.rechazarValorPropio(auth, id, body);
   }
 
   /** "¿En qué se me va la plata?" — por categoría y naturaleza, por competencia. */

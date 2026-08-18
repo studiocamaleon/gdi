@@ -92,6 +92,54 @@ describe('CargosDirectosProductoService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('rechaza una regla condicional JsonLogic mal formada', async () => {
+    const service = serviceCon({
+      productoConfigPaso: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'config-paso', paramsPasoJson: null }),
+      },
+      cargoDirectoCatalogo: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...cargo,
+          modosActivacionSoportados: ['CONDICIONAL'],
+        }),
+      },
+      productoCargoDirectoPaso: { create: jest.fn() },
+    });
+
+    await expect(
+      service.asociarCargoPaso('tenant', 'config-paso', {
+        cargoDirectoCatalogoId: cargo.id,
+        modoActivacion: ModoActivacionCargoDto.CONDICIONAL,
+        condicionActivacionJson: { operador_inexistente: [1] },
+      }),
+    ).rejects.toThrow('regla de activación');
+  });
+
+  it('rechaza un monto fijo sin importe positivo', async () => {
+    const service = serviceCon({
+      productoConfigPaso: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'config-paso', paramsPasoJson: null }),
+      },
+      cargoDirectoCatalogo: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ ...cargo, configJson: { monto: 0 } }),
+      },
+      productoCargoDirectoPaso: { create: jest.fn() },
+    });
+
+    await expect(
+      service.asociarCargoPaso('tenant', 'config-paso', {
+        cargoDirectoCatalogoId: cargo.id,
+        modoActivacion: ModoActivacionCargoDto.OBLIGATORIO,
+      }),
+    ).rejects.toThrow('necesita un monto');
+  });
+
   it('exige elegir un nivel cuando el paso está configurado por niveles', async () => {
     const service = serviceCon({
       productoConfigPaso: {

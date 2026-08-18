@@ -52,7 +52,7 @@ export type RentabilidadPanel = {
 export type TabPanel<T = Record<string, never>> = {
   meta: MetaPanel;
   pendiente?: boolean;
-} & Partial<T>;
+} & T;
 
 function qs(rango?: RangoPanel): string {
   const params = new URLSearchParams();
@@ -204,13 +204,13 @@ export type ProduccionPanel = {
 export type ProductoMargenPanel = {
   nombre: string;
   ventas: number;
-  costo: number;
-  margen: number;
-  margenPct: number;
+  costo?: number;
+  margen?: number;
+  margenPct?: number;
   /** Costos variables (material + consumibles) y margen de contribución. */
-  costosVariables: number;
-  contribucion: number;
-  contribucionPct: number;
+  costosVariables?: number;
+  contribucion?: number;
+  contribucionPct?: number;
   items: number;
 };
 export type MaterialUsoPanel = {
@@ -220,7 +220,7 @@ export type MaterialUsoPanel = {
   /** Formato comercial de la hoja (SRA3, A3+…) cuando la variante lo trae. */
   formato: string | null;
   cantidad: number;
-  costo: number;
+  costo?: number;
   items: number;
 };
 export type MedidasModoProductoPanel = {
@@ -265,6 +265,7 @@ export type AdicionalesPanel = {
   porProducto: ProductoAdicionalesPanel[];
 };
 export type ProductoPanel = {
+  margenesVisibles: boolean;
   porCategoria: ProductoMargenPanel[];
   porProducto: ProductoMargenPanel[];
   /** Consumo de sustrato (papel/vinilo/film) — teórico, del snapshot. */
@@ -360,12 +361,13 @@ export type VendedorEquipoPanel = {
   ordenes: number;
   facturado: number;
   ticketPromedio: number;
-  margen: number | null;
-  margenPct: number | null;
+  margen?: number | null;
+  margenPct?: number | null;
   itemsSinCosto: number;
   comisionEstimada: number | null;
 };
 export type EquipoPanel = {
+  margenesVisibles: boolean;
   comisionesVisibles: boolean;
   kpis: {
     personasActivas: number;
@@ -384,6 +386,7 @@ export type EquipoPanel = {
 };
 
 export type ClientesPanel = {
+  margenesVisibles: boolean;
   kpis: {
     activos: number;
     nuevos: number;
@@ -399,7 +402,7 @@ export type ClientesPanel = {
     segmentos: Array<{ segmento: SegmentoRfmPanel; clientes: number; facturado: number }>;
     enRiesgo: ClienteRfmPanel[];
   };
-  margenClientes: MargenClientePanel[];
+  margenClientes?: MargenClientePanel[];
   granularidad: GranularidadPanel;
 };
 
@@ -450,7 +453,12 @@ export function getPanelResumen(rango?: RangoPanel) {
       produccion: ResumenProduccionKpis;
       serie: Array<{ fecha: string; monto: number; costo: number }>;
       topClientes: RankingPanel[];
-      topProductos: ProductoMargenPanel[];
+      topProductos: Array<{
+        nombre: string;
+        ventas: number;
+        margenPct: number;
+        items: number;
+      }>;
       alertas: AlertaPanel[];
     }>
   >(`/reportes/panel/resumen${qs(rango)}`);
@@ -490,6 +498,15 @@ export function getPanelClientes(rango?: RangoPanel) {
 }
 export function getPanelEquipo(rango?: RangoPanel) {
   return apiRequest<TabPanel<EquipoPanel>>(`/reportes/panel/equipo${qs(rango)}`);
+}
+
+export type SaludEtaPanel = {
+  precision: import("@/lib/eta-api").PrecisionEta;
+  salud: import("@/lib/eta-api").SaludEta;
+};
+
+export function getPanelSaludEta(rango?: RangoPanel) {
+  return apiRequest<TabPanel<SaludEtaPanel>>(`/reportes/panel/salud-eta${qs(rango)}`);
 }
 
 export function getPanelMixCategoria(categoria: string, rango?: RangoPanel) {

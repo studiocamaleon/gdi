@@ -23,11 +23,17 @@ export type PeriodoKey = "mes" | "mesPasado" | "trimestre" | "anio";
 export const PERIODOS: Array<{ key: PeriodoKey; label: string }> = [
   { key: "mes", label: "Este mes" },
   { key: "mesPasado", label: "Mes pasado" },
-  { key: "trimestre", label: "Trimestre" },
-  { key: "anio", label: "Año" },
+  { key: "trimestre", label: "Trimestre actual" },
+  { key: "anio", label: "Año actual" },
 ];
 
 export const PERIODO_POR_DEFECTO: PeriodoKey = "mes";
+
+export type ParametrosPeriodo = {
+  periodo?: string | string[];
+  desde?: string | string[];
+  hasta?: string | string[];
+};
 
 /** Lo que venga en la URL, saneado. Basura o vacío → el mes en curso. */
 export function leerPeriodo(valor: string | string[] | undefined): PeriodoKey {
@@ -35,6 +41,35 @@ export function leerPeriodo(valor: string | string[] | undefined): PeriodoKey {
   return PERIODOS.some((p) => p.key === clave)
     ? (clave as PeriodoKey)
     : PERIODO_POR_DEFECTO;
+}
+
+function primerValor(valor: string | string[] | undefined): string | undefined {
+  return Array.isArray(valor) ? valor[0] : valor;
+}
+
+/** Valida una clave calendario real, no solamente su forma. */
+export function esFechaCalendario(valor: string | undefined): valor is string {
+  if (!valor || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const [anio, mes, dia] = valor.split("-").map(Number);
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  return (
+    fecha.getUTCFullYear() === anio
+    && fecha.getUTCMonth() === mes - 1
+    && fecha.getUTCDate() === dia
+  );
+}
+
+/** Devuelve el rango personalizado sólo cuando está completo y es coherente. */
+export function leerRangoPersonalizado(
+  desdeValor: string | string[] | undefined,
+  hastaValor: string | string[] | undefined,
+): Required<RangoPanel> | null {
+  const desde = primerValor(desdeValor);
+  const hasta = primerValor(hastaValor);
+  if (!esFechaCalendario(desde) || !esFechaCalendario(hasta) || desde > hasta) {
+    return null;
+  }
+  return { desde, hasta };
 }
 
 /** Clave "YYYY-MM-DD" por aritmética UTC pura (mes 0-11; día 0 = fin del anterior). */
@@ -64,4 +99,15 @@ export function rangoDe(
     return { desde: clave(y, q, 1), hasta: clave(y, q + 3, 0) };
   }
   return { desde: clave(y, 0, 1), hasta: clave(y, 11, 31) };
+}
+
+/** Prioriza un rango personalizado válido y cae al preset solicitado. */
+export function rangoDeParametros(
+  parametros: ParametrosPeriodo,
+  zona: string = ZONA_DEFAULT,
+): RangoPanel {
+  return (
+    leerRangoPersonalizado(parametros.desde, parametros.hasta)
+    ?? rangoDe(leerPeriodo(parametros.periodo), zona)
+  );
 }

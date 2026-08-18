@@ -631,6 +631,24 @@ describe('AplicarPrecioService', () => {
       );
     });
 
+    it.each([Number.NaN, Number.POSITIVE_INFINITY])(
+      'rechaza costo no finito: %s',
+      (costoUnitario) => {
+        expect(() => service.aplicar(baseInput({ costoUnitario }))).toThrow(
+          BadRequestException,
+        );
+      },
+    );
+
+    it.each([Number.NaN, Number.POSITIVE_INFINITY])(
+      'rechaza cantidad no finita: %s',
+      (cantidad) => {
+        expect(() => service.aplicar(baseInput({ cantidad }))).toThrow(
+          BadRequestException,
+        );
+      },
+    );
+
     it('rechaza método inválido', () => {
       expect(() =>
         service.aplicar(

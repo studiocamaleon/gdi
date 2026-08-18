@@ -10,11 +10,10 @@ import {
   pct,
 } from "@/components/panel/panel-general";
 import {
-  getEtaPrecision,
-  getEtaSalud,
   type PrecisionEta,
   type SaludEta,
 } from "@/lib/eta-api";
+import { getPanelSaludEta, type RangoPanel } from "@/lib/panel-api";
 
 /** "corte_laser" → "Corte laser" cuando no hay nombre del catálogo. */
 function prettyFamilia(codigo: string) {
@@ -27,12 +26,12 @@ const min = (v: number | null) => (v == null ? "—" : fmtMinutos(v));
 export function PanelSaludEta({
   initialPrecision,
   initialSalud,
-  familiaNombres,
+  rango,
   enReportes = false,
 }: {
   initialPrecision: PrecisionEta;
   initialSalud: SaludEta;
-  familiaNombres: Record<string, string>;
+  rango?: RangoPanel;
   /** Dentro del shell de Reportes: el cromo (título, período, tabs) ya lo pone
    *  el shell, así que se rinde sólo el cuerpo. */
   enReportes?: boolean;
@@ -46,9 +45,9 @@ export function PanelSaludEta({
     setCargando(true);
     setError(null);
     try {
-      const [p, s] = await Promise.all([getEtaPrecision(), getEtaSalud()]);
-      setPrecision(p);
-      setSalud(s);
+      const actualizado = await getPanelSaludEta(rango);
+      setPrecision(actualizado.precision);
+      setSalud(actualizado.salud);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo actualizar.");
     } finally {
@@ -56,8 +55,8 @@ export function PanelSaludEta({
     }
   };
 
-  const nombreFamilia = (codigo: string) =>
-    familiaNombres[codigo] ?? prettyFamilia(codigo);
+  const nombreFamilia = (familia: SaludEta["sesgoFamilias"][number]) =>
+    familia.familiaNombre ?? prettyFamilia(familia.familiaCodigo);
 
   const hayMuestras = precision.muestras > 0;
   // + = tiende a terminar tarde; lo mostramos con su signo y una etiqueta.
@@ -217,7 +216,7 @@ export function PanelSaludEta({
                       <tr key={f.familiaCodigo}>
                         <td>
                           <div className="nm">
-                            {nombreFamilia(f.familiaCodigo)}
+                            {nombreFamilia(f)}
                           </div>
                           <div
                             className="sub"

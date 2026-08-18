@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProduccionService } from '../produccion/produccion.service';
 import { regionalDelTenant } from '../common/regional';
 import { resolverTecnologiaMaquina } from '../common/tecnologia-maquina';
 import { claveFechaEnZona } from '../common/zona';
+import { finExclusivo, type Rango } from '../reportes/periodo';
+import { resolverFamilia } from '../productos-servicios/pasos/familias';
 import {
   descomponerCiclo,
   evaluarSesgoFamilias,
@@ -433,6 +435,19 @@ export class EtaService {
     return resumirPrecision(promesas);
   }
 
+  /** Variante usada por Reportes: recibe los bordes ya resueltos en la zona del tenant. */
+  async precisionEnRango(tenantId: string, rango: Rango) {
+    const promesas = await this.prisma.etaPromesa.findMany({
+      where: {
+        tenantId,
+        finReal: { not: null },
+        congeladaEl: { gte: rango.desde, lt: finExclusivo(rango) },
+      },
+      select: { errorMin: true, sinEstimar: true },
+    });
+    return resumirPrecision(promesas);
+  }
+
   // ── Reporte: salud del modelo (F3) ───────────────────────────────────────
 
   /**
@@ -441,9 +456,12 @@ export class EtaService {
    * sugeridor de correcciones. El sugeridor sólo PROPONE (D9): aplicar la
    * corrección sigue siendo decisión humana.
    */
-  async saludModelo(tenantId: string) {
+  async saludModelo(tenantId: string, rango?: Rango) {
+    const borde = rango
+      ? { gte: rango.desde, lt: finExclusivo(rango) }
+      : undefined;
     const promesas = await this.prisma.etaPromesa.findMany({
-      where: { tenantId },
+      where: { tenantId, ...(borde ? { congeladaEl: borde } : {}) },
       select: { sinEstimar: true, parcial: true },
     });
     const total = promesas.length;
@@ -474,6 +492,9 @@ export class EtaService {
         AND "tiempoRealMin" IS NOT NULL
         AND "duracionEstimadaMin" IS NOT NULL
         AND "tiempoFuente" IN ('medido', 'medido_lote')
+        ${rango
+          ? Prisma.sql`AND "completadoEl" >= ${rango.desde} AND "completadoEl" < ${finExclusivo(rango)}`
+          : Prisma.empty}
       GROUP BY "familiaCodigo"
       HAVING COUNT(*) >= 3
     `;
@@ -484,7 +505,10 @@ export class EtaService {
         medianaEstimadoMin: Number(f.medianaEstimadoMin),
         medianaRealMin: Number(f.medianaRealMin),
       })),
-    );
+    ).map((fila) => ({
+      ...fila,
+      familiaNombre: resolverFamilia(fila.familiaCodigo)?.nombre ?? null,
+    }));
 
     return { cobertura, sesgoFamilias };
   }

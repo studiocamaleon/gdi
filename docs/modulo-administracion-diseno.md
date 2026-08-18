@@ -5,6 +5,20 @@
 > usuario) + decisiones de la conversación. Este doc traduce esa
 > investigación a modelo de datos, contratos y etapas de implementación.
 
+> **Estado operativo 2026-08-18.** Las etapas de este documento conservan
+> valor como historial de diseño, pero Tesorería ya opera sobre un libro único
+> de fondos. Cuentas, cobros, pagos, transferencias, ajustes y valores generan
+> movimientos auditables mediante la misma primitiva transaccional. La
+> implementación vigente agrega saldos iniciales trazables, prevención de
+> sobregiros, idempotencia, reversiones, conciliación, moneda y cambio,
+> actor/motivo, paginación y exportación. Los cheques/eCheq recibidos recorren
+> cartera, depósito, acreditación, rechazo o endoso; los propios, emisión,
+> débito, anulación o rechazo. La acreditación suma días hábiles en la zona
+> horaria del tenant y
+> los movimientos acreditan siempre el **disponible real**. Ver migraciones
+> `20260818030000_tesoreria_operativa` y
+> `20260818031500_tesoreria_auditoria_idempotencia_pagos`.
+
 ## 1. Principios (del PDF, innegociables)
 
 1. **Las tres cifras.** Todo cobro distingue: **facturado** (precio del
@@ -52,23 +66,23 @@
 
 Hoy NO existen datos fiscales (verificado en schema):
 
-| Entidad | Campos a agregar |
-|---|---|
-| `Cliente` | `cuit String?`, `condicionFiscal` ('RI' \| 'monotributo' \| 'exento' \| 'consumidor_final', default consumidor_final), `limiteCredito Decimal?` |
-| `Proveedor` | `cuit String?`, `condicionFiscal String?` |
+| Entidad                                    | Campos a agregar                                                                                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Cliente`                                  | `cuit String?`, `condicionFiscal` ('RI' \| 'monotributo' \| 'exento' \| 'consumidor_final', default consumidor_final), `limiteCredito Decimal?`                                                                          |
+| `Proveedor`                                | `cuit String?`, `condicionFiscal String?`                                                                                                                                                                                |
 | Tenant (nueva tabla `ConfiguracionFiscal`) | cuit, razonSocial, condicionFiscal, nº IIBB, domicilio fiscal, puntos de venta habilitados, `proveedorFacturacion` ('manual' \| 'tusfacturas'), referencia de credenciales (nunca el secreto en claro; env/secret store) |
 
 **Selección automática de letra** (matriz emisor→receptor). Implementada y
 testeada en `apps/api/src/administracion/letra-comprobante.ts`; fuente:
 [ARCA, régimen general](https://www.afip.gob.ar/facturacion/regimen-general/comprobantes.asp).
 
-| receptor ↓ / emisor → | RI | Monotributo | Exento |
-|---|---|---|---|
-| Responsable Inscripto | **A** | C | C |
-| Monotributo | **A** | C | C |
-| Exento | **B** | C | C |
-| Consumidor final | **B** | C | C |
-| Exterior (exportación) | **E** | E | E |
+| receptor ↓ / emisor →  | RI    | Monotributo | Exento |
+| ---------------------- | ----- | ----------- | ------ |
+| Responsable Inscripto  | **A** | C           | C      |
+| Monotributo            | **A** | C           | C      |
+| Exento                 | **B** | C           | C      |
+| Consumidor final       | **B** | C           | C      |
+| Exterior (exportación) | **E** | E           | E      |
 
 > **Corrección (2026-07-16): la clase M ya no existe.** La RG 5762/2025 la
 > abrogó desde el 01/12/2025. Quien no acredita solvencia patrimonial emite
@@ -89,6 +103,7 @@ tenant. Montos `Decimal @db.Decimal(14, 2)`; alícuotas `Decimal(6, 3)`;
 moneda `VarChar(3)` default 'ARS'.
 
 ### MetodoPago
+
 `codigo` (unique por tenant), `nombre`, `tipo` ('efectivo' | 'transferencia'
 | 'qr_interoperable' | 'debito' | 'credito' | 'credito_cuotas' | 'mp_qr' |
 'mp_link' | 'cheque' | 'echeq' | 'debin' | 'otro'), `comisionPct`,
@@ -98,10 +113,17 @@ moneda `VarChar(3)` default 'ARS'.
 `orden Int`. Seed inicial por tenant con el catálogo del PDF (cap. 4).
 
 ### CuentaFondos
+
 `tipo` ('caja' | 'banco'), `nombre`, `banco?`, `cbuAlias?`, `moneda`,
 `saldo Decimal` (denormalizado), `datosOpenBankingJson?` (F3), `activo`.
 
+La cartera de cheques/eCheq **no es una CuentaFondos**: cada documento vive
+como `Valor` en estado `cartera`. Su `Cobro.cuentaDestinoId` permanece nulo
+hasta que Tesorería registra el depósito; en ese momento se asigna una cuenta
+bancaria y la acreditación posterior genera el movimiento de fondos.
+
 ### MovimientoFondos
+
 `cuentaId`, `fecha`, `tipo` ('entrada' | 'salida'), `monto` (positivo),
 `concepto`, `origenTipo` ('cobro' | 'pago' | 'transferencia' | 'valor' |
 'ajuste_arqueo'), `cobroId?`, `pagoId?`, `valorId?`,
@@ -111,6 +133,7 @@ moneda `VarChar(3)` default 'ARS'.
 `saldoPosterior Decimal` (corrido, para el extracto).
 
 ### Comprobante
+
 `clase` ('FA' | 'NC' | 'ND'), `letra` ('A'|'B'|'C'|'M'|'E'|'T'),
 `puntoVenta Int`, `numero Int?` (null hasta emisión), `fecha`,
 `clienteId`, `ordenId?` (origen), `cotizacionId?`, `condicionVenta`
@@ -125,6 +148,7 @@ total − imputaciones − aplicación de NC), `motivoRechazo?`.
 `@@unique([tenantId, letra, puntoVenta, numero])`.
 
 ### Cobro
+
 `clienteId`, `fecha`, `metodoPagoId`, `cuentaDestinoId`,
 `montoBruto`, `comisionMonto`, `comisionIvaMonto`, `netoAcreditado`
 (= bruto − comisión − IVA comisión), `retencionesTotal`,
@@ -137,10 +161,12 @@ El movimiento de fondos se genera al registrar (efectivo/transferencia) o
 al acreditar el valor (cheques) — ver máquina de estados del Valor.
 
 ### CobroImputacion
+
 `cobroId`, `comprobanteId`, `monto`. Actualiza `saldoPendiente` del
 comprobante en la misma transacción.
 
 ### RetencionPercepcion
+
 `direccion` ('sufrida' | 'practicada'), `cobroId?` / `pagoId?` (XOR),
 `regimen` ('SICORE_IVA' | 'SICORE_GANANCIAS' | 'IIBB_RET' | 'IIBB_PERC' |
 'SIRCREB' | 'SIRCUPA' | 'SIRTAC' | 'PERCEPCION_IVA' | 'otro'),
@@ -149,22 +175,29 @@ comprobante en la misma transacción.
 período = query directa sobre esta tabla (insumo contador, cap. 5 PDF).
 
 ### Valor (cheque / echeq)
+
 `origen` ('tercero' | 'propio'), `formato` ('fisico' | 'echeq'),
 `modalidad` ('comun' | 'diferido'), `numero`, `banco`, `importe`,
-`moneda`, `fechaEmision`, `fechaPago?` (diferido), `estado` (ver §5),
-`clienteId?` (recibido de), `proveedorId?` (endosado a), `cobroId?`,
-`pagoId?`, `cuentaDepositoId?`, `endososJson?`, `motivoRechazo?`.
+`claveInstrumento` (identidad normalizada y única por tenant),
+`identificadorBancario?` (ID del eCheq), `moneda`, `fechaEmision`,
+`fechaPago?` (diferido), `estado` (ver §5), `clienteId?` (recibido de),
+`proveedorId?` (endosado a), `cobroId?`, `cuentaDepositoId?`,
+`motivoRechazo?` y fechas de cada hito. El pago asociado vive en
+`Pago.valorId`, único: un instrumento no puede respaldar dos órdenes de pago.
 
-### Pago + PagoImputacion + ComprobanteCompra  *(Fase 2 — definidas acá, se migran cuando toque)*
+### Pago + PagoImputacion + ComprobanteCompra _(Fase 2 — definidas acá, se migran cuando toque)_
+
 Espejo de Cobro/Imputacion/Comprobante para proveedores, con
 `retenciones practicadas` (Grafo como agente) y órdenes de pago.
 
-### MovimientoBancario  *(Fase 3 — open banking)*
+### MovimientoBancario _(Fase 3 — open banking)_
+
 `cuentaId`, `fecha`, `monto`, `descripcion`, `referencia`,
 `movimientoFondosId?` (match), `estadoMatch` ('auto' | 'manual' |
 'pendiente' | 'descartado'), `rawJson`.
 
 ### Cuenta corriente
+
 **No es tabla**: es la proyección cronológica de Comprobantes (debe),
 Cobros/NC (haber) y anticipos por cliente, con saldo corrido computado.
 Límite de crédito vive en `Cliente.limiteCredito`.
@@ -180,12 +213,17 @@ emitido` directo (número tipeado, CAE opcional).
 **Valor — tercero (recibido):**
 `cartera → endosado` (a proveedor, se vuelve medio de un Pago) ·
 `cartera → depositado → acreditado` (genera MovimientoFondos entrada +
-acredita el Cobro asociado) · `depositado → rechazado` (revierte: el
+acredita el Cobro asociado) · `depositado → cartera` (corrección de depósito)
+· `acreditado → depositado` (corrección con contramovimiento) ·
+`depositado/acreditado → rechazado` (revierte: el
 cobro vuelve a pendiente, el comprobante recupera saldo, la cta. cte. del
-cliente se debita de nuevo + evento).
+cliente se debita de nuevo + evento) · `endosado → cartera` al anular la orden
+de pago. Todos los hitos generan `ValorEvento` append-only.
 
 **Valor — propio (emitido):**
-`cartera(emitido) → debitado(pagado)` · `→ rechazado`.
+`emitido → debitado` (recién ahí mueve fondos) · `emitido → anulado` al anular
+la orden de pago · `emitido/debitado → rechazado` cuando el banco informa un
+rechazo.
 
 **Cobro.estadoAcreditacion:** `pendiente → acreditado` (automático por
 fecha estimada en medios electrónicos — job o al consultar; manual/por
@@ -204,9 +242,10 @@ disponibleReal       = netoAcreditado − retencionesTotal
 fechaAcreditacion    = fecha + metodo.plazoAcreditacionDias (hábiles: v1
                        usa días corridos, mejora posterior)
 ```
+
 El backend recalcula y valida contra lo enviado (tolerancia $1, patrón
 OT). Las líneas de retención son editables porque el % del padrón varía
-por contribuyente; el método solo *sugiere* (flag `sufreRetencion`).
+por contribuyente; el método solo _sugiere_ (flag `sufreRetencion`).
 
 ## 7. API (módulo `administracion`)
 
@@ -215,6 +254,7 @@ DTOs class-validator, paginación estándar, eventos de auditoría con
 usuarioId/datosJson/origen (mismo enfoque que ordenes-trabajo).
 
 **Etapa B**
+
 - `GET/POST/PATCH /administracion/metodos-pago` (+ toggle)
 - `GET/POST/PATCH /administracion/cuentas` (+ movimientos paginados)
 - `POST /administracion/cuentas/transferencias` (par de movimientos)
@@ -227,6 +267,7 @@ usuarioId/datosJson/origen (mismo enfoque que ordenes-trabajo).
   las 3 cifras). Reemplaza el mock `OrdenTrabajoPago`.
 
 **Etapa C**
+
 - `GET/POST/PATCH /administracion/comprobantes` · `POST .../:id/emitir`
   (provider) · `POST .../:id/anular` · items desde OT: el POST acepta
   `ordenId` y arma `itemsJson` desde los items persistidos de la orden.
@@ -235,11 +276,13 @@ usuarioId/datosJson/origen (mismo enfoque que ordenes-trabajo).
   saldo corrido + límite) · `GET /administracion/deudores` (aging)
 
 **Etapa D**
+
 - `ConfiguracionFiscal` del tenant (GET/PUT) ·
   `GET /administracion/padron/:cuit` (via provider) ·
   provider `tusfacturas` implementando `InvoicingProvider`.
 
 **Interfaz `InvoicingProvider`**
+
 ```ts
 emitir(comprobante): Promise<{ numero, cae, caeVencimiento, raw } | { rechazo }>
 consultarPadron(cuit): Promise<{ condicionFiscal, razonSocial } | null>
@@ -266,14 +309,14 @@ consultarPadron(cuit): Promise<{ condicionFiscal, razonSocial } | null>
 
 ## 9. Etapas y entregables
 
-| Etapa | Contenido | Verificable |
-|---|---|---|
-| **A** | Este doc + contrato TS `src/lib/administracion.ts` + migraciones base (prerrequisitos fiscales + MetodoPago/CuentaFondos/MovimientoFondos/Cobro/Imputacion/Retencion/Valor/Comprobante) | migra + seed catálogo métodos |
-| **B** | API métodos/cuentas/cobros + vista tesorería + catálogo métodos + registrar cobro v2 + tab Pagos OT real (diseños Prioridad 1 del usuario) | cobrar una seña de OT real con 3 cifras y verla en tesorería |
-| **C** | Comprobantes (provider manual) + imputaciones + cta. cte. + aging (diseños Prioridad 2) | facturar una OT, imputarle el anticipo, ver cta. cte. y aging |
-| **D** | ConfiguracionFiscal + TusFacturasAPP + letra automática + padrón | emitir FA real con CAE desde una OT |
-| **E** | Fase 2 PDF: valores completos en UI, retenciones report, CxP | ciclo completo de un echeq + reporte para el contador |
-| **F** | Fase 3 PDF: conciliación (Prometeo) + flujo 13 semanas | conciliación automática sobre cuenta real |
+| Etapa | Contenido                                                                                                                                                                               | Verificable                                                   |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **A** | Este doc + contrato TS `src/lib/administracion.ts` + migraciones base (prerrequisitos fiscales + MetodoPago/CuentaFondos/MovimientoFondos/Cobro/Imputacion/Retencion/Valor/Comprobante) | migra + seed catálogo métodos                                 |
+| **B** | API métodos/cuentas/cobros + vista tesorería + catálogo métodos + registrar cobro v2 + tab Pagos OT real (diseños Prioridad 1 del usuario)                                              | cobrar una seña de OT real con 3 cifras y verla en tesorería  |
+| **C** | Comprobantes (provider manual) + imputaciones + cta. cte. + aging (diseños Prioridad 2)                                                                                                 | facturar una OT, imputarle el anticipo, ver cta. cte. y aging |
+| **D** | ConfiguracionFiscal + TusFacturasAPP + letra automática + padrón                                                                                                                        | emitir FA real con CAE desde una OT                           |
+| **E** | Fase 2 PDF: valores completos en UI, retenciones report, CxP                                                                                                                            | ciclo completo de un echeq + reporte para el contador         |
+| **F** | Fase 3 PDF: conciliación (Prometeo) + flujo 13 semanas                                                                                                                                  | conciliación automática sobre cuenta real                     |
 
 ## 10. Fuera de alcance (explícito)
 

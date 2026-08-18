@@ -2,7 +2,7 @@ import { MetaPie, TabResumen } from "@/components/panel/panel-general";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { getPanelResumen } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
-import { leerPeriodo, rangoDe } from "@/lib/panel-periodo";
+import { rangoDeParametros, type ParametrosPeriodo } from "@/lib/panel-periodo";
 import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
@@ -17,17 +17,17 @@ export const dynamic = "force-dynamic";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<ParametrosPeriodo>;
 }) {
   if (!(await tienePermiso("reportes.ver_resumen"))) {
     return <SinPermiso modulo="el Resumen ejecutivo" />;
   }
 
-  const { periodo } = await searchParams;
-  const d = await getPanelResumen(rangoDe(leerPeriodo(periodo), await zonaHorariaDelTenant()));
+  const parametros = await searchParams;
+  const d = await getPanelResumen(rangoDeParametros(parametros, await zonaHorariaDelTenant()));
   return (
     <>
-      <TabResumen d={d as never} />
+      <TabResumen d={d} />
       <MetaPie meta={d.meta} />
     </>
   );
