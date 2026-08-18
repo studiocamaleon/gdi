@@ -3110,6 +3110,53 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(outs.pliegos_calculados).toBe(tg.pliegosXCapa);
   });
 
+  it('talonario duplicado: todas las capas activas costean la tirada completa', async () => {
+    if (!tenantId) return;
+    const talonario = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TALON-DUPL-A4' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: talonario.id,
+      periodo: '2026-03',
+      jobContext: {
+        cantidad: 20,
+        caras: 1,
+        tipoCopia: 2,
+        numerosXTalonario: 50,
+        medidaCustomMm: { anchoMm: 210, altoMm: 297 },
+        piezas: [{ cantidad: 20, anchoMm: 210, altoMm: 297 }],
+      },
+    });
+
+    expect(result.exitoso).toBe(true);
+    const impresiones = result.cotizacion!.pasos.filter(
+      (p) =>
+        p.activado &&
+        p.familiaCodigo === 'impresion_por_hoja' &&
+        p.nestingResult,
+    );
+    expect(impresiones).toHaveLength(2);
+
+    const original = impresiones.find(
+      (p) => p.nestingResult?.talonarioGrouping,
+    );
+    const duplicado = impresiones.find((p) => p !== original);
+    expect(original).toBeDefined();
+    expect(duplicado).toBeDefined();
+
+    const pliegosPorCapa =
+      original!.nestingResult!.talonarioGrouping!.pliegosXCapa;
+    expect(pliegosPorCapa).toBe(1_000);
+    expect(duplicado!.nestingResult!.cantidadCalculada).toBe(pliegosPorCapa);
+    expect(
+      duplicado!.materiales?.find((material) => material.unidad === 'hoja')
+        ?.cantidad,
+    ).toBe(pliegosPorCapa);
+    // Las pilas pertenecen al agrupado original y no se vuelven a publicar.
+    expect(duplicado!.outputsCanonicos?.talonario_pilas).toBeNull();
+  });
+
   it('v3.1 grid-2d-multi: jobContext con piezas de medidas distintas → multi-bin packing', async () => {
     // Test unitario del dispatcher multi (no requiere producto seed específico).
     const fakePaso = {

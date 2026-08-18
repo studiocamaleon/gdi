@@ -54,7 +54,6 @@ const DEFAULTS: Umbrales = {
   margenPctMin: 25,
 };
 
-
 @Injectable()
 export class AlertasService {
   constructor(
@@ -63,7 +62,9 @@ export class AlertasService {
   ) {}
 
   async getUmbrales(tenantId: string): Promise<Umbrales> {
-    const row = await this.prisma.configuracionInsights.findUnique({ where: { tenantId } });
+    const row = await this.prisma.configuracionInsights.findUnique({
+      where: { tenantId },
+    });
     if (!row) return { ...DEFAULTS };
     return {
       diasClienteDormido: row.diasClienteDormido,
@@ -76,7 +77,10 @@ export class AlertasService {
     };
   }
 
-  async actualizarUmbrales(tenantId: string, dto: ActualizarUmbralesDto): Promise<Umbrales> {
+  async actualizarUmbrales(
+    tenantId: string,
+    dto: ActualizarUmbralesDto,
+  ): Promise<Umbrales> {
     const actual = await this.getUmbrales(tenantId);
     const merged = { ...actual, ...limpiar(dto) };
     await this.prisma.configuracionInsights.upsert({
@@ -108,19 +112,28 @@ export class AlertasService {
       this.puntoEquilibrio(tenantId, rango, hoy, rentabilidadCalculada),
       this.tarifasViejas(tenantId, umbrales, hoy),
     ]);
-    return grupos.flat().sort((a, b) => ORDEN[a.severidad] - ORDEN[b.severidad]);
+    return grupos
+      .flat()
+      .sort((a, b) => ORDEN[a.severidad] - ORDEN[b.severidad]);
   }
 
   // 1. Deuda vencida > N% de la facturación del período. Deuda COMERCIAL:
   // órdenes finalizadas hace +30 días con saldo sin cobrar, contra lo
   // vendido finalizado del período.
-  private async deudaVencida(tenantId: string, rango: Rango, u: Umbrales): Promise<Alerta[]> {
-    const [row] = await this.prisma.$queryRaw<Array<{ vencido: number; facturado: number }>>`
+  private async deudaVencida(
+    tenantId: string,
+    rango: Rango,
+    u: Umbrales,
+  ): Promise<Alerta[]> {
+    const [row] = await this.prisma.$queryRaw<
+      Array<{ vencido: number; facturado: number }>
+    >`
       SELECT
         (SELECT COALESCE(SUM(GREATEST(0, total - "cobradoTotal")), 0)::float8 FROM "OrdenTrabajo"
           WHERE "tenantId" = ${tenantId}::uuid
             AND estado IN ('finalizada', 'entregada')
-            AND "fechaFinalizada" < (CURRENT_DATE - 30)) AS vencido,
+            AND COALESCE("fechaVencimientoComercial", "fechaFinalizada"::date)
+                < (CURRENT_DATE - 30)) AS vencido,
         (SELECT COALESCE(SUM(total), 0)::float8 FROM "OrdenTrabajo"
           WHERE "tenantId" = ${tenantId}::uuid
             AND estado IN ('finalizada', 'entregada')
@@ -147,8 +160,14 @@ export class AlertasService {
   }
 
   // 2. Clientes recurrentes que dejaron de comprar.
-  private async clientesDormidos(tenantId: string, u: Umbrales, hoy: Date): Promise<Alerta[]> {
-    const rows = await this.prisma.$queryRaw<Array<{ ordenes: number; ultima: Date }>>`
+  private async clientesDormidos(
+    tenantId: string,
+    u: Umbrales,
+    hoy: Date,
+  ): Promise<Alerta[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ ordenes: number; ultima: Date }>
+    >`
       SELECT COUNT(DISTINCT ot.id)::int AS ordenes, MAX(ot."fechaEmision") AS ultima
       FROM "OrdenTrabajo" ot
       WHERE ot."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
@@ -159,7 +178,8 @@ export class AlertasService {
     const dormidos = rows.filter(
       (r) =>
         r.ordenes >= 2 &&
-        Math.floor((hoyMid.getTime() - r.ultima.getTime()) / MS_DIA) > u.diasClienteDormido,
+        Math.floor((hoyMid.getTime() - r.ultima.getTime()) / MS_DIA) >
+          u.diasClienteDormido,
     ).length;
     if (dormidos === 0) return [];
     return [
@@ -174,7 +194,11 @@ export class AlertasService {
   }
 
   // 3. Concentración de cartera en el top-3.
-  private async concentracion(tenantId: string, rango: Rango, u: Umbrales): Promise<Alerta[]> {
+  private async concentracion(
+    tenantId: string,
+    rango: Rango,
+    u: Umbrales,
+  ): Promise<Alerta[]> {
     const rows = await this.prisma.$queryRaw<Array<{ facturado: number }>>`
       SELECT COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado
       FROM "OrdenTrabajoItem" oti
@@ -217,8 +241,12 @@ export class AlertasService {
     const transcurridos =
       hoyMid >= rango.hasta
         ? total
-        : Math.max(0, Math.round((hoyMid.getTime() - rango.desde.getTime()) / MS_DIA) + 1);
-    const esperadoPct = total > 0 ? Math.min(100, (transcurridos / total) * 100) : 100;
+        : Math.max(
+            0,
+            Math.round((hoyMid.getTime() - rango.desde.getTime()) / MS_DIA) + 1,
+          );
+    const esperadoPct =
+      total > 0 ? Math.min(100, (transcurridos / total) * 100) : 100;
     if (p.avancePct >= esperadoPct) return [];
     const dinero = await this.dinero(tenantId);
     return [
@@ -233,8 +261,14 @@ export class AlertasService {
   }
 
   // 5. Centros con tarifas sin actualizar hace muchos meses.
-  private async tarifasViejas(tenantId: string, u: Umbrales, hoy: Date): Promise<Alerta[]> {
-    const rows = await this.prisma.$queryRaw<Array<{ centro: string; ultimo: string }>>`
+  private async tarifasViejas(
+    tenantId: string,
+    u: Umbrales,
+    hoy: Date,
+  ): Promise<Alerta[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ centro: string; ultimo: string }>
+    >`
       SELECT cc.nombre AS centro, MAX(t.periodo) AS ultimo
       FROM "CentroCostoTarifaPeriodo" t
       JOIN "CentroCosto" cc ON cc.id = t."centroCostoId"

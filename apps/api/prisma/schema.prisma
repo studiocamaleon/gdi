@@ -682,6 +682,7 @@ model Tenant {
   comprobantes                                     Comprobante[]
   comprobanteContadores                            ComprobanteContador[]
   cobroImputaciones                                CobroImputacion[]
+  cobroOrdenes                                     CobroOrden[]
   comprobanteOrdenes                               ComprobanteOrden[]
   familiaPasoDefaults                              FamiliaPasoDefaults[]
   centroCopiadoConfig                              CentroCopiadoConfig?
@@ -956,34 +957,39 @@ model Cliente {
   /// Consentimiento para recibir WhatsApp. Arranca en false y NO se
   /// backfillea: WhatsApp exige opt-in y la ley 25.326 también, así que
   /// marcarlos a todos en true de una migración sería exactamente la trampa.
-  aceptaWhatsapp      Boolean?
+  aceptaWhatsapp           Boolean?
   /// Cuándo se registró el consentimiento. Sin esto no hay nada que mostrar
   /// el día que un cliente pregunte por qué le escriben.
-  aceptaWhatsappEl    DateTime?
-  id                  String                            @id @default(uuid()) @db.Uuid
-  tenantId            String                            @db.Uuid
-  nombre              String
-  razonSocial         String?
+  aceptaWhatsappEl         DateTime?
+  id                       String                            @id @default(uuid()) @db.Uuid
+  tenantId                 String                            @db.Uuid
+  nombre                   String
+  razonSocial              String?
   /// Opcional desde el alta de mostrador: escaneando el DNI hay nombre y
   /// documento, pero nadie pide un email con el cliente esperando.
-  emailPrincipal      String?
-  telefonoCodigo      String
-  telefonoNumero      String
+  emailPrincipal           String?
+  telefonoCodigo           String
+  telefonoNumero           String
   /// DNI (sólo dígitos), cuando el alta salió del documento. Es distinto del
   /// CUIT: ARCA los trata como tipos de documento distintos (96 vs 80).
-  documentoNumero     String?                           @db.VarChar(9)
+  documentoNumero          String?                           @db.VarChar(9)
   /// De dónde salió el alta: 'mostrador' = se escaneó el DNI en el momento y
   /// puede faltarle email o teléfono. null = alta normal, completa.
-  origenAlta          String?
-  paisCodigo          String                            @db.VarChar(2)
+  origenAlta               String?
+  paisCodigo               String                            @db.VarChar(2)
   // === Datos fiscales (módulo Administración) ===
   /// CUIT/CUIL sin guiones (11 dígitos) o null si no lo tenemos todavía.
-  cuit                String?                           @db.VarChar(11)
+  cuit                     String?                           @db.VarChar(11)
   /// 'RI' | 'monotributo' | 'exento' | 'consumidor_final' | 'exterior'.
   /// Define la letra del comprobante junto con la condición del emisor.
-  condicionFiscal     String                            @default("consumidor_final")
+  condicionFiscal          String                            @default("consumidor_final")
   /// Tope de deuda en cta. cte. (null = sin límite definido).
-  limiteCredito       Decimal?                          @db.Decimal(14, 2)
+  limiteCredito            Decimal?                          @db.Decimal(14, 2)
+  /// Plazo comercial de la cuenta corriente. Null = no tiene cuenta
+  /// corriente y la deuda vence al finalizar la OT; 0 = cuenta corriente
+  /// con vencimiento inmediato. Se congela en cada orden al finalizar para
+  /// que editar al cliente no reescriba el historial.
+  plazoCuentaCorrienteDias Int?
   /// Inhabilitado: sigue existiendo y sus órdenes, comprobantes y cobros
   /// quedan enteros, pero desaparece de las listas y de los buscadores.
   ///
@@ -991,21 +997,21 @@ model Cliente {
   /// las órdenes sin cliente EN SILENCIO: la relación es opcional, así que
   /// Postgres pone null y nadie se entera hasta que alguien busca de quién era
   /// una orden. Ver docs/clientes-inhabilitar-diseno.md
-  activo              Boolean                           @default(true)
-  createdAt           DateTime                          @default(now())
-  updatedAt           DateTime                          @updatedAt
-  tenant              Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contactos           ClienteContacto[]
-  direcciones         ClienteDireccion[]
-  eventos             ClienteEvento[]
+  activo                   Boolean                           @default(true)
+  createdAt                DateTime                          @default(now())
+  updatedAt                DateTime                          @updatedAt
+  tenant                   Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactos                ClienteContacto[]
+  direcciones              ClienteDireccion[]
+  eventos                  ClienteEvento[]
   // === Modelo Universal V2 ===
-  cotizacionesV2      Cotizacion[]                      @relation("CotizacionV2Cliente")
-  preciosEspecialesV2 ProductoPrecioEspecialClienteV2[] @relation("ProductoPrecioEspecialClienteV2Cliente")
-  ordenesTrabajo      OrdenTrabajo[]                    @relation("OrdenTrabajoCliente")
-  cobros              Cobro[]
-  valores             Valor[]
-  comprobantes        Comprobante[]
-  archivos            Archivo[]
+  cotizacionesV2           Cotizacion[]                      @relation("CotizacionV2Cliente")
+  preciosEspecialesV2      ProductoPrecioEspecialClienteV2[] @relation("ProductoPrecioEspecialClienteV2Cliente")
+  ordenesTrabajo           OrdenTrabajo[]                    @relation("OrdenTrabajoCliente")
+  cobros                   Cobro[]
+  valores                  Valor[]
+  comprobantes             Comprobante[]
+  archivos                 Archivo[]
 
   @@unique([tenantId, nombre])
   @@unique([tenantId, documentoNumero])
@@ -2966,47 +2972,51 @@ model CotizacionItem {
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
 model OrdenTrabajo {
-  id                      String                 @id @default(uuid()) @db.Uuid
-  tenantId                String                 @db.Uuid
+  id                        String                 @id @default(uuid()) @db.Uuid
+  tenantId                  String                 @db.Uuid
   /// UUID estable del comando de creación. Permite devolver la misma OT ante
   /// reintentos luego de una respuesta perdida, sin duplicar taller ni cobros.
-  idempotencyKey          String?                @db.Uuid
+  idempotencyKey            String?                @db.Uuid
   /// "OT-2026-0184" — asignado al crear vía OrdenTrabajoContador.
-  numero                  String
-  clienteId               String?                @db.Uuid
-  vendedorEmpleadoId      String?                @db.Uuid
+  numero                    String
+  clienteId                 String?                @db.Uuid
+  vendedorEmpleadoId        String?                @db.Uuid
   /// Presupuesto de origen (si vino del cotizador).
-  cotizacionId            String?                @db.Uuid
+  cotizacionId              String?                @db.Uuid
   /// 'borrador' | 'pendiente' | 'produccion' | 'finalizada' | 'entregada' |
   /// 'cancelada'. Las cinco primeras son una SECUENCIA que sólo avanza;
   /// 'cancelada' es una salida lateral y terminal.
-  estado                  String                 @default("borrador")
-  fechaEmision            DateTime?
-  fechaEntrega            DateTime?              @db.Date
-  observaciones           String?
+  estado                    String                 @default("borrador")
+  fechaEmision              DateTime?
+  fechaEntrega              DateTime?              @db.Date
+  observaciones             String?
   /// 'mostrador' | 'web' | 'vendedor_externo' | 'telefono'.
-  canalVenta              String?
+  canalVenta                String?
   /// Denormalizados para el listado; la fuente de verdad es items/snapshot.
-  subtotal                Decimal?               @db.Decimal(14, 2)
-  impuestos               Decimal?               @db.Decimal(14, 2)
-  cargosDirectos          Decimal?               @db.Decimal(14, 2)
+  subtotal                  Decimal?               @db.Decimal(14, 2)
+  impuestos                 Decimal?               @db.Decimal(14, 2)
+  cargosDirectos            Decimal?               @db.Decimal(14, 2)
   /// Snapshots de cargos a nivel orden. Null en órdenes históricas.
-  cargosDirectosJson      Json?
+  cargosDirectosJson        Json?
   /// Σ de los descuentos comerciales de los items (sobre el neto), denormalizado
   /// para el listado. El descuento ya está DENTRO de `subtotal`/`total`.
-  descuentoTotal          Decimal?               @db.Decimal(14, 2)
-  total                   Decimal?               @db.Decimal(14, 2)
+  descuentoTotal            Decimal?               @db.Decimal(14, 2)
+  total                     Decimal?               @db.Decimal(14, 2)
   /// Avance 0-100 informado por producción; null = sin dato.
-  progresoPct             Int?
+  progresoPct               Int?
   /// Token aleatorio url-safe del link PÚBLICO de seguimiento del cliente
   /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
   /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
-  publicToken             String?                @unique
+  publicToken               String?                @unique
   /// Primera vez que la orden llegó a 'finalizada'. Ancla del aging de la
   /// deuda COMERCIAL (la deuda nace acá, no en la factura). Reabrir la
   /// orden NO la borra: si vuelve a finalizar, el aging no se resetea.
   /// Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
-  fechaFinalizada         DateTime?
+  fechaFinalizada           DateTime?
+  /// Vencimiento comercial congelado al finalizar. Sin cuenta corriente es
+  /// la misma fecha de finalización; con cuenta corriente suma el plazo
+  /// configurado entonces en el cliente.
+  fechaVencimientoComercial DateTime?              @db.Date
   /// Cuándo se entregó, la PRIMERA vez. Es el ancla del pedido de reseña —"N
   /// días después de la entrega"—, y por eso no se resetea: volver a marcar
   /// entregada una orden que se había reabierto no reinicia el reloj.
@@ -3014,15 +3024,15 @@ model OrdenTrabajo {
   /// Null en todas las órdenes anteriores a este campo, a propósito: sin fecha
   /// no hay pedido de reseña, y así encender la función no dispara un WhatsApp
   /// por cada orden vieja del historial.
-  fechaEntregada          DateTime?
+  fechaEntregada            DateTime?
   /// Denormalizados del eje fiscal y de cobranza, mantenidos en la misma
   /// transacción que sus movimientos (patrón Comprobante.saldoPendiente):
   /// facturadoTotal = Σ ComprobanteOrden.monto de facturas emitidas no
   /// anuladas (las NC restan); cobradoTotal = Σ Cobro.montoBruto no
   /// anulados de la orden. Los estados derivados (sin facturar/parcial/
   /// facturada y sin cobrar/parcial/cobrada) se calculan de acá.
-  facturadoTotal          Decimal                @default(0) @db.Decimal(14, 2)
-  cobradoTotal            Decimal                @default(0) @db.Decimal(14, 2)
+  facturadoTotal            Decimal                @default(0) @db.Decimal(14, 2)
+  cobradoTotal              Decimal                @default(0) @db.Decimal(14, 2)
   /// Tratamiento fiscal de la orden: 'FISCAL' (default, lleva IVA y comprobante
   /// electrónico) | 'SIN_COMPROBANTE' (el desglose oculta el IVA, `total` = neto,
   /// y la orden queda FUERA de la cola de facturar — no se factura por error).
@@ -3031,45 +3041,46 @@ model OrdenTrabajo {
   /// El sistema NO modela la evasión: registra un hecho neutro ("no llevó
   /// comprobante"); declarar o no ese ingreso vive fuera del sistema.
   /// Ver docs/margen-y-decisiones-de-precio.md §6.
-  tratamientoFiscal       String                 @default("FISCAL")
+  tratamientoFiscal         String                 @default("FISCAL")
   /// === Cancelación ===
   /// Cuándo se canceló. Es el "está cancelada" real: `estado` lo dice también,
   /// pero esta fecha es la que ordena y la que permite contar cancelaciones
   /// por período sin adivinar mirando el timeline.
-  canceladaEl             DateTime?
+  canceladaEl               DateTime?
   /// En qué etapa estaba cuando se canceló. Sin esto se pierde la diferencia
   /// entre una que murió en borrador y una que se cortó con el taller a mitad
   /// de camino, que es justo lo que hay que poder mirar después.
-  estadoAlCancelar        String?
+  estadoAlCancelar          String?
   /// Por qué. Obligatorio al cancelar: una orden que desaparece de las ventas
   /// sin explicación es una discusión asegurada tres meses después.
-  motivoCancelacion       String?
-  canceladaPorId          String?                @db.Uuid
+  motivoCancelacion         String?
+  canceladaPorId            String?                @db.Uuid
   /// Nombre CONGELADO de quien canceló: el legajo puede cambiar o borrarse y
   /// el historial no puede quedar sin responsable.
-  canceladaPorNombre      String?
+  canceladaPorNombre        String?
   /// Foto del avance al momento de cancelar: cuántos pasos estaban hechos
   /// sobre el total y cuántos minutos reales se habían trabajado. Es lo que
   /// permite decidir si se le cobra algo al cliente, y queda acá porque los
   /// pasos siguen vivos pero el avance se sigue moviendo si alguien reabre.
-  pasosHechosAlCancelar   Int?
-  pasosTotalAlCancelar    Int?
-  minutosRealesAlCancelar Int?
-  createdAt               DateTime               @default(now())
-  updatedAt               DateTime               @updatedAt
-  tenant                  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente                 Cliente?               @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
-  vendedor                Empleado?              @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
-  cotizacion              Cotizacion?            @relation(fields: [cotizacionId], references: [id])
-  items                   OrdenTrabajoItem[]
-  pasos                   OrdenTrabajoItemPaso[]
-  eventos                 OrdenTrabajoEvento[]
-  cobros                  Cobro[]
-  movimientosFondos       MovimientoFondos[]
-  comprobantes            Comprobante[]
-  comprobanteOrdenes      ComprobanteOrden[]
-  archivos                Archivo[]
-  cuponRedenciones        CuponRedencion[]
+  pasosHechosAlCancelar     Int?
+  pasosTotalAlCancelar      Int?
+  minutosRealesAlCancelar   Int?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+  tenant                    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente                   Cliente?               @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  vendedor                  Empleado?              @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
+  cotizacion                Cotizacion?            @relation(fields: [cotizacionId], references: [id])
+  items                     OrdenTrabajoItem[]
+  pasos                     OrdenTrabajoItemPaso[]
+  eventos                   OrdenTrabajoEvento[]
+  cobros                    Cobro[]
+  aplicacionesCobro         CobroOrden[]
+  movimientosFondos         MovimientoFondos[]
+  comprobantes              Comprobante[]
+  comprobanteOrdenes        ComprobanteOrden[]
+  archivos                  Archivo[]
+  cuponRedenciones          CuponRedencion[]
 
   @@unique([tenantId, numero])
   @@unique([tenantId, idempotencyKey])
@@ -3598,6 +3609,7 @@ model Cobro {
   movimientos               MovimientoFondos[]
   valores                   Valor[]
   imputaciones              CobroImputacion[]
+  aplicacionesOrden         CobroOrden[]
   archivos                  Archivo[]
 
   @@unique([tenantId, idempotencyKey])
@@ -3901,6 +3913,26 @@ model CobroImputacion {
 
   @@unique([cobroId, comprobanteId])
   @@index([tenantId, comprobanteId])
+}
+
+/// Aplicación COMERCIAL de un cobro a una orden. Es distinta de
+/// CobroImputacion, que aplica el mismo dinero a comprobantes fiscales.
+/// Un cobro general de cuenta corriente puede cancelar varias órdenes y el
+/// remanente queda como anticipo del cliente.
+model CobroOrden {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  cobroId   String   @db.Uuid
+  ordenId   String   @db.Uuid
+  monto     Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cobro  Cobro        @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  orden  OrdenTrabajo @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+
+  @@unique([cobroId, ordenId])
+  @@index([tenantId, ordenId])
 }
 
 /// Aplica (parte de) un comprobante a una orden de trabajo. Un comprobante

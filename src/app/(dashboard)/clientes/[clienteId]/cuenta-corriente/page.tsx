@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { CuentaCorrienteView } from "@/components/administracion/cuenta-corriente-view";
-import type { CuentaCorriente } from "@/lib/administracion";
 import { getCuentaCorriente } from "@/lib/administracion-api";
+import { ApiError } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +13,13 @@ export default async function CuentaCorrientePage({
 }) {
   const { clienteId } = await params;
 
-  let cc: CuentaCorriente | null = null;
+  let cc;
   try {
     cc = await getCuentaCorriente(clienteId);
-  } catch {
-    cc = null;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
   }
-
-  if (!cc) notFound();
 
   return <CuentaCorrienteView cc={cc} />;
 }

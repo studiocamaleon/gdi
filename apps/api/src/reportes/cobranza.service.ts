@@ -13,10 +13,11 @@ import { diasDelRango, finExclusivo, type Rango } from './periodo';
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const MS_DIA = 86_400_000;
 
-type FranjaAging = '0-30' | '31-60' | '61-90' | '+90';
-const FRANJAS: FranjaAging[] = ['0-30', '31-60', '61-90', '+90'];
+type FranjaAging = 'A vencer' | '0-30' | '31-60' | '61-90' | '+90';
+const FRANJAS: FranjaAging[] = ['A vencer', '0-30', '31-60', '61-90', '+90'];
 
 function franjaDe(dias: number): FranjaAging {
+  if (dias <= 0) return 'A vencer';
   if (dias <= 30) return '0-30';
   if (dias <= 60) return '31-60';
   if (dias <= 90) return '61-90';
@@ -61,6 +62,7 @@ export class CobranzaService {
           },
           select: {
             fechaFinalizada: true,
+            fechaVencimientoComercial: true,
             total: true,
             cobradoTotal: true,
             clienteId: true,
@@ -69,7 +71,13 @@ export class CobranzaService {
         }),
         // Costo de cobrar: comisiones por método, cobros del rango.
         this.prisma.$queryRaw<
-          Array<{ metodo: string; cantidad: number; bruto: number; comision: number; neto: number }>
+          Array<{
+            metodo: string;
+            cantidad: number;
+            bruto: number;
+            comision: number;
+            neto: number;
+          }>
         >`
           SELECT mp.nombre AS metodo, COUNT(*)::int AS cantidad,
                  COALESCE(SUM(co."montoBruto"), 0)::float8 AS bruto,
@@ -114,7 +122,13 @@ export class CobranzaService {
 
     // ── Aging + deudores ──────────────────────────────────────────────
     const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-    const aging: Record<FranjaAging, number> = { '0-30': 0, '31-60': 0, '61-90': 0, '+90': 0 };
+    const aging: Record<FranjaAging, number> = {
+      'A vencer': 0,
+      '0-30': 0,
+      '31-60': 0,
+      '61-90': 0,
+      '+90': 0,
+    };
     const deudoresMap = new Map<string, Deudor>();
     for (const o of ordenesAbiertas) {
       const saldo = Math.max(
@@ -122,10 +136,10 @@ export class CobranzaService {
         r2(Number(o.total ?? 0) - Number(o.cobradoTotal ?? 0)),
       );
       if (saldo <= 0) continue;
-      const fechaBase = o.fechaFinalizada ?? hoyMid;
-      const dias = Math.max(
-        0,
-        Math.floor((hoyMid.getTime() - fechaBase.getTime()) / MS_DIA),
+      const fechaBase =
+        o.fechaVencimientoComercial ?? o.fechaFinalizada ?? hoyMid;
+      const dias = Math.floor(
+        (hoyMid.getTime() - fechaBase.getTime()) / MS_DIA,
       );
       const franja = franjaDe(dias);
       aging[franja] += saldo;
@@ -137,16 +151,23 @@ export class CobranzaService {
           cliente: o.cliente?.nombre ?? 'Mostrador / sin cliente',
           saldo: 0,
           diasMax: 0,
-          porFranja: { '0-30': 0, '31-60': 0, '61-90': 0, '+90': 0 },
+          porFranja: {
+            'A vencer': 0,
+            '0-30': 0,
+            '31-60': 0,
+            '61-90': 0,
+            '+90': 0,
+          },
         };
         deudoresMap.set(key, d);
       }
       d.saldo += saldo;
-      d.diasMax = Math.max(d.diasMax, dias);
+      d.diasMax = Math.max(d.diasMax, Math.max(0, dias));
       d.porFranja[franja] += saldo;
     }
     const agingTotal = FRANJAS.reduce((a, f) => a + aging[f], 0);
-    const vencido = aging['31-60'] + aging['61-90'] + aging['+90'];
+    const vencido =
+      aging['0-30'] + aging['31-60'] + aging['61-90'] + aging['+90'];
     const deudores = [...deudoresMap.values()]
       .map((d) => ({ ...d, saldo: r2(d.saldo) }))
       .sort((a, b) => b.saldo - a.saldo);
@@ -170,12 +191,20 @@ export class CobranzaService {
       facturado > 0 ? r2((agingTotal / facturado) * diasDelRango(rango)) : null;
 
     // ── Cheques en cartera ────────────────────────────────────────────
-    const chequesPorEstado = new Map<string, { cantidad: number; importe: number; prox: Date | null }>();
+    const chequesPorEstado = new Map<
+      string,
+      { cantidad: number; importe: number; prox: Date | null }
+    >();
     for (const v of chequeRows) {
-      const e = chequesPorEstado.get(v.estado) ?? { cantidad: 0, importe: 0, prox: null };
+      const e = chequesPorEstado.get(v.estado) ?? {
+        cantidad: 0,
+        importe: 0,
+        prox: null,
+      };
       e.cantidad += 1;
       e.importe += Number(v.importe);
-      if (v.fechaPago && (!e.prox || v.fechaPago < e.prox)) e.prox = v.fechaPago;
+      if (v.fechaPago && (!e.prox || v.fechaPago < e.prox))
+        e.prox = v.fechaPago;
       chequesPorEstado.set(v.estado, e);
     }
     const cheques = [...chequesPorEstado.entries()].map(([estado, e]) => ({
@@ -185,7 +214,10 @@ export class CobranzaService {
       proximoVencimiento: e.prox ? e.prox.toISOString().slice(0, 10) : null,
     }));
 
-    const fondos = cuentas.map((c) => ({ cuenta: c.nombre, saldo: r2(Number(c.saldo)) }));
+    const fondos = cuentas.map((c) => ({
+      cuenta: c.nombre,
+      saldo: r2(Number(c.saldo)),
+    }));
 
     return {
       facturado: r2(facturado),

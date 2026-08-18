@@ -251,6 +251,8 @@ export type MovimientoCuentaCorriente = {
   facturado?: number;
   facturadoPct?: number;
   imputaciones?: Array<{ nombre: string; monto: number; resto?: boolean }>;
+  /** Aplicación comercial del cobro a órdenes de trabajo. */
+  aplicaciones?: Array<{ nombre: string; monto: number }>;
 };
 
 export type CuentaCorriente = {
@@ -261,6 +263,7 @@ export type CuentaCorriente = {
     cuit: string | null;
     condicionFiscal: string;
     limiteCredito: number | null;
+    plazoCuentaCorrienteDias: number | null;
     vendedor: string | null;
   };
   /** Positivo = el cliente debe. */

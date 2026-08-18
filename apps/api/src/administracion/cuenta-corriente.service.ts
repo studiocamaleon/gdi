@@ -58,6 +58,7 @@ export class CuentaCorrienteService {
       select: {
         clienteId: true,
         fechaFinalizada: true,
+        fechaVencimientoComercial: true,
         total: true,
         cobradoTotal: true,
         facturadoTotal: true,
@@ -95,7 +96,10 @@ export class CuentaCorrienteService {
       // El aging reusa la mecánica de vencimientos con la fecha de
       // finalización como vencimiento: los días "vencidos" son días
       // desde que la orden está lista.
-      acc.comps.push({ vencimiento: o.fechaFinalizada, saldo: deuda });
+      acc.comps.push({
+        vencimiento: o.fechaVencimientoComercial ?? o.fechaFinalizada,
+        saldo: deuda,
+      });
       acc.total += Number(o.total ?? 0);
       acc.facturado += Number(o.facturadoTotal ?? 0);
       porCliente.set(clave, acc);
@@ -131,6 +135,7 @@ export class CuentaCorrienteService {
         cuit: true,
         condicionFiscal: true,
         limiteCredito: true,
+        plazoCuentaCorrienteDias: true,
       },
     });
     if (!cliente) {
@@ -149,6 +154,7 @@ export class CuentaCorrienteService {
           id: true,
           numero: true,
           fechaFinalizada: true,
+          fechaVencimientoComercial: true,
           total: true,
           cobradoTotal: true,
           facturadoTotal: true,
@@ -165,6 +171,10 @@ export class CuentaCorrienteService {
                 include: { puntoVenta: { select: { numero: true } } },
               },
             },
+          },
+          aplicacionesOrden: {
+            include: { orden: { select: { numero: true } } },
+            orderBy: { createdAt: 'asc' },
           },
         },
       }),
@@ -205,6 +215,7 @@ export class CuentaCorrienteService {
       facturado?: number;
       facturadoPct?: number;
       imputaciones?: Array<{ nombre: string; monto: number; resto?: boolean }>;
+      aplicaciones?: Array<{ nombre: string; monto: number }>;
     };
 
     const movs: Mov[] = [];
@@ -238,6 +249,10 @@ export class CuentaCorrienteService {
         nombre: nombreComp(i.comprobante),
         monto: Number(i.monto),
       }));
+      const aplicaciones = co.aplicacionesOrden.map((a) => ({
+        nombre: a.orden.numero,
+        monto: Number(a.monto),
+      }));
       if (sinImputar > 0 && imputaciones.length > 0) {
         // Lo que no se aplicó a ninguna factura (sólo informativo: la
         // deuda comercial no depende de la imputación fiscal).
@@ -260,6 +275,7 @@ export class CuentaCorrienteService {
         haber: bruto,
         cobroId: co.id,
         imputaciones,
+        aplicaciones,
       });
     }
 
@@ -276,7 +292,10 @@ export class CuentaCorrienteService {
     const saldo = acumulado;
     // El aging corre por orden con saldo, desde su finalización.
     const paraAging: ComprobanteAging[] = ordenes
-      .map((o) => ({ vencimiento: o.fechaFinalizada, saldo: deudaDe(o) }))
+      .map((o) => ({
+        vencimiento: o.fechaVencimientoComercial ?? o.fechaFinalizada,
+        saldo: deudaDe(o),
+      }))
       .filter((c) => c.saldo > 0);
     const aging = calcularAging(paraAging, new Date());
     const pendientes = paraAging.length;
@@ -293,6 +312,7 @@ export class CuentaCorrienteService {
         cuit: cliente.cuit,
         condicionFiscal: cliente.condicionFiscal,
         limiteCredito: limite,
+        plazoCuentaCorrienteDias: cliente.plazoCuentaCorrienteDias,
         vendedor,
       },
       saldo,

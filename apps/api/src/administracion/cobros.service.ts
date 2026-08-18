@@ -96,7 +96,7 @@ export class CobrosService {
       });
       if (existente) return this.findOne(auth, existente.id);
     }
-    const [metodo, cuenta, orden] = await Promise.all([
+    const [metodo, cuenta, orden, cliente] = await Promise.all([
       this.prisma.metodoPago.findFirst({
         where: {
           id: payload.metodoPagoId,
@@ -125,11 +125,29 @@ export class CobrosService {
             },
           })
         : null,
+      payload.clienteId
+        ? this.prisma.cliente.findFirst({
+            where: { id: payload.clienteId, tenantId: auth.tenantId },
+            select: { id: true },
+          })
+        : null,
     ]);
     if (!metodo)
       throw new NotFoundException('No se encontró el método de pago.');
     if (payload.ordenId && !orden) {
       throw new NotFoundException('No se encontró la orden.');
+    }
+    if (payload.clienteId && !cliente) {
+      throw new NotFoundException('No se encontró el cliente.');
+    }
+    if (
+      orden?.clienteId &&
+      payload.clienteId &&
+      orden.clienteId !== payload.clienteId
+    ) {
+      throw new BadRequestException(
+        'La orden y el cobro pertenecen a clientes distintos.',
+      );
     }
     if (orden && orden.estado === 'borrador') {
       throw new BadRequestException(
@@ -368,20 +386,21 @@ export class CobrosService {
           });
         }
 
-        if (orden) {
-          // Eje de cobranza de la orden: denormalizado + matching automático
-          // contra sus facturas emitidas impagas (FIFO). El usuario no
-          // imputa a mano.
-          await this.facturacionOrdenes.recalcularCobrado(
-            tx,
-            auth.tenantId,
-            orden.id,
-          );
-          await this.facturacionOrdenes.matchearCobro(
+        // Eje comercial: un cobro desde cuenta corriente puede cancelar varias
+        // órdenes FIFO. El eje fiscal se matchea aparte contra facturas.
+        const aplicaciones =
+          await this.facturacionOrdenes.aplicarCobroComercial(
             tx,
             auth.tenantId,
             cobro.id,
           );
+        await this.facturacionOrdenes.matchearCobro(
+          tx,
+          auth.tenantId,
+          cobro.id,
+        );
+
+        if (orden) {
           await tx.ordenTrabajoEvento.create({
             data: {
               tenantId: auth.tenantId,
@@ -400,6 +419,25 @@ export class CobrosService {
               },
             },
           });
+        } else {
+          for (const aplicacion of aplicaciones) {
+            await tx.ordenTrabajoEvento.create({
+              data: {
+                tenantId: auth.tenantId,
+                ordenId: aplicacion.ordenId,
+                tipo: 'nota',
+                descripcion: `Cobro de cuenta corriente aplicado: ${formatearMoneda(aplicacion.monto, moneda, { decimales: 0 })} · ${metodo.nombre}`,
+                usuarioNombre,
+                usuarioId: auth.userId,
+                origen: 'usuario',
+                datosJson: {
+                  cobroId: cobro.id,
+                  montoAplicado: aplicacion.monto,
+                  metodo: metodo.nombre,
+                },
+              },
+            });
+          }
         }
 
         // El link del recibo nace con el cobro: el aviso de WhatsApp sale

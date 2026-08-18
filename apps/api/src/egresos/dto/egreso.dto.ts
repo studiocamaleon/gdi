@@ -90,14 +90,17 @@ export class CrearEgresoDto {
   moneda?: string;
 
   @IsNumber()
+  @Min(0)
   neto: number;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   iva?: number;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   otrosImpuestos?: number;
 
   @IsOptional()
@@ -171,14 +174,17 @@ export class EditarEgresoDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   neto?: number;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   iva?: number;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   otrosImpuestos?: number;
 
   @IsOptional()
@@ -218,11 +224,11 @@ export class RetencionPracticadaDto {
   jurisdiccion?: string;
 
   @IsNumber()
-  @Min(0)
+  @Min(0.01)
   base: number;
 
   @IsNumber()
-  @Min(0)
+  @Min(0.001)
   alicuota: number;
 
   @IsNumber()

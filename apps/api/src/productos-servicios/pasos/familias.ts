@@ -350,6 +350,9 @@ const impresion_por_hoja: DefinicionFamilia = {
     'pliegos_impresos',
     'poses_por_pliego',
     'cortes_calculados',
+    // Traza interna: permite que duplicado/triplicado repitan la misma
+    // imposición de talonario sin volver a publicar sus pilas.
+    'talonario_modo_incompleto',
     'talonario_pilas',
     'pliego_impresion_ancho_mm',
     'pliego_impresion_alto_mm',

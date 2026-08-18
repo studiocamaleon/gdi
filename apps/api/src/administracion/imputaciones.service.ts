@@ -7,6 +7,7 @@ import {
 import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImputarCobroDto } from './dto/comprobante.dto';
+import { ejecutarTransaccionFondos } from './fondos-ledger';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -27,7 +28,7 @@ export class ImputacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async imputar(auth: CurrentAuth, cobroId: string, payload: ImputarCobroDto) {
-    return this.prisma.$transaction(async (tx) => {
+    return ejecutarTransaccionFondos(this.prisma, async (tx) => {
       const cobro = await tx.cobro.findFirst({
         where: { id: cobroId, tenantId: auth.tenantId },
         include: { imputaciones: true },
@@ -45,7 +46,7 @@ export class ImputacionesService {
           `No existe el comprobante ${payload.comprobanteId}`,
         );
       }
-      if (comprobante.estado !== 'emitido') {
+      if (comprobante.estado !== 'emitido' || comprobante.anuladoEl) {
         throw new BadRequestException(
           'Sólo se puede imputar un cobro a un comprobante emitido.',
         );
@@ -92,6 +93,23 @@ export class ImputacionesService {
         );
       }
 
+      // El decremento condicional es la segunda barrera además del aislamiento
+      // serializable: jamás persiste un saldo negativo aunque otro proceso
+      // haya consumido la factura entre la lectura y la escritura.
+      const actualizado = await tx.comprobante.updateMany({
+        where: {
+          id: payload.comprobanteId,
+          tenantId: auth.tenantId,
+          saldoPendiente: { gte: payload.monto },
+        },
+        data: { saldoPendiente: { decrement: payload.monto } },
+      });
+      if (actualizado.count !== 1) {
+        throw new ConflictException(
+          'El saldo del comprobante cambió mientras se aplicaba el cobro. Revisalo e intentá nuevamente.',
+        );
+      }
+
       const imputacion = await tx.cobroImputacion.create({
         data: {
           tenantId: auth.tenantId,
@@ -99,11 +117,6 @@ export class ImputacionesService {
           comprobanteId: payload.comprobanteId,
           monto: payload.monto,
         },
-      });
-
-      await tx.comprobante.update({
-        where: { id: payload.comprobanteId },
-        data: { saldoPendiente: r2(saldo - payload.monto) },
       });
 
       return {
@@ -118,7 +131,7 @@ export class ImputacionesService {
   }
 
   async quitar(auth: CurrentAuth, imputacionId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return ejecutarTransaccionFondos(this.prisma, async (tx) => {
       const imp = await tx.cobroImputacion.findFirst({
         where: { id: imputacionId, tenantId: auth.tenantId },
         include: { comprobante: true },
@@ -129,11 +142,7 @@ export class ImputacionesService {
       await tx.cobroImputacion.delete({ where: { id: imputacionId } });
       await tx.comprobante.update({
         where: { id: imp.comprobanteId },
-        data: {
-          saldoPendiente: r2(
-            Number(imp.comprobante.saldoPendiente) + Number(imp.monto),
-          ),
-        },
+        data: { saldoPendiente: { increment: Number(imp.monto) } },
       });
       return { ok: true };
     });
