@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { MotorUniversalService } from './motor.service';
-import { CotizarDto } from './cotizar.dto';
+import { CotizarDto, RecotizarItemDto } from './cotizar.dto';
 import type { CotizarOutput } from './tipos';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
@@ -60,10 +60,8 @@ export class MotorUniversalController {
    * Si se pasa cotizacionId, agrega item a esa cotización; sino crea una nueva.
    */
   @Post('cotizar-y-guardar')
-  async cotizarYGuardar(
-    @Body() dto: CotizarDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  @Permiso('comercial.gestionar')
+  async cotizarYGuardar(@Body() dto: CotizarDto, @Req() req: RequestWithAuth) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) {
       throw new UnauthorizedException(
@@ -84,13 +82,10 @@ export class MotorUniversalController {
   }
 
   @Patch('cotizacion-items/:id/recotizar')
+  @Permiso('comercial.gestionar')
   async recotizarItem(
     @Param('id') id: string,
-    @Body()
-    dto: Pick<
-      CotizarDto,
-      'jobContext' | 'rutaAlternativaId' | 'clienteId' | 'periodo' | 'descuento'
-    >,
+    @Body() dto: RecotizarItemDto,
     @Req() req: RequestWithAuth,
   ) {
     const tenantId = req.auth?.tenantId;

@@ -6,6 +6,7 @@ import { EgresosService } from '../egresos.service';
 import { estadoPorPagado, incideEnResultado } from '../egresos.types';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentAuth } from '../../auth/auth.types';
+import { claveInstrumentoValor } from '../../administracion/valor-identidad';
 
 /**
  * Egresos y Cuentas por pagar (F1). Corre contra gdi_saas_test con fixtures
@@ -29,6 +30,7 @@ describe('EgresosService', () => {
   let tenantId: string;
   let auth: CurrentAuth;
   let cuentaId: string;
+  let cuentaChequeId: string;
   let metodoPagoId: string;
   let metodoChequeId: string;
   let proveedorId: string;
@@ -55,9 +57,20 @@ describe('EgresosService', () => {
     } as CurrentAuth;
 
     const cuenta = await prisma.cuentaFondos.create({
-      data: { tenantId, tipo: 'caja', nombre: 'Caja test', saldo: 1_000_000 },
+      // La suite acumula pagos entre casos; el fondo amplio mantiene el foco
+      // de estos tests en egresos y deja el sobregiro a tesoreria-operativa.
+      data: { tenantId, tipo: 'caja', nombre: 'Caja test', saldo: 100_000_000 },
     });
     cuentaId = cuenta.id;
+    const cuentaCheque = await prisma.cuentaFondos.create({
+      data: {
+        tenantId,
+        tipo: 'banco',
+        nombre: 'Banco test',
+        saldo: 100_000_000,
+      },
+    });
+    cuentaChequeId = cuentaCheque.id;
     const metodo = await prisma.metodoPago.create({
       data: {
         tenantId,
@@ -119,9 +132,9 @@ describe('EgresosService', () => {
     return String(10_000 + seq);
   };
 
-  const saldoCuenta = async () => {
+  const saldoCuenta = async (id = cuentaId) => {
     const c = await prisma.cuentaFondos.findUniqueOrThrow({
-      where: { id: cuentaId },
+      where: { id },
       select: { saldo: true },
     });
     return Number(c.saldo);
@@ -498,11 +511,11 @@ describe('EgresosService', () => {
         puntoVenta: '0005',
         numeroComprobante: nroDoc(),
       });
-      const saldoAntes = await saldoCuenta();
+      const saldoAntes = await saldoCuenta(cuentaChequeId);
 
       const pago = await service.registrarPago(auth, {
         metodoPagoId: metodoChequeId,
-        cuentaOrigenId: cuentaId,
+        cuentaOrigenId: cuentaChequeId,
         imputaciones: [{ egresoId: id, monto: 200_000 }],
         cheque: {
           numero: '00012345',
@@ -516,7 +529,7 @@ describe('EgresosService', () => {
       const egreso = await prisma.egreso.findUniqueOrThrow({ where: { id } });
       expect(egreso.estado).toBe('pagado');
       // La plata NO salió: el cheque está en cartera.
-      expect(await saldoCuenta()).toBe(saldoAntes);
+      expect(await saldoCuenta(cuentaChequeId)).toBe(saldoAntes);
       const movs = await prisma.movimientoFondos.count({
         where: { tenantId, pagoId: pago.id },
       });
@@ -526,7 +539,7 @@ describe('EgresosService', () => {
         where: { tenantId, numero: '00012345' },
       });
       expect(valor.origen).toBe('propio');
-      expect(valor.estado).toBe('cartera');
+      expect(valor.estado).toBe('emitido');
       expect(valor.proveedorId).toBe(proveedorId);
     });
 
@@ -550,6 +563,31 @@ describe('EgresosService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    it('no permite emitir un cheque propio desde caja o billetera', async () => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Cheque desde cuenta incorrecta',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-09-30',
+        neto: 5_000,
+        tipoComprobante: 'FA',
+        puntoVenta: '0005',
+        numeroComprobante: nroDoc(),
+      });
+      await expect(
+        service.registrarPago(auth, {
+          metodoPagoId: metodoChequeId,
+          cuentaOrigenId: cuentaId,
+          imputaciones: [{ egresoId: id, monto: 5_000 }],
+          cheque: {
+            numero: 'CTA-INCORRECTA',
+            banco: 'Galicia',
+            formato: 'echeq',
+          },
+        }),
+      ).rejects.toThrow(/cuenta bancaria/i);
+    });
+
     it('anular el pago con cheque en cartera lo da de baja, sin contramovimiento', async () => {
       const { id } = await service.crear(auth, {
         descripcion: 'Cheque a anular',
@@ -564,7 +602,7 @@ describe('EgresosService', () => {
       const saldoAntes = await saldoCuenta();
       const pago = await service.registrarPago(auth, {
         metodoPagoId: metodoChequeId,
-        cuentaOrigenId: cuentaId,
+        cuentaOrigenId: cuentaChequeId,
         imputaciones: [{ egresoId: id, monto: 70_000 }],
         cheque: { numero: '00099999', banco: 'Nación', formato: 'fisico' },
       });
@@ -582,7 +620,65 @@ describe('EgresosService', () => {
       const valor = await prisma.valor.findFirstOrThrow({
         where: { tenantId, numero: '00099999' },
       });
-      expect(valor.estado).toBe('rechazado');
+      expect(valor.estado).toBe('anulado');
+    });
+
+    it('un rechazo reabre la deuda y revierte el débito bancario sin borrar movimientos', async () => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Cheque bancario rechazado',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-09-30',
+        neto: 85_000,
+        tipoComprobante: 'FA',
+        puntoVenta: '0006',
+        numeroComprobante: nroDoc(),
+      });
+      const saldoAntes = await saldoCuenta(cuentaChequeId);
+      const pago = await service.registrarPago(auth, {
+        metodoPagoId: metodoChequeId,
+        cuentaOrigenId: cuentaChequeId,
+        imputaciones: [{ egresoId: id, monto: 85_000 }],
+        cheque: {
+          numero: 'RECH-0001',
+          banco: 'Galicia',
+          formato: 'echeq',
+        },
+      });
+      const valor = await prisma.valor.findFirstOrThrow({
+        where: { tenantId, numero: 'RECH-0001' },
+      });
+
+      await service.debitarValor(auth, valor.id, {
+        idempotencyKey: randomUUID(),
+      });
+      expect(await saldoCuenta(cuentaChequeId)).toBe(saldoAntes - 85_000);
+
+      await service.rechazarValorPropio(auth, valor.id, {
+        motivo: 'Fondos insuficientes informados por el banco',
+        idempotencyKey: randomUUID(),
+      });
+
+      const [egreso, pagoRechazado, valorRechazado, movimientos, eventos] =
+        await Promise.all([
+          prisma.egreso.findUniqueOrThrow({ where: { id } }),
+          prisma.pago.findUniqueOrThrow({ where: { id: pago.id } }),
+          prisma.valor.findUniqueOrThrow({ where: { id: valor.id } }),
+          prisma.movimientoFondos.findMany({
+            where: { tenantId, valorId: valor.id },
+          }),
+          prisma.valorEvento.findMany({ where: { valorId: valor.id } }),
+        ]);
+      expect(egreso.estado).toBe('pendiente');
+      expect(Number(egreso.pagadoTotal)).toBe(0);
+      expect(pagoRechazado.anuladoEl).not.toBeNull();
+      expect(valorRechazado.estado).toBe('rechazado');
+      expect(await saldoCuenta(cuentaChequeId)).toBe(saldoAntes);
+      expect(movimientos.map((movimiento) => movimiento.tipo).sort()).toEqual([
+        'entrada',
+        'salida',
+      ]);
+      expect(eventos.map((evento) => evento.tipo)).toContain('rechazado');
     });
   });
 
@@ -609,6 +705,7 @@ describe('EgresosService', () => {
           modalidad: 'diferido',
           numero,
           banco: 'Nación',
+          claveInstrumento: claveInstrumentoValor('tercero', 'Nación', numero),
           importe,
           moneda: 'ARS',
           fechaPago: new Date('2026-12-15'),
@@ -635,7 +732,6 @@ describe('EgresosService', () => {
 
       const pago = await service.registrarPago(auth, {
         metodoPagoId: metodoChequeId,
-        cuentaOrigenId: cuentaId,
         imputaciones: [{ egresoId: id, monto: 150_000 }],
         valorId: valor.id,
       });
@@ -647,6 +743,7 @@ describe('EgresosService', () => {
         where: { id: valor.id },
       });
       expect(despues.estado).toBe('endosado');
+      expect(despues.endosadoEl).not.toBeNull();
       // A quién se lo dimos: sin esto la cartera no sabe dónde fue.
       expect(despues.proveedorId).toBe(proveedorId);
 
@@ -657,6 +754,12 @@ describe('EgresosService', () => {
           where: { tenantId, pagoId: pago.id },
         }),
       ).toBe(0);
+      const [pagoGuardado, eventos] = await Promise.all([
+        prisma.pago.findUniqueOrThrow({ where: { id: pago.id } }),
+        prisma.valorEvento.findMany({ where: { valorId: valor.id } }),
+      ]);
+      expect(pagoGuardado.cuentaOrigenId).toBeNull();
+      expect(eventos.map((evento) => evento.tipo)).toContain('endosado');
     });
 
     /** Un cheque no se parte: o cubre el pago exacto o no sirve. */
@@ -754,9 +857,14 @@ describe('EgresosService', () => {
           modalidad: 'comun',
           numero: 'END-0004',
           banco: 'Galicia',
+          claveInstrumento: claveInstrumentoValor(
+            'propio',
+            'Galicia',
+            'END-0004',
+          ),
           importe: 50_000,
           moneda: 'ARS',
-          estado: 'cartera',
+          estado: 'emitido',
         },
       });
       const { id } = await facturaDe(50_000);
@@ -808,17 +916,27 @@ describe('EgresosService', () => {
       });
       expect(devuelto.estado).toBe('cartera');
       expect(devuelto.proveedorId).toBeNull();
+      expect(devuelto.endosadoEl).toBeNull();
+
+      const eventos = await prisma.valorEvento.findMany({
+        where: { valorId: valor.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(eventos.map((evento) => evento.tipo)).toEqual([
+        'endosado',
+        'endoso_revertido',
+      ]);
 
       const egreso = await prisma.egreso.findUniqueOrThrow({ where: { id } });
       expect(egreso.estado).toBe('pendiente');
     });
 
-    /** El propio, en cambio, sí queda rechazado: lo emitimos para ese pago. */
-    it('al anular, el cheque PROPIO queda rechazado y no vuelve a cartera', async () => {
+    /** El propio queda anulado: no se confunde con un rechazo del banco. */
+    it('al anular, el cheque PROPIO queda anulado y no vuelve a cartera', async () => {
       const { id } = await facturaDe(30_000);
       const pago = await service.registrarPago(auth, {
         metodoPagoId: metodoChequeId,
-        cuentaOrigenId: cuentaId,
+        cuentaOrigenId: cuentaChequeId,
         imputaciones: [{ egresoId: id, monto: 30_000 }],
         cheque: { numero: 'END-0007', banco: 'Galicia', formato: 'echeq' },
       });
@@ -827,7 +945,7 @@ describe('EgresosService', () => {
       const valor = await prisma.valor.findFirstOrThrow({
         where: { tenantId, numero: 'END-0007' },
       });
-      expect(valor.estado).toBe('rechazado');
+      expect(valor.estado).toBe('anulado');
     });
 
     it('la cartera sólo ofrece cheques de tercero disponibles', async () => {
@@ -869,8 +987,9 @@ describe('EgresosService', () => {
       const suma = cuotas.reduce((acc, c) => acc + Number(c.total), 0);
       expect(Math.round(suma * 100) / 100).toBe(100_000);
       // Un vencimiento por mes.
-      expect(cuotas.map((c) => c.fechaVencimiento?.toISOString().slice(0, 10)))
-        .toEqual(['2026-09-10', '2026-10-10', '2026-11-10']);
+      expect(
+        cuotas.map((c) => c.fechaVencimiento?.toISOString().slice(0, 10)),
+      ).toEqual(['2026-09-10', '2026-10-10', '2026-11-10']);
       expect(cuotas[0].descripcion).toContain('cuota 1/3');
     });
 
@@ -959,9 +1078,9 @@ describe('EgresosService', () => {
       const fila = r.proveedores.find((p) => p.proveedorId === prov.id);
       expect(fila).toBeDefined();
       for (const [tramo, , monto] of casos) {
-        expect({ [tramo]: fila!.aging[tramo as keyof typeof fila.aging] }).toEqual(
-          { [tramo]: monto },
-        );
+        expect({
+          [tramo]: fila!.aging[tramo as keyof typeof fila.aging],
+        }).toEqual({ [tramo]: monto });
       }
       expect(fila!.total).toBe(15_000);
       // El KPI de riesgo son los dos tramos más viejos.
@@ -1010,9 +1129,9 @@ describe('EgresosService', () => {
       const id = await crearPagado(20_000);
       await service.editar(auth, id, { fechaCompetencia: '2026-01-31' });
       const listado = await service.listar(auth, {});
-      expect(
-        listado.egresos.find((x) => x.id === id)?.fechaCompetencia,
-      ).toBe('2026-01-31');
+      expect(listado.egresos.find((x) => x.id === id)?.fechaCompetencia).toBe(
+        '2026-01-31',
+      );
     });
 
     it('NO deja tocar el importe: rompería pagadoTotal <= total', async () => {

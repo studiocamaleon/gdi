@@ -32,10 +32,22 @@ import type {
   AnularDto,
   CrearCategoriaEgresoDto,
   CrearEgresoDto,
+  DebitarValorDto,
   EditarCategoriaEgresoDto,
   EditarEgresoDto,
+  RechazarValorPropioDto,
   RegistrarPagoDto,
 } from './dto/egreso.dto';
+import {
+  ejecutarTransaccionFondos,
+  registrarMovimientoFondos,
+  resolverActorFondos,
+} from '../administracion/fondos-ledger';
+import {
+  bancoValorNormalizado,
+  claveInstrumentoValor,
+  numeroValorNormalizado,
+} from '../administracion/valor-identidad';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const dec = (v: Prisma.Decimal | null | undefined) => (v ? Number(v) : 0);
@@ -128,10 +140,11 @@ export class EgresosService {
     });
     const negocio = tenant?.nombre ?? 'Mi imprenta';
     const empresa = await this.empresa.paraDocumentos(auth.tenantId);
-    const cuentaTexto =
-      [pago.cuentaOrigen.banco ?? pago.cuentaOrigen.nombre]
-        .filter(Boolean)
-        .join(' · ') || null;
+    const cuentaTexto = pago.cuentaOrigen
+      ? [pago.cuentaOrigen.banco ?? pago.cuentaOrigen.nombre]
+          .filter(Boolean)
+          .join(' · ') || null
+      : 'Cheque endosado desde cartera';
 
     const doc: OrdenPagoDoc = {
       numero: pago.numero,
@@ -862,10 +875,74 @@ export class EgresosService {
     if (dto.imputaciones.length === 0) {
       throw new BadRequestException('Indicá qué egresos estás pagando.');
     }
+    if (dto.idempotencyKey) {
+      const existente = await this.prisma.pago.findUnique({
+        where: {
+          tenantId_idempotencyKey: {
+            tenantId: auth.tenantId,
+            idempotencyKey: dto.idempotencyKey,
+          },
+        },
+      });
+      if (existente) {
+        return {
+          id: existente.id,
+          numero: existente.numero,
+          montoBruto: dec(existente.montoBruto),
+          retencionesTotal: dec(existente.retencionesTotal),
+          montoNeto: dec(existente.montoNeto),
+          enCartera: Boolean(existente.valorId),
+        };
+      }
+    }
     const registradoPor = await this.nombreActor(auth);
-    return this.prisma.$transaction((tx) =>
-      this.registrarPagoEnTx(tx, auth, dto, registradoPor),
-    );
+    try {
+      return await ejecutarTransaccionFondos(this.prisma, (tx) =>
+        this.registrarPagoEnTx(tx, auth, dto, registradoPor),
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        JSON.stringify(error.meta?.target).includes('claveInstrumento')
+      ) {
+        throw new ConflictException(
+          'Ese cheque/eCheq ya fue registrado. Revisá el número y el banco.',
+        );
+      }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        JSON.stringify(error.meta?.target).includes('valorId')
+      ) {
+        throw new ConflictException(
+          'Ese cheque/eCheq ya está asociado a otra orden de pago.',
+        );
+      }
+      if (
+        dto.idempotencyKey &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existente = await this.prisma.pago.findUniqueOrThrow({
+          where: {
+            tenantId_idempotencyKey: {
+              tenantId: auth.tenantId,
+              idempotencyKey: dto.idempotencyKey,
+            },
+          },
+        });
+        return {
+          id: existente.id,
+          numero: existente.numero,
+          montoBruto: dec(existente.montoBruto),
+          retencionesTotal: dec(existente.retencionesTotal),
+          montoNeto: dec(existente.montoNeto),
+          enCartera: Boolean(existente.valorId),
+        };
+      }
+      throw error;
+    }
   }
 
   /**
@@ -878,6 +955,26 @@ export class EgresosService {
     dto: RegistrarPagoDto,
     registradoPor: string,
   ) {
+    if (dto.idempotencyKey) {
+      const existente = await tx.pago.findUnique({
+        where: {
+          tenantId_idempotencyKey: {
+            tenantId: auth.tenantId,
+            idempotencyKey: dto.idempotencyKey,
+          },
+        },
+      });
+      if (existente) {
+        return {
+          id: existente.id,
+          numero: existente.numero,
+          montoBruto: dec(existente.montoBruto),
+          retencionesTotal: dec(existente.retencionesTotal),
+          montoNeto: dec(existente.montoNeto),
+          enCartera: Boolean(existente.valorId),
+        };
+      }
+    }
     const metodo = await tx.metodoPago.findFirst({
       where: { id: dto.metodoPagoId, tenantId: auth.tenantId },
       select: { id: true, nombre: true, tipo: true },
@@ -902,11 +999,41 @@ export class EgresosService {
         'Los datos del cheque sólo aplican a un método de tipo cheque.',
       );
     }
-    const cuenta = await tx.cuentaFondos.findFirst({
-      where: { id: dto.cuentaOrigenId, tenantId: auth.tenantId },
-      select: { id: true, nombre: true, moneda: true },
-    });
-    if (!cuenta) throw new NotFoundException('Esa cuenta no existe.');
+    const modalidadChequePropio = dto.cheque
+      ? (dto.cheque.modalidad ?? (dto.cheque.fechaPago ? 'diferido' : 'comun'))
+      : null;
+    if (modalidadChequePropio === 'diferido' && !dto.cheque?.fechaPago) {
+      throw new BadRequestException(
+        'Un cheque diferido requiere su fecha de pago.',
+      );
+    }
+    if (modalidadChequePropio === 'comun' && dto.cheque?.fechaPago) {
+      throw new BadRequestException(
+        'Un cheque común no lleva fecha de pago diferida.',
+      );
+    }
+    const esEndoso = esCheque && Boolean(dto.valorId);
+    const cuenta = dto.cuentaOrigenId
+      ? await tx.cuentaFondos.findFirst({
+          where: {
+            id: dto.cuentaOrigenId,
+            tenantId: auth.tenantId,
+            activo: true,
+          },
+          select: { id: true, nombre: true, moneda: true, tipo: true },
+        })
+      : null;
+    if (dto.cuentaOrigenId && !cuenta) {
+      throw new NotFoundException('Esa cuenta no existe.');
+    }
+    if (!esEndoso && !cuenta) {
+      throw new BadRequestException('Elegí la cuenta de origen del pago.');
+    }
+    if (esCheque && dto.cheque && cuenta?.tipo !== 'banco') {
+      throw new BadRequestException(
+        'Un cheque propio debe emitirse desde una cuenta bancaria.',
+      );
+    }
 
     const egresos = await tx.egreso.findMany({
       where: {
@@ -927,6 +1054,7 @@ export class EgresosService {
     if (egresos.length !== dto.imputaciones.length) {
       throw new NotFoundException('Alguno de los egresos no existe.');
     }
+    const monedaPago = esEndoso ? egresos[0]!.moneda : cuenta!.moneda;
     const porId = new Map(egresos.map((e) => [e.id, e]));
 
     for (const imp of dto.imputaciones) {
@@ -942,9 +1070,11 @@ export class EgresosService {
           `${e.numero} debe $${saldo.toLocaleString('es-AR')} y estás imputando $${r2(imp.monto).toLocaleString('es-AR')}.`,
         );
       }
-      if (e.moneda !== cuenta.moneda) {
+      if (e.moneda !== monedaPago) {
         throw new BadRequestException(
-          `${e.numero} está en ${e.moneda} y la cuenta en ${cuenta.moneda}. Pagá desde una cuenta en ${e.moneda}.`,
+          esEndoso
+            ? `${e.numero} está en ${e.moneda} y el cheque en otra moneda.`
+            : `${e.numero} está en ${e.moneda} y la cuenta en ${cuenta!.moneda}. Pagá desde una cuenta en ${e.moneda}.`,
         );
       }
     }
@@ -984,15 +1114,16 @@ export class EgresosService {
         numero,
         fecha,
         metodoPagoId: metodo.id,
-        cuentaOrigenId: cuenta.id,
+        cuentaOrigenId: esEndoso ? null : (cuenta?.id ?? null),
         montoBruto,
         retencionesTotal,
         montoNeto,
-        moneda: cuenta.moneda,
+        moneda: monedaPago,
         proveedorId: [...proveedorIds][0] ?? null,
         referencia: dto.referencia?.trim() || null,
         registradoPorNombre: registradoPor,
         notas: dto.notas?.trim() || null,
+        idempotencyKey: dto.idempotencyKey ?? null,
         retenciones: {
           create: retenciones.map((r) => ({
             tenantId: auth.tenantId,
@@ -1036,7 +1167,7 @@ export class EgresosService {
         : `Pago ${numero} · ${egresos[0].beneficiarioNombre} (${egresos.length} egresos)`;
 
     if (esCheque && dto.cheque) {
-      // El cheque va a CARTERA: la factura queda saldada pero la cuenta no se
+      // El cheque queda EMITIDO: la factura queda saldada pero la cuenta no se
       // toca hasta que el banco lo debite. Registrar la salida acá haría ver
       // un saldo que todavía existe como menor de lo que es.
       const valor = await tx.valor.create({
@@ -1044,18 +1175,25 @@ export class EgresosService {
           tenantId: auth.tenantId,
           origen: 'propio',
           formato: dto.cheque.formato,
-          modalidad: dto.cheque.fechaPago ? 'diferido' : 'comun',
-          numero: dto.cheque.numero.trim(),
-          banco: dto.cheque.banco.trim(),
+          modalidad: modalidadChequePropio!,
+          numero: numeroValorNormalizado(dto.cheque.numero),
+          banco: bancoValorNormalizado(dto.cheque.banco),
+          claveInstrumento: claveInstrumentoValor(
+            'propio',
+            dto.cheque.banco,
+            dto.cheque.numero,
+          ),
+          identificadorBancario:
+            dto.cheque.identificadorBancario?.trim() || null,
           importe: montoNeto,
-          moneda: cuenta.moneda,
+          moneda: cuenta!.moneda,
           fechaEmision: dto.cheque.fechaEmision
             ? new Date(dto.cheque.fechaEmision)
             : fecha,
           fechaPago: dto.cheque.fechaPago
             ? new Date(dto.cheque.fechaPago)
             : null,
-          estado: 'cartera',
+          estado: 'emitido',
           proveedorId: [...proveedorIds][0] ?? null,
         },
       });
@@ -1064,6 +1202,22 @@ export class EgresosService {
       await tx.pago.update({
         where: { id: pago.id },
         data: { valorId: valor.id },
+      });
+      await tx.valorEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          valorId: valor.id,
+          tipo: 'emitido',
+          actorUserId: auth.userId,
+          actorNombre: registradoPor,
+          detalleJson: {
+            pagoId: pago.id,
+            pagoNumero: pago.numero,
+            proveedorId: [...proveedorIds][0] ?? null,
+            proveedorNombre: egresos[0]?.beneficiarioNombre ?? null,
+            cuentaId: cuenta!.id,
+          },
+        },
       });
     } else if (esCheque && dto.valorId) {
       /*
@@ -1099,46 +1253,66 @@ export class EgresosService {
           `El cheque es de ${dec(valor.importe)} y estás pagando ${montoNeto}. Un cheque se endosa por su importe exacto.`,
         );
       }
-      if (valor.moneda !== cuenta.moneda) {
+      if (valor.moneda !== monedaPago) {
         throw new BadRequestException(
-          `El cheque está en ${valor.moneda} y el pago en ${cuenta.moneda}.`,
+          `El cheque está en ${valor.moneda} y el pago en ${monedaPago}.`,
         );
       }
 
-      await tx.valor.update({
-        where: { id: valor.id },
+      const actualizado = await tx.valor.updateMany({
+        where: {
+          id: valor.id,
+          tenantId: auth.tenantId,
+          estado: 'cartera',
+        },
         data: {
           estado: 'endosado',
+          endosadoEl: fecha,
           // A quién se lo endosamos: sin esto la cartera no sabe dónde fue.
           proveedorId: [...proveedorIds][0] ?? null,
         },
       });
+      if (actualizado.count === 0) {
+        throw new ConflictException(
+          'Ese cheque fue operado por otro usuario y ya no está en cartera.',
+        );
+      }
       await tx.pago.update({
         where: { id: pago.id },
         data: { valorId: valor.id },
       });
+      await tx.valorEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          valorId: valor.id,
+          tipo: 'endosado',
+          actorUserId: auth.userId,
+          actorNombre: registradoPor,
+          detalleJson: {
+            fecha: fecha.toISOString(),
+            pagoId: pago.id,
+            pagoNumero: pago.numero,
+            proveedorId: [...proveedorIds][0] ?? null,
+            proveedorNombre: egresos[0]?.beneficiarioNombre ?? null,
+          },
+        },
+      });
     } else {
       // La plata sale YA, y sale el NETO: lo retenido no se le paga al
       // proveedor, se deposita al fisco.
-      const cuentaAct = await tx.cuentaFondos.update({
-        where: { id: cuenta.id },
-        data: { saldo: { decrement: montoNeto } },
-      });
-      await tx.movimientoFondos.create({
-        data: {
-          tenantId: auth.tenantId,
-          cuentaId: cuenta.id,
-          fecha,
-          tipo: 'salida',
-          monto: montoNeto,
-          concepto:
-            retencionesTotal > 0
-              ? `${concepto} · neto de retenciones`
-              : concepto,
-          origenTipo: 'pago',
-          pagoId: pago.id,
-          saldoPosterior: Number(cuentaAct.saldo),
-        },
+      await registrarMovimientoFondos(tx, {
+        tenantId: auth.tenantId,
+        cuentaId: cuenta!.id,
+        fecha,
+        tipo: 'salida',
+        monto: montoNeto,
+        concepto:
+          retencionesTotal > 0 ? `${concepto} · neto de retenciones` : concepto,
+        origenTipo: 'pago',
+        pagoId: pago.id,
+        actor: { userId: auth.userId, nombre: registradoPor },
+        referencia: dto.referencia,
+        notas: dto.notas,
       });
     }
 
@@ -1165,14 +1339,15 @@ export class EgresosService {
    * historial — se intentó y falló, y eso es información.
    */
   async anularPago(auth: CurrentAuth, id: string, dto: AnularDto) {
-    return this.prisma.$transaction(async (tx) => {
+    const actor = await resolverActorFondos(this.prisma, auth);
+    return ejecutarTransaccionFondos(this.prisma, async (tx) => {
       const pago = await tx.pago.findFirst({
         where: { id, tenantId: auth.tenantId },
         include: { imputaciones: true },
       });
       if (!pago) throw new NotFoundException('No encontramos ese pago.');
       if (pago.anuladoEl) {
-        throw new ConflictException('Ese pago ya está anulado.');
+        return { ok: true, idempotente: true };
       }
 
       for (const imp of pago.imputaciones) {
@@ -1197,22 +1372,28 @@ export class EgresosService {
         where: { tenantId: auth.tenantId, pagoId: pago.id, tipo: 'salida' },
       });
       if (salioDeLaCuenta > 0) {
-        const cuentaAct = await tx.cuentaFondos.update({
-          where: { id: pago.cuentaOrigenId },
-          data: { saldo: { increment: monto } },
+        if (!pago.cuentaOrigenId) {
+          throw new ConflictException(
+            'El pago tiene movimientos pero no conserva su cuenta de origen.',
+          );
+        }
+        const original = await tx.movimientoFondos.findFirst({
+          where: { tenantId: auth.tenantId, pagoId: pago.id, tipo: 'salida' },
+          orderBy: { createdAt: 'asc' },
         });
-        await tx.movimientoFondos.create({
-          data: {
-            tenantId: auth.tenantId,
-            cuentaId: pago.cuentaOrigenId,
-            fecha: new Date(),
-            tipo: 'entrada',
-            monto,
-            concepto: `Anulación del pago ${pago.numero}: ${dto.motivo.trim()}`,
-            origenTipo: 'pago',
-            pagoId: pago.id,
-            saldoPosterior: Number(cuentaAct.saldo),
-          },
+        await registrarMovimientoFondos(tx, {
+          tenantId: auth.tenantId,
+          cuentaId: pago.cuentaOrigenId,
+          fecha: new Date(),
+          tipo: 'entrada',
+          monto,
+          concepto: `Anulación del pago ${pago.numero}: ${dto.motivo.trim()}`,
+          origenTipo: 'pago',
+          pagoId: pago.id,
+          actor,
+          reversionDeId: original?.id ?? null,
+          notas: dto.motivo,
+          estadoConciliacion: 'diferencia',
         });
       }
       // Si se pagó con cheque, la plata nunca salió: lo que hay que deshacer
@@ -1227,13 +1408,13 @@ export class EgresosService {
           Deshacer el pago con cheque NO es lo mismo según de quién sea:
 
           · PROPIO — lo emitimos nosotros para este pago. Si el pago se cae, el
-            cheque no tiene por qué existir: queda rechazado.
+            cheque queda anulado; no se confunde con un rechazo bancario.
           · ENDOSADO — es de un tercero y entró por un cobro. El pago se cae
             pero el cheque sigue siendo nuestro: VUELVE A CARTERA para poder
             usarlo en otra cosa. Marcarlo rechazado lo haría desaparecer de la
             cartera y perderíamos plata cobrada.
         */
-        const enJuego = valor?.origen === 'tercero' ? 'endosado' : 'cartera';
+        const enJuego = valor?.origen === 'tercero' ? 'endosado' : 'emitido';
         if (valor && valor.estado !== enJuego) {
           throw new ConflictException(
             valor.origen === 'tercero'
@@ -1245,8 +1426,30 @@ export class EgresosService {
           where: { id: pago.valorId },
           data:
             valor?.origen === 'tercero'
-              ? { estado: 'cartera', proveedorId: null }
-              : { estado: 'rechazado', motivoRechazo: dto.motivo.trim() },
+              ? {
+                  estado: 'cartera',
+                  proveedorId: null,
+                  endosadoEl: null,
+                }
+              : {
+                  estado: 'anulado',
+                  anuladoEl: new Date(),
+                  motivoRechazo: dto.motivo.trim(),
+                },
+        });
+        await tx.valorEvento.create({
+          data: {
+            tenantId: auth.tenantId,
+            valorId: pago.valorId,
+            tipo: valor?.origen === 'tercero' ? 'endoso_revertido' : 'anulado',
+            actorUserId: actor.userId,
+            actorNombre: actor.nombre,
+            detalleJson: {
+              pagoId: pago.id,
+              pagoNumero: pago.numero,
+              motivo: dto.motivo.trim(),
+            },
+          },
         });
       }
 
@@ -1285,7 +1488,7 @@ export class EgresosService {
         fecha: i.pago.fecha.toISOString(),
         monto: dec(i.monto),
         metodoNombre: i.pago.metodoPago.nombre,
-        cuentaNombre: i.pago.cuentaOrigen.nombre,
+        cuentaNombre: i.pago.cuentaOrigen?.nombre ?? 'Cheque endosado',
         referencia: i.pago.referencia,
         anuladoEl: i.pago.anuladoEl ? i.pago.anuladoEl.toISOString() : null,
         motivoAnulacion: i.pago.motivoAnulacion,
@@ -1434,6 +1637,227 @@ export class EgresosService {
         clienteNombre: v.cliente?.nombre ?? null,
       })),
     };
+  }
+
+  /** Confirma que el banco debitó un cheque propio y recién entonces mueve fondos. */
+  async debitarValor(auth: CurrentAuth, id: string, dto: DebitarValorDto) {
+    if (dto.idempotencyKey) {
+      const existente = await this.prisma.movimientoFondos.findUnique({
+        where: {
+          tenantId_idempotencyKey: {
+            tenantId: auth.tenantId,
+            idempotencyKey: dto.idempotencyKey,
+          },
+        },
+      });
+      if (existente) return { ok: true, idempotente: true };
+    }
+    const actor = await resolverActorFondos(this.prisma, auth);
+    return ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      const valor = await tx.valor.findFirst({
+        where: { id, tenantId: auth.tenantId, origen: 'propio' },
+        include: {
+          pagos: {
+            where: { anuladoEl: null },
+            include: { cuentaOrigen: true },
+            take: 1,
+          },
+        },
+      });
+      if (!valor) throw new NotFoundException('No encontramos ese cheque.');
+      if (valor.estado === 'debitado') {
+        return { ok: true, idempotente: true };
+      }
+      if (valor.estado !== 'emitido') {
+        throw new ConflictException(
+          `El cheque está ${valor.estado}; no puede debitarse.`,
+        );
+      }
+      const pago = valor.pagos[0];
+      if (!pago) {
+        throw new BadRequestException(
+          'El cheque no tiene un pago vigente asociado.',
+        );
+      }
+      if (!pago.cuentaOrigenId || !pago.cuentaOrigen) {
+        throw new BadRequestException(
+          'El cheque propio no conserva una cuenta bancaria de origen.',
+        );
+      }
+      const fecha = dto.fecha ? soloFecha(dto.fecha) : new Date();
+      const cambio = await tx.valor.updateMany({
+        where: { id: valor.id, tenantId: auth.tenantId, estado: 'emitido' },
+        data: { estado: 'debitado', debitadoEl: fecha },
+      });
+      if (cambio.count === 0) {
+        throw new ConflictException('El cheque fue operado por otro usuario.');
+      }
+      await registrarMovimientoFondos(tx, {
+        tenantId: auth.tenantId,
+        cuentaId: pago.cuentaOrigenId,
+        fecha,
+        tipo: 'salida',
+        monto: dec(valor.importe),
+        concepto: `Débito cheque propio ${valor.numero} · ${pago.numero}`,
+        origenTipo: 'valor',
+        actor,
+        pagoId: pago.id,
+        valorId: valor.id,
+        idempotencyKey: dto.idempotencyKey,
+        referencia: dto.referencia,
+        notas: dto.notas,
+      });
+      await tx.valorEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          valorId: valor.id,
+          tipo: 'debitado',
+          actorUserId: actor.userId,
+          actorNombre: actor.nombre,
+          detalleJson: {
+            pagoId: pago.id,
+            cuentaId: pago.cuentaOrigenId,
+            fecha: fecha.toISOString(),
+          },
+        },
+      });
+      return { ok: true };
+    });
+  }
+
+  /**
+   * Registra el rechazo bancario de un cheque propio.
+   *
+   * No es una simple etiqueta: el pago deja de ser válido, por lo que las
+   * facturas vuelven a deber. Si el débito ya se había confirmado, se genera
+   * un contramovimiento auditable; el movimiento original nunca se borra.
+   */
+  async rechazarValorPropio(
+    auth: CurrentAuth,
+    id: string,
+    dto: RechazarValorPropioDto,
+  ) {
+    const actor = await resolverActorFondos(this.prisma, auth);
+    return ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      const valor = await tx.valor.findFirst({
+        where: { id, tenantId: auth.tenantId, origen: 'propio' },
+        include: {
+          movimientos: { orderBy: { createdAt: 'asc' } },
+          pagos: {
+            where: { anuladoEl: null },
+            include: { imputaciones: true, cuentaOrigen: true },
+            take: 1,
+          },
+        },
+      });
+      if (!valor) throw new NotFoundException('No encontramos ese cheque.');
+      if (valor.estado === 'rechazado') {
+        return { ok: true, idempotente: true };
+      }
+      if (!['emitido', 'debitado'].includes(valor.estado)) {
+        throw new ConflictException(
+          `El cheque está ${valor.estado}; no puede registrarse como rechazado.`,
+        );
+      }
+      const pago = valor.pagos[0];
+      if (!pago) {
+        throw new BadRequestException(
+          'El cheque no tiene un pago vigente asociado para reabrir.',
+        );
+      }
+      const fecha = dto.fecha ? soloFecha(dto.fecha) : new Date();
+      const estadoAnterior = valor.estado;
+      const cambio = await tx.valor.updateMany({
+        where: {
+          id: valor.id,
+          tenantId: auth.tenantId,
+          estado: valor.estado,
+        },
+        data: {
+          estado: 'rechazado',
+          rechazadoEl: fecha,
+          motivoRechazo: dto.motivo.trim(),
+        },
+      });
+      if (cambio.count === 0) {
+        throw new ConflictException('El cheque fue operado por otro usuario.');
+      }
+
+      for (const imputacion of pago.imputaciones) {
+        const egreso = await tx.egreso.findUniqueOrThrow({
+          where: { id: imputacion.egresoId },
+          select: { total: true, pagadoTotal: true },
+        });
+        const pagado = Math.max(
+          0,
+          r2(dec(egreso.pagadoTotal) - dec(imputacion.monto)),
+        );
+        await tx.egreso.update({
+          where: { id: imputacion.egresoId },
+          data: {
+            pagadoTotal: pagado,
+            estado: estadoPorPagado(dec(egreso.total), pagado),
+          },
+        });
+      }
+
+      if (estadoAnterior === 'debitado') {
+        if (!pago.cuentaOrigenId || !pago.cuentaOrigen) {
+          throw new BadRequestException(
+            'No se puede identificar la cuenta del débito rechazado.',
+          );
+        }
+        const salida = valor.movimientos.find(
+          (movimiento) => movimiento.tipo === 'salida',
+        );
+        if (!salida) {
+          throw new BadRequestException(
+            'El cheque figura debitado pero no tiene un movimiento de salida.',
+          );
+        }
+        await registrarMovimientoFondos(tx, {
+          tenantId: auth.tenantId,
+          cuentaId: pago.cuentaOrigenId,
+          fecha,
+          tipo: 'entrada',
+          monto: dec(valor.importe),
+          concepto: `Rechazo cheque propio ${valor.numero}: ${dto.motivo.trim()}`,
+          origenTipo: 'valor',
+          actor,
+          pagoId: pago.id,
+          valorId: valor.id,
+          idempotencyKey: dto.idempotencyKey,
+          reversionDeId: salida.id,
+          notas: dto.motivo.trim(),
+          estadoConciliacion: 'diferencia',
+        });
+      }
+
+      await tx.pago.update({
+        where: { id: pago.id },
+        data: {
+          anuladoEl: fecha,
+          motivoAnulacion: `Cheque rechazado: ${dto.motivo.trim()}`,
+        },
+      });
+      await tx.valorEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          valorId: valor.id,
+          tipo: 'rechazado',
+          actorUserId: actor.userId,
+          actorNombre: actor.nombre,
+          detalleJson: {
+            fecha: fecha.toISOString(),
+            motivo: dto.motivo.trim(),
+            pagoId: pago.id,
+            pagoNumero: pago.numero,
+            revirtioFondos: estadoAnterior === 'debitado',
+          },
+        },
+      });
+      return { ok: true };
+    });
   }
 
   async saldosPorProveedor(auth: CurrentAuth) {

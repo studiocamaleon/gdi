@@ -20,6 +20,7 @@ import type {
 } from './dto/cargo-directo.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { leerNivelesPaso } from '../motor-universal/niveles-paso';
+import { evaluarRegla } from '../motor-universal/evaluador-jsonlogic';
 
 @Injectable()
 export class CargosDirectosProductoService {
@@ -478,12 +479,24 @@ export class CargosDirectosProductoService {
         'Un costo directo condicional necesita una regla de activación.',
       );
     }
+    if (dto.modoActivacion === 'CONDICIONAL') {
+      const evaluacion = evaluarRegla(
+        dto.condicionActivacionJson,
+        {} as Record<string, unknown>,
+      );
+      if (evaluacion.error) {
+        throw new BadRequestException(
+          `La regla de activación del costo directo es inválida: ${evaluacion.error}`,
+        );
+      }
+    }
     const base = this.asRecord(cargo.configJson);
     const override = this.asRecord(dto.configOverrideJson);
     const config = { ...base, ...override };
     if (cargo.modoCalculo === 'MONTO_FIJO_PLANO') {
       const zonas = Array.isArray(config.zonas) ? config.zonas : [];
-      if (!(Number(config.monto) > 0) && zonas.length === 0) {
+      const monto = Number(config.monto);
+      if (!(Number.isFinite(monto) && monto > 0) && zonas.length === 0) {
         throw new BadRequestException(
           `El cargo "${cargo.nombre}" necesita un monto o una tabla de importes.`,
         );
@@ -496,6 +509,7 @@ export class CargosDirectosProductoService {
             !item.codigo.trim() ||
             typeof item.nombre !== 'string' ||
             !item.nombre.trim() ||
+            !Number.isFinite(Number(item.monto)) ||
             !(Number(item.monto) > 0)
           );
         })
@@ -505,13 +519,15 @@ export class CargosDirectosProductoService {
         );
       }
     } else if (cargo.modoCalculo === 'PORCENTAJE_SOBRE_BASE') {
-      if (!(Number(config.porcentaje ?? config.porcentajeDefault) > 0)) {
+      const porcentaje = Number(config.porcentaje ?? config.porcentajeDefault);
+      if (!Number.isFinite(porcentaje) || porcentaje <= 0) {
         throw new BadRequestException(
           `El cargo "${cargo.nombre}" necesita un porcentaje mayor a cero.`,
         );
       }
     } else if (cargo.modoCalculo === 'POR_UNIDAD_INPUT') {
       if (
+        !Number.isFinite(Number(config.precioPorUnidad)) ||
         !(Number(config.precioPorUnidad) > 0) ||
         typeof config.inputCantidad !== 'string' ||
         !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(config.inputCantidad.trim()) ||
@@ -522,6 +538,10 @@ export class CargosDirectosProductoService {
           `El cargo "${cargo.nombre}" necesita precio, unidad y un dato de cantidad válido.`,
         );
       }
+    } else {
+      throw new BadRequestException(
+        `El cargo "${cargo.nombre}" tiene un modo de cálculo desconocido.`,
+      );
     }
   }
 
@@ -529,6 +549,28 @@ export class CargosDirectosProductoService {
     return value && typeof value === 'object' && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : {};
+  }
+
+  private validarReglaPasoExtra(
+    modoActivacion: string | null | undefined,
+    condicion: unknown,
+  ) {
+    if (modoActivacion !== 'CONDICIONAL') return;
+    if (
+      !condicion ||
+      typeof condicion !== 'object' ||
+      Array.isArray(condicion)
+    ) {
+      throw new BadRequestException(
+        'Un paso extra condicional necesita una regla de activación.',
+      );
+    }
+    const evaluacion = evaluarRegla(condicion, {} as Record<string, unknown>);
+    if (evaluacion.error) {
+      throw new BadRequestException(
+        `La regla de activación del paso extra es inválida: ${evaluacion.error}`,
+      );
+    }
   }
 
   private rethrowAsociacionDuplicada(err: unknown): never {
@@ -555,6 +597,7 @@ export class CargosDirectosProductoService {
       throw new NotFoundException(`Producto ${productoId} no encontrado`);
 
     await this.familias.assertFamiliaExiste(tenantId, dto.familiaCodigo);
+    this.validarReglaPasoExtra(dto.modoActivacion, dto.condicionActivacionJson);
 
     // Validar que las FK provistas pertenezcan al tenant (evita referencias
     // cross-tenant a máquinas/perfiles/pasos de ruta ajenos).
@@ -631,6 +674,13 @@ export class CargosDirectosProductoService {
     });
     if (!existente)
       throw new NotFoundException(`Paso extra ${pasoExtraId} no encontrado`);
+
+    this.validarReglaPasoExtra(
+      dto.modoActivacion ?? existente.modoActivacion,
+      dto.condicionActivacionJson !== undefined
+        ? dto.condicionActivacionJson
+        : existente.condicionActivacionJson,
+    );
 
     // La máquina efectiva tras el patch (para validar perfil y limpiar centro).
     const maquinaEfectiva =

@@ -18,12 +18,13 @@ import type {
   MetodoPago,
   MetodoPagoTipo,
   ModalidadPuntoVenta,
-  MovimientoFondos,
+  MovimientosFondosPagina,
   OrdenFacturable,
   ProveedorFacturacion,
   PuntoVenta,
   ResultadoLoteFacturacion,
   TesoreriaKpis,
+  ValorTesoreria,
 } from "@/lib/administracion";
 
 // ── Configuración fiscal ───────────────────────────────────────────────
@@ -275,10 +276,9 @@ export async function updateMetodoPago(
 }
 
 export async function toggleMetodoPago(id: string): Promise<MetodoPago> {
-  return apiRequest<MetodoPago>(
-    `/administracion/metodos-pago/${id}/toggle`,
-    { method: "PATCH" },
-  );
+  return apiRequest<MetodoPago>(`/administracion/metodos-pago/${id}/toggle`, {
+    method: "PATCH",
+  });
 }
 
 export async function instalarCatalogoMetodosPago(): Promise<{
@@ -297,6 +297,7 @@ export async function getCuentasFondos(): Promise<CuentaFondosResumen[]> {
 // ── Tesorería ──────────────────────────────────────────────────────────
 
 export async function getTesoreria(): Promise<{
+  monedaLocal: string;
   cuentas: CuentaFondos[];
   kpis: TesoreriaKpis;
 }> {
@@ -309,6 +310,8 @@ export async function crearCuentaFondos(payload: {
   banco?: string;
   cbuAlias?: string;
   moneda?: string;
+  saldoInicial?: number;
+  permiteSaldoNegativo?: boolean;
 }): Promise<{ id: string }> {
   return apiRequest("/administracion/cuentas", {
     method: "POST",
@@ -318,8 +321,77 @@ export async function crearCuentaFondos(payload: {
 
 export async function getMovimientosCuenta(
   cuentaId: string,
-): Promise<MovimientoFondos[]> {
-  return apiRequest(`/administracion/cuentas/${cuentaId}/movimientos`);
+  filtros?: {
+    page?: number;
+    pageSize?: number;
+    q?: string;
+    origenTipo?: string;
+    estadoConciliacion?: string;
+    desde?: string;
+    hasta?: string;
+  },
+): Promise<MovimientosFondosPagina> {
+  const query = new URLSearchParams();
+  if (filtros?.page) query.set("page", String(filtros.page));
+  if (filtros?.pageSize) query.set("pageSize", String(filtros.pageSize));
+  if (filtros?.q) query.set("q", filtros.q);
+  if (filtros?.origenTipo) query.set("origenTipo", filtros.origenTipo);
+  if (filtros?.estadoConciliacion)
+    query.set("estadoConciliacion", filtros.estadoConciliacion);
+  if (filtros?.desde) query.set("desde", filtros.desde);
+  if (filtros?.hasta) query.set("hasta", filtros.hasta);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return apiRequest(`/administracion/cuentas/${cuentaId}/movimientos${suffix}`);
+}
+
+export async function editarCuentaFondos(
+  cuentaId: string,
+  payload: {
+    tipo?: string;
+    nombre?: string;
+    banco?: string;
+    cbuAlias?: string;
+    moneda?: string;
+    permiteSaldoNegativo?: boolean;
+    activo?: boolean;
+  },
+): Promise<{ id: string }> {
+  return apiRequest(`/administracion/cuentas/${cuentaId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function ajustarCuentaFondos(
+  cuentaId: string,
+  payload: {
+    tipo: "entrada" | "salida";
+    monto: number;
+    fecha: string;
+    concepto: string;
+    idempotencyKey?: string;
+    referencia?: string;
+    notas?: string;
+  },
+): Promise<{ ok: boolean; id: string }> {
+  return apiRequest(`/administracion/cuentas/${cuentaId}/ajustes`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function conciliarMovimientoFondos(
+  cuentaId: string,
+  movimientoId: string,
+  payload: {
+    estado: "pendiente" | "conciliado" | "diferencia";
+    notas?: string;
+  },
+): Promise<{ ok: boolean }> {
+  return apiRequest(
+    `/administracion/cuentas/${cuentaId}/movimientos/${movimientoId}/conciliacion`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+  );
 }
 
 export async function transferirEntreCuentas(payload: {
@@ -329,6 +401,9 @@ export async function transferirEntreCuentas(payload: {
   monto: number;
   /** Obligatorio entre monedas distintas: lo que llegó, en la del DESTINO. */
   montoDestino?: number;
+  idempotencyKey?: string;
+  referencia?: string;
+  notas?: string;
 }): Promise<{ ok: boolean }> {
   return apiRequest("/administracion/cuentas/transferencias", {
     method: "POST",
@@ -339,21 +414,93 @@ export async function transferirEntreCuentas(payload: {
 export async function cerrarArqueo(
   cuentaId: string,
   contado: number,
+  opciones?: { idempotencyKey?: string; notas?: string },
 ): Promise<{ diferencia: number }> {
   return apiRequest(`/administracion/cuentas/${cuentaId}/arqueo`, {
     method: "POST",
-    body: JSON.stringify({ contado }),
+    body: JSON.stringify({ contado, ...opciones }),
+  });
+}
+
+export async function getValoresTesoreria(): Promise<ValorTesoreria[]> {
+  return apiRequest("/administracion/valores");
+}
+
+export async function depositarValor(
+  id: string,
+  payload: { cuentaDestinoId: string; fecha: string; notas?: string },
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/valores/${id}/depositar`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function acreditarValor(
+  id: string,
+  payload: {
+    fecha?: string;
+    idempotencyKey?: string;
+    referencia?: string;
+    notas?: string;
+  },
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/valores/${id}/acreditar`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function revertirDepositoValor(
+  id: string,
+  payload: { motivo: string; fecha?: string },
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/valores/${id}/revertir-deposito`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function revertirAcreditacionValor(
+  id: string,
+  payload: { motivo: string; fecha?: string; idempotencyKey?: string },
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/valores/${id}/revertir-acreditacion`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function rechazarValor(
+  id: string,
+  payload: { motivo: string; fecha?: string; idempotencyKey?: string },
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/valores/${id}/rechazar`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function anularCobro(
+  id: string,
+  payload: { motivo: string; idempotencyKey?: string },
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/cobros/${id}`, {
+    method: "DELETE",
+    body: JSON.stringify(payload),
   });
 }
 
 // ── Cobros ─────────────────────────────────────────────────────────────
 
 export type CrearCobroPayload = {
+  idempotencyKey?: string;
   ordenId?: string;
   clienteId?: string;
   fecha: string;
   metodoPagoId: string;
-  cuentaDestinoId: string;
+  /** Se omite para cheques/eCheq hasta que Tesorería registre el depósito. */
+  cuentaDestinoId?: string | null;
   montoBruto: number;
   comisionPctAplicada: number;
   retenciones?: Array<{
@@ -366,9 +513,11 @@ export type CrearCobroPayload = {
   }>;
   valor?: {
     formato: "fisico" | "echeq";
+    modalidad?: "comun" | "diferido";
     origen: "tercero" | "propio";
     numero: string;
     banco: string;
+    identificadorBancario?: string;
     fechaEmision?: string;
     fechaPago?: string;
   };

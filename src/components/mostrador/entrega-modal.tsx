@@ -121,7 +121,11 @@ export function EntregaModal({
     void Promise.all([getMetodosPago(), getCuentasFondos()])
       .then(([ms, cs]) => {
         if (!vivo) return;
-        const activos = ms.filter((m) => m.activo);
+        // El flujo rápido no captura banco, número ni vencimiento del valor.
+        // Los cheques/eCheq se registran desde el formulario completo.
+        const activos = ms.filter(
+          (m) => m.activo && m.tipo !== "cheque_echeq",
+        );
         setMetodos(activos);
         setCuentas(cs);
       })

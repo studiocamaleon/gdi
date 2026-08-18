@@ -292,11 +292,12 @@ const impresion_por_hoja: DefinicionFamilia = {
     avisos: ['perfil_doble_faz'],
   },
   // [Tanda C] Antes: defaults cableados por nombre en el editor.
-  mecanismoCantidadDefault: 'HEREDAR_DEL_OUTPUT_CANONICO',
+  // La imposición vive en este paso, por lo que su cantidad efectiva sale de
+  // su propio nesting. Heredar era un remanente de cuando pre-prensa acomodaba.
+  mecanismoCantidadDefault: 'CALCULADO_POR_PASO',
   // [Etapa F3] Antes: FAMILIAS_IMPRESION en motor.service.
   esImpresion: true,
   // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
-  outputHeredadoDefault: 'pliegos_calculados',
   nombre: 'Impresión por hoja',
   categoria: 'produccion_impresion',
   // [Etapa F] Antes: caso 6 del dispatcher, ruteado por familiaCodigo.
@@ -1114,7 +1115,11 @@ const plastificado_pouch: DefinicionFamilia = {
       default: 0,
     },
   ],
-  productosTipicos: ['Credenciales plastificadas', 'Menús plastificados', 'Tarjetas rígidas pouch'],
+  productosTipicos: [
+    'Credenciales plastificadas',
+    'Menús plastificados',
+    'Tarjetas rígidas pouch',
+  ],
 };
 
 const pintura_superficial: DefinicionFamilia = {
@@ -1379,7 +1384,10 @@ const estructura_bastidor: DefinicionFamilia = {
       requerido: false,
       compatibilidadMaterial: {
         familiasMateriaPrima: ['HERRAJE_ACCESORIO'],
-        subfamiliasMateriaPrima: ['SISTEMA_COLGADO_MONTAJE', 'FIJACION_AUXILIAR'],
+        subfamiliasMateriaPrima: [
+          'SISTEMA_COLGADO_MONTAJE',
+          'FIJACION_AUXILIAR',
+        ],
       },
       // Pares de soportes cada ~80 cm de ancho (los deriva el bastidor).
       magnitudDerivada: 'anclajes',
@@ -1680,7 +1688,10 @@ const montaje_sobre_sustrato: DefinicionFamilia = {
   codigo: 'montaje_sobre_sustrato',
   // [Tanda C] Antes: defaults cableados por nombre en el editor.
   mecanismoCantidadDefault: 'CALCULADO_POR_PASO',
-  ritmoDefault: { modoCalculo: 'batch_time', fuenteCantidad: 'cantidad_montaje' },
+  ritmoDefault: {
+    modoCalculo: 'batch_time',
+    fuenteCantidad: 'cantidad_montaje',
+  },
   nombre: 'Montado sobre material',
   categoria: 'estructural_montaje',
   // [Etapa F] Antes: caso 5 del dispatcher, ruteado por familiaCodigo. La
@@ -1736,11 +1747,7 @@ const montaje_sobre_sustrato: DefinicionFamilia = {
   },
   fuentePiezasDefault: 'piezas_jobcontext',
   inputsRequeridos: [],
-  outputsCanonicos: [
-    'piezas_montadas',
-    'm2_calculados',
-    'aprovechamiento_pct',
-  ],
+  outputsCanonicos: ['piezas_montadas', 'm2_calculados', 'aprovechamiento_pct'],
   validaciones: [],
   paramsPasoSchema: [
     {
@@ -2267,9 +2274,7 @@ export function origenMargenesNestingDeFamilia(
 
 /** Campo de la máquina que aporta la separación entre piezas, si la familia
  *  declara uno. [Etapa A] */
-export function campoSeparacionMaquinaDeFamilia(
-  codigo: string,
-): string | null {
+export function campoSeparacionMaquinaDeFamilia(codigo: string): string | null {
   return resolverFamilia(codigo)?.campoSeparacionMaquina ?? null;
 }
 
@@ -2380,9 +2385,7 @@ export function separacionEsLiteral(codigo: string): boolean {
 
 /** Magnitud que alimenta la productividad cuando el modelador no eligió una.
  *  [Etapa A] */
-export function magnitudTiempoDefaultDeFamilia(
-  codigo: string,
-): string | null {
+export function magnitudTiempoDefaultDeFamilia(codigo: string): string | null {
   return resolverFamilia(codigo)?.magnitudTiempoDefault ?? null;
 }
 

@@ -80,7 +80,11 @@ function hoyIso() {
 function sumarDias(iso: string, dias: number) {
   const [y, m, d] = iso.split("-").map(Number);
   const fecha = new Date(y, (m ?? 1) - 1, d ?? 1);
-  fecha.setDate(fecha.getDate() + dias);
+  let restantes = Math.max(0, Math.trunc(dias));
+  while (restantes > 0) {
+    fecha.setDate(fecha.getDate() + 1);
+    if (fecha.getDay() !== 0 && fecha.getDay() !== 6) restantes -= 1;
+  }
   return `${String(fecha.getDate()).padStart(2, "0")}/${String(fecha.getMonth() + 1).padStart(2, "0")}/${fecha.getFullYear()}`;
 }
 
@@ -114,6 +118,12 @@ export function CobroFormulario({
   const { moneda } = useConfigRegional();
   const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const metodosActivos = metodos.filter((m) => m.activo);
+  const cuentasCompatibles = cuentas.filter(
+    (c) =>
+      c.moneda === moneda.codigo &&
+      c.tipo !== "cartera_valores" &&
+      c.tipo !== "cartera_valores_legacy",
+  );
   const [metodoId, setMetodoId] = React.useState(metodosActivos[0]?.id ?? "");
   const metodo = metodosActivos.find((m) => m.id === metodoId) ?? null;
   const esCheque = metodo?.tipo === "cheque_echeq";
@@ -135,11 +145,13 @@ export function CobroFormulario({
   const [retOpen, setRetOpen] = React.useState(false);
   const [rets, setRets] = React.useState<RetLinea[]>([]);
   const [chq, setChq] = React.useState({
+    formato: "fisico" as "fisico" | "echeq",
+    modalidad: "comun" as "comun" | "diferido",
     numero: "",
     banco: BANCOS[0],
+    identificadorBancario: "",
     emision: "",
     pago: "",
-    origen: "tercero" as "tercero" | "propio",
   });
 
   const bruto = montoNum ?? 0;
@@ -152,11 +164,17 @@ export function CobroFormulario({
     0,
   );
   const disponible = neto - totalRet;
-  const cuentaUsadaId =
-    cuentaId ?? metodo?.cuentaDestinoId ?? cuentas[0]?.id ?? null;
-  const cuentaUsada = cuentas.find((c) => c.id === cuentaUsadaId);
+  const cuentaUsadaId = esCheque
+    ? null
+    : (cuentaId ??
+      cuentasCompatibles.find((c) => c.id === metodo?.cuentaDestinoId)?.id ??
+      cuentasCompatibles[0]?.id ??
+      null);
+  const cuentaUsada = cuentasCompatibles.find((c) => c.id === cuentaUsadaId);
   const fechaAcreditacion = esCheque
-    ? chq.pago || "al acreditar el valor"
+    ? chq.modalidad === "diferido"
+      ? chq.pago || "al acreditar el valor"
+      : "al acreditar el valor"
     : sumarDias(fecha, metodo?.plazoAcreditacionDias ?? 0);
 
   const seleccionarMetodo = (id: string) => {
@@ -199,9 +217,23 @@ export function CobroFormulario({
     setRets((prev) => prev.filter((_, j) => j !== i));
 
   const submit = () => {
-    if (!metodo || !cuentaUsadaId || bruto <= 0) return;
+    if (!metodo || bruto <= 0 || (!esCheque && !cuentaUsadaId)) return;
+    if (disponible <= 0) {
+      toast.error(
+        "Las comisiones y retenciones no pueden consumir todo el cobro.",
+      );
+      return;
+    }
     if (esCheque && !chq.numero.trim()) {
       toast.error("Cargá el número del cheque/echeq.");
+      return;
+    }
+    if (esCheque && chq.modalidad === "diferido" && !chq.pago) {
+      toast.error("Indicá la fecha de pago del cheque diferido.");
+      return;
+    }
+    if (esCheque && chq.emision && chq.pago && chq.pago < chq.emision) {
+      toast.error("La fecha de pago no puede ser anterior a la emisión.");
       return;
     }
     onSubmit({
@@ -211,9 +243,10 @@ export function CobroFormulario({
       // docs/facturacion-ordenes-deuda-comercial-diseno.md §5.
       imputaciones: [],
       payload: {
+        idempotencyKey: crypto.randomUUID(),
         fecha,
         metodoPagoId: metodo.id,
-        cuentaDestinoId: cuentaUsadaId,
+        ...(esCheque ? {} : { cuentaDestinoId: cuentaUsadaId! }),
         montoBruto: bruto,
         comisionPctAplicada: comPct,
         referencia: referencia.trim() || undefined,
@@ -229,10 +262,15 @@ export function CobroFormulario({
           })),
         valor: esCheque
           ? {
-              formato: chq.numero.match(/^e/i) ? "echeq" : "fisico",
-              origen: chq.origen,
+              formato: chq.formato,
+              modalidad: chq.modalidad,
+              origen: "tercero",
               numero: chq.numero.trim(),
               banco: chq.banco,
+              identificadorBancario:
+                chq.formato === "echeq"
+                  ? chq.identificadorBancario.trim() || undefined
+                  : undefined,
               fechaEmision: chq.emision || undefined,
               fechaPago: chq.pago || undefined,
             }
@@ -240,7 +278,9 @@ export function CobroFormulario({
       },
       metodoNombre: metodo.nombre,
       metodoTipo: metodo.tipo,
-      cuentaDestinoNombre: cuentaUsada?.nombre ?? "—",
+      cuentaDestinoNombre: esCheque
+        ? "Valor en cartera"
+        : (cuentaUsada?.nombre ?? "—"),
       comisionMonto: comision,
       comisionIvaMonto: ivaCom,
       netoAcreditado: neto,
@@ -362,19 +402,38 @@ export function CobroFormulario({
               onChange={(e) => setReferencia(e.target.value)}
             />
           </div>
-          <div className="arc-field" style={{ marginBottom: 0 }}>
-            <label>Cuenta destino</label>
-            <select
-              value={cuentaUsadaId ?? ""}
-              onChange={(e) => setCuentaId(e.target.value)}
-            >
-              {cuentas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          {esCheque ? (
+            <div className="arc-auto-note" style={{ marginBottom: 0 }}>
+              <LandmarkIcon />
+              El valor queda en cartera sin cuenta destino. La cuenta bancaria
+              se elige cuando se registra el depósito.
+            </div>
+          ) : (
+            <div className="arc-field" style={{ marginBottom: 0 }}>
+              <label htmlFor="cobro-cuenta-destino">Cuenta destino</label>
+              <select
+                id="cobro-cuenta-destino"
+                value={cuentaUsadaId ?? ""}
+                onChange={(e) => setCuentaId(e.target.value)}
+                disabled={cuentasCompatibles.length === 0}
+              >
+                {cuentasCompatibles.length === 0 ? (
+                  <option value="">No hay cuentas en {moneda.codigo}</option>
+                ) : null}
+                {cuentasCompatibles.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+              {cuentasCompatibles.length === 0 ? (
+                <p className="mt-2 text-sm text-destructive">
+                  Creá o activá una cuenta en {moneda.codigo} antes de registrar
+                  el cobro.
+                </p>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {esCheque ? (
@@ -391,7 +450,40 @@ export function CobroFormulario({
             </div>
             <div className="arc-frow">
               <div className="arc-field">
-                <label>Número de cheque / echeq</label>
+                <label>Formato</label>
+                <select
+                  value={chq.formato}
+                  onChange={(e) =>
+                    setChq({
+                      ...chq,
+                      formato: e.target.value as "fisico" | "echeq",
+                    })
+                  }
+                >
+                  <option value="fisico">Cheque físico</option>
+                  <option value="echeq">eCheq</option>
+                </select>
+              </div>
+              <div className="arc-field">
+                <label>Modalidad</label>
+                <select
+                  value={chq.modalidad}
+                  onChange={(e) =>
+                    setChq({
+                      ...chq,
+                      modalidad: e.target.value as "comun" | "diferido",
+                      pago: e.target.value === "comun" ? "" : chq.pago,
+                    })
+                  }
+                >
+                  <option value="comun">Común</option>
+                  <option value="diferido">Diferido</option>
+                </select>
+              </div>
+            </div>
+            <div className="arc-frow">
+              <div className="arc-field">
+                <label>Número del instrumento</label>
                 <input
                   value={chq.numero}
                   onChange={(e) => setChq({ ...chq, numero: e.target.value })}
@@ -411,6 +503,23 @@ export function CobroFormulario({
               </div>
             </div>
             <div className="arc-frow">
+              {chq.formato === "echeq" ? (
+                <div className="arc-field">
+                  <label>
+                    ID bancario <span className="opt">(opcional)</span>
+                  </label>
+                  <input
+                    value={chq.identificadorBancario}
+                    onChange={(e) =>
+                      setChq({
+                        ...chq,
+                        identificadorBancario: e.target.value,
+                      })
+                    }
+                    placeholder="Identificador informado por el banco"
+                  />
+                </div>
+              ) : null}
               <div className="arc-field">
                 <label>Fecha de emisión</label>
                 <input
@@ -419,39 +528,24 @@ export function CobroFormulario({
                   onChange={(e) => setChq({ ...chq, emision: e.target.value })}
                 />
               </div>
-              <div className="arc-field">
-                <label>
-                  Fecha de pago <span className="opt">(si es diferido)</span>
-                </label>
-                <input
-                  type="date"
-                  value={chq.pago}
-                  onChange={(e) => setChq({ ...chq, pago: e.target.value })}
-                />
-              </div>
             </div>
-            <div className="arc-field" style={{ marginBottom: 0 }}>
-              <label>Origen del valor</label>
-              <div className="arc-radio-row">
-                <button
-                  type="button"
-                  className={`arc-radio-chip ${chq.origen === "propio" ? "on" : ""}`}
-                  onClick={() => setChq({ ...chq, origen: "propio" })}
-                >
-                  Propio
-                </button>
-                <button
-                  type="button"
-                  className={`arc-radio-chip ${chq.origen === "tercero" ? "on" : ""}`}
-                  onClick={() => setChq({ ...chq, origen: "tercero" })}
-                >
-                  De tercero
-                </button>
+            {chq.modalidad === "diferido" ? (
+              <div className="arc-frow">
+                <div className="arc-field">
+                  <label>Fecha de pago</label>
+                  <input
+                    type="date"
+                    value={chq.pago}
+                    onChange={(e) => setChq({ ...chq, pago: e.target.value })}
+                  />
+                </div>
               </div>
-            </div>
+            ) : null}
+            <p className="text-sm text-muted-foreground">
+              El cheque queda en cartera como valor recibido de un tercero.
+            </p>
           </div>
         ) : null}
-
 
         <div className="arc-card-sec">
           <div
@@ -463,7 +557,9 @@ export function CobroFormulario({
             {rets.length > 0 ? (
               <span className="badge">{rets.length}</span>
             ) : null}
-            {totalRet > 0 ? <span className="sum">−{fmt(totalRet)}</span> : null}
+            {totalRet > 0 ? (
+              <span className="sum">−{fmt(totalRet)}</span>
+            ) : null}
           </div>
           {retOpen ? (
             <div className="arc-ret-body">
@@ -523,7 +619,9 @@ export function CobroFormulario({
                           type="number"
                           step="0.01"
                           value={r.alicuota}
-                          onChange={(e) => setRet(i, "alicuota", e.target.value)}
+                          onChange={(e) =>
+                            setRet(i, "alicuota", e.target.value)
+                          }
                           placeholder="0"
                         />
                         <span className="s">%</span>
@@ -631,17 +729,29 @@ export function CobroFormulario({
         </div>
         <div className="arc-acct-hint">
           <LandmarkIcon />
-          Acredita en{" "}
-          <b style={{ color: "var(--ink-2)", margin: "0 4px" }}>
-            {cuentaUsada?.nombre ?? "—"}
-          </b>{" "}
-          · {fechaAcreditacion}
+          {esCheque ? (
+            <>Valor en cartera · cuenta bancaria al depositar</>
+          ) : (
+            <>
+              Acredita en{" "}
+              <b style={{ color: "var(--ink-2)", margin: "0 4px" }}>
+                {cuentaUsada?.nombre ?? "—"}
+              </b>{" "}
+              · {fechaAcreditacion}
+            </>
+          )}
         </div>
         <div className="arc-sum-actions">
           <button
             type="button"
             className="btn btn-primary"
-            disabled={bruto <= 0 || !metodo || guardando}
+            disabled={
+              bruto <= 0 ||
+              !metodo ||
+              (!esCheque && !cuentaUsadaId) ||
+              disponible <= 0 ||
+              guardando
+            }
             onClick={submit}
           >
             <CheckIcon />
@@ -656,7 +766,11 @@ export function CobroFormulario({
               Cancelar
             </Link>
           ) : onCancel ? (
-            <button type="button" className="btn arc-btn-ghost" onClick={onCancel}>
+            <button
+              type="button"
+              className="btn arc-btn-ghost"
+              onClick={onCancel}
+            >
               Cancelar
             </button>
           ) : null}

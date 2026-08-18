@@ -222,8 +222,14 @@ export interface TiempoManualConfig {
 export interface CotizarOutput {
   /** Si la cotización tuvo éxito (sin errores que cortan). */
   exitoso: boolean;
-  /** Errores tipados que cortaron la cotización (D.7 Tipo B + C). */
+  /** Diagnósticos tipados. ERROR corta; WARNING acompaña una cotización válida. */
   errores: ErrorMotor[];
+  /** Identidad técnica para soporte y auditoría; no contiene datos comerciales. */
+  metadata?: {
+    quoteRunId: string;
+    motorVersion: string;
+    durationMs: number;
+  };
   /** Cotización (presente si exitoso=true). */
   cotizacion?: CotizacionResultado;
 }
@@ -235,6 +241,8 @@ export interface CotizacionResultado {
   /** Ruta alternativa usada. */
   rutaAlternativaId: string;
   rutaNombre: string;
+  /** Período efectivo de tarifas usado por el motor. */
+  periodoTarifario: string;
   /** Cantidad efectivamente producida (puede diferir de pedida en talonarios pose_completa). */
   cantidadEfectiva: number;
   cantidadPedida: number;
@@ -272,9 +280,7 @@ export interface CotizacionResultado {
     total: number;
     unitario: number;
   };
-  /** Precio calculado por el Tab Precio (F.2.12). Legacy — sin impuestos ni
-   * comisiones; se mantiene por compatibilidad con tests viejos. UI nueva
-   * lee `desglosePrecio`. */
+  /** Proyección compatible del desglose autoritativo, expresada a neto. */
   precio?: {
     metodoUsado: string;
     precioUnitario: number;
@@ -717,7 +723,9 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;
@@ -774,6 +782,7 @@ export interface ProductoCargado {
   rutaAlternativaId: string;
   rutaAlternativaNombre: string;
   rutaId: string;
+  rutaVersion: number;
   rutaCodigo: string;
   rutaNombre: string;
   pasos: PasoCargado[];
@@ -964,6 +973,8 @@ export interface ComponenteDesgasteCargado {
   materiaPrimaVariante?: {
     id: string;
     sku: string;
+    activo?: boolean;
+    materiaPrimaActiva?: boolean;
     precioReferencia: number | null;
   } | null;
 }
@@ -983,6 +994,8 @@ export interface ConsumibleMaquinaCargado {
   materialVariante: {
     id: string;
     sku: string;
+    activo?: boolean;
+    materiaPrimaActiva?: boolean;
     nombreVariante?: string | null;
     materiaPrimaNombre?: string | null;
     materiaPrimaTemplateId?: string | null;
@@ -1027,6 +1040,8 @@ export interface SlotCargado {
   materialVariante?: {
     id: string;
     sku: string;
+    activo?: boolean;
+    materiaPrimaActiva?: boolean;
     nombreVariante?: string | null;
     materiaPrimaNombre?: string | null;
     materiaPrimaTemplateId?: string | null;

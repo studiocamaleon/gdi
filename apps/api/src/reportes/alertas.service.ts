@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { RentabilidadService } from './rentabilidad.service';
+import {
+  RentabilidadService,
+  type RentabilidadPeriodo,
+} from './rentabilidad.service';
 import { diasDelRango, finExclusivo, type Rango } from './periodo';
 import type { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
 import { formatearMoneda } from '../common/moneda';
@@ -91,13 +94,18 @@ export class AlertasService {
   }
 
   /** Evalúa todas las reglas y devuelve las alertas activas, más severas primero. */
-  async activas(tenantId: string, rango: Rango, hoy: Date = new Date()): Promise<Alerta[]> {
+  async activas(
+    tenantId: string,
+    rango: Rango,
+    hoy: Date = new Date(),
+    rentabilidadCalculada?: RentabilidadPeriodo | Promise<RentabilidadPeriodo>,
+  ): Promise<Alerta[]> {
     const umbrales = await this.getUmbrales(tenantId);
     const grupos = await Promise.all([
       this.deudaVencida(tenantId, rango, umbrales),
       this.clientesDormidos(tenantId, umbrales, hoy),
       this.concentracion(tenantId, rango, umbrales),
-      this.puntoEquilibrio(tenantId, rango, hoy),
+      this.puntoEquilibrio(tenantId, rango, hoy, rentabilidadCalculada),
       this.tarifasViejas(tenantId, umbrales, hoy),
     ]);
     return grupos.flat().sort((a, b) => ORDEN[a.severidad] - ORDEN[b.severidad]);
@@ -193,8 +201,15 @@ export class AlertasService {
   }
 
   // 4. Por debajo del punto de equilibrio para lo transcurrido del período.
-  private async puntoEquilibrio(tenantId: string, rango: Rango, hoy: Date): Promise<Alerta[]> {
-    const p = await this.rentabilidad.periodo(tenantId, rango);
+  private async puntoEquilibrio(
+    tenantId: string,
+    rango: Rango,
+    hoy: Date,
+    rentabilidadCalculada?: RentabilidadPeriodo | Promise<RentabilidadPeriodo>,
+  ): Promise<Alerta[]> {
+    const p = rentabilidadCalculada
+      ? await rentabilidadCalculada
+      : await this.rentabilidad.periodo(tenantId, rango);
     if (p.puntoEquilibrio === null || p.avancePct === null) return [];
     // Progreso esperado: fracción del período ya transcurrida (100% si es pasado).
     const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());

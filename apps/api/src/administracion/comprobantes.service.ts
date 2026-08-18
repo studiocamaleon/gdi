@@ -309,7 +309,7 @@ export class ComprobantesService {
         cobroId: i.cobroId,
         fecha: i.cobro.fecha.toISOString().slice(0, 10),
         metodoNombre: i.cobro.metodoPago.nombre,
-        cuentaNombre: i.cobro.cuentaDestino.nombre,
+        cuentaNombre: i.cobro.cuentaDestino?.nombre ?? 'Valor en cartera',
         monto: Number(i.monto),
       })),
     };

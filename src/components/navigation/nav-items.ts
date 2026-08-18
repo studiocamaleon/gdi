@@ -236,11 +236,9 @@ export const NAV: NavItem[] = [
   // Reportes fue durante un tiempo el "Panel general": nueve vistas como tabs de
   // la home, sin URL propia. Como tabs no se podían linkear ni compartir, y el
   // buscador —que come de este árbol— no las encontraba. Cada reporte quedó como
-  // ruta propia, pero en el sidebar Reportes es UNA línea: adentro la tira de
-  // reportes ya es la navegación (ver reportes-shell.tsx) y repetirla como nueve
-  // hijos sólo cargaba el menú. `/reportes` manda al primero que la persona
-  // puede ver, y `buscar` sostiene lo que los hijos daban gratis: escribir
-  // "embudo" o "costo laboral" sigue encontrando el módulo.
+  // ruta propia, pero en el sidebar Reportes es UNA línea: `/reportes` abre el
+  // catálogo y cada informe mantiene una URL compartible. Repetirlos como nueve
+  // hijos sólo cargaría el menú; `buscar` sostiene lo que los hijos daban gratis.
   //
   // Ojo: el permiso de acá es sólo el del módulo. Qué reporte ve cada uno lo
   // deciden la tira (reportes-shell.tsx) y el gate de cada página.
@@ -258,8 +256,8 @@ export const NAV: NavItem[] = [
       "Producción",
       "Equipo",
       "Finanzas",
-      "Ventas & Producto",
-      "Costo laboral",
+      "Ventas y producto",
+      "Salud del ETA",
     ],
   },
   {
@@ -350,4 +348,3 @@ export function flattenNavDestinations(
     return [{ key: item.key, label: item.label, href: item.href, grupo: "" }];
   });
 }
-

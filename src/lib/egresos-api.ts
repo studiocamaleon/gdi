@@ -227,8 +227,9 @@ export async function getPagosDeEgreso(
 // ── Pagos ──────────────────────────────────────────────────────────────
 
 export async function registrarPagoEgresos(body: {
+  idempotencyKey?: string;
   metodoPagoId: string;
-  cuentaOrigenId: string;
+  cuentaOrigenId?: string;
   fecha?: string;
   referencia?: string;
   notas?: string;
@@ -247,6 +248,8 @@ export async function registrarPagoEgresos(body: {
     numero: string;
     banco: string;
     formato: string;
+    modalidad?: "comun" | "diferido";
+    identificadorBancario?: string;
     fechaEmision?: string;
     fechaPago?: string;
   };
@@ -268,14 +271,11 @@ export async function registrarPagoEgresos(body: {
     retencionesTotal: number;
     montoNeto: number;
     enCartera: boolean;
-  }>(
-    "/egresos/pagos",
-    {
-      method: "POST",
-      body: JSON.stringify(body),
-      headers: { "Content-Type": "application/json" },
-    },
-  );
+  }>("/egresos/pagos", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export async function anularPagoEgreso(
@@ -286,6 +286,35 @@ export async function anularPagoEgreso(
     method: "PATCH",
     body: JSON.stringify({ motivo }),
     headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function debitarValorPropio(
+  id: string,
+  payload: {
+    fecha?: string;
+    idempotencyKey?: string;
+    referencia?: string;
+    notas?: string;
+  },
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/egresos/valores/${id}/debitar`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function rechazarValorPropio(
+  id: string,
+  payload: {
+    motivo: string;
+    fecha?: string;
+    idempotencyKey?: string;
+  },
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/egresos/valores/${id}/rechazar`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

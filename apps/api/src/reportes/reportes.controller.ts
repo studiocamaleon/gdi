@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Put, Query } from '@nestjs/common';
-import { claveFechaEnZona } from '../common/zona';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ReportesService } from './reportes.service';
@@ -18,6 +17,7 @@ import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 import { RolSistema } from '@prisma/client';
+import { EtaService } from '../eta/eta.service';
 
 /**
  * Reportes (Inteligencia de negocio) — un endpoint por REPORTE. Cada uno
@@ -44,6 +44,7 @@ export class ReportesController {
     private readonly clientesSvc: ClientesService,
     private readonly equipoSvc: EquipoService,
     private readonly embudoSvc: EmbudoService,
+    private readonly etaSvc: EtaService,
   ) {}
 
   /**
@@ -53,16 +54,23 @@ export class ReportesController {
    * de fábrica la tiene sólo el Administrador.
    */
   @Permiso('reportes.ver_resumen')
+  @OcultaMargenes(false)
   @Get('resumen')
   async resumen(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
+    const rentabilidadPromise = this.rentabilidad.bloque(auth.tenantId, rango, anterior);
     const [{ actual, sinComparativa, deltas }, topClientes, topProductos, prodKpis, alertas, serie] =
       await Promise.all([
-        this.rentabilidad.bloque(auth.tenantId, rango, anterior),
+        rentabilidadPromise,
         this.ventas.topClientes(auth.tenantId, rango, 5),
         this.productos.topProductos(auth.tenantId, rango, 5),
         this.produccionSvc.resumenKpis(auth.tenantId, rango),
-        this.alertas.activas(auth.tenantId, rango),
+        this.alertas.activas(
+          auth.tenantId,
+          rango,
+          new Date(),
+          rentabilidadPromise.then((resultado) => resultado.actual),
+        ),
         this.ventas.serie(auth.tenantId, rango),
       ]);
     return {
@@ -190,6 +198,7 @@ export class ReportesController {
       meta: this.service.metaBase(rango, anterior, 'Snapshot de cotización', {
         limites: this.productos.limites(),
       }),
+      margenesVisibles: Boolean(auth.permisos?.has('finanzas.ver_margenes')),
       ...producto,
     };
   }
@@ -213,6 +222,7 @@ export class ReportesController {
         limites: this.clientesSvc.limites(clientes.rfm.diasActivo),
         sinComparativa: clientes.sinComparativa,
       }),
+      margenesVisibles: Boolean(auth.permisos?.has('finanzas.ver_margenes')),
       ...clientes,
     };
   }
@@ -230,7 +240,26 @@ export class ReportesController {
       meta: this.service.metaBase(rango, anterior, 'Tramos de trabajo y pasos completados', {
         limites: this.equipoSvc.limites(),
       }),
+      margenesVisibles: Boolean(auth.permisos?.has('finanzas.ver_margenes')),
       ...equipo,
+    };
+  }
+
+  @Get('salud-eta')
+  async saludEta(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
+    const [precision, salud] = await Promise.all([
+      this.etaSvc.precisionEnRango(auth.tenantId, rango),
+      this.etaSvc.saludModelo(auth.tenantId, rango),
+    ]);
+    return {
+      meta: this.service.metaBase(rango, anterior, 'Promesas ETA y tiempos medidos', {
+        limites: [
+          'La precisión usa promesas congeladas en el período que ya cerraron; la calibración usa pasos medidos completados en el mismo rango.',
+        ],
+      }),
+      precision,
+      salud,
     };
   }
 
@@ -240,6 +269,7 @@ export class ReportesController {
   }
 
   @Put('umbrales')
+  @Permiso('reportes.ver_resumen')
   actualizarUmbrales(
     @CurrentSession() auth: CurrentAuth,
     @Body() payload: ActualizarUmbralesDto,

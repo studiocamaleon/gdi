@@ -2854,6 +2854,7 @@ model Cotizacion {
   @@index([tenantId, estado])
   @@index([tenantId, createdAt])
   @@index([tenantId, clienteId])
+  @@index([tenantId, fechaEnvio])
 }
 
 /// Numeración de presupuestos por tenant y año (patrón OrdenTrabajoContador).
@@ -3075,6 +3076,8 @@ model OrdenTrabajo {
   @@index([tenantId, estado])
   @@index([tenantId, createdAt])
   @@index([tenantId, clienteId])
+  @@index([tenantId, estado, fechaEmision])
+  @@index([tenantId, estado, fechaFinalizada])
 }
 
 model OrdenTrabajoItem {
@@ -3306,6 +3309,7 @@ model OrdenTrabajoItemPaso {
   @@index([tenantId, estado])
   @@index([tenantId, mesaUsuarioId])
   @@index([tenantId, maquinaId])
+  @@index([tenantId, estado, completadoEl])
 }
 
 /// Sesión de trabajo sobre un paso (registro-tiempos-produccion D2): quién,
@@ -3415,28 +3419,49 @@ model OrdenTrabajoContador {
 // entra la plata (comisión, IVA s/comisión, plazo, retención) y dónde.
 
 model CuentaFondos {
-  id                 String             @id @default(uuid()) @db.Uuid
-  tenantId           String             @db.Uuid
-  /// 'caja' | 'banco' | 'billetera' | 'cartera_valores'.
-  tipo               String
-  nombre             String
-  banco              String?
-  cbuAlias           String?
-  moneda             String             @default("ARS") @db.VarChar(3)
+  id                   String               @id @default(uuid()) @db.Uuid
+  tenantId             String               @db.Uuid
+  /// 'caja' | 'banco' | 'billetera'. Los cheques en cartera son `Valor`, no
+  /// una cuenta de fondos.
+  tipo                 String
+  nombre               String
+  banco                String?
+  cbuAlias             String?
+  moneda               String               @default("ARS") @db.VarChar(3)
   /// Denormalizado recalculable desde MovimientoFondos (etapa B).
-  saldo              Decimal            @default(0) @db.Decimal(14, 2)
-  activo             Boolean            @default(true)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  metodosPagoDefault MetodoPago[]
-  movimientos        MovimientoFondos[]
-  cobrosDestino      Cobro[]
-  pagosOrigen        Pago[]
-  valoresDeposito    Valor[]
+  saldo                Decimal              @default(0) @db.Decimal(14, 2)
+  /// Las cajas y billeteras normalmente no pueden quedar negativas. Una
+  /// cuenta bancaria con descubierto puede habilitarlo explícitamente.
+  permiteSaldoNegativo Boolean              @default(false)
+  activo               Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metodosPagoDefault   MetodoPago[]
+  movimientos          MovimientoFondos[]
+  cobrosDestino        Cobro[]
+  pagosOrigen          Pago[]
+  valoresDeposito      Valor[]
+  eventos              CuentaFondosEvento[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
+}
+
+/// Auditoría append-only del ciclo de vida de una cuenta de fondos.
+model CuentaFondosEvento {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @db.Uuid
+  cuentaId    String       @db.Uuid
+  /// 'creada' | 'editada' | 'activada' | 'desactivada'.
+  tipo        String       @db.VarChar(30)
+  actorUserId String?      @db.Uuid
+  actorNombre String
+  detalleJson Json?
+  createdAt   DateTime     @default(now())
+  cuenta      CuentaFondos @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, cuentaId, createdAt])
 }
 
 model MetodoPago {
@@ -3469,42 +3494,60 @@ model MetodoPago {
 }
 
 model MovimientoFondos {
-  id                 String        @id @default(uuid()) @db.Uuid
-  tenantId           String        @db.Uuid
-  cuentaId           String        @db.Uuid
-  fecha              DateTime      @default(now())
+  id                  String        @id @default(uuid()) @db.Uuid
+  tenantId            String        @db.Uuid
+  cuentaId            String        @db.Uuid
+  fecha               DateTime      @default(now())
   /// 'entrada' | 'salida'.
-  tipo               String
-  monto              Decimal       @db.Decimal(14, 2)
-  concepto           String
+  tipo                String
+  monto               Decimal       @db.Decimal(14, 2)
+  concepto            String
   /// 'cobro' | 'pago' | 'transferencia' | 'valor' | 'ajuste_arqueo'.
-  origenTipo         String
-  cobroId            String?       @db.Uuid
+  origenTipo          String
+  cobroId             String?       @db.Uuid
   /// Pago a proveedor que generó esta salida (docs/egresos-y-cuentas-por-pagar).
-  pagoId             String?       @db.Uuid
-  valorId            String?       @db.Uuid
+  pagoId              String?       @db.Uuid
+  valorId             String?       @db.Uuid
   /// Movimiento espejo en la otra cuenta (transferencias).
-  transferenciaParId String?       @db.Uuid
+  transferenciaParId  String?       @db.Uuid
+  /// Identifica una operación lógica. En una transferencia los dos
+  /// movimientos comparten el mismo UUID.
+  operacionId         String?       @db.Uuid
+  /// Clave provista por el cliente para que un retry no mueva dinero dos veces.
+  /// Sólo la fila principal de una operación la lleva.
+  idempotencyKey      String?       @db.VarChar(80)
+  /// Movimiento original que esta fila revierte, sin borrar historia.
+  reversionDeId       String?       @db.Uuid
   /// Sólo en transferencias entre cuentas de DISTINTA moneda: unidades de la
   /// moneda destino por 1 de la de origen, derivado de lo que el usuario
   /// declaró que llegó (`montoDestino`). El doc del módulo lo especificaba
   /// desde el día uno y nunca se había implementado — la UI decía "se
   /// registra el tipo de cambio del día" y era mentira.
-  tipoCambio         Decimal?      @db.Decimal(14, 4)
-  ordenId            String?       @db.Uuid
+  tipoCambio          Decimal?      @db.Decimal(14, 4)
+  ordenId             String?       @db.Uuid
   /// Saldo de la cuenta después de este movimiento (extracto corrido).
-  saldoPosterior     Decimal       @db.Decimal(14, 2)
+  saldoPosterior      Decimal       @db.Decimal(14, 2)
   /// 'pendiente' | 'conciliado' | 'diferencia' (para conciliación, F3).
-  estadoConciliacion String        @default("pendiente")
-  createdAt          DateTime      @default(now())
-  tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cuenta             CuentaFondos  @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
-  cobro              Cobro?        @relation(fields: [cobroId], references: [id])
-  pago               Pago?         @relation(fields: [pagoId], references: [id])
-  valor              Valor?        @relation(fields: [valorId], references: [id])
-  orden              OrdenTrabajo? @relation(fields: [ordenId], references: [id])
+  estadoConciliacion  String        @default("pendiente")
+  conciliadoEl        DateTime?
+  conciliadoPorId     String?       @db.Uuid
+  conciliadoPorNombre String?
+  referencia          String?       @db.VarChar(100)
+  notas               String?       @db.VarChar(500)
+  actorUserId         String?       @db.Uuid
+  actorNombre         String?
+  createdAt           DateTime      @default(now())
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cuenta              CuentaFondos  @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  cobro               Cobro?        @relation(fields: [cobroId], references: [id])
+  pago                Pago?         @relation(fields: [pagoId], references: [id])
+  valor               Valor?        @relation(fields: [valorId], references: [id])
+  orden               OrdenTrabajo? @relation(fields: [ordenId], references: [id])
 
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, cuentaId, fecha])
+  @@index([tenantId, operacionId])
+  @@index([tenantId, estadoConciliacion, fecha])
 }
 
 model Cobro {
@@ -3514,7 +3557,9 @@ model Cobro {
   ordenId                   String?               @db.Uuid
   fecha                     DateTime
   metodoPagoId              String                @db.Uuid
-  cuentaDestinoId           String                @db.Uuid
+  /// Mientras un cheque/eCheq está en cartera todavía no existe una cuenta
+  /// destino. Se asigna recién al depositarlo.
+  cuentaDestinoId           String?               @db.Uuid
   montoBruto                Decimal               @db.Decimal(14, 2)
   /// % de comisión efectivamente aplicado (editable sobre el del método).
   comisionPctAplicada       Decimal               @default(0) @db.Decimal(6, 3)
@@ -3538,22 +3583,28 @@ model Cobro {
   /// porque después alguien editó el legajo del empleado.
   registradoPorNombre       String?
   anuladoEl                 DateTime?
+  anuladoPorId              String?               @db.Uuid
+  anuladoPorNombre          String?
+  motivoAnulacion           String?               @db.VarChar(300)
+  idempotencyKey            String?               @db.VarChar(80)
   createdAt                 DateTime              @default(now())
   updatedAt                 DateTime              @updatedAt
   tenant                    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cliente                   Cliente?              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   orden                     OrdenTrabajo?         @relation(fields: [ordenId], references: [id])
   metodoPago                MetodoPago            @relation(fields: [metodoPagoId], references: [id])
-  cuentaDestino             CuentaFondos          @relation(fields: [cuentaDestinoId], references: [id])
+  cuentaDestino             CuentaFondos?         @relation(fields: [cuentaDestinoId], references: [id], onDelete: SetNull)
   retenciones               RetencionPercepcion[]
   movimientos               MovimientoFondos[]
   valores                   Valor[]
   imputaciones              CobroImputacion[]
   archivos                  Archivo[]
 
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])
   @@index([tenantId, estadoAcreditacion])
+  @@index([tenantId, anuladoEl, fecha])
 }
 
 /// Numeración de recibos de pago por tenant y año (patrón OrdenTrabajoContador).
@@ -3595,39 +3646,68 @@ model RetencionPercepcion {
 }
 
 model Valor {
-  id               String             @id @default(uuid()) @db.Uuid
-  tenantId         String             @db.Uuid
+  id                    String             @id @default(uuid()) @db.Uuid
+  tenantId              String             @db.Uuid
   /// 'tercero' (recibido) | 'propio' (emitido).
-  origen           String
+  origen                String
   /// 'fisico' | 'echeq'.
-  formato          String
+  formato               String
   /// 'comun' | 'diferido'.
-  modalidad        String
-  numero           String
-  banco            String
-  importe          Decimal            @db.Decimal(14, 2)
-  moneda           String             @default("ARS") @db.VarChar(3)
-  fechaEmision     DateTime?
-  fechaPago        DateTime?
+  modalidad             String
+  numero                String
+  banco                 String
+  /// Identidad normalizada del instrumento: origen|banco|numero. Impide que
+  /// el mismo cheque se registre dos veces aunque cambien mayúsculas o espacios.
+  claveInstrumento      String             @db.VarChar(260)
+  /// Identificador provisto por el banco para un eCheq, si se conoce.
+  identificadorBancario String?            @db.VarChar(100)
+  importe               Decimal            @db.Decimal(14, 2)
+  moneda                String             @default("ARS") @db.VarChar(3)
+  fechaEmision          DateTime?
+  fechaPago             DateTime?
   /// tercero: 'cartera' | 'endosado' | 'depositado' | 'acreditado' | 'rechazado'
-  /// propio:  'cartera' | 'debitado' | 'rechazado'.
-  estado           String             @default("cartera")
-  clienteId        String?            @db.Uuid
-  proveedorId      String?            @db.Uuid
-  cobroId          String?            @db.Uuid
-  cuentaDepositoId String?            @db.Uuid
-  motivoRechazo    String?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente          Cliente?           @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  proveedor        Proveedor?         @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
-  cobro            Cobro?             @relation(fields: [cobroId], references: [id])
-  cuentaDeposito   CuentaFondos?      @relation(fields: [cuentaDepositoId], references: [id])
-  movimientos      MovimientoFondos[]
-  pagos            Pago[]
+  /// propio:  'emitido' | 'debitado' | 'anulado' | 'rechazado'.
+  estado                String             @default("cartera")
+  clienteId             String?            @db.Uuid
+  proveedorId           String?            @db.Uuid
+  cobroId               String?            @db.Uuid
+  cuentaDepositoId      String?            @db.Uuid
+  motivoRechazo         String?
+  depositadoEl          DateTime?
+  acreditadoEl          DateTime?
+  endosadoEl            DateTime?
+  debitadoEl            DateTime?
+  anuladoEl             DateTime?
+  rechazadoEl           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente               Cliente?           @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  proveedor             Proveedor?         @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+  cobro                 Cobro?             @relation(fields: [cobroId], references: [id])
+  cuentaDeposito        CuentaFondos?      @relation(fields: [cuentaDepositoId], references: [id])
+  movimientos           MovimientoFondos[]
+  pagos                 Pago[]
+  eventos               ValorEvento[]
 
+  @@unique([tenantId, claveInstrumento])
   @@index([tenantId, estado])
+}
+
+/// Historial append-only de depósito, acreditación, rechazo y reversión de
+/// cheques/eCheq. El estado actual vive en Valor; acá queda quién hizo qué.
+model ValorEvento {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  valorId     String   @db.Uuid
+  tipo        String   @db.VarChar(30)
+  actorUserId String?  @db.Uuid
+  actorNombre String
+  detalleJson Json?
+  createdAt   DateTime @default(now())
+  valor       Valor    @relation(fields: [valorId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, valorId, createdAt])
 }
 
 // === TAB PRECIO V2 ===
@@ -4044,7 +4124,9 @@ model Pago {
   numero              String
   fecha               DateTime
   metodoPagoId        String    @db.Uuid
-  cuentaOrigenId      String    @db.Uuid
+  /// Es null cuando el pago se realiza endosando un cheque de tercero: ese
+  /// valor nunca entró ni salió de una cuenta de fondos propia.
+  cuentaOrigenId      String?   @db.Uuid
   /// Lo que se imputa a los egresos.
   montoBruto          Decimal   @db.Decimal(14, 2)
   /// Retenciones PRACTICADAS (F2): reducen lo que sale sin reducir lo saldado.
@@ -4058,17 +4140,18 @@ model Pago {
   /// N° de operación del medio de pago: transferencia, cupón, ticket.
   referencia          String?   @db.VarChar(60)
   /// Cheque propio emitido (F2). Valor ya soporta origen 'propio'.
-  valorId             String?   @db.Uuid
+  valorId             String?   @unique @db.Uuid
   anuladoEl           DateTime?
   motivoAnulacion     String?
   registradoPorNombre String?
   notas               String?
+  idempotencyKey      String?   @db.VarChar(80)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   metodoPago   MetodoPago            @relation(fields: [metodoPagoId], references: [id])
-  cuentaOrigen CuentaFondos          @relation(fields: [cuentaOrigenId], references: [id])
+  cuentaOrigen CuentaFondos?         @relation(fields: [cuentaOrigenId], references: [id])
   proveedor    Proveedor?            @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
   valor        Valor?                @relation(fields: [valorId], references: [id])
   imputaciones PagoImputacion[]
@@ -4076,6 +4159,7 @@ model Pago {
   retenciones  RetencionPercepcion[]
 
   @@unique([tenantId, numero])
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, fecha])
   @@index([tenantId, proveedorId])
 }

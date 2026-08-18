@@ -26,6 +26,7 @@ export type PrecisionEta = {
 /** Sesgo estimado-vs-real de una familia + la corrección sugerida. */
 export type SesgoFamiliaEta = {
   familiaCodigo: string;
+  familiaNombre?: string | null;
   muestras: number;
   medianaEstimadoMin: number;
   medianaRealMin: number;

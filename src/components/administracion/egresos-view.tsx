@@ -17,7 +17,7 @@
  */
 
 import * as React from "react";
-import { FileIcon, UploadCloudIcon, XIcon } from "lucide-react";
+import { FileIcon, HandCoinsIcon, UploadCloudIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
@@ -27,6 +27,7 @@ import { formatBytes, validarArchivo } from "@/lib/archivos";
 import { subirArchivo } from "@/lib/archivos-api";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MoneyInput } from "@/components/ui/money-input";
 import {
   SelectBuscable,
@@ -423,6 +424,7 @@ export function EgresosView({
   metodosPago,
   cuentas,
   modo = "egresos",
+  valorEndosoInicialId,
 }: {
   initialEgresos: Egreso[];
   initialResumen: ResumenEgresos | null;
@@ -432,6 +434,8 @@ export function EgresosView({
   cuentas: CuentaFondosResumen[];
   /** Qué mitad del módulo se está mirando. Ver `ModoEgresos`. */
   modo?: ModoEgresos;
+  /** Llega desde Cartera: mantiene el endoso dentro de una orden de pago. */
+  valorEndosoInicialId?: string;
 }) {
   const tabsVisibles = TABS_POR_MODO[modo];
   // Los permisos se resuelven en el cliente (patrón de la casa): el guard del
@@ -631,6 +635,18 @@ export function EgresosView({
           ) : null}
         </div>
 
+        {valorEndosoInicialId ? (
+          <Alert>
+            <HandCoinsIcon />
+            <AlertTitle>Endosar cheque desde cartera</AlertTitle>
+            <AlertDescription>
+              Seleccioná una o más facturas del mismo proveedor y pulsá Pagar.
+              El cheque ya quedará elegido y no se afectará ninguna cuenta
+              bancaria propia.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {error ? <div className="egr-error mod-suelto">{error}</div> : null}
 
         {tab === "analisis" ? (
@@ -803,6 +819,7 @@ export function EgresosView({
             metodosPago={metodosPago}
             cuentas={cuentas}
             hoy={hoy}
+            valorInicialId={valorEndosoInicialId}
             onCerrar={() => setPagoAbierto(false)}
             onListo={() => {
               setPagoAbierto(false);
@@ -1499,10 +1516,25 @@ function AltaEgreso({
   // avisar tiraba todo lo tipeado. Se compara el estado contra el que tenía
   // al abrirse en vez de marcar campo por campo.
   const instantanea = JSON.stringify([
-    yaPagado, descripcion, categoriaId, proveedorId, beneficiario,
-    competencia, vencimiento, neto, iva, alicuota, tipoComprobante,
-    puntoVenta, numeroComprobante, metodoPagoId, cuentaId, referencia,
-    notas, adjuntos.length, cuotas,
+    yaPagado,
+    descripcion,
+    categoriaId,
+    proveedorId,
+    beneficiario,
+    competencia,
+    vencimiento,
+    neto,
+    iva,
+    alicuota,
+    tipoComprobante,
+    puntoVenta,
+    numeroComprobante,
+    metodoPagoId,
+    cuentaId,
+    referencia,
+    notas,
+    adjuntos.length,
+    cuotas,
   ]);
   const [instantaneaInicial] = React.useState(instantanea);
   const hayCambios = instantanea !== instantaneaInicial;
@@ -1947,6 +1979,7 @@ function RegistrarPago({
   metodosPago,
   cuentas,
   hoy,
+  valorInicialId,
   onCerrar,
   onListo,
 }: {
@@ -1954,6 +1987,7 @@ function RegistrarPago({
   metodosPago: MetodoPago[];
   cuentas: CuentaFondosResumen[];
   hoy: string;
+  valorInicialId?: string;
   onCerrar: () => void;
   onListo: () => void;
 }) {
@@ -1963,8 +1997,13 @@ function RegistrarPago({
     () => opcionesDeMetodos(metodosPago),
     [metodosPago],
   );
+  const metodoChequeInicial = metodosPago.find(
+    (metodo) => metodo.tipo === "cheque_echeq",
+  );
   const [metodoPagoId, setMetodoPagoId] = React.useState(
-    metodosPago[0]?.id ?? "",
+    valorInicialId
+      ? (metodoChequeInicial?.id ?? "")
+      : (metodosPago[0]?.id ?? ""),
   );
   /** `null` = la manda el método elegido. Ver `opcionesDeCuentas`. */
   const [cuentaId, setCuentaId] = React.useState<string | null>(null);
@@ -1980,21 +2019,38 @@ function RegistrarPago({
   const [chequeNumero, setChequeNumero] = React.useState("");
   const [chequeBanco, setChequeBanco] = React.useState("");
   const [chequeFormato, setChequeFormato] = React.useState("echeq");
+  const [chequeModalidad, setChequeModalidad] = React.useState<
+    "comun" | "diferido"
+  >("comun");
+  const [chequeIdentificadorBancario, setChequeIdentificadorBancario] =
+    React.useState("");
   const [chequeFechaPago, setChequeFechaPago] = React.useState("");
   /** Emitir uno propio o endosar uno que ya está en cartera. */
   const [chequeModo, setChequeModo] = React.useState<"propio" | "endoso">(
-    "propio",
+    valorInicialId ? "endoso" : "propio",
   );
-  const [valorId, setValorId] = React.useState("");
+  const [valorId, setValorId] = React.useState(valorInicialId ?? "");
   /** `null` = todavía no se pidió la cartera. */
   const [valores, setValores] = React.useState<ValorEnCartera[] | null>(null);
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const idempotencyKey = React.useRef(crypto.randomUUID()).current;
 
   // Mismo guardián que el alta: el pago también se carga a mano.
   const instantanea = JSON.stringify([
-    metodoPagoId, cuentaId, fecha, referencia, montos, retenciones,
-    chequeNumero, chequeBanco, chequeFormato, chequeFechaPago, chequeModo,
+    metodoPagoId,
+    cuentaId,
+    fecha,
+    referencia,
+    montos,
+    retenciones,
+    chequeNumero,
+    chequeBanco,
+    chequeFormato,
+    chequeModalidad,
+    chequeIdentificadorBancario,
+    chequeFechaPago,
+    chequeModo,
     valorId,
   ]);
   const [instantaneaInicial] = React.useState(instantanea);
@@ -2011,6 +2067,7 @@ function RegistrarPago({
 
   const metodo = metodosPago.find((m) => m.id === metodoPagoId);
   const esCheque = metodo?.tipo === "cheque_echeq";
+  const esEndoso = esCheque && chequeModo === "endoso";
 
   // La cartera se pide sólo cuando hace falta: la mayoría de los pagos no son
   // por endoso y el modal no tiene por qué pagar esa consulta siempre.
@@ -2037,7 +2094,9 @@ function RegistrarPago({
   const ajustarAlCheque = () => {
     if (!valorElegido) return;
     // El cheque respalda lo que SALE; lo retenido no viaja en el cheque.
-    setMontos(repartirEntreEgresos(egresos, valorElegido.importe + retencionesTotal));
+    setMontos(
+      repartirEntreEgresos(egresos, valorElegido.importe + retencionesTotal),
+    );
   };
 
   /** Lo que el cheque puede pagar como máximo de esta selección. */
@@ -2058,9 +2117,23 @@ function RegistrarPago({
       })),
     [valores, moneda],
   );
+  const cuentasCompatibles =
+    esCheque && chequeModo === "propio"
+      ? cuentas.filter((cuenta) => cuenta.tipo === "banco")
+      : cuentas;
+  const cuentaPredeterminadaId = cuentasCompatibles.some(
+    (cuenta) => cuenta.id === metodo?.cuentaDestinoId,
+  )
+    ? (metodo?.cuentaDestinoId ?? "")
+    : (cuentasCompatibles[0]?.id ?? "");
   const cuentaUsadaId =
-    cuentaId ?? metodo?.cuentaDestinoId ?? cuentas[0]?.id ?? "";
-  const opcionesCuenta = opcionesDeCuentas(cuentas, metodo?.cuentaDestinoId);
+    cuentaId && cuentasCompatibles.some((cuenta) => cuenta.id === cuentaId)
+      ? cuentaId
+      : cuentaPredeterminadaId;
+  const opcionesCuenta = opcionesDeCuentas(
+    cuentasCompatibles,
+    cuentaPredeterminadaId,
+  );
   const total = egresos.reduce((acc, e) => acc + (montos[e.id] ?? 0), 0);
   const retencionesTotal = retenciones.reduce((acc, r) => acc + r.monto, 0);
   // Lo que realmente sale de la cuenta: lo retenido se deposita al fisco.
@@ -2072,8 +2145,9 @@ function RegistrarPago({
     setError(null);
     try {
       await registrarPagoEgresos({
+        idempotencyKey,
         metodoPagoId,
-        cuentaOrigenId: cuentaUsadaId,
+        cuentaOrigenId: esEndoso ? undefined : cuentaUsadaId,
         fecha,
         referencia: referencia.trim() || undefined,
         imputaciones: egresos
@@ -2097,11 +2171,21 @@ function RegistrarPago({
                 numero: chequeNumero.trim(),
                 banco: chequeBanco.trim(),
                 formato: chequeFormato,
-                fechaPago: chequeFechaPago || undefined,
+                modalidad: chequeModalidad,
+                identificadorBancario:
+                  chequeFormato === "echeq"
+                    ? chequeIdentificadorBancario.trim() || undefined
+                    : undefined,
+                fechaPago:
+                  chequeModalidad === "diferido"
+                    ? chequeFechaPago || undefined
+                    : undefined,
               }
             : undefined,
         valorId:
-          esCheque && chequeModo === "endoso" ? valorId || undefined : undefined,
+          esCheque && chequeModo === "endoso"
+            ? valorId || undefined
+            : undefined,
       });
       onListo();
     } catch (e) {
@@ -2153,15 +2237,24 @@ function RegistrarPago({
                 placeholderBusqueda="Buscar método…"
               />
             </label>
-            <label className="egr-f">
-              <span>Sale de</span>
-              <SelectBuscable
-                value={cuentaUsadaId}
-                onChange={setCuentaId}
-                opciones={opcionesCuenta}
-                placeholderBusqueda="Buscar cuenta…"
-              />
-            </label>
+            {!esEndoso ? (
+              <label className="egr-f">
+                <span>Sale de</span>
+                <SelectBuscable
+                  value={cuentaUsadaId}
+                  onChange={setCuentaId}
+                  opciones={opcionesCuenta}
+                  placeholderBusqueda="Buscar cuenta…"
+                />
+                {esCheque &&
+                chequeModo === "propio" &&
+                cuentasCompatibles.length === 0 ? (
+                  <span className="egr-error">
+                    Creá una cuenta bancaria antes de emitir un cheque propio.
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
             <label className="egr-f">
               <span>Fecha</span>
               <input
@@ -2294,16 +2387,41 @@ function RegistrarPago({
                   />
                 </label>
                 <label className="egr-f">
-                  <span>Fecha de pago</span>
-                  <input
-                    type="date"
-                    value={chequeFechaPago}
-                    onChange={(e) => setChequeFechaPago(e.target.value)}
+                  <span>Modalidad</span>
+                  <SelectBuscable
+                    value={chequeModalidad}
+                    onChange={(valor) => {
+                      setChequeModalidad(valor as "comun" | "diferido");
+                      if (valor === "comun") setChequeFechaPago("");
+                    }}
+                    opciones={[
+                      { value: "comun", label: "Común" },
+                      { value: "diferido", label: "Diferido" },
+                    ]}
                   />
-                  <small className="egr-hint">
-                    Con fecha futura es diferido.
-                  </small>
                 </label>
+                {chequeFormato === "echeq" ? (
+                  <label className="egr-f">
+                    <span>ID bancario (opcional)</span>
+                    <input
+                      value={chequeIdentificadorBancario}
+                      onChange={(e) =>
+                        setChequeIdentificadorBancario(e.target.value)
+                      }
+                      placeholder="Identificador informado por el banco"
+                    />
+                  </label>
+                ) : null}
+                {chequeModalidad === "diferido" ? (
+                  <label className="egr-f">
+                    <span>Fecha de pago</span>
+                    <input
+                      type="date"
+                      value={chequeFechaPago}
+                      onChange={(e) => setChequeFechaPago(e.target.value)}
+                    />
+                  </label>
+                ) : null}
               </div>
               <div className="egr-nota-inline">
                 La factura queda saldada, pero la plata no sale de la cuenta
@@ -2339,7 +2457,9 @@ function RegistrarPago({
                     value={r.regimen}
                     onChange={(v) =>
                       setRetenciones((prev) =>
-                        prev.map((x, j) => (j === i ? { ...x, regimen: v } : x)),
+                        prev.map((x, j) =>
+                          j === i ? { ...x, regimen: v } : x,
+                        ),
                       )
                     }
                     opciones={OPCIONES_RETENCION}
@@ -2370,7 +2490,11 @@ function RegistrarPago({
 
           <div className="egr-total mod-destacado">
             <span>
-              {retencionesTotal > 0 ? "Sale de la cuenta" : "Total del pago"}
+              {esEndoso
+                ? "Cheque endosado"
+                : retencionesTotal > 0
+                  ? "Sale de la cuenta"
+                  : "Total del pago"}
             </span>
             <strong className="mono">{fmt(neto)}</strong>
           </div>
@@ -2400,9 +2524,12 @@ function RegistrarPago({
               total <= 0 ||
               excede ||
               retencionesTotal > total ||
+              (!esEndoso && !cuentaUsadaId) ||
               (esCheque &&
                 chequeModo === "propio" &&
-                (!chequeNumero.trim() || !chequeBanco.trim())) ||
+                (!chequeNumero.trim() ||
+                  !chequeBanco.trim() ||
+                  (chequeModalidad === "diferido" && !chequeFechaPago))) ||
               // Endosar exige un cheque elegido Y que su importe sea el del
               // pago: un cheque no se parte, y el backend lo rechaza igual.
               (esCheque &&

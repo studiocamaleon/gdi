@@ -10,11 +10,10 @@ import { AlertasService } from './alertas.service';
 import { ClientesService } from './clientes.service';
 import { EquipoService } from './equipo.service';
 import { EmbudoService } from './embudo.service';
-import { EmpleadosModule } from '../empleados/empleados.module';
+import { EtaModule } from '../eta/eta.module';
 
 @Module({
-  // El costo laboral sale del legajo: la remuneración vigente de cada persona.
-  imports: [EmpleadosModule],
+  imports: [EtaModule],
   controllers: [ReportesController],
   providers: [
     ReportesService,

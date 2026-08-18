@@ -1,15 +1,23 @@
 import { AcreditacionesView } from "@/components/administracion/acreditaciones-view";
-import type { CobroPendienteAcreditacion } from "@/lib/administracion";
-import { getCobrosPendientesAcreditacion } from "@/lib/administracion-api";
+import {
+  getCobrosPendientesAcreditacion,
+  getTesoreria,
+  getValoresTesoreria,
+} from "@/lib/administracion-api";
 
 export const dynamic = "force-dynamic";
 
 export default async function AcreditacionesPage() {
-  let filas: CobroPendienteAcreditacion[] = [];
-  try {
-    filas = await getCobrosPendientesAcreditacion();
-  } catch {
-    filas = [];
-  }
-  return <AcreditacionesView initialFilas={filas} />;
+  const [filas, valores, tesoreria] = await Promise.all([
+    getCobrosPendientesAcreditacion(),
+    getValoresTesoreria(),
+    getTesoreria(),
+  ]);
+  return (
+    <AcreditacionesView
+      initialFilas={filas}
+      initialValores={valores}
+      cuentas={tesoreria.cuentas.filter((cuenta) => cuenta.activo)}
+    />
+  );
 }

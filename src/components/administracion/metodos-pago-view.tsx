@@ -108,7 +108,9 @@ function FilaMetodo({
           </span>
           <span className="acct">
             <LandmarkIcon />
-            {metodo.cuentaDestinoNombre ?? "Sin cuenta destino"}
+            {metodo.tipo === "cheque_echeq"
+              ? "Cuenta al depositar"
+              : (metodo.cuentaDestinoNombre ?? "Sin cuenta destino")}
           </span>
         </span>
         <span className="apm-pct mono">
@@ -224,8 +226,15 @@ function SheetMetodo({
   const fmt = useFmt();
   const [form, setForm] = React.useState<SheetDraft>(draft);
   const sim = simularMetodo(form, BASE_SIMULACION);
+  const esCheque = form.tipo === "cheque_echeq";
   const set = <K extends keyof SheetDraft>(campo: K, valor: SheetDraft[K]) =>
     setForm((prev) => ({ ...prev, [campo]: valor }));
+  const seleccionarTipo = (tipo: MetodoPagoTipo) =>
+    setForm((prev) => ({
+      ...prev,
+      tipo,
+      cuentaDestinoId: tipo === "cheque_echeq" ? null : prev.cuentaDestinoId,
+    }));
   const esNuevo = !draft.id;
 
   return (
@@ -257,7 +266,9 @@ function SheetMetodo({
             <label>Tipo</label>
             <select
               value={form.tipo}
-              onChange={(e) => set("tipo", e.target.value as MetodoPagoTipo)}
+              onChange={(e) =>
+                seleccionarTipo(e.target.value as MetodoPagoTipo)
+              }
             >
               {METODO_PAGO_TIPOS.map((tipo) => (
                 <option key={tipo} value={tipo}>
@@ -310,17 +321,27 @@ function SheetMetodo({
             </div>
             <div className="apm-field">
               <label>Cuenta destino</label>
-              <select
-                value={form.cuentaDestinoId ?? ""}
-                onChange={(e) => set("cuentaDestinoId", e.target.value || null)}
-              >
-                <option value="">Sin cuenta destino</option>
-                {cuentas.map((cuenta) => (
-                  <option key={cuenta.id} value={cuenta.id}>
-                    {cuenta.nombre}
-                  </option>
-                ))}
-              </select>
+              {esCheque ? (
+                <input
+                  value="Se elige al depositar el valor"
+                  disabled
+                  aria-label="La cuenta destino se elige al depositar"
+                />
+              ) : (
+                <select
+                  value={form.cuentaDestinoId ?? ""}
+                  onChange={(e) =>
+                    set("cuentaDestinoId", e.target.value || null)
+                  }
+                >
+                  <option value="">Sin cuenta destino</option>
+                  {cuentas.map((cuenta) => (
+                    <option key={cuenta.id} value={cuenta.id}>
+                      {cuenta.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
           <div className="apm-toggle-field">
@@ -442,7 +463,10 @@ export function MetodosPagoView({
         ivaComisionPct: draft.ivaComisionPct,
         plazoAcreditacionDias: draft.plazoAcreditacionDias,
         sufreRetencion: draft.sufreRetencion,
-        cuentaDestinoId: draft.cuentaDestinoId ?? null,
+        cuentaDestinoId:
+          draft.tipo === "cheque_echeq"
+            ? null
+            : (draft.cuentaDestinoId ?? null),
         activo: draft.activo,
       };
       const guardado = draft.id

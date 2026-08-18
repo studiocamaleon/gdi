@@ -6,7 +6,10 @@ import {
 import { Prisma, TipoCentroCosto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
-import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
+import {
+  MecanismoCantidadPasoDto,
+  type UpsertProductoConfigPasoDto,
+} from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { construirClaveMatch } from '../motor-universal/tercerizado-costo';
 import { leerNivelesPaso } from '../motor-universal/niveles-paso';
@@ -17,6 +20,12 @@ import {
   resolverFamilia,
 } from './pasos/familias';
 import { exigirProveedorActivoDelTenant } from '../proveedores/proveedor-validacion';
+import {
+  CAPACIDADES,
+  capacidadesDeclaradas,
+  type CapacidadKey,
+} from './pasos/capacidades';
+import { evaluarRegla } from '../motor-universal/evaluador-jsonlogic';
 
 // [Etapa A] Ambas reglas viven ahora en la declaración de la familia
 // (tiposPerfilCompatibles / formulaForzada del slot). Estos alias quedan por
@@ -39,6 +48,19 @@ export class ConfigPasosService {
     dto: UpsertProductoConfigPasoDto,
   ) {
     this.familias.validarConfigPasoContraFamilia(familiaCodigo, dto);
+    this.validarReglaActivacion(
+      dto.modoActivacion,
+      dto.condicionActivacionJson,
+    );
+    if (
+      dto.mecanismoCantidad ===
+        MecanismoCantidadPasoDto.HEREDAR_DEL_OUTPUT_CANONICO &&
+      this.origenHerencia(dto.mecanismoCantidadConfigJson)
+    ) {
+      throw new BadRequestException(
+        'Una configuración base reutilizable no puede fijar un paso origen de una ruta concreta.',
+      );
+    }
     await this.validarSlotsMaterialesCompatibles(tenantId, familiaCodigo, dto);
     await this.validarMaquinasCandidatasCompatibles(
       tenantId,
@@ -144,6 +166,17 @@ export class ConfigPasosService {
       );
     }
     this.familias.validarConfigPasoContraFamilia(rutaPaso.familiaCodigo, dto);
+    this.validarReglaActivacion(
+      dto.modoActivacion,
+      dto.condicionActivacionJson,
+    );
+    await this.validarOrigenHerencia(
+      tenantId,
+      rutaAlt.rutaId,
+      rutaAlt.rutaVersion,
+      rutaPaso,
+      dto,
+    );
     await this.validarSlotsMaterialesCompatibles(
       tenantId,
       rutaPaso.familiaCodigo,
@@ -485,6 +518,102 @@ export class ConfigPasosService {
 
       return configPaso;
     });
+  }
+
+  private validarReglaActivacion(
+    modoActivacion: string | null | undefined,
+    condicion: unknown,
+  ) {
+    if (modoActivacion !== 'CONDICIONAL') return;
+    if (
+      !condicion ||
+      typeof condicion !== 'object' ||
+      Array.isArray(condicion)
+    ) {
+      throw new BadRequestException(
+        'Un paso condicional necesita una regla de activación.',
+      );
+    }
+    const evaluacion = evaluarRegla(condicion, {} as Record<string, unknown>);
+    if (evaluacion.error) {
+      throw new BadRequestException(
+        `La regla de activación del paso es inválida: ${evaluacion.error}`,
+      );
+    }
+  }
+
+  private origenHerencia(config: unknown): {
+    rutaPasoId?: unknown;
+    capacidad?: unknown;
+  } | null {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      return null;
+    }
+    const origen = (config as Record<string, unknown>).origen;
+    return origen && typeof origen === 'object' && !Array.isArray(origen)
+      ? (origen as { rutaPasoId?: unknown; capacidad?: unknown })
+      : null;
+  }
+
+  private async validarOrigenHerencia(
+    tenantId: string,
+    rutaId: string,
+    version: number,
+    pasoDestino: { id: string; orden: number },
+    dto: UpsertProductoConfigPasoDto,
+  ) {
+    if (
+      dto.mecanismoCantidad !==
+      MecanismoCantidadPasoDto.HEREDAR_DEL_OUTPUT_CANONICO
+    ) {
+      return;
+    }
+    const origen = this.origenHerencia(dto.mecanismoCantidadConfigJson);
+    if (!origen) return; // compatibilidad de configuraciones legacy existentes
+    if (typeof origen.rutaPasoId !== 'string' || !origen.rutaPasoId.trim()) {
+      throw new BadRequestException(
+        'El origen de la herencia debe indicar un paso de la ruta.',
+      );
+    }
+    if (
+      typeof origen.capacidad !== 'string' ||
+      !(origen.capacidad in CAPACIDADES)
+    ) {
+      throw new BadRequestException(
+        'La capacidad elegida para heredar no existe.',
+      );
+    }
+    const capacidad = origen.capacidad as CapacidadKey;
+    if (!CAPACIDADES[capacidad].heredable) {
+      throw new BadRequestException(
+        `La capacidad ${CAPACIDADES[capacidad].nombre} no se puede usar como cantidad.`,
+      );
+    }
+    const pasoOrigen = await this.prisma.rutaPaso.findFirst({
+      where: {
+        id: origen.rutaPasoId,
+        tenantId,
+        rutaId,
+        version,
+        activo: true,
+      },
+      select: { id: true, orden: true, familiaCodigo: true },
+    });
+    if (!pasoOrigen || pasoOrigen.orden >= pasoDestino.orden) {
+      throw new BadRequestException(
+        'El origen de la herencia debe ser un paso activo anterior de la misma ruta y versión.',
+      );
+    }
+    const familiaOrigen = resolverFamilia(pasoOrigen.familiaCodigo);
+    const capacidades = new Set<CapacidadKey>([
+      'unidades_procesadas',
+      ...capacidadesDeclaradas(familiaOrigen?.outputsCanonicos),
+    ]);
+    if (!capacidades.has(capacidad)) {
+      throw new BadRequestException(
+        `El paso origen no publica la capacidad ${CAPACIDADES[capacidad].nombre}.`,
+      );
+    }
   }
 
   private async validarMaquinasCandidatasCompatibles(
