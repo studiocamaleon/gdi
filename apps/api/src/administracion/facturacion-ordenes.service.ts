@@ -72,16 +72,177 @@ export class FacturacionOrdenesService {
     tenantId: string,
     ordenId: string,
   ): Promise<number> {
-    const agregado = await tx.cobro.aggregate({
-      where: { tenantId, ordenId, anuladoEl: null },
-      _sum: { montoBruto: true },
-    });
-    const cobrado = r2(Number(agregado._sum.montoBruto ?? 0));
+    const [aplicado, directosSinAplicacion] = await Promise.all([
+      tx.cobroOrden.aggregate({
+        where: { tenantId, ordenId, cobro: { anuladoEl: null } },
+        _sum: { monto: true },
+      }),
+      // Compatibilidad defensiva para datos creados antes de la migración o
+      // fixtures que todavía construyen el cobro directo a mano.
+      tx.cobro.aggregate({
+        where: {
+          tenantId,
+          ordenId,
+          anuladoEl: null,
+          aplicacionesOrden: { none: { ordenId } },
+        },
+        _sum: { montoBruto: true },
+      }),
+    ]);
+    const cobrado = r2(
+      Number(aplicado._sum.monto ?? 0) +
+        Number(directosSinAplicacion._sum.montoBruto ?? 0),
+    );
     await tx.ordenTrabajo.update({
       where: { id: ordenId },
       data: { cobradoTotal: cobrado },
     });
     return cobrado;
+  }
+
+  /**
+   * Distribuye comercialmente un cobro. Si vino desde una OT conserva esa
+   * intención; si vino desde la cuenta corriente aplica FIFO por vencimiento.
+   * El sobrante no se fuerza: queda como anticipo del cliente.
+   */
+  async aplicarCobroComercial(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    cobroId: string,
+  ): Promise<Array<{ ordenId: string; monto: number }>> {
+    const cobro = await tx.cobro.findFirst({
+      where: { id: cobroId, tenantId, anuladoEl: null },
+      include: {
+        aplicacionesOrden: { select: { ordenId: true, monto: true } },
+      },
+    });
+    if (!cobro) return [];
+    if (cobro.aplicacionesOrden.length > 0) {
+      return cobro.aplicacionesOrden.map((a) => ({
+        ordenId: a.ordenId,
+        monto: Number(a.monto),
+      }));
+    }
+
+    if (cobro.ordenId) {
+      const bloqueada = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "OrdenTrabajo"
+        WHERE "id" = ${cobro.ordenId}::uuid AND "tenantId" = ${tenantId}::uuid
+        FOR UPDATE
+      `);
+      if (bloqueada.length === 0) return [];
+      const monto = Number(cobro.montoBruto);
+      await tx.cobroOrden.create({
+        data: { tenantId, cobroId, ordenId: cobro.ordenId, monto },
+      });
+      await this.recalcularCobrado(tx, tenantId, cobro.ordenId);
+      return [{ ordenId: cobro.ordenId, monto }];
+    }
+    if (!cobro.clienteId) return [];
+
+    const ids = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
+      FROM "OrdenTrabajo"
+      WHERE "tenantId" = ${tenantId}::uuid
+        AND "clienteId" = ${cobro.clienteId}::uuid
+        AND "estado" IN ('finalizada', 'entregada')
+        AND COALESCE("total", 0) > COALESCE("cobradoTotal", 0)
+      ORDER BY COALESCE("fechaVencimientoComercial", "fechaFinalizada"::date) ASC,
+               "fechaFinalizada" ASC,
+               "createdAt" ASC
+      FOR UPDATE
+    `);
+    if (ids.length === 0) return [];
+    const ordenes = await tx.ordenTrabajo.findMany({
+      where: { tenantId, id: { in: ids.map((fila) => fila.id) } },
+      select: { id: true, total: true, cobradoTotal: true },
+    });
+    const porId = new Map(ordenes.map((orden) => [orden.id, orden]));
+    let libre = Number(cobro.montoBruto);
+    const aplicaciones: Array<{ ordenId: string; monto: number }> = [];
+    for (const { id: ordenId } of ids) {
+      if (libre <= EPS) break;
+      const orden = porId.get(ordenId);
+      if (!orden) continue;
+      const pendiente = r2(
+        Number(orden.total ?? 0) - Number(orden.cobradoTotal ?? 0),
+      );
+      const monto = r2(Math.min(libre, pendiente));
+      if (monto <= EPS) continue;
+      await tx.cobroOrden.create({
+        data: { tenantId, cobroId, ordenId, monto },
+      });
+      await tx.ordenTrabajo.update({
+        where: { id: ordenId },
+        data: { cobradoTotal: { increment: monto } },
+      });
+      aplicaciones.push({ ordenId, monto });
+      libre = r2(libre - monto);
+    }
+    return aplicaciones;
+  }
+
+  /** Aplica anticipos todavía libres cuando una nueva orden queda exigible. */
+  async aplicarAnticiposClienteAOrden(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    ordenId: string,
+  ): Promise<void> {
+    const bloqueada = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
+      FROM "OrdenTrabajo"
+      WHERE "id" = ${ordenId}::uuid AND "tenantId" = ${tenantId}::uuid
+      FOR UPDATE
+    `);
+    if (bloqueada.length === 0) return;
+    const orden = await tx.ordenTrabajo.findFirst({
+      where: {
+        id: ordenId,
+        tenantId,
+        estado: { in: ['finalizada', 'entregada'] },
+      },
+      select: { clienteId: true, total: true, cobradoTotal: true },
+    });
+    if (!orden?.clienteId) return;
+    let pendiente = r2(
+      Number(orden.total ?? 0) - Number(orden.cobradoTotal ?? 0),
+    );
+    if (pendiente <= EPS) return;
+
+    const cobroIds = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
+      FROM "Cobro"
+      WHERE "tenantId" = ${tenantId}::uuid
+        AND "clienteId" = ${orden.clienteId}::uuid
+        AND "ordenId" IS NULL
+        AND "anuladoEl" IS NULL
+      ORDER BY "fecha" ASC, "createdAt" ASC
+      FOR UPDATE
+    `);
+    for (const { id: cobroId } of cobroIds) {
+      if (pendiente <= EPS) break;
+      const cobro = await tx.cobro.findFirst({
+        where: { id: cobroId, tenantId, anuladoEl: null },
+        select: {
+          montoBruto: true,
+          aplicacionesOrden: { select: { monto: true } },
+        },
+      });
+      if (!cobro) continue;
+      const yaAplicado = cobro.aplicacionesOrden.reduce(
+        (suma, aplicacion) => suma + Number(aplicacion.monto),
+        0,
+      );
+      const libre = r2(Number(cobro.montoBruto) - yaAplicado);
+      const monto = r2(Math.min(libre, pendiente));
+      if (monto <= EPS) continue;
+      await tx.cobroOrden.create({
+        data: { tenantId, cobroId, ordenId, monto },
+      });
+      pendiente = r2(pendiente - monto);
+    }
+    await this.recalcularCobrado(tx, tenantId, ordenId);
   }
 
   /**
@@ -130,7 +291,7 @@ export class FacturacionOrdenesService {
       where: { id: cobroId, tenantId, anuladoEl: null },
       include: { imputaciones: { select: { monto: true } } },
     });
-    if (!cobro?.ordenId) return;
+    if (!cobro) return;
 
     let libre = r2(
       Number(cobro.montoBruto) -
@@ -138,17 +299,46 @@ export class FacturacionOrdenesService {
     );
     if (libre <= EPS) return;
 
-    const facturas = await this.facturasImpagasDeOrden(
-      tx,
-      tenantId,
-      cobro.ordenId,
-    );
-    for (const factura of facturas) {
-      if (libre <= EPS) break;
-      const aplicado = await this.aplicarCobroAFactura(
+    if (cobro.ordenId) {
+      const facturas = await this.facturasImpagasDeOrden(
         tx,
         tenantId,
-        { id: cobro.id, ordenId: cobro.ordenId, libre },
+        cobro.ordenId,
+      );
+      for (const factura of facturas) {
+        if (libre <= EPS) break;
+        const aplicado = await this.aplicarCobroAFactura(
+          tx,
+          tenantId,
+          { id: cobro.id, ordenId: cobro.ordenId, libre },
+          factura,
+        );
+        libre = r2(libre - aplicado);
+      }
+      return;
+    }
+
+    // Cobro general de cuenta corriente: fiscalmente aplica FIFO contra las
+    // facturas del cliente, independientemente de la distribución comercial.
+    if (!cobro.clienteId) return;
+    const facturas = await tx.comprobante.findMany({
+      where: {
+        tenantId,
+        clienteId: cobro.clienteId,
+        tipo: 'factura',
+        estado: 'emitido',
+        anuladoEl: null,
+        saldoPendiente: { gt: 0 },
+      },
+      select: { id: true },
+      orderBy: [{ vencimiento: 'asc' }, { fecha: 'asc' }, { createdAt: 'asc' }],
+    });
+    for (const factura of facturas) {
+      if (libre <= EPS) break;
+      const aplicado = await this.aplicarCobroLibreAFactura(
+        tx,
+        tenantId,
+        { id: cobro.id, libre },
         factura,
       );
       libre = r2(libre - aplicado);
@@ -172,6 +362,7 @@ export class FacturacionOrdenesService {
       select: {
         tipo: true,
         estado: true,
+        clienteId: true,
         saldoPendiente: true,
         ordenes: { select: { ordenId: true, monto: true } },
       },
@@ -209,6 +400,36 @@ export class FacturacionOrdenesService {
         );
       }
     }
+
+    if (!comprobante.clienteId) return;
+    const cobrosGenerales = await tx.cobro.findMany({
+      where: {
+        tenantId,
+        clienteId: comprobante.clienteId,
+        ordenId: null,
+        anuladoEl: null,
+      },
+      include: { imputaciones: { select: { monto: true } } },
+      orderBy: [{ fecha: 'asc' }, { createdAt: 'asc' }],
+    });
+    for (const cobro of cobrosGenerales) {
+      const libre = r2(
+        Number(cobro.montoBruto) -
+          cobro.imputaciones.reduce((s, i) => s + Number(i.monto), 0),
+      );
+      if (libre <= EPS) continue;
+      const factura = await tx.comprobante.findUniqueOrThrow({
+        where: { id: comprobanteId },
+        select: { id: true, saldoPendiente: true },
+      });
+      if (Number(factura.saldoPendiente) <= EPS) return;
+      await this.aplicarCobroLibreAFactura(
+        tx,
+        tenantId,
+        { id: cobro.id, libre },
+        factura,
+      );
+    }
   }
 
   /**
@@ -223,7 +444,10 @@ export class FacturacionOrdenesService {
   ): Promise<void> {
     const cobro = await tx.cobro.findFirst({
       where: { id: cobroId, tenantId },
-      include: { imputaciones: true },
+      include: {
+        imputaciones: true,
+        aplicacionesOrden: { select: { ordenId: true } },
+      },
     });
     if (!cobro) return;
     for (const imp of cobro.imputaciones) {
@@ -235,8 +459,10 @@ export class FacturacionOrdenesService {
     await tx.cobroImputacion.deleteMany({
       where: { cobroId, tenantId },
     });
-    if (cobro.ordenId) {
-      await this.recalcularCobrado(tx, tenantId, cobro.ordenId);
+    const ordenes = new Set(cobro.aplicacionesOrden.map((a) => a.ordenId));
+    if (cobro.ordenId) ordenes.add(cobro.ordenId);
+    for (const ordenId of ordenes) {
+      await this.recalcularCobrado(tx, tenantId, ordenId);
     }
   }
 
@@ -320,15 +546,8 @@ export class FacturacionOrdenesService {
       // facturado y dejaba la factura corregida con su saldo y sus cobros
       // imputados como si nada hubiera pasado — o sea, plata pegada a un
       // comprobante que ya no debería estar vivo.
-      if (
-        emitido?.tipo === 'nota_credito' &&
-        emitido.comprobanteOrigenId
-      ) {
-        await this.revertirFactura(
-          tx,
-          tenantId,
-          emitido.comprobanteOrigenId,
-        );
+      if (emitido?.tipo === 'nota_credito' && emitido.comprobanteOrigenId) {
+        await this.revertirFactura(tx, tenantId, emitido.comprobanteOrigenId);
         return;
       }
 
@@ -367,9 +586,7 @@ export class FacturacionOrdenesService {
       take: 500,
     });
     return ordenes
-      .filter(
-        (o) => Number(o.total ?? 0) - Number(o.facturadoTotal) > 0.01,
-      )
+      .filter((o) => Number(o.total ?? 0) - Number(o.facturadoTotal) > 0.01)
       .map((o) => ({
         ordenId: o.id,
         numero: o.numero,
@@ -469,6 +686,16 @@ export class FacturacionOrdenesService {
     );
     if (monto <= EPS) return 0;
 
+    const actualizado = await tx.comprobante.updateMany({
+      where: { id: factura.id, tenantId, saldoPendiente: { gte: monto } },
+      data: { saldoPendiente: { decrement: monto } },
+    });
+    if (actualizado.count !== 1) {
+      throw new BadRequestException(
+        'El saldo de la factura cambió mientras se aplicaba el cobro. Reintentá la operación.',
+      );
+    }
+
     // El par (cobro, factura) es único: si ya existe (p. ej. un re-match
     // tras liberar cupo), se acumula sobre la imputación existente.
     await tx.cobroImputacion.upsert({
@@ -486,9 +713,53 @@ export class FacturacionOrdenesService {
       },
       update: { monto: { increment: monto } },
     });
-    await tx.comprobante.update({
-      where: { id: factura.id },
+    return monto;
+  }
+
+  /** Aplicación fiscal de un cobro general del cliente, sin OT exclusiva. */
+  private async aplicarCobroLibreAFactura(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    cobro: { id: string; libre: number },
+    factura: { id: string },
+  ): Promise<number> {
+    const actual = await tx.comprobante.findFirst({
+      where: {
+        id: factura.id,
+        tenantId,
+        tipo: 'factura',
+        estado: 'emitido',
+        anuladoEl: null,
+      },
+      select: { saldoPendiente: true },
+    });
+    if (!actual) return 0;
+    const monto = r2(Math.min(cobro.libre, Number(actual.saldoPendiente)));
+    if (monto <= EPS) return 0;
+
+    const actualizado = await tx.comprobante.updateMany({
+      where: { id: factura.id, tenantId, saldoPendiente: { gte: monto } },
       data: { saldoPendiente: { decrement: monto } },
+    });
+    if (actualizado.count !== 1) {
+      throw new BadRequestException(
+        'El saldo de la factura cambió mientras se aplicaba el cobro. Reintentá la operación.',
+      );
+    }
+    await tx.cobroImputacion.upsert({
+      where: {
+        cobroId_comprobanteId: {
+          cobroId: cobro.id,
+          comprobanteId: factura.id,
+        },
+      },
+      create: {
+        tenantId,
+        cobroId: cobro.id,
+        comprobanteId: factura.id,
+        monto,
+      },
+      update: { monto: { increment: monto } },
     });
     return monto;
   }

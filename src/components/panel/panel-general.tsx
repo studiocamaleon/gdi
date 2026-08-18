@@ -959,7 +959,7 @@ export function TabProduccion({ d }: { d: ProduccionPanel }) {
 
 /* ═══════════ TAB · Finanzas ═══════════ */
 export type FinanzasData = { meta: MetaPanel; rentabilidad: RentabilidadPanel; cobranza: CobranzaPanel };
-const AGING_COLORS: Record<string, string> = { "0-30": "var(--ok)", "31-60": "#c8c6c0", "61-90": "#d97757", "+90": "var(--signal)" };
+const AGING_COLORS: Record<string, string> = { "A vencer": "var(--muted-text)", "0-30": "var(--ok)", "31-60": "#c8c6c0", "61-90": "#d97757", "+90": "var(--signal)" };
 export function TabFinanzas({ d }: { d: FinanzasData }) {
   const { moneda } = useConfigRegional();
   const r = d.rentabilidad, co = d.cobranza;
@@ -988,7 +988,7 @@ export function TabFinanzas({ d }: { d: FinanzasData }) {
             {co.aging.map((a) => (
               <div key={a.franja} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: AGING_COLORS[a.franja] }} />
-                <span style={{ color: "var(--ink-2)", flex: 1 }}>{a.franja} días</span>
+                <span style={{ color: "var(--ink-2)", flex: 1 }}>{a.franja === "A vencer" ? a.franja : `${a.franja} días`}</span>
                 <span className="mono" style={{ color: "var(--muted-text)" }}>{co.agingTotal > 0 ? pct((a.monto / co.agingTotal) * 100) : "0%"}</span>
                 <span className="mono" style={{ color: "var(--ink)", fontWeight: 500, width: 90, textAlign: "right" }}>{formatearMoneda(a.monto, moneda, { decimales: 0 })}</span>
               </div>
@@ -1021,7 +1021,7 @@ export function TabFinanzas({ d }: { d: FinanzasData }) {
         <Card span={12} title="Deudores principales" sub="prioridad de cobranza" flush>
           {co.deudores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin deuda pendiente.</div> : (
             <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Saldo</th><th className="right">Días máx.</th><th style={{ width: 200 }}>Distribución</th></tr></thead>
-              <tbody>{co.deudores.map((x) => (<tr key={x.clienteId ?? x.cliente}><td><div className="nm">{x.cliente}</div></td><td className="right mono" style={{ fontWeight: 600 }}>{formatearMoneda(x.saldo, moneda, { decimales: 0 })}</td><td className="right mono" style={{ color: x.diasMax > 60 ? "var(--signal)" : "var(--ink)" }}>{x.diasMax} d</td><td style={{ width: 200 }}><StackedHBar height={10} segments={(["0-30", "31-60", "61-90", "+90"] as const).map((f) => ({ value: x.porFranja[f], color: AGING_COLORS[f], label: f }))} /></td></tr>))}</tbody>
+              <tbody>{co.deudores.map((x) => (<tr key={x.clienteId ?? x.cliente}><td><div className="nm">{x.cliente}</div></td><td className="right mono" style={{ fontWeight: 600 }}>{formatearMoneda(x.saldo, moneda, { decimales: 0 })}</td><td className="right mono" style={{ color: x.diasMax > 60 ? "var(--signal)" : "var(--ink)" }}>{x.diasMax} d</td><td style={{ width: 200 }}><StackedHBar height={10} segments={(["A vencer", "0-30", "31-60", "61-90", "+90"] as const).map((f) => ({ value: x.porFranja[f], color: AGING_COLORS[f], label: f }))} /></td></tr>))}</tbody>
             </table>
           )}
         </Card>

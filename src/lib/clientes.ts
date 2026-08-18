@@ -78,6 +78,8 @@ export type ClienteDetalle = {
   condicionFiscal: CondicionFiscal;
   /** Tope de deuda en cta. cte.; null = sin límite definido. */
   limiteCredito: number | null;
+  /** Null = venta común; número = cuenta corriente con ese plazo. */
+  plazoCuentaCorrienteDias: number | null;
   contacto: string;
   email: string;
   ciudad: string;
@@ -108,6 +110,7 @@ export type ClientePayload = {
   documentoNumero?: string;
   condicionFiscal?: CondicionFiscal;
   limiteCredito?: number | null;
+  plazoCuentaCorrienteDias?: number | null;
   email: string;
   pais: string;
   telefonoCodigo: string;
@@ -147,6 +150,7 @@ export function createEmptyCliente(): ClienteDetalle {
     condicionFiscal: "consumidor_final",
     activo: true,
     limiteCredito: null,
+    plazoCuentaCorrienteDias: null,
     contacto: "",
     email: "",
     ciudad: "",

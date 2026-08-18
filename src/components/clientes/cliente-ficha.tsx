@@ -76,6 +76,7 @@ type DatosGeneralesState = {
   cuit: string;
   documentoNumero: string;
   condicionFiscal: CondicionFiscal;
+  plazoCuentaCorrienteDias: string;
   limiteCredito: string;
   telefonoCodigo: string;
   telefonoNumero: string;
@@ -131,6 +132,10 @@ function buildPayload(
   direcciones: ClienteDireccion[],
   aceptaWhatsapp: boolean | null,
 ): ClientePayload {
+  const plazoCuentaCorrienteDias =
+    datosGenerales.plazoCuentaCorrienteDias.trim() === ""
+      ? null
+      : Number(datosGenerales.plazoCuentaCorrienteDias);
   return {
     nombre: datosGenerales.nombre.trim(),
     razonSocial: datosGenerales.razonSocial.trim() || undefined,
@@ -138,7 +143,9 @@ function buildPayload(
     documentoNumero:
       datosGenerales.documentoNumero.replace(/\D/g, "") || undefined,
     condicionFiscal: datosGenerales.condicionFiscal,
+    plazoCuentaCorrienteDias,
     limiteCredito:
+      plazoCuentaCorrienteDias === null ||
       datosGenerales.limiteCredito.trim() === ""
         ? null
         : Number(datosGenerales.limiteCredito),
@@ -177,6 +184,7 @@ type FieldErrors = Partial<
     | "telefonoNumero"
     | "cuit"
     | "documentoNumero"
+    | "plazoCuentaCorrienteDias"
     | "limiteCredito",
     string
   >
@@ -193,6 +201,15 @@ function validatePayload(payload: ClientePayload) {
   }
   if (payload.documentoNumero && !/^\d{7,9}$/.test(payload.documentoNumero)) {
     fields.documentoNumero = "El DNI debe tener entre 7 y 9 dígitos.";
+  }
+  if (
+    payload.plazoCuentaCorrienteDias !== null &&
+    payload.plazoCuentaCorrienteDias !== undefined &&
+    (!Number.isInteger(payload.plazoCuentaCorrienteDias) ||
+      payload.plazoCuentaCorrienteDias < 0 ||
+      payload.plazoCuentaCorrienteDias > 365)
+  ) {
+    fields.plazoCuentaCorrienteDias = "Ingresá un plazo entre 0 y 365 días.";
   }
   if (
     payload.limiteCredito !== null &&
@@ -288,6 +305,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       cuit: cliente.cuit,
       documentoNumero: cliente.documentoNumero ?? "",
       condicionFiscal: cliente.condicionFiscal,
+      plazoCuentaCorrienteDias:
+        cliente.plazoCuentaCorrienteDias === null
+          ? ""
+          : String(cliente.plazoCuentaCorrienteDias),
       limiteCredito:
         cliente.limiteCredito === null ? "" : String(cliente.limiteCredito),
       telefonoCodigo: cliente.telefonoCodigo,
@@ -508,13 +529,15 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       setErrorMessage(validation.message);
       toast.error(validation.message);
       const firstField = Object.keys(validation.fields)[0] as
-        keyof FieldErrors | undefined;
+        | keyof FieldErrors
+        | undefined;
       const fieldIds: Record<keyof FieldErrors, string> = {
         nombre: "cliente-nombre",
         email: "cliente-email",
         telefonoNumero: "telefono-numero",
         cuit: "cliente-cuit",
         documentoNumero: "cliente-documento",
+        plazoCuentaCorrienteDias: "cliente-condicion-pago",
         limiteCredito: "cliente-limite-credito",
       };
       if (firstField) document.getElementById(fieldIds[firstField])?.focus();
@@ -648,11 +671,8 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         </Alert>
       ) : null}
 
-      <fieldset
-        disabled={readOnly}
-        className="contents [&>*]:shrink-0"
-      >
-      <Card className="rounded-2xl border-border/70 shadow-sm">
+      <fieldset disabled={readOnly} className="contents [&>*]:shrink-0">
+        <Card className="rounded-2xl border-border/70 shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-bold tracking-tight">
               Datos generales
@@ -795,12 +815,48 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                 </FieldDescription>
               </Field>
 
-              <Field data-invalid={Boolean(fieldErrors.limiteCredito)}>
+              <Field
+                data-invalid={Boolean(fieldErrors.plazoCuentaCorrienteDias)}
+              >
+                <FieldLabel htmlFor="cliente-condicion-pago">
+                  Plazo de cuenta corriente (días)
+                </FieldLabel>
+                <Input
+                  id="cliente-condicion-pago"
+                  inputMode="numeric"
+                  aria-invalid={Boolean(fieldErrors.plazoCuentaCorrienteDias)}
+                  value={datosGenerales.plazoCuentaCorrienteDias}
+                  onChange={(event) =>
+                    setDatosGenerales((current) => ({
+                      ...current,
+                      plazoCuentaCorrienteDias: event.target.value.replace(
+                        /\D/g,
+                        "",
+                      ),
+                    }))
+                  }
+                  placeholder="Venta común"
+                />
+                <FieldDescription>
+                  {fieldErrors.plazoCuentaCorrienteDias ??
+                    "Vacío = vence al finalizar la orden. Ej. 30 = cuenta corriente a 30 días."}
+                </FieldDescription>
+              </Field>
+
+              <Field
+                data-disabled={
+                  datosGenerales.plazoCuentaCorrienteDias.trim() === ""
+                }
+                data-invalid={Boolean(fieldErrors.limiteCredito)}
+              >
                 <FieldLabel htmlFor="cliente-limite-credito">
                   Límite de crédito (opcional)
                 </FieldLabel>
                 <Input
                   id="cliente-limite-credito"
+                  disabled={
+                    datosGenerales.plazoCuentaCorrienteDias.trim() === ""
+                  }
                   inputMode="decimal"
                   aria-invalid={Boolean(fieldErrors.limiteCredito)}
                   value={datosGenerales.limiteCredito}
@@ -814,7 +870,9 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                 />
                 <FieldDescription>
                   {fieldErrors.limiteCredito ??
-                    "Tope de deuda en cuenta corriente. Vacío = sin límite."}
+                    (datosGenerales.plazoCuentaCorrienteDias.trim() === ""
+                      ? "Se habilita al configurar un plazo de cuenta corriente."
+                      : "Tope de deuda. Vacío = cuenta corriente sin límite.")}
                 </FieldDescription>
               </Field>
 
@@ -1530,45 +1588,54 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
               </Tabs>
             )}
           </CardContent>
-      </Card>
-      {mode !== "create" ? (
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold tracking-tight">
-              Actividad de la ficha
-            </CardTitle>
-            <CardDescription>
-              Últimos cambios registrados con fecha y responsable.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {cliente.eventos.length === 0 ? (
-              <Empty className="min-h-32">
-                <EmptyHeader>
-                  <EmptyTitle>Sin actividad registrada</EmptyTitle>
-                  <EmptyDescription>
-                    Los próximos cambios quedarán visibles en esta sección.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {cliente.eventos.map((evento) => (
-                  <li key={evento.id} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <span>
-                      <strong className="font-medium capitalize">{evento.tipo}</strong>
-                      {" por "}{evento.actorNombre}
-                    </span>
-                    <time dateTime={evento.createdAt} className="text-sm text-muted-foreground">
-                      {fechaHora(evento.createdAt)}
-                    </time>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
         </Card>
-      ) : null}
+        {mode !== "create" ? (
+          <Card className="rounded-2xl border-border/70 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold tracking-tight">
+                Actividad de la ficha
+              </CardTitle>
+              <CardDescription>
+                Últimos cambios registrados con fecha y responsable.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {cliente.eventos.length === 0 ? (
+                <Empty className="min-h-32">
+                  <EmptyHeader>
+                    <EmptyTitle>Sin actividad registrada</EmptyTitle>
+                    <EmptyDescription>
+                      Los próximos cambios quedarán visibles en esta sección.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {cliente.eventos.map((evento) => (
+                    <li
+                      key={evento.id}
+                      className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <span>
+                        <strong className="font-medium capitalize">
+                          {evento.tipo}
+                        </strong>
+                        {" por "}
+                        {evento.actorNombre}
+                      </span>
+                      <time
+                        dateTime={evento.createdAt}
+                        className="text-sm text-muted-foreground"
+                      >
+                        {fechaHora(evento.createdAt)}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
       </fieldset>
     </form>
   );

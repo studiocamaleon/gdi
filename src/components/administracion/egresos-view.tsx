@@ -68,6 +68,7 @@ import {
   anularEgreso,
   anularPagoEgreso,
   crearEgreso,
+  editarEgreso,
   getEgresos,
   getPagosDeEgreso,
   getReporteEgresos,
@@ -349,9 +350,9 @@ function useCerrarConEscape(onCerrar: () => void, activo = true) {
 }
 
 /** Catálogos fijos: no cambian por tenant, así que se arman una sola vez. */
-const OPCIONES_COMPROBANTE: OpcionSelect[] = TIPOS_COMPROBANTE_COMPRA.map(
-  (t) => ({ value: t, label: TIPO_COMPROBANTE_LABELS[t] }),
-);
+const OPCIONES_COMPROBANTE: OpcionSelect[] = TIPOS_COMPROBANTE_COMPRA.filter(
+  (t) => t !== "NC",
+).map((t) => ({ value: t, label: TIPO_COMPROBANTE_LABELS[t] }));
 
 const OPCIONES_FRECUENCIA: OpcionSelect[] = FRECUENCIAS_RECURRENTE.map((f) => ({
   value: f,
@@ -472,7 +473,7 @@ export function EgresosView({
         const [lista, res] = await Promise.all([
           getEgresos(
             t === "por-pagar"
-              ? { soloPendientes: true }
+              ? { soloPendientes: true, texto: texto || undefined }
               : { texto: texto || undefined },
           ),
           getResumenEgresos(),
@@ -523,7 +524,7 @@ export function EgresosView({
   };
 
   const visibles = React.useMemo(() => {
-    if (tab === "por-pagar" || !texto.trim()) return egresos;
+    if (!texto.trim()) return egresos;
     const q = texto.trim().toLowerCase();
     return egresos.filter(
       (e) =>
@@ -790,6 +791,7 @@ export function EgresosView({
 
         {altaAbierta ? (
           <AltaEgreso
+            modo={modo}
             categorias={categorias}
             proveedores={proveedores}
             metodosPago={metodosPago}
@@ -831,13 +833,20 @@ export function EgresosView({
         {detalle ? (
           <DetalleEgreso
             egreso={detalle}
+            categorias={categorias}
+            puedeGestionar={puedeGestionar}
             puedeAnular={puedeAnular}
             onCerrar={() => setDetalle(null)}
             onAnular={() => {
               setAnulando(detalle);
               setDetalle(null);
             }}
-            onCambio={() => void recargar()}
+            onCambio={() => {
+              void recargar().then((lista) => {
+                const actualizado = lista?.find((e) => e.id === detalle.id);
+                if (actualizado) setDetalle(actualizado);
+              });
+            }}
           />
         ) : null}
 
@@ -1441,6 +1450,7 @@ function Analisis({
  * vencimiento y va a Cuentas por pagar.
  */
 function AltaEgreso({
+  modo,
   categorias,
   proveedores,
   metodosPago,
@@ -1449,6 +1459,7 @@ function AltaEgreso({
   onCerrar,
   onListo,
 }: {
+  modo: ModoEgresos;
   categorias: CategoriaEgreso[];
   proveedores: ProveedorOpcion[];
   metodosPago: MetodoPago[];
@@ -1479,7 +1490,7 @@ function AltaEgreso({
     [metodosPago],
   );
 
-  const [yaPagado, setYaPagado] = React.useState(true);
+  const [yaPagado, setYaPagado] = React.useState(modo !== "cuentas-por-pagar");
   const [descripcion, setDescripcion] = React.useState("");
   const [categoriaId, setCategoriaId] = React.useState(activas[0]?.id ?? "");
   const [proveedorId, setProveedorId] = React.useState("");
@@ -1488,6 +1499,7 @@ function AltaEgreso({
   const [vencimiento, setVencimiento] = React.useState(sumarDias(hoy, 30));
   const [neto, setNeto] = React.useState(0);
   const [iva, setIva] = React.useState(0);
+  const [otrosImpuestos, setOtrosImpuestos] = React.useState(0);
   /** Porcentaje elegido, o `null` = lo escribe la persona. */
   const [alicuota, setAlicuota] = React.useState<number | null>(21);
   const [tipoComprobante, setTipoComprobante] = React.useState("SIN_DOCUMENTO");
@@ -1525,6 +1537,7 @@ function AltaEgreso({
     vencimiento,
     neto,
     iva,
+    otrosImpuestos,
     alicuota,
     tipoComprobante,
     puntoVenta,
@@ -1549,7 +1562,10 @@ function AltaEgreso({
   useCerrarConEscape(pedirCierre, !confirmandoSalida);
 
   const conIva = discriminaIva(tipoComprobante);
-  const total = neto + iva;
+  const requiereDatosFiscales = ["FA", "FB", "FC", "ND"].includes(
+    tipoComprobante,
+  );
+  const total = neto + iva + otrosImpuestos;
 
   // La cuenta que se va a usar: la elegida, si no la del método, si no la
   // primera. Mismo orden que Cobros.
@@ -1605,6 +1621,7 @@ function AltaEgreso({
         fechaCompetencia: competencia,
         neto,
         iva,
+        otrosImpuestos,
         notas: notas.trim() || undefined,
       };
       if (proveedorId) body.proveedorId = proveedorId;
@@ -1660,6 +1677,8 @@ function AltaEgreso({
     categoriaId &&
     total > 0 &&
     (proveedorId || beneficiario.trim().length >= 2) &&
+    (!requiereDatosFiscales ||
+      (proveedorId && puntoVenta.trim() && numeroComprobante.trim())) &&
     // `cuentaUsadaId` y no `cuentaId`: lo que importa es que HAYA una cuenta,
     // no que la hayan elegido a mano. Mirar el estado crudo dejaría el botón
     // apagado hasta tocar un campo que ya venía resuelto.
@@ -1847,6 +1866,21 @@ function AltaEgreso({
               </label>
             </div>
 
+            <div className="egr-sub egr-sub-2">
+              <label className="egr-f">
+                <span>Otros impuestos / percepciones</span>
+                <CampoMonto
+                  valor={otrosImpuestos}
+                  onCambio={setOtrosImpuestos}
+                  ariaLabel="Otros impuestos y percepciones"
+                />
+              </label>
+              <div className="egr-hint egr-hint-box">
+                Importes del comprobante que no son IVA: percepciones de IIBB,
+                tasas u otros tributos.
+              </div>
+            </div>
+
             {tipoComprobante !== "SIN_DOCUMENTO" ? (
               <div className="egr-sub egr-sub-2">
                 {/* Los ceros los pone el sistema al salir del campo, no la
@@ -1879,6 +1913,13 @@ function AltaEgreso({
                     placeholder="00012345"
                   />
                 </label>
+              </div>
+            ) : null}
+
+            {requiereDatosFiscales && !proveedorId ? (
+              <div className="egr-error egr-f-wide">
+                Para una factura o nota de débito, elegí el proveedor que la
+                emitió.
               </div>
             ) : null}
 
@@ -2014,7 +2055,14 @@ function RegistrarPago({
     Object.fromEntries(egresos.map((e) => [e.id, e.saldo])),
   );
   const [retenciones, setRetenciones] = React.useState<
-    Array<{ regimen: string; monto: number }>
+    Array<{
+      regimen: string;
+      jurisdiccion: string;
+      base: number;
+      alicuota: number;
+      monto: number;
+      nroComprobante: string;
+    }>
   >([]);
   const [chequeNumero, setChequeNumero] = React.useState("");
   const [chequeBanco, setChequeBanco] = React.useState("");
@@ -2136,6 +2184,13 @@ function RegistrarPago({
   );
   const total = egresos.reduce((acc, e) => acc + (montos[e.id] ?? 0), 0);
   const retencionesTotal = retenciones.reduce((acc, r) => acc + r.monto, 0);
+  const retencionesInvalidas = retenciones.some(
+    (retencion) =>
+      retencion.base <= 0 ||
+      retencion.alicuota <= 0 ||
+      retencion.monto <= 0 ||
+      (retencion.regimen === "IIBB_CONVENIO" && !retencion.jurisdiccion.trim()),
+  );
   // Lo que realmente sale de la cuenta: lo retenido se deposita al fisco.
   const neto = total - retencionesTotal;
   const excede = egresos.some((e) => (montos[e.id] ?? 0) > e.saldo + 0.005);
@@ -2157,12 +2212,11 @@ function RegistrarPago({
           .filter((r) => r.monto > 0)
           .map((r) => ({
             regimen: r.regimen,
-            // La base es el total del pago y la alícuota se deriva: al
-            // administrativo le llega el MONTO en el certificado, no el %.
-            base: total,
-            alicuota:
-              total > 0 ? Math.round((r.monto / total) * 100000) / 1000 : 0,
+            jurisdiccion: r.jurisdiccion.trim() || undefined,
+            base: r.base,
+            alicuota: r.alicuota,
             monto: r.monto,
+            nroComprobante: r.nroComprobante.trim() || undefined,
           })),
         // Uno u otro, nunca los dos: el backend lo rechaza si van juntos.
         cheque:
@@ -2439,7 +2493,14 @@ function RegistrarPago({
                 onClick={() =>
                   setRetenciones((prev) => [
                     ...prev,
-                    { regimen: "SICORE_GANANCIAS", monto: 0 },
+                    {
+                      regimen: "SICORE_GANANCIAS",
+                      jurisdiccion: "",
+                      base: total,
+                      alicuota: 0,
+                      monto: 0,
+                      nroComprobante: "",
+                    },
                   ])
                 }
               >
@@ -2452,31 +2513,106 @@ function RegistrarPago({
               </div>
             ) : (
               retenciones.map((r, i) => (
-                <div className="egr-ret-fila" key={i}>
-                  <SelectBuscable
-                    value={r.regimen}
-                    onChange={(v) =>
-                      setRetenciones((prev) =>
-                        prev.map((x, j) =>
-                          j === i ? { ...x, regimen: v } : x,
-                        ),
-                      )
-                    }
-                    opciones={OPCIONES_RETENCION}
-                    ariaLabel="Régimen de retención"
-                  />
-                  <CampoMonto
-                    valor={r.monto}
-                    onCambio={(v) =>
-                      setRetenciones((prev) =>
-                        prev.map((x, j) => (j === i ? { ...x, monto: v } : x)),
-                      )
-                    }
-                    ariaLabel="Monto retenido"
-                  />
+                <div className="egr-ret-fila egr-ret-detalle" key={i}>
+                  <label className="egr-f">
+                    <span>Régimen</span>
+                    <SelectBuscable
+                      value={r.regimen}
+                      onChange={(v) =>
+                        setRetenciones((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, regimen: v } : x,
+                          ),
+                        )
+                      }
+                      opciones={OPCIONES_RETENCION}
+                      ariaLabel="Régimen de retención"
+                    />
+                  </label>
+                  <label className="egr-f">
+                    <span>Jurisdicción</span>
+                    <input
+                      value={r.jurisdiccion}
+                      onChange={(event) =>
+                        setRetenciones((prev) =>
+                          prev.map((x, j) =>
+                            j === i
+                              ? { ...x, jurisdiccion: event.target.value }
+                              : x,
+                          ),
+                        )
+                      }
+                      placeholder="Ej. CABA"
+                    />
+                  </label>
+                  <label className="egr-f">
+                    <span>Base imponible</span>
+                    <CampoMonto
+                      valor={r.base}
+                      onCambio={(v) =>
+                        setRetenciones((prev) =>
+                          prev.map((x, j) => (j === i ? { ...x, base: v } : x)),
+                        )
+                      }
+                      ariaLabel="Base imponible de la retención"
+                    />
+                  </label>
+                  <label className="egr-f">
+                    <span>Alícuota (%)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.001"
+                      value={r.alicuota || ""}
+                      onChange={(event) =>
+                        setRetenciones((prev) =>
+                          prev.map((x, j) =>
+                            j === i
+                              ? {
+                                  ...x,
+                                  alicuota: Math.max(
+                                    0,
+                                    Number(event.target.value) || 0,
+                                  ),
+                                }
+                              : x,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="egr-f">
+                    <span>Monto retenido</span>
+                    <CampoMonto
+                      valor={r.monto}
+                      onCambio={(v) =>
+                        setRetenciones((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, monto: v } : x,
+                          ),
+                        )
+                      }
+                      ariaLabel="Monto retenido"
+                    />
+                  </label>
+                  <label className="egr-f">
+                    <span>Certificado / referencia</span>
+                    <input
+                      value={r.nroComprobante}
+                      onChange={(event) =>
+                        setRetenciones((prev) =>
+                          prev.map((x, j) =>
+                            j === i
+                              ? { ...x, nroComprobante: event.target.value }
+                              : x,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
                   <button
                     type="button"
-                    className="egr-link"
+                    className="egr-link egr-ret-quitar"
                     onClick={() =>
                       setRetenciones((prev) => prev.filter((_, j) => j !== i))
                     }
@@ -2505,6 +2641,13 @@ function RegistrarPago({
             </div>
           ) : null}
 
+          {retencionesInvalidas ? (
+            <div className="egr-error mod-suelto">
+              Completá base, alícuota y monto de cada retención. Ingresos Brutos
+              también necesita jurisdicción.
+            </div>
+          ) : null}
+
           {excede ? (
             <div className="egr-error mod-suelto">
               Estás imputando más de lo que se debe en alguno de los egresos.
@@ -2523,6 +2666,7 @@ function RegistrarPago({
               guardando ||
               total <= 0 ||
               excede ||
+              retencionesInvalidas ||
               retencionesTotal > total ||
               (!esEndoso && !cuentaUsadaId) ||
               (esCheque &&
@@ -2571,12 +2715,16 @@ function RegistrarPago({
 /** Ficha del egreso con sus pagos y la acción de anular. */
 function DetalleEgreso({
   egreso,
+  categorias,
+  puedeGestionar,
   puedeAnular,
   onCerrar,
   onAnular,
   onCambio,
 }: {
   egreso: Egreso;
+  categorias: CategoriaEgreso[];
+  puedeGestionar: boolean;
   puedeAnular: boolean;
   onCerrar: () => void;
   onAnular: () => void;
@@ -2590,6 +2738,49 @@ function DetalleEgreso({
   const [anulandoPago, setAnulandoPago] = React.useState<PagoDeEgreso | null>(
     null,
   );
+  const [editando, setEditando] = React.useState(false);
+  const [descripcion, setDescripcion] = React.useState(egreso.descripcion);
+  const [categoriaId, setCategoriaId] = React.useState(
+    egreso.categoriaEgresoId,
+  );
+  const [competencia, setCompetencia] = React.useState(
+    egreso.fechaCompetencia.slice(0, 10),
+  );
+  const [vencimiento, setVencimiento] = React.useState(
+    egreso.fechaVencimiento?.slice(0, 10) ?? "",
+  );
+  const [neto, setNeto] = React.useState(egreso.neto);
+  const [iva, setIva] = React.useState(egreso.iva);
+  const [otrosImpuestos, setOtrosImpuestos] = React.useState(
+    egreso.otrosImpuestos,
+  );
+  const [notas, setNotas] = React.useState(egreso.notas ?? "");
+  const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  const [errorEdicion, setErrorEdicion] = React.useState<string | null>(null);
+
+  const guardarEdicion = async () => {
+    setGuardandoEdicion(true);
+    setErrorEdicion(null);
+    try {
+      await editarEgreso(egreso.id, {
+        descripcion: descripcion.trim(),
+        categoriaEgresoId: categoriaId,
+        fechaCompetencia: competencia,
+        ...(vencimiento ? { fechaVencimiento: vencimiento } : {}),
+        ...(egreso.pagadoTotal <= 0 ? { neto, iva, otrosImpuestos } : {}),
+        notas: notas.trim(),
+      });
+      toast.success("Egreso actualizado.");
+      setEditando(false);
+      onCambio();
+    } catch (error) {
+      setErrorEdicion(
+        error instanceof Error ? error.message : "No se pudo actualizar.",
+      );
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  };
 
   const cargar = React.useCallback(() => {
     getPagosDeEgreso(egreso.id)
@@ -2615,62 +2806,150 @@ function DetalleEgreso({
           </button>
         </div>
         <div className="mod-body">
-          <dl className="egr-dl">
-            <dt>Beneficiario</dt>
-            <dd>{egreso.beneficiarioNombre}</dd>
-            <dt>Categoría</dt>
-            <dd>
-              {egreso.categoriaNombre}
-              {egreso.naturaleza ? (
-                <small> · {NATURALEZA_LABELS[egreso.naturaleza]}</small>
+          {editando ? (
+            <div className="egr-grid">
+              <label className="egr-f egr-f-wide">
+                <span>Descripción</span>
+                <input
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                />
+              </label>
+              <label className="egr-f">
+                <span>Categoría</span>
+                <SelectBuscable
+                  value={categoriaId}
+                  onChange={setCategoriaId}
+                  opciones={opcionesDeCategorias(categorias)}
+                />
+              </label>
+              <label className="egr-f">
+                <span>Competencia</span>
+                <input
+                  type="date"
+                  value={competencia}
+                  onChange={(e) => setCompetencia(e.target.value)}
+                />
+              </label>
+              {egreso.fechaVencimiento ? (
+                <label className="egr-f">
+                  <span>Vencimiento</span>
+                  <input
+                    type="date"
+                    value={vencimiento}
+                    onChange={(e) => setVencimiento(e.target.value)}
+                  />
+                </label>
               ) : null}
-            </dd>
-            <dt>Competencia</dt>
-            <dd>{fechaConDia(egreso.fechaCompetencia)}</dd>
-            <dt>Vencimiento</dt>
-            <dd>
-              {egreso.fechaVencimiento
-                ? fechaConDia(egreso.fechaVencimiento)
-                : "fue de contado"}
-            </dd>
-            {egreso.numeroComprobante ? (
-              <>
-                <dt>Comprobante</dt>
-                <dd className="mono">
-                  {egreso.tipoComprobante} {egreso.puntoVenta}-
-                  {egreso.numeroComprobante}
-                </dd>
-              </>
-            ) : null}
-            <dt>Neto</dt>
-            <dd className="mono">{fmt(egreso.neto)}</dd>
-            <dt>IVA</dt>
-            <dd className="mono">{fmt(egreso.iva)}</dd>
-            <dt>Total</dt>
-            <dd className="mono">
-              <strong>{fmt(egreso.total)}</strong>
-            </dd>
-            <dt>Pagado</dt>
-            <dd className="mono">{fmt(egreso.pagadoTotal)}</dd>
-            {egreso.registradoPorNombre ? (
-              <>
-                <dt>Cargado por</dt>
-                <dd>{egreso.registradoPorNombre}</dd>
-              </>
-            ) : null}
-            {egreso.notas ? (
-              <>
-                <dt>Notas</dt>
-                <dd>{egreso.notas}</dd>
-              </>
-            ) : null}
-            {egreso.motivoAnulacion ? (
-              <>
-                <dt>Anulado</dt>
-                <dd>{egreso.motivoAnulacion}</dd>
-              </>
-            ) : null}
-          </dl>
+              {egreso.pagadoTotal <= 0 ? (
+                <div className="egr-sub egr-sub-3">
+                  <label className="egr-f">
+                    <span>Neto / importe</span>
+                    <CampoMonto
+                      valor={neto}
+                      onCambio={setNeto}
+                      ariaLabel="Neto o importe"
+                    />
+                  </label>
+                  <label className="egr-f">
+                    <span>IVA</span>
+                    <CampoMonto valor={iva} onCambio={setIva} ariaLabel="IVA" />
+                  </label>
+                  <label className="egr-f">
+                    <span>Otros impuestos</span>
+                    <CampoMonto
+                      valor={otrosImpuestos}
+                      onCambio={setOtrosImpuestos}
+                      ariaLabel="Otros impuestos"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <Alert className="egr-f-wide">
+                  <AlertTitle>Importes bloqueados</AlertTitle>
+                  <AlertDescription>
+                    Como ya tiene pagos, primero hay que anularlos para cambiar
+                    los importes. La clasificación y las fechas sí se pueden
+                    corregir.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <label className="egr-f egr-f-wide">
+                <span>Notas</span>
+                <textarea
+                  rows={3}
+                  value={notas}
+                  onChange={(e) => setNotas(e.target.value)}
+                />
+              </label>
+              {errorEdicion ? (
+                <div className="egr-error egr-f-wide">{errorEdicion}</div>
+              ) : null}
+            </div>
+          ) : (
+            <dl className="egr-dl">
+              <dt>Beneficiario</dt>
+              <dd>{egreso.beneficiarioNombre}</dd>
+              <dt>Categoría</dt>
+              <dd>
+                {egreso.categoriaNombre}
+                {egreso.naturaleza ? (
+                  <small> · {NATURALEZA_LABELS[egreso.naturaleza]}</small>
+                ) : null}
+              </dd>
+              <dt>Competencia</dt>
+              <dd>{fechaConDia(egreso.fechaCompetencia)}</dd>
+              <dt>Vencimiento</dt>
+              <dd>
+                {egreso.fechaVencimiento
+                  ? fechaConDia(egreso.fechaVencimiento)
+                  : "fue de contado"}
+              </dd>
+              {egreso.numeroComprobante ? (
+                <>
+                  <dt>Comprobante</dt>
+                  <dd className="mono">
+                    {egreso.tipoComprobante} {egreso.puntoVenta}-
+                    {egreso.numeroComprobante}
+                  </dd>
+                </>
+              ) : null}
+              <dt>Neto</dt>
+              <dd className="mono">{fmt(egreso.neto)}</dd>
+              <dt>IVA</dt>
+              <dd className="mono">{fmt(egreso.iva)}</dd>
+              {egreso.otrosImpuestos > 0 ? (
+                <>
+                  <dt>Otros impuestos</dt>
+                  <dd className="mono">{fmt(egreso.otrosImpuestos)}</dd>
+                </>
+              ) : null}
+              <dt>Total</dt>
+              <dd className="mono">
+                <strong>{fmt(egreso.total)}</strong>
+              </dd>
+              <dt>Pagado</dt>
+              <dd className="mono">{fmt(egreso.pagadoTotal)}</dd>
+              {egreso.registradoPorNombre ? (
+                <>
+                  <dt>Cargado por</dt>
+                  <dd>{egreso.registradoPorNombre}</dd>
+                </>
+              ) : null}
+              {egreso.notas ? (
+                <>
+                  <dt>Notas</dt>
+                  <dd>{egreso.notas}</dd>
+                </>
+              ) : null}
+              {egreso.motivoAnulacion ? (
+                <>
+                  <dt>Anulado</dt>
+                  <dd>{egreso.motivoAnulacion}</dd>
+                </>
+              ) : null}
+            </dl>
+          )}
 
           <div className="egr-pagos">
             <div className="egr-pagos-t">Factura escaneada</div>
@@ -2732,6 +3011,42 @@ function DetalleEgreso({
           </div>
         </div>
         <div className="mod-foot">
+          {puedeGestionar && egreso.estado !== "anulado" ? (
+            editando ? (
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setEditando(false)}
+                  disabled={guardandoEdicion}
+                >
+                  Cancelar edición
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void guardarEdicion()}
+                  disabled={
+                    guardandoEdicion ||
+                    descripcion.trim().length < 2 ||
+                    !categoriaId ||
+                    !competencia ||
+                    neto + iva + otrosImpuestos <= 0
+                  }
+                >
+                  {guardandoEdicion ? "Guardando…" : "Guardar cambios"}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setEditando(true)}
+              >
+                Editar
+              </button>
+            )
+          ) : null}
           {puedeAnular && egreso.estado !== "anulado" ? (
             <button type="button" className="btn btn-danger" onClick={onAnular}>
               Anular egreso

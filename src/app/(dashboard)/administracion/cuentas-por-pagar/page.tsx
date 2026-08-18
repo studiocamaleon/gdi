@@ -28,30 +28,12 @@ export default async function CuentasPorPagarPage({
   const { endosarValorId } = await searchParams;
   const [egresos, resumen, categorias, proveedores, metodosPago, cuentas] =
     await Promise.all([
-      getEgresos({ soloPendientes: true }).then(
-        (r) => r.egresos,
-        () => [],
-      ),
-      getResumenEgresos().then(
-        (r) => r,
-        () => null,
-      ),
-      getCategoriasEgreso().then(
-        (r) => r,
-        () => [],
-      ),
-      getProveedores().then(
-        (r) => r,
-        () => [],
-      ),
-      getMetodosPago().then(
-        (r) => r,
-        () => [],
-      ),
-      getCuentasFondos().then(
-        (r) => r,
-        () => [],
-      ),
+      getEgresos({ soloPendientes: true }).then((r) => r.egresos),
+      getResumenEgresos(),
+      getCategoriasEgreso(),
+      getProveedores(),
+      getMetodosPago(),
+      getCuentasFondos(),
     ]);
 
   return (

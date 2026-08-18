@@ -17,6 +17,7 @@ import {
   sumaTramosMin,
   TRANSICIONES_PASO,
   validarCancelacion,
+  vencimientoComercialDesde,
 } from '../ordenes-trabajo.service';
 import {
   esCancelable,
@@ -31,6 +32,34 @@ function svc(): OrdenesTrabajoService {
     OrdenesTrabajoService.prototype,
   ) as OrdenesTrabajoService;
 }
+
+describe('vencimiento comercial de la orden', () => {
+  const finalizadaDeNoche = new Date('2026-08-19T01:30:00.000Z');
+
+  it('una venta común vence el día local en que se finaliza', () => {
+    expect(
+      vencimientoComercialDesde(
+        finalizadaDeNoche,
+        null,
+        'America/Argentina/Buenos_Aires',
+      )
+        .toISOString()
+        .slice(0, 10),
+    ).toBe('2026-08-18');
+  });
+
+  it('una cuenta corriente suma el plazo sobre esa fecha local', () => {
+    expect(
+      vencimientoComercialDesde(
+        finalizadaDeNoche,
+        30,
+        'America/Argentina/Buenos_Aires',
+      )
+        .toISOString()
+        .slice(0, 10),
+    ).toBe('2026-09-17');
+  });
+});
 
 describe('OrdenesTrabajoService — idempotencia de creación', () => {
   it('devuelve la OT existente antes de volver a ejecutar la creación', async () => {
@@ -302,58 +331,137 @@ describe('cargos de orden', () => {
   });
 
   it('actualiza los cargos porcentuales cuando cambia el subtotal', () => {
-    const [cargo] = recalcularCargosPorSubtotal([{
-      modoCalculoSnapshot: 'PORCENTAJE_SOBRE_BASE',
-      configSnapshot: { porcentajeAplicado: 10 },
-      impuestoPorcentaje: 21,
-    }], 2_000) as Array<Record<string, unknown>>;
-    expect(cargo).toMatchObject({ baseCalculo: 2_000, montoNeto: 200, impuestoMonto: 42, total: 242 });
+    const [cargo] = recalcularCargosPorSubtotal(
+      [
+        {
+          modoCalculoSnapshot: 'PORCENTAJE_SOBRE_BASE',
+          configSnapshot: { porcentajeAplicado: 10 },
+          impuestoPorcentaje: 21,
+        },
+      ],
+      2_000,
+    ) as Array<Record<string, unknown>>;
+    expect(cargo).toMatchObject({
+      baseCalculo: 2_000,
+      montoNeto: 200,
+      impuestoMonto: 42,
+      total: 242,
+    });
   });
 
   it('recalcula porcentaje, impuesto y total sin confiar en el navegador', async () => {
     const service = svc() as unknown as {
       prisma: unknown;
-      cargosAutorizados: (tenantId: string, cargos: Array<Record<string, unknown>>, subtotal: number, decimales: number) => Promise<Array<Record<string, unknown>>>;
+      cargosAutorizados: (
+        tenantId: string,
+        cargos: Array<Record<string, unknown>>,
+        subtotal: number,
+        decimales: number,
+      ) => Promise<Array<Record<string, unknown>>>;
     };
-    service.prisma = { cargoDirectoCatalogo: { findMany: jest.fn().mockResolvedValue([{
-      id: 'f2ae7857-bef9-4db5-a34b-791fd573c596', codigo: 'urgencia', nombre: 'Urgencia',
-      descripcion: null, modoCalculo: 'PORCENTAJE_SOBRE_BASE', configJson: { porcentajeDefault: 5 },
-    }]) } };
-    const [cargo] = await service.cargosAutorizados('tenant-1', [{
-      cargoDirectoCatalogoId: 'f2ae7857-bef9-4db5-a34b-791fd573c596',
-      configInput: { porcentajeAplicado: 10 }, montoNeto: 999_999,
-    }], 1_000, 2);
-    expect(cargo).toMatchObject({ codigoSnapshot: 'urgencia', montoNeto: 100, impuestoMonto: 21, total: 121 });
+    service.prisma = {
+      cargoDirectoCatalogo: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'f2ae7857-bef9-4db5-a34b-791fd573c596',
+            codigo: 'urgencia',
+            nombre: 'Urgencia',
+            descripcion: null,
+            modoCalculo: 'PORCENTAJE_SOBRE_BASE',
+            configJson: { porcentajeDefault: 5 },
+          },
+        ]),
+      },
+    };
+    const [cargo] = await service.cargosAutorizados(
+      'tenant-1',
+      [
+        {
+          cargoDirectoCatalogoId: 'f2ae7857-bef9-4db5-a34b-791fd573c596',
+          configInput: { porcentajeAplicado: 10 },
+          montoNeto: 999_999,
+        },
+      ],
+      1_000,
+      2,
+    );
+    expect(cargo).toMatchObject({
+      codigoSnapshot: 'urgencia',
+      montoNeto: 100,
+      impuestoMonto: 21,
+      total: 121,
+    });
   });
 });
 
 describe('montos autoritativos del cotizador', () => {
   it('prioriza los importes exactos persistidos', () => {
-    expect(montosCotizacionItem({
-      precioNetoTotal: 10_000, impuestosPorFueraTotal: 2_100,
-      precioTotal: 12_100, impuestosSnapshotJson: [],
-    })).toEqual({ subtotal: 10_000, impuestos: 2_100, total: 12_100 });
+    expect(
+      montosCotizacionItem({
+        precioNetoTotal: 10_000,
+        impuestosPorFueraTotal: 2_100,
+        precioTotal: 12_100,
+        impuestosSnapshotJson: [],
+      }),
+    ).toEqual({ subtotal: 10_000, impuestos: 2_100, total: 12_100 });
   });
 
   it('reconstruye snapshots históricos desde impuestos por fuera', () => {
-    expect(montosCotizacionItem({
-      precioNetoTotal: null, impuestosPorFueraTotal: null, precioTotal: 12_100,
-      impuestosSnapshotJson: [{ porcentaje: 21, traslado: 'POR_FUERA' }],
-    })).toEqual({ subtotal: 10_000, impuestos: 2_100, total: 12_100 });
+    expect(
+      montosCotizacionItem({
+        precioNetoTotal: null,
+        impuestosPorFueraTotal: null,
+        precioTotal: 12_100,
+        impuestosSnapshotJson: [{ porcentaje: 21, traslado: 'POR_FUERA' }],
+      }),
+    ).toEqual({ subtotal: 10_000, impuestos: 2_100, total: 12_100 });
   });
 
   it('reemplaza montos, identidad y descuento declarados por el navegador', () => {
-    const service = svc() as unknown as { itemAutorizado: (item: Record<string, unknown>, snapshot: Record<string, unknown>, decimales: number) => Record<string, unknown> };
-    const item = service.itemAutorizado({
-      cotizacionItemId: 'item-1', codigo: 'FALSO', nombre: 'Falso', cantidad: 999,
-      subtotal: 1, impuestos: 0, total: 1, descuentoMonto: 50_000,
-    }, {
-      id: 'item-1', cotizacionId: 'cot-1', cantidad: 100,
-      snapshotJson: { producto: { codigo: 'TARJ-REAL', nombre: 'Tarjetas reales' } },
-      precioNetoTotal: 10_000, impuestosPorFueraTotal: 2_100, precioTotal: 12_100,
-      impuestosSnapshotJson: [], descuentoTipo: 'PORCENTAJE', descuentoValor: 10, descuentoMonto: 1_111.11,
-    }, 2);
-    expect(item).toMatchObject({ codigo: 'TARJ-REAL', nombre: 'Tarjetas reales', cantidad: 100, subtotal: 10_000, impuestos: 2_100, total: 12_100, descuentoMonto: 1_111.11 });
+    const service = svc() as unknown as {
+      itemAutorizado: (
+        item: Record<string, unknown>,
+        snapshot: Record<string, unknown>,
+        decimales: number,
+      ) => Record<string, unknown>;
+    };
+    const item = service.itemAutorizado(
+      {
+        cotizacionItemId: 'item-1',
+        codigo: 'FALSO',
+        nombre: 'Falso',
+        cantidad: 999,
+        subtotal: 1,
+        impuestos: 0,
+        total: 1,
+        descuentoMonto: 50_000,
+      },
+      {
+        id: 'item-1',
+        cotizacionId: 'cot-1',
+        cantidad: 100,
+        snapshotJson: {
+          producto: { codigo: 'TARJ-REAL', nombre: 'Tarjetas reales' },
+        },
+        precioNetoTotal: 10_000,
+        impuestosPorFueraTotal: 2_100,
+        precioTotal: 12_100,
+        impuestosSnapshotJson: [],
+        descuentoTipo: 'PORCENTAJE',
+        descuentoValor: 10,
+        descuentoMonto: 1_111.11,
+      },
+      2,
+    );
+    expect(item).toMatchObject({
+      codigo: 'TARJ-REAL',
+      nombre: 'Tarjetas reales',
+      cantidad: 100,
+      subtotal: 10_000,
+      impuestos: 2_100,
+      total: 12_100,
+      descuentoMonto: 1_111.11,
+    });
   });
 });
 
@@ -795,8 +903,9 @@ describe('OrdenesTrabajoService — gate de descuento al emitir (F3 descuentos)'
 
   it('sin descuento ni siquiera consulta la config', async () => {
     const s = svcConUmbral(10);
-    (s.prisma as { configuracionPresupuestos: { findUnique: () => never } })
-      .configuracionPresupuestos.findUnique = () => {
+    (
+      s.prisma as { configuracionPresupuestos: { findUnique: () => never } }
+    ).configuracionPresupuestos.findUnique = () => {
       throw new Error('no debería consultar');
     };
     await expect(

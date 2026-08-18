@@ -407,7 +407,7 @@ export type ClientesPanel = {
 };
 
 /** Cobranza (tab Finanzas): aging, costo de cobrar, DSO, cheques, fondos. */
-export type FranjaAgingPanel = "0-30" | "31-60" | "61-90" | "+90";
+export type FranjaAgingPanel = "A vencer" | "0-30" | "31-60" | "61-90" | "+90";
 export type DeudorPanel = {
   clienteId: string | null;
   cliente: string;

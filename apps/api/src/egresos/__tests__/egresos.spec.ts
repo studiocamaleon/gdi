@@ -251,6 +251,49 @@ describe('EgresosService', () => {
       );
     });
 
+    it('normaliza punto de venta y número antes de controlar duplicados', async () => {
+      const base = {
+        descripcion: 'Tinta para plotter',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-08-30',
+        neto: 25_000,
+        tipoComprobante: 'FA',
+      };
+      const creado = await service.crear(auth, {
+        ...base,
+        puntoVenta: '1',
+        numeroComprobante: '7391',
+      });
+      const guardado = await prisma.egreso.findUniqueOrThrow({
+        where: { id: creado.id },
+      });
+      expect(guardado.puntoVenta).toBe('0001');
+      expect(guardado.numeroComprobante).toBe('00007391');
+      await expect(
+        service.crear(auth, {
+          ...base,
+          puntoVenta: '0001',
+          numeroComprobante: '00007391',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('no registra una nota de crédito como deuda positiva', async () => {
+      await expect(
+        service.crear(auth, {
+          descripcion: 'Crédito del proveedor',
+          categoriaEgresoId: catMateriales,
+          proveedorId,
+          fechaVencimiento: '2026-08-30',
+          neto: 10_000,
+          tipoComprobante: 'NC',
+          puntoVenta: '1',
+          numeroComprobante: nroDoc(),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
     it('dos gastos SIN documento no se estorban', async () => {
       // Los NULL no colisionan en Postgres: es lo que deja entrar la caja chica.
       const base = {
@@ -349,6 +392,27 @@ describe('EgresosService', () => {
           imputaciones: [
             { egresoId: a.id, monto: 50_000 },
             { egresoId: b.id, monto: 50_000 },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('tampoco mezcla un proveedor con un beneficiario libre', async () => {
+      const proveedor = await crearDiferido(50_000);
+      const libre = await service.crear(auth, {
+        descripcion: 'Flete eventual',
+        categoriaEgresoId: catMateriales,
+        beneficiarioNombre: 'Transportes del Sur',
+        fechaVencimiento: '2026-08-30',
+        neto: 25_000,
+      });
+      await expect(
+        service.registrarPago(auth, {
+          metodoPagoId,
+          cuentaOrigenId: cuentaId,
+          imputaciones: [
+            { egresoId: proveedor.id, monto: 50_000 },
+            { egresoId: libre.id, monto: 25_000 },
           ],
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -978,8 +1042,12 @@ describe('EgresosService', () => {
         puntoVenta: '0007',
         numeroComprobante: doc,
       });
+      const numeroNormalizado = doc.padStart(8, '0');
       const cuotas = await prisma.egreso.findMany({
-        where: { tenantId, numeroComprobante: { startsWith: `${doc}/` } },
+        where: {
+          tenantId,
+          numeroComprobante: { startsWith: `${numeroNormalizado}/` },
+        },
         orderBy: { fechaVencimiento: 'asc' },
       });
       expect(cuotas).toHaveLength(3);
@@ -991,6 +1059,32 @@ describe('EgresosService', () => {
         cuotas.map((c) => c.fechaVencimiento?.toISOString().slice(0, 10)),
       ).toEqual(['2026-09-10', '2026-10-10', '2026-11-10']);
       expect(cuotas[0].descripcion).toContain('cuota 1/3');
+    });
+
+    it('mantiene fin de mes sin desbordar a marzo', async () => {
+      const doc = nroDoc();
+      await service.crear(auth, {
+        descripcion: 'Equipo con primera cuota a fin de mes',
+        categoriaEgresoId: catMaquinaria,
+        proveedorId,
+        fechaVencimiento: '2026-01-31',
+        neto: 30_000,
+        cuotas: 3,
+        tipoComprobante: 'FA',
+        puntoVenta: '0007',
+        numeroComprobante: doc,
+      });
+      const numeroNormalizado = doc.padStart(8, '0');
+      const cuotas = await prisma.egreso.findMany({
+        where: {
+          tenantId,
+          numeroComprobante: { startsWith: `${numeroNormalizado}/` },
+        },
+        orderBy: { fechaVencimiento: 'asc' },
+      });
+      expect(
+        cuotas.map((c) => c.fechaVencimiento?.toISOString().slice(0, 10)),
+      ).toEqual(['2026-01-31', '2026-02-28', '2026-03-31']);
     });
 
     it('en cuotas no puede nacer pagado', async () => {
@@ -1186,7 +1280,7 @@ describe('EgresosService', () => {
       const { id } = await service.crear(auth, {
         descripcion: 'Se anula',
         categoriaEgresoId: catMateriales,
-        beneficiarioNombre: 'Error',
+        proveedorId,
         fechaCompetencia: '2026-04-10',
         neto: 777_000,
         fechaVencimiento: '2026-05-10',

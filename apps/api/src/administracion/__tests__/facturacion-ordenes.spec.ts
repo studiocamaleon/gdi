@@ -174,24 +174,24 @@ describe('FacturacionOrdenesService — motor', () => {
       await crearFactura([{ ordenId: orden.id, monto: 25_000 }], {
         estado: 'borrador',
       });
-      expect(
-        await motor.recalcularFacturado(prisma, tenantId, orden.id),
-      ).toBe(40_000);
+      expect(await motor.recalcularFacturado(prisma, tenantId, orden.id)).toBe(
+        40_000,
+      );
 
       await crearFactura([{ ordenId: orden.id, monto: 15_000 }], {
         tipo: 'nota_credito',
       });
-      expect(
-        await motor.recalcularFacturado(prisma, tenantId, orden.id),
-      ).toBe(25_000);
+      expect(await motor.recalcularFacturado(prisma, tenantId, orden.id)).toBe(
+        25_000,
+      );
 
       // NC mayor que lo facturado: el agregado no baja de cero.
       await crearFactura([{ ordenId: orden.id, monto: 90_000 }], {
         tipo: 'nota_credito',
       });
-      expect(
-        await motor.recalcularFacturado(prisma, tenantId, orden.id),
-      ).toBe(0);
+      expect(await motor.recalcularFacturado(prisma, tenantId, orden.id)).toBe(
+        0,
+      );
     });
   });
 
@@ -230,6 +230,124 @@ describe('FacturacionOrdenesService — motor', () => {
       expect(
         await prisma.cobroImputacion.count({ where: { cobroId: cobro.id } }),
       ).toBe(0);
+    });
+  });
+
+  describe('aplicación comercial por cuenta corriente', () => {
+    const clienteAislado = async (sufijo: string) =>
+      prisma.cliente.create({
+        data: {
+          tenantId,
+          nombre: `Cliente cuenta ${sufijo}`,
+          emailPrincipal: `${sufijo}@test.com`,
+          telefonoCodigo: '11',
+          telefonoNumero: '4444-4444',
+          paisCodigo: 'AR',
+          plazoCuentaCorrienteDias: 30,
+        },
+      });
+
+    it('distribuye un cobro general FIFO por vencimiento y deja el excedente libre', async () => {
+      const cliente = await clienteAislado(randomUUID());
+      const vieja = await prisma.ordenTrabajo.create({
+        data: {
+          tenantId,
+          numero: `OT-CC-${randomUUID().slice(0, 8)}`,
+          clienteId: cliente.id,
+          estado: 'finalizada',
+          fechaFinalizada: new Date('2026-05-01'),
+          fechaVencimientoComercial: new Date('2026-05-31'),
+          subtotal: 40_000,
+          impuestos: 0,
+          total: 40_000,
+        },
+      });
+      const nueva = await prisma.ordenTrabajo.create({
+        data: {
+          tenantId,
+          numero: `OT-CC-${randomUUID().slice(0, 8)}`,
+          clienteId: cliente.id,
+          estado: 'finalizada',
+          fechaFinalizada: new Date('2026-06-01'),
+          fechaVencimientoComercial: new Date('2026-07-01'),
+          subtotal: 70_000,
+          impuestos: 0,
+          total: 70_000,
+        },
+      });
+      const cobro = await prisma.cobro.create({
+        data: {
+          tenantId,
+          clienteId: cliente.id,
+          fecha: new Date('2026-07-05'),
+          metodoPagoId,
+          cuentaDestinoId: cuentaId,
+          montoBruto: 100_000,
+          netoAcreditado: 100_000,
+          disponibleReal: 100_000,
+          estadoAcreditacion: 'acreditado',
+        },
+      });
+
+      const aplicaciones = await motor.aplicarCobroComercial(
+        prisma,
+        tenantId,
+        cobro.id,
+      );
+      expect(aplicaciones).toEqual([
+        { ordenId: vieja.id, monto: 40_000 },
+        { ordenId: nueva.id, monto: 60_000 },
+      ]);
+      const ordenes = await prisma.ordenTrabajo.findMany({
+        where: { id: { in: [vieja.id, nueva.id] } },
+        select: { id: true, cobradoTotal: true },
+      });
+      expect(
+        Object.fromEntries(ordenes.map((o) => [o.id, Number(o.cobradoTotal)])),
+      ).toEqual({ [vieja.id]: 40_000, [nueva.id]: 60_000 });
+    });
+
+    it('aplica un anticipo libre cuando la orden recién se finaliza', async () => {
+      const cliente = await clienteAislado(randomUUID());
+      const anticipo = await prisma.cobro.create({
+        data: {
+          tenantId,
+          clienteId: cliente.id,
+          fecha: new Date('2026-07-01'),
+          metodoPagoId,
+          cuentaDestinoId: cuentaId,
+          montoBruto: 35_000,
+          netoAcreditado: 35_000,
+          disponibleReal: 35_000,
+          estadoAcreditacion: 'acreditado',
+        },
+      });
+      const orden = await prisma.ordenTrabajo.create({
+        data: {
+          tenantId,
+          numero: `OT-CC-${randomUUID().slice(0, 8)}`,
+          clienteId: cliente.id,
+          estado: 'finalizada',
+          fechaFinalizada: new Date('2026-07-15'),
+          fechaVencimientoComercial: new Date('2026-08-14'),
+          subtotal: 50_000,
+          impuestos: 0,
+          total: 50_000,
+        },
+      });
+
+      await motor.aplicarAnticiposClienteAOrden(prisma, tenantId, orden.id);
+
+      const actualizada = await prisma.ordenTrabajo.findUniqueOrThrow({
+        where: { id: orden.id },
+      });
+      expect(Number(actualizada.cobradoTotal)).toBe(35_000);
+      const aplicacion = await prisma.cobroOrden.findUniqueOrThrow({
+        where: {
+          cobroId_ordenId: { cobroId: anticipo.id, ordenId: orden.id },
+        },
+      });
+      expect(Number(aplicacion.monto)).toBe(35_000);
     });
   });
 
@@ -289,10 +407,9 @@ describe('FacturacionOrdenesService — motor', () => {
         motor.validarTope(prisma, tenantId, excedida.id),
       ).rejects.toThrow(/no se puede facturar más/);
 
-      const justa = await crearFactura(
-        [{ ordenId: orden.id, monto: 30_000 }],
-        { estado: 'borrador' },
-      );
+      const justa = await crearFactura([{ ordenId: orden.id, monto: 30_000 }], {
+        estado: 'borrador',
+      });
       await expect(
         motor.validarTope(prisma, tenantId, justa.id),
       ).resolves.toBeUndefined();
@@ -302,7 +419,9 @@ describe('FacturacionOrdenesService — motor', () => {
   describe('reversas', () => {
     it('revertirCobro restaura el saldo fiscal y el cobradoTotal', async () => {
       const orden = await crearOrden(80_000);
-      const factura = await crearFactura([{ ordenId: orden.id, monto: 80_000 }]);
+      const factura = await crearFactura([
+        { ordenId: orden.id, monto: 80_000 },
+      ]);
       const cobro = await crearCobro(orden.id, 80_000);
       await motor.recalcularCobrado(prisma, tenantId, orden.id);
       await motor.matchearCobro(prisma, tenantId, cobro.id);

@@ -10,15 +10,13 @@ import {
   CobroFormulario,
   type CobroDraft,
 } from "@/components/administracion/cobro-formulario";
-import type {
-  CuentaFondosResumen,
-  MetodoPago,
-} from "@/lib/administracion";
-import { crearCobro, imputarCobro } from "@/lib/administracion-api";
+import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
+import { crearCobro } from "@/lib/administracion-api";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { formatearMoneda } from "@/lib/moneda";
 
 export type OrdenContexto = {
+  tipo: "orden";
   id: string;
   numero: string;
   clienteId: string | null;
@@ -28,55 +26,50 @@ export type OrdenContexto = {
   cobradoBruto: number;
 };
 
+export type ClienteCobroContexto = {
+  tipo: "cliente";
+  id: string;
+  nombre: string;
+  saldo: number;
+};
+
 export function RegistrarCobroView({
-  orden,
+  contexto,
   metodos,
   cuentas,
 }: {
-  orden: OrdenContexto;
+  contexto: OrdenContexto | ClienteCobroContexto;
   metodos: MetodoPago[];
   cuentas: CuentaFondosResumen[];
 }) {
   const router = useRouter();
   const { moneda } = useConfigRegional();
   const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
-  const saldo = Math.max(0, orden.total - orden.cobradoBruto);
+  const esOrden = contexto.tipo === "orden";
+  const saldo = Math.max(
+    0,
+    esOrden ? contexto.total - contexto.cobradoBruto : contexto.saldo,
+  );
   const [guardando, setGuardando] = React.useState(false);
 
   const submit = async (draft: CobroDraft) => {
     setGuardando(true);
     try {
-      const cobro = await crearCobro({
+      await crearCobro({
         ...draft.payload,
-        ordenId: orden.id,
-        clienteId: orden.clienteId ?? undefined,
+        ...(esOrden ? { ordenId: contexto.id } : {}),
+        clienteId: esOrden ? (contexto.clienteId ?? undefined) : contexto.id,
       });
-
-      // El cobro ya existe: si una imputación falla, se avisa cuál en vez de
-      // dejar el cobro a medio aplicar en silencio.
-      const fallidas: string[] = [];
-      for (const imp of draft.imputaciones) {
-        try {
-          await imputarCobro(cobro.id, imp);
-        } catch (error) {
-          fallidas.push(
-            error instanceof Error ? error.message : "error desconocido",
-          );
-        }
-      }
-      if (fallidas.length > 0) {
-        toast.error(
-          `El cobro se registró, pero ${fallidas.length} imputación${fallidas.length === 1 ? "" : "es"} falló: ${fallidas.join(" · ")}. Aplicalo desde la cuenta corriente.`,
-          { duration: 10000 },
-        );
-      } else {
-        toast.success(
-          draft.payload.valor
-            ? "Valor en cartera registrado."
-            : `Cobro de ${fmt(draft.payload.montoBruto)} registrado.`,
-        );
-      }
-      router.push(`/produccion/ordenes/${orden.id}`);
+      toast.success(
+        draft.payload.valor
+          ? "Valor en cartera registrado."
+          : `Cobro de ${fmt(draft.payload.montoBruto)} registrado.`,
+      );
+      router.push(
+        esOrden
+          ? `/produccion/ordenes/${contexto.id}`
+          : `/clientes/${contexto.id}/cuenta-corriente`,
+      );
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -98,33 +91,48 @@ export function RegistrarCobroView({
       }}
     >
       <div className="arc-wrap">
-        <Link className="arc-crumb" href={`/produccion/ordenes/${orden.id}`}>
+        <Link
+          className="arc-crumb"
+          href={
+            esOrden
+              ? `/produccion/ordenes/${contexto.id}`
+              : `/clientes/${contexto.id}/cuenta-corriente`
+          }
+        >
           <ArrowLeftIcon />
-          Volver a {orden.numero}
+          {esOrden
+            ? `Volver a ${contexto.numero}`
+            : "Volver a cuenta corriente"}
         </Link>
         <div className="arc-head">
           <h1>Registrar cobro</h1>
           <div className="sub">
-            Imputá un pago a la orden. El método define comisión, acreditación
-            y retenciones.
+            {esOrden
+              ? "Imputá un pago a la orden. El método define comisión, acreditación y retenciones."
+              : "Registrá el pago del cliente. Se aplicará primero a las órdenes vencidas más antiguas y el excedente quedará a cuenta."}
           </div>
         </div>
 
         <div className="arc-ot-ctx">
           <div className="blk">
-            <span className="l">Orden</span>
-            <span className="id">{orden.numero}</span>
+            <span className="l">{esOrden ? "Orden" : "Cliente"}</span>
+            <span className="id">
+              {esOrden ? contexto.numero : contexto.nombre}
+            </span>
           </div>
           <div className="sep" />
           <div className="blk">
             <span className="cli">
-              {orden.clienteNombre}
-              {orden.resumen ? ` · ${orden.resumen}` : ""}
+              {esOrden
+                ? `${contexto.clienteNombre}${contexto.resumen ? ` · ${contexto.resumen}` : ""}`
+                : "Cobro general de cuenta corriente"}
             </span>
           </div>
           <div className="spacer" />
           <div className="blk">
-            <span className="l">Saldo pendiente</span>
+            <span className="l">
+              {esOrden ? "Saldo pendiente" : "Saldo deudor"}
+            </span>
             <span className="v warn">{fmt(saldo)}</span>
           </div>
         </div>
@@ -135,7 +143,11 @@ export function RegistrarCobroView({
           cuentas={cuentas}
           guardando={guardando}
           onSubmit={(draft) => void submit(draft)}
-          cancelHref={`/produccion/ordenes/${orden.id}`}
+          cancelHref={
+            esOrden
+              ? `/produccion/ordenes/${contexto.id}`
+              : `/clientes/${contexto.id}/cuenta-corriente`
+          }
         />
       </div>
     </div>

@@ -35,7 +35,7 @@ function useFmt() {
 function LedgerRow({ m }: { m: MovimientoCuentaCorriente }) {
   const fmt = useFmt();
   const [open, setOpen] = React.useState(false);
-  const tiene = !!m.imputaciones?.length;
+  const tiene = !!m.imputaciones?.length || !!m.aplicaciones?.length;
   return (
     <>
       <div
@@ -75,22 +75,41 @@ function LedgerRow({ m }: { m: MovimientoCuentaCorriente }) {
       </div>
       {open && tiene ? (
         <div className="acc-lg-exp">
-          <div className="acc-imp-mini">
-            <div className="t">Imputado a</div>
-            {m.imputaciones?.map((im, i) => (
-              <div key={i} className={`acc-imp-line ${im.resto ? "rest" : ""}`}>
-                {im.resto ? (
-                  <InfoIcon style={{ width: 13, height: 13 }} />
-                ) : (
+          {m.aplicaciones?.length ? (
+            <div className="acc-imp-mini">
+              <div className="t">Aplicado comercialmente a</div>
+              {m.aplicaciones.map((aplicacion, i) => (
+                <div key={i} className="acc-imp-line">
                   <CheckIcon
                     style={{ width: 13, height: 13, color: "var(--ok)" }}
                   />
-                )}
-                <span className="n">{im.nombre}</span>
-                <span className="m">{fmt(im.monto)}</span>
-              </div>
-            ))}
-          </div>
+                  <span className="n">{aplicacion.nombre}</span>
+                  <span className="m">{fmt(aplicacion.monto)}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {m.imputaciones?.length ? (
+            <div className="acc-imp-mini">
+              <div className="t">Imputado fiscalmente a</div>
+              {m.imputaciones?.map((im, i) => (
+                <div
+                  key={i}
+                  className={`acc-imp-line ${im.resto ? "rest" : ""}`}
+                >
+                  {im.resto ? (
+                    <InfoIcon style={{ width: 13, height: 13 }} />
+                  ) : (
+                    <CheckIcon
+                      style={{ width: 13, height: 13, color: "var(--ok)" }}
+                    />
+                  )}
+                  <span className="n">{im.nombre}</span>
+                  <span className="m">{fmt(im.monto)}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </>
@@ -120,7 +139,9 @@ function AgingModal({
             <XIcon />
           </button>
           <h2>Aging del cliente</h2>
-          <div className="s">{cc.cliente.nombre} · antigüedad del saldo deudor</div>
+          <div className="s">
+            {cc.cliente.nombre} · antigüedad del saldo deudor
+          </div>
         </div>
         <div className="acc-modal-body">
           {TRAMOS_AGING.map((t, i) => (
@@ -227,6 +248,12 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
                 ] ?? cc.cliente.condicionFiscal}
               </span>
               <span>CUIT {formatCuitODash(cc.cliente.cuit)}</span>
+              <span>
+                ·{" "}
+                {cc.cliente.plazoCuentaCorrienteDias === null
+                  ? "Venta común"
+                  : `Cuenta corriente · ${cc.cliente.plazoCuentaCorrienteDias} días`}
+              </span>
               {cc.cliente.vendedor ? (
                 <span>· Vendedor: {cc.cliente.vendedor}</span>
               ) : null}
@@ -236,18 +263,25 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
             <div className="l">Saldo actual</div>
             <div className={`v ${saldo <= 0 ? "ok" : ""}`}>{fmt(saldo)}</div>
             <div className="s">
-              {saldo > 0 ? "Deudor" : "Sin deuda"} ·{" "}
-              {cc.comprobantesPendientes}{" "}
-              {cc.comprobantesPendientes === 1 ? "orden" : "órdenes"} sin
-              cobrar
+              {saldo > 0 ? "Deudor" : "Sin deuda"} · {cc.comprobantesPendientes}{" "}
+              {cc.comprobantesPendientes === 1 ? "orden" : "órdenes"} sin cobrar
             </div>
           </div>
           <div className="acc-limit">
-            {limite === null ? (
+            {cc.cliente.plazoCuentaCorrienteDias === null ? (
+              <>
+                <div className="l">Cuenta corriente</div>
+                <div className="sin-limite">
+                  No habilitada. Las órdenes vencen al finalizar.{" "}
+                  <Link href={`/clientes/${cc.cliente.id}`}>Configurar</Link>
+                </div>
+              </>
+            ) : limite === null ? (
               <>
                 <div className="l">Límite de crédito</div>
                 <div className="sin-limite">
-                  Sin límite definido.{" "}
+                  Cuenta corriente sin límite ·{" "}
+                  {cc.cliente.plazoCuentaCorrienteDias} días.{" "}
                   <Link href={`/clientes/${cc.cliente.id}`}>Configurar</Link>
                 </div>
               </>
@@ -323,8 +357,8 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
           </div>
           {cc.movimientos.length === 0 ? (
             <div className="acc-vacio">
-              Este cliente todavía no tiene movimientos: cuando una orden
-              suya se finalice o le registres un cobro van a aparecer acá.
+              Este cliente todavía no tiene movimientos: cuando una orden suya
+              se finalice o le registres un cobro van a aparecer acá.
             </div>
           ) : (
             cc.movimientos.map((m) => <LedgerRow key={m.id} m={m} />)
@@ -332,7 +366,9 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
           {cc.movimientos.length > 0 ? (
             <div className="acc-lg-foot">
               <span>
-                {saldo > 0 ? "Saldo deudor actual" : "Saldo a favor del cliente"}
+                {saldo > 0
+                  ? "Saldo deudor actual"
+                  : "Saldo a favor del cliente"}
               </span>
               <span className="v">{fmt(saldo)}</span>
             </div>

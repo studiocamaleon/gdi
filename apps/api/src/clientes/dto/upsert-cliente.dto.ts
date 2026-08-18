@@ -11,6 +11,7 @@ import {
   IsString,
   Length,
   Matches,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -71,6 +72,13 @@ export class UpsertClienteDto {
   @IsNumber()
   @Min(0)
   limiteCredito?: number | null;
+
+  /** Null = venta común; número = cuenta corriente con ese plazo. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(365)
+  plazoCuentaCorrienteDias?: number | null;
 
   @ValidateIf(
     (_, value) => value !== undefined && value !== null && value !== '',

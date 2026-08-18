@@ -59,6 +59,7 @@ import {
 } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { evaluarCupon, planDescuentoCupon } from '../cupones/cupon-reglas';
+import { FacturacionOrdenesService } from '../administracion/facturacion-ordenes.service';
 
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
@@ -403,6 +404,24 @@ export function corteJornadaDe(
   return corteDia;
 }
 
+/**
+ * Fecha calendario en que la deuda comercial pasa a estar vencida.
+ * Se parte del día local del tenant, no del UTC del servidor: una orden
+ * finalizada a las 22:30 en Argentina sigue perteneciendo a ese día.
+ */
+export function vencimientoComercialDesde(
+  finalizadaEl: Date,
+  plazoDias: number | null | undefined,
+  zonaHoraria: string,
+): Date {
+  const fechaLocal = claveFechaEnZona(finalizadaEl, zonaHoraria);
+  const claveVencimiento = sumarDiasAClave(
+    fechaLocal,
+    Math.max(0, Math.trunc(plazoDias ?? 0)),
+  );
+  return new Date(`${claveVencimiento}T00:00:00.000Z`);
+}
+
 type PasoSecuencia = { indice: number; estado: string };
 
 /**
@@ -484,6 +503,7 @@ export class OrdenesTrabajoService {
     // Para "acreditar y cancelar" en un paso. Es una dependencia de ida:
     // Administración no sabe nada de este módulo, así que no hay ciclo.
     private readonly comprobantes: ComprobantesService,
+    private readonly facturacionOrdenes: FacturacionOrdenesService,
   ) {}
 
   /**
@@ -1383,7 +1403,8 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró el vendedor.');
 
     let itemsAutorizados:
-      Array<CrearOrdenTrabajoItemDto & { id?: string }> | undefined;
+      | Array<CrearOrdenTrabajoItemDto & { id?: string }>
+      | undefined;
     if (payload.items) {
       const idsExistentes = payload.items
         .map((item) => item.id)
@@ -2240,7 +2261,8 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
+            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
+            | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -2847,10 +2869,7 @@ export class OrdenesTrabajoService {
       // Primera finalización: nace la deuda comercial y arranca su aging.
       // Sólo la primera (reabrir y re-finalizar no la resetea).
       if (hacia === 'finalizada') {
-        await tx.ordenTrabajo.updateMany({
-          where: { id: orden.id, fechaFinalizada: null },
-          data: { fechaFinalizada: new Date() },
-        });
+        await this.marcarPrimeraFinalizacion(tx, auth.tenantId, orden.id);
       }
       // Primera entrega: es el ancla del pedido de reseña. Mismo criterio que
       // arriba —sólo la primera— para que corregir el estado de una orden ya
@@ -3121,6 +3140,47 @@ export class OrdenesTrabajoService {
     await this.descartarPromesasEta(auth.tenantId, orden.id);
 
     return this.findOne(auth, orden.id);
+  }
+
+  /**
+   * Congela el nacimiento y el vencimiento de la deuda comercial. Una venta
+   * común vence el mismo día que finaliza; una cuenta corriente suma el plazo
+   * vigente del cliente. Reabrir o editar luego al cliente no cambia la foto.
+   */
+  private async marcarPrimeraFinalizacion(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    ordenId: string,
+  ) {
+    const orden = await tx.ordenTrabajo.findFirst({
+      where: { id: ordenId, tenantId },
+      select: {
+        fechaFinalizada: true,
+        cliente: { select: { plazoCuentaCorrienteDias: true } },
+      },
+    });
+    if (!orden || orden.fechaFinalizada) return;
+
+    const ahora = new Date();
+    const { zonaHoraria } = await regionalDelTenant(tx, tenantId);
+    const vencimiento = vencimientoComercialDesde(
+      ahora,
+      orden.cliente?.plazoCuentaCorrienteDias,
+      zonaHoraria,
+    );
+
+    await tx.ordenTrabajo.updateMany({
+      where: { id: ordenId, tenantId, fechaFinalizada: null },
+      data: {
+        fechaFinalizada: ahora,
+        fechaVencimientoComercial: vencimiento,
+      },
+    });
+    await this.facturacionOrdenes.aplicarAnticiposClienteAOrden(
+      tx,
+      tenantId,
+      ordenId,
+    );
   }
 
   /**
@@ -4296,10 +4356,7 @@ export class OrdenesTrabajoService {
       // Primera finalización (acá: el último paso completado la finaliza
       // solo): nace la deuda comercial y arranca su aging.
       if (nuevoEstadoOrden === 'finalizada') {
-        await tx.ordenTrabajo.updateMany({
-          where: { id: ordenId, fechaFinalizada: null },
-          data: { fechaFinalizada: new Date() },
-        });
+        await this.marcarPrimeraFinalizacion(tx, auth.tenantId, ordenId);
       }
 
       await tx.ordenTrabajoEvento.create({
@@ -4607,10 +4664,7 @@ export class OrdenesTrabajoService {
         },
       });
       if (finaliza) {
-        await tx.ordenTrabajo.updateMany({
-          where: { id: ordenId, fechaFinalizada: null },
-          data: { fechaFinalizada: new Date() },
-        });
+        await this.marcarPrimeraFinalizacion(tx, auth.tenantId, ordenId);
       }
       await tx.ordenTrabajoEvento.create({
         data: {

@@ -62,6 +62,11 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
   // CobrosService lo usa la entrega en el mostrador (cobrar y entregar en un
   // acto). La dependencia sigue siendo de ida: Administración no importa
   // OrdenesTrabajoModule.
-  exports: [RecibosService, ComprobantesService, CobrosService],
+  exports: [
+    RecibosService,
+    ComprobantesService,
+    CobrosService,
+    FacturacionOrdenesService,
+  ],
 })
 export class AdministracionModule {}

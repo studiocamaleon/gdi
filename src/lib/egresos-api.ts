@@ -207,6 +207,29 @@ export async function crearEgreso(
   });
 }
 
+export type EditarEgresoBody = {
+  descripcion?: string;
+  categoriaEgresoId?: string;
+  fechaCompetencia?: string;
+  fechaVencimiento?: string;
+  neto?: number;
+  iva?: number;
+  otrosImpuestos?: number;
+  centroCostoId?: string;
+  notas?: string;
+};
+
+export async function editarEgreso(
+  id: string,
+  body: EditarEgresoBody,
+): Promise<{ ok: boolean }> {
+  return apiRequest<{ ok: boolean }>(`/egresos/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export async function anularEgreso(
   id: string,
   motivo: string,

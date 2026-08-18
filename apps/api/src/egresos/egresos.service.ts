@@ -81,6 +81,35 @@ function hoyEnZona(zonaHoraria: string): string {
   }).format(new Date());
 }
 
+/**
+ * Suma meses sin dejar que JavaScript desborde el día al mes siguiente.
+ * Ejemplo: 31/01 + 1 mes = 28/02 (o 29), no 03/03.
+ */
+function sumarMesesConTope(fecha: Date, meses: number): Date {
+  const dia = fecha.getUTCDate();
+  const primeroDestino = new Date(
+    Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth() + meses, 1),
+  );
+  const ultimoDia = new Date(
+    Date.UTC(
+      primeroDestino.getUTCFullYear(),
+      primeroDestino.getUTCMonth() + 1,
+      0,
+    ),
+  ).getUTCDate();
+  primeroDestino.setUTCDate(Math.min(dia, ultimoDia));
+  return primeroDestino;
+}
+
+function normalizarParteComprobante(
+  valor: string | undefined,
+  largo: number,
+): string | null {
+  const limpio = valor?.trim().toUpperCase() ?? '';
+  if (!limpio) return null;
+  return /^\d+$/.test(limpio) ? limpio.padStart(largo, '0') : limpio;
+}
+
 @Injectable()
 export class EgresosService {
   constructor(
@@ -565,6 +594,34 @@ export class EgresosService {
     }
 
     const cuotas = dto.cuotas ?? 1;
+
+    // Una nota de crédito no es un egreso positivo: reduce deuda/costo y debe
+    // aplicarse contra comprobantes del proveedor. Hasta que exista ese flujo
+    // específico, aceptarla acá falsearía CxP y el libro de compras.
+    if (dto.tipoComprobante === 'NC') {
+      throw new BadRequestException(
+        'Las notas de crédito no se cargan como egresos. Aplicalas desde el crédito del proveedor.',
+      );
+    }
+
+    const esComprobanteFiscal = ['FA', 'FB', 'FC', 'ND'].includes(
+      dto.tipoComprobante ?? '',
+    );
+    const puntoVenta = normalizarParteComprobante(dto.puntoVenta, 4);
+    const numeroComprobante = normalizarParteComprobante(
+      dto.numeroComprobante,
+      8,
+    );
+    if (esComprobanteFiscal && !dto.proveedorId) {
+      throw new BadRequestException(
+        'Una factura o nota de débito necesita un proveedor identificado.',
+      );
+    }
+    if (esComprobanteFiscal && (!puntoVenta || !numeroComprobante)) {
+      throw new BadRequestException(
+        'Completá el punto de venta y el número del comprobante.',
+      );
+    }
     if (cuotas > 1 && !dto.fechaVencimiento) {
       throw new BadRequestException(
         'Una compra en cuotas necesita la fecha de la primera cuota.',
@@ -611,11 +668,22 @@ export class EgresosService {
     const iva = r2(dto.iva ?? 0);
     const otros = r2(dto.otrosImpuestos ?? 0);
     const total = r2(neto + iva + otros);
-    if (total === 0) {
-      throw new BadRequestException('El importe no puede ser cero.');
+    if (total <= 0) {
+      throw new BadRequestException(
+        'El importe total debe ser mayor que cero.',
+      );
     }
 
-    const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
+    const { zonaHoraria, moneda } = await regionalDelTenant(
+      this.prisma,
+      auth.tenantId,
+    );
+    const monedaSolicitada = dto.moneda?.trim().toUpperCase();
+    if (monedaSolicitada && monedaSolicitada !== moneda.codigo) {
+      throw new BadRequestException(
+        `La empresa opera en ${moneda.codigo}; el egreso no puede registrarse en ${monedaSolicitada}.`,
+      );
+    }
     const fechaCompetencia = soloFecha(
       dto.fechaCompetencia ?? hoyEnZona(zonaHoraria),
     );
@@ -647,8 +715,7 @@ export class EgresosService {
             const otrosCuota = esPrimera
               ? r2(otros - otrosBase * (cuotas - 1))
               : otrosBase;
-            const vence = new Date(fechaVencimiento!);
-            vence.setUTCMonth(vence.getUTCMonth() + i);
+            const vence = sumarMesesConTope(fechaVencimiento!, i);
             const numeroCuota = await this.numerarEgreso(
               tx,
               auth.tenantId,
@@ -664,15 +731,15 @@ export class EgresosService {
                 beneficiarioNombre: beneficiario,
                 fechaCompetencia,
                 fechaVencimiento: vence,
-                moneda: dto.moneda ?? 'ARS',
+                moneda: moneda.codigo,
                 neto: netoCuota,
                 iva: ivaCuota,
                 otrosImpuestos: otrosCuota,
                 total: r2(netoCuota + ivaCuota + otrosCuota),
                 tipoComprobante: dto.tipoComprobante ?? null,
-                puntoVenta: dto.puntoVenta?.trim() || null,
-                numeroComprobante: dto.numeroComprobante?.trim()
-                  ? `${dto.numeroComprobante.trim()}/${i + 1}`
+                puntoVenta,
+                numeroComprobante: numeroComprobante
+                  ? `${numeroComprobante}/${i + 1}`
                   : null,
                 estado: 'pendiente',
                 origen: 'manual',
@@ -703,14 +770,14 @@ export class EgresosService {
             beneficiarioNombre: beneficiario,
             fechaCompetencia,
             fechaVencimiento,
-            moneda: dto.moneda ?? 'ARS',
+            moneda: moneda.codigo,
             neto,
             iva,
             otrosImpuestos: otros,
             total,
             tipoComprobante: dto.tipoComprobante ?? null,
-            puntoVenta: dto.puntoVenta?.trim() || null,
-            numeroComprobante: dto.numeroComprobante?.trim() || null,
+            puntoVenta,
+            numeroComprobante,
             estado: 'pendiente',
             origen: 'manual',
             centroCostoId: dto.centroCostoId ?? null,
@@ -750,8 +817,8 @@ export class EgresosService {
             tenantId: auth.tenantId,
             proveedorId: dto.proveedorId ?? null,
             tipoComprobante: dto.tipoComprobante ?? null,
-            puntoVenta: dto.puntoVenta?.trim() || null,
-            numeroComprobante: dto.numeroComprobante?.trim() || null,
+            puntoVenta,
+            numeroComprobante,
           },
           select: { numero: true, total: true, fechaCompetencia: true },
         });
@@ -801,6 +868,19 @@ export class EgresosService {
     if (dto.descripcion !== undefined)
       data.descripcion = dto.descripcion.trim();
     if (dto.categoriaEgresoId !== undefined) {
+      const categoria = await this.prisma.categoriaEgreso.findFirst({
+        where: {
+          id: dto.categoriaEgresoId,
+          tenantId: auth.tenantId,
+          activo: true,
+        },
+        select: { id: true },
+      });
+      if (!categoria) {
+        throw new BadRequestException(
+          'La categoría no existe, está inactiva o pertenece a otra empresa.',
+        );
+      }
       data.categoria = { connect: { id: dto.categoriaEgresoId } };
     }
     if (dto.fechaCompetencia !== undefined) {
@@ -833,7 +913,13 @@ export class EgresosService {
       data.neto = neto;
       data.iva = iva;
       data.otrosImpuestos = otros;
-      data.total = r2(neto + iva + otros);
+      const total = r2(neto + iva + otros);
+      if (total <= 0) {
+        throw new BadRequestException(
+          'El importe total debe ser mayor que cero.',
+        );
+      }
+      data.total = total;
     }
     await this.prisma.egreso.update({ where: { id }, data });
     return { ok: true };
@@ -1079,14 +1165,21 @@ export class EgresosService {
       }
     }
 
+    const beneficiarios = new Set(
+      egresos.map((e) =>
+        e.proveedorId
+          ? `proveedor:${e.proveedorId}`
+          : `beneficiario:${e.beneficiarioNombre.trim().toLocaleLowerCase('es')}`,
+      ),
+    );
+    if (beneficiarios.size > 1) {
+      throw new BadRequestException(
+        'Un pago es para un solo proveedor o beneficiario: separá las órdenes de pago.',
+      );
+    }
     const proveedorIds = new Set(
       egresos.map((e) => e.proveedorId).filter((p): p is string => Boolean(p)),
     );
-    if (proveedorIds.size > 1) {
-      throw new BadRequestException(
-        'Un pago es de un solo proveedor: una orden de pago se le manda a alguien.',
-      );
-    }
 
     const fecha = dto.fecha ? new Date(dto.fecha) : new Date();
     const montoBruto = r2(
@@ -1097,6 +1190,17 @@ export class EgresosService {
     // imputado — confundir las dos cosas deja al proveedor debiendo plata que
     // en realidad ya se le retuvo.
     const retenciones = dto.retenciones ?? [];
+    if (
+      retenciones.some(
+        (retencion) =>
+          retencion.regimen === 'IIBB_CONVENIO' &&
+          !retencion.jurisdiccion?.trim(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Una retención de Ingresos Brutos necesita la jurisdicción.',
+      );
+    }
     const retencionesTotal = r2(
       retenciones.reduce((acc, r) => acc + r.monto, 0),
     );

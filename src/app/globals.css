@@ -23667,10 +23667,9 @@ button.otl-kpi {
    aplastando el badge (que además no tenía flex-shrink). */
 .fo-comps .mov-th,
 .fo-comps .mov-row {
-  grid-template-columns: 88px minmax(170px, 1fr) 92px minmax(
-      0,
-      148px
-    ) 112px 124px;
+  grid-template-columns:
+    88px minmax(170px, 1fr) 92px minmax(0, 148px)
+    112px 124px;
   gap: 10px;
 }
 
@@ -30441,10 +30440,9 @@ body:has(.t-app) {
 }
 .prodtab .otp-prod-head {
   display: grid;
-  grid-template-columns: 20px minmax(150px, 1.3fr) minmax(
-      150px,
-      1.6fr
-    ) 90px 40px;
+  grid-template-columns:
+    20px minmax(150px, 1.3fr) minmax(150px, 1.6fr)
+    90px 40px;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
@@ -40567,6 +40565,15 @@ body:has(.t-app) {
   grid-column: 1 / -1;
 }
 
+.egr-grid .egr-hint-box {
+  align-self: end;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  line-height: 1.4;
+}
+
 /* Sub-grillas que ocupan la fila entera: agrupan campos que tienen que ir
    juntos (neto + IVA + comprobante, punto de venta + número) sin depender de
    cuántos campos condicionales se hayan mostrado más arriba. */
@@ -40919,6 +40926,24 @@ body:has(.t-app) {
   border-top: 1px solid var(--hairline);
 }
 
+.egr-ret-fila.egr-ret-detalle {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+}
+
+.egr-ret-fila.egr-ret-detalle + .egr-ret-fila.egr-ret-detalle {
+  border-top: 1px solid var(--hairline);
+}
+
+.egr-ret-fila .egr-ret-quitar {
+  justify-self: start;
+}
+
 .egr-select {
   padding: 8px 10px;
   color: var(--ink);
@@ -40938,6 +40963,10 @@ body:has(.t-app) {
 
 @media (max-width: 640px) {
   .egr-ret-fila {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .egr-ret-fila.egr-ret-detalle {
     grid-template-columns: minmax(0, 1fr);
   }
 }

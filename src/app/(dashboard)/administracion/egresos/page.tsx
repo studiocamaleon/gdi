@@ -1,6 +1,10 @@
 import { EgresosView } from "@/components/administracion/egresos-view";
 import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
-import { getCategoriasEgreso, getEgresos, getResumenEgresos } from "@/lib/egresos-api";
+import {
+  getCategoriasEgreso,
+  getEgresos,
+  getResumenEgresos,
+} from "@/lib/egresos-api";
 import { getProveedores } from "@/lib/proveedores-api";
 
 export const dynamic = "force-dynamic";
@@ -17,30 +21,12 @@ export default async function EgresosPage() {
   // es mejor que una pantalla de error por un catálogo sin cargar.
   const [egresos, resumen, categorias, proveedores, metodosPago, cuentas] =
     await Promise.all([
-      getEgresos({}).then(
-        (r) => r.egresos,
-        () => [],
-      ),
-      getResumenEgresos().then(
-        (r) => r,
-        () => null,
-      ),
-      getCategoriasEgreso().then(
-        (r) => r,
-        () => [],
-      ),
-      getProveedores().then(
-        (r) => r,
-        () => [],
-      ),
-      getMetodosPago().then(
-        (r) => r,
-        () => [],
-      ),
-      getCuentasFondos().then(
-        (r) => r,
-        () => [],
-      ),
+      getEgresos({}).then((r) => r.egresos),
+      getResumenEgresos(),
+      getCategoriasEgreso(),
+      getProveedores(),
+      getMetodosPago(),
+      getCuentasFondos(),
     ]);
 
   return (

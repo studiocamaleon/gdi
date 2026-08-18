@@ -276,6 +276,7 @@ export class ClientesService {
         documentoNumero: normalized.documentoNumero,
         condicionFiscal: normalized.condicionFiscal,
         limiteCredito: normalized.limiteCredito,
+        plazoCuentaCorrienteDias: normalized.plazoCuentaCorrienteDias,
         emailPrincipal: normalized.email,
         telefonoCodigo: normalized.telefonoCodigo,
         telefonoNumero: normalized.telefonoNumero,
@@ -346,6 +347,7 @@ export class ClientesService {
             documentoNumero: normalized.documentoNumero,
             condicionFiscal: normalized.condicionFiscal,
             limiteCredito: normalized.limiteCredito,
+            plazoCuentaCorrienteDias: normalized.plazoCuentaCorrienteDias,
             emailPrincipal: normalized.email,
             telefonoCodigo: normalized.telefonoCodigo,
             telefonoNumero: normalized.telefonoNumero,
@@ -661,6 +663,11 @@ export class ClientesService {
         payload.limiteCredito === undefined || payload.limiteCredito === null
           ? null
           : payload.limiteCredito,
+      plazoCuentaCorrienteDias:
+        payload.plazoCuentaCorrienteDias === undefined ||
+        payload.plazoCuentaCorrienteDias === null
+          ? null
+          : Math.trunc(payload.plazoCuentaCorrienteDias),
       email: payload.email?.trim().toLowerCase() || null,
       pais: payload.pais.trim().toUpperCase(),
       telefonoCodigo: payload.telefonoCodigo?.trim() || '',
@@ -734,6 +741,7 @@ export class ClientesService {
       updatedAt: cliente.updatedAt.toISOString(),
       limiteCredito:
         cliente.limiteCredito === null ? null : Number(cliente.limiteCredito),
+      plazoCuentaCorrienteDias: cliente.plazoCuentaCorrienteDias,
       // Sin email es '' y no null: el front lo pone en un <input>, y un null
       // ahí lo volvería no-controlado a mitad de camino.
       email: cliente.emailPrincipal ?? '',
