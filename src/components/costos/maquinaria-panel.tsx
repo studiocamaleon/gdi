@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { MaquinaAltaDialog } from "./maquina-editor/maquina-alta-dialog";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -473,16 +473,15 @@ export function MaquinariaPanel({
                 </TableCell>
                 <TableCell className="sticky-right text-right">
                   <div className="centros-actions justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      render={
-                        <Link href={`/costos/maquinaria/${maquina.id}`} />
-                      }
-                      nativeButton={false}
+                    <Link
+                      href={`/costos/maquinaria/${maquina.id}`}
+                      className={buttonVariants({
+                        variant: "outline",
+                        size: "sm",
+                      })}
                     >
                       {puedeGestionar ? "Editar" : "Ver"}
-                    </Button>
+                    </Link>
                     {puedeGestionar ? (
                       maquina.activo ? (
                         <Button

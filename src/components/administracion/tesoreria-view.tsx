@@ -29,7 +29,7 @@ import {
 } from "@/components/navigation/config-regional-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
@@ -1009,16 +1009,16 @@ export function TesoreriaView({
               {fmtLocal(initialKpis.aAcreditar)}
             </CardTitle>
             <CardAction>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                render={
-                  <Link href="/administracion/tesoreria/acreditaciones" />
-                }
+              <Link
+                href="/administracion/tesoreria/acreditaciones"
+                className={buttonVariants({
+                  variant: "ghost",
+                  size: "icon-sm",
+                })}
               >
                 <ArrowLeftRightIcon />
                 <span className="sr-only">Abrir acreditaciones y valores</span>
-              </Button>
+              </Link>
             </CardAction>
           </CardHeader>
           <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">

@@ -16,7 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -255,18 +255,15 @@ export function PasosFamiliasView({
                     </td>
                     <td className="right">
                       {puedeGestionar ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          nativeButton={false}
-                          render={
-                            <Link
-                              href={`/productos-servicios/pasos/${paso.id}`}
-                            />
-                          }
+                        <Link
+                          href={`/productos-servicios/pasos/${paso.id}`}
+                          className={buttonVariants({
+                            variant: "outline",
+                            size: "sm",
+                          })}
                         >
                           Configurar
-                        </Button>
+                        </Link>
                       ) : null}
                       {puedeGestionar ? <Button
                         variant="ghost"
@@ -356,16 +353,15 @@ export function PasosFamiliasView({
                   <td>{getLabel(categoriaFamiliaLabels, f.categoria).label}</td>
                   <td className="right">
                     {puedeGestionar ? (
-                      <Button
-                        variant={f.configBase ? "outline" : "ghost"}
-                        size="sm"
-                        nativeButton={false}
-                        render={
-                          <Link href={`/productos-servicios/pasos/${f.codigo}`} />
-                        }
+                      <Link
+                        href={`/productos-servicios/pasos/${f.codigo}`}
+                        className={buttonVariants({
+                          variant: f.configBase ? "outline" : "ghost",
+                          size: "sm",
+                        })}
                       >
                         {f.configBase ? "Editar configuración" : "Configurar"}
-                      </Button>
+                      </Link>
                     ) : null}
                   </td>
                 </tr>

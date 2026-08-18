@@ -39,7 +39,7 @@ import {
 } from "@/lib/empleados";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -383,16 +383,17 @@ export function EmpleadoFicha({
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 [&>*]:shrink-0 md:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-3">
-          <Button
-            variant="sidebar"
-            nativeButton={false}
-            size="sm"
-            className="w-fit"
-            render={<NavLink href="/empleados" />}
+          <NavLink
+            href="/empleados"
+            className={buttonVariants({
+              variant: "sidebar",
+              size: "sm",
+              className: "w-fit",
+            })}
           >
             <ArrowLeftIcon data-icon="inline-start" />
             Volver a empleados
-          </Button>
+          </NavLink>
           <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">
               {mode === "create" ? "Nuevo empleado" : "Ficha de empleado"}

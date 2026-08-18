@@ -29,7 +29,7 @@ import {
   parseEmpleadosImportCsv,
 } from "@/lib/empleados-importacion";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -336,15 +336,16 @@ export function EmpleadosTable({
                 </DropdownMenuContent>
               </DropdownMenu>
               {canManage ? (
-                <Button
-                  variant="brand"
-                  className="w-full sm:w-auto"
-                  nativeButton={false}
-                  render={<NavLink href="/empleados/nuevo" />}
+                <NavLink
+                  href="/empleados/nuevo"
+                  className={buttonVariants({
+                    variant: "brand",
+                    className: "w-full sm:w-auto",
+                  })}
                 >
                   <PlusIcon data-icon="inline-start" />
                   Nuevo empleado
-                </Button>
+                </NavLink>
               ) : null}
             </div>
           </div>

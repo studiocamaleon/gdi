@@ -39,7 +39,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -574,16 +574,18 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-3">
-          <Button
-            variant="sidebar"
-            nativeButton={false}
-            size="sm"
-            className="w-fit"
-            render={<Link href="/clientes" onNavigate={confirmNavigation} />}
+          <Link
+            href="/clientes"
+            onNavigate={confirmNavigation}
+            className={buttonVariants({
+              variant: "sidebar",
+              size: "sm",
+              className: "w-fit",
+            })}
           >
             <ArrowLeftIcon data-icon="inline-start" />
             Volver a clientes
-          </Button>
+          </Link>
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">
@@ -609,19 +611,14 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
 
         <div className="flex flex-wrap items-center gap-2">
           {mode !== "create" ? (
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={
-                <Link
-                  href={`/clientes/${cliente.id}/cuenta-corriente`}
-                  onNavigate={confirmNavigation}
-                />
-              }
+            <Link
+              href={`/clientes/${cliente.id}/cuenta-corriente`}
+              onNavigate={confirmNavigation}
+              className={buttonVariants({ variant: "outline" })}
             >
               <ReceiptTextIcon data-icon="inline-start" />
               Cuenta corriente
-            </Button>
+            </Link>
           ) : null}
           {!readOnly ? (
             <Button

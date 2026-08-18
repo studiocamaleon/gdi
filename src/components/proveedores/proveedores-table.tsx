@@ -29,7 +29,7 @@ import {
   parseContactImportCsv,
 } from "@/lib/contactos-importacion";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -411,14 +411,13 @@ export function ProveedoresTable({
                   </DropdownMenuContent>
                 </DropdownMenu>
                 {canManage ? (
-                  <Button
-                    variant="brand"
-                    nativeButton={false}
-                    render={<NavLink href="/proveedores/nuevo" />}
+                  <NavLink
+                    href="/proveedores/nuevo"
+                    className={buttonVariants({ variant: "brand" })}
                   >
                     <PlusIcon data-icon="inline-start" />
                     Nuevo proveedor
-                  </Button>
+                  </NavLink>
                 ) : null}
               </div>
             </div>

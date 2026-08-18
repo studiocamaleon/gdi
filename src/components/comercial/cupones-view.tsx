@@ -20,7 +20,7 @@ import {
   useFecha,
 } from "@/components/navigation/config-regional-provider";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   Dialog,
@@ -628,15 +628,13 @@ export function CuponesView({
             ) : null}
             <DialogFooter>
               {qr ? (
-                <Button
-                  variant="outline"
-                  render={
-                    <a href={qr.dataUrl} download={`cupon-${qr.codigo}.png`} />
-                  }
-                  nativeButton={false}
+                <a
+                  href={qr.dataUrl}
+                  download={`cupon-${qr.codigo}.png`}
+                  className={buttonVariants({ variant: "outline" })}
                 >
                   Descargar PNG
-                </Button>
+                </a>
               ) : null}
               <Button onClick={() => setQr(null)}>Listo</Button>
             </DialogFooter>

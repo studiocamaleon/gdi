@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -186,13 +186,13 @@ export function ProductosServiciosTable({
           <div className="sub">{total} productos encontrados.</div>
         </div>
         {canManage ? (
-          <Button
-            nativeButton={false}
-            render={<Link href="/productos-servicios/nuevo" />}
+          <Link
+            href="/productos-servicios/nuevo"
+            className={buttonVariants()}
           >
             <PlusIcon data-icon="inline-start" />
             Nuevo producto
-          </Button>
+          </Link>
         ) : null}
       </div>
 
