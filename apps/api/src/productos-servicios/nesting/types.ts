@@ -153,6 +153,8 @@ export interface NestingMetrics {
   wasteAreaM2?: number;
   /** Solo grid-2d-single: largo consumido en una placa parcial (para costeo largo_consumido). */
   largoConsumidoMm?: number;
+  /** Margen físico posterior, necesario para costear correctamente una placa parcial. */
+  trailingMarginMm?: number;
   /** Solo multi/sólver externo: métricas por placa real acomodada. */
   perSubstrate?: Array<{ areaUtilMm2: number; consumedLengthMm: number }>;
 }

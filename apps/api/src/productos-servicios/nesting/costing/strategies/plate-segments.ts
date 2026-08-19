@@ -44,26 +44,37 @@ export function costingPlateSegments<T = unknown>(
   let fullUnits = 0;
   let fullUnitsCost = 0;
   let lastUnit: CostingResult['breakdown']['lastUnit'] = null;
+  const units: CostingResult['breakdown']['units'] = [];
   let piezasRestantes = input.totalPieces;
 
   for (let i = 0; i < input.unitsNeeded; i++) {
     const piezasEnEsteSustrato = Math.min(piezasRestantes, piezasPorSustrato);
     piezasRestantes -= piezasEnEsteSustrato;
 
-    const filasNecesarias =
-      columnas > 0 ? Math.ceil(piezasEnEsteSustrato / columnas) : 0;
-    const largoConsumido =
-      fullLayoutLengthMm > 0 && filas > 0
-        ? (filasNecesarias / filas) * fullLayoutLengthMm
-        : consumedLengthFromPlacements(
-            input.nesting.placements.slice(0, piezasEnEsteSustrato),
-            inferredBottomMarginMm,
-          );
+    const placementsDeEstaUnidad = input.nesting.placements.slice(
+      0,
+      piezasEnEsteSustrato,
+    );
+    const largoConsumido = placementsDeEstaUnidad.length
+      ? consumedLengthFromPlacements(
+          placementsDeEstaUnidad,
+          metrics.trailingMarginMm ?? inferredBottomMarginMm,
+        )
+      : fullLayoutLengthMm > 0 && filas > 0 && columnas > 0
+        ? Math.ceil(piezasEnEsteSustrato / columnas) *
+          (fullLayoutLengthMm / filas)
+        : 0;
     const occupation = round2((largoConsumido / substrate.heightMm) * 100);
     const segment = segmentSteps.find((s) => s >= occupation) ?? 100;
     const cost = round2(input.unitPrice * (segment / 100));
 
     totalCost += cost;
+    units.push({
+      index: i,
+      occupationPct: occupation,
+      segmentApplied: segment,
+      cost,
+    });
 
     if (segment === 100) {
       fullUnits++;
@@ -84,6 +95,7 @@ export function costingPlateSegments<T = unknown>(
       fullUnits,
       fullUnitsCost: round2(fullUnitsCost),
       lastUnit,
+      units,
     },
   };
 }
@@ -101,7 +113,10 @@ function costingPlateSegmentsByActualPlacements<T = unknown>(
     return emptyResult(input.unitPrice);
   }
 
-  const placementsBySubstrate = new Map<number, typeof input.nesting.placements>();
+  const placementsBySubstrate = new Map<
+    number,
+    typeof input.nesting.placements
+  >();
   for (const placement of input.nesting.placements) {
     const substrateIndex = placement.substrateIndex ?? 0;
     const current = placementsBySubstrate.get(substrateIndex) ?? [];
@@ -113,6 +128,7 @@ function costingPlateSegmentsByActualPlacements<T = unknown>(
   let fullUnits = 0;
   let fullUnitsCost = 0;
   let lastUnit: CostingResult['breakdown']['lastUnit'] = null;
+  const units: CostingResult['breakdown']['units'] = [];
 
   for (let i = 0; i < input.unitsNeeded; i++) {
     const placements = placementsBySubstrate.get(i) ?? [];
@@ -125,6 +141,12 @@ function costingPlateSegmentsByActualPlacements<T = unknown>(
     const segment = segmentSteps.find((s) => s >= occupation) ?? 100;
     const cost = round2(input.unitPrice * (segment / 100));
     totalCost += cost;
+    units.push({
+      index: i,
+      occupationPct: occupation,
+      segmentApplied: segment,
+      cost,
+    });
 
     if (segment === 100) {
       fullUnits++;
@@ -145,6 +167,7 @@ function costingPlateSegmentsByActualPlacements<T = unknown>(
       fullUnits,
       fullUnitsCost: round2(fullUnitsCost),
       lastUnit,
+      units,
     },
   };
 }
@@ -181,6 +204,7 @@ function emptyResult(unitPrice: number): CostingResult {
       fullUnits: 0,
       fullUnitsCost: 0,
       lastUnit: null,
+      units: [],
     },
   };
 }

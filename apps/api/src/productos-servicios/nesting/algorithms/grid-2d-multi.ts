@@ -23,8 +23,33 @@ import type {
 interface PendingPiece {
   origW: number;
   origH: number;
+  packedW: number;
+  packedH: number;
+  prerotated: boolean;
   pieceId: string;
   meta?: unknown;
+}
+
+/**
+ * El resultado público contiene un placement por pieza, por lo que aun con un
+ * packer agrupado terminaríamos materializando todas las instancias. Este
+ * límite evita que una entrada accidental tumbe el API por memoria. Los
+ * trabajos mayores deben dividirse en tandas antes de llegar al nesting.
+ */
+export const MAX_GRID_MULTI_INSTANCES = 100_000;
+
+function emptyResult<T>(): Grid2DMultiResult<T> {
+  return {
+    algorithm: 'grid-2d-multi',
+    substrates: [],
+    placements: [],
+    metrics: {
+      aprovechamientoPct: 0,
+      areaUtilMm2: 0,
+      areaTotalMm2: 0,
+    },
+    perSubstrate: [],
+  };
 }
 
 export interface Grid2DMultiOptions extends NestingOptions {
@@ -60,16 +85,56 @@ export function nestGrid2DMulti<T = unknown>(
 
   const areaWidthMm = substrate.widthMm - marginLeftMm - marginRightMm;
   const areaHeightMm = substrate.heightMm - marginTopMm - marginBottomMm;
+  if (areaWidthMm <= 0 || areaHeightMm <= 0) return emptyResult<T>();
+
+  const piezasValidas = pieces.filter(
+    (piece) =>
+      Number.isFinite(piece.widthMm) &&
+      Number.isFinite(piece.heightMm) &&
+      Number.isFinite(piece.quantity) &&
+      piece.widthMm > 0 &&
+      piece.heightMm > 0 &&
+      piece.quantity > 0,
+  );
+  const expectedCount = piezasValidas.reduce(
+    (total, piece) => total + Math.ceil(piece.quantity),
+    0,
+  );
+  if (expectedCount <= 0 || expectedCount > MAX_GRID_MULTI_INSTANCES) {
+    return emptyResult<T>();
+  }
+
+  // maxrects-packer acepta rectángulos "oversized" y los coloca desbordados.
+  // Los rechazamos antes de invocarlo: una pieza debe entrar completa en al
+  // menos una orientación dentro del área útil.
+  const algunaNoEntra = piezasValidas.some((piece) => {
+    const normal =
+      piece.widthMm <= areaWidthMm && piece.heightMm <= areaHeightMm;
+    const rotada =
+      allowRotation &&
+      piece.heightMm <= areaWidthMm &&
+      piece.widthMm <= areaHeightMm;
+    return !normal && !rotada;
+  });
+  if (algunaNoEntra) return emptyResult<T>();
 
   // Expandir piezas a instancias individuales (1 por cantidad)
   const pendientes: PendingPiece[] = [];
-  for (const piece of pieces) {
-    if (piece.widthMm <= 0 || piece.heightMm <= 0 || piece.quantity <= 0)
-      continue;
-    for (let i = 0; i < piece.quantity; i++) {
+  for (const piece of piezasValidas) {
+    const entraNormal =
+      piece.widthMm <= areaWidthMm && piece.heightMm <= areaHeightMm;
+    const prerotated =
+      !entraNormal &&
+      allowRotation &&
+      piece.heightMm <= areaWidthMm &&
+      piece.widthMm <= areaHeightMm;
+    for (let i = 0; i < Math.ceil(piece.quantity); i++) {
       pendientes.push({
         origW: piece.widthMm,
         origH: piece.heightMm,
+        packedW: prerotated ? piece.heightMm : piece.widthMm,
+        packedH: prerotated ? piece.widthMm : piece.heightMm,
+        prerotated,
         pieceId: piece.id,
         meta: piece.meta,
       });
@@ -78,19 +143,7 @@ export function nestGrid2DMulti<T = unknown>(
   // Ordenar por área descendente (heurística estándar de bin-packing)
   pendientes.sort((a, b) => b.origW * b.origH - a.origW * a.origH);
 
-  if (pendientes.length === 0) {
-    return {
-      algorithm: 'grid-2d-multi',
-      substrates: [],
-      placements: [],
-      metrics: {
-        aprovechamientoPct: 0,
-        areaUtilMm2: 0,
-        areaTotalMm2: 0,
-      },
-      perSubstrate: [],
-    };
-  }
+  if (pendientes.length === 0) return emptyResult<T>();
 
   const packer = new MaxRectsPacker(
     areaWidthMm + sepHMm,
@@ -105,9 +158,12 @@ export function nestGrid2DMulti<T = unknown>(
   );
 
   for (const p of pendientes) {
-    packer.add(p.origW + sepHMm, p.origH + sepVMm, {
+    packer.add(p.packedW + sepHMm, p.packedH + sepVMm, {
       origW: p.origW,
       origH: p.origH,
+      packedW: p.packedW,
+      packedH: p.packedH,
+      prerotated: p.prerotated,
       pieceId: p.pieceId,
       meta: p.meta,
     });
@@ -128,7 +184,9 @@ export function nestGrid2DMulti<T = unknown>(
         rot?: boolean;
       };
       const data = packedRect.data;
-      const rotated = packedRect.rot ?? false;
+      // Una pieza que sólo entra girada se prerota antes de enviarla al
+      // packer. Si el packer vuelve a rotarla, ambos giros se cancelan.
+      const rotated = data.prerotated !== (packedRect.rot ?? false);
       const placedW = rotated ? data.origH : data.origW;
       const placedH = rotated ? data.origW : data.origH;
       const bottom = rect.y + placedH + marginTopMm;
@@ -157,6 +215,20 @@ export function nestGrid2DMulti<T = unknown>(
     });
     totalAreaUtil += areaUtil;
   });
+
+  const EPSILON_MM = 0.01;
+  const hayPlacementInvalido =
+    placements.length !== expectedCount ||
+    placements.some(
+      (placement) =>
+        placement.xMm < marginLeftMm - EPSILON_MM ||
+        placement.yMm < marginTopMm - EPSILON_MM ||
+        placement.xMm + placement.widthMm >
+          substrate.widthMm - marginRightMm + EPSILON_MM ||
+        placement.yMm + placement.heightMm >
+          substrate.heightMm - marginBottomMm + EPSILON_MM,
+    );
+  if (hayPlacementInvalido) return emptyResult<T>();
 
   const areaTotalMm2 =
     substrate.widthMm * substrate.heightMm * substrates.length;

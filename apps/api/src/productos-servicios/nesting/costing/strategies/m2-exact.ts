@@ -42,6 +42,7 @@ export function costingM2Exact<T = unknown>(
       fullUnits: input.unitsNeeded,
       fullUnitsCost: totalCost,
       lastUnit: null,
+      units: [],
     },
   };
 }

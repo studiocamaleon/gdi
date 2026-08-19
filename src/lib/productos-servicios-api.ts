@@ -1293,6 +1293,12 @@ export interface CotizarResponse {
             segmentApplied: number | null;
             cost: number;
           } | null;
+          units?: Array<{
+            index: number;
+            occupationPct: number;
+            segmentApplied: number | null;
+            cost: number;
+          }>;
         };
       }>;
       cargosDirectosPaso?: Array<{

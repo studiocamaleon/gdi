@@ -40,6 +40,12 @@ export interface NestingViewerProps {
         segmentApplied: number | null;
         cost: number;
       } | null;
+      units?: Array<{
+        index: number;
+        occupationPct: number;
+        segmentApplied: number | null;
+        cost: number;
+      }>;
     };
   }>;
   maxPx?: number;
@@ -242,12 +248,19 @@ export function NestingViewer({
   const conImpresora = firstSubstrate?.kind === "roll" && maquinaVisual != null;
   const [verMaquina, setVerMaquina] = React.useState(true);
   const firstHeight =
-    firstSubstrate?.kind === "sheet" ? firstSubstrate.heightMm : firstSubstrate?.lengthMm;
+    firstSubstrate?.kind === "sheet"
+      ? firstSubstrate.heightMm
+      : firstSubstrate?.lengthMm;
   const firstVisualConfig = firstSubstrate
-    ? getEffectiveVisualConfig(result.visualConfig, firstSubstrate.widthMm, firstHeight ?? 0)
+    ? getEffectiveVisualConfig(
+        result.visualConfig,
+        firstSubstrate.widthMm,
+        firstHeight ?? 0,
+      )
     : null;
   const areaUtilMm2 = firstVisualConfig
-    ? firstVisualConfig.usableArea.widthMm * firstVisualConfig.usableArea.heightMm
+    ? firstVisualConfig.usableArea.widthMm *
+      firstVisualConfig.usableArea.heightMm
     : 0;
   const substrateLabel =
     result.visualConfig?.substrateLabel ??
@@ -259,7 +272,12 @@ export function NestingViewer({
 
   if (!result.substrates.length) {
     return (
-      <div className={cn("rounded-xl border border-dashed p-6 text-sm text-muted-foreground", className)}>
+      <div
+        className={cn(
+          "rounded-xl border border-dashed p-6 text-sm text-muted-foreground",
+          className,
+        )}
+      >
         Sin sustratos para visualizar.
       </div>
     );
@@ -269,9 +287,7 @@ export function NestingViewer({
     <section className={cn("nesting-viewer", className)}>
       <div className="nesting-strat-row">
         <div className="nesting-strat on">
-          <span className="ix">
-            01
-          </span>
+          <span className="ix">01</span>
           <span>{algorithmLabel(result.algorithm)}</span>
           <span className="yield">
             {formatNumber(result.aprovechamientoPct, 1)}%
@@ -279,7 +295,10 @@ export function NestingViewer({
         </div>
         {result.costingPreview ? (
           <div className="right">
-            Costeo: <strong className="font-semibold text-foreground">{result.costingPreview.label}</strong>
+            Costeo:{" "}
+            <strong className="font-semibold text-foreground">
+              {result.costingPreview.label}
+            </strong>
           </div>
         ) : null}
       </div>
@@ -307,9 +326,17 @@ export function NestingViewer({
           />
         ) : (
           <StatBlock
-            label={result.unidad === "m_lineales" ? "Largo consumido" : "Cantidad calculada"}
+            label={
+              result.unidad === "m_lineales"
+                ? "Largo consumido"
+                : "Cantidad calculada"
+            }
             value={`${formatNumber(result.cantidadCalculada, 2)} ${labelUnidad(result.unidad)}`}
-            hint={result.consumedLengthMm ? `Rollo: ${formatMm(result.consumedLengthMm)}` : undefined}
+            hint={
+              result.consumedLengthMm
+                ? `Rollo: ${formatMm(result.consumedLengthMm)}`
+                : undefined
+            }
           />
         )}
         <StatBlock
@@ -323,8 +350,16 @@ export function NestingViewer({
         />
         <StatBlock
           label="Desperdicio costeado"
-          value={result.costingPreview?.wasteAreaMm2 ? formatM2(result.costingPreview.wasteAreaMm2) : "-"}
-          hint={result.costingPreview?.segmentAppliedPct ? `Escalón ${result.costingPreview.segmentAppliedPct}%` : undefined}
+          value={
+            result.costingPreview?.wasteAreaMm2
+              ? formatM2(result.costingPreview.wasteAreaMm2)
+              : "-"
+          }
+          hint={
+            result.costingPreview?.segmentAppliedPct
+              ? `Escalón ${result.costingPreview.segmentAppliedPct}%`
+              : undefined
+          }
         />
       </div>
 
@@ -359,7 +394,9 @@ export function NestingViewer({
             totalSubstrates={result.substrates.length}
             visualConfig={result.visualConfig}
             costingPreview={result.costingPreview}
-            placements={result.placements.filter((p) => (p.substrateIndex ?? 0) === idx)}
+            placements={result.placements.filter(
+              (p) => (p.substrateIndex ?? 0) === idx,
+            )}
             maxPx={maxPx}
             showLabels={showLabels}
             modificaciones={modificaciones}
@@ -373,7 +410,9 @@ export function NestingViewer({
       <NestingFooter result={result} />
       <NestingOutputsSummary outputs={result.outputsCanonicos} />
       <PlanImposicionCuadernillo outputs={result.outputsCanonicos} />
-      <PliegoSeleccionadoBanner seleccion={result.pliegoImpresionSeleccionado} />
+      <PliegoSeleccionadoBanner
+        seleccion={result.pliegoImpresionSeleccionado}
+      />
       <TalonarioGrouping grouping={result.talonarioGrouping} copias={copias} />
     </section>
   );
@@ -394,7 +433,11 @@ function StatBlock({
     <div className={cn("nesting-stat", featured && "featured")}>
       <div className="lbl">{label}</div>
       <div className="val">{value}</div>
-      {hint ? <div className="sub" title={hint}>{hint}</div> : null}
+      {hint ? (
+        <div className="sub" title={hint}>
+          {hint}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -408,7 +451,9 @@ function NestingConfigStrip({
 }) {
   const sub = result.substrates[0];
   const height = sub?.kind === "sheet" ? sub.heightMm : sub?.lengthMm;
-  const visualConfig = sub ? getEffectiveVisualConfig(result.visualConfig, sub.widthMm, height ?? 0) : null;
+  const visualConfig = sub
+    ? getEffectiveVisualConfig(result.visualConfig, sub.widthMm, height ?? 0)
+    : null;
   const panelizado = visualConfig?.panelizado;
   const maquina = result.visualConfig?.maquina;
   const configItems = [
@@ -426,13 +471,14 @@ function NestingConfigStrip({
         ]
       : null,
     visualConfig
-      ? [
-          "Demasía",
-          `${formatMm(getPieceBleedMm(visualConfig))} por lado`,
-        ]
+      ? ["Demasía", `${formatMm(getPieceBleedMm(visualConfig))} por lado`]
       : null,
-    visualConfig ? ["Rotación", visualConfig.allowRotation ? "permitida" : "bloqueada"] : null,
-    result.costingPreview ? ["Costeo", costingLabel(result.costingPreview.strategy)] : null,
+    visualConfig
+      ? ["Rotación", visualConfig.allowRotation ? "permitida" : "bloqueada"]
+      : null,
+    result.costingPreview
+      ? ["Costeo", costingLabel(result.costingPreview.strategy)]
+      : null,
     panelizado?.enabled
       ? [
           "Panelizado",
@@ -472,8 +518,22 @@ function NestingCostingSummary({
             <span>{item.materialNombre}</span>
             <span>{costingLabel(detalle.strategy)}</span>
             <span>Total {formatMoney(detalle.totalCost, moneda)}</span>
-            {detalle.lastUnit ? (
-              <span>Última placa {formatNumber(detalle.lastUnit.occupationPct, 1)}%</span>
+            {detalle.units && detalle.units.length > 0 ? (
+              <span>
+                {detalle.units
+                  .map(
+                    (unit) =>
+                      `Placa ${unit.index + 1}: ${formatNumber(unit.occupationPct, 1)}%` +
+                      (unit.segmentApplied != null
+                        ? ` → cobra ${formatNumber(unit.segmentApplied, 0)}%`
+                        : ""),
+                  )
+                  .join(" · ")}
+              </span>
+            ) : detalle.lastUnit ? (
+              <span>
+                Última placa {formatNumber(detalle.lastUnit.occupationPct, 1)}%
+              </span>
             ) : null}
           </div>
         );
@@ -492,9 +552,7 @@ function NestingOutputsSummary({
 
   return (
     <div className="nesting-outputs">
-      <div className="lbl">
-        Outputs del nesting
-      </div>
+      <div className="lbl">Outputs del nesting</div>
       <div className="items">
         {items.map(([key, value]) => (
           <div key={key} className="out">
@@ -511,7 +569,9 @@ function NestingOutputsSummary({
   );
 }
 
-function getDisplayableOutputs(outputs?: NestingViewerInput["outputsCanonicos"]) {
+function getDisplayableOutputs(
+  outputs?: NestingViewerInput["outputsCanonicos"],
+) {
   if (!outputs) return [];
   const preferred = [
     "pliegos_calculados",
@@ -523,7 +583,9 @@ function getDisplayableOutputs(outputs?: NestingViewerInput["outputsCanonicos"])
   ];
   return preferred
     .filter((key) => outputs[key] != null)
-    .map((key) => [key, formatOutputValue(key, outputs[key])] as [string, string])
+    .map(
+      (key) => [key, formatOutputValue(key, outputs[key])] as [string, string],
+    )
     .filter(([, value]) => value.length > 0);
 }
 
@@ -534,7 +596,11 @@ function formatOutputValue(key: string, value: unknown) {
     return formatNumber(value, 2);
   }
   if (typeof value === "string") return value;
-  if (typeof value === "object" && value !== null && key === "cortes_calculados") {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    key === "cortes_calculados"
+  ) {
     const cuts = value as {
       cortesTotales?: unknown;
       columnas?: unknown;
@@ -547,8 +613,10 @@ function formatOutputValue(key: string, value: unknown) {
     const filas = Number(cuts.filas ?? 0);
     const demasia = Number(cuts.demasiaMm ?? 0);
     const base = `${formatNumber(total, 0)} cortes`;
-    const grid = columnas > 0 && filas > 0 ? ` · ${columnas} col × ${filas} filas` : "";
-    const bleed = demasia > 0 ? ` · demasía ${formatMm(demasia)}` : " · sin demasía";
+    const grid =
+      columnas > 0 && filas > 0 ? ` · ${columnas} col × ${filas} filas` : "";
+    const bleed =
+      demasia > 0 ? ` · demasía ${formatMm(demasia)}` : " · sin demasía";
     return `${base}${grid}${bleed}`;
   }
   return "";
@@ -585,7 +653,11 @@ type PlanImposicionOutput = {
   paginasDelPaso?: number[];
   librosPorJuego: number;
   juegos: number;
-  plan: Array<{ hoja: number; frente: [number, number]; dorso: [number, number] }>;
+  plan: Array<{
+    hoja: number;
+    frente: [number, number];
+    dorso: [number, number];
+  }>;
 };
 
 /** "Tapa · páginas 1-2, 31-32" — qué parte del libro cubre este paso. */
@@ -657,15 +729,28 @@ function ImposicionOverlay({
         // Sin rotar: páginas lado a lado (plegado vertical). Rotado 90°:
         // páginas apiladas (plegado horizontal).
         const fold = rotated
-          ? { x1: r.x + 3, y1: r.y + r.height / 2, x2: r.x + r.width - 3, y2: r.y + r.height / 2 }
-          : { x1: r.x + r.width / 2, y1: r.y + 3, x2: r.x + r.width / 2, y2: r.y + r.height - 3 };
+          ? {
+              x1: r.x + 3,
+              y1: r.y + r.height / 2,
+              x2: r.x + r.width - 3,
+              y2: r.y + r.height / 2,
+            }
+          : {
+              x1: r.x + r.width / 2,
+              y1: r.y + 3,
+              x2: r.x + r.width / 2,
+              y2: r.y + r.height - 3,
+            };
         const centro1 = rotated
           ? { x: r.x + r.width / 2, y: r.y + r.height * 0.28 }
           : { x: r.x + r.width * 0.25, y: r.y + r.height * 0.52 };
         const centro2 = rotated
           ? { x: r.x + r.width / 2, y: r.y + r.height * 0.78 }
           : { x: r.x + r.width * 0.75, y: r.y + r.height * 0.52 };
-        const fs = Math.max(9, Math.min(15, Math.min(r.width, r.height) * 0.12));
+        const fs = Math.max(
+          9,
+          Math.min(15, Math.min(r.width, r.height) * 0.12),
+        );
         const caption = Math.max(6.5, fs * 0.6);
         return (
           <g key={`${placement.pieceId}-imp-${idx}`}>
@@ -678,14 +763,35 @@ function ImposicionOverlay({
               strokeWidth={1}
               strokeDasharray="7 5"
             />
-            <text x={centro1.x} y={centro1.y} textAnchor="middle" fontSize={fs} fontFamily="monospace" fill="#3f3b31">
+            <text
+              x={centro1.x}
+              y={centro1.y}
+              textAnchor="middle"
+              fontSize={fs}
+              fontFamily="monospace"
+              fill="#3f3b31"
+            >
               pág {hoja1.frente[0]}
             </text>
-            <text x={centro2.x} y={centro2.y} textAnchor="middle" fontSize={fs} fontFamily="monospace" fill="#3f3b31">
+            <text
+              x={centro2.x}
+              y={centro2.y}
+              textAnchor="middle"
+              fontSize={fs}
+              fontFamily="monospace"
+              fill="#3f3b31"
+            >
               pág {hoja1.frente[1]}
             </text>
-            <text x={r.x + 5} y={r.y + caption + 4} fontSize={caption} fontFamily="monospace" fill="#8a8577">
-              hoja {hoja1.hoja} · frente (dorso: {hoja1.dorso[0]} | {hoja1.dorso[1]})
+            <text
+              x={r.x + 5}
+              y={r.y + caption + 4}
+              fontSize={caption}
+              fontFamily="monospace"
+              fill="#8a8577"
+            >
+              hoja {hoja1.hoja} · frente (dorso: {hoja1.dorso[0]} |{" "}
+              {hoja1.dorso[1]})
             </text>
           </g>
         );
@@ -704,7 +810,8 @@ function PlanImposicionCuadernillo({
   const seleccion = describirSeleccion(plan);
   const hojasDelPaso = plan.hojasDelPaso ?? plan.plan.length;
   const esBlanca = (pagina: number) => pagina > plan.paginasSolicitadas;
-  const celda = (pagina: number) => (esBlanca(pagina) ? `${pagina}·bl` : String(pagina));
+  const celda = (pagina: number) =>
+    esBlanca(pagina) ? `${pagina}·bl` : String(pagina);
   return (
     <div className={s.planImposicion}>
       <div className={s.planHead}>
@@ -718,8 +825,12 @@ function PlanImposicionCuadernillo({
           ) : null}
           {hojasDelPaso} de {plan.hojasPorLibro} hoja
           {plan.hojasPorLibro === 1 ? "" : "s"} del libro
-          {plan.librosPorJuego > 1 ? ` · ${plan.librosPorJuego} libros por juego (cortar al medio)` : ""}
-          {plan.paginasBlancas > 0 ? ` · ${plan.paginasBlancas} pág. en blanco al final` : ""}
+          {plan.librosPorJuego > 1
+            ? ` · ${plan.librosPorJuego} libros por juego (cortar al medio)`
+            : ""}
+          {plan.paginasBlancas > 0
+            ? ` · ${plan.paginasBlancas} pág. en blanco al final`
+            : ""}
           {" · el gráfico muestra la primera hoja de este paso"}
         </span>
       </div>
@@ -765,7 +876,9 @@ function NestingLegend({
   modificaciones?: ModificacionesOverlay;
   tools?: React.ReactNode;
 }) {
-  const hasMargins = visualConfig && Object.values(visualConfig.margins).some((value) => value > 0);
+  const hasMargins =
+    visualConfig &&
+    Object.values(visualConfig.margins).some((value) => value > 0);
   const hasBleed = visualConfig && getPieceBleedMm(visualConfig) > 0;
   const showCosting = costingPreview && costingPreview.strategy !== "simple";
   const hasPanelizado = visualConfig?.panelizado?.enabled === true;
@@ -793,20 +906,45 @@ function NestingLegend({
     <div className="nesting-legend">
       <span className="lbl">Referencias</span>
       <LegendChip color="#ffffff" border="#b8d8c2" label="Área útil" dashed />
-      {hasMargins ? <LegendChip color="#fff4df" border="#e9b978" label="Márgenes" /> : null}
-      {showCosting ? <LegendChip color="#fff1c8" border="#e7be58" label="Área costeada" /> : null}
-      {costingPreview?.wasteAreaMm2 ? <LegendChip color="#fef3ed" border="#f4b9a0" label="Desperdicio" dashed /> : null}
-      {hasBleed ? <LegendChip color="#e7e5e4" border="#bdb9b4" label="Demasía" /> : null}
-      {hasPanelizado ? <LegendChip color="#fef3c7" border="#d97706" label="Solape" /> : null}
-      {hasModificacion ? (
-        <LegendChip color="#fdd2b0" border="#c2410c" label="Bolsillo / refuerzo" dashed />
+      {hasMargins ? (
+        <LegendChip color="#fff4df" border="#e9b978" label="Márgenes" />
       ) : null}
-      {hasOjales ? <LegendChip color="#ffffff" border="#0f766e" label="Ojales" /> : null}
+      {showCosting ? (
+        <LegendChip color="#fff1c8" border="#e7be58" label="Área costeada" />
+      ) : null}
+      {costingPreview?.wasteAreaMm2 ? (
+        <LegendChip
+          color="#fef3ed"
+          border="#f4b9a0"
+          label="Desperdicio"
+          dashed
+        />
+      ) : null}
+      {hasBleed ? (
+        <LegendChip color="#e7e5e4" border="#bdb9b4" label="Demasía" />
+      ) : null}
+      {hasPanelizado ? (
+        <LegendChip color="#fef3c7" border="#d97706" label="Solape" />
+      ) : null}
+      {hasModificacion ? (
+        <LegendChip
+          color="#fdd2b0"
+          border="#c2410c"
+          label="Bolsillo / refuerzo"
+          dashed
+        />
+      ) : null}
+      {hasOjales ? (
+        <LegendChip color="#ffffff" border="#0f766e" label="Ojales" />
+      ) : null}
       {pieceGroups.map((piece) => (
         <span key={piece.key} className="lg-item">
           <span
             className="sw"
-            style={{ backgroundColor: piece.style.fill, borderColor: piece.style.stroke }}
+            style={{
+              backgroundColor: piece.style.fill,
+              borderColor: piece.style.stroke,
+            }}
             aria-hidden
           />
           <span className="nm">{piece.label}</span>
@@ -879,8 +1017,13 @@ function SubstrateView({
   planImposicion,
 }: SubstrateViewProps) {
   const widthMm = substrate.widthMm;
-  const heightMm = substrate.kind === "sheet" ? substrate.heightMm : substrate.lengthMm;
-  const displayLandscape = shouldDisplaySheetLandscape(substrate.kind, widthMm, heightMm);
+  const heightMm =
+    substrate.kind === "sheet" ? substrate.heightMm : substrate.lengthMm;
+  const displayLandscape = shouldDisplaySheetLandscape(
+    substrate.kind,
+    widthMm,
+    heightMm,
+  );
   const displayWidthMm = displayLandscape ? heightMm : widthMm;
   const displayHeightMm = displayLandscape ? widthMm : heightMm;
   const longestMm = Math.max(displayWidthMm, displayHeightMm);
@@ -892,7 +1035,9 @@ function SubstrateView({
   // escala respeta la PROPORCIÓN máquina/material: la boca mide el ancho útil
   // de la máquina en los mismos px/mm que el rollo.
   const printerAnchoMm =
-    printer?.anchoUtilMm && printer.anchoUtilMm > 0 ? printer.anchoUtilMm : null;
+    printer?.anchoUtilMm && printer.anchoUtilMm > 0
+      ? printer.anchoUtilMm
+      : null;
   const ROLL_WIDTH_PX = printer != null ? 520 : 280;
   let scale = isRoll ? ROLL_WIDTH_PX / displayWidthMm : maxPx / longestMm;
   if (isRoll && printerAnchoMm && printerAnchoMm > displayWidthMm) {
@@ -910,7 +1055,11 @@ function SubstrateView({
       ? Math.max(padPx, (mouthWPx + 96 - wPx) / 2)
       : Math.max(padPx, (360 - wPx) / 2);
   const padYPx = padPx;
-  const effectiveVisualConfig = getEffectiveVisualConfig(visualConfig, widthMm, heightMm);
+  const effectiveVisualConfig = getEffectiveVisualConfig(
+    visualConfig,
+    widthMm,
+    heightMm,
+  );
   const displayTransform: DisplayTransform = {
     rotated: displayLandscape,
     substrateWidthMm: widthMm,
@@ -939,8 +1088,11 @@ function SubstrateView({
     ? Math.max(0, printerChassisH + 6 - padYPx)
     : 0;
   const viewBoxH = hPx + padYPx * 2 + contentOffsetY;
-  const hasMargins = Object.values(effectiveVisualConfig.margins).some((value) => value > 0);
-  const largeSheet = substrate.kind === "sheet" && Math.max(widthMm, heightMm) >= 1000;
+  const hasMargins = Object.values(effectiveVisualConfig.margins).some(
+    (value) => value > 0,
+  );
+  const largeSheet =
+    substrate.kind === "sheet" && Math.max(widthMm, heightMm) >= 1000;
   // Rollo: ancho natural (no estirar el rollo angosto a lo ancho del canvas).
   // El scroll vertical se hace cargo del largo. Alto máximo del contenedor
   // (más generoso con la boca de impresora, que agranda la presentación).
@@ -949,11 +1101,24 @@ function SubstrateView({
   const canvasMaxWidth = isRoll
     ? viewBoxW
     : Math.min(
-        Math.max(viewBoxW, substrate.kind === "sheet" ? (largeSheet ? 820 : 520) : 680),
+        Math.max(
+          viewBoxW,
+          substrate.kind === "sheet" ? (largeSheet ? 820 : 520) : 680,
+        ),
         substrate.kind === "sheet" ? (largeSheet ? 1180 : 760) : 980,
       );
-  const substrateRect = mapDisplayRect(displayTransform, 0, 0, widthMm, heightMm);
-  const printableArea = getPrintableArea(effectiveVisualConfig, widthMm, heightMm);
+  const substrateRect = mapDisplayRect(
+    displayTransform,
+    0,
+    0,
+    widthMm,
+    heightMm,
+  );
+  const printableArea = getPrintableArea(
+    effectiveVisualConfig,
+    widthMm,
+    heightMm,
+  );
   const printableClipRect = mapDisplayRect(
     displayTransform,
     printableArea.xMm,
@@ -998,7 +1163,15 @@ function SubstrateView({
               height="7"
               patternTransform="rotate(45)"
             >
-              <line x1="0" y1="0" x2="0" y2="7" stroke="#8b8277" strokeWidth="1" opacity="0.2" />
+              <line
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="7"
+                stroke="#8b8277"
+                strokeWidth="1"
+                opacity="0.2"
+              />
             </pattern>
             <clipPath id={printableClipId}>
               <rect
@@ -1037,106 +1210,116 @@ function SubstrateView({
               mouthW={mouthWPx}
             />
           ) : null}
-          <g transform={contentOffsetY > 0 ? `translate(0 ${contentOffsetY})` : undefined}>
-          <rect
-            x={substrateRect.x}
-            y={substrateRect.y}
-            width={substrateRect.width}
-            height={substrateRect.height}
-            fill="#fbf6e7"
-            stroke="#d9a85b"
-            strokeWidth={1.2}
-            strokeDasharray={substrate.kind === "roll" ? "4 2" : undefined}
-          />
-          <CostingOverlay
-            costingPreview={getCostingPreviewForSubstrate(
-              costingPreview,
-              substrateIndex,
-              totalSubstrates,
-              widthMm,
-              heightMm,
-            )}
-            padPx={padPx}
-            scale={scale}
-            substrateWidthMm={widthMm}
-            substrateHeightMm={heightMm}
-            placements={placements}
-            displayTransform={displayTransform}
-            placementTransform={placementTransform}
-          />
-          {hasMargins ? (
-            <MarginsLayer
+          <g
+            transform={
+              contentOffsetY > 0 ? `translate(0 ${contentOffsetY})` : undefined
+            }
+          >
+            <rect
+              x={substrateRect.x}
+              y={substrateRect.y}
+              width={substrateRect.width}
+              height={substrateRect.height}
+              fill="#fbf6e7"
+              stroke="#d9a85b"
+              strokeWidth={1.2}
+              strokeDasharray={substrate.kind === "roll" ? "4 2" : undefined}
+            />
+            <CostingOverlay
+              costingPreview={getCostingPreviewForSubstrate(
+                costingPreview,
+                substrateIndex,
+                totalSubstrates,
+                widthMm,
+                heightMm,
+              )}
+              padPx={padPx}
+              scale={scale}
+              substrateWidthMm={widthMm}
+              substrateHeightMm={heightMm}
+              placements={placements}
+              displayTransform={displayTransform}
+              placementTransform={placementTransform}
+            />
+            {hasMargins ? (
+              <MarginsLayer
+                visualConfig={effectiveVisualConfig}
+                padPx={padPx}
+                scale={scale}
+                substrateWidthMm={widthMm}
+                substrateHeightMm={heightMm}
+                patternId={marginPatternId}
+                displayTransform={displayTransform}
+              />
+            ) : null}
+            <PrintableAreaLayer
               visualConfig={effectiveVisualConfig}
               padPx={padPx}
               scale={scale}
               substrateWidthMm={widthMm}
               substrateHeightMm={heightMm}
-              patternId={marginPatternId}
               displayTransform={displayTransform}
             />
-          ) : null}
-          <PrintableAreaLayer
-            visualConfig={effectiveVisualConfig}
-            padPx={padPx}
-            scale={scale}
-            substrateWidthMm={widthMm}
-            substrateHeightMm={heightMm}
-            displayTransform={displayTransform}
-          />
-          <SpacingLayer
-            visualConfig={effectiveVisualConfig}
-            placements={placements}
-            padPx={padPx}
-            scale={scale}
-            clipPathId={printableClipId}
-            displayTransform={placementTransform}
-          />
-          <DimensionLabels
-            padPx={padPx}
-            padXPx={padXPx}
-            padYPx={padYPx}
-            widthPx={wPx}
-            heightPx={hPx}
-            widthMm={displayWidthMm}
-            heightMm={displayHeightMm}
-            kind={substrate.kind}
-            hideWidthLabel={showPrinter}
-          />
-          <g clipPath={substrate.kind === "roll" ? `url(#${printableClipId})` : undefined}>
-            {placements.map((placement, idx) => (
-              <PlacementRect
-                key={`${placement.pieceId}-${idx}`}
-                placement={placement}
-                index={idx}
-                showLabels={showLabels && !planImposicion}
-                displayTransform={placementTransform}
-                modificaciones={modificaciones}
-              />
-            ))}
-            {planImposicion ? (
-              <ImposicionOverlay
-                placements={placements}
-                displayTransform={placementTransform}
-                plan={planImposicion}
+            <SpacingLayer
+              visualConfig={effectiveVisualConfig}
+              placements={placements}
+              padPx={padPx}
+              scale={scale}
+              clipPathId={printableClipId}
+              displayTransform={placementTransform}
+            />
+            <DimensionLabels
+              padPx={padPx}
+              padXPx={padXPx}
+              padYPx={padYPx}
+              widthPx={wPx}
+              heightPx={hPx}
+              widthMm={displayWidthMm}
+              heightMm={displayHeightMm}
+              kind={substrate.kind}
+              hideWidthLabel={showPrinter}
+            />
+            <g
+              clipPath={
+                substrate.kind === "roll"
+                  ? `url(#${printableClipId})`
+                  : undefined
+              }
+            >
+              {placements.map((placement, idx) => (
+                <PlacementRect
+                  key={`${placement.pieceId}-${idx}`}
+                  placement={placement}
+                  index={idx}
+                  showLabels={showLabels && !planImposicion}
+                  displayTransform={placementTransform}
+                  modificaciones={modificaciones}
+                />
+              ))}
+              {planImposicion ? (
+                <ImposicionOverlay
+                  placements={placements}
+                  displayTransform={placementTransform}
+                  plan={planImposicion}
+                />
+              ) : null}
+            </g>
+            {isRoll && printer ? (
+              <PrintStartMarker
+                substrateRect={substrateRect}
+                printableTopY={printableClipRect.y}
               />
             ) : null}
-          </g>
-          {isRoll && printer ? (
-            <PrintStartMarker
-              substrateRect={substrateRect}
-              printableTopY={printableClipRect.y}
-            />
-          ) : null}
-          {showPrinter ? (
-            <rect
-              x={substrateRect.x}
-              y={substrateRect.y}
-              width={substrateRect.width}
-              height={Math.min(26, 16 * (printerChassisH / 64))}
-              fill={`url(#${printerShadeId})`}
-              pointerEvents="none"
-            />
-          ) : null}
+            {showPrinter ? (
+              <rect
+                x={substrateRect.x}
+                y={substrateRect.y}
+                width={substrateRect.width}
+                height={Math.min(26, 16 * (printerChassisH / 64))}
+                fill={`url(#${printerShadeId})`}
+                pointerEvents="none"
+              />
+            ) : null}
           </g>
         </svg>
       </div>
@@ -1176,11 +1359,17 @@ function PrinterMouth({
     maquina.anchoUtilMm && maquina.anchoUtilMm > 0
       ? formatNumber(maquina.anchoUtilMm / 1000, 2)
       : null;
-  const plateSub = [anchoM ? `ancho útil ${anchoM} m` : null, maquina.tecnologia]
+  const plateSub = [
+    anchoM ? `ancho útil ${anchoM} m` : null,
+    maquina.tecnologia,
+  ]
     .filter(Boolean)
     .join(" · ");
   const mouthClampedX = Math.max(chassisX + 6 * f, mouthX);
-  const mouthClampedW = Math.min(mouthW, chassisX + chassisW - 6 * f - mouthClampedX);
+  const mouthClampedW = Math.min(
+    mouthW,
+    chassisX + chassisW - 6 * f - mouthClampedX,
+  );
   const mouthCenterX = mouthClampedX + mouthClampedW / 2;
   const carriageW = 56 * f;
   const panelW = 50 * f;
@@ -1188,38 +1377,153 @@ function PrinterMouth({
   const railY = chassisH * 0.63;
   return (
     <g aria-hidden pointerEvents="none">
-      <rect x={chassisX} y={2} width={chassisW} height={chassisH - 2} rx={7 * f} fill={`url(#${printerBodyId})`} />
-      <rect x={chassisX + 7 * f} y={2} width={chassisW - 14 * f} height={2 * f} fill="#cbc7c1" />
+      <rect
+        x={chassisX}
+        y={2}
+        width={chassisW}
+        height={chassisH - 2}
+        rx={7 * f}
+        fill={`url(#${printerBodyId})`}
+      />
+      <rect
+        x={chassisX + 7 * f}
+        y={2}
+        width={chassisW - 14 * f}
+        height={2 * f}
+        fill="#cbc7c1"
+      />
       {/* riel + carro */}
-      <rect x={chassisX + 22 * f} y={railY} width={chassisW - 44 * f} height={1.6 * f} fill="#b6b2ab" />
-      <rect x={chassisX + 22 * f} y={railY + 2.6 * f} width={chassisW - 44 * f} height={0.8 * f} fill="#efedea" />
-      <rect x={mouthCenterX - carriageW / 2} y={railY - 7 * f} width={carriageW} height={14 * f} rx={2.5 * f} fill="#23232a" />
-      <rect x={mouthCenterX - carriageW / 2 + 4 * f} y={railY - 4 * f} width={carriageW - 8 * f} height={4 * f} rx={1.2 * f} fill="#3d3d45" />
-      <rect x={mouthCenterX - 13 * f} y={railY + 5 * f} width={26 * f} height={2.2 * f} rx={f} fill="#0891b2" opacity={0.85} />
+      <rect
+        x={chassisX + 22 * f}
+        y={railY}
+        width={chassisW - 44 * f}
+        height={1.6 * f}
+        fill="#b6b2ab"
+      />
+      <rect
+        x={chassisX + 22 * f}
+        y={railY + 2.6 * f}
+        width={chassisW - 44 * f}
+        height={0.8 * f}
+        fill="#efedea"
+      />
+      <rect
+        x={mouthCenterX - carriageW / 2}
+        y={railY - 7 * f}
+        width={carriageW}
+        height={14 * f}
+        rx={2.5 * f}
+        fill="#23232a"
+      />
+      <rect
+        x={mouthCenterX - carriageW / 2 + 4 * f}
+        y={railY - 4 * f}
+        width={carriageW - 8 * f}
+        height={4 * f}
+        rx={1.2 * f}
+        fill="#3d3d45"
+      />
+      <rect
+        x={mouthCenterX - 13 * f}
+        y={railY + 5 * f}
+        width={26 * f}
+        height={2.2 * f}
+        rx={f}
+        fill="#0891b2"
+        opacity={0.85}
+      />
       {/* placa identificatoria */}
-      <text x={chassisX + 10 * f} y={16 * f} fontSize={9 * f} fontFamily="var(--font-mono, monospace)" letterSpacing={0.4 * f} fill="#5f5f68">
+      <text
+        x={chassisX + 10 * f}
+        y={16 * f}
+        fontSize={9 * f}
+        fontFamily="var(--font-mono, monospace)"
+        letterSpacing={0.4 * f}
+        fill="#5f5f68"
+      >
         {maquina.nombre.toUpperCase()}
       </text>
       {plateSub ? (
-        <text x={chassisX + 10 * f} y={27 * f} fontSize={7.5 * f} fontFamily="var(--font-mono, monospace)" fill="#9c998f">
+        <text
+          x={chassisX + 10 * f}
+          y={27 * f}
+          fontSize={7.5 * f}
+          fontFamily="var(--font-mono, monospace)"
+          fill="#9c998f"
+        >
           {plateSub}
         </text>
       ) : null}
       {/* panel de control */}
-      <rect x={panelX} y={9 * f} width={panelW} height={19 * f} rx={2.5 * f} fill="#f6f5f3" stroke="#c9c5be" strokeWidth={0.8 * f} />
-      <rect x={panelX + 4 * f} y={13 * f} width={24 * f} height={2.4 * f} rx={1.2 * f} fill="#d3cfc8" />
-      <rect x={panelX + 4 * f} y={18 * f} width={15 * f} height={2.4 * f} rx={1.2 * f} fill="#d3cfc8" />
-      <circle cx={panelX + panelW - 6 * f} cy={23 * f} r={2.2 * f} fill="#0891b2" />
+      <rect
+        x={panelX}
+        y={9 * f}
+        width={panelW}
+        height={19 * f}
+        rx={2.5 * f}
+        fill="#f6f5f3"
+        stroke="#c9c5be"
+        strokeWidth={0.8 * f}
+      />
+      <rect
+        x={panelX + 4 * f}
+        y={13 * f}
+        width={24 * f}
+        height={2.4 * f}
+        rx={1.2 * f}
+        fill="#d3cfc8"
+      />
+      <rect
+        x={panelX + 4 * f}
+        y={18 * f}
+        width={15 * f}
+        height={2.4 * f}
+        rx={1.2 * f}
+        fill="#d3cfc8"
+      />
+      <circle
+        cx={panelX + panelW - 6 * f}
+        cy={23 * f}
+        r={2.2 * f}
+        fill="#0891b2"
+      />
       {/* ventilaciones */}
       <g stroke="#c9c5be" strokeWidth={f} strokeLinecap="round">
-        <line x1={panelX - 84 * f} y1={13 * f} x2={panelX - 14 * f} y2={13 * f} />
-        <line x1={panelX - 84 * f} y1={17.5 * f} x2={panelX - 14 * f} y2={17.5 * f} />
-        <line x1={panelX - 84 * f} y1={22 * f} x2={panelX - 14 * f} y2={22 * f} />
+        <line
+          x1={panelX - 84 * f}
+          y1={13 * f}
+          x2={panelX - 14 * f}
+          y2={13 * f}
+        />
+        <line
+          x1={panelX - 84 * f}
+          y1={17.5 * f}
+          x2={panelX - 14 * f}
+          y2={17.5 * f}
+        />
+        <line
+          x1={panelX - 84 * f}
+          y1={22 * f}
+          x2={panelX - 14 * f}
+          y2={22 * f}
+        />
       </g>
       {/* boca: mide el ancho útil de la MÁQUINA a escala (el rollo, más angosto,
           queda centrado debajo — se lee la proporción máquina/material) */}
-      <rect x={mouthClampedX - 4 * f} y={chassisH - 13 * f} width={mouthClampedW + 8 * f} height={13 * f} fill="#cdc9c3" />
-      <rect x={mouthClampedX} y={chassisH - 9 * f} width={mouthClampedW} height={9 * f} fill={`url(#${printerSlotId})`} />
+      <rect
+        x={mouthClampedX - 4 * f}
+        y={chassisH - 13 * f}
+        width={mouthClampedW + 8 * f}
+        height={13 * f}
+        fill="#cdc9c3"
+      />
+      <rect
+        x={mouthClampedX}
+        y={chassisH - 9 * f}
+        width={mouthClampedW}
+        height={9 * f}
+        fill={`url(#${printerSlotId})`}
+      />
       {anchoM ? (
         <text
           x={mouthCenterX}
@@ -1233,7 +1537,16 @@ function PrinterMouth({
           {`${anchoM} M ÚTIL`}
         </text>
       ) : null}
-      <rect x={chassisX} y={2} width={chassisW} height={chassisH - 2} rx={7 * f} fill="none" stroke="#c4c0b9" strokeWidth={1} />
+      <rect
+        x={chassisX}
+        y={2}
+        width={chassisW}
+        height={chassisH - 2}
+        rx={7 * f}
+        fill="none"
+        stroke="#c4c0b9"
+        strokeWidth={1}
+      />
     </g>
   );
 }
@@ -1314,7 +1627,14 @@ function DimensionLabels({
   return (
     <>
       {!hideWidthLabel ? (
-        <text x={padXPx + widthPx / 2} y={Math.max(13, padYPx - 12)} textAnchor="middle" fontSize={11} fill="#4b5563" fontFamily="monospace">
+        <text
+          x={padXPx + widthPx / 2}
+          y={Math.max(13, padYPx - 12)}
+          textAnchor="middle"
+          fontSize={11}
+          fill="#4b5563"
+          fontFamily="monospace"
+        >
           {formatMm(widthMm)}
         </text>
       ) : null}
@@ -1346,7 +1666,13 @@ function PlacementRect({
   displayTransform: DisplayTransform;
   modificaciones?: ModificacionesOverlay;
 }) {
-  const rect = mapDisplayRect(displayTransform, placement.xMm, placement.yMm, placement.widthMm, placement.heightMm);
+  const rect = mapDisplayRect(
+    displayTransform,
+    placement.xMm,
+    placement.yMm,
+    placement.widthMm,
+    placement.heightMm,
+  );
   const { x, y, width: w, height: h } = rect;
   const style = colorForKey(placementGroupKey(placement));
   const baseLabel = placementLabel(placement);
@@ -1362,48 +1688,117 @@ function PlacementRect({
   const showMainLabel = showLabels && w > 24 && h > 14 && labelFontSize >= 5;
   const overlapStartMm = Math.max(0, placement.overlapStartMm ?? 0);
   const overlapEndMm = Math.max(0, placement.overlapEndMm ?? 0);
-  const verticalStart = overlapStartMm > 0
-    ? mapDisplayRect(displayTransform, placement.xMm, placement.yMm, Math.min(overlapStartMm, placement.widthMm), placement.heightMm)
-    : null;
-  const verticalEnd = overlapEndMm > 0
-    ? mapDisplayRect(
-      displayTransform,
-      placement.xMm + Math.max(0, placement.widthMm - overlapEndMm),
-      placement.yMm,
-      Math.min(overlapEndMm, placement.widthMm),
-      placement.heightMm,
-    )
-    : null;
-  const horizontalStart = overlapStartMm > 0
-    ? mapDisplayRect(displayTransform, placement.xMm, placement.yMm, placement.widthMm, Math.min(overlapStartMm, placement.heightMm))
-    : null;
-  const horizontalEnd = overlapEndMm > 0
-    ? mapDisplayRect(
-      displayTransform,
-      placement.xMm,
-      placement.yMm + Math.max(0, placement.heightMm - overlapEndMm),
-      placement.widthMm,
-      Math.min(overlapEndMm, placement.heightMm),
-    )
-    : null;
+  const verticalStart =
+    overlapStartMm > 0
+      ? mapDisplayRect(
+          displayTransform,
+          placement.xMm,
+          placement.yMm,
+          Math.min(overlapStartMm, placement.widthMm),
+          placement.heightMm,
+        )
+      : null;
+  const verticalEnd =
+    overlapEndMm > 0
+      ? mapDisplayRect(
+          displayTransform,
+          placement.xMm + Math.max(0, placement.widthMm - overlapEndMm),
+          placement.yMm,
+          Math.min(overlapEndMm, placement.widthMm),
+          placement.heightMm,
+        )
+      : null;
+  const horizontalStart =
+    overlapStartMm > 0
+      ? mapDisplayRect(
+          displayTransform,
+          placement.xMm,
+          placement.yMm,
+          placement.widthMm,
+          Math.min(overlapStartMm, placement.heightMm),
+        )
+      : null;
+  const horizontalEnd =
+    overlapEndMm > 0
+      ? mapDisplayRect(
+          displayTransform,
+          placement.xMm,
+          placement.yMm + Math.max(0, placement.heightMm - overlapEndMm),
+          placement.widthMm,
+          Math.min(overlapEndMm, placement.heightMm),
+        )
+      : null;
 
   return (
     <g>
-      <rect x={x} y={y} width={w} height={h} fill={style.fill} stroke={style.stroke} strokeWidth={0.8} />
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        fill={style.fill}
+        stroke={style.stroke}
+        strokeWidth={0.8}
+      />
       {placement.panelAxis === "vertical" && verticalStart ? (
-        <rect x={verticalStart.x} y={verticalStart.y} width={verticalStart.width} height={verticalStart.height} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
+        <rect
+          x={verticalStart.x}
+          y={verticalStart.y}
+          width={verticalStart.width}
+          height={verticalStart.height}
+          fill="#fef3c7"
+          fillOpacity={0.58}
+          stroke="#d97706"
+          strokeWidth={0.35}
+        />
       ) : null}
       {placement.panelAxis === "vertical" && verticalEnd ? (
-        <rect x={verticalEnd.x} y={verticalEnd.y} width={verticalEnd.width} height={verticalEnd.height} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
+        <rect
+          x={verticalEnd.x}
+          y={verticalEnd.y}
+          width={verticalEnd.width}
+          height={verticalEnd.height}
+          fill="#fef3c7"
+          fillOpacity={0.58}
+          stroke="#d97706"
+          strokeWidth={0.35}
+        />
       ) : null}
       {placement.panelAxis === "horizontal" && horizontalStart ? (
-        <rect x={horizontalStart.x} y={horizontalStart.y} width={horizontalStart.width} height={horizontalStart.height} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
+        <rect
+          x={horizontalStart.x}
+          y={horizontalStart.y}
+          width={horizontalStart.width}
+          height={horizontalStart.height}
+          fill="#fef3c7"
+          fillOpacity={0.58}
+          stroke="#d97706"
+          strokeWidth={0.35}
+        />
       ) : null}
       {placement.panelAxis === "horizontal" && horizontalEnd ? (
-        <rect x={horizontalEnd.x} y={horizontalEnd.y} width={horizontalEnd.width} height={horizontalEnd.height} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
+        <rect
+          x={horizontalEnd.x}
+          y={horizontalEnd.y}
+          width={horizontalEnd.width}
+          height={horizontalEnd.height}
+          fill="#fef3c7"
+          fillOpacity={0.58}
+          stroke="#d97706"
+          strokeWidth={0.35}
+        />
       ) : null}
       {placement.rotated ? (
-        <line x1={x} y1={y} x2={x + w} y2={y + h} stroke={style.text} strokeWidth={0.45} strokeDasharray="3 3" opacity={0.35} />
+        <line
+          x1={x}
+          y1={y}
+          x2={x + w}
+          y2={y + h}
+          stroke={style.text}
+          strokeWidth={0.45}
+          strokeDasharray="3 3"
+          opacity={0.35}
+        />
       ) : null}
       <ModificacionesFisicasOverlay
         placement={placement}
@@ -1426,7 +1821,15 @@ function PlacementRect({
             {label}
           </text>
           {w > 54 && h > 30 ? (
-            <text x={x + 6} y={y + 12} fontSize={7.5} fontFamily="monospace" fill={style.text} fillOpacity={0.55} pointerEvents="none">
+            <text
+              x={x + 6}
+              y={y + 12}
+              fontSize={7.5}
+              fontFamily="monospace"
+              fill={style.text}
+              fillOpacity={0.55}
+              pointerEvents="none"
+            >
               P-{String(index + 1).padStart(2, "0")}
             </text>
           ) : null}
@@ -1437,7 +1840,10 @@ function PlacementRect({
 }
 
 function NestingFooter({ result }: { result: NestingViewerInput }) {
-  const placedAreaMm2 = result.placements.reduce((acc, p) => acc + p.widthMm * p.heightMm, 0);
+  const placedAreaMm2 = result.placements.reduce(
+    (acc, p) => acc + p.widthMm * p.heightMm,
+    0,
+  );
   const chargedArea = result.costingPreview?.chargedAreaMm2;
   const chargedLength = result.costingPreview?.chargedLengthMm;
 
@@ -1521,8 +1927,13 @@ function TalonarioGrouping({
   return (
     <div className="flex flex-wrap gap-3 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
       <span className="font-semibold">Talonario</span>
-      <span>{grouping.talonariosEfectivos}/{grouping.talonariosPedidos} efectivos</span>
-      <span>{grouping.gruposCompletos} grupo(s) + {grouping.talonariosResiduo} residuo</span>
+      <span>
+        {grouping.talonariosEfectivos}/{grouping.talonariosPedidos} efectivos
+      </span>
+      <span>
+        {grouping.gruposCompletos} grupo(s) + {grouping.talonariosResiduo}{" "}
+        residuo
+      </span>
       <span>
         {grouping.pliegosXCapa} pliegos × copia
         {copias > 1
@@ -1530,8 +1941,14 @@ function TalonarioGrouping({
           : ""}
       </span>
       {grouping.pilas ? <span>{grouping.pilas} pila(s)</span> : null}
-      {grouping.posesDesperdicio > 0 ? <span>{grouping.posesDesperdicio} poses vacías</span> : null}
-      <span>modo: {modoIncompletoLabel[grouping.modoIncompleto] ?? grouping.modoIncompleto}</span>
+      {grouping.posesDesperdicio > 0 ? (
+        <span>{grouping.posesDesperdicio} poses vacías</span>
+      ) : null}
+      <span>
+        modo:{" "}
+        {modoIncompletoLabel[grouping.modoIncompleto] ??
+          grouping.modoIncompleto}
+      </span>
     </div>
   );
 }
@@ -1543,7 +1960,11 @@ function getCostingPreviewForSubstrate(
   widthMm: number,
   heightMm: number,
 ): NestingViewerInput["costingPreview"] | undefined {
-  if (!costingPreview || costingPreview.strategy !== "plate-segments" || totalSubstrates <= 1) {
+  if (
+    !costingPreview ||
+    costingPreview.strategy !== "plate-segments" ||
+    totalSubstrates <= 1
+  ) {
     return costingPreview;
   }
 
@@ -1576,17 +1997,37 @@ function getEffectiveVisualConfig(
   );
 }
 
-function getPrintableArea(visualConfig: VisualConfig, widthMm: number, heightMm: number) {
-  return visualConfig.printableArea ?? {
-    xMm: visualConfig.margins.leftMm,
-    yMm: visualConfig.margins.topMm,
-    widthMm: Math.max(0, widthMm - visualConfig.margins.leftMm - visualConfig.margins.rightMm),
-    heightMm: Math.max(0, heightMm - visualConfig.margins.topMm - visualConfig.margins.bottomMm),
-  };
+function getPrintableArea(
+  visualConfig: VisualConfig,
+  widthMm: number,
+  heightMm: number,
+) {
+  return (
+    visualConfig.printableArea ?? {
+      xMm: visualConfig.margins.leftMm,
+      yMm: visualConfig.margins.topMm,
+      widthMm: Math.max(
+        0,
+        widthMm - visualConfig.margins.leftMm - visualConfig.margins.rightMm,
+      ),
+      heightMm: Math.max(
+        0,
+        heightMm - visualConfig.margins.topMm - visualConfig.margins.bottomMm,
+      ),
+    }
+  );
 }
 
-function shouldDisplaySheetLandscape(kind: "sheet" | "roll", widthMm: number, heightMm: number) {
-  return kind === "sheet" && heightMm > widthMm * 1.12 && Math.max(widthMm, heightMm) >= 1000;
+function shouldDisplaySheetLandscape(
+  kind: "sheet" | "roll",
+  widthMm: number,
+  heightMm: number,
+) {
+  return (
+    kind === "sheet" &&
+    heightMm > widthMm * 1.12 &&
+    Math.max(widthMm, heightMm) >= 1000
+  );
 }
 
 function getCenteredPlacementTransform(
@@ -1621,8 +2062,10 @@ function getCenteredPlacementTransform(
 
   return {
     ...transform,
-    offsetXMm: extraXMm > 0.01 ? usableArea.xMm + extraXMm / 2 - bounds.minX : 0,
-    offsetYMm: extraYMm > 0.01 ? usableArea.yMm + extraYMm / 2 - bounds.minY : 0,
+    offsetXMm:
+      extraXMm > 0.01 ? usableArea.xMm + extraXMm / 2 - bounds.minX : 0,
+    offsetYMm:
+      extraYMm > 0.01 ? usableArea.yMm + extraYMm / 2 - bounds.minY : 0,
   };
 }
 
@@ -1660,7 +2103,12 @@ function getPieceBleedMm(visualConfig: VisualConfig) {
   if (Number.isFinite(explicit) && explicit != null) {
     return Math.max(0, explicit);
   }
-  return Math.max(visualConfig.spacing.horizontalMm, visualConfig.spacing.verticalMm) / 2;
+  return (
+    Math.max(
+      visualConfig.spacing.horizontalMm,
+      visualConfig.spacing.verticalMm,
+    ) / 2
+  );
 }
 
 function PrintableAreaLayer({
@@ -1676,8 +2124,18 @@ function PrintableAreaLayer({
   substrateHeightMm: number;
   displayTransform: DisplayTransform;
 }) {
-  const printableArea = getPrintableArea(visualConfig, substrateWidthMm, substrateHeightMm);
-  const rect = mapDisplayRect(displayTransform, printableArea.xMm, printableArea.yMm, printableArea.widthMm, printableArea.heightMm);
+  const printableArea = getPrintableArea(
+    visualConfig,
+    substrateWidthMm,
+    substrateHeightMm,
+  );
+  const rect = mapDisplayRect(
+    displayTransform,
+    printableArea.xMm,
+    printableArea.yMm,
+    printableArea.widthMm,
+    printableArea.heightMm,
+  );
   return (
     <rect
       x={rect.x}
@@ -1711,18 +2169,64 @@ function MarginsLayer({
   const { leftMm, rightMm, topMm, bottomMm } = visualConfig.margins;
   const fill = `url(#${patternId})`;
   const top = mapDisplayRect(displayTransform, 0, 0, substrateWidthMm, topMm);
-  const bottom = mapDisplayRect(displayTransform, 0, substrateHeightMm - bottomMm, substrateWidthMm, bottomMm);
-  const left = mapDisplayRect(displayTransform, 0, 0, leftMm, substrateHeightMm);
-  const right = mapDisplayRect(displayTransform, substrateWidthMm - rightMm, 0, rightMm, substrateHeightMm);
+  const bottom = mapDisplayRect(
+    displayTransform,
+    0,
+    substrateHeightMm - bottomMm,
+    substrateWidthMm,
+    bottomMm,
+  );
+  const left = mapDisplayRect(
+    displayTransform,
+    0,
+    0,
+    leftMm,
+    substrateHeightMm,
+  );
+  const right = mapDisplayRect(
+    displayTransform,
+    substrateWidthMm - rightMm,
+    0,
+    rightMm,
+    substrateHeightMm,
+  );
   return (
     <g opacity={0.95}>
-      {topMm > 0 ? <rect x={top.x} y={top.y} width={top.width} height={top.height} fill={fill} /> : null}
-      {bottomMm > 0 ? (
-        <rect x={bottom.x} y={bottom.y} width={bottom.width} height={bottom.height} fill={fill} />
+      {topMm > 0 ? (
+        <rect
+          x={top.x}
+          y={top.y}
+          width={top.width}
+          height={top.height}
+          fill={fill}
+        />
       ) : null}
-      {leftMm > 0 ? <rect x={left.x} y={left.y} width={left.width} height={left.height} fill={fill} /> : null}
+      {bottomMm > 0 ? (
+        <rect
+          x={bottom.x}
+          y={bottom.y}
+          width={bottom.width}
+          height={bottom.height}
+          fill={fill}
+        />
+      ) : null}
+      {leftMm > 0 ? (
+        <rect
+          x={left.x}
+          y={left.y}
+          width={left.width}
+          height={left.height}
+          fill={fill}
+        />
+      ) : null}
       {rightMm > 0 ? (
-        <rect x={right.x} y={right.y} width={right.width} height={right.height} fill={fill} />
+        <rect
+          x={right.x}
+          y={right.y}
+          width={right.width}
+          height={right.height}
+          fill={fill}
+        />
       ) : null}
     </g>
   );
@@ -1751,7 +2255,16 @@ function CostingOverlay({
     return (
       <g>
         {placements.map((placement, idx) => (
-          <CostingRect key={`cost-${placement.pieceId}-${idx}`} rect={mapDisplayRect(placementTransform, placement.xMm, placement.yMm, placement.widthMm, placement.heightMm)} />
+          <CostingRect
+            key={`cost-${placement.pieceId}-${idx}`}
+            rect={mapDisplayRect(
+              placementTransform,
+              placement.xMm,
+              placement.yMm,
+              placement.widthMm,
+              placement.heightMm,
+            )}
+          />
         ))}
       </g>
     );
@@ -1767,7 +2280,15 @@ function CostingOverlay({
   return (
     <g>
       <rect
-        {...svgRect(mapDisplayRect(displayTransform, bounds.xMm, bounds.yMm, bounds.widthMm, bounds.heightMm))}
+        {...svgRect(
+          mapDisplayRect(
+            displayTransform,
+            bounds.xMm,
+            bounds.yMm,
+            bounds.widthMm,
+            bounds.heightMm,
+          ),
+        )}
         fill="#fff1c8"
         fillOpacity={0.62}
         stroke="#e7be58"
@@ -1775,7 +2296,15 @@ function CostingOverlay({
       />
       {costingPreview.wasteAreaMm2 && costingPreview.wasteAreaMm2 > 0 ? (
         <rect
-          {...svgRect(mapDisplayRect(displayTransform, bounds.xMm, bounds.yMm, bounds.widthMm, bounds.heightMm))}
+          {...svgRect(
+            mapDisplayRect(
+              displayTransform,
+              bounds.xMm,
+              bounds.yMm,
+              bounds.widthMm,
+              bounds.heightMm,
+            ),
+          )}
           fill="#fef3ed"
           fillOpacity={0.3}
           stroke="#f4b9a0"
@@ -1833,14 +2362,44 @@ function SpacingLayer({
         const topGapY = placement.yMm - pieceBleedMm;
         const rightGapX = placement.xMm + placement.widthMm;
         const bottomGapY = placement.yMm + placement.heightMm;
-        const hasLeftNeighbor = sepH > 0 && hasAdjacentPlacement(placement, placements, "left", sepH);
-        const hasRightNeighbor = sepH > 0 && hasAdjacentPlacement(placement, placements, "right", sepH);
-        const hasTopNeighbor = sepV > 0 && hasAdjacentPlacement(placement, placements, "top", sepV);
-        const hasBottomNeighbor = sepV > 0 && hasAdjacentPlacement(placement, placements, "bottom", sepV);
-        const leftBleed = mapDisplayRect(displayTransform, leftGapX, placement.yMm, pieceBleedMm, placement.heightMm);
-        const rightBleed = mapDisplayRect(displayTransform, rightGapX, placement.yMm, hasRightNeighbor ? sepH : pieceBleedMm, placement.heightMm);
-        const topBleed = mapDisplayRect(displayTransform, placement.xMm, topGapY, placement.widthMm, pieceBleedMm);
-        const bottomBleed = mapDisplayRect(displayTransform, placement.xMm, bottomGapY, placement.widthMm, hasBottomNeighbor ? sepV : pieceBleedMm);
+        const hasLeftNeighbor =
+          sepH > 0 && hasAdjacentPlacement(placement, placements, "left", sepH);
+        const hasRightNeighbor =
+          sepH > 0 &&
+          hasAdjacentPlacement(placement, placements, "right", sepH);
+        const hasTopNeighbor =
+          sepV > 0 && hasAdjacentPlacement(placement, placements, "top", sepV);
+        const hasBottomNeighbor =
+          sepV > 0 &&
+          hasAdjacentPlacement(placement, placements, "bottom", sepV);
+        const leftBleed = mapDisplayRect(
+          displayTransform,
+          leftGapX,
+          placement.yMm,
+          pieceBleedMm,
+          placement.heightMm,
+        );
+        const rightBleed = mapDisplayRect(
+          displayTransform,
+          rightGapX,
+          placement.yMm,
+          hasRightNeighbor ? sepH : pieceBleedMm,
+          placement.heightMm,
+        );
+        const topBleed = mapDisplayRect(
+          displayTransform,
+          placement.xMm,
+          topGapY,
+          placement.widthMm,
+          pieceBleedMm,
+        );
+        const bottomBleed = mapDisplayRect(
+          displayTransform,
+          placement.xMm,
+          bottomGapY,
+          placement.widthMm,
+          hasBottomNeighbor ? sepV : pieceBleedMm,
+        );
         return (
           <React.Fragment key={`spacing-${placement.pieceId}-${idx}`}>
             {pieceBleedMm > 0 && !hasLeftNeighbor ? (
@@ -1896,8 +2455,12 @@ function ModificacionesFisicasOverlay({
   );
   if (!marco && puntos.length === 0) return null;
 
-  const toRect = (r: { xMm: number; yMm: number; widthMm: number; heightMm: number }) =>
-    mapDisplayRect(displayTransform, r.xMm, r.yMm, r.widthMm, r.heightMm);
+  const toRect = (r: {
+    xMm: number;
+    yMm: number;
+    widthMm: number;
+    heightMm: number;
+  }) => mapDisplayRect(displayTransform, r.xMm, r.yMm, r.widthMm, r.heightMm);
 
   let pathDemasia: string | null = null;
   let innerRect: ReturnType<typeof mapDisplayRect> | null = null;
@@ -1987,28 +2550,53 @@ function hasAdjacentPlacement(
 
   return placements.some((other) => {
     if (other === placement) return false;
-    if ((other.substrateIndex ?? 0) !== (placement.substrateIndex ?? 0)) return false;
+    if ((other.substrateIndex ?? 0) !== (placement.substrateIndex ?? 0))
+      return false;
     if (direction === "right") {
       return (
         nearlyEqual(other.xMm, expectedX, toleranceMm) &&
-        rangesOverlap(placement.yMm, placement.yMm + placement.heightMm, other.yMm, other.yMm + other.heightMm, toleranceMm)
+        rangesOverlap(
+          placement.yMm,
+          placement.yMm + placement.heightMm,
+          other.yMm,
+          other.yMm + other.heightMm,
+          toleranceMm,
+        )
       );
     }
     if (direction === "left") {
       return (
         nearlyEqual(other.xMm + other.widthMm, expectedX, toleranceMm) &&
-        rangesOverlap(placement.yMm, placement.yMm + placement.heightMm, other.yMm, other.yMm + other.heightMm, toleranceMm)
+        rangesOverlap(
+          placement.yMm,
+          placement.yMm + placement.heightMm,
+          other.yMm,
+          other.yMm + other.heightMm,
+          toleranceMm,
+        )
       );
     }
     if (direction === "top") {
       return (
         nearlyEqual(other.yMm + other.heightMm, expectedY, toleranceMm) &&
-        rangesOverlap(placement.xMm, placement.xMm + placement.widthMm, other.xMm, other.xMm + other.widthMm, toleranceMm)
+        rangesOverlap(
+          placement.xMm,
+          placement.xMm + placement.widthMm,
+          other.xMm,
+          other.xMm + other.widthMm,
+          toleranceMm,
+        )
       );
     }
     return (
       nearlyEqual(other.yMm, expectedY, toleranceMm) &&
-      rangesOverlap(placement.xMm, placement.xMm + placement.widthMm, other.xMm, other.xMm + other.widthMm, toleranceMm)
+      rangesOverlap(
+        placement.xMm,
+        placement.xMm + placement.widthMm,
+        other.xMm,
+        other.xMm + other.widthMm,
+        toleranceMm,
+      )
     );
   });
 }
@@ -2017,6 +2605,12 @@ function nearlyEqual(a: number, b: number, tolerance: number) {
   return Math.abs(a - b) <= tolerance;
 }
 
-function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number, tolerance: number) {
+function rangesOverlap(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number,
+  tolerance: number,
+) {
   return aStart < bEnd - tolerance && bStart < aEnd - tolerance;
 }

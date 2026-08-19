@@ -59,5 +59,12 @@ export interface CostingResult {
       segmentApplied: number | null;
       cost: number;
     } | null;
+    /** Desglose completo por hoja/placa cobrada. */
+    units: Array<{
+      index: number;
+      occupationPct: number;
+      segmentApplied: number | null;
+      cost: number;
+    }>;
   };
 }

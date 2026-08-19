@@ -138,6 +138,7 @@ export function nestGrid2DSingle<T = unknown>(
         areaUtilMm2: 0,
         areaTotalMm2: substrate.widthMm * substrate.heightMm,
         largoConsumidoMm: 0,
+        trailingMarginMm: marginBottomMm,
       },
     };
   }
@@ -196,6 +197,7 @@ export function nestGrid2DSingle<T = unknown>(
       areaUtilMm2,
       areaTotalMm2,
       largoConsumidoMm,
+      trailingMarginMm: marginBottomMm,
     },
   };
 }

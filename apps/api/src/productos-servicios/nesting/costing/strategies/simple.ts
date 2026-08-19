@@ -36,6 +36,12 @@ export function costingSimple<T = unknown>(
       fullUnits,
       fullUnitsCost: totalCost,
       lastUnit: null,
+      units: Array.from({ length: fullUnits }, (_, index) => ({
+        index,
+        occupationPct: 100,
+        segmentApplied: 100,
+        cost: input.unitPrice,
+      })),
     },
   };
 }

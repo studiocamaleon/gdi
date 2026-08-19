@@ -815,3 +815,117 @@ describe('fuenteMedidaEfectiva — override por slot vs param del paso (§8)', (
     expect(fuenteMedidaEfectiva(mkPaso({}))).toBeNull();
   });
 });
+
+describe('panelizado sobre hoja', () => {
+  const chapa = {
+    id: 'chapa-100',
+    subfamilia: 'SUSTRATO_RIGIDO',
+    atributosVarianteJson: { anchoMm: 100, altoMm: 100 },
+  };
+
+  it('preserva identidad, orden y solapes de cada panel automático', async () => {
+    const paso = buildPasoMontaje('auto') as ReturnType<
+      typeof buildPasoMontaje
+    >;
+    paso.paramsPasoJson.nestingConfig = {
+      ...paso.paramsPasoJson.nestingConfig,
+      allowRotation: false,
+      pieceBleedMm: 0,
+      separationHMm: 0,
+      separationVMm: 0,
+      panelizado: {
+        enabled: true,
+        mode: 'automatic',
+        axis: 'vertical',
+        overlapMm: 10,
+      },
+    };
+
+    const result = await runNestingForPaso(
+      paso as never,
+      {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 250, altoMm: 80 }],
+      },
+      chapa,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.placements).toHaveLength(4);
+    expect(
+      result!.placements.map((placement) => placement.panelIndex).sort(),
+    ).toEqual([1, 2, 3, 4]);
+    expect(
+      result!.placements.every((placement) => placement.panelCount === 4),
+    ).toBe(true);
+    expect(
+      result!.placements.every(
+        (placement) => placement.pieceId === 'piece-0-0',
+      ),
+    ).toBe(true);
+  });
+
+  it('respeta un layout manual válido en vez de recalcularlo', async () => {
+    const paso = buildPasoMontaje('auto') as ReturnType<
+      typeof buildPasoMontaje
+    >;
+    paso.paramsPasoJson.nestingConfig = {
+      ...paso.paramsPasoJson.nestingConfig,
+      allowRotation: false,
+      pieceBleedMm: 0,
+      separationHMm: 0,
+      separationVMm: 0,
+      panelizado: {
+        enabled: true,
+        mode: 'manual',
+        axis: 'vertical',
+        overlapMm: 10,
+        manualLayout: {
+          items: [
+            {
+              sourcePieceId: 'piece-0-0',
+              pieceWidthMm: 180,
+              pieceHeightMm: 80,
+              axis: 'vertical',
+              panels: [
+                {
+                  panelIndex: 1,
+                  usefulWidthMm: 90,
+                  usefulHeightMm: 80,
+                  overlapStartMm: 0,
+                  overlapEndMm: 10,
+                  finalWidthMm: 100,
+                  finalHeightMm: 80,
+                },
+                {
+                  panelIndex: 2,
+                  usefulWidthMm: 90,
+                  usefulHeightMm: 80,
+                  overlapStartMm: 10,
+                  overlapEndMm: 0,
+                  finalWidthMm: 100,
+                  finalHeightMm: 80,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = await runNestingForPaso(
+      paso as never,
+      {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 180, altoMm: 80 }],
+      },
+      chapa,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.placements).toHaveLength(2);
+    expect(
+      result!.placements.map((placement) => placement.panelIndex).sort(),
+    ).toEqual([1, 2]);
+  });
+});

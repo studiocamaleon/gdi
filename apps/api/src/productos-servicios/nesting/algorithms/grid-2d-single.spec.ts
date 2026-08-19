@@ -30,4 +30,17 @@ describe('nestGrid2DSingle', () => {
     expect(result.placements[1]).toMatchObject({ xMm: 96, yMm: 2 });
     expect(result.placements[2]).toMatchObject({ xMm: 2, yMm: 56 });
   });
+
+  it('mantiene todas las piezas en una sola orientación para corte en guillotina', () => {
+    const result = nestGrid2DSingle(
+      { id: 'pieza_principal', widthMm: 60, heightMm: 40, quantity: 1 },
+      { kind: 'sheet', widthMm: 100, heightMm: 100 },
+      { allowRotation: true },
+    );
+
+    expect(result.metrics.piezasPorSustrato).toBe(2);
+    expect(
+      new Set(result.placements.map((placement) => placement.rotated)).size,
+    ).toBe(1);
+  });
 });

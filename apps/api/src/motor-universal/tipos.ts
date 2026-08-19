@@ -81,6 +81,14 @@ export interface JobContext {
     anchoMm: number;
     altoMm: number;
     perimetroMm?: number;
+    sourcePieceId?: string;
+    panelIndex?: number;
+    panelCount?: number;
+    panelAxis?: 'vertical' | 'horizontal';
+    usefulWidthMm?: number;
+    usefulHeightMm?: number;
+    overlapStartMm?: number;
+    overlapEndMm?: number;
   }>;
   /** Medidas custom cuando el producto permite medida personalizada (LIBRE o MIXTA). */
   medidaCustomMm?: { anchoMm: number; altoMm: number };
@@ -691,6 +699,12 @@ export interface MaterialEjecutado {
       segmentApplied: number | null;
       cost: number;
     } | null;
+    units: Array<{
+      index: number;
+      occupationPct: number;
+      segmentApplied: number | null;
+      cost: number;
+    }>;
   };
   /** Modo de selección que se aplicó. */
   modoSeleccion:

@@ -5,7 +5,9 @@ import type { NestingConfigResolved } from '../nesting-config';
  * Partición en paños sobre HOJA (montaje): la chapa trasera de un cartel más
  * grande que la hoja se hace en partes, como en el taller.
  */
-function config(over: Partial<NestingConfigResolved> = {}): NestingConfigResolved {
+function config(
+  over: Partial<NestingConfigResolved> = {},
+): NestingConfigResolved {
   return {
     algorithm: null,
     allowRotation: true,
@@ -52,9 +54,11 @@ describe('partirPiezasEnPanosDeHoja', () => {
       config(),
     );
     expect(r).not.toBeNull();
-    expect(r![0].cantidad).toBe(3);
-    expect(r![0].anchoMm).toBeCloseTo(2500 / 3, 3);
-    expect(r![0].altoMm).toBe(1300);
+    expect(r).toHaveLength(3);
+    expect(r!.every((panel) => panel.cantidad === 1)).toBe(true);
+    expect(r!.every((panel) => panel.anchoMm === 2500 / 3)).toBe(true);
+    expect(r!.every((panel) => panel.altoMm === 1300)).toBe(true);
+    expect(r!.map((panel) => panel.panelIndex)).toEqual([1, 2, 3]);
   });
 
   it('con junta, cada paño con corte suma el solape', () => {
@@ -64,7 +68,10 @@ describe('partirPiezasEnPanosDeHoja', () => {
         panelizado: { ...config().panelizado, overlapMm: 20 },
       }),
     );
+    expect(r).toHaveLength(3);
     expect(r![0].anchoMm).toBeCloseTo(2500 / 3 + 20, 3);
+    expect(r![1].anchoMm).toBeCloseTo(2500 / 3 + 40, 3);
+    expect(r![2].anchoMm).toBeCloseTo(2500 / 3 + 20, 3);
   });
 
   it('devuelve null si todo ya entra (sin partir de más)', () => {
@@ -112,6 +119,7 @@ describe('partirPiezasEnPanosDeHoja', () => {
       config(),
     );
     expect(r![0]).toEqual({ cantidad: 2, anchoMm: 600, altoMm: 400 });
-    expect(r![1].cantidad).toBe(3);
+    expect(r!.slice(1)).toHaveLength(3);
+    expect(r!.slice(1).every((panel) => panel.cantidad === 1)).toBe(true);
   });
 });

@@ -69,7 +69,9 @@ export function calculateSustratoToPliegoConversion(
 
   return {
     esDerivado: true,
-    pliegosPorSustrato: Math.max(1, pliegosPorSustrato),
+    // Cero es un resultado válido y necesario: significa que el pliego de
+    // impresión no puede obtenerse físicamente de la hoja comprada.
+    pliegosPorSustrato,
     orientacion: rotada > normal ? 'rotada' : 'normal',
   };
 }

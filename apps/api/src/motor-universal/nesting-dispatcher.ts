@@ -35,6 +35,7 @@ import {
   type EvaluateGranFormatoMixedShelfLayoutInput,
   type GranFormatoMixedShelfLayoutResult,
 } from '../productos-servicios/nesting/algorithms/shelf-rollo';
+import { normalizeGranFormatoPanelManualLayout } from '../productos-servicios/nesting/helpers/granformato-pieces';
 import { evaluateGranFormatoMaxRectsRollLayout } from '../productos-servicios/nesting/algorithms/maxrects-rollo';
 import { evaluateGranFormatoSequentialRollLayout } from '../productos-servicios/nesting/algorithms/secuencial-rollo';
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
@@ -160,7 +161,9 @@ export interface MaterialResueltoParaNesting {
  * de que el atributo esté cargado. LAMINADO_FILM también es rollo (aunque
  * laminado rutea por su propia vía y no pasa por acá).
  */
-export function esSustratoRollo(subfamilia: string | null | undefined): boolean {
+export function esSustratoRollo(
+  subfamilia: string | null | undefined,
+): boolean {
   return (
     subfamilia === 'SUSTRATO_ROLLO_FLEXIBLE' ||
     subfamilia === 'VINILO_CORTE' ||
@@ -231,10 +234,84 @@ export async function runNestingForPaso(
     materialResuelto,
     opts,
   );
-  if (!resultado) return null;
+  if (!resultado || !geometriaDispatchValida(resultado)) return null;
   // El agrupamiento de talonario es post-nesting. El original declara el modo
   // y las capas siguientes lo heredan para repetir la misma tirada.
   return aplicarTalonarioGroupingSiCorresponde(resultado, paso, jobContext);
+}
+
+/** Última barrera común: ningún algoritmo puede publicar piezas fuera del
+ * material, superpuestas o con números no finitos. */
+function geometriaDispatchValida(result: NestingDispatchResult): boolean {
+  if (
+    !Number.isFinite(result.cantidadCalculada) ||
+    result.cantidadCalculada <= 0 ||
+    !Number.isFinite(result.aprovechamientoPct) ||
+    result.aprovechamientoPct < 0 ||
+    result.aprovechamientoPct > 100.01
+  ) {
+    return false;
+  }
+  const porSustrato = new Map<number, Placement[]>();
+  for (const placement of result.placements) {
+    const substrateIndex = placement.substrateIndex ?? 0;
+    if (
+      !Number.isInteger(substrateIndex) ||
+      substrateIndex < 0 ||
+      substrateIndex >= result.substrates.length
+    ) {
+      return false;
+    }
+    const substrate = result.substrates[substrateIndex];
+    if (!substrate) return false;
+    const heightMm =
+      substrate.kind === 'sheet' ? substrate.heightMm : substrate.lengthMm;
+    const values = [
+      placement.xMm,
+      placement.yMm,
+      placement.widthMm,
+      placement.heightMm,
+    ];
+    if (
+      values.some((value) => !Number.isFinite(value)) ||
+      placement.widthMm <= 0 ||
+      placement.heightMm <= 0
+    ) {
+      return false;
+    }
+    const epsilon = 0.01;
+    if (
+      placement.xMm < -epsilon ||
+      placement.yMm < -epsilon ||
+      placement.xMm + placement.widthMm > substrate.widthMm + epsilon ||
+      placement.yMm + placement.heightMm > heightMm + epsilon
+    ) {
+      return false;
+    }
+    const group = porSustrato.get(substrateIndex) ?? [];
+    group.push(placement);
+    porSustrato.set(substrateIndex, group);
+  }
+
+  // Barrido por X: exacto para resultados normales. El límite evita que una
+  // validación defensiva vuelva a bloquear el API en tiradas masivas.
+  for (const placements of porSustrato.values()) {
+    if (placements.length > 5_000) continue;
+    const sorted = [...placements].sort((a, b) => a.xMm - b.xMm);
+    for (let i = 0; i < sorted.length; i++) {
+      const current = sorted[i];
+      const currentRight = current.xMm + current.widthMm;
+      for (let j = i + 1; j < sorted.length; j++) {
+        const next = sorted[j];
+        if (next.xMm >= currentRight - 0.01) break;
+        const overlapY =
+          current.yMm < next.yMm + next.heightMm - 0.01 &&
+          next.yMm < current.yMm + current.heightMm - 0.01;
+        if (overlapY) return false;
+      }
+    }
+  }
+  return true;
 }
 
 async function despacharNesting(
@@ -428,7 +505,10 @@ async function runMontajeSobreSustrato(
   let montajeContext = buildJobContextPiezas(paso, jobContext);
   if (!montajeContext) return null;
 
-  if (config.algorithm === 'shelf-rollo' || config.algorithm === 'maxrects-rollo') {
+  if (
+    config.algorithm === 'shelf-rollo' ||
+    config.algorithm === 'maxrects-rollo'
+  ) {
     return runShelfRollo(paso, montajeContext, materialResuelto, config);
   }
 
@@ -473,9 +553,9 @@ async function runMontajeSobreSustrato(
  * diagnostica.
  */
 export function partirPiezasEnPanosDeHoja(
-  piezas: Array<{ cantidad: number; anchoMm: number; altoMm: number }>,
+  piezas: NonNullable<JobContext['piezas']>,
   config: NestingConfigResolved,
-): Array<{ cantidad: number; anchoMm: number; altoMm: number }> | null {
+): NonNullable<JobContext['piezas']> | null {
   if (!config.panelizado?.enabled) return null;
   const sheetW = config.sheetWidthMm ?? 0;
   const sheetH = config.sheetHeightMm ?? 0;
@@ -496,39 +576,138 @@ export function partirPiezasEnPanosDeHoja(
   if (piezas.every((p) => entra(p.anchoMm, p.altoMm))) return null;
 
   const overlap = Math.max(0, config.panelizado.overlapMm ?? 0);
-  const eje = config.panelizado.mode === 'manual' ? config.panelizado.axis : 'automatic';
-  const resultado: Array<{ cantidad: number; anchoMm: number; altoMm: number }> = [];
+  const eje = config.panelizado.axis;
+  const resultado: NonNullable<JobContext['piezas']> = [];
 
-  for (const pieza of piezas) {
+  if (config.panelizado.mode === 'manual') {
+    const manual = normalizeGranFormatoPanelManualLayout(
+      config.panelizado.manualLayout,
+    );
+    const cantidadInstancias = piezas.reduce(
+      (total, pieza) => total + Math.ceil(pieza.cantidad),
+      0,
+    );
+    if (!manual || manual.items.length !== cantidadInstancias) return null;
+    const byId = new Map(
+      manual.items.map((item) => [item.sourcePieceId, item]),
+    );
+    for (const [pieceIndex, pieza] of piezas.entries()) {
+      for (
+        let copyIndex = 0;
+        copyIndex < Math.ceil(pieza.cantidad);
+        copyIndex++
+      ) {
+        const sourcePieceId = `piece-${pieceIndex}-${copyIndex}`;
+        const item = byId.get(sourcePieceId);
+        if (
+          !item ||
+          Math.abs(item.pieceWidthMm - pieza.anchoMm) > 1 ||
+          Math.abs(item.pieceHeightMm - pieza.altoMm) > 1
+        ) {
+          return null;
+        }
+        for (const panel of item.panels) {
+          if (!entra(panel.finalWidthMm, panel.finalHeightMm)) return null;
+          resultado.push({
+            cantidad: 1,
+            anchoMm: panel.finalWidthMm,
+            altoMm: panel.finalHeightMm,
+            sourcePieceId,
+            panelIndex: panel.panelIndex,
+            panelCount: item.panels.length,
+            panelAxis: item.axis,
+            usefulWidthMm: panel.usefulWidthMm,
+            usefulHeightMm: panel.usefulHeightMm,
+            overlapStartMm: panel.overlapStartMm,
+            overlapEndMm: panel.overlapEndMm,
+          });
+        }
+      }
+    }
+    return resultado;
+  }
+
+  for (const [pieceIndex, pieza] of piezas.entries()) {
     if (entra(pieza.anchoMm, pieza.altoMm)) {
       resultado.push(pieza);
       continue;
     }
-    // Grilla mínima de paños iguales: menos paños primero, menos cortes
-    // como desempate. Eje manual: vertical = cortes a lo ancho (columnas),
-    // horizontal = cortes a lo alto (filas).
-    let mejor: { nx: number; ny: number } | null = null;
-    const maxDiv = 8;
+    // Se permiten hasta 64 divisiones por eje. El límite anterior de 8 era
+    // demasiado chico para frentes o fondos largos y no estaba documentado.
+    const maxDiv = 64;
+    let mejor: {
+      nx: number;
+      ny: number;
+      areaFisicaMm2: number;
+    } | null = null;
     for (let nx = 1; nx <= (eje === 'horizontal' ? 1 : maxDiv); nx++) {
       for (let ny = 1; ny <= (eje === 'vertical' ? 1 : maxDiv); ny++) {
-        const panoW = pieza.anchoMm / nx + (nx > 1 ? overlap : 0);
-        const panoH = pieza.altoMm / ny + (ny > 1 ? overlap : 0);
-        if (!entra(panoW, panoH)) continue;
+        const usefulW = pieza.anchoMm / nx;
+        const usefulH = pieza.altoMm / ny;
+        const paneles = Array.from({ length: nx * ny }, (_, index) => {
+          const col = index % nx;
+          const row = Math.floor(index / nx);
+          const extraW = (col > 0 ? overlap : 0) + (col < nx - 1 ? overlap : 0);
+          const extraH = (row > 0 ? overlap : 0) + (row < ny - 1 ? overlap : 0);
+          return { anchoMm: usefulW + extraW, altoMm: usefulH + extraH };
+        });
+        if (!paneles.every((panel) => entra(panel.anchoMm, panel.altoMm)))
+          continue;
+        const areaFisicaMm2 = paneles.reduce(
+          (total, panel) => total + panel.anchoMm * panel.altoMm,
+          0,
+        );
         if (
           !mejor ||
           nx * ny < mejor.nx * mejor.ny ||
-          (nx * ny === mejor.nx * mejor.ny && nx + ny < mejor.nx + mejor.ny)
+          (nx * ny === mejor.nx * mejor.ny &&
+            (areaFisicaMm2 < mejor.areaFisicaMm2 ||
+              (areaFisicaMm2 === mejor.areaFisicaMm2 &&
+                nx + ny < mejor.nx + mejor.ny)))
         ) {
-          mejor = { nx, ny };
+          mejor = { nx, ny, areaFisicaMm2 };
         }
       }
     }
     if (!mejor) return null;
-    resultado.push({
-      cantidad: pieza.cantidad * mejor.nx * mejor.ny,
-      anchoMm: pieza.anchoMm / mejor.nx + (mejor.nx > 1 ? overlap : 0),
-      altoMm: pieza.altoMm / mejor.ny + (mejor.ny > 1 ? overlap : 0),
-    });
+    const usefulW = pieza.anchoMm / mejor.nx;
+    const usefulH = pieza.altoMm / mejor.ny;
+    const panelCount = mejor.nx * mejor.ny;
+    for (
+      let copyIndex = 0;
+      copyIndex < Math.ceil(pieza.cantidad);
+      copyIndex++
+    ) {
+      const sourcePieceId = `piece-${pieceIndex}-${copyIndex}`;
+      for (let row = 0; row < mejor.ny; row++) {
+        for (let col = 0; col < mejor.nx; col++) {
+          const overlapLeft = col > 0 ? overlap : 0;
+          const overlapRight = col < mejor.nx - 1 ? overlap : 0;
+          const overlapTop = row > 0 ? overlap : 0;
+          const overlapBottom = row < mejor.ny - 1 ? overlap : 0;
+          resultado.push({
+            cantidad: 1,
+            anchoMm: usefulW + overlapLeft + overlapRight,
+            altoMm: usefulH + overlapTop + overlapBottom,
+            sourcePieceId,
+            panelIndex: row * mejor.nx + col + 1,
+            panelCount,
+            panelAxis:
+              mejor.nx > 1 && mejor.ny === 1
+                ? 'vertical'
+                : mejor.ny > 1 && mejor.nx === 1
+                  ? 'horizontal'
+                  : mejor.nx >= mejor.ny
+                    ? 'vertical'
+                    : 'horizontal',
+            usefulWidthMm: usefulW,
+            usefulHeightMm: usefulH,
+            overlapStartMm: overlapLeft + overlapTop,
+            overlapEndMm: overlapRight + overlapBottom,
+          });
+        }
+      }
+    }
   }
   return resultado;
 }
@@ -550,7 +729,9 @@ function todasLasPiezasEntranEnHoja(
   const utilW =
     (config.sheetWidthMm ?? 0) - config.margins.leftMm - config.margins.rightMm;
   const utilH =
-    (config.sheetHeightMm ?? 0) - config.margins.topMm - config.margins.bottomMm;
+    (config.sheetHeightMm ?? 0) -
+    config.margins.topMm -
+    config.margins.bottomMm;
   if (utilW <= 0 || utilH <= 0) return false;
   const EPS = 1; // mm — tolerancia de redondeo
   return piezas.every(
@@ -583,7 +764,12 @@ function todasLasPiezasEntranEnHoja(
 function conLonaBrutaSiExiste(jobContext: JobContext): JobContext {
   const bruta = jobContext.lonaBrutaMm;
   const piezas = jobContext.piezas ?? [];
-  if (!bruta || !(bruta.anchoMm > 0) || !(bruta.altoMm > 0) || piezas.length === 0) {
+  if (
+    !bruta ||
+    !(bruta.anchoMm > 0) ||
+    !(bruta.altoMm > 0) ||
+    piezas.length === 0
+  ) {
     return jobContext;
   }
   return {
@@ -613,7 +799,8 @@ function normalizarPiezasDeOutput(
 ): Array<{ cantidad: number; anchoMm: number; altoMm: number }> {
   if (!valor || typeof valor !== 'object') return [];
   const items = Array.isArray(valor) ? valor : [valor];
-  const piezas: Array<{ cantidad: number; anchoMm: number; altoMm: number }> = [];
+  const piezas: Array<{ cantidad: number; anchoMm: number; altoMm: number }> =
+    [];
   for (const item of items) {
     if (!item || typeof item !== 'object') continue;
     const it = item as Record<string, unknown>;
@@ -771,7 +958,10 @@ function runShelfRollo(
     .map((shelfInput) =>
       esPlotterCad
         ? evaluateSequentialRollCandidate(shelfInput)
-        : evaluateRollLayoutForConfiguredAlgorithm(shelfInput, config.algorithm),
+        : evaluateRollLayoutForConfiguredAlgorithm(
+            shelfInput,
+            config.algorithm,
+          ),
     )
     .filter(
       (
@@ -808,9 +998,7 @@ function runShelfRollo(
     panelIndex: p.panelIndex ?? undefined,
     panelCount: p.panelCount ?? undefined,
     panelAxis: (p.panelAxis ?? undefined) as
-      | 'vertical'
-      | 'horizontal'
-      | undefined,
+      'vertical' | 'horizontal' | undefined,
     usefulWidthMm: p.usefulWidthMm,
     usefulHeightMm: p.usefulHeightMm,
     overlapStartMm: p.overlapStartMm,
@@ -897,7 +1085,10 @@ function buildShelfInputsForPanelizado(
           config.panelizado.axis === 'horizontal' ? 'horizontal' : 'vertical',
         ] as const)
       : config.panelizado.axis === 'automatic'
-        ? (['automatic'] as const)
+        ? // La dirección automática se compara con layouts COMPLETOS. Antes el
+          // helper elegía el eje por cantidad de paneles sin saber cómo iban a
+          // acomodarse después en el rollo.
+          (['vertical', 'horizontal'] as const)
         : ([config.panelizado.axis] as const);
 
   return axisCandidates.map((axis) => ({
@@ -1018,7 +1209,8 @@ function runGrid2DMultiForArea(
   const medidasDistintas = new Set(
     piezas.map((p) => `${p.anchoMm}x${p.altoMm}`),
   );
-  if (medidasDistintas.size <= 1) {
+  const contienePaneles = piezas.some((pieza) => pieza.panelIndex != null);
+  if (medidasDistintas.size <= 1 && !contienePaneles) {
     return runGrid2DSingleForArea(jobContext, config);
   }
 
@@ -1028,6 +1220,7 @@ function runGrid2DMultiForArea(
       widthMm: p.anchoMm,
       heightMm: p.altoMm,
       quantity: p.cantidad,
+      meta: metadataPanelDePieza(p),
     })),
     {
       kind: 'sheet',
@@ -1055,7 +1248,7 @@ function runGrid2DMultiForArea(
     unidad: 'pliegos',
     aprovechamientoPct: result.metrics.aprovechamientoPct,
     substrates: result.substrates,
-    placements: result.placements,
+    placements: result.placements.map(promoverMetadataPanel),
     metricasRaw: result.metrics,
     piezasAcomodadas: result.placements.length,
     visualConfig: buildVisualConfig({
@@ -1074,6 +1267,46 @@ function runGrid2DMultiForArea(
       allowRotation: config.allowRotation,
       substrateLabel: 'Placa',
     }),
+  };
+}
+
+function metadataPanelDePieza(
+  pieza: NonNullable<JobContext['piezas']>[number],
+): Record<string, unknown> | undefined {
+  if (pieza.panelIndex == null) return undefined;
+  return {
+    sourcePieceId: pieza.sourcePieceId,
+    panelIndex: pieza.panelIndex,
+    panelCount: pieza.panelCount,
+    panelAxis: pieza.panelAxis,
+    usefulWidthMm: pieza.usefulWidthMm,
+    usefulHeightMm: pieza.usefulHeightMm,
+    overlapStartMm: pieza.overlapStartMm,
+    overlapEndMm: pieza.overlapEndMm,
+  };
+}
+
+function promoverMetadataPanel(placement: Placement): Placement {
+  const meta = asRecord(placement.meta);
+  const panelAxis =
+    meta.panelAxis === 'vertical' || meta.panelAxis === 'horizontal'
+      ? meta.panelAxis
+      : undefined;
+  return {
+    ...placement,
+    pieceId:
+      typeof meta.sourcePieceId === 'string'
+        ? meta.sourcePieceId
+        : placement.pieceId,
+    panelIndex: readPositiveNumberFromRecord(meta, 'panelIndex') ?? undefined,
+    panelCount: readPositiveNumberFromRecord(meta, 'panelCount') ?? undefined,
+    panelAxis,
+    usefulWidthMm:
+      readPositiveNumberFromRecord(meta, 'usefulWidthMm') ?? undefined,
+    usefulHeightMm:
+      readPositiveNumberFromRecord(meta, 'usefulHeightMm') ?? undefined,
+    overlapStartMm: readNonNegativeNumberFromRecord(meta, 'overlapStartMm'),
+    overlapEndMm: readNonNegativeNumberFromRecord(meta, 'overlapEndMm'),
   };
 }
 
@@ -1168,9 +1401,6 @@ function runGrid2DSingleForArea(
       areaUtilMm2: totalPiezas * pieza.anchoMm * pieza.altoMm,
       areaTotalMm2: result.metrics.areaTotalMm2 * pliegosNecesarios,
       largoConsumidoMm: previewConsumedLengthMm,
-      columnas: undefined,
-      filas: undefined,
-      piezasPorSustrato: undefined,
     },
     piezasPorPliego,
     piezasAcomodadas: totalPiezas,
@@ -1853,6 +2083,7 @@ function runGrid2DMulti(
       widthMm: p.anchoMm,
       heightMm: p.altoMm,
       quantity: p.cantidad,
+      meta: metadataPanelDePieza(p),
     })),
     sustrato,
     options,
@@ -1868,7 +2099,7 @@ function runGrid2DMulti(
     unidad: 'pliegos',
     aprovechamientoPct: result.metrics.aprovechamientoPct,
     substrates: result.substrates,
-    placements: result.placements,
+    placements: result.placements.map(promoverMetadataPanel),
     metricasRaw: result.metrics,
     piezasAcomodadas: result.placements.length,
     visualConfig: buildVisualConfig({
@@ -2202,4 +2433,13 @@ function readPositiveNumberFromRecord(
     }
   }
   return null;
+}
+
+function readNonNegativeNumberFromRecord(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = record[key];
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }

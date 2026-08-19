@@ -100,6 +100,7 @@ import {
   type CostingStrategyKind,
 } from '../productos-servicios/nesting/costing';
 import { MAX_HOJAS_CABALLETE_DEFAULT } from '../productos-servicios/nesting/helpers/cuadernillo-imposicion';
+import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import {
   getModoColorsFromPerfil,
   MODO_COLOR_LABELS,
@@ -2968,6 +2969,54 @@ export class MotorUniversalService {
       // así que corta por la tabla de guards de arriba como cualquier paso.
     }
 
+    // El pliego que carga la impresora puede ser menor que la hoja comprada,
+    // pero nunca mayor. La conversión de compra es una restricción física, no
+    // un simple factor de costo: si da cero, continuar cobraría una hoja que no
+    // puede producir el pliego configurado.
+    const sheetDispatch = nestingDispatch?.substrates.find(
+      (sub) => sub.kind === 'sheet',
+    );
+    const usaConversionCompra = Boolean(
+      primitivasDeFamilia(paso.familiaCodigo)?.compraSustrato,
+    );
+    const usaMaterialPropioDelCandidato = Boolean(
+      nestingDispatch?.pliegoImpresionSeleccionado?.materiaPrima,
+    );
+    if (
+      sheetDispatch?.kind === 'sheet' &&
+      usaConversionCompra &&
+      !usaMaterialPropioDelCandidato &&
+      materialPreliminar
+    ) {
+      const attrs = materialPreliminar.atributosVarianteJson ?? {};
+      const compraAnchoMm = Number(attrs.anchoMm ?? attrs.widthMm ?? 0);
+      const compraAltoMm = Number(
+        attrs.largoMm ?? attrs.altoMm ?? attrs.heightMm ?? 0,
+      );
+      if (compraAnchoMm > 0 && compraAltoMm > 0) {
+        const conversion = calculateSustratoToPliegoConversion({
+          sustrato: { anchoMm: compraAnchoMm, altoMm: compraAltoMm },
+          pliegoImpresion: {
+            anchoMm: sheetDispatch.widthMm,
+            altoMm: sheetDispatch.heightMm,
+          },
+        });
+        if (conversion.pliegosPorSustrato === 0) {
+          errores.push({
+            codigo: 'pliego_impresion_no_entra_en_sustrato_compra',
+            severidad: 'ERROR',
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            mensaje: `El pliego de impresión de ${Math.round(sheetDispatch.widthMm)} × ${Math.round(sheetDispatch.heightMm)} mm no entra en la hoja comprada de ${Math.round(compraAnchoMm)} × ${Math.round(compraAltoMm)} mm.`,
+            sugerencia:
+              'Elegí una hoja de compra más grande o configurá un pliego de impresión más chico.',
+          });
+          return this.pasoAbortado(paso);
+        }
+      }
+    }
+
     // F3 cartelería — un rollo más ancho que la boca de la máquina no se
     // puede cargar físicamente, aunque el acomodo geométrico cierre. Sin este
     // guard el motor cotizaba una lona de 3,20 m en una impresora de 1,80 y
@@ -4918,6 +4967,7 @@ export class MotorUniversalService {
               fullUnits: costeoNesting.breakdown.fullUnits,
               fullUnitsCost: costeoNesting.breakdown.fullUnitsCost,
               lastUnit: costeoNesting.breakdown.lastUnit,
+              units: costeoNesting.breakdown.units,
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as

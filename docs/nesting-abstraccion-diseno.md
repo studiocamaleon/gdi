@@ -5,6 +5,11 @@
 > **Tag base**: `v1.1-stable-pre-modelo-universal`
 > **Aprendizaje del refactor anterior**: lo aplicamos acá — análisis primero, extracción NO destructiva, reversible por fases.
 
+> **Actualización 2026-08-19**: la migración al motor universal está completa.
+> Los adaptadores legacy `rigid-adapter` y `digital-adapter` fueron retirados
+> porque ya no tenían consumidores; el dispatcher universal es la única entrada
+> productiva. Este documento conserva las fases originales como historial.
+
 ---
 
 ## 1. Contexto

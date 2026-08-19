@@ -65,6 +65,20 @@ export type GranFormatoManualLayout = {
   items: GranFormatoManualLayoutItem[];
 };
 
+export const MAX_GRAN_FORMATO_INSTANCES = 100_000;
+
+function cantidadTotalValida(medidas: GranFormatoMeasure[]): boolean {
+  const total = medidas.reduce(
+    (sum, medida) =>
+      sum +
+      (Number.isFinite(medida.cantidad) && medida.cantidad > 0
+        ? Math.ceil(medida.cantidad)
+        : 0),
+    0,
+  );
+  return total > 0 && total <= MAX_GRAN_FORMATO_INSTANCES;
+}
+
 // ─── getGranFormatoNullableNumber ───────────────────────────────────
 
 export function getGranFormatoNullableNumber(value: unknown): number | null {
@@ -85,26 +99,35 @@ export function getGranFormatoNullableNumber(value: unknown): number | null {
 export function buildGranFormatoPieceInstances(
   medidas: GranFormatoMeasure[],
 ): GranFormatoPiece[] {
+  if (!cantidadTotalValida(medidas)) return [];
   return medidas
     .flatMap((medida, medidaIndex) =>
-      Array.from({ length: Math.max(1, medida.cantidad) }, (_, copyIndex) => ({
-        id: `piece-${medidaIndex}-${copyIndex}`,
-        sourcePieceId: `piece-${medidaIndex}-${copyIndex}`,
-        originalWidthMm: medida.anchoMm,
-        originalHeightMm: medida.altoMm,
-        widthMm: medida.anchoMm,
-        heightMm: medida.altoMm,
-        usefulWidthMm: medida.anchoMm,
-        usefulHeightMm: medida.altoMm,
-        overlapStartMm: 0,
-        overlapEndMm: 0,
-        area: medida.anchoMm * medida.altoMm,
-        longestSide: Math.max(medida.anchoMm, medida.altoMm),
-        shortestSide: Math.min(medida.anchoMm, medida.altoMm),
-        panelIndex: null as number | null,
-        panelCount: null as number | null,
-        panelAxis: null as GranFormatoPanelAxis | null,
-      })),
+      medida.anchoMm > 0 &&
+      medida.altoMm > 0 &&
+      Number.isFinite(medida.cantidad) &&
+      medida.cantidad > 0
+        ? Array.from(
+            { length: Math.ceil(medida.cantidad) },
+            (_, copyIndex) => ({
+              id: `piece-${medidaIndex}-${copyIndex}`,
+              sourcePieceId: `piece-${medidaIndex}-${copyIndex}`,
+              originalWidthMm: medida.anchoMm,
+              originalHeightMm: medida.altoMm,
+              widthMm: medida.anchoMm,
+              heightMm: medida.altoMm,
+              usefulWidthMm: medida.anchoMm,
+              usefulHeightMm: medida.altoMm,
+              overlapStartMm: 0,
+              overlapEndMm: 0,
+              area: medida.anchoMm * medida.altoMm,
+              longestSide: Math.max(medida.anchoMm, medida.altoMm),
+              shortestSide: Math.min(medida.anchoMm, medida.altoMm),
+              panelIndex: null as number | null,
+              panelCount: null as number | null,
+              panelAxis: null as GranFormatoPanelAxis | null,
+            }),
+          )
+        : [],
     )
     .sort(
       (a, b) =>
@@ -119,15 +142,24 @@ export function buildGranFormatoPieceInstances(
 export function expandGranFormatoMeasuresToSinglePieces(
   medidas: GranFormatoMeasure[],
 ): Array<{ sourcePieceId: string; anchoMm: number; altoMm: number }> {
+  if (!cantidadTotalValida(medidas)) return [];
   const pieces: Array<{
     sourcePieceId: string;
     anchoMm: number;
     altoMm: number;
   }> = [];
   for (const [medidaIndex, medida] of medidas.entries()) {
+    if (
+      medida.anchoMm <= 0 ||
+      medida.altoMm <= 0 ||
+      !Number.isFinite(medida.cantidad) ||
+      medida.cantidad <= 0
+    ) {
+      continue;
+    }
     for (
       let copyIndex = 0;
-      copyIndex < Math.max(1, medida.cantidad);
+      copyIndex < Math.ceil(medida.cantidad);
       copyIndex += 1
     ) {
       pieces.push({
@@ -156,6 +188,7 @@ export type BuildGranFormatoPanelizedPiecesInput = {
 export function buildGranFormatoPanelizedPieces(
   input: BuildGranFormatoPanelizedPiecesInput,
 ): GranFormatoPiece[] | null {
+  if (!cantidadTotalValida(input.medidas)) return null;
   const pieces: GranFormatoPiece[] = [];
 
   const buildSplitSizes = (
@@ -304,9 +337,17 @@ export function buildGranFormatoPanelizedPieces(
   };
 
   for (const [medidaIndex, medida] of input.medidas.entries()) {
+    if (
+      medida.anchoMm <= 0 ||
+      medida.altoMm <= 0 ||
+      !Number.isFinite(medida.cantidad) ||
+      medida.cantidad <= 0
+    ) {
+      continue;
+    }
     for (
       let copyIndex = 0;
-      copyIndex < Math.max(1, medida.cantidad);
+      copyIndex < Math.ceil(medida.cantidad);
       copyIndex += 1
     ) {
       const sourcePieceId = `piece-${medidaIndex}-${copyIndex}`;
