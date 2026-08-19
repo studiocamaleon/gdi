@@ -82,6 +82,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAgregar: (items: PropuestaItem[]) => void;
+  /** Cliente de la propuesta; habilita su precio especial en el motor. */
+  clienteId?: string | null;
   /** Edición: la CARGA completa (todos los renglones que entraron juntos). */
   editItems?: PropuestaItem[] | null;
 }
@@ -215,6 +217,7 @@ export default function CentroCopiadoSheet({
   open,
   onOpenChange,
   onAgregar,
+  clienteId,
   editItems,
 }: Props) {
   const [papeles, setPapeles] = React.useState<PapelOpcion[]>([]);
@@ -469,6 +472,7 @@ export default function CentroCopiadoSheet({
     const seq = ++previewSeq.current;
     const handle = setTimeout(() => {
       void cotizarCentroCopiado({
+        clienteId: clienteId || undefined,
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
@@ -508,7 +512,7 @@ export default function CentroCopiadoSheet({
         });
     }, 350);
     return () => clearTimeout(handle);
-  }, [open, docs, grupos]);
+  }, [open, docs, grupos, clienteId]);
 
   const agregarDocs = React.useCallback(
     (
@@ -730,6 +734,7 @@ export default function CentroCopiadoSheet({
     setGuardando(true);
     try {
       const r = await construirItemsCentroCopiado({
+        clienteId: clienteId || undefined,
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
@@ -795,7 +800,7 @@ export default function CentroCopiadoSheet({
     } finally {
       setGuardando(false);
     }
-  }, [docs, grupos, onAgregar, onOpenChange]);
+  }, [docs, grupos, clienteId, onAgregar, onOpenChange]);
 
   if (!open) return null;
 

@@ -153,6 +153,7 @@ import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-pre
 import ccFicha from "@/components/comercial/centro-copiado-ficha.module.css";
 import {
   guardarTomoCentroCopiado,
+  cantidadLibrosCentroCopiado,
   dimsDeFormato,
   estadoCentroCopiado,
   metaCentroCopiado,
@@ -483,14 +484,23 @@ function applyCotizacionToItem(
   const total = getCotizacionTotal(cotizacion);
   const impuestoPorcentaje =
     subtotal > 0 ? (impuestoMonto / subtotal) * 100 : 0;
+  const cantidadLibros =
+    item.unidadMedida === "libros"
+      ? cantidadLibrosCentroCopiado(jobContext)
+      : null;
+  const cantidad =
+    cantidadLibros ??
+    cotizacion.cantidadComercialPricing ??
+    cotizacion.cantidadEfectiva ??
+    item.cantidad;
 
   return {
     ...item,
-    cantidad:
-      cotizacion.cantidadComercialPricing ??
-      cotizacion.cantidadEfectiva ??
-      item.cantidad,
-    precioUnitario: getCotizacionUnitario(cotizacion),
+    cantidad,
+    precioUnitario:
+      cantidadLibros && cantidad > 0
+        ? subtotal / cantidad
+        : getCotizacionUnitario(cotizacion),
     subtotal,
     impuestoMonto,
     impuestoPorcentaje,
@@ -5248,6 +5258,14 @@ function rehidratarOrdenItem(
   const resumen = (snap?.resumen ?? null) as SnapshotResumenOrden | null;
   const trazabilidad = (snap?.trazabilidad ??
     null) as SnapshotTrazabilidadOrden | null;
+  const jobContext =
+    (snap?.jobContext as Record<string, unknown> | null) ?? undefined;
+  const unidadMedida = unidadDesdeCorta(producto.cantidadUnidad);
+  const cantidadLibros =
+    unidadMedida === "libros"
+      ? cantidadLibrosCentroCopiado(jobContext)
+      : null;
+  const cantidadVisible = cantidadLibros ?? producto.cantidad;
 
   const costosVacios = {
     tiempoTotal: 0,
@@ -5391,10 +5409,10 @@ function rehidratarOrdenItem(
     subcategoriaComercialCodigo: "",
     subcategoriaComercialNombre:
       producto.subcategoriaComercial || producto.familia,
-    unidadMedida: unidadDesdeCorta(producto.cantidadUnidad),
-    cantidad: producto.cantidad,
+    unidadMedida,
+    cantidad: cantidadVisible,
     precioUnitario:
-      producto.cantidad > 0 ? producto.total / producto.cantidad : 0,
+      cantidadVisible > 0 ? producto.total / cantidadVisible : 0,
     subtotal: producto.subtotal,
     impuestoPorcentaje:
       producto.subtotal > 0
@@ -5416,7 +5434,7 @@ function rehidratarOrdenItem(
     pasos: trazabilidad?.pasos ? getCotizacionPasos(cotizacion) : [],
     adicionales: producto.adicionales,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
-    jobContext: (snap?.jobContext as Record<string, unknown>) ?? undefined,
+    jobContext,
     // Descuento que aplicó el vendedor (para reeditarlo si se recotiza el ítem).
     descuentoInput:
       producto.descuentoTipo && producto.descuentoValor != null
@@ -8379,6 +8397,7 @@ export function PropuestaFicha({
       />
       <CentroCopiadoSheet
         open={copiadoOpen}
+        clienteId={clienteId || null}
         editItems={copiadoEditItems}
         onOpenChange={(open) => {
           setCopiadoOpen(open);

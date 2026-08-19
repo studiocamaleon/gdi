@@ -126,6 +126,11 @@ export class GrupoCentroCopiadoDto {
 }
 
 export class CotizarCentroCopiadoDto {
+  /** Cliente de la cotización. Permite al motor aplicar su precio especial. */
+  @IsOptional()
+  @IsUUID()
+  clienteId?: string;
+
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
@@ -156,10 +161,6 @@ export class AgregarAOrdenCentroCopiadoDto extends CotizarCentroCopiadoDto {
   @IsOptional()
   @IsUUID()
   cotizacionId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  clienteId?: string;
 
   /** Id de esta carga (agrupa todos sus renglones en la ficha). Se genera si falta. */
   @IsOptional()

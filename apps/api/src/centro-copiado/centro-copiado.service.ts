@@ -571,6 +571,7 @@ export class CentroCopiadoService {
       orderBy: { nombre: 'asc' },
     });
     return {
+      productoId: precios.productoId,
       version: config.version,
       actualizadoEl:
         'updatedAt' in config ? config.updatedAt.toISOString() : null,
@@ -1414,6 +1415,7 @@ export class CentroCopiadoService {
     ctx: Ctx,
     copias: number,
     periodo: string | null,
+    clienteId?: string,
   ): Promise<DocumentoResultado> {
     const { carillas, hojas } = calcularHojas(doc.paginas, copias, doc.faz);
     const base = {
@@ -1462,6 +1464,7 @@ export class CentroCopiadoService {
       this.motor.cotizar({
         tenantId,
         productoId: ctx.productoId,
+        clienteId,
         periodo,
         jobContext: contexto as never,
       });
@@ -1557,6 +1560,7 @@ export class CentroCopiadoService {
     miembrosDto: DocumentoInput[],
     tipoAnillo: string,
     periodo: string | null,
+    clienteId?: string,
   ): Promise<AnilladoResultado | null> {
     const repr = miembrosDto.find(
       (doc) =>
@@ -1615,12 +1619,14 @@ export class CentroCopiadoService {
       this.motor.cotizar({
         tenantId,
         productoId: ctx.productoId,
+        clienteId,
         periodo,
         jobContext: base as never,
       }),
       this.motor.cotizar({
         tenantId,
         productoId: ctx.productoId,
+        clienteId,
         periodo,
         jobContext: conAnillado as never,
       }),
@@ -1867,6 +1873,7 @@ export class CentroCopiadoService {
           ctx,
           copias,
           periodo,
+          dto.clienteId,
         );
       }),
     );
@@ -1906,6 +1913,7 @@ export class CentroCopiadoService {
                 miembrosDto,
                 g.tipoAnillo ?? '',
                 periodo,
+                dto.clienteId,
               )
             : null;
         // El tomo es UN ítem: impresión + anillado en el mismo subtotal.
@@ -2051,6 +2059,7 @@ export class CentroCopiadoService {
             grupoCargaId,
             cotizacionId,
             periodo,
+            dto.clienteId,
           ),
         );
       }
@@ -2247,6 +2256,7 @@ export class CentroCopiadoService {
     grupoCargaId: string,
     cotizacionId: string,
     periodo: string | null,
+    clienteId?: string,
   ): Promise<ItemAgregado> {
     const p = this.prepararDoc(doc, ctx, grupo, grupoCargaId);
     const base = {
@@ -2270,6 +2280,7 @@ export class CentroCopiadoService {
       const { result, cotizacionItemId } = await this.motor.cotizarYGuardar({
         tenantId,
         productoId: ctx.productoId,
+        clienteId,
         jobContext: p.jobContext as never,
         cotizacionId,
         periodo,
@@ -2335,6 +2346,7 @@ export class CentroCopiadoService {
               ctx,
               grupoCargaId,
               periodo,
+              dto.clienteId,
             ),
           );
         }
@@ -2349,6 +2361,7 @@ export class CentroCopiadoService {
             undefined,
             grupoCargaId,
             periodo,
+            dto.clienteId,
           ),
         );
       }
@@ -2363,6 +2376,7 @@ export class CentroCopiadoService {
     grupo: GrupoCentroCopiadoDto | undefined,
     grupoCargaId: string,
     periodo: string | null,
+    clienteId?: string,
   ): Promise<ItemConstruido> {
     const p = this.prepararDoc(doc, ctx, grupo, grupoCargaId);
     // El renglón se mide en LIBROS cuando anilla (1 libro = 1 copia encuadernada)
@@ -2395,6 +2409,7 @@ export class CentroCopiadoService {
     const r = await this.motor.cotizar({
       tenantId,
       productoId: ctx.productoId,
+      clienteId,
       periodo,
       jobContext: p.jobContext as never,
     });
@@ -2449,6 +2464,7 @@ export class CentroCopiadoService {
     ctx: Ctx,
     grupoCargaId: string,
     periodo: string | null,
+    clienteId?: string,
   ): Promise<{
     tomoNombre: string;
     juegos: number;
@@ -2479,6 +2495,7 @@ export class CentroCopiadoService {
         const r = await this.motor.cotizar({
           tenantId,
           productoId: ctx.productoId,
+          clienteId,
           periodo,
           jobContext: prep.jobContext as never,
         });
@@ -2536,6 +2553,7 @@ export class CentroCopiadoService {
         const rA = await this.motor.cotizar({
           tenantId,
           productoId: ctx.productoId,
+          clienteId,
           periodo,
           jobContext: jobContext as never,
         });
@@ -2782,6 +2800,7 @@ export class CentroCopiadoService {
     ctx: Ctx,
     grupoCargaId: string,
     periodo: string | null,
+    clienteId?: string,
   ): Promise<ItemConstruido> {
     const a = await this.agregarTomo(
       tenantId,
@@ -2790,6 +2809,7 @@ export class CentroCopiadoService {
       ctx,
       grupoCargaId,
       periodo,
+      clienteId,
     );
     return {
       documentoId: grupo.id,
@@ -2873,6 +2893,7 @@ export class CentroCopiadoService {
       ctx,
       grupoCargaId,
       periodo,
+      dto.clienteId,
     );
     if (a.error || !a.base) {
       return {

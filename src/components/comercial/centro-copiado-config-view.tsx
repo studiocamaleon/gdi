@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PreciosEspecialesClientesCard } from "@/components/productos-servicios/tab-precio-completo";
 import { ApiError } from "@/lib/api";
 import {
   actualizarConfigCentroCopiado,
@@ -1161,6 +1162,13 @@ export function CentroCopiadoConfigView() {
         </TabsContent>
 
         <TabsContent value="oferta" className="grid gap-4 pt-3">
+          {cfg.productoId ? (
+            <PreciosEspecialesClientesCard
+              productoId={cfg.productoId}
+              unidadComercial="hoja"
+              descripcion="Aplica la política particular del cliente sobre los costos calculados por el motor universal. Si no hay una regla activa, se usa la política general de Centro de Copiado."
+            />
+          ) : null}
           <Card>
             <CardHeader>
               <CardTitle>Papeles y gramajes</CardTitle>

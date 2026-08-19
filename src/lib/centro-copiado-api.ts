@@ -65,6 +65,28 @@ export function metaCentroCopiado(
   return raw && typeof raw === "object" ? (raw as CentroCopiadoMeta) : null;
 }
 
+/**
+ * Cantidad comercial visible de una carga anillada. La impresión se cotiza por
+ * hojas, pero el cliente compra libros: un documento usa `copias` y un tomo
+ * usa `juegos`. Devuelve null para cualquier ítem que no sea de CC anillado.
+ */
+export function cantidadLibrosCentroCopiado(
+  jobContext: Record<string, unknown> | null | undefined,
+): number | null {
+  const meta = metaCentroCopiado(jobContext);
+  if (!meta) return null;
+  const terminaciones = meta.terminaciones ?? [];
+  const esAnillado =
+    meta.esAnillado === true ||
+    terminaciones.includes("Anillado") ||
+    meta.terminacion?.split(",").some((t) => t.trim() === "Anillado") === true;
+  if (!esAnillado) return null;
+  const cantidad = meta.esTomo ? meta.juegos : meta.copias;
+  return typeof cantidad === "number" && Number.isFinite(cantidad) && cantidad > 0
+    ? cantidad
+    : null;
+}
+
 export interface DocumentoCentroCopiado {
   id: string;
   nombre?: string;
@@ -101,6 +123,8 @@ export interface GrupoCentroCopiado {
 }
 
 export interface CotizarCentroCopiadoRequest {
+  /** Cliente actual; el motor usa su precio especial si existe y está activo. */
+  clienteId?: string | null;
   documentos: DocumentoCentroCopiado[];
   grupos?: GrupoCentroCopiado[];
 }
@@ -239,6 +263,8 @@ export interface MaquinaOpcion {
 }
 
 export interface CentroCopiadoConfig {
+  /** Producto técnico cotizado por el motor universal. */
+  productoId: string | null;
   /** Versión optimista: evita pisar cambios realizados desde otra sesión. */
   version: number;
   actualizadoEl: string | null;
@@ -525,6 +551,9 @@ export function itemConstruidoAPropuestaItem(
       : esTomo
         ? "Tomo anillado"
         : undefined;
+  const cantidadLibros = cantidadLibrosCentroCopiado(ic.jobContext);
+  const cantidadVisible =
+    ic.unidad === "libros" && cantidadLibros ? cantidadLibros : ic.cantidad;
   return {
     id:
       typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -540,8 +569,9 @@ export function itemConstruidoAPropuestaItem(
     subcategoriaComercialCodigo: "papeleria_comercial",
     subcategoriaComercialNombre: "Centro de copiado",
     unidadMedida: (ic.unidad as PropuestaItem["unidadMedida"]) ?? "unidad",
-    cantidad: ic.cantidad,
-    precioUnitario: ic.precioUnitario,
+    cantidad: cantidadVisible,
+    precioUnitario:
+      cantidadVisible > 0 ? ic.subtotal / cantidadVisible : ic.precioUnitario,
     subtotal: ic.subtotal,
     impuestoPorcentaje: ic.impuestoPorcentaje,
     impuestoMonto: ic.impuestoMonto,

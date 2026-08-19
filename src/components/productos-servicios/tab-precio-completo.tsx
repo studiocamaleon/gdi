@@ -183,7 +183,7 @@ export function TabPrecioCompleto({
             productoId={productoId}
             onStateChange={hasUnifiedSave ? setComisionesState : undefined}
           />
-          <SeccionPreciosEspeciales
+          <PreciosEspecialesClientesCard
             productoId={productoId}
             unidadComercial={unidadComercial}
           />
@@ -531,12 +531,14 @@ function SeccionComisiones({
 // SECCIÓN 4 — Precios especiales por cliente
 // ════════════════════════════════════════════════════════════════════════
 
-function SeccionPreciosEspeciales({
+export function PreciosEspecialesClientesCard({
   productoId,
   unidadComercial,
+  descripcion = "Reemplaza el precio estándar cuando el cliente seleccionado compra este producto. Cada cliente puede tener su propio método de cálculo.",
 }: {
   productoId: string;
   unidadComercial?: string;
+  descripcion?: string;
 }) {
   const [items, setItems] = React.useState<PrecioEspecialClienteItem[]>([]);
   const [clientes, setClientes] = React.useState<ClienteDetalle[]>([]);
@@ -646,10 +648,7 @@ function SeccionPreciosEspeciales({
       <CardHeader className="wiz-section-head pricing-section-head">
         <div className="body">
           <CardTitle>Precios especiales por cliente</CardTitle>
-          <CardDescription>
-            Override del precio standard cuando el cliente X compra este producto. Cada precio
-            especial usa su propio método de cálculo.
-          </CardDescription>
+          <CardDescription>{descripcion}</CardDescription>
         </div>
         <CardAction className="pricing-section-action">
           <Button

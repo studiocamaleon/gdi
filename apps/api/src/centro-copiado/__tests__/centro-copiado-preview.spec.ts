@@ -8,10 +8,12 @@
  * Corre contra gdi_saas_test (DB aislada, test/jest-setup-db.ts).
  */
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { MotorUniversalService } from '../../motor-universal/motor.service';
 import { AplicarPrecioService } from '../../productos-servicios/precio/aplicar-precio.service';
 import { PreciosEspecialesClientesService } from '../../productos-servicios/precio/precios-especiales-clientes/precios-especiales-clientes.service';
 import { CentroCopiadoService } from '../centro-copiado.service';
+import { CC_PRODUCTO_CODIGO } from '../provisionar-plantilla';
 
 const prisma = new PrismaClient();
 
@@ -166,4 +168,71 @@ it('rechaza medidas que no coinciden con el formato declarado', async () => {
       ],
     }),
   ).rejects.toThrow('no coincide con el catálogo');
+});
+
+it('aplica y deja snapshot del precio especial del cliente en Carga rápida', async () => {
+  if (!tenantId) return;
+
+  await service.getConfig(tenantId);
+  const producto = await prisma.producto.findUniqueOrThrow({
+    where: {
+      tenantId_codigo: { tenantId, codigo: CC_PRODUCTO_CODIGO },
+    },
+    select: { id: true },
+  });
+  const sufijo = randomUUID().slice(0, 8);
+  const cliente = await prisma.cliente.create({
+    data: {
+      tenantId,
+      nombre: `Cliente CC especial ${sufijo}`,
+      emailPrincipal: `cc-${sufijo}@test.local`,
+      telefonoCodigo: '11',
+      telefonoNumero: '55550000',
+      paisCodigo: 'AR',
+    },
+  });
+  const especial = await prisma.productoPrecioEspecialClienteV2.create({
+    data: {
+      tenantId,
+      productoId: producto.id,
+      clienteId: cliente.id,
+      configJson: {
+        metodoCalculo: 'por_margen',
+        detalle: { marginPct: 5 },
+      },
+    },
+  });
+
+  try {
+    const r = await service.construirItems(
+      tenantId,
+      {
+        clienteId: cliente.id,
+        documentos: [
+          {
+            id: 'especial-cliente',
+            paginas: 2,
+            copias: 1,
+            tamano: 'A4',
+            tamanoAnchoMm: 210,
+            tamanoAltoMm: 297,
+            papelMateriaPrimaId: papel,
+            color: 'BN',
+            faz: 1,
+          },
+        ],
+      },
+      '2026-03',
+    );
+
+    expect(r.items[0].error).toBeNull();
+    expect(
+      r.items[0].cotizacion?.desglosePrecio?.precioEspecialCliente,
+    ).toEqual({ precioEspecialId: especial.id, clienteId: cliente.id });
+  } finally {
+    await prisma.productoPrecioEspecialClienteV2.delete({
+      where: { id: especial.id },
+    });
+    await prisma.cliente.delete({ where: { id: cliente.id } });
+  }
 });
