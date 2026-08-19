@@ -4,8 +4,9 @@ import {
   type MaquinaRef,
 } from "@/components/produccion/estaciones-panel";
 import { getEstaciones, getFamiliasPasos } from "@/lib/estaciones-api";
-import { getEmpleados } from "@/lib/empleados-api";
-import { getMaquinas } from "@/lib/maquinaria-api";
+import { getRecursosEstaciones } from "@/lib/estaciones-api";
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
 import type { Estacion, FamiliaPasoCatalogo } from "@/lib/estaciones";
 
 export const dynamic = "force-dynamic";
@@ -16,31 +17,35 @@ export const dynamic = "force-dynamic";
  * responde, el panel arranca vacío.
  */
 export default async function EstacionesPage() {
+  if (!(await tienePermiso("produccion.configurar"))) {
+    return <SinPermiso modulo="Configuración de estaciones" />;
+  }
   let estaciones: Estacion[] = [];
   let familias: FamiliaPasoCatalogo[] = [];
   let empleados: EmpleadoRef[] = [];
   let maquinas: MaquinaRef[] = [];
-  try {
-    const [ests, fams, emps, maqs] = await Promise.all([
-      getEstaciones(),
-      getFamiliasPasos(),
-      getEmpleados(),
-      getMaquinas(),
-    ]);
-    estaciones = ests;
-    familias = fams;
-    empleados = emps.map((emp) => ({
+  let loadWarning: string | null = null;
+  const [ests, fams, recursos] = await Promise.allSettled([
+    getEstaciones(),
+    getFamiliasPasos(),
+    getRecursosEstaciones(),
+  ]);
+  if (ests.status === "fulfilled") estaciones = ests.value;
+  if (fams.status === "fulfilled") familias = fams.value;
+  if (recursos.status === "fulfilled") {
+    empleados = recursos.value.empleados.map((emp) => ({
       id: emp.id,
       nombreCompleto: emp.nombreCompleto,
       sector: emp.sector,
     }));
-    maquinas = maqs.map((maq) => ({
+    maquinas = recursos.value.maquinas.map((maq) => ({
       id: maq.id,
       codigo: maq.codigo,
       nombre: maq.nombre,
     }));
-  } catch {
-    // La vista muestra sus estados vacíos.
+  }
+  if ([ests, fams, recursos].some((resultado) => resultado.status === "rejected")) {
+    loadWarning = "Parte de la configuración del taller no pudo cargarse. Se conservaron los datos disponibles.";
   }
   return (
     <EstacionesPanel
@@ -48,6 +53,7 @@ export default async function EstacionesPage() {
       initialFamilias={familias}
       empleados={empleados}
       maquinas={maquinas}
+      initialLoadWarning={loadWarning}
     />
   );
 }

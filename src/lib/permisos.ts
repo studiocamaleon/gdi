@@ -34,6 +34,9 @@ export type PermisoClave =
   | "reportes.ver_resumen"
   | "registros.gestionar_empleados"
   | "registros.ver_comisiones"
+  | "produccion.ejecutar"
+  | "produccion.supervisar"
+  | "produccion.configurar"
   // Los sueldos de los legajos. Registros es un módulo abierto —el vendedor
   // carga clientes ahí—, así que la remuneración pide su propio permiso.
   // Datos fiscales y métodos de pago: viven en Configuración pero son del

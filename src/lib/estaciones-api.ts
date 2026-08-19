@@ -9,6 +9,15 @@ export async function getEstaciones() {
   return apiRequest<Estacion[]>("/produccion/estaciones");
 }
 
+export type RecursosEstaciones = {
+  empleados: Array<{ id: string; nombreCompleto: string; sector: string }>;
+  maquinas: Array<{ id: string; codigo: string; nombre: string }>;
+};
+
+export async function getRecursosEstaciones() {
+  return apiRequest<RecursosEstaciones>("/produccion/estaciones-recursos");
+}
+
 /** Catálogo de familias de pasos + qué estación tiene tomada cada una. */
 export async function getFamiliasPasos() {
   return apiRequest<FamiliaPasoCatalogo[]>("/produccion/familias-pasos");

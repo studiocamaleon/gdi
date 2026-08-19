@@ -44,6 +44,7 @@ import { IntegracionesModule } from './integraciones/integraciones.module';
 import { CobroModule } from './cobro/cobro.module';
 import { SuscripcionesModule } from './suscripciones/suscripciones.module';
 import { CentroCopiadoModule } from './centro-copiado/centro-copiado.module';
+import { PanelGeneralModule } from './panel-general/panel-general.module';
 
 @Module({
   imports: [
@@ -112,6 +113,7 @@ import { CentroCopiadoModule } from './centro-copiado/centro-copiado.module';
     ArchivosModule,
     IntegracionesModule,
     CentroCopiadoModule,
+    PanelGeneralModule,
   ],
   controllers: [AppController],
   providers: [

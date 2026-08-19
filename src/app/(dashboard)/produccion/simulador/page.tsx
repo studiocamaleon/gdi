@@ -1,5 +1,8 @@
 import { SimuladorImpresion } from "@/components/produccion/simulador-impresion";
-import { getSimuladorImpresion, type SimuladorData } from "@/lib/simulador-impresion-api";
+import {
+  getSimuladorImpresion,
+  type SimuladorData,
+} from "@/lib/simulador-impresion-api";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +13,16 @@ export const dynamic = "force-dynamic";
  * cliente lo levanta después.
  */
 export default async function SimuladorImpresionPage() {
-  let data: SimuladorData = { jobs: [], materiales: [] };
+  let data: SimuladorData = {
+    jobs: [],
+    materiales: [],
+    puedeVerImportes: false,
+  };
+  let initialError: string | null = null;
   try {
     data = await getSimuladorImpresion();
   } catch {
-    // Estado vacío; el poll del cliente reintenta.
+    initialError = "No pudimos cargar la cola de impresión.";
   }
-  return <SimuladorImpresion initialData={data} />;
+  return <SimuladorImpresion initialData={data} initialError={initialError} />;
 }

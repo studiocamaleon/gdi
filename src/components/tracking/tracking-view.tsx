@@ -10,6 +10,7 @@ import {
   fechaLarga,
   getTrackingPublico,
   haceCuanto,
+  resumenEstadoTracking,
   urlArchivoTracking,
   type TrackingArchivo,
   type TrackingItem,
@@ -518,7 +519,7 @@ export function TrackingView({
           >{estadoNarrativo(data.estado)}</strong>.
         </h1>
         <div className="t-hero-sub">
-          {data.progresoPct}% completado. Te avisaremos ni bien esté listo para retirar.
+          {resumenEstadoTracking(data.estado, data.progresoPct)}
         </div>
 
         {/* QR de retiro: sólo cuando el trabajo está listo. Es el respaldo del

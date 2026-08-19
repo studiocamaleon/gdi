@@ -145,6 +145,10 @@ export class RecurrentesService {
       auth.tenantId,
       dto.proveedorId,
     );
+    await this.validarGastoFijoDelTenant(
+      auth,
+      dto.gastoFijoEstructuraId,
+    );
     return this.prisma.gastoRecurrente.create({
       data: {
         tenantId: auth.tenantId,
@@ -169,6 +173,11 @@ export class RecurrentesService {
       select: { id: true, gastoFijoEstructuraId: true },
     });
     if (!actual) throw new NotFoundException('No encontramos esa plantilla.');
+
+    await this.validarGastoFijoDelTenant(
+      auth,
+      dto.gastoFijoEstructuraId,
+    );
 
     // Vincular la plantilla al presupuestado alcanza a los egresos YA
     // emitidos: si no, quien descubre el reporte después de meses de uso lo
@@ -209,6 +218,25 @@ export class RecurrentesService {
           : {}),
       },
     });
+  }
+
+  /**
+   * El id llega como escalar porque Prisma no puede expresar una relación
+   * compuesta por tenant. Sin esta guarda, un UUID conocido de otra empresa
+   * podría quedar vinculado y contaminar el análisis presupuestado vs. real.
+   */
+  private async validarGastoFijoDelTenant(
+    auth: CurrentAuth,
+    gastoFijoId: string | null | undefined,
+  ): Promise<void> {
+    if (gastoFijoId === undefined || gastoFijoId === null) return;
+    const gasto = await this.prisma.gastoFijoEstructura.findFirst({
+      where: { id: gastoFijoId, tenantId: auth.tenantId },
+      select: { id: true },
+    });
+    if (!gasto) {
+      throw new NotFoundException('Ese gasto fijo no existe en esta empresa.');
+    }
   }
 
   /**
@@ -353,7 +381,8 @@ export class RecurrentesService {
    * Lo que la estructura DEBERÍA costar contra lo que realmente se pagó.
    *
    * El presupuestado sale de `GastoFijoEstructura`, que es lo que el motor usa
-   * para el punto de equilibrio; el real sale de los egresos del período. Son
+   * para el punto de equilibrio; el real sale de los egresos registrados en
+   * el período, aunque sigan pendientes de pago. Son
    * dos números distintos y ninguno reemplaza al otro: es el mismo patrón
    * "cotizado vs. real" que ya usamos en las órdenes, aplicado a la estructura.
    *

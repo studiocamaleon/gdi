@@ -24,6 +24,7 @@ import {
   PauseIcon,
   PlayIcon,
   PrinterIcon,
+  RefreshCwIcon,
   ScissorsIcon,
   SearchIcon,
   SquareDashedIcon,
@@ -37,6 +38,8 @@ import {
 
 import {
   codigoVisibleItem,
+  bucketKanbanProduccion,
+  debeRefrescarTablero,
   etiquetaDuracion,
   etiquetaEntrega,
   etiquetaMomento,
@@ -47,6 +50,7 @@ import {
   itemConRetraso,
   itemIniciado,
   itemTerminado,
+  esItemEnCursoOperativo,
   lineaEstado,
   MOTIVOS_PAUSA,
   resolverEstacionDePaso,
@@ -55,10 +59,12 @@ import {
   pasoReabrible,
   prioridadDerivada,
   progresoItem,
+  textoEntregaRelativa,
   SIN_ESTACION_KEY,
   TERCERIZADOS_KEY,
   TIEMPO_FUENTE_LABELS,
   type TableroItemData,
+  type AlcanceTableroProduccion,
   type TableroPasoAccion,
   type TableroPasoData,
   type TableroPrioridad,
@@ -89,6 +95,14 @@ import { useConfigRegional } from "@/components/navigation/config-regional-provi
 import { SimulacionView } from "@/components/produccion/simulacion-view";
 import { formatBytes, urlDeArchivo, type Archivo } from "@/lib/archivos";
 import { listarArchivos } from "@/lib/archivos-api";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban" | "simulacion";
@@ -297,12 +311,12 @@ function stepStatus(paso: TableroPasoData): StepStatus {
  * `desdeIso`, refrescado cada 30 s (suficiente para un taller).
  */
 function ElapsedMin({ desdeIso }: { desdeIso: string }) {
-  const [, tick] = React.useReducer((n: number) => n + 1, 0);
+  const [ahora, setAhora] = React.useState(() => Date.now());
   React.useEffect(() => {
-    const timer = setInterval(tick, 30_000);
+    const timer = setInterval(() => setAhora(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
-  const min = Math.max(1, (Date.now() - new Date(desdeIso).getTime()) / 60_000);
+  const min = Math.max(1, (ahora - new Date(desdeIso).getTime()) / 60_000);
   return <>{etiquetaDuracion(min)}</>;
 }
 
@@ -464,7 +478,7 @@ const ItemRow = React.memo(function ItemRow({ item, eta, onOpen }: { item: ItemV
       <div className="tab-row-right">
         <div className={`tab-due ${item.delayed && !item.blocked ? "delayed" : ""}`}>
           <span className="due-label">{item.dueLabel}</span>
-          <span className="due-in">{item.dueIn === "Hoy" ? "vence hoy" : `${item.dueIn} restantes`}</span>
+          <span className="due-in">{textoEntregaRelativa(item.dueDays, item.dueIn)}</span>
           <EtaLine item={item} eta={eta} />
         </div>
         <div className="tab-assigned" title={`Estación actual: ${item.station}`}>
@@ -516,6 +530,7 @@ function FiltersBar({
             key={status.k}
             type="button"
             className={filters.status === status.k ? "on" : ""}
+            aria-pressed={filters.status === status.k}
             onClick={() => setFilters((current) => ({ ...current, status: status.k as StatusFilter }))}
           >
             {status.l}
@@ -536,6 +551,7 @@ function FiltersBar({
             key={priority.k}
             type="button"
             className={filters.priority === priority.k ? "on" : ""}
+            aria-pressed={filters.priority === priority.k}
             onClick={() => setFilters((current) => ({ ...current, priority: priority.k as PriorityFilter }))}
           >
             {priority.l}
@@ -595,11 +611,15 @@ function PasoAcciones({
   item,
   step,
   busy,
+  canManage,
+  canSupervise,
   onAccion,
 }: {
   item: ItemView;
   step: StepView;
   busy: boolean;
+  canManage: boolean;
+  canSupervise: boolean;
   onAccion: AccionHandler;
 }) {
   const [bloqueando, setBloqueando] = React.useState(false);
@@ -612,6 +632,8 @@ function PasoAcciones({
   const paso = step.paso;
   const esActual = item.currentStep?.paso.id === paso.id;
   const esCronometro = paso.modoRegistro === "cronometro";
+
+  if (!canManage) return null;
 
   // Un paso TERCERIZADO es una compra al proveedor, no trabajo del taller: no se
   // ejecuta desde el tablero (se avanza en "Compras / Tercerizados" de la OT).
@@ -637,7 +659,7 @@ function PasoAcciones({
 
   if (paso.estado === "hecho") {
     // Reabrir sólo el último hecho: deshacer en el medio rompe la secuencia.
-    if (!pasoReabrible(item.data, paso)) return null;
+    if (!canSupervise || !pasoReabrible(item.data, paso)) return null;
     return (
       <div className="ds-acciones">
         <button
@@ -652,6 +674,7 @@ function PasoAcciones({
     );
   }
   if (paso.estado === "bloqueado") {
+    if (!canSupervise) return null;
     return (
       <div className="ds-acciones">
         <button
@@ -848,10 +871,18 @@ function PasoAcciones({
 function DetailRuta({
   item,
   busy,
+  canManage,
+  canSupervise,
+  estaciones,
+  estacionIdsEjecutables,
   onAccion,
 }: {
   item: ItemView;
   busy: boolean;
+  canManage: boolean;
+  canSupervise: boolean;
+  estaciones: Estacion[];
+  estacionIdsEjecutables: string[] | null;
   onAccion: AccionHandler;
 }) {
   if (item.sinRuta) {
@@ -867,6 +898,13 @@ function DetailRuta({
     <div className="detail-route">
       {item.steps.map((step, index) => {
         const paso = step.paso;
+        const estacion = resolverEstacionDePaso(estaciones, paso);
+        const puedeEjecutarPaso =
+          canSupervise ||
+          (canManage &&
+            estacion != null &&
+            estacionIdsEjecutables != null &&
+            estacionIdsEjecutables.includes(estacion.id));
         const dur = etiquetaDuracion(paso.duracionEstimadaMin);
         // El paso ACTIVO (la frontera de la secuencia) se resalta con borde
         // para ubicar de un vistazo dónde está parado el trabajo.
@@ -916,7 +954,14 @@ function DetailRuta({
                   {paso.completadoPorNombre ? ` · por ${paso.completadoPorNombre}` : ""}
                 </div>
               ) : null}
-              <PasoAcciones item={item} step={step} busy={busy} onAccion={onAccion} />
+              <PasoAcciones
+                item={item}
+                step={step}
+                busy={busy}
+                canManage={puedeEjecutarPaso}
+                canSupervise={canSupervise}
+                onAccion={onAccion}
+              />
             </div>
           </div>
         );
@@ -1072,11 +1117,21 @@ function DetailActividad({ eventos, cargando }: { eventos: OrdenTrabajoEvento[];
 function ItemDetailSheet({
   item,
   busy,
+  canManage,
+  canSupervise,
+  estaciones,
+  estacionIdsEjecutables,
+  alcance,
   onAccion,
   onClose,
 }: {
   item: ItemView | undefined;
   busy: boolean;
+  canManage: boolean;
+  canSupervise: boolean;
+  estaciones: Estacion[];
+  estacionIdsEjecutables: string[] | null;
+  alcance: AlcanceTableroProduccion;
   onAccion: AccionHandler;
   onClose: () => void;
 }) {
@@ -1089,6 +1144,11 @@ function ItemDetailSheet({
   // al abrir el sheet (y se refresca si cambió la orden seleccionada).
   React.useEffect(() => {
     if (!ordenId) return;
+    if (alcance === "operario") {
+      setDetalle(null);
+      setCargandoDetalle(false);
+      return;
+    }
     let vigente = true;
     setCargandoDetalle(true);
     getOrdenTrabajo(ordenId)
@@ -1104,7 +1164,7 @@ function ItemDetailSheet({
     return () => {
       vigente = false;
     };
-  }, [ordenId]);
+  }, [alcance, ordenId]);
 
   // Esc cierra el sheet (sólo mientras hay un item abierto).
   const abierto = Boolean(item);
@@ -1169,7 +1229,7 @@ function ItemDetailSheet({
             <div className="due">
               <div className="lbl">Entrega</div>
               <div className="val">{item.dueLabel}</div>
-              <div className="sub">{item.dueIn === "Hoy" ? "vence hoy" : `${item.dueIn} restantes`}</div>
+              <div className="sub">{textoEntregaRelativa(item.dueDays, item.dueIn)}</div>
             </div>
           </div>
 
@@ -1183,27 +1243,49 @@ function ItemDetailSheet({
           <div className="item-meta-strip">
             <div className="m"><div className="k">Avance</div><div className="v">{item.progressPct}%<span className="sub">· {doneSteps}/{totalSteps} pasos</span></div></div>
             <div className="m"><div className="k">Cantidad</div><div className="v">{item.qtyLabel}</div></div>
-            <div className="m"><div className="k">Vendedor</div><div className="v"><span className="mini-av">{iniciales(item.vendedor)}</span>{item.vendedor.split(" ")[0]}</div></div>
+            {alcance !== "operario" ? <div className="m"><div className="k">Vendedor</div><div className="v"><span className="mini-av">{iniciales(item.vendedor)}</span>{item.vendedor.split(" ")[0]}</div></div> : null}
             <div className="m"><div className="k">Estación actual</div><div className="v">{item.station}</div></div>
             <div className="m"><div className="k">Tiempo estimado</div><div className="v mono">{estimadoTotal ?? "—"}</div></div>
           </div>
 
-          <div className="sheet-tabs">
-            {[
+          <div className="sheet-tabs" role="tablist" aria-label="Detalle del item">
+            {(alcance === "operario" ? [
+              { k: "ruta", l: "Ruta de producción", n: totalSteps },
+            ] : [
               { k: "ruta", l: "Ruta de producción", n: totalSteps },
               { k: "materiales", l: "Materiales", n: materiales.length },
               { k: "archivos", l: "Archivos", n: item.data.archivosCount },
               { k: "actividad", l: "Actividad", n: eventos.length },
-            ].map((entry) => (
-              <button key={entry.k} type="button" className={tab === entry.k ? "on" : ""} onClick={() => setTab(entry.k)}>
+            ]).map((entry) => (
+              <button
+                key={entry.k}
+                type="button"
+                role="tab"
+                id={`item-tab-${entry.k}`}
+                aria-controls="item-tab-panel"
+                aria-selected={tab === entry.k}
+                tabIndex={tab === entry.k ? 0 : -1}
+                className={tab === entry.k ? "on" : ""}
+                onClick={() => setTab(entry.k)}
+              >
                 {entry.l}<span className="ct">{entry.n}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="sheet-body">
-          {tab === "ruta" ? <DetailRuta item={item} busy={busy} onAccion={onAccion} /> : null}
+        <div className="sheet-body" id="item-tab-panel" role="tabpanel" aria-labelledby={`item-tab-${tab}`}>
+          {tab === "ruta" ? (
+            <DetailRuta
+              item={item}
+              busy={busy}
+              canManage={canManage}
+              canSupervise={canSupervise}
+              estaciones={estaciones}
+              estacionIdsEjecutables={estacionIdsEjecutables}
+              onAccion={onAccion}
+            />
+          ) : null}
           {tab === "materiales" ? <DetailMateriales materiales={materiales} cargando={cargandoDetalle} /> : null}
           {tab === "archivos" ? <DetailArchivos itemId={item.id} /> : null}
           {tab === "actividad" ? <DetailActividad eventos={eventos} cargando={cargandoDetalle} /> : null}
@@ -1218,9 +1300,9 @@ function ItemDetailSheet({
                 : null}
           </div>
           <div className="spacer" />
-          <Link className="btn" href={`/produccion/ordenes/${item.data.ordenId}`}>
+          {alcance !== "operario" ? <Link className="btn" href={`/produccion/ordenes/${item.data.ordenId}`}>
             Ver orden {item.otCode}
-          </Link>
+          </Link> : null}
         </div>
       </aside>
     </>
@@ -1660,12 +1742,14 @@ function StationGrid({
 function TaskCard({
   task,
   inMesa,
+  canManage,
   onMoveToMesa,
   onOpen,
   dragHint,
 }: {
   task: StationTask;
   inMesa: boolean;
+  canManage: boolean;
   onMoveToMesa: (id: string) => void;
   onOpen: (id: string) => void;
   dragHint?: boolean;
@@ -1691,7 +1775,7 @@ function TaskCard({
   return (
     <div
       className={`sta-task status-${statusCls} ${task.overdue ? "overdue" : ""} ${task.urgent ? "urgent" : ""} ${inMesa ? "in-mesa" : ""} ${dragging ? "dragging" : ""}`}
-      draggable
+      draggable={canManage}
       onDragStart={(event) => {
         event.dataTransfer.setData("text/paso-id", taskId(task));
         event.dataTransfer.effectAllowed = "move";
@@ -1700,7 +1784,7 @@ function TaskCard({
       onDragEnd={() => setDragging(false)}
     >
       <div className="sta-task-row1">
-        <span className="grip" title="Arrastrá para mover"><GripVerticalIcon /></span>
+        {canManage ? <span className="grip" title="Arrastrá para mover"><GripVerticalIcon /></span> : null}
         <span className="code">{task.item.code}</span>
         <span className={`task-status ${statusCls}`}>{statusLabel}</span>
         {task.overdue ? <span className="task-vencido"><BanIcon />VENCIDO</span> : null}
@@ -1714,11 +1798,11 @@ function TaskCard({
         {task.step.paso.motivoBloqueo ? <div className="meta sub-detail"><span className="v">{task.step.paso.motivoBloqueo}</span></div> : null}
       </div>
       <div className="sta-task-foot">
-        <div className="ts"><ClockIcon /><span>{task.item.dueLabel}</span><span className="sep">·</span><span className={task.overdue ? "warn" : ""}>{task.item.dueIn}</span></div>
+        <div className="ts"><ClockIcon /><span>{task.item.dueLabel}</span><span className="sep">·</span><span className={task.overdue ? "warn" : ""}>{textoEntregaRelativa(task.item.dueDays, task.item.dueIn)}</span></div>
         <div className="actions">
-          <button type="button" className="sta-btn ghost" onClick={(event) => { event.stopPropagation(); onMoveToMesa(taskId(task)); }}>
+          {canManage ? <button type="button" className="sta-btn ghost" onClick={(event) => { event.stopPropagation(); onMoveToMesa(taskId(task)); }}>
             {inMesa ? <><ArrowLeftIcon />Devolver</> : <>Mover a mi mesa<ArrowRightIcon /></>}
-          </button>
+          </button> : null}
           <button type="button" className="sta-btn primary" onClick={(event) => { event.stopPropagation(); onOpen(task.item.id); }}>Ver detalles</button>
         </div>
       </div>
@@ -1733,6 +1817,7 @@ function StationDetail({
   medianas,
   noLaborables,
   stationKey,
+  canManage,
   onMesa,
   onBack,
   onOpen,
@@ -1742,6 +1827,7 @@ function StationDetail({
   medianas: Map<string, number>;
   noLaborables: Set<string>;
   stationKey: string;
+  canManage: boolean;
   onMesa: (pasoId: string, en: boolean) => void;
   onBack: () => void;
   onOpen: (id: string) => void;
@@ -1777,12 +1863,14 @@ function StationDetail({
   };
 
   const permitirSoltar = (zona: "mesa" | "shared") => (event: React.DragEvent) => {
+    if (!canManage) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setDragOver(zona);
   };
 
   const soltarEn = (zona: "mesa" | "shared") => (event: React.DragEvent) => {
+    if (!canManage) return;
     event.preventDefault();
     setDragOver(null);
     const pasoId = event.dataTransfer.getData("text/paso-id");
@@ -1855,7 +1943,7 @@ function StationDetail({
           { k: "mesa", l: "Mi mesa" },
           { k: "urgentes", l: "Solo urgentes" },
         ].map((entry) => (
-          <button key={entry.k} type="button" className={`chip ${filter === entry.k ? "on" : ""}`} onClick={() => setFilter(entry.k)}>{entry.l}</button>
+          <button key={entry.k} type="button" aria-pressed={filter === entry.k} className={`chip ${filter === entry.k ? "on" : ""}`} onClick={() => setFilter(entry.k)}>{entry.l}</button>
         ))}
       </div>
 
@@ -1868,8 +1956,8 @@ function StationDetail({
             onDragLeave={() => setDragOver((current) => (current === "mesa" ? null : current))}
             onDrop={soltarEn("mesa")}
           >
-            {mesaTasks.length === 0 ? <div className="sta-mesa-empty"><div className="ic"><SquareDashedIcon /></div><div className="ttl">Arrastrá tareas acá para trabajar en ellas</div><div className="sub">Las tareas pasan a tu mesa cuando las tomás de la fila compartida.</div></div> : null}
-            {visibleMesa.map((task) => <TaskCard key={taskId(task)} task={task} inMesa onMoveToMesa={toggleMesa} onOpen={onOpen} />)}
+            {mesaTasks.length === 0 ? <div className="sta-mesa-empty"><div className="ic"><SquareDashedIcon /></div><div className="ttl">{canManage ? "Arrastrá tareas acá para trabajar en ellas" : "No hay tareas en tu mesa"}</div><div className="sub">{canManage ? "Las tareas pasan a tu mesa cuando las tomás de la fila compartida." : "Esta vista es de sólo lectura."}</div></div> : null}
+            {visibleMesa.map((task) => <TaskCard key={taskId(task)} task={task} inMesa canManage={canManage} onMoveToMesa={toggleMesa} onOpen={onOpen} />)}
           </div>
         </div>
 
@@ -1882,7 +1970,7 @@ function StationDetail({
             onDrop={soltarEn("shared")}
           >
             {visibleShared.length === 0 ? <div className="sta-shared-empty">{filter === "mesa" ? "Solo se muestran las tareas de tu mesa." : "No quedan tareas pendientes que coincidan con el filtro."}</div> : null}
-            {visibleShared.map((task, index) => <TaskCard key={taskId(task)} task={task} inMesa={false} onMoveToMesa={toggleMesa} onOpen={onOpen} dragHint={index === 0 && mesaTasks.length === 0 && filter === "todos"} />)}
+            {visibleShared.map((task, index) => <TaskCard key={taskId(task)} task={task} inMesa={false} canManage={canManage} onMoveToMesa={toggleMesa} onOpen={onOpen} dragHint={canManage && index === 0 && mesaTasks.length === 0 && filter === "todos"} />)}
           </div>
         </div>
       </div>
@@ -1896,6 +1984,8 @@ function ByStationView({
   medianas,
   noLaborables,
   llegadasHoyMin,
+  canManage,
+  estacionIdsEjecutables,
   onMesa,
   onOpen,
 }: {
@@ -1904,21 +1994,29 @@ function ByStationView({
   medianas: Map<string, number>;
   noLaborables: Set<string>;
   llegadasHoyMin: Map<string, number>;
+  canManage: boolean;
+  estacionIdsEjecutables: string[] | null;
   onMesa: (pasoId: string, en: boolean) => void;
   onOpen: (id: string) => void;
 }) {
   const [stationKey, setStationKey] = React.useState<string | null>(null);
-  if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} stationKey={stationKey} onMesa={onMesa} onBack={() => setStationKey(null)} onOpen={onOpen} />;
+  const puedeEjecutarEstacion =
+    stationKey != null &&
+    canManage &&
+    (estacionIdsEjecutables === null ||
+      estacionIdsEjecutables.includes(stationKey));
+  if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} stationKey={stationKey} canManage={puedeEjecutarEstacion} onMesa={onMesa} onBack={() => setStationKey(null)} onOpen={onOpen} />;
   return <StationGrid items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onSelect={setStationKey} />;
 }
 
 // ── Kanban ───────────────────────────────────────────────────────────────
 
 function getKanbanBucket(item: ItemView): KanbanBucketKey {
-  if (!item.started) return "not-started";
-  if (item.dueDays === 0) return "today";
-  if (item.delayed) return "delayed";
-  return "active";
+  return bucketKanbanProduccion({
+    iniciado: item.started,
+    atrasado: item.delayed,
+    diasEntrega: item.dueDays,
+  });
 }
 
 function kanbanStepIcon(item: ItemView) {
@@ -1952,7 +2050,7 @@ const KanbanCard = React.memo(function KanbanCard({ item, onOpen }: { item: Item
       </div>
       <div className="kan-progress" aria-label={`Avance ${item.progressPct}%`}><span style={{ width: `${item.progressPct}%` }} /></div>
       <div className="kan-foot">
-        <span className={`due ${item.delayed || item.dueDays === 0 ? "warn" : ""}`}><ClockIcon />{item.dueLabel} · {item.dueIn}</span>
+        <span className={`due ${item.delayed || item.dueDays === 0 ? "warn" : ""}`}><ClockIcon />{item.dueLabel} · {textoEntregaRelativa(item.dueDays, item.dueIn)}</span>
         <span className="op"><span className="mini-av">{iniciales(item.vendedor)}</span>{item.vendedor.split(" ")[0]}</span>
       </div>
     </button>
@@ -2040,12 +2138,23 @@ function ItemsList({
 
 export function TableroProduccion({
   initialItems,
+  initialMeta,
+  initialLoadError = null,
+  initialPartialWarning = null,
   estaciones,
   duracionesFamilias,
   diasNoLaborables,
   tiempoEntrePasosMin = 0,
 }: {
   initialItems: TableroItemData[];
+  initialMeta: {
+    alcance: AlcanceTableroProduccion;
+    puedeGestionar: boolean;
+    estacionIdsEjecutables: string[] | null;
+    vendedorSinVinculo: boolean;
+  };
+  initialLoadError?: string | null;
+  initialPartialWarning?: string | null;
   estaciones: Estacion[];
   duracionesFamilias: DuracionFamilia[];
   diasNoLaborables: DiaNoLaborable[];
@@ -2053,15 +2162,25 @@ export function TableroProduccion({
   tiempoEntrePasosMin?: number;
 }) {
   const { zonaHoraria } = useConfigRegional();
+  const permisoEjecutar = usePuede("produccion.ejecutar");
+  const permisoSupervisar = usePuede("produccion.supervisar");
   const [items, setItems] = React.useState<TableroItemData[]>(initialItems);
+  const [meta, setMeta] = React.useState(initialMeta);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
   const [defaultMode, setDefaultMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
   const [tabMenu, setTabMenu] = React.useState<{ mode: Mode; x: number; y: number } | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [loadError, setLoadError] = React.useState<string | null>(initialLoadError);
+  const [syncError, setSyncError] = React.useState<string | null>(null);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [actualizadoEl, setActualizadoEl] = React.useState<Date | null>(
+    initialLoadError ? null : new Date(),
+  );
   const [filters, setFilters] = React.useState<{ status: StatusFilter; priority: PriorityFilter; query: string }>({ status: "all", priority: "all", query: "" });
   const searchParams = useSearchParams();
+  const canManage = (permisoEjecutar || permisoSupervisar) && meta.puedeGestionar;
 
   React.useEffect(() => {
     const savedMode = readStoredBoardMode();
@@ -2085,23 +2204,52 @@ export function TableroProduccion({
   // re-render reemplaza la card arrastrada y corta el drop).
   const mutacionesRef = React.useRef(0);
   const dragActivoRef = React.useRef(false);
-  const ultimoSnapshotRef = React.useRef<string | null>(null);
+  const ultimoSnapshotRef = React.useRef<string | null>(JSON.stringify(initialItems));
+  const montadoRef = React.useRef(true);
+
+  React.useEffect(() => () => {
+    montadoRef.current = false;
+  }, []);
+
+  const refrescar = React.useCallback(async (forzar = false) => {
+    if (
+      !debeRefrescarTablero({
+        pestanaOculta: !forzar && document.hidden,
+        mutacionesEnCurso: mutacionesRef.current,
+        arrastreActivo: dragActivoRef.current,
+      })
+    ) return;
+    if (forzar) setRefreshing(true);
+    try {
+      const respuesta = await getTableroProduccion();
+      if (!montadoRef.current || mutacionesRef.current > 0 || dragActivoRef.current) return;
+      const snapshot = JSON.stringify(respuesta.items);
+      if (snapshot !== ultimoSnapshotRef.current) {
+        ultimoSnapshotRef.current = snapshot;
+        setItems(respuesta.items);
+      }
+      setMeta({
+        alcance: respuesta.alcance,
+        puedeGestionar: respuesta.puedeGestionar,
+        estacionIdsEjecutables: respuesta.estacionIdsEjecutables,
+        vendedorSinVinculo: respuesta.vendedorSinVinculo,
+      });
+      setLoadError(null);
+      setSyncError(null);
+      setActualizadoEl(new Date());
+    } catch (err) {
+      if (!montadoRef.current) return;
+      setSyncError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo actualizar el tablero. Se conservan los últimos datos.",
+      );
+    } finally {
+      if (montadoRef.current && forzar) setRefreshing(false);
+    }
+  }, []);
 
   React.useEffect(() => {
-    let vivo = true;
-    const refrescar = async () => {
-      if (document.hidden || mutacionesRef.current > 0 || dragActivoRef.current) return;
-      try {
-        const { items: frescos } = await getTableroProduccion();
-        if (!vivo || mutacionesRef.current > 0 || dragActivoRef.current) return;
-        const snapshot = JSON.stringify(frescos);
-        if (snapshot === ultimoSnapshotRef.current) return; // sin cambios: ni un re-render
-        ultimoSnapshotRef.current = snapshot;
-        setItems(frescos);
-      } catch {
-        // Error de red: se conserva el último estado (no parpadea).
-      }
-    };
     const id = window.setInterval(() => void refrescar(), POLL_TABLERO_MS);
     const onFocus = () => {
       if (!document.hidden) void refrescar();
@@ -2114,7 +2262,6 @@ export function TableroProduccion({
     window.addEventListener("dragend", onDragEnd);
     window.addEventListener("drop", onDragEnd);
     return () => {
-      vivo = false;
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener("focus", onFocus);
@@ -2122,7 +2269,7 @@ export function TableroProduccion({
       window.removeEventListener("dragend", onDragEnd);
       window.removeEventListener("drop", onDragEnd);
     };
-  }, []);
+  }, [refrescar]);
 
   React.useEffect(() => {
     if (!tabMenu) return undefined;
@@ -2194,6 +2341,7 @@ export function TableroProduccion({
       accion: TableroPasoAccion,
       opts?: { motivo?: string; motivoDetalle?: string; tiempoDeclaradoMin?: number },
     ) => {
+      if (!canManage) return;
       setBusy(true);
       setError(null);
       mutacionesRef.current += 1;
@@ -2210,7 +2358,7 @@ export function TableroProduccion({
         setBusy(false);
       }
     },
-    [],
+    [canManage],
   );
 
   /**
@@ -2219,6 +2367,7 @@ export function TableroProduccion({
    * re-proyectado (trae el nombre real del dueño) o se revierte.
    */
   const handleMesa = React.useCallback(async (pasoId: string, en: boolean) => {
+    if (!canManage) return;
     const previo = items;
     mutacionesRef.current += 1;
     setItems((current) =>
@@ -2233,14 +2382,18 @@ export function TableroProduccion({
     );
     try {
       const actualizado = await mesaPasoProduccion(pasoId, en);
-      setItems((current) => current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)));
+      setItems((current) =>
+        actualizado.pasos.length === 0
+          ? current.filter((entry) => entry.id !== actualizado.id)
+          : current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)),
+      );
     } catch (err) {
       setItems(previo);
       setError(err instanceof Error ? err.message : "No se pudo mover el paso.");
     } finally {
       mutacionesRef.current -= 1;
     }
-  }, [items]);
+  }, [canManage, items]);
 
   const tabEntries: Array<{ mode: Mode; label: string; count?: number }> = [
     { mode: "items", label: BOARD_MODE_LABELS.items, count: views.length },
@@ -2266,7 +2419,15 @@ export function TableroProduccion({
 
   const filtered = React.useMemo(() => {
     return views.filter((item) => {
-      if (filters.status === "in-progress" && (item.blocked || item.delayed)) return false;
+      if (
+        filters.status === "in-progress" &&
+        !esItemEnCursoOperativo({
+          iniciado: item.started,
+          terminado: item.finished,
+          bloqueado: item.blocked,
+          atrasado: item.delayed,
+        })
+      ) return false;
       if (filters.status === "blocked" && !item.blocked) return false;
       if (filters.status === "delayed" && (!item.delayed || item.blocked)) return false;
       if (filters.status === "due-today" && item.dueDays !== 0) return false;
@@ -2283,7 +2444,14 @@ export function TableroProduccion({
   const counts = {
     all: views.length,
     shown: filtered.length,
-    inProgress: views.filter((item) => !item.blocked && !item.delayed).length,
+    inProgress: views.filter((item) =>
+      esItemEnCursoOperativo({
+        iniciado: item.started,
+        terminado: item.finished,
+        bloqueado: item.blocked,
+        atrasado: item.delayed,
+      }),
+    ).length,
     blocked: views.filter((item) => item.blocked).length,
     delayed: views.filter((item) => item.delayed && !item.blocked).length,
     today: views.filter((item) => item.dueDays === 0).length,
@@ -2296,9 +2464,44 @@ export function TableroProduccion({
         <div className="page-head">
           <div className="title-block">
             <h1>Tablero de producción en tiempo real</h1>
-            <div className="sub">Items de las órdenes emitidas, con su ruta real de pasos. Se actualiza solo, sin recargar. Click en un item para ver el detalle y ejecutar acciones.</div>
+            <div className="sub">
+              Items de las órdenes emitidas, con cliente y ruta real de pasos.
+              {actualizadoEl
+                ? ` Actualizado a las ${actualizadoEl.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`
+                : " Todavía no se pudo actualizar."}
+            </div>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            loading={refreshing}
+            loadingText="Actualizando"
+            onClick={() => void refrescar(true)}
+          >
+            <RefreshCwIcon data-icon="inline-start" />
+            Actualizar
+          </Button>
         </div>
+
+        {initialPartialWarning ? (
+          <Alert>
+            <AlertTitle>Configuración parcialmente disponible</AlertTitle>
+            <AlertDescription>{initialPartialWarning}</AlertDescription>
+          </Alert>
+        ) : null}
+        {syncError ? (
+          <Alert variant="destructive">
+            <AlertTitle>El tablero no se está actualizando</AlertTitle>
+            <AlertDescription>
+              Se conservan los últimos datos válidos. {syncError}
+            </AlertDescription>
+            <AlertAction>
+              <Button type="button" variant="outline" size="sm" onClick={() => void refrescar(true)}>
+                Reintentar
+              </Button>
+            </AlertAction>
+          </Alert>
+        ) : null}
 
         <div className="d-kpi-row">
           <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Items en producción</span></div><div className="d-kpi-val"><span className="num">{views.length}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">de órdenes emitidas</span></div></div>
@@ -2308,16 +2511,35 @@ export function TableroProduccion({
           <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Vencen hoy</span></div><div className="d-kpi-val"><span className="num">{counts.today}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">prioridad de despacho</span></div></div>
         </div>
 
-        {error ? <div className="tab-error" role="alert">{error}</div> : null}
+        {error ? (
+          <Alert variant="destructive">
+            <AlertTitle>No se pudo completar la acción</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
 
-        <div className="dash-tabs">
+        <div className="dash-tabs" role="tablist" aria-label="Vistas del tablero de producción">
           {tabEntries.map((entry) => (
             <button
               key={entry.mode}
               type="button"
+              role="tab"
+              id={`tablero-tab-${entry.mode}`}
+              aria-controls="tablero-panel-vista"
+              tabIndex={mode === entry.mode ? 0 : -1}
               className={`dash-tab ${mode === entry.mode ? "on" : ""}`}
               aria-selected={mode === entry.mode}
               onClick={() => setMode(entry.mode)}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                const actual = tabEntries.findIndex((tab) => tab.mode === entry.mode);
+                const delta = event.key === "ArrowRight" ? 1 : -1;
+                const siguiente = tabEntries[(actual + delta + tabEntries.length) % tabEntries.length];
+                if (!siguiente) return;
+                setMode(siguiente.mode);
+                document.getElementById(`tablero-tab-${siguiente.mode}`)?.focus();
+              }}
               onContextMenu={(event) => {
                 event.preventDefault();
                 setTabMenu({ mode: entry.mode, x: event.clientX, y: event.clientY });
@@ -2344,11 +2566,35 @@ export function TableroProduccion({
           </div>
         ) : null}
 
-        {views.length === 0 ? (
+        <div
+          id="tablero-panel-vista"
+          role="tabpanel"
+          aria-labelledby={`tablero-tab-${mode}`}
+        >
+        {loadError && views.length === 0 ? (
+          <Alert variant="destructive">
+            <AlertTitle>No se pudo cargar el tablero</AlertTitle>
+            <AlertDescription>{loadError}</AlertDescription>
+            <AlertAction>
+              <Button type="button" variant="outline" size="sm" onClick={() => void refrescar(true)}>
+                Reintentar
+              </Button>
+            </AlertAction>
+          </Alert>
+        ) : meta.vendedorSinVinculo ? (
           <div className="empty-results">
-            No hay órdenes en producción. Cuando emitas una orden de trabajo al taller,
-            sus items aparecen acá con su ruta de pasos.{" "}
-            <Link href="/produccion/ordenes">Ir a Órdenes de trabajo</Link>
+            Tu usuario vendedor no está vinculado a un empleado. Vinculalo desde
+            Configuración para ver solamente tus órdenes.
+          </div>
+        ) : views.length === 0 ? (
+          <div className="empty-results">
+            {meta.alcance === "operario" ? (
+              "No tenés tareas reclamadas en tu mesa de trabajo."
+            ) : (
+              <>No hay órdenes en producción. Cuando emitas una orden de trabajo al taller,
+              sus items aparecen acá con su ruta de pasos.{" "}
+              <Link href="/produccion/ordenes">Ir a Órdenes de trabajo</Link></>
+            )}
           </div>
         ) : (
           <>
@@ -2358,7 +2604,7 @@ export function TableroProduccion({
                 <ItemsList items={filtered} sim={sim} onOpen={setSelectedId} />
               </>
             ) : null}
-            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onMesa={handleMesa} onOpen={setSelectedId} /> : null}
+            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} canManage={canManage} estacionIdsEjecutables={meta.estacionIdsEjecutables} onMesa={handleMesa} onOpen={setSelectedId} /> : null}
             {mode === "simulacion" ? (
           <SimulacionView
             items={items}
@@ -2376,9 +2622,20 @@ export function TableroProduccion({
             ) : null}
           </>
         )}
+        </div>
       </div>
 
-      <ItemDetailSheet item={selectedItem} busy={busy} onAccion={handleAccion} onClose={() => setSelectedId(null)} />
+      <ItemDetailSheet
+        item={selectedItem}
+        busy={busy}
+        canManage={canManage}
+        canSupervise={permisoSupervisar}
+        estaciones={estaciones}
+        estacionIdsEjecutables={meta.estacionIdsEjecutables}
+        alcance={meta.alcance}
+        onAccion={handleAccion}
+        onClose={() => setSelectedId(null)}
+      />
     </div>
   );
 }

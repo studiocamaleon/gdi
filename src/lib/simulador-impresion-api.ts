@@ -8,14 +8,18 @@ import { apiRequest } from "@/lib/api";
  * Ver docs/simulador-impresion-diseno.md
  */
 
-export type SimuladorPieza = { anchoMm: number; altoMm: number; cantidad: number };
+export type SimuladorPieza = {
+  anchoMm: number;
+  altoMm: number;
+  cantidad: number;
+};
 
 export type SimuladorJob = {
   pasoId: string;
   itemId: string;
   ordenId: string;
   codigo: string;
-  cliente: string;
+  cliente: string | null;
   producto: string;
   /** "YYYY-MM-DD" o null. */
   fechaEntrega: string | null;
@@ -28,6 +32,7 @@ export type SimuladorJob = {
     sku: string;
     anchoMm: number | null;
     precioMl: number | null;
+    compatibilidadClave: string;
   } | null;
   /** Largo de rollo consumido al cotizar este item por separado (mm). */
   consumoCotizadoMm: number | null;
@@ -43,6 +48,7 @@ export type SimuladorAncho = {
   anchoMm: number;
   precioMl: number | null;
   stockMl: number | null;
+  compatibilidadClave: string;
 };
 
 export type SimuladorMaterial = {
@@ -54,6 +60,7 @@ export type SimuladorMaterial = {
 export type SimuladorData = {
   jobs: SimuladorJob[];
   materiales: SimuladorMaterial[];
+  puedeVerImportes: boolean;
 };
 
 export async function getSimuladorImpresion() {
@@ -107,10 +114,16 @@ export type SimuladorNestingRequest = {
   grupos: Array<{ key: string; pasoIds: string[]; anchosMm: number[] }>;
 };
 
-export async function simularNesting(body: SimuladorNestingRequest, signal?: AbortSignal) {
-  return apiRequest<{ grupos: SimuladorNestingGrupo[] }>("/produccion/simulador/nesting", {
-    method: "POST",
-    body: JSON.stringify(body),
-    signal,
-  });
+export async function simularNesting(
+  body: SimuladorNestingRequest,
+  signal?: AbortSignal,
+) {
+  return apiRequest<{ grupos: SimuladorNestingGrupo[] }>(
+    "/produccion/simulador/nesting",
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal,
+    },
+  );
 }

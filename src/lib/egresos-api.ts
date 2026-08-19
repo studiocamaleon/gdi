@@ -118,7 +118,7 @@ export async function crearRecurrente(body: {
   diaVencimiento?: number;
   vigenteDesde: string;
   vigenteHasta?: string;
-  gastoFijoEstructuraId?: string;
+  gastoFijoEstructuraId?: string | null;
 }): Promise<GastoRecurrente> {
   return apiRequest<GastoRecurrente>("/egresos/recurrentes", {
     method: "POST",
@@ -135,7 +135,7 @@ export async function editarRecurrente(
     diaVencimiento?: number;
     vigenteHasta?: string;
     activo?: boolean;
-    gastoFijoEstructuraId?: string;
+    gastoFijoEstructuraId?: string | null;
   },
 ): Promise<GastoRecurrente> {
   return apiRequest<GastoRecurrente>(`/egresos/recurrentes/${id}`, {

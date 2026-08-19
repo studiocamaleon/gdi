@@ -20,6 +20,7 @@ import {
   FRECUENCIAS_GASTO_FIJO,
   FRECUENCIA_LABEL,
   getGastosFijos,
+  toggleGastoFijo,
   updateGastoFijo,
   type FrecuenciaGastoFijo,
   type GastoFijo,
@@ -236,7 +237,21 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
   // El total suma el MENSUAL, que es lo que pesa en el punto de equilibrio.
   // Sumar las cuotas mezclaría un seguro anual con un alquiler mensual y daría
   // un número que no significa nada.
-  const total = filtrados.reduce((acc, g) => acc + g.importeMensual, 0);
+  const total = filtrados
+    .filter((g) => g.activo)
+    .reduce((acc, g) => acc + g.importeMensual, 0);
+
+  const alternarActivo = async (gasto: GastoFijo) => {
+    try {
+      await toggleGastoFijo(gasto.id);
+      toast.success(gasto.activo ? "Gasto desactivado." : "Gasto activado.");
+      await recargar();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo cambiar el estado.",
+      );
+    }
+  };
 
   const abrir = (gasto: GastoFijo | null) => {
     setEditando(gasto);
@@ -416,6 +431,13 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
                 </td>
                 <td className="right sticky-right">
                   <span className="centros-actions">
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void alternarActivo(g)}
+                    >
+                      {g.activo ? "Desactivar" : "Activar"}
+                    </button>
                     <button type="button" className="btn" onClick={() => abrir(g)}>
                       Editar
                     </button>

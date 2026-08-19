@@ -17,22 +17,22 @@
 - **D2 — Piezas desde `nestingResult.placements`** del snapshot (la verdad
   física: post-panelizado y con demasía), fallback `jobContext.piezas`
   (mm). Sin datos → job "sin medidas": fuera del nesting, dentro del lote.
-- **D3 — Agrupación: tecnología → MATERIA PRIMA** (no variante): la gracia
-  es re-nestear juntos jobs cotizados en anchos distintos del mismo
-  material. Tecnología: `jobContext.tecnologia_<rutaPasoId>` ?? global.
-  Material: el slot MATERIAL del paso en trazabilidad (sustrato).
+- **D3 — Agrupación: tecnología → MATERIA PRIMA → compatibilidad física**:
+  se re-nestean juntos anchos distintos únicamente cuando coinciden los demás
+  atributos de variante (color, gramaje, acabado, adhesivo, etc.). Compartir
+  materia prima y ancho no vuelve intercambiables dos SKUs.
 - **D4 — Anchos sugeridos = variantes activas de esa materia prima** con
   `atributosVarianteJson.anchoMm`, su `precioReferencia` (por ml) y stock
   (`Σ StockMateriaPrimaVariante.cantidadDisponible`).
-- **D5 — El nesting consolidado es client-side** (FFDH del mock, en cm):
-  herramienta de decisión visual del impresor. El motor (maxrects por
-  item) sigue siendo la única verdad de COSTEO; elegir otro ancho acá no
-  re-costea ni descuenta stock en v1.
+- **D5 — El nesting consolidado lo ejecuta el backend con el motor real** y
+  los parámetros congelados en el snapshot. El frontend sólo representa el
+  resultado y elige un rollo concreto; no posee un packer alternativo.
 - **D6 — Ahorro en $ además de ml** (decisión usuario): baseline = Σ por
   job de `consumedLengthMm × precioMl de la variante cotizada` (lo que
   consumiría imprimir cada uno por separado como se cotizó); propuesta =
-  largo consolidado × precioMl de la variante del ancho elegido. Jobs sin
-  precio quedan fuera del $ (se informa en ml igual).
+  largo consolidado × precioMl de la variante del ancho elegido. El navegador
+  envía sólo `{ varianteId, anchoMm }`; el servidor recalcula y valida todos
+  los consumos, costos, compatibilidad y stock antes de guardar el ahorro.
 - **D7 — Completar en lote**: `POST /ordenes-trabajo/tablero/pasos/
   completar-lote { pasoIds }` — reusa la acción individual por paso
   (mismas validaciones de frontera/estado, eventos, promoción de orden,
@@ -69,7 +69,8 @@
 }
 ```
 
-`POST /ordenes-trabajo/tablero/pasos/completar-lote { pasoIds: string[] }`
+`POST /ordenes-trabajo/tablero/pasos/completar-lote`
+`{ pasoIds: string[], ahorro?: { varianteId, anchoMm } }`
 → `{ completados: number, errores: Array<{ pasoId, motivo }> }`.
 
 ## 3. Casos borde

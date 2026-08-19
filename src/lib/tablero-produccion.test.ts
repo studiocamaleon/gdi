@@ -1,6 +1,82 @@
 import { describe, expect, it } from "vitest";
 
-import { resolverEstacionDePaso } from "@/lib/tablero-produccion";
+import {
+  bucketKanbanProduccion,
+  debeRefrescarTablero,
+  esItemEnCursoOperativo,
+  resolverEstacionDePaso,
+  textoEntregaRelativa,
+} from "@/lib/tablero-produccion";
+
+describe("clasificación operativa del tablero", () => {
+  it("un pendiente futuro no cuenta como trabajo en curso", () => {
+    expect(
+      esItemEnCursoOperativo({
+        iniciado: false,
+        terminado: false,
+        bloqueado: false,
+        atrasado: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("sólo considera en curso un item iniciado, vivo y sin alertas", () => {
+    expect(
+      esItemEnCursoOperativo({
+        iniciado: true,
+        terminado: false,
+        bloqueado: false,
+        atrasado: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("Kanban prioriza el atraso aunque el trabajo no haya iniciado", () => {
+    expect(
+      bucketKanbanProduccion({
+        iniciado: false,
+        atrasado: true,
+        diasEntrega: -3,
+      }),
+    ).toBe("delayed");
+  });
+
+  it("expresa las entregas vencidas como atraso y no como tiempo restante", () => {
+    expect(textoEntregaRelativa(-15, "Vencida 15d")).toBe("15 días de atraso");
+    expect(textoEntregaRelativa(0, "Hoy")).toBe("vence hoy");
+  });
+
+  it("pausa el refresco con pestaña oculta, mutaciones o drag activo", () => {
+    expect(
+      debeRefrescarTablero({
+        pestanaOculta: false,
+        mutacionesEnCurso: 0,
+        arrastreActivo: false,
+      }),
+    ).toBe(true);
+    expect(
+      debeRefrescarTablero({
+        pestanaOculta: true,
+        mutacionesEnCurso: 0,
+        arrastreActivo: false,
+      }),
+    ).toBe(false);
+    expect(
+      debeRefrescarTablero({
+        pestanaOculta: false,
+        mutacionesEnCurso: 1,
+        arrastreActivo: false,
+      }),
+    ).toBe(false);
+    expect(
+      debeRefrescarTablero({
+        pestanaOculta: false,
+        mutacionesEnCurso: 0,
+        arrastreActivo: true,
+      }),
+    ).toBe(false);
+  });
+});
 
 type Est = {
   id: string;

@@ -28,6 +28,13 @@ export class ProduccionController {
     return this.service.findEstaciones(auth.tenantId);
   }
 
+  /** Referencias operativas del editor, sin exigir Registros ni Costos. */
+  @Permiso('produccion.configurar')
+  @Get('estaciones-recursos')
+  recursosEstaciones(@CurrentSession() auth: CurrentAuth) {
+    return this.service.recursosEstaciones(auth.tenantId);
+  }
+
   /** Catálogo de familias de pasos + qué estación tiene tomada cada una. */
   @Get('familias-pasos')
   findFamiliasPasos(@CurrentSession() auth: CurrentAuth) {
@@ -48,7 +55,6 @@ export class ProduccionController {
    * El simulador no tiene packer propio: acomoda con el mismo nesting que
    * cotizó, para que el ahorro compare dos acomodos equivalentes.
    */
-  @Permiso('produccion.gestionar')
   @Post('simulador/nesting')
   simuladorNesting(
     @CurrentSession() auth: CurrentAuth,
@@ -88,7 +94,7 @@ export class ProduccionController {
     return this.service.getConfiguracion(auth.tenantId);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.configurar')
   @Put('configuracion')
   actualizarConfiguracion(
     @CurrentSession() auth: CurrentAuth,
@@ -104,7 +110,7 @@ export class ProduccionController {
     return this.service.findDiasNoLaborables(auth.tenantId);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.configurar')
   @Post('dias-no-laborables')
   crearDiaNoLaborable(
     @CurrentSession() auth: CurrentAuth,
@@ -113,7 +119,7 @@ export class ProduccionController {
     return this.service.crearDiaNoLaborable(auth, payload);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.configurar')
   @Delete('dias-no-laborables/:id')
   eliminarDiaNoLaborable(
     @CurrentSession() auth: CurrentAuth,
@@ -122,7 +128,7 @@ export class ProduccionController {
     return this.service.eliminarDiaNoLaborable(auth, id);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.configurar')
   @Post('estaciones')
   createEstacion(
     @CurrentSession() auth: CurrentAuth,
@@ -131,7 +137,7 @@ export class ProduccionController {
     return this.service.createEstacion(auth, payload);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.configurar')
   @Put('estaciones/:id')
   updateEstacion(
     @CurrentSession() auth: CurrentAuth,
@@ -141,13 +147,13 @@ export class ProduccionController {
     return this.service.updateEstacion(auth, id, payload);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.configurar')
   @Patch('estaciones/:id/toggle')
   toggleEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.toggleEstacion(auth, id);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.configurar')
   @Delete('estaciones/:id')
   deleteEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.deleteEstacion(auth, id);

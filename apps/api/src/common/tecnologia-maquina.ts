@@ -7,7 +7,7 @@
  */
 
 /** Catálogo de tecnologías conocidas (sync con `tecnologiaMaquinaItems`). */
-const TECNOLOGIAS = [
+export const TECNOLOGIAS_MAQUINA = [
   'laser',
   'eco_solvente',
   'uv',
@@ -40,7 +40,7 @@ export function normalizarTecnologiaMaquina(value: unknown): string | null {
   if (['dtf_uv', 'dtfuv'].includes(normalized)) return 'dtf_uv';
   if (normalized === 'inkjet') return 'inkjet';
 
-  return (TECNOLOGIAS as readonly string[]).includes(normalized)
+  return (TECNOLOGIAS_MAQUINA as readonly string[]).includes(normalized)
     ? normalized
     : null;
 }

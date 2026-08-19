@@ -32,6 +32,13 @@ describe('catálogo de permisos', () => {
       expect(efectivos.has('costos.ver')).toBe(true);
     });
 
+    it('gestionar producción conserva ejecución, supervisión y configuración', () => {
+      const efectivos = expandir(['produccion.gestionar']);
+      expect(efectivos.has('produccion.ejecutar')).toBe(true);
+      expect(efectivos.has('produccion.supervisar')).toBe(true);
+      expect(efectivos.has('produccion.configurar')).toBe(true);
+    });
+
     it('ver no arrastra gestionar', () => {
       expect(expandir(['costos.ver']).has('costos.gestionar')).toBe(false);
     });
@@ -73,11 +80,14 @@ describe('catálogo de permisos', () => {
     });
 
     /** El agujero que cierra el módulo: el operario no ve la plata. */
-    it('el operario sólo entra a producción', () => {
+    it('el operario ve y ejecuta producción, sin configurarla ni ver la plata', () => {
       const efectivos = expandir(
         ROLES_PREDEFINIDOS.find((r) => r.codigo === 'operario')!.permisos,
       );
-      expect(efectivos.has('produccion.gestionar')).toBe(true);
+      expect(efectivos.has('produccion.ver')).toBe(true);
+      expect(efectivos.has('produccion.ejecutar')).toBe(true);
+      expect(efectivos.has('produccion.supervisar')).toBe(false);
+      expect(efectivos.has('produccion.configurar')).toBe(false);
       for (const modulo of [
         'costos',
         'administracion',

@@ -7,6 +7,7 @@ import type {
 import type {
   TableroItemData,
   TableroPasoAccion,
+  TableroProduccionData,
 } from "@/lib/tablero-produccion";
 
 /**
@@ -199,11 +200,9 @@ export async function quitarOrdenItem(
   );
 }
 
-/** Dataset completo del Tablero: items de órdenes activas con sus pasos. */
-export async function getTableroProduccion(): Promise<{
-  items: TableroItemData[];
-}> {
-  return apiRequest<{ items: TableroItemData[] }>("/ordenes-trabajo/tablero");
+/** Dataset autorizado del Tablero: items activos visibles para el perfil. */
+export async function getTableroProduccion(): Promise<TableroProduccionData> {
+  return apiRequest<TableroProduccionData>("/ordenes-trabajo/tablero");
 }
 
 /** Pasos materializados de UNA orden (tab Producción del detalle de OT). */
@@ -276,30 +275,27 @@ export async function avanzarCompraProduccion(
  * acumulado de Reportes.
  */
 export type AhorroConsolidacionPayload = {
-  materiaPrimaId?: string;
-  materiaPrimaNombre: string;
-  tecnologia?: string;
-  jobs: number;
-  consumoSeparadoMl: number;
-  consumoConsolidadoMl: number;
-  ahorroMl: number;
-  costoSeparado?: number;
-  costoConsolidado?: number;
-  ahorroPesos?: number;
-  baselineParcial?: boolean;
+  varianteId: string;
+  anchoMm: number;
 };
 
 export async function completarPasosLote(
   pasoIds: string[],
   duracionTandaMin?: number,
   ahorro?: AhorroConsolidacionPayload,
+  validarCompatibilidadLaser?: boolean,
 ) {
   const resultado = await apiRequest<{
     completados: number;
     errores: Array<{ pasoId: string; motivo: string }>;
   }>("/ordenes-trabajo/tablero/pasos/completar-lote", {
     method: "POST",
-    body: JSON.stringify({ pasoIds, duracionTandaMin, ahorro }),
+    body: JSON.stringify({
+      pasoIds,
+      duracionTandaMin,
+      ahorro,
+      validarCompatibilidadLaser,
+    }),
   });
   avisarTramosCambiaron();
   return resultado;

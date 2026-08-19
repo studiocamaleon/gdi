@@ -325,7 +325,7 @@ export class FacturacionOrdenesService {
       where: {
         tenantId,
         clienteId: cobro.clienteId,
-        tipo: 'factura',
+        tipo: { in: ['factura', 'nota_debito'] },
         estado: 'emitido',
         anuladoEl: null,
         saldoPendiente: { gt: 0 },
@@ -369,7 +369,7 @@ export class FacturacionOrdenesService {
     });
     if (
       !comprobante ||
-      comprobante.tipo !== 'factura' ||
+      !['factura', 'nota_debito'].includes(comprobante.tipo) ||
       comprobante.estado !== 'emitido'
     ) {
       return;
@@ -617,7 +617,7 @@ export class FacturacionOrdenesService {
         tenantId,
         ordenId,
         comprobante: {
-          tipo: 'factura',
+          tipo: { in: ['factura', 'nota_debito'] },
           estado: 'emitido',
           anuladoEl: null,
           saldoPendiente: { gt: 0 },
@@ -727,7 +727,7 @@ export class FacturacionOrdenesService {
       where: {
         id: factura.id,
         tenantId,
-        tipo: 'factura',
+        tipo: { in: ['factura', 'nota_debito'] },
         estado: 'emitido',
         anuladoEl: null,
       },

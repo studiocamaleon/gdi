@@ -80,7 +80,7 @@ export class CrearRecurrenteDto {
   /** El puente con el presupuestado del costeo. */
   @IsOptional()
   @IsUUID()
-  gastoFijoEstructuraId?: string;
+  gastoFijoEstructuraId?: string | null;
 }
 
 export class EditarRecurrenteDto {
@@ -111,5 +111,5 @@ export class EditarRecurrenteDto {
 
   @IsOptional()
   @IsUUID()
-  gastoFijoEstructuraId?: string;
+  gastoFijoEstructuraId?: string | null;
 }

@@ -8,6 +8,8 @@ import { apiRequest } from "@/lib/api";
  */
 
 export type LaserPapel = {
+  materiaPrimaId: string | null;
+  varianteId: string | null;
   nombre: string;
   gramaje: number | null;
 };
@@ -24,7 +26,7 @@ export type LaserJob = {
   itemId: string;
   ordenId: string;
   codigo: string;
-  cliente: string;
+  cliente: string | null;
   producto: string;
   fechaEntrega: string | null;
   estado: "pendiente" | "en_curso";
@@ -46,6 +48,9 @@ export type LaserJob = {
   modoColor: string | null;
   /** Pasos siguientes del item (adónde va después). */
   acabados: string[];
+  /** Clave calculada por el servidor; null = no se demostró compatibilidad. */
+  compatibilidadKey: string | null;
+  faltantesCompatibilidad: string[];
 };
 
 export type SimuladorLaserData = { jobs: LaserJob[] };

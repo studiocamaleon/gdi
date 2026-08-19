@@ -1259,7 +1259,7 @@ describe('EgresosService', () => {
         hasta: '2026-05-31',
       });
 
-      // Salió de la caja todo; gasto del período es sólo lo primero.
+      // Se registró todo; gasto del período es sólo lo primero.
       expect(r.totalSalida).toBe(1_080_000);
       expect(r.totalResultado).toBe(150_000);
 

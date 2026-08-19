@@ -1,5 +1,8 @@
 import { SimuladorLaser } from "@/components/produccion/simulador-laser";
-import { getSimuladorLaser, type SimuladorLaserData } from "@/lib/simulador-laser-api";
+import {
+  getSimuladorLaser,
+  type SimuladorLaserData,
+} from "@/lib/simulador-laser-api";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +14,11 @@ export const dynamic = "force-dynamic";
  */
 export default async function SimuladorLaserPage() {
   let data: SimuladorLaserData = { jobs: [] };
+  let initialError: string | null = null;
   try {
     data = await getSimuladorLaser();
   } catch {
-    // Estado vacío; el poll del cliente reintenta.
+    initialError = "No pudimos cargar la cola de impresión láser.";
   }
-  return <SimuladorLaser initialData={data} />;
+  return <SimuladorLaser initialData={data} initialError={initialError} />;
 }

@@ -43,6 +43,7 @@ export function FacturacionView({
   const [facturando, setFacturando] = React.useState(false);
   const [resultado, setResultado] =
     React.useState<ResultadoLoteFacturacion | null>(null);
+  const seleccionarTodoRef = React.useRef<HTMLInputElement>(null);
 
   const data = initialOrdenes;
   const rows = React.useMemo(
@@ -62,12 +63,33 @@ export function FacturacionView({
   const clientesSel = new Set(seleccionadas.map((o) => o.clienteId ?? "CF"));
   const puedeAgrupar = seleccionadas.length > 1 && clientesSel.size === 1;
   const totalPendiente = data.reduce((s, o) => s + o.saldoSinFacturar, 0);
+  const todasVisiblesSeleccionadas =
+    rows.length > 0 && rows.every((o) => sel.has(o.ordenId));
+  const algunaVisibleSeleccionada = rows.some((o) => sel.has(o.ordenId));
+
+  React.useEffect(() => {
+    if (seleccionarTodoRef.current) {
+      seleccionarTodoRef.current.indeterminate =
+        algunaVisibleSeleccionada && !todasVisiblesSeleccionadas;
+    }
+  }, [algunaVisibleSeleccionada, todasVisiblesSeleccionadas]);
 
   const toggle = (id: string) =>
     setSel((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+
+  const toggleTodasVisibles = () =>
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (todasVisiblesSeleccionadas) {
+        rows.forEach((o) => next.delete(o.ordenId));
+      } else {
+        rows.forEach((o) => next.add(o.ordenId));
+      }
       return next;
     });
 
@@ -164,6 +186,7 @@ export function FacturacionView({
               <div className="ade-search">
                 <SearchIcon />
                 <input
+                  aria-label="Buscar orden o cliente"
                   placeholder="Buscar orden o cliente…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
@@ -216,7 +239,15 @@ export function FacturacionView({
                     "36px 1.4fr 1.4fr 0.9fr 1fr 1fr 1fr 1fr",
                 }}
               >
-                <span />
+                <span style={{ display: "flex", justifyContent: "center" }}>
+                  <input
+                    ref={seleccionarTodoRef}
+                    type="checkbox"
+                    aria-label="Seleccionar todas las órdenes visibles"
+                    checked={todasVisiblesSeleccionadas}
+                    onChange={toggleTodasVisibles}
+                  />
+                </span>
                 <span>Orden</span>
                 <span>Cliente</span>
                 <span className="r">Finalizada</span>
@@ -238,6 +269,7 @@ export function FacturacionView({
                   <div style={{ display: "flex", justifyContent: "center" }}>
                     <input
                       type="checkbox"
+                      aria-label={`Seleccionar ${o.numero}`}
                       checked={sel.has(o.ordenId)}
                       onChange={() => toggle(o.ordenId)}
                       onClick={(e) => e.stopPropagation()}

@@ -136,6 +136,8 @@ export class EtaService {
             indice: paso.indice,
             nombre: paso.nombre,
             familiaCodigo: paso.familiaCodigo,
+            plantillaCodigo:
+              resolverFamilia(paso.familiaCodigo)?.plantillaCodigo ?? null,
             centroCostoId: paso.centroCostoId,
             maquinaId: paso.maquinaId,
             tecnologia: paso.maquinaId

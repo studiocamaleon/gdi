@@ -29,6 +29,14 @@ import {
 
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
   createEmptyEstacion,
   DIAS_SEMANA,
   ETAPAS_ESTACION,
@@ -175,6 +183,9 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
   const [corte, setCorte] = React.useState<string | null>(null);
   const [entrePasos, setEntrePasos] = React.useState<number | null>(null);
   const fechaRef = React.useRef<HTMLInputElement | null>(null);
+  const configRef = React.useRef({ margenEtaDias: 0, corteJornada: "20:00", tiempoEntrePasosMin: 0 });
+  const guardadoRef = React.useRef<Promise<void>>(Promise.resolve());
+  const versionRef = React.useRef(0);
 
   React.useEffect(() => {
     let vigente = true;
@@ -187,6 +198,7 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
         setMargen(config.margenEtaDias);
         setCorte(config.corteJornada);
         setEntrePasos(config.tiempoEntrePasosMin);
+        configRef.current = config;
       })
       .catch(() => {
         if (!vigente) return;
@@ -197,39 +209,47 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
     return () => { vigente = false; };
   }, []);
 
+  const guardarConfiguracion = (patch: Partial<typeof configRef.current>) => {
+    configRef.current = { ...configRef.current, ...patch };
+    const snapshot = { ...configRef.current };
+    const version = ++versionRef.current;
+    guardadoRef.current = guardadoRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        await actualizarConfiguracionProduccion(snapshot);
+      })
+      .catch(async () => {
+        if (version !== versionRef.current) return;
+        setError("No se pudo guardar la configuración. Se restauraron los últimos valores confirmados.");
+        try {
+          const confirmada = await getConfiguracionProduccion();
+          configRef.current = confirmada;
+          setMargen(confirmada.margenEtaDias);
+          setCorte(confirmada.corteJornada);
+          setEntrePasos(confirmada.tiempoEntrePasosMin);
+        } catch {
+          // El aviso permanece visible; no inventamos valores confirmados.
+        }
+      });
+  };
+
   const cambiarMargen = (valor: number) => {
     const acotado = Math.max(0, Math.min(15, valor));
-    setMargen(acotado); // optimista: el stepper responde al click
-    actualizarConfiguracionProduccion({
-      margenEtaDias: acotado,
-      tiempoEntrePasosMin: entrePasos ?? 0,
-    }).catch(() => {
-      setError("No se pudo guardar el margen.");
-    });
+    setMargen(acotado);
+    guardarConfiguracion({ margenEtaDias: acotado });
   };
 
   /** Minutos que cuesta llevar el material a la próxima estación. */
   const cambiarEntrePasos = (valor: number) => {
     const acotado = Math.max(0, Math.min(240, valor));
     setEntrePasos(acotado);
-    actualizarConfiguracionProduccion({
-      margenEtaDias: margen ?? 0,
-      tiempoEntrePasosMin: acotado,
-    }).catch(() => {
-      setError("No se pudo guardar el tiempo entre pasos.");
-    });
+    guardarConfiguracion({ tiempoEntrePasosMin: acotado });
   };
 
   const cambiarCorte = (valor: string) => {
     setCorte(valor); // optimista: el picker responde al toque
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(valor)) return;
-    actualizarConfiguracionProduccion({
-      margenEtaDias: margen ?? 0,
-      tiempoEntrePasosMin: entrePasos ?? 0,
-      corteJornada: valor,
-    }).catch(() => {
-      setError("No se pudo guardar el corte de jornada.");
-    });
+    guardarConfiguracion({ corteJornada: valor });
   };
 
   const agregar = async () => {
@@ -262,15 +282,15 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
   const hoyClave = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
 
   return (
-    <>
-      <div className="sheet-backdrop est-sheet-backdrop" onClick={onClose} />
-      <div className="sheet est-sheet feriados-sheet" role="dialog" aria-modal="true">
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent className="est-sheet feriados-sheet gap-0 p-0 sm:max-w-none" showCloseButton={false}>
         <div className="sheet-head est-sheet-head">
           <div>
             <div className="kicker">PRODUCCIÓN</div>
-            <h2>Calendario del taller</h2>
-            <div className="sub">Feriados, cierres y margen para prometer fechas: alimentan la proyección de cola y la demora estimada.</div>
+            <SheetTitle>Calendario del taller</SheetTitle>
+            <SheetDescription>Feriados, cierres y margen para prometer fechas: alimentan la proyección de cola y la demora estimada.</SheetDescription>
           </div>
+          <SheetClose render={<button type="button" className="close" aria-label="Cerrar calendario" />}><XIcon /></SheetClose>
         </div>
         <div className="sheet-body est-form">
           <div className="est-section-head"><span className="num">01</span><div><div className="ttl">Margen para prometer</div><div className="sub">Colchón sobre la fecha que el sistema estima en el cotizador.</div></div></div>
@@ -338,7 +358,7 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
               {guardando ? "Agregando…" : "Agregar"}
             </button>
           </div>
-          {error ? <div className="est-error" role="alert">{error}</div> : null}
+          {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
 
           {dias === null ? (
             <div className="feriados-empty">Cargando…</div>
@@ -362,8 +382,8 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
           <div className="spacer" />
           <button type="button" className="btn" onClick={onClose}>Cerrar</button>
         </div>
-      </div>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -734,17 +754,16 @@ function StationForm({
     }));
 
   return (
-    <>
-      <div className="sheet-backdrop est-sheet-backdrop" onClick={onCancel} />
-      <div className="sheet est-sheet" role="dialog" aria-modal="true">
+    <Sheet open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <SheetContent className="est-sheet gap-0 p-0 sm:max-w-none" showCloseButton={false}>
         <div className="sheet-head est-sheet-head">
           <div className="head-icon" style={{ background: etapa.color }}>{iconEl(draft.icono)}</div>
           <div className="body">
             <div className="eyebrow">{initial ? "Editar estación" : "Nueva estación"}</div>
-            <h2>{draft.nombre.trim() || (initial ? initial.nombre : "Estación sin nombre")}</h2>
-            <div className="sub">{etapa.nm} · {etapa.desc}</div>
+            <SheetTitle>{draft.nombre.trim() || (initial ? initial.nombre : "Estación sin nombre")}</SheetTitle>
+            <SheetDescription>{etapa.nm} · {etapa.desc}</SheetDescription>
           </div>
-          <span className="close" onClick={onCancel}><XIcon /></span>
+          <SheetClose render={<button type="button" className="close" aria-label="Cerrar editor" />}><XIcon /></SheetClose>
         </div>
 
         <div className="sheet-body est-form">
@@ -1000,8 +1019,8 @@ function StationForm({
           <button type="button" className="btn" onClick={onCancel} disabled={saving}>Cancelar</button>
           <button type="button" className="btn btn-primary" onClick={() => onSave(draft)} disabled={!valid || saving}>{saving ? "Guardando…" : initial ? "Guardar cambios" : "Crear estación"}</button>
         </div>
-      </div>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1048,11 +1067,13 @@ export function EstacionesPanel({
   initialFamilias,
   empleados,
   maquinas,
+  initialLoadWarning,
 }: {
   initialEstaciones: Estacion[];
   initialFamilias: FamiliaPasoCatalogo[];
   empleados: EmpleadoRef[];
   maquinas: MaquinaRef[];
+  initialLoadWarning?: string | null;
 }) {
   const [items, setItems] = React.useState(initialEstaciones);
   const [familias, setFamilias] = React.useState(initialFamilias);
@@ -1063,6 +1084,7 @@ export function EstacionesPanel({
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
+  const searchRef = React.useRef<HTMLInputElement | null>(null);
   const [filterCategoria, setFilterCategoria] = React.useState<string>("all");
   /* El tiempo entre pasos del taller, sólo para mostrar qué hereda una
      estación sin valor propio. Se refresca al abrir un formulario porque
@@ -1080,6 +1102,17 @@ export function EstacionesPanel({
       vivo = false;
     };
   }, [sheet]);
+  React.useEffect(() => {
+    const enfocarBusqueda = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
+      event.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener("keydown", enfocarBusqueda);
+    return () => window.removeEventListener("keydown", enfocarBusqueda);
+  }, []);
 
   // maquinaId → estación dueña (para avisar el "movimiento" en el picker).
   const maquinaEnEstacion = React.useMemo(() => {
@@ -1136,7 +1169,7 @@ export function EstacionesPanel({
   return (
     <div
       className="est-page"
-      style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "28px 32px 40px" }}
+      style={{ flex: 1, minHeight: 0, overflowY: "auto" }}
     >
       <div className="page-head">
         <div className="title-block">
@@ -1149,10 +1182,16 @@ export function EstacionesPanel({
         </div>
       </div>
 
+      {initialLoadWarning ? (
+        <Alert variant="destructive">
+          <AlertDescription>{initialLoadWarning} Actualizá la página para reintentar.</AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="est-toolbar">
         <div className="search">
           <SearchIcon />
-          <input placeholder="Buscar por nombre o descripción…" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <input ref={searchRef} placeholder="Buscar por nombre o descripción…" value={query} onChange={(event) => setQuery(event.target.value)} />
           <span className="kbd">/</span>
         </div>
         <div className="est-etapa-filter">
@@ -1167,7 +1206,7 @@ export function EstacionesPanel({
 
       {grouped.map(({ cat, items: groupItems }) => (
         <section key={cat.key} className="est-group">
-          <div className="est-group-head"><span className="dot" style={{ background: cat.color }} /><h3>{cat.nm}</h3><span className="rule" /><span className="ct">{groupItems.length} estación{groupItems.length === 1 ? "" : "es"}</span></div>
+          <div className="est-group-head"><span className="dot" style={{ background: cat.color }} /><h3>{cat.nm}</h3><span className="rule" /><span className="ct">{groupItems.length} {groupItems.length === 1 ? "estación" : "estaciones"}</span></div>
           <div className="est-group-grid">
             {groupItems.map((est) => <EstacionCard key={est.id} est={est} onEdit={setSheet} />)}
             <button type="button" className="est-add-card" onClick={() => { setNuevaEtapa(cat.key); setSheet("new"); }}>

@@ -17727,11 +17727,14 @@ body {
 .sim-tanda {
   display: inline-flex;
   align-items: center;
+  width: auto;
+  flex: 0 0 auto;
   gap: 6px;
   font-size: 11.5px;
   color: var(--muted-text);
 }
 .sim-tanda label {
+  flex: none;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -18379,6 +18382,12 @@ button.est-card {
 .est-page {
   max-width: 1480px;
   margin: 0 auto;
+  padding: 28px 32px 40px;
+}
+@media (max-width: 900px) {
+  .est-page {
+    padding: 20px 16px 32px;
+  }
 }
 
 /* Toolbar */
@@ -19551,6 +19560,21 @@ textarea.est-input {
     animation: sim-pulse 1.6s ease-in-out infinite;
   }
 
+  .sim-live.stale {
+    color: var(--signal);
+    background: var(--signal-bg);
+    border-color: #f2d9c9;
+  }
+
+  .sim-live.stale .d {
+    background: var(--signal);
+    animation: none;
+  }
+
+  .sim-page .sim-alert {
+    margin-bottom: 16px;
+  }
+
   @keyframes sim-pulse {
     0%,
     100% {
@@ -20063,6 +20087,10 @@ textarea.est-input {
     opacity: 0.6;
   }
 
+  .sim-roll:disabled {
+    cursor: not-allowed;
+  }
+
   .sim-roll .rr1 {
     display: flex;
     align-items: center;
@@ -20155,28 +20183,14 @@ textarea.est-input {
   }
 
   .sim-send {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
     margin-left: auto;
-    padding: 8px 14px;
-    background: var(--ink);
-    color: #fff;
-    border: 1px solid var(--ink);
-    border-radius: var(--r-2);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
   }
 
-  .sim-send:disabled {
-    opacity: 0.55;
-    cursor: default;
-  }
-
-  .sim-send svg {
-    width: 14px;
-    height: 14px;
+  .sim-page .sim-batch-warning {
+    margin-top: 8px;
+    color: var(--signal);
+    font-size: 12px;
+    text-align: right;
   }
 
   .sim-empty {
@@ -20337,12 +20351,36 @@ textarea.est-input {
     width: 13px;
     height: 13px;
   }
+  .laz-page .laz-batch-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+  }
   .laz-lote {
     white-space: nowrap;
   }
   .laz-lote svg {
     width: 14px;
     height: 14px;
+  }
+  .laz-page .laz-readonly,
+  .laz-page .laz-incomplete {
+    max-width: 240px;
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .laz-page .laz-readonly {
+    color: var(--muted-text, #74747c);
+    background: color-mix(in srgb, var(--ink, #14141a) 4%, transparent);
+  }
+  .laz-page .laz-incomplete {
+    color: var(--signal, #c2410c);
+    background: var(--signal-bg, #fdf1ea);
+    border: 1px solid #f4d3c0;
   }
 
   .laz-batch-body {
@@ -20425,6 +20463,13 @@ textarea.est-input {
     border: 1px dashed var(--border-strong, #d4d2cd);
   }
 
+  @media (max-width: 1100px) {
+    .laz-page .laz-batch-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+  }
+
   @media (max-width: 900px) {
     .laz-lane-head {
       flex-wrap: wrap;
@@ -20465,6 +20510,70 @@ textarea.est-input {
 
     .sim-mat-cols {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .sim-page {
+      padding: 20px 16px 48px;
+    }
+
+    .sim-head,
+    .sim-mats-head {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .sim-techs {
+      grid-template-columns: 1fr;
+    }
+
+    .sim-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sim-mat-head {
+      grid-template-columns: 22px minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 13px 12px;
+    }
+
+    .sim-mat-body {
+      padding: 12px;
+    }
+
+    .sim-save {
+      align-items: stretch;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .sim-save .sv {
+      min-width: calc(50% - 6px);
+    }
+
+    .sim-tanda {
+      flex: 1 1 auto;
+    }
+
+    .sim-send {
+      margin-left: 0;
+      width: 100%;
+    }
+
+    .laz-page .laz-batch-actions {
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      margin-left: 0;
+      width: 100%;
+    }
+
+    .laz-lote {
+      width: 100%;
+    }
+
+    .sim-page .sim-batch-warning {
+      text-align: left;
     }
   }
 }

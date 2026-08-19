@@ -119,6 +119,60 @@ export type TableroItemData = {
   pasos: TableroPasoData[];
 };
 
+export type AlcanceTableroProduccion = "completo" | "vendedor" | "operario";
+
+export type TableroProduccionData = {
+  items: TableroItemData[];
+  alcance: AlcanceTableroProduccion;
+  puedeGestionar: boolean;
+  /** null = todas (supervisor); lista = estaciones habilitadas del empleado. */
+  estacionIdsEjecutables: string[] | null;
+  vendedorSinVinculo: boolean;
+};
+
+export function esItemEnCursoOperativo(item: {
+  iniciado: boolean;
+  terminado: boolean;
+  bloqueado: boolean;
+  atrasado: boolean;
+}): boolean {
+  return item.iniciado && !item.terminado && !item.bloqueado && !item.atrasado;
+}
+
+export function bucketKanbanProduccion(item: {
+  iniciado: boolean;
+  atrasado: boolean;
+  diasEntrega: number | null;
+}): "not-started" | "today" | "delayed" | "active" {
+  if (item.atrasado) return "delayed";
+  if (item.diasEntrega === 0) return "today";
+  if (!item.iniciado) return "not-started";
+  return "active";
+}
+
+export function textoEntregaRelativa(
+  diasEntrega: number | null,
+  etiqueta: string,
+): string {
+  if (diasEntrega != null && diasEntrega < 0) {
+    const dias = Math.abs(diasEntrega);
+    return `${dias} ${dias === 1 ? "día" : "días"} de atraso`;
+  }
+  return etiqueta === "Hoy" ? "vence hoy" : `${etiqueta} restantes`;
+}
+
+export function debeRefrescarTablero(estado: {
+  pestanaOculta: boolean;
+  mutacionesEnCurso: number;
+  arrastreActivo: boolean;
+}): boolean {
+  return (
+    !estado.pestanaOculta &&
+    estado.mutacionesEnCurso === 0 &&
+    !estado.arrastreActivo
+  );
+}
+
 export type TableroPasoAccion =
   | "iniciar"
   | "pausar"

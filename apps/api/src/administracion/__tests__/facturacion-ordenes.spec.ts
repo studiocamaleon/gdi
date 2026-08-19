@@ -391,6 +391,22 @@ describe('FacturacionOrdenesService — motor', () => {
       expect(imp).toHaveLength(1);
       expect(Number(imp[0].monto)).toBe(100_000);
     });
+
+    it('imputa también una nota de débito emitida', async () => {
+      const orden = await crearOrden(15_000);
+      const cobro = await crearCobro(orden.id, 2_500);
+      const nd = await crearFactura([{ ordenId: orden.id, monto: 2_500 }], {
+        tipo: 'nota_debito',
+      });
+
+      await motor.matchearFactura(prisma, tenantId, nd.id);
+
+      expect(await saldoDe(nd.id)).toBe(0);
+      const imputacion = await prisma.cobroImputacion.findFirst({
+        where: { cobroId: cobro.id, comprobanteId: nd.id },
+      });
+      expect(Number(imputacion?.monto)).toBe(2_500);
+    });
   });
 
   describe('validarTope', () => {

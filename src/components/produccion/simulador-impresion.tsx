@@ -15,7 +15,22 @@
 import * as React from "react";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
-import { ArrowRightIcon, CheckIcon, ChevronRightIcon } from "lucide-react";
+import {
+  AlertTriangleIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  RefreshCwIcon,
+} from "lucide-react";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 import {
   getSimuladorImpresion,
@@ -43,11 +58,12 @@ type VJob = {
   /** pasoId: la clave de todo (selección, lote, colores). */
   id: string;
   code: string;
-  cliente: string;
+  cliente: string | null;
   producto: string;
   piezas: VPieza[];
   copies: number;
   urgent: boolean;
+  urgencyLabel: "ATRASADA" | "HOY" | "MAÑANA" | null;
   due: string;
   /** Consumo al cotizar por separado (ml) y su precio por ml, para el ahorro. */
   consumoCotizadoMl: number | null;
@@ -67,6 +83,7 @@ type VMaterial = {
   rolls: number[];
   stockMl: Record<number, number | null>;
   precioMl: Record<number, number | null>;
+  varianteId: Record<number, string>;
 };
 
 type VTech = { key: string; nm: string; sub: string; color: string };
@@ -74,13 +91,27 @@ type VTech = { key: string; nm: string; sub: string; color: string };
 const SIN_TECNOLOGIA = "sin_tecnologia";
 const SIN_MATERIAL = "sin_material";
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
-
-const TECH_COLORS = ["#6d4bd8", "#1f9d6b", "#2f8fd6", "#c9599a", "#d9803a", "#3a9ca0", "#b0578f"];
+const TECH_COLORS = [
+  "#6d4bd8",
+  "#1f9d6b",
+  "#2f8fd6",
+  "#c9599a",
+  "#d9803a",
+  "#3a9ca0",
+  "#b0578f",
+];
 
 const SIM_COLORS = [
-  "#2f6fdb", "#e08a2b", "#7a52d8", "#1f9d6b", "#d1495b",
-  "#c99a2b", "#3a9ca0", "#b0578f", "#5a7fd8", "#c07a4a",
+  "#2f6fdb",
+  "#e08a2b",
+  "#7a52d8",
+  "#1f9d6b",
+  "#d1495b",
+  "#c99a2b",
+  "#3a9ca0",
+  "#b0578f",
+  "#5a7fd8",
+  "#c07a4a",
 ];
 
 function techKeyDe(job: SimuladorJob) {
@@ -88,14 +119,18 @@ function techKeyDe(job: SimuladorJob) {
 }
 
 function materialKeyDe(job: SimuladorJob) {
-  return `${techKeyDe(job)}|${job.materiaPrimaId ?? SIN_MATERIAL}`;
+  return `${techKeyDe(job)}|${job.materiaPrimaId ?? SIN_MATERIAL}|${
+    job.varianteCotizada?.compatibilidadClave ?? "sin_compatibilidad"
+  }`;
 }
 
-function buildViewModel(data: SimuladorData) {
+export function buildViewModel(data: SimuladorData) {
   const jobs = new Map<string, VJob[]>(); // materialKey → jobs
   const techs: VTech[] = [];
   const materials: VMaterial[] = [];
-  const catalogo = new Map(data.materiales.map((mat) => [mat.materiaPrimaId, mat]));
+  const catalogo = new Map(
+    data.materiales.map((mat) => [mat.materiaPrimaId, mat]),
+  );
 
   for (const job of data.jobs) {
     const dias = diasHastaEntrega(job.fechaEntrega);
@@ -111,8 +146,19 @@ function buildViewModel(data: SimuladorData) {
       })),
       copies: job.piezas.reduce((acc, pieza) => acc + pieza.cantidad, 0),
       urgent: dias !== null && dias <= 1,
+      urgencyLabel:
+        dias === null
+          ? null
+          : dias < 0
+            ? "ATRASADA"
+            : dias === 0
+              ? "HOY"
+              : dias === 1
+                ? "MAÑANA"
+                : null,
       due: etiquetaEntrega(job.fechaEntrega),
-      consumoCotizadoMl: job.consumoCotizadoMm !== null ? job.consumoCotizadoMm / 1000 : null,
+      consumoCotizadoMl:
+        job.consumoCotizadoMm !== null ? job.consumoCotizadoMm / 1000 : null,
       precioMlCotizado: job.varianteCotizada?.precioMl ?? null,
       sinMedidas: job.piezas.length === 0,
       duracionEstimadaMin: job.duracionEstimadaMin,
@@ -126,53 +172,79 @@ function buildViewModel(data: SimuladorData) {
     if (!techs.some((tech) => tech.key === techKey)) {
       techs.push({
         key: techKey,
-        nm: job.tecnologia ? technologyCodeLabel(job.tecnologia) : "Sin tecnología",
+        nm: job.tecnologia
+          ? technologyCodeLabel(job.tecnologia)
+          : "Sin tecnología",
         sub: "",
         color: TECH_COLORS[techs.length % TECH_COLORS.length],
       });
     }
     if (!materials.some((material) => material.key === matKey)) {
-      const cat = job.materiaPrimaId ? catalogo.get(job.materiaPrimaId) : undefined;
+      const cat = job.materiaPrimaId
+        ? catalogo.get(job.materiaPrimaId)
+        : undefined;
       const stockMl: Record<number, number | null> = {};
       const precioMl: Record<number, number | null> = {};
+      const varianteId: Record<number, string> = {};
       // El simulador nestea por ANCHO: varias variantes del catálogo pueden
       // compartir ancho (mismo cm, distinto color/gramaje). Se deduplica por
       // ancho para no repetir rollos (evita keys duplicadas): se acumula el
       // stock y se conserva el precio más bajo del ancho.
       const rolls: number[] = [];
-      for (const ancho of cat?.anchos ?? []) {
+      const compatibilidad = job.varianteCotizada?.compatibilidadClave;
+      for (const ancho of (cat?.anchos ?? []).filter(
+        (item) =>
+          !compatibilidad || item.compatibilidadClave === compatibilidad,
+      )) {
         const rollCm = ancho.anchoMm / 10;
         if (!rolls.includes(rollCm)) {
           rolls.push(rollCm);
           stockMl[rollCm] = ancho.stockMl;
           precioMl[rollCm] = ancho.precioMl;
+          varianteId[rollCm] = ancho.varianteId;
         } else {
-          if (ancho.stockMl != null) stockMl[rollCm] = (stockMl[rollCm] ?? 0) + ancho.stockMl;
-          if (ancho.precioMl != null && (precioMl[rollCm] == null || ancho.precioMl < precioMl[rollCm]!)) {
+          // Un único rollo real por ancho: no se suman stocks de SKUs distintos.
+          // Se prefiere el que tenga más disponibilidad y, en empate, menor costo.
+          const stockActual = stockMl[rollCm] ?? -1;
+          const stockCandidato = ancho.stockMl ?? -1;
+          if (
+            stockCandidato > stockActual ||
+            (stockCandidato === stockActual &&
+              ancho.precioMl != null &&
+              (precioMl[rollCm] == null || ancho.precioMl < precioMl[rollCm]!))
+          ) {
+            stockMl[rollCm] = ancho.stockMl;
             precioMl[rollCm] = ancho.precioMl;
+            varianteId[rollCm] = ancho.varianteId;
           }
         }
       }
       materials.push({
         key: matKey,
         tech: techKey,
-        nm: cat?.nombre ?? job.materiaPrimaNombre ?? "Sin material identificado",
-        sub: cat ? `${cat.anchos.length} ancho${cat.anchos.length === 1 ? "" : "s"} en catálogo` : "OT manual o sin sustrato",
+        nm:
+          cat?.nombre ?? job.materiaPrimaNombre ?? "Sin material identificado",
+        sub: cat
+          ? `${rolls.length} ancho${rolls.length === 1 ? "" : "s"} compatible${rolls.length === 1 ? "" : "s"}`
+          : "OT manual o sin sustrato",
         rolls,
         stockMl,
         precioMl,
+        varianteId,
       });
     }
   }
   // Urgentes primero dentro de cada material.
   for (const lista of jobs.values()) {
-    lista.sort((a, b) => Number(b.urgent) - Number(a.urgent) || a.code.localeCompare(b.code));
+    lista.sort(
+      (a, b) =>
+        Number(b.urgent) - Number(a.urgent) || a.code.localeCompare(b.code),
+    );
   }
   return { jobs, techs, materials };
 }
 
 /* ─────────── Nesting: motor puro en src/lib (testeado) ─────────── */
-
 
 type SimPlaced = { x: number; y: number; w: number; h: number; id: string };
 
@@ -206,7 +278,8 @@ function simCompareRolls(
   const porAncho = new Map((grupo?.anchos ?? []).map((a) => [a.anchoMm, a]));
   const results: SimRollResult[] = material.rolls.map((rollCm) => {
     const acomodo = porAncho.get(Math.round(rollCm * 10));
-    const totalLen = acomodo?.consumedLengthMm != null ? acomodo.consumedLengthMm / 10 : 0;
+    const totalLen =
+      acomodo?.consumedLengthMm != null ? acomodo.consumedLengthMm / 10 : 0;
     const placed: SimPlaced[] = (acomodo?.placements ?? []).map((p) => ({
       x: p.xMm / 10,
       y: p.yMm / 10,
@@ -245,9 +318,13 @@ function simCompareRolls(
 }
 
 const simFmt = (n: number, d = 1) =>
-  n.toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  n.toLocaleString("es-AR", {
+    minimumFractionDigits: d,
+    maximumFractionDigits: d,
+  });
 
-const fmtRollM = (rollCm: number) => (rollCm / 100).toFixed(2).replace(".", ",");
+const fmtRollM = (rollCm: number) =>
+  (rollCm / 100).toFixed(2).replace(".", ",");
 
 const fmtPesos = (n: number, moneda: Moneda) =>
   formatearMoneda(n, moneda, { decimales: 0 });
@@ -312,8 +389,22 @@ function SimRollLayout({
   const hayMargenes = latPx > 0 || lonPx > 0;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
-      <rect x={padL} y={oy} width={rollW} height={rollH} fill="#faf9f7" stroke="#d4d2cd" strokeWidth="1.5" rx="2" />
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      width="100%"
+      preserveAspectRatio="xMidYMid meet"
+      style={{ display: "block" }}
+    >
+      <rect
+        x={padL}
+        y={oy}
+        width={rollW}
+        height={rollH}
+        fill="#faf9f7"
+        stroke="#d4d2cd"
+        strokeWidth="1.5"
+        rx="2"
+      />
       {/* Franjas no imprimibles (sombreado) + límite del área útil (punteada).
           Se dibujan antes que las piezas; como las piezas ya vienen insetadas
           por el motor, apoyan justo contra la punteada, sin cruzarla. */}
@@ -321,18 +412,78 @@ function SimRollLayout({
         <g>
           {latPx > 0 ? (
             <>
-              <rect x={padL} y={oy} width={rollW} height={latPx} fill="#e7e5e2" fillOpacity="0.55" />
-              <rect x={padL} y={oy + rollH - latPx} width={rollW} height={latPx} fill="#e7e5e2" fillOpacity="0.55" />
-              <line x1={padL} x2={padL + rollW} y1={oy + latPx} y2={oy + latPx} stroke="#c9c6c0" strokeWidth="1" strokeDasharray="4 3" />
-              <line x1={padL} x2={padL + rollW} y1={oy + rollH - latPx} y2={oy + rollH - latPx} stroke="#c9c6c0" strokeWidth="1" strokeDasharray="4 3" />
+              <rect
+                x={padL}
+                y={oy}
+                width={rollW}
+                height={latPx}
+                fill="#e7e5e2"
+                fillOpacity="0.55"
+              />
+              <rect
+                x={padL}
+                y={oy + rollH - latPx}
+                width={rollW}
+                height={latPx}
+                fill="#e7e5e2"
+                fillOpacity="0.55"
+              />
+              <line
+                x1={padL}
+                x2={padL + rollW}
+                y1={oy + latPx}
+                y2={oy + latPx}
+                stroke="#c9c6c0"
+                strokeWidth="1"
+                strokeDasharray="4 3"
+              />
+              <line
+                x1={padL}
+                x2={padL + rollW}
+                y1={oy + rollH - latPx}
+                y2={oy + rollH - latPx}
+                stroke="#c9c6c0"
+                strokeWidth="1"
+                strokeDasharray="4 3"
+              />
             </>
           ) : null}
           {lonPx > 0 ? (
             <>
-              <rect x={padL} y={oy} width={lonPx} height={rollH} fill="#e7e5e2" fillOpacity="0.55" />
-              <rect x={padL + rollW - lonPx} y={oy} width={lonPx} height={rollH} fill="#e7e5e2" fillOpacity="0.55" />
-              <line x1={padL + lonPx} x2={padL + lonPx} y1={oy} y2={oy + rollH} stroke="#c9c6c0" strokeWidth="1" strokeDasharray="4 3" />
-              <line x1={padL + rollW - lonPx} x2={padL + rollW - lonPx} y1={oy} y2={oy + rollH} stroke="#c9c6c0" strokeWidth="1" strokeDasharray="4 3" />
+              <rect
+                x={padL}
+                y={oy}
+                width={lonPx}
+                height={rollH}
+                fill="#e7e5e2"
+                fillOpacity="0.55"
+              />
+              <rect
+                x={padL + rollW - lonPx}
+                y={oy}
+                width={lonPx}
+                height={rollH}
+                fill="#e7e5e2"
+                fillOpacity="0.55"
+              />
+              <line
+                x1={padL + lonPx}
+                x2={padL + lonPx}
+                y1={oy}
+                y2={oy + rollH}
+                stroke="#c9c6c0"
+                strokeWidth="1"
+                strokeDasharray="4 3"
+              />
+              <line
+                x1={padL + rollW - lonPx}
+                x2={padL + rollW - lonPx}
+                y1={oy}
+                y2={oy + rollH}
+                stroke="#c9c6c0"
+                strokeWidth="1"
+                strokeDasharray="4 3"
+              />
             </>
           ) : null}
         </g>
@@ -345,10 +496,33 @@ function SimRollLayout({
         const c = colorMap[p.id] || "#888";
         const showLabel = w > 44 && h > 22;
         return (
-          <g key={i} className="sim-piece" style={{ animationDelay: `${Math.min(i * 0.015, 0.4)}s` }}>
-            <rect x={x} y={y} width={w} height={h} fill={c} fillOpacity="0.16" stroke={c} strokeWidth="1.3" rx="2" />
+          <g
+            key={i}
+            className="sim-piece"
+            style={{ animationDelay: `${Math.min(i * 0.015, 0.4)}s` }}
+          >
+            <rect
+              x={x}
+              y={y}
+              width={w}
+              height={h}
+              fill={c}
+              fillOpacity="0.16"
+              stroke={c}
+              strokeWidth="1.3"
+              rx="2"
+            />
             {showLabel ? (
-              <text x={x + w / 2} y={y + h / 2} textAnchor="middle" dominantBaseline="central" fill={c} fontSize="10" fontFamily="var(--font-mono)" fontWeight="600">
+              <text
+                x={x + w / 2}
+                y={y + h / 2}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill={c}
+                fontSize="10"
+                fontFamily="var(--font-mono)"
+                fontWeight="600"
+              >
                 {colorLabel(p.id, colorMap)}
               </text>
             ) : null}
@@ -368,13 +542,28 @@ function SimRollLayout({
       >
         {fmtRollM(rollCm)} m
       </text>
-      <text x={padL + rollW / 2} y={oy + rollH + 18} textAnchor="middle" fill="#6e6e76" fontSize="11" fontFamily="var(--font-mono)" fontWeight="600">
+      <text
+        x={padL + rollW / 2}
+        y={oy + rollH + 18}
+        textAnchor="middle"
+        fill="#6e6e76"
+        fontSize="11"
+        fontFamily="var(--font-mono)"
+        fontWeight="600"
+      >
         {simFmt(pack.totalLen / 100, 2)} m lineales
       </text>
       {/* Valores de los márgenes, arriba del rollo. El de avance corre una sola
           vez por tanda (por eso "×1"): es lo que explica el ahorro. */}
       {hayMargenes ? (
-        <text x={padL + rollW / 2} y={11} textAnchor="middle" fill="#9a9a9f" fontSize="9.5" fontFamily="var(--font-mono)">
+        <text
+          x={padL + rollW / 2}
+          y={11}
+          textAnchor="middle"
+          fill="#9a9a9f"
+          fontSize="9.5"
+          fontFamily="var(--font-mono)"
+        >
           {`orilla ${simFmt(mLat * 10, 0)} mm · avance ${simFmt(mLon * 10, 0)} mm ×1`}
         </text>
       ) : null}
@@ -387,7 +576,9 @@ const labelPorJob = new WeakMap<Record<string, string>, Map<string, string>>();
 function colorLabel(id: string, colorMap: Record<string, string>) {
   let mapa = labelPorJob.get(colorMap);
   if (!mapa) {
-    mapa = new Map(Object.keys(colorMap).map((jobId, i) => [jobId, `#${i + 1}`]));
+    mapa = new Map(
+      Object.keys(colorMap).map((jobId, i) => [jobId, `#${i + 1}`]),
+    );
     labelPorJob.set(colorMap, mapa);
   }
   return mapa.get(id) ?? "";
@@ -405,6 +596,8 @@ function SimMaterialCard({
   onToggle,
   onCompletar,
   completando,
+  puedeVerImportes,
+  puedeGestionar,
 }: {
   material: VMaterial;
   jobs: VJob[];
@@ -418,8 +611,10 @@ function SimMaterialCard({
     pasoIds: string[],
     duracionTandaMin?: number,
     ahorro?: AhorroConsolidacionPayload,
-  ) => void;
+  ) => Promise<void>;
   completando: boolean;
+  puedeVerImportes: boolean;
+  puedeGestionar: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const [open, setOpen] = React.useState(false);
@@ -428,6 +623,8 @@ function SimMaterialCard({
   // entre los trabajos del lote. Vacío = cada paso asienta su estimado; NO
   // se prellena para no fabricar "mediciones" que nadie midió.
   const [tanda, setTanda] = React.useState("");
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const durationId = React.useId();
   const tandaMin = Number(tanda);
   const tandaValida = Number.isFinite(tandaMin) && tandaMin >= 1;
 
@@ -440,7 +637,9 @@ function SimMaterialCard({
     [material, nesting],
   );
   const shownRoll =
-    rollOverride && material.rolls.includes(rollOverride) ? rollOverride : bestRoll;
+    rollOverride && material.rolls.includes(rollOverride)
+      ? rollOverride
+      : bestRoll;
   const shownPack = results.find((r) => r.rollCm === shownRoll);
 
   const colorMap: Record<string, string> = {};
@@ -450,7 +649,8 @@ function SimMaterialCard({
 
   const totalPieces = activeJobs.reduce((a, j) => a + j.copies, 0);
   const totalM2 = activeJobs.reduce(
-    (a, j) => a + j.piezas.reduce((s, p) => s + (p.w * p.h * p.copies) / 10000, 0),
+    (a, j) =>
+      a + j.piezas.reduce((s, p) => s + (p.w * p.h * p.copies) / 10000, 0),
     0,
   );
 
@@ -459,21 +659,39 @@ function SimMaterialCard({
   const conBaseline = activeJobs.filter(
     (j) => j.consumoCotizadoMl !== null && !j.sinMedidas,
   );
-  const separadoMl = conBaseline.reduce((a, j) => a + (j.consumoCotizadoMl ?? 0), 0);
+  const separadoMl = conBaseline.reduce(
+    (a, j) => a + (j.consumoCotizadoMl ?? 0),
+    0,
+  );
   const separadoPesos = conBaseline.reduce(
     (a, j) =>
-      j.precioMlCotizado !== null ? a + (j.consumoCotizadoMl ?? 0) * j.precioMlCotizado : a,
+      j.precioMlCotizado !== null
+        ? a + (j.consumoCotizadoMl ?? 0) * j.precioMlCotizado
+        : a,
     0,
   );
   const consolidadoMl = shownPack ? shownPack.totalLen / 100 : null;
   const ahorroMl =
-    consolidadoMl !== null && conBaseline.length > 0 ? separadoMl - consolidadoMl : null;
+    consolidadoMl !== null && conBaseline.length > 0
+      ? separadoMl - consolidadoMl
+      : null;
   const ahorroPesos =
-    shownPack?.costo != null && separadoPesos > 0 ? separadoPesos - shownPack.costo : null;
-  const baselineParcial = conBaseline.length < activeJobs.filter((j) => !j.sinMedidas).length;
+    shownPack?.costo != null && separadoPesos > 0
+      ? separadoPesos - shownPack.costo
+      : null;
+  const baselineParcial =
+    conBaseline.length < activeJobs.filter((j) => !j.sinMedidas).length;
 
   const singleRoll = material.rolls.length === 1;
   const completables = activeJobs.map((j) => j.id);
+  const hayTrabajosConMedidas = activeJobs.some((job) => !job.sinMedidas);
+  const nestingValido =
+    !hayTrabajosConMedidas ||
+    (!nesteando &&
+      !nestingError &&
+      shownPack != null &&
+      shownPack.pieces > 0 &&
+      shownPack.incompatible.length === 0);
   const estimadoTanda = activeJobs.reduce(
     (acc, j) => acc + (j.duracionEstimadaMin ?? 0),
     0,
@@ -481,30 +699,28 @@ function SimMaterialCard({
 
   // Ahorro CONCRETADO de la tanda: se persiste al marcar impresos para el
   // acumulado de Reportes. Sin baseline cotizado no hay qué asentar.
-  const materiaPrimaId = material.key.split("|")[1];
   const ahorroPayload: AhorroConsolidacionPayload | undefined =
-    ahorroMl !== null && consolidadoMl !== null
+    shownRoll != null && material.varianteId[shownRoll] && nestingValido
       ? {
-          materiaPrimaId: materiaPrimaId !== SIN_MATERIAL ? materiaPrimaId : undefined,
-          materiaPrimaNombre: material.nm,
-          tecnologia: material.tech !== SIN_TECNOLOGIA ? material.tech : undefined,
-          jobs: activeJobs.length,
-          consumoSeparadoMl: r2(separadoMl),
-          consumoConsolidadoMl: r2(consolidadoMl),
-          ahorroMl: r2(ahorroMl),
-          costoSeparado: separadoPesos > 0 ? r2(separadoPesos) : undefined,
-          costoConsolidado: shownPack?.costo != null ? r2(shownPack.costo) : undefined,
-          ahorroPesos: ahorroPesos !== null ? r2(ahorroPesos) : undefined,
-          baselineParcial,
+          varianteId: material.varianteId[shownRoll],
+          anchoMm: Math.round(shownRoll * 10),
         }
       : undefined;
 
   return (
     <div className={`sim-mat ${open ? "open" : ""}`}>
-      <button type="button" className="sim-mat-head" onClick={() => setOpen((o) => !o)}>
+      <button
+        type="button"
+        className="sim-mat-head"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
         <span className="chev">
           <ChevronRightIcon
-            style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s ease" }}
+            style={{
+              transform: open ? "rotate(90deg)" : "none",
+              transition: "transform .15s ease",
+            }}
           />
         </span>
         <div className="sim-mat-id">
@@ -546,7 +762,9 @@ function SimMaterialCard({
               style={{
                 width: `${shownPack ? Math.round(shownPack.utilization * 100) : 0}%`,
                 background:
-                  shownPack && shownPack.utilization > 0.7 ? "var(--ok)" : "var(--info)",
+                  shownPack && shownPack.utilization > 0.7
+                    ? "var(--ok)"
+                    : "var(--info)",
               }}
             />
           </div>
@@ -570,21 +788,35 @@ function SimMaterialCard({
                     type="button"
                     key={j.id}
                     className={`sim-job ${off ? "off" : ""} ${j.urgent ? "urgent" : ""}`}
+                    aria-pressed={!off}
                     onClick={() => onToggle(j.id)}
                   >
-                    <span className="jc" style={{ background: colorMap[j.id], opacity: off ? 0.25 : 1 }} />
+                    <span
+                      className="jc"
+                      style={{
+                        background: colorMap[j.id],
+                        opacity: off ? 0.25 : 1,
+                      }}
+                    />
                     <div className="jb">
                       <div className="j1">
                         <span className="code mono">{j.code}</span>
-                        {j.urgent ? <span className="urg">HOY</span> : null}
+                        {j.urgencyLabel ? (
+                          <span className="urg">{j.urgencyLabel}</span>
+                        ) : null}
                       </div>
-                      <div className="j2">{j.cliente} · {j.producto}</div>
+                      <div className="j2">
+                        {j.cliente} · {j.producto}
+                      </div>
                       <div className="j3 mono">
                         {j.sinMedidas
                           ? "sin medidas"
                           : `${simFmt(pieza0.w, 0)}×${simFmt(pieza0.h, 0)} · ${j.copies}u${j.piezas.length > 1 ? ` · ${j.piezas.length} tamaños` : ""}`}
-                        {" · "}{j.due}
-                        {incompat && !off ? <span className="warn"> · no entra</span> : null}
+                        {" · "}
+                        {j.due}
+                        {incompat && !off ? (
+                          <span className="warn"> · no entra</span>
+                        ) : null}
                       </div>
                     </div>
                     <span className={`cbx ${!off ? "on" : ""}`}>
@@ -628,7 +860,13 @@ function SimMaterialCard({
                         type="button"
                         key={r.rollCm}
                         className={`sim-roll ${isShown ? "shown" : ""} ${isBest ? "best" : ""} ${blocked ? "blocked" : ""}`}
-                        onClick={() => setRollOverride(r.rollCm === bestRoll ? null : r.rollCm)}
+                        aria-pressed={isShown}
+                        disabled={blocked}
+                        onClick={() =>
+                          setRollOverride(
+                            r.rollCm === bestRoll ? null : r.rollCm,
+                          )
+                        }
                       >
                         <div className="rr1">
                           <span className="w mono">{fmtRollM(r.rollCm)} m</span>
@@ -643,11 +881,19 @@ function SimMaterialCard({
                           />
                         </div>
                         <div className="rr2 mono">
-                          <span className="u">{Math.round(r.utilization * 100)}%</span>
-                          <span className="wa">{r.costo !== null ? fmtPesos(r.costo, moneda) : `−${simFmt(r.wasteArea / 10000, 1)}m²`}</span>
+                          <span className="u">
+                            {Math.round(r.utilization * 100)}%
+                          </span>
+                          <span className="wa">
+                            {r.costo !== null
+                              ? fmtPesos(r.costo, moneda)
+                              : `−${simFmt(r.wasteArea / 10000, 1)}m²`}
+                          </span>
                         </div>
                         {blocked ? (
-                          <div className="rblock mono">{r.incompatible.length} no entra</div>
+                          <div className="rblock mono">
+                            {r.incompatible.length} no entra
+                          </div>
                         ) : null}
                       </button>
                     );
@@ -660,85 +906,154 @@ function SimMaterialCard({
                   <span className="k">Consumo</span>
                   <span className="v mono">
                     {consolidadoMl !== null ? simFmt(consolidadoMl, 2) : "—"} ml
-                    {shownPack?.costo != null ? ` · ${fmtPesos(shownPack.costo, moneda)}` : ""}
+                    {puedeVerImportes && shownPack?.costo != null
+                      ? ` · ${fmtPesos(shownPack.costo, moneda)}`
+                      : ""}
                   </span>
                 </div>
                 <div className={`sv ${(ahorroMl ?? 0) >= 0 ? "ok" : ""}`}>
-                  <span className="k">Ahorro vs. cotizado{baselineParcial ? " (parcial)" : ""}</span>
+                  <span className="k">
+                    Ahorro vs. cotizado{baselineParcial ? " (parcial)" : ""}
+                  </span>
                   <span className="v mono">
                     {ahorroMl !== null ? `${simFmt(ahorroMl, 1)} ml` : "—"}
-                    {ahorroPesos !== null ? ` · ${fmtPesos(ahorroPesos, moneda)}` : ""}
+                    {puedeVerImportes && ahorroPesos !== null
+                      ? ` · ${fmtPesos(ahorroPesos, moneda)}`
+                      : ""}
                   </span>
                 </div>
-                <div
-                  className="sim-tanda"
-                  title="Si medís cuánto duró la tanda completa, ese tiempo real se reparte entre los trabajos y sirve para calibrar la máquina. Vacío = queda el estimado."
-                >
-                  <label>Duró</label>
-                  <input
-                    type="number"
-                    min={1}
-                    placeholder={estimadoTanda > 0 ? `~${Math.round(estimadoTanda)}` : "min"}
-                    value={tanda}
-                    onChange={(event) => setTanda(event.target.value)}
-                  />
-                  <span className="u">min</span>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-primary sim-send"
-                  disabled={completables.length === 0 || completando}
-                  onClick={() =>
-                    onCompletar(
-                      completables,
-                      tandaValida ? tandaMin : undefined,
-                      ahorroPayload,
-                    )
-                  }
-                >
-                  <ArrowRightIcon />
-                  {completando ? "Marcando…" : `Marcar impresos (${completables.length})`}
-                </button>
+                {puedeGestionar ? (
+                  <>
+                    <div
+                      className="sim-tanda"
+                      title="Si medís cuánto duró la tanda completa, ese tiempo real se reparte entre los trabajos y sirve para calibrar la máquina. Vacío = queda el estimado."
+                    >
+                      <label htmlFor={durationId}>Duró</label>
+                      <input
+                        id={durationId}
+                        type="number"
+                        min={1}
+                        placeholder={
+                          estimadoTanda > 0
+                            ? `~${Math.round(estimadoTanda)}`
+                            : "min"
+                        }
+                        value={tanda}
+                        onChange={(event) => setTanda(event.target.value)}
+                      />
+                      <span className="u">min</span>
+                    </div>
+                    <Button
+                      className="sim-send"
+                      size="lg"
+                      disabled={
+                        completables.length === 0 ||
+                        completando ||
+                        !nestingValido
+                      }
+                      onClick={() => setConfirmOpen(true)}
+                    >
+                      <ArrowRightIcon data-icon="inline-start" />
+                      {completando
+                        ? "Marcando…"
+                        : `Marcar impresos (${completables.length})`}
+                    </Button>
+                  </>
+                ) : null}
               </div>
+              {!nestingValido ? (
+                <div className="sim-batch-warning" role="status">
+                  {nestingError
+                    ? "No se puede completar hasta recuperar el acomodo."
+                    : nesteando
+                      ? "Esperando el cálculo del acomodo…"
+                      : "Elegí un ancho donde entren todos los trabajos."}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       ) : null}
+      <ConfirmacionDestructiva
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        titulo={`Confirmar tanda de ${material.nm}`}
+        descripcion="Esta acción marcará los pasos como impresos y avanzará sus órdenes de trabajo."
+        impacto={[
+          `${completables.length} trabajo${completables.length === 1 ? "" : "s"} avanzará${completables.length === 1 ? "" : "n"} de etapa.`,
+          shownRoll
+            ? `Se registrará el ancho seleccionado de ${fmtRollM(shownRoll)} m.`
+            : "La tanda no tiene un ancho registrado.",
+          tandaValida
+            ? `Se distribuirán ${simFmt(tandaMin, 0)} minutos reales.`
+            : "Se conservarán los tiempos estimados.",
+        ]}
+        requiereTipear={false}
+        accionLabel="Confirmar impresión"
+        onConfirmar={async () => {
+          await onCompletar(
+            completables,
+            tandaValida ? tandaMin : undefined,
+            ahorroPayload,
+          );
+          setConfirmOpen(false);
+        }}
+      />
     </div>
   );
 }
 
 /* ─────────── Vista principal ─────────── */
 
-export function SimuladorImpresion({ initialData }: { initialData: SimuladorData }) {
+export function SimuladorImpresion({
+  initialData,
+  initialError = null,
+}: {
+  initialData: SimuladorData;
+  initialError?: string | null;
+}) {
   const { moneda } = useConfigRegional();
+  const puedeGestionar = usePuede("produccion.gestionar");
   const [data, setData] = React.useState(initialData);
   const [excluded, setExcluded] = React.useState<Set<string>>(() => new Set());
   const [completando, setCompletando] = React.useState(false);
   const [resultado, setResultado] = React.useState<string | null>(null);
+  const [refreshError, setRefreshError] = React.useState<string | null>(
+    initialError,
+  );
+  const [refreshing, setRefreshing] = React.useState(false);
   const completandoRef = React.useRef(false);
 
-  const { jobs: jobsByMat, techs, materials } = React.useMemo(
-    () => buildViewModel(data),
-    [data],
-  );
+  const {
+    jobs: jobsByMat,
+    techs,
+    materials,
+  } = React.useMemo(() => buildViewModel(data), [data]);
   const [techKey, setTechKey] = React.useState<string | null>(null);
   const tech = techs.find((t) => t.key === techKey) ?? techs[0] ?? null;
 
   // Cola EN VIVO (mismo patrón del tablero): pausa oculta + refresh al foco;
   // no se pisa un lote en vuelo. La selección vive por pasoId: lo que otro
   // completa desaparece solo.
+  const refrescar = React.useCallback(async () => {
+    if (document.hidden || completandoRef.current) return;
+    setRefreshing(true);
+    try {
+      const fresh = await getSimuladorImpresion();
+      if (!completandoRef.current) setData(fresh);
+      setRefreshError(null);
+    } catch (error) {
+      setRefreshError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar la cola.",
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   React.useEffect(() => {
-    let vivo = true;
-    const refrescar = async () => {
-      if (document.hidden || completandoRef.current) return;
-      try {
-        const fresh = await getSimuladorImpresion();
-        if (vivo && !completandoRef.current) setData(fresh);
-      } catch {
-        // Se conserva el último estado.
-      }
-    };
     const id = window.setInterval(() => void refrescar(), POLL_SIMULADOR_MS);
     const onFocus = () => {
       if (!document.hidden) void refrescar();
@@ -746,12 +1061,11 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
     document.addEventListener("visibilitychange", onFocus);
     window.addEventListener("focus", onFocus);
     return () => {
-      vivo = false;
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [refrescar]);
 
   const toggle = (id: string) =>
     setExcluded((s) => {
@@ -776,13 +1090,16 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
       const res = await completarPasosLote(pasoIds, duracionTandaMin, ahorro);
       const fresh = await getSimuladorImpresion();
       setData(fresh);
+      setRefreshError(null);
       setResultado(
         res.errores.length === 0
           ? `${res.completados} paso${res.completados === 1 ? "" : "s"} de impresión marcados como hechos.`
           : `${res.completados} marcados · ${res.errores.length} con error: ${res.errores.map((e) => e.motivo).join(" / ")}`,
       );
     } catch (err) {
-      setResultado(err instanceof Error ? err.message : "No se pudo completar el lote.");
+      setResultado(
+        err instanceof Error ? err.message : "No se pudo completar el lote.",
+      );
     } finally {
       setCompletando(false);
       completandoRef.current = false;
@@ -809,9 +1126,9 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
     [techMaterials, jobsByMat, excluded],
   );
   const gruposKey = JSON.stringify(grupos);
-  const [nesting, setNesting] = React.useState<Map<string, SimuladorNestingGrupo>>(
-    () => new Map(),
-  );
+  const [nesting, setNesting] = React.useState<
+    Map<string, SimuladorNestingGrupo>
+  >(() => new Map());
   const [nestingError, setNestingError] = React.useState<string | null>(null);
   const [nesteando, setNesteando] = React.useState(false);
 
@@ -835,7 +1152,9 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
           // Sin acomodo no se inventan números: se avisa y no se muestra nada.
           setNesting(new Map());
           setNestingError(
-            err instanceof Error ? err.message : "No se pudo calcular el acomodo.",
+            err instanceof Error
+              ? err.message
+              : "No se pudo calcular el acomodo.",
           );
         })
         .finally(() => {
@@ -853,7 +1172,8 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
     .flatMap((m) => jobsByMat.get(m.key) ?? [])
     .filter((j) => !excluded.has(j.id));
   const techM2 = techJobs.reduce(
-    (a, j) => a + j.piezas.reduce((s, p) => s + (p.w * p.h * p.copies) / 10000, 0),
+    (a, j) =>
+      a + j.piezas.reduce((s, p) => s + (p.w * p.h * p.copies) / 10000, 0),
     0,
   );
   const techPieces = techJobs.reduce((a, j) => a + j.copies, 0);
@@ -867,120 +1187,171 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
     const { results, bestRoll } = simCompareRolls(m, nesting.get(m.key));
     const best = results.find((r) => r.rollCm === bestRoll);
     if (!best) continue;
-    const conBaseline = mj.filter((j) => j.consumoCotizadoMl !== null && !j.sinMedidas);
-    const sepMl = conBaseline.reduce((a, j) => a + (j.consumoCotizadoMl ?? 0), 0);
+    const conBaseline = mj.filter(
+      (j) => j.consumoCotizadoMl !== null && !j.sinMedidas,
+    );
+    const sepMl = conBaseline.reduce(
+      (a, j) => a + (j.consumoCotizadoMl ?? 0),
+      0,
+    );
     const sepPesos = conBaseline.reduce(
-      (a, j) => (j.precioMlCotizado !== null ? a + (j.consumoCotizadoMl ?? 0) * j.precioMlCotizado : a),
+      (a, j) =>
+        j.precioMlCotizado !== null
+          ? a + (j.consumoCotizadoMl ?? 0) * j.precioMlCotizado
+          : a,
       0,
     );
     if (conBaseline.length) techAhorroMl += sepMl - best.totalLen / 100;
-    if (sepPesos > 0 && best.costo !== null) techAhorroPesos += sepPesos - best.costo;
+    if (sepPesos > 0 && best.costo !== null)
+      techAhorroPesos += sepPesos - best.costo;
   }
 
   const techCount = (tk: string) =>
-    materials.filter((m) => m.tech === tk).reduce((acc, m) => acc + (jobsByMat.get(m.key)?.length ?? 0), 0);
+    materials
+      .filter((m) => m.tech === tk)
+      .reduce((acc, m) => acc + (jobsByMat.get(m.key)?.length ?? 0), 0);
 
   return (
     <div className="sim-scroll">
-    <div className="sim-page">
-      <div className="sim-head">
-        <div className="left">
-          <h1>Simulador gran formato</h1>
-          <div className="sub">
-            Todo lo listo para imprimir por área, consolidado por material, con el
-            ancho de rollo óptimo y su costo. Marcá el batch impreso de una.
+      <div className="sim-page">
+        <div className="sim-head">
+          <div className="left">
+            <h1>Simulador gran formato</h1>
+            <div className="sub">
+              Todo lo listo para imprimir por área, consolidado por material,
+              con el ancho de rollo óptimo y su costo. Marcá el batch impreso de
+              una.
+            </div>
           </div>
+          <span className={`sim-live ${refreshError ? "stale" : ""}`}>
+            <span className="d" />
+            {refreshError ? "Datos sin actualizar" : "Cola en vivo"}
+          </span>
         </div>
-        <span className="sim-live">
-          <span className="d" />
-          Cola en vivo
-        </span>
-      </div>
 
-      {resultado ? <div className="sim-resultado" role="status">{resultado}</div> : null}
+        {resultado ? (
+          <div className="sim-resultado" role="status">
+            {resultado}
+          </div>
+        ) : null}
 
-      {techs.length === 0 ? (
-        <div className="sim-empty">
-          No hay pasos de impresión por área listos para imprimir. Cuando una orden
-          emitida llegue a su paso de impresión, aparece acá.
-        </div>
-      ) : (
-        <>
-          <div className="sim-techs">
-            {techs.map((t) => (
-              <button
-                type="button"
-                key={t.key}
-                className={`sim-tech ${currentTechKey === t.key ? "on" : ""}`}
-                onClick={() => setTechKey(t.key)}
+        {refreshError ? (
+          <Alert variant="destructive" className="sim-alert">
+            <AlertTriangleIcon />
+            <AlertTitle>No pudimos actualizar la cola</AlertTitle>
+            <AlertDescription>
+              Conservamos los últimos datos disponibles. {refreshError}
+            </AlertDescription>
+            <AlertAction>
+              <Button
+                variant="outline"
+                size="sm"
+                loading={refreshing}
+                onClick={() => void refrescar()}
               >
-                <span className="dot" style={{ background: t.color }} />
-                <span className="tt">
-                  <span className="n">{t.nm}</span>
-                  <span className="s">{t.sub}</span>
-                </span>
-                <span className="ct mono">{techCount(t.key)}</span>
-              </button>
-            ))}
-          </div>
+                <RefreshCwIcon data-icon="inline-start" />
+                Reintentar
+              </Button>
+            </AlertAction>
+          </Alert>
+        ) : null}
 
-          <div className="sim-kpis">
-            <div className="sim-kpi">
-              <div className="k">Materiales</div>
-              <div className="v mono">{techMaterials.length}</div>
+        {techs.length === 0 ? (
+          refreshError ? null : (
+            <div className="sim-empty">
+              No hay pasos de impresión por área listos para imprimir. Cuando
+              una orden emitida llegue a su paso de impresión, aparece acá.
             </div>
-            <div className="sim-kpi">
-              <div className="k">Trabajos en cola</div>
-              <div className="v mono">{techJobs.length}</div>
+          )
+        ) : (
+          <>
+            <div
+              className="sim-techs"
+              role="tablist"
+              aria-label="Tecnologías de impresión"
+            >
+              {techs.map((t) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={currentTechKey === t.key}
+                  key={t.key}
+                  className={`sim-tech ${currentTechKey === t.key ? "on" : ""}`}
+                  onClick={() => setTechKey(t.key)}
+                >
+                  <span className="dot" style={{ background: t.color }} />
+                  <span className="tt">
+                    <span className="n">{t.nm}</span>
+                    <span className="s">{t.sub}</span>
+                  </span>
+                  <span className="ct mono">{techCount(t.key)}</span>
+                </button>
+              ))}
             </div>
-            <div className="sim-kpi">
-              <div className="k">Piezas totales</div>
-              <div className="v mono">{techPieces}</div>
-            </div>
-            <div className="sim-kpi">
-              <div className="k">Área a imprimir</div>
-              <div className="v mono">{simFmt(techM2, 1)} m²</div>
-            </div>
-            <div className={`sim-kpi ${techAhorroMl >= 0 ? "ok" : ""}`}>
-              <div className="k">Ahorro vs. cotizado</div>
-              <div className="v mono">
-                {simFmt(techAhorroMl, 1)} ml
-                {techAhorroPesos !== 0 ? ` · ${fmtPesos(techAhorroPesos, moneda)}` : ""}
+
+            <div className="sim-kpis">
+              <div className="sim-kpi">
+                <div className="k">Materiales</div>
+                <div className="v mono">{techMaterials.length}</div>
+              </div>
+              <div className="sim-kpi">
+                <div className="k">Trabajos en cola</div>
+                <div className="v mono">{techJobs.length}</div>
+              </div>
+              <div className="sim-kpi">
+                <div className="k">Piezas totales</div>
+                <div className="v mono">{techPieces}</div>
+              </div>
+              <div className="sim-kpi">
+                <div className="k">Área a imprimir</div>
+                <div className="v mono">{simFmt(techM2, 1)} m²</div>
+              </div>
+              <div className={`sim-kpi ${techAhorroMl >= 0 ? "ok" : ""}`}>
+                <div className="k">Ahorro vs. cotizado</div>
+                <div className="v mono">
+                  {simFmt(techAhorroMl, 1)} ml
+                  {data.puedeVerImportes && techAhorroPesos !== 0
+                    ? ` · ${fmtPesos(techAhorroPesos, moneda)}`
+                    : ""}
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="sim-mats">
-            <div className="sim-mats-head">
-              <span className="ttl">
-                Materiales · <span style={{ color: tech?.color }}>{tech?.nm}</span>
-              </span>
-              <span className="hint">
-                Tocá un material para ver el acomodo · tocá un trabajo para excluirlo del batch
-              </span>
+            <div className="sim-mats">
+              <div className="sim-mats-head">
+                <span className="ttl">
+                  Materiales ·{" "}
+                  <span style={{ color: tech?.color }}>{tech?.nm}</span>
+                </span>
+                <span className="hint">
+                  Tocá un material para ver el acomodo · tocá un trabajo para
+                  excluirlo del batch
+                </span>
+              </div>
+              {techMaterials.map((m) => {
+                const mj = jobsByMat.get(m.key) ?? [];
+                if (!mj.length) return null;
+                return (
+                  <SimMaterialCard
+                    key={m.key}
+                    material={m}
+                    jobs={mj}
+                    excluded={excluded}
+                    nesting={nesting.get(m.key)}
+                    nesteando={nesteando}
+                    nestingError={nestingError}
+                    onToggle={toggle}
+                    onCompletar={completar}
+                    completando={completando}
+                    puedeVerImportes={data.puedeVerImportes}
+                    puedeGestionar={puedeGestionar}
+                  />
+                );
+              })}
             </div>
-            {techMaterials.map((m) => {
-              const mj = jobsByMat.get(m.key) ?? [];
-              if (!mj.length) return null;
-              return (
-                <SimMaterialCard
-                  key={m.key}
-                  material={m}
-                  jobs={mj}
-                  excluded={excluded}
-                  nesting={nesting.get(m.key)}
-                  nesteando={nesteando}
-                  nestingError={nestingError}
-                  onToggle={toggle}
-                  onCompletar={(pasoIds, tanda, ahorro) => void completar(pasoIds, tanda, ahorro)}
-                  completando={completando}
-                />
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

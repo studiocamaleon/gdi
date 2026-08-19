@@ -213,6 +213,20 @@ export function estadoNarrativo(estado: string): string {
   }
 }
 
+/** Bajada del estado global: no debe prometer un retiro que ya ocurrió. */
+export function resumenEstadoTracking(
+  estado: string,
+  progresoPct: number,
+): string {
+  if (estado === "entregada") {
+    return "Pedido entregado. Gracias por confiar en nosotros.";
+  }
+  if (estado === "finalizada") {
+    return `${progresoPct}% completado. Ya podés retirarlo.`;
+  }
+  return `${progresoPct}% completado. Te avisaremos ni bien esté listo para retirar.`;
+}
+
 export function estadoPill(
   estado: string,
 ): { label: string; tone: "ok" | "warm" | "wait" } {

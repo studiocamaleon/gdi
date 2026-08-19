@@ -54,12 +54,24 @@ import type {
 import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import type { AhorroConsolidacionDto } from './dto/completar-pasos-lote.dto';
 import {
+  colaConsolidacionDeFamilia,
   modoRegistroDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { evaluarCupon, planDescuentoCupon } from '../cupones/cupon-reglas';
 import { FacturacionOrdenesService } from '../administracion/facturacion-ordenes.service';
+import {
+  acomodarTanda,
+  claveCompatibilidadVariante,
+} from '../produccion/produccion.service';
+import {
+  aplicarFallbackConfigLaser,
+  claveCompatibilidadLoteLaser,
+  extraerCompatibilidadLaser,
+  faltantesCompatibilidadLaser,
+} from '../produccion/simulador-laser-compatibilidad';
+import { resolverEstacionDePaso } from '../eta/motor/tablero-tipos';
 
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
@@ -98,6 +110,66 @@ type CotizacionItemFinanciero = {
   descuentoValor: unknown;
   descuentoMonto: unknown;
 };
+
+type PasoAhorroConsolidacion = {
+  id: string;
+  rutaPasoId: string | null;
+  item: {
+    cotizacionItem: {
+      jobContextJson: Prisma.JsonValue;
+      trazabilidadJson: Prisma.JsonValue;
+    } | null;
+  };
+};
+
+function snapshotAhorroPaso(paso: PasoAhorroConsolidacion) {
+  const jobContext =
+    (paso.item.cotizacionItem?.jobContextJson as Record<
+      string,
+      unknown
+    > | null) ?? null;
+  const trazabilidad = paso.item.cotizacionItem?.trazabilidadJson as {
+    pasos?: Array<{
+      rutaPasoId?: string | null;
+      materiales?: Array<{
+        tipoLineaCosto?: string;
+        materialVarianteId?: string;
+        materiaPrimaNombre?: string;
+        precioUnitario?: number;
+      }>;
+      nestingResult?: { consumedLengthMm?: number } | null;
+    }>;
+  } | null;
+  const traza = Array.isArray(trazabilidad?.pasos)
+    ? trazabilidad.pasos.find(
+        (item) => item.rutaPasoId && item.rutaPasoId === paso.rutaPasoId,
+      )
+    : null;
+  const material = traza?.materiales?.find(
+    (item) => item.tipoLineaCosto === 'MATERIAL',
+  );
+  const tecnologiaPaso = paso.rutaPasoId
+    ? jobContext?.[`tecnologia_${paso.rutaPasoId}`]
+    : null;
+  return {
+    varianteId:
+      typeof material?.materialVarianteId === 'string'
+        ? material.materialVarianteId
+        : null,
+    consumoCotizadoMl:
+      typeof traza?.nestingResult?.consumedLengthMm === 'number'
+        ? traza.nestingResult.consumedLengthMm / 1000
+        : null,
+    precioMl:
+      typeof material?.precioUnitario === 'number'
+        ? material.precioUnitario
+        : null,
+    tecnologia:
+      (typeof tecnologiaPaso === 'string' && tecnologiaPaso) ||
+      (typeof jobContext?.tecnologia === 'string' && jobContext.tecnologia) ||
+      null,
+  };
+}
 
 function redondearDinero(valor: number, decimales: number) {
   const factor = 10 ** decimales;
@@ -281,6 +353,50 @@ const LIST_INCLUDE = {
 
 /** Órdenes que viven en el Tablero: emitidas y todavía no terminadas. */
 const ESTADOS_TABLERO: OrdenTrabajoEstado[] = ['pendiente', 'produccion'];
+
+export type AlcanceTableroProduccion = 'completo' | 'vendedor' | 'operario';
+
+/**
+ * El tablero se personaliza por capacidades efectivas, no por el nombre del
+ * rol. Esto mantiene seguros también los roles personalizados y permite que
+ * el Panel General previsualice perfiles reemplazando sólo sus permisos.
+ */
+export function alcanceTableroProduccionDe(
+  auth: Pick<CurrentAuth, 'permisos'>,
+): AlcanceTableroProduccion {
+  void auth;
+  // El Tablero es la verdad compartida del taller: todos sus lectores ven
+  // todas las órdenes, sus pasos y el cliente. Los permisos finos gobiernan
+  // las acciones, no recortan la lectura.
+  return 'completo';
+}
+
+type PasoVisibleParaOperario = {
+  indice: number;
+  estado: string;
+  mesaEsMia: boolean;
+  mesaUsuarioNombre: string | null;
+  tramoAbierto: { esMio: boolean } | null;
+};
+
+/** Su mesa + la frontera activa libre que puede reclamar; nunca pasos futuros. */
+export function pasosVisiblesParaOperario<T extends PasoVisibleParaOperario>(
+  pasos: T[],
+): T[] {
+  return pasos.filter((paso) => {
+    if (paso.mesaEsMia || paso.tramoAbierto?.esMio) return true;
+    if (
+      paso.estado === 'hecho' ||
+      paso.estado === 'bloqueado' ||
+      paso.mesaUsuarioNombre
+    ) {
+      return false;
+    }
+    return pasos
+      .filter((anterior) => anterior.indice < paso.indice)
+      .every((anterior) => anterior.estado === 'hecho');
+  });
+}
 
 /**
  * Proyección mínima del PasoEjecutado del snapshot del cotizador
@@ -1403,8 +1519,7 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró el vendedor.');
 
     let itemsAutorizados:
-      | Array<CrearOrdenTrabajoItemDto & { id?: string }>
-      | undefined;
+      Array<CrearOrdenTrabajoItemDto & { id?: string }> | undefined;
     if (payload.items) {
       const idsExistentes = payload.items
         .map((item) => item.id)
@@ -2261,8 +2376,7 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
-            | undefined;
+            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -3905,12 +4019,38 @@ export class OrdenesTrabajoService {
     );
   }
 
-  /** Items activos con sus pasos: el dataset COMPLETO del Tablero. */
+  /** Items activos con sus pasos, personalizados por alcance efectivo. */
   async tablero(auth: CurrentAuth) {
     await this.reconciliarTramosVencidos(auth.tenantId);
     await this.backfillPasosTablero(auth);
+    const alcance = alcanceTableroProduccionDe(auth);
+    const puedeGestionar =
+      auth.permisos?.has('produccion.ejecutar') ||
+      auth.permisos?.has('produccion.supervisar') ||
+      false;
+    const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
+    const empleadoEjecutor =
+      puedeGestionar && !supervisa
+        ? await this.prisma.empleado.findFirst({
+            where: {
+              tenantId: auth.tenantId,
+              userId: auth.userId,
+              activo: true,
+            },
+            select: {
+              estaciones: { select: { estacionId: true } },
+            },
+          })
+        : null;
+    const estacionIdsEjecutables = supervisa
+      ? null
+      : (empleadoEjecutor?.estaciones.map((fila) => fila.estacionId) ?? []);
+
     const ordenes = await this.prisma.ordenTrabajo.findMany({
-      where: { tenantId: auth.tenantId, estado: { in: ESTADOS_TABLERO } },
+      where: {
+        tenantId: auth.tenantId,
+        estado: { in: ESTADOS_TABLERO },
+      },
       include: {
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
@@ -3961,12 +4101,19 @@ export class OrdenesTrabajoService {
       auth.tenantId,
       ordenes.flatMap((orden) => orden.items),
     );
-    return {
-      items: ordenes.flatMap((orden) =>
-        orden.items.map((item) =>
+    const items = ordenes.flatMap((orden) =>
+      orden.items
+        .map((item) =>
           this.toTableroItem(orden, item, auth.userId, tecnologias),
-        ),
-      ),
+        )
+        .map((item) => item),
+    );
+    return {
+      items,
+      alcance,
+      puedeGestionar,
+      estacionIdsEjecutables,
+      vendedorSinVinculo: false,
     };
   }
 
@@ -4052,26 +4199,136 @@ export class OrdenesTrabajoService {
 
   /**
    * Toma o suelta un paso de "mi mesa de trabajo" (vista Por estación).
-   * Reclamo simple y visible: tomar pisa el reclamo de otro (taller chico);
-   * los pasos hechos no se reclaman. Devuelve el item re-proyectado.
+   * El reclamo es exclusivo: nunca se pisa silenciosamente el trabajo que ya
+   * tomó otra persona. El update condicional también cierra la carrera entre
+   * dos usuarios que intentan tomarlo al mismo tiempo.
    */
+  private async validarEjecucionEnEstacion(
+    auth: CurrentAuth,
+    paso: { familiaCodigo: string; maquinaId: string | null },
+  ) {
+    if (!(auth.permisos?.has('produccion.ejecutar') ?? false)) {
+      throw new ForbiddenException('No tenés permiso para ejecutar producción.');
+    }
+    const [empleado, maquina, estaciones] = await Promise.all([
+      this.prisma.empleado.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          userId: auth.userId,
+          activo: true,
+        },
+        select: { id: true },
+      }),
+      paso.maquinaId
+        ? this.prisma.maquina.findFirst({
+            where: { tenantId: auth.tenantId, id: paso.maquinaId },
+            select: {
+              plantilla: true,
+              parametrosTecnicosJson: true,
+              capacidadesAvanzadasJson: true,
+            },
+          })
+        : Promise.resolve(null),
+      this.prisma.estacion.findMany({
+        where: { tenantId: auth.tenantId, activo: true },
+        select: {
+          id: true,
+          activo: true,
+          reglas: { select: { tipo: true, valor: true } },
+          maquinas: {
+            select: { id: true, centroCostoPrincipalId: true },
+          },
+          empleados: { select: { empleadoId: true } },
+        },
+      }),
+    ]);
+    if (!empleado) {
+      throw new ForbiddenException(
+        'Tu usuario debe estar vinculado a un empleado activo para ejecutar pasos.',
+      );
+    }
+    const familia = resolverFamilia(paso.familiaCodigo);
+    const estacion = resolverEstacionDePaso(
+      estaciones.map((item) => ({
+        ...item,
+        familias: item.reglas
+          .filter((regla) => regla.tipo === 'familia')
+          .map((regla) => regla.valor),
+        reglas: item.reglas.filter((regla) => regla.tipo !== 'familia'),
+        maquinas: item.maquinas.map((itemMaquina) => ({
+          id: itemMaquina.id,
+          centroCostoId: itemMaquina.centroCostoPrincipalId,
+        })),
+      })),
+      {
+        familiaCodigo: paso.familiaCodigo,
+        plantillaCodigo: familia?.plantillaCodigo ?? null,
+        centroCostoId: null,
+        maquinaId: paso.maquinaId,
+        tecnologia: resolverTecnologiaMaquina(maquina),
+      },
+    );
+    if (!estacion) {
+      throw new ForbiddenException(
+        'El paso no tiene una estación activa configurada.',
+      );
+    }
+    if (!estacion.empleados.some((fila) => fila.empleadoId === empleado.id)) {
+      throw new ForbiddenException(
+        'No estás habilitado para ejecutar trabajos de esta estación.',
+      );
+    }
+  }
+
   async mesaPaso(auth: CurrentAuth, pasoId: string, en: boolean) {
     const paso = await this.prisma.ordenTrabajoItemPaso.findFirst({
       where: { id: pasoId, tenantId: auth.tenantId },
-      select: { id: true, itemId: true, estado: true },
+      select: {
+        id: true,
+        itemId: true,
+        estado: true,
+        mesaUsuarioId: true,
+        familiaCodigo: true,
+        maquinaId: true,
+      },
     });
     if (!paso) {
       throw new NotFoundException('No se encontró el paso de producción.');
+    }
+    if (en && !auth.permisos?.has('produccion.supervisar')) {
+      await this.validarEjecucionEnEstacion(auth, paso);
     }
     if (en && paso.estado === 'hecho') {
       throw new BadRequestException(
         'El paso ya está hecho: no va a ninguna mesa.',
       );
     }
-    await this.prisma.ordenTrabajoItemPaso.update({
-      where: { id: paso.id },
+    if (en && paso.mesaUsuarioId === auth.userId) {
+      return this.tableroItemActualizado(auth, paso.itemId);
+    }
+    if (en && paso.mesaUsuarioId) {
+      throw new ConflictException(
+        'Otra persona ya tomó este paso. Actualizá el tablero para ver su asignación.',
+      );
+    }
+    if (!en && paso.mesaUsuarioId !== auth.userId) {
+      throw new ConflictException(
+        'No podés soltar un paso que no está en tu mesa.',
+      );
+    }
+    const actualizado = await this.prisma.ordenTrabajoItemPaso.updateMany({
+      where: {
+        id: paso.id,
+        tenantId: auth.tenantId,
+        mesaUsuarioId: en ? null : auth.userId,
+      },
       data: { mesaUsuarioId: en ? auth.userId : null },
     });
+    if (actualizado.count !== 1) {
+      throw new ConflictException(
+        'La asignación cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
+      );
+    }
     return this.tableroItemActualizado(auth, paso.itemId);
   }
 
@@ -4096,7 +4353,9 @@ export class OrdenesTrabajoService {
         include: {
           orden: { select: { estado: true, progresoPct: true } },
           item: { select: { nombre: true, ordenIndice: true } },
-          tramos: { select: { id: true, inicioEl: true, finEl: true } },
+          tramos: {
+            select: { id: true, usuarioId: true, inicioEl: true, finEl: true },
+          },
         },
       }),
       this.prisma.empleado.findFirst({
@@ -4106,6 +4365,26 @@ export class OrdenesTrabajoService {
     ]);
     if (!paso) {
       throw new NotFoundException('No se encontró el paso de producción.');
+    }
+    const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
+    if (
+      (payload.accion === 'desbloquear' || payload.accion === 'reabrir') &&
+      !supervisa
+    ) {
+      throw new ForbiddenException(
+        'Sólo un supervisor puede desbloquear o reabrir pasos.',
+      );
+    }
+    if (!supervisa) {
+      await this.validarEjecucionEnEstacion(auth, paso);
+      if (
+        paso.mesaUsuarioId !== auth.userId &&
+        !paso.tramos.some(
+          (tramo) => tramo.usuarioId === auth.userId && !tramo.finEl,
+        )
+      ) {
+        throw new ForbiddenException('Este paso no está en tu mesa de trabajo.');
+      }
     }
     const ordenEstado = paso.orden.estado as OrdenTrabajoEstado;
     // Reabrir un paso de una OT ya finalizada la vuelve a producción (deshacer
@@ -4285,10 +4564,41 @@ export class OrdenesTrabajoService {
     const letraItem = String.fromCharCode(65 + (paso.item.ordenIndice % 26));
 
     const ordenFinalizada = await this.prisma.$transaction(async (tx) => {
-      await tx.ordenTrabajoItemPaso.update({
-        where: { id: paso.id },
+      // Serializa todas las acciones de una misma OT antes de recalcular su
+      // progreso. Evita que dos pasos distintos escriban porcentajes tomados
+      // de snapshots concurrentes.
+      const ordenTomada = await tx.ordenTrabajo.updateMany({
+        where: {
+          id: ordenId,
+          tenantId: auth.tenantId,
+          estado: ordenEstado,
+        },
+        data: { updatedAt: ahora },
+      });
+      if (ordenTomada.count !== 1) {
+        throw new ConflictException(
+          'La orden cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
+        );
+      }
+
+      // Compare-and-set: la transición sólo se confirma si el paso conserva
+      // exactamente el estado que validamos. El segundo de dos clicks
+      // concurrentes obtiene conflicto y no abre otro tramo.
+      const pasoTomado = await tx.ordenTrabajoItemPaso.updateMany({
+        where: {
+          id: paso.id,
+          tenantId: auth.tenantId,
+          ordenId,
+          itemId,
+          estado: estadoActual,
+        },
         data,
       });
+      if (pasoTomado.count !== 1) {
+        throw new ConflictException(
+          'El paso cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
+        );
+      }
 
       // Tramos (D2): iniciar/continuar abren sesión de trabajo; pausar,
       // completar y bloquear cierran la abierta con su motivo.
@@ -4437,6 +4747,7 @@ export class OrdenesTrabajoService {
     pasoIds: string[],
     duracionTandaMin?: number,
     ahorro?: AhorroConsolidacionDto,
+    validarCompatibilidadLaser = false,
   ) {
     const unicos = [...new Set(pasoIds)];
     const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
@@ -4446,10 +4757,234 @@ export class OrdenesTrabajoService {
         ordenId: true,
         itemId: true,
         nombre: true,
+        rutaPasoId: true,
+        familiaCodigo: true,
+        estado: true,
+        tipoEjecucion: true,
         duracionEstimadaMin: true,
+        item: {
+          select: {
+            cotizacionItem: {
+              select: { jobContextJson: true, trazabilidadJson: true },
+            },
+            pasos: {
+              where: { estado: { not: 'hecho' } },
+              orderBy: { indice: 'asc' },
+              take: 1,
+              select: { id: true, estado: true },
+            },
+          },
+        },
       },
     });
     const porId = new Map(pasos.map((paso) => [paso.id, paso]));
+
+    if (validarCompatibilidadLaser) {
+      if (pasos.length !== unicos.length) {
+        throw new BadRequestException(
+          'La tanda cambió. Actualizá la cola antes de confirmar la impresión.',
+        );
+      }
+
+      const extraidas = pasos.map((paso) => ({
+        paso,
+        datos: extraerCompatibilidadLaser(
+          paso.item.cotizacionItem?.jobContextJson ?? null,
+          paso.item.cotizacionItem?.trazabilidadJson ?? null,
+          paso.rutaPasoId,
+        ),
+      }));
+      const configIds = [
+        ...new Set(
+          extraidas
+            .map((item) => item.datos.configPasoId)
+            .filter((id): id is string => id !== null),
+        ),
+      ];
+      const configs = configIds.length
+        ? await this.prisma.productoConfigPaso.findMany({
+            where: { tenantId: auth.tenantId, id: { in: configIds } },
+            select: { id: true, paramsPasoJson: true, maquinaM1Id: true },
+          })
+        : [];
+      const configPorId = new Map(configs.map((item) => [item.id, item]));
+      const claves = new Set<string>();
+
+      for (const { paso, datos } of extraidas) {
+        if (
+          colaConsolidacionDeFamilia(paso.familiaCodigo) !== 'laser' ||
+          paso.tipoEjecucion === 'tercerizado' ||
+          paso.estado === 'bloqueado' ||
+          paso.item.pasos[0]?.id !== paso.id
+        ) {
+          throw new BadRequestException(
+            'La tanda cambió: uno de los trabajos ya no está listo para impresión láser.',
+          );
+        }
+        const resuelta = aplicarFallbackConfigLaser(
+          datos,
+          datos.configPasoId ? configPorId.get(datos.configPasoId) : undefined,
+        );
+        const faltantes = faltantesCompatibilidadLaser(resuelta);
+        const clave = claveCompatibilidadLoteLaser(resuelta);
+        if (!clave) {
+          throw new BadRequestException(
+            `No se puede completar la tanda: faltan ${faltantes.join(', ')}.`,
+          );
+        }
+        claves.add(clave);
+      }
+      if (claves.size !== 1) {
+        throw new BadRequestException(
+          'La tanda contiene trabajos con máquina, papel o configuración de impresión incompatibles.',
+        );
+      }
+    }
+
+    let ahorroVerificado: {
+      materiaPrimaId: string;
+      materiaPrimaNombre: string;
+      tecnologia: string | null;
+      jobs: number;
+      consumoSeparadoMl: number;
+      consumoConsolidadoMl: number;
+      ahorroMl: number;
+      costoSeparado: number | null;
+      costoConsolidado: number | null;
+      ahorroPesos: number | null;
+      baselineParcial: boolean;
+    } | null = null;
+
+    if (ahorro) {
+      if (pasos.length !== unicos.length) {
+        throw new BadRequestException(
+          'La tanda cambió. Actualizá la cola antes de confirmar la impresión.',
+        );
+      }
+      const acomodo = acomodarTanda(pasos, [ahorro.anchoMm]).anchos[0];
+      if (
+        !acomodo ||
+        acomodo.consumedLengthMm == null ||
+        acomodo.piezasAcomodadas === 0 ||
+        acomodo.incompatibles.length > 0
+      ) {
+        throw new BadRequestException(
+          'El ancho elegido no admite todos los trabajos de la tanda.',
+        );
+      }
+
+      const snapshots = pasos.map(snapshotAhorroPaso);
+      const idsVariantes = [
+        ...new Set(
+          snapshots
+            .map((item) => item.varianteId)
+            .filter((id): id is string => id !== null),
+        ),
+      ];
+      const variantes = await this.prisma.materiaPrimaVariante.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          id: { in: [...idsVariantes, ahorro.varianteId] },
+          activo: true,
+        },
+        select: {
+          id: true,
+          materiaPrimaId: true,
+          atributosVarianteJson: true,
+          precioReferencia: true,
+          stocks: { select: { cantidadDisponible: true } },
+          materiaPrima: { select: { nombre: true } },
+        },
+      });
+      const seleccionada = variantes.find(
+        (item) => item.id === ahorro.varianteId,
+      );
+      const anchoSeleccionado = Number(
+        (seleccionada?.atributosVarianteJson as { anchoMm?: unknown } | null)
+          ?.anchoMm,
+      );
+      if (!seleccionada || anchoSeleccionado !== ahorro.anchoMm) {
+        throw new BadRequestException(
+          'El rollo seleccionado ya no está disponible para ese ancho.',
+        );
+      }
+
+      const compatibilidad = claveCompatibilidadVariante(
+        seleccionada.atributosVarianteJson,
+      );
+      const porVariante = new Map(variantes.map((item) => [item.id, item]));
+      const compatibles = snapshots.every((snapshot) => {
+        const variante = snapshot.varianteId
+          ? porVariante.get(snapshot.varianteId)
+          : null;
+        return (
+          variante != null &&
+          variante.materiaPrimaId === seleccionada.materiaPrimaId &&
+          claveCompatibilidadVariante(variante.atributosVarianteJson) ===
+            compatibilidad
+        );
+      });
+      if (!compatibles) {
+        throw new BadRequestException(
+          'La tanda contiene variantes de material que no se pueden imprimir juntas.',
+        );
+      }
+
+      const consumoConsolidadoMl = acomodo.consumedLengthMm / 1000;
+      const stockConocido = seleccionada.stocks.length > 0;
+      const stockDisponible = seleccionada.stocks.reduce(
+        (total, item) => total + Number(item.cantidadDisponible),
+        0,
+      );
+      if (stockConocido && stockDisponible < consumoConsolidadoMl) {
+        throw new BadRequestException(
+          'El rollo seleccionado no tiene stock suficiente para la tanda.',
+        );
+      }
+
+      const conConsumo = snapshots.filter(
+        (item) => item.consumoCotizadoMl != null,
+      );
+      const conCosto = conConsumo.filter((item) => item.precioMl != null);
+      const consumoSeparadoMl = conConsumo.reduce(
+        (total, item) => total + (item.consumoCotizadoMl ?? 0),
+        0,
+      );
+      const costoSeparado = conCosto.reduce(
+        (total, item) =>
+          total + (item.consumoCotizadoMl ?? 0) * (item.precioMl ?? 0),
+        0,
+      );
+      const precioSeleccionado =
+        seleccionada.precioReferencia != null
+          ? Number(seleccionada.precioReferencia)
+          : null;
+      const costoConsolidado =
+        precioSeleccionado != null
+          ? consumoConsolidadoMl * precioSeleccionado
+          : null;
+      const redondear = (valor: number) => Math.round(valor * 100) / 100;
+      ahorroVerificado = {
+        materiaPrimaId: seleccionada.materiaPrimaId,
+        materiaPrimaNombre: seleccionada.materiaPrima.nombre,
+        tecnologia:
+          snapshots.map((item) => item.tecnologia).find((item) => item) ?? null,
+        jobs: pasos.length,
+        consumoSeparadoMl: redondear(consumoSeparadoMl),
+        consumoConsolidadoMl: redondear(consumoConsolidadoMl),
+        ahorroMl: redondear(consumoSeparadoMl - consumoConsolidadoMl),
+        costoSeparado: conCosto.length > 0 ? redondear(costoSeparado) : null,
+        costoConsolidado:
+          costoConsolidado != null ? redondear(costoConsolidado) : null,
+        ahorroPesos:
+          conCosto.length > 0 && costoConsolidado != null
+            ? redondear(costoSeparado - costoConsolidado)
+            : null,
+        baselineParcial:
+          conConsumo.length < snapshots.length ||
+          conCosto.length < snapshots.length,
+      };
+    }
 
     // Prorrateo de la tanda (D11): un solo número medido para todo el lote,
     // repartido por peso del estimado. Los pasos sin estimado pesan como el
@@ -4516,7 +5051,7 @@ export class OrdenesTrabajoService {
     // Ahorro por consolidación de la tanda (simulador gran formato): se
     // asienta SOLO si el lote completó entero — con completados parciales
     // los números del batch (calculados para la tanda completa) mentirían.
-    if (ahorro && completados > 0 && errores.length === 0) {
+    if (ahorroVerificado && completados > 0 && errores.length === 0) {
       const actor = await this.prisma.empleado.findFirst({
         where: { tenantId: auth.tenantId, userId: auth.userId },
         select: { nombreCompleto: true },
@@ -4526,17 +5061,17 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           usuarioId: auth.userId,
           usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
-          materiaPrimaId: ahorro.materiaPrimaId ?? null,
-          materiaPrimaNombre: ahorro.materiaPrimaNombre,
-          tecnologia: ahorro.tecnologia ?? null,
-          jobs: ahorro.jobs,
-          consumoSeparadoMl: ahorro.consumoSeparadoMl,
-          consumoConsolidadoMl: ahorro.consumoConsolidadoMl,
-          ahorroMl: ahorro.ahorroMl,
-          costoSeparado: ahorro.costoSeparado ?? null,
-          costoConsolidado: ahorro.costoConsolidado ?? null,
-          ahorroPesos: ahorro.ahorroPesos ?? null,
-          baselineParcial: ahorro.baselineParcial ?? false,
+          materiaPrimaId: ahorroVerificado.materiaPrimaId,
+          materiaPrimaNombre: ahorroVerificado.materiaPrimaNombre,
+          tecnologia: ahorroVerificado.tecnologia,
+          jobs: ahorroVerificado.jobs,
+          consumoSeparadoMl: ahorroVerificado.consumoSeparadoMl,
+          consumoConsolidadoMl: ahorroVerificado.consumoConsolidadoMl,
+          ahorroMl: ahorroVerificado.ahorroMl,
+          costoSeparado: ahorroVerificado.costoSeparado,
+          costoConsolidado: ahorroVerificado.costoConsolidado,
+          ahorroPesos: ahorroVerificado.ahorroPesos,
+          baselineParcial: ahorroVerificado.baselineParcial,
         },
       });
     }
@@ -4583,7 +5118,20 @@ export class OrdenesTrabajoService {
     const tecnologias = await this.tecnologiaPorMaquinaDeItems(auth.tenantId, [
       item,
     ]);
-    return this.toTableroItem(item.orden, item, auth.userId, tecnologias);
+    const proyectado = this.toTableroItem(
+      item.orden,
+      item,
+      auth.userId,
+      tecnologias,
+    );
+    if (alcanceTableroProduccionDe(auth) !== 'operario') return proyectado;
+    return {
+      ...proyectado,
+      clienteNombre: 'Cliente no visible',
+      vendedorNombre: '—',
+      specs: [],
+      pasos: pasosVisiblesParaOperario(proyectado.pasos),
+    };
   }
 
   /**

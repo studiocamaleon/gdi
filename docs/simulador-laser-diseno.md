@@ -13,8 +13,9 @@
 - **D1 — Alcance: familia `impresion_por_hoja` en FRONTERA** de órdenes
   vivas, bloqueados afuera. `impresion_por_pieza` NO entra (decisión
   usuario); `grabado_laser` es otra familia y otra vista.
-- **D2 — La unidad operativa es el BATCH "enviable junto"**: papel (tipo +
-  gramaje) + PLIEGO DE IMPRESIÓN + modo de color + caras. Una carga de
+- **D2 — La unidad operativa es el BATCH "enviable junto"**: máquina +
+  variante física exacta de papel + gramaje + PLIEGO DE IMPRESIÓN + modo de
+  color + caras. Una carga de
   bandeja, una cola de RIP, un "Marcar impresos (N)" (reusa
   completar-lote). Es el gemelo del "agrupar por materia prima" del
   simulador por área. OJO (corrección 2026-07-17): el pliego de impresión
@@ -54,21 +55,29 @@
 ```ts
 {
   jobs: Array<{
-    pasoId, itemId, ordenId, codigo, cliente, producto: string;
+    pasoId;
+    itemId;
+    ordenId;
+    codigo;
+    cliente;
+    producto: string;
     fechaEntrega: string | null;
     estado: "pendiente" | "en_curso";
     iniciadoEl: string | null;
     duracionEstimadaMin: number | null;
     centroCostoId: string | null;
     centroCostoNombre: string | null;
-    papel: { nombre, gramaje, formato, anchoMm, altoMm } | null;
-    hojas: number | null;        // hojas físicas a cargar en bandeja
-    clics: number | null;        // impresiones (caras × pliegos)
+    papel: { materiaPrimaId; varianteId; nombre; gramaje } | null;
+    pliego: { preset; anchoMm; altoMm } | null;
+    hojas: number | null; // hojas físicas a cargar en bandeja
+    clics: number | null; // impresiones (caras × pliegos)
     caras: 1 | 2 | null;
-    modoColor: string | null;    // "CMYK", "CMYK+blanco", "BYN"…
-    acabados: string[];          // pasos siguientes del item (cap 4)
+    modoColor: string | null; // "CMYK", "CMYK+blanco", "BYN"…
+    acabados: string[]; // pasos siguientes del item (cap 4)
+    compatibilidadKey: string | null;
+    faltantesCompatibilidad: string[];
   }>;
-  centros: Array<{ id, nombre: string; maquinas: string[] }>;
+  centros: Array<{ id; nombre: string; maquinas: string[] }>;
 }
 ```
 
@@ -76,14 +85,17 @@ Lote: `POST /ordenes-trabajo/tablero/pasos/completar-lote` (existente).
 
 ## 3. Casos borde
 
-- Paso sin snapshot (OT manual) → job con papel null: batch "Sin papel
-  identificado", sólo lote.
-- modoColor ausente → "Sin definir" (batch propio: no se mezcla).
+- Paso sin snapshot o con cualquier dato de compatibilidad ausente → se muestra
+  aislado como "Datos incompletos" y no permite completar en lote.
+- modoColor ausente → se informa como faltante y no se mezcla ni completa.
 - Centro sin máquinas cargadas → lane sin lista de equipos, funciona
   igual.
 - Job en_curso: el batch lo muestra imprimiendo; sigue completable en el
   lote (completar desde en_curso es transición válida).
 - Cola vacía → estado explicativo (nada listo para imprimir por hoja).
+- Al confirmar, el servidor vuelve a comprobar frontera, tipo interno y toda la
+  clave de compatibilidad antes de avanzar el primer paso.
+- El cliente se oculta para operarios sin `comercial.ver` ni `registros.ver`.
 
 ## 4. Journey (verificación E2E)
 

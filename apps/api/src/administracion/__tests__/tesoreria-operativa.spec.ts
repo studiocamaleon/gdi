@@ -36,6 +36,8 @@ describe('Tesorería operativa', () => {
   const cobros = new CobrosService(
     prisma,
     {
+      aplicarCobroComercial: jest.fn().mockResolvedValue([]),
+      matchearCobro: jest.fn().mockResolvedValue(undefined),
       revertirCobro: jest.fn().mockResolvedValue(undefined),
     } as unknown as FacturacionOrdenesService,
     {} as RecibosService,
@@ -358,7 +360,10 @@ describe('Tesorería operativa', () => {
     } as unknown as NotificacionesCobrosService;
     const servicioCobros = new CobrosService(
       prisma,
-      {} as FacturacionOrdenesService,
+      {
+        aplicarCobroComercial: jest.fn().mockResolvedValue([]),
+        matchearCobro: jest.fn().mockResolvedValue(undefined),
+      } as unknown as FacturacionOrdenesService,
       recibos,
       avisos,
     );

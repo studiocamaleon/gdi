@@ -64,11 +64,21 @@ function EstadoBadge({ estado, visto }: { estado: PresupuestoEstado; visto?: boo
   );
 }
 
-export function PresupuestosView({ initial, rol }: { initial: PresupuestosListado; rol: MembershipRole }) {
+export function PresupuestosView({
+  initial,
+  rol,
+  filtroInicial,
+}: {
+  initial: PresupuestosListado;
+  rol: MembershipRole;
+  filtroInicial?: PresupuestoEstado;
+}) {
   const { moneda } = useConfigRegional();
   const router = useRouter();
   const [data, setData] = React.useState(initial);
-  const [filtro, setFiltro] = React.useState<PresupuestoEstado | "todos">("todos");
+  const [filtro, setFiltro] = React.useState<PresupuestoEstado | "todos">(
+    filtroInicial ?? "todos",
+  );
   const [busqueda, setBusqueda] = React.useState("");
   const [pagina, setPagina] = React.useState(0);
   const [configAbierta, setConfigAbierta] = React.useState(false);
@@ -182,7 +192,15 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
         <div className="otl-toolbar">
           <div className="otl-filters">
             {chips.map((f) => (
-              <button key={f.k} type="button" className={`otl-fchip ${filtro === f.k ? "on" : ""}`} onClick={() => { setPagina(0); setFiltro(f.k); }}>
+              <button key={f.k} type="button" className={`otl-fchip ${filtro === f.k ? "on" : ""}`} onClick={() => {
+                setPagina(0);
+                setFiltro(f.k);
+                router.replace(
+                  f.k === "todos"
+                    ? "/comercial/presupuestos"
+                    : `/comercial/presupuestos?estado=${f.k}`,
+                );
+              }}>
                 {f.label}
                 <span className="ct">{countChip(f.k)}</span>
               </button>

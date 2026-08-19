@@ -8,7 +8,10 @@ import {
   type DiaNoLaborable,
   type DuracionFamilia,
 } from "@/lib/estaciones-api";
-import type { TableroItemData } from "@/lib/tablero-produccion";
+import type {
+  TableroItemData,
+  TableroProduccionData,
+} from "@/lib/tablero-produccion";
 import type { Estacion } from "@/lib/estaciones";
 
 export const dynamic = "force-dynamic";
@@ -27,25 +30,49 @@ export default async function TableroProduccionPage() {
   let duraciones: DuracionFamilia[] = [];
   let diasNoLaborables: DiaNoLaborable[] = [];
   let tiempoEntrePasosMin = 0;
-  try {
-    const [tablero, ests, durs, dias, config] = await Promise.all([
+  let tableroMeta: Omit<TableroProduccionData, "items"> = {
+    alcance: "completo",
+    puedeGestionar: false,
+    estacionIdsEjecutables: [],
+    vendedorSinVinculo: false,
+  };
+  let errorInicial: string | null = null;
+  let avisoParcial: string | null = null;
+
+  const [tablero, ests, durs, dias, config] = await Promise.allSettled([
       getTableroProduccion(),
       getEstaciones(),
       getDuracionesFamilias(),
       getDiasNoLaborables(),
       getConfiguracionProduccion(),
-    ]);
-    items = tablero.items;
-    estaciones = ests;
-    duraciones = durs;
-    diasNoLaborables = dias;
-    tiempoEntrePasosMin = config.tiempoEntrePasosMin;
-  } catch {
-    // Estados vacíos de la vista.
+  ]);
+  if (tablero.status === "fulfilled") {
+    items = tablero.value.items;
+    tableroMeta = {
+      alcance: tablero.value.alcance,
+      puedeGestionar: tablero.value.puedeGestionar,
+      estacionIdsEjecutables: tablero.value.estacionIdsEjecutables,
+      vendedorSinVinculo: tablero.value.vendedorSinVinculo,
+    };
+  } else {
+    errorInicial = "No se pudo cargar el tablero de producción.";
+  }
+  if (ests.status === "fulfilled") estaciones = ests.value;
+  if (durs.status === "fulfilled") duraciones = durs.value;
+  if (dias.status === "fulfilled") diasNoLaborables = dias.value;
+  if (config.status === "fulfilled") {
+    tiempoEntrePasosMin = config.value.tiempoEntrePasosMin;
+  }
+  if ([ests, durs, dias, config].some((resultado) => resultado.status === "rejected")) {
+    avisoParcial =
+      "Parte de la configuración del taller no está disponible. Las proyecciones pueden ser incompletas.";
   }
   return (
     <TableroProduccion
       initialItems={items}
+      initialMeta={tableroMeta}
+      initialLoadError={errorInicial}
+      initialPartialWarning={avisoParcial}
       estaciones={estaciones}
       duracionesFamilias={duraciones}
       diasNoLaborables={diasNoLaborables}

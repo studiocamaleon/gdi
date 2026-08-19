@@ -156,7 +156,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Completar varios pasos de una (simulador de impresión). */
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.ejecutar', 'produccion.supervisar')
   @Post('tablero/pasos/completar-lote')
   completarPasosLote(
     @CurrentSession() auth: CurrentAuth,
@@ -167,6 +167,7 @@ export class OrdenesTrabajoController {
       payload.pasoIds,
       payload.duracionTandaMin,
       payload.ahorro,
+      payload.validarCompatibilidadLaser,
     );
   }
 
@@ -177,7 +178,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Pausa automática por inactividad (D13): sin respuesta al countdown. */
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.ejecutar', 'produccion.supervisar')
   @Patch('tablero/pasos/:pasoId/auto-pausa')
   autoPausa(
     @CurrentSession() auth: CurrentAuth,
@@ -187,7 +188,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.ejecutar', 'produccion.supervisar')
   @Patch('tablero/pasos/:pasoId/mesa')
   mesaPaso(
     @CurrentSession() auth: CurrentAuth,
@@ -198,7 +199,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Panel de Compras: avanzar el estado de una compra tercerizada (F2). */
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.supervisar')
   @Patch('tablero/pasos/:pasoId/compra')
   avanzarCompra(
     @CurrentSession() auth: CurrentAuth,
@@ -309,7 +310,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.quitarItem(auth, id, itemId);
   }
 
-  @Permiso('produccion.gestionar')
+  @Permiso('produccion.ejecutar', 'produccion.supervisar')
   @Patch(':id/items/:itemId/pasos/:pasoId')
   accionPaso(
     @CurrentSession() auth: CurrentAuth,

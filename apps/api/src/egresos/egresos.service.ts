@@ -1613,8 +1613,9 @@ export class EgresosService {
    * Y separa lo que INCIDE EN RESULTADO de lo que sólo mueve caja: una
    * guillotina de $3.500.000 haría ver un julio catastrófico si se sumara al
    * gasto, un retiro de socios no es un gasto, y un adelanto de sueldo es
-   * plata que el empleado debe. Los tres salen de la caja igual, así que se
-   * informan aparte en vez de esconderse.
+   * plata que el empleado debe. Los tres son egresos registrados igual, así
+   * que se informan aparte en vez de esconderse. El movimiento efectivo vive
+   * en Tesorería: acá también aparecen pendientes porque se usa competencia.
    */
   async reporte(auth: CurrentAuth, q: { desde?: string; hasta?: string }) {
     const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
@@ -1675,7 +1676,7 @@ export class EgresosService {
     return {
       desde,
       hasta,
-      /** Todo lo que salió de la caja en el período. */
+      /** Todo lo registrado por competencia, pagado o pendiente. */
       totalSalida: r2(totalSalida),
       /** Sólo lo que es gasto: costo de producción + estructura. */
       totalResultado: r2(totalResultado),

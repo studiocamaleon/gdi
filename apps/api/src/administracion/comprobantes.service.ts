@@ -259,6 +259,10 @@ export class ComprobantesService {
             orden: { select: { numero: true } },
           },
         },
+        correcciones: {
+          where: { tipo: 'nota_credito', estado: 'emitido', anuladoEl: null },
+          select: { id: true },
+        },
       },
       orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }],
       take: 200,
@@ -288,6 +292,10 @@ export class ComprobantesService {
             monto: true,
             orden: { select: { numero: true } },
           },
+        },
+        correcciones: {
+          where: { tipo: 'nota_credito', estado: 'emitido', anuladoEl: null },
+          select: { id: true },
         },
         imputaciones: {
           include: {
@@ -478,7 +486,10 @@ export class ComprobantesService {
         // Clave anti-duplicado: se genera y persiste ANTES de hablar con
         // cualquier provider.
         idempotencyKey: randomUUID(),
-        saldoPendiente: totales.total,
+        // Una NC reduce el saldo de su comprobante origen; no constituye una
+        // cuenta por cobrar propia. Facturas y ND sí nacen pendientes.
+        saldoPendiente:
+          payload.tipo === 'nota_credito' ? 0 : totales.total,
         comprobanteOrigenId: payload.comprobanteOrigenId ?? null,
       },
       include: {
@@ -509,7 +520,10 @@ export class ComprobantesService {
   async emitir(auth: CurrentAuth, id: string) {
     const comprobante = await this.prisma.comprobante.findFirst({
       where: { id, tenantId: auth.tenantId },
-      include: { puntoVenta: true },
+      include: {
+        puntoVenta: true,
+        comprobanteOrigen: { include: { puntoVenta: true } },
+      },
     });
     if (!comprobante) {
       throw new NotFoundException(`No existe el comprobante ${id}`);
@@ -599,6 +613,20 @@ export class ComprobantesService {
         ? comprobante.vencimiento.toISOString().slice(0, 10)
         : null,
       leyenda: comprobante.leyenda,
+      asociados:
+        comprobante.comprobanteOrigen?.numero != null
+          ? [
+              {
+                tipo: comprobante.comprobanteOrigen.tipo,
+                puntoVenta: comprobante.comprobanteOrigen.puntoVenta.numero,
+                numero: comprobante.comprobanteOrigen.numero,
+                fecha: comprobante.comprobanteOrigen.fecha
+                  .toISOString()
+                  .slice(0, 10),
+                cuit: emisorCuit,
+              },
+            ]
+          : undefined,
     });
 
     if (resultado.estado === 'rechazado') {
@@ -678,11 +706,21 @@ export class ComprobantesService {
     // Recién emitido cuenta para el facturado de sus órdenes (una NC
     // resta), y una factura absorbe los cobros libres de sus órdenes.
     await this.facturacionOrdenes.alEmitirComprobante(auth.tenantId, id);
+    // El matching anterior puede haber reducido el saldo con cobros que ya
+    // existían. No devolver el objeto previo a ese matching: la respuesta de
+    // emisión tiene que reflejar el saldo realmente persistido.
+    const saldoActual = await this.prisma.comprobante.findUniqueOrThrow({
+      where: { id },
+      select: { saldoPendiente: true },
+    });
     // El comprobante queda congelado con los datos del emisor de ESTE
     // momento; si mañana cambia el domicilio fiscal, éste no muta.
     await this.congelarPdf(auth.tenantId, id);
     await this.publicar(auth.tenantId, id);
-    return this.toResponse(actualizado);
+    return {
+      ...this.toResponse(actualizado),
+      saldoPendiente: Number(saldoActual.saldoPendiente),
+    };
   }
 
   /**
@@ -1410,6 +1448,7 @@ export class ComprobantesService {
     rechazoJson: Prisma.JsonValue;
     saldoPendiente: Prisma.Decimal;
     comprobanteOrigenId: string | null;
+    correcciones?: Array<{ id: string }>;
   }) {
     const pv = String(c.puntoVenta.numero).padStart(4, '0');
     const nro = c.numero === null ? null : String(c.numero).padStart(8, '0');
@@ -1455,6 +1494,7 @@ export class ComprobantesService {
       rechazo: c.rechazoJson,
       saldoPendiente: Number(c.saldoPendiente),
       comprobanteOrigenId: c.comprobanteOrigenId,
+      corregido: (c.correcciones?.length ?? 0) > 0,
     };
   }
 }

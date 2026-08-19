@@ -55,6 +55,16 @@ function totalEnPesos(c: Comprobante, campo: "total" | "saldoPendiente") {
   return c.moneda === "USD" && c.cotizacion ? v * c.cotizacion : v;
 }
 
+function etiquetaSaldo(c: Comprobante, fmt: (monto: number) => string) {
+  if (c.estado === "anulado") return "—";
+  if (c.tipo === "nota_credito") {
+    return c.estado === "emitido" ? "Aplicada" : "—";
+  }
+  if (c.corregido && c.saldoPendiente <= 0) return "Corregido";
+  if (c.total < 0) return "—";
+  return c.saldoPendiente > 0 ? fmt(c.saldoPendiente) : "Cobrado";
+}
+
 export function ComprobantesView({
   initialComprobantes,
 }: {
@@ -116,12 +126,21 @@ export function ComprobantesView({
   ).length;
   const facturado = data
     .filter((c) => c.estado === "emitido")
-    .reduce((s, c) => s + totalEnPesos(c, "total"), 0);
+    .reduce(
+      (s, c) =>
+        s +
+        (c.tipo === "nota_credito" ? -1 : 1) *
+          totalEnPesos(c, "total"),
+      0,
+    );
   const pendiente = vigentes
-    .filter((c) => c.estado === "emitido")
+    .filter((c) => c.estado === "emitido" && c.tipo !== "nota_credito")
     .reduce((s, c) => s + totalEnPesos(c, "saldoPendiente"), 0);
   const ncCount = data.filter(
-    (c) => c.tipo === "nota_credito" && mesActual(c.fecha),
+    (c) =>
+      c.tipo === "nota_credito" &&
+      c.estado === "emitido" &&
+      mesActual(c.fecha),
   ).length;
 
   return (
@@ -318,11 +337,7 @@ export function ComprobantesView({
                     <span
                       className={`${s.saldoCell} ${c.saldoPendiente > 0 ? "pend" : "ok"}`}
                     >
-                      {c.total < 0
-                        ? "—"
-                        : c.saldoPendiente > 0
-                          ? fmt(c.saldoPendiente)
-                          : "Cobrado"}
+                      {etiquetaSaldo(c, fmt)}
                       {c.saldoPendiente > 0 && c.total > 0 ? (
                         <span className="sub">de {fmt(c.total)}</span>
                       ) : null}
@@ -342,4 +357,3 @@ export function ComprobantesView({
     </div>
   );
 }
-

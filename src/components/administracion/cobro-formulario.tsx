@@ -454,10 +454,10 @@ export function CobroFormulario({
                 <select
                   value={chq.formato}
                   onChange={(e) =>
-                    setChq({
-                      ...chq,
+                    setChq((prev) => ({
+                      ...prev,
                       formato: e.target.value as "fisico" | "echeq",
-                    })
+                    }))
                   }
                 >
                   <option value="fisico">Cheque físico</option>
@@ -468,13 +468,14 @@ export function CobroFormulario({
                 <label>Modalidad</label>
                 <select
                   value={chq.modalidad}
-                  onChange={(e) =>
-                    setChq({
-                      ...chq,
-                      modalidad: e.target.value as "comun" | "diferido",
-                      pago: e.target.value === "comun" ? "" : chq.pago,
-                    })
-                  }
+                  onChange={(e) => {
+                    const modalidad = e.target.value as "comun" | "diferido";
+                    setChq((prev) => ({
+                      ...prev,
+                      modalidad,
+                      pago: modalidad === "comun" ? "" : prev.pago,
+                    }));
+                  }}
                 >
                   <option value="comun">Común</option>
                   <option value="diferido">Diferido</option>
@@ -486,7 +487,9 @@ export function CobroFormulario({
                 <label>Número del instrumento</label>
                 <input
                   value={chq.numero}
-                  onChange={(e) => setChq({ ...chq, numero: e.target.value })}
+                  onChange={(e) =>
+                    setChq((prev) => ({ ...prev, numero: e.target.value }))
+                  }
                   placeholder="0000 0000"
                 />
               </div>
@@ -494,7 +497,9 @@ export function CobroFormulario({
                 <label>Banco emisor</label>
                 <select
                   value={chq.banco}
-                  onChange={(e) => setChq({ ...chq, banco: e.target.value })}
+                  onChange={(e) =>
+                    setChq((prev) => ({ ...prev, banco: e.target.value }))
+                  }
                 >
                   {BANCOS.map((b) => (
                     <option key={b}>{b}</option>
@@ -511,10 +516,10 @@ export function CobroFormulario({
                   <input
                     value={chq.identificadorBancario}
                     onChange={(e) =>
-                      setChq({
-                        ...chq,
+                      setChq((prev) => ({
+                        ...prev,
                         identificadorBancario: e.target.value,
-                      })
+                      }))
                     }
                     placeholder="Identificador informado por el banco"
                   />
@@ -525,7 +530,9 @@ export function CobroFormulario({
                 <input
                   type="date"
                   value={chq.emision}
-                  onChange={(e) => setChq({ ...chq, emision: e.target.value })}
+                  onChange={(e) =>
+                    setChq((prev) => ({ ...prev, emision: e.target.value }))
+                  }
                 />
               </div>
             </div>
@@ -536,7 +543,9 @@ export function CobroFormulario({
                   <input
                     type="date"
                     value={chq.pago}
-                    onChange={(e) => setChq({ ...chq, pago: e.target.value })}
+                    onChange={(e) =>
+                      setChq((prev) => ({ ...prev, pago: e.target.value }))
+                    }
                   />
                 </div>
               </div>

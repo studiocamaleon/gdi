@@ -112,7 +112,10 @@ export function ConfirmacionDestructiva({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      {/* Puede abrirse desde un modal propio (`.mod-bg`, z-index 60). La
+          confirmación tiene que quedar por encima o la acción se ve en el DOM
+          pero resulta invisible e imposible de confirmar. */}
+      <AlertDialogContent className="z-[80]" overlayClassName="z-[80]">
         <AlertDialogHeader>
           <div className="flex items-start gap-3">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-100">

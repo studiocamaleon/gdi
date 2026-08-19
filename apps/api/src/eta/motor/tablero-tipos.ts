@@ -21,6 +21,7 @@ export type TableroPasoData = {
   indice: number;
   nombre: string;
   familiaCodigo: string;
+  plantillaCodigo?: string | null;
   centroCostoId: string | null;
   /** Máquina que ejecutó el paso (rediseño de estaciones por reglas). */
   maquinaId?: string | null;
@@ -115,7 +116,11 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
   estaciones: T[],
   paso: Pick<
     TableroPasoData,
-    'familiaCodigo' | 'centroCostoId' | 'maquinaId' | 'tecnologia'
+    | 'familiaCodigo'
+    | 'plantillaCodigo'
+    | 'centroCostoId'
+    | 'maquinaId'
+    | 'tecnologia'
   >,
 ): T | null {
   const activas = estaciones.filter((estacion) => estacion.activo);
@@ -137,15 +142,22 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
   }
   const porPaso = activas.find((estacion) =>
     (estacion.reglas ?? []).some(
-      (regla) => regla.tipo === 'paso' && regla.valor === paso.familiaCodigo,
+      (regla) =>
+        regla.tipo === 'paso' &&
+        (regla.valor === paso.familiaCodigo ||
+          (paso.plantillaCodigo != null &&
+            regla.valor === paso.plantillaCodigo)),
     ),
   );
   if (porPaso) return porPaso;
 
   // 4. Por familia: general (sin máquinas) o única candidata. Sin centro de
   //    costo (Fase D). Espejo de src/lib/tablero-produccion.ts.
-  const candidatas = activas.filter((estacion) =>
-    estacion.familias.includes(paso.familiaCodigo),
+  const candidatas = activas.filter(
+    (estacion) =>
+      estacion.familias.includes(paso.familiaCodigo) ||
+      (paso.plantillaCodigo != null &&
+        estacion.familias.includes(paso.plantillaCodigo)),
   );
   if (candidatas.length === 0) return null;
   const general = candidatas.find((estacion) => estacion.maquinas.length === 0);

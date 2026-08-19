@@ -145,6 +145,24 @@ export const PERMISOS_TRANSVERSALES = [
     descripcion:
       'Reglas de comisión y estimaciones por vendedor. Administrar legajos no alcanza.',
   },
+  {
+    clave: 'produccion.ejecutar',
+    label: 'Ejecutar pasos de producción',
+    descripcion:
+      'Tomar trabajos de las estaciones habilitadas, iniciarlos, pausarlos y completarlos. No permite configurar el taller.',
+  },
+  {
+    clave: 'produccion.supervisar',
+    label: 'Supervisar la producción',
+    descripcion:
+      'Intervenir en cualquier estación, bloquear, desbloquear, reabrir y reasignar trabajos.',
+  },
+  {
+    clave: 'produccion.configurar',
+    label: 'Configurar el taller',
+    descripcion:
+      'Crear y editar estaciones, reglas de ruteo, capacidad, calendarios y feriados.',
+  },
   /**
    * Los sueldos son el dato más sensible del sistema y el módulo que los aloja
    * es el más abierto: el Vendedor tiene `registros.gestionar` porque carga
@@ -206,6 +224,13 @@ export function expandir(permisos: string[]): Set<string> {
     out.add(p);
     if (p.endsWith('.gestionar')) {
       out.add(`${p.slice(0, -'.gestionar'.length)}.ver`);
+    }
+    // Producción necesita separar la ejecución diaria de la configuración.
+    // El permiso histórico `gestionar` conserva su significado de acceso total.
+    if (p === 'produccion.gestionar') {
+      out.add('produccion.ejecutar');
+      out.add('produccion.supervisar');
+      out.add('produccion.configurar');
     }
   }
   return out;
@@ -285,6 +310,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'reportes.ver',
       'comercial.ver',
       'registros.ver',
+      'produccion.ver',
       'administracion.gestionar',
       'finanzas.ver_margenes',
       // Quien maneja los cobros es quien corrige un cobro mal cargado.
@@ -298,12 +324,9 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
     codigo: 'operario',
     nombre: 'Operario',
     descripcion:
-      'La mesa de trabajo y su propio desempeño. No ve precios, costos ni clientes.',
+      'Ve el tablero y ejecuta los pasos de sus estaciones. No ve precios, costos ni márgenes.',
     rolBase: RolSistema.OPERADOR,
-    // `gestionar` y no `ver`: el operario no mira producción, la ejecuta —
-    // reclama pasos en la mesa, los inicia y los completa. Lo que lo acota no
-    // es el permiso sino el tablero, que sólo le deja tocar el paso activo.
-    permisos: ['panel.ver', 'produccion.gestionar'],
+    permisos: ['panel.ver', 'produccion.ver', 'produccion.ejecutar'],
   },
 ];
 

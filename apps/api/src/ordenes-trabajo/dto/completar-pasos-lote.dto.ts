@@ -4,65 +4,29 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
-  IsInt,
   IsNumber,
   IsOptional,
-  IsString,
   IsUUID,
-  MaxLength,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
 
 /**
  * Ahorro de material CONCRETADO al consolidar la tanda (simulador gran
- * formato): el front calcula el nesting y el baseline cotizado; acá viaja
- * el resultado para persistirlo como valor generado por el sistema.
+ * formato): el navegador sólo declara el rollo elegido. El servidor vuelve a
+ * calcular el nesting, el baseline y los importes antes de persistirlos.
  */
 export class AhorroConsolidacionDto {
-  @IsOptional()
   @IsUUID()
-  materiaPrimaId?: string;
+  varianteId: string;
 
-  @IsString()
-  @MaxLength(200)
-  materiaPrimaNombre: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(60)
-  tecnologia?: string;
-
-  @IsInt()
+  /** Ancho realmente elegido por el operador. El servidor vuelve a correr el
+   * nesting y calcula consumos/costos; ningún importe del navegador se confía. */
+  @IsNumber()
   @Min(1)
-  jobs: number;
-
-  @IsNumber()
-  @Min(0)
-  consumoSeparadoMl: number;
-
-  @IsNumber()
-  @Min(0)
-  consumoConsolidadoMl: number;
-
-  @IsNumber()
-  ahorroMl: number;
-
-  @IsOptional()
-  @IsNumber()
-  costoSeparado?: number;
-
-  @IsOptional()
-  @IsNumber()
-  costoConsolidado?: number;
-
-  @IsOptional()
-  @IsNumber()
-  ahorroPesos?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  baselineParcial?: boolean;
+  @Max(100000)
+  anchoMm: number;
 }
 
 export class CompletarPasosLoteDto {
@@ -80,6 +44,15 @@ export class CompletarPasosLoteDto {
   @IsNumber()
   @Min(1)
   duracionTandaMin?: number;
+
+  /**
+   * El simulador láser pide una validación atómica adicional: todos los pasos
+   * deben seguir en frontera y compartir máquina, variante, gramaje, pliego,
+   * color y caras antes de que se complete el primero.
+   */
+  @IsOptional()
+  @IsBoolean()
+  validarCompatibilidadLaser?: boolean;
 
   /** Ahorro por consolidación de la tanda (simulador gran formato). */
   @IsOptional()

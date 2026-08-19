@@ -250,6 +250,41 @@ describe('RecurrentesService', () => {
   });
 
   describe('vincular al presupuestado', () => {
+    it('rechaza un gasto fijo de otra empresa', async () => {
+      const ajeno = await prisma.tenant.create({
+        data: { nombre: 'Empresa ajena', slug: `ajena-${randomUUID().slice(0, 8)}` },
+      });
+      const categoriaAjena = await prisma.categoriaEgreso.create({
+        data: {
+          tenantId: ajeno.id,
+          codigo: 'alquiler-ajeno',
+          nombre: 'Alquiler ajeno',
+          naturaleza: 'GASTO_ESTRUCTURA',
+        },
+      });
+      const fijoAjeno = await prisma.gastoFijoEstructura.create({
+        data: {
+          tenantId: ajeno.id,
+          nombre: 'Gasto fijo ajeno',
+          categoriaEgresoId: categoriaAjena.id,
+          importeMensual: 1,
+          vigenteDesde: '2026-01',
+        },
+      });
+
+      await expect(
+        service.crear(auth, {
+          descripcion: 'No debe cruzar tenants',
+          categoriaEgresoId: catAlquiler,
+          monto: 1,
+          vigenteDesde: periodoActual(),
+          gastoFijoEstructuraId: fijoAjeno.id,
+        }),
+      ).rejects.toThrow('no existe en esta empresa');
+
+      await prisma.tenant.delete({ where: { id: ajeno.id } });
+    });
+
     it('alcanza a los egresos YA emitidos', async () => {
       // Quien descubre el reporte después de meses de uso tiene que verlo con
       // su historia, no vacío.
@@ -290,7 +325,7 @@ describe('RecurrentesService', () => {
   // ── Presupuestado vs. real (journey E4) ──────────────────────────────
 
   describe('presupuestado vs. real', () => {
-    it('compara el gasto fijo contra lo que realmente se pagó', async () => {
+    it('compara el gasto fijo contra lo realmente registrado', async () => {
       // El recurrente emitió $900.000, que es el presupuestado. Se corrige a
       // $1.050.000: es exactamente el caso de la luz que sube.
       const generado = await prisma.egreso.findFirstOrThrow({

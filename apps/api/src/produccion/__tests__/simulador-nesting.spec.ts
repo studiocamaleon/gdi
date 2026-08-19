@@ -1,5 +1,39 @@
 import { evaluateRollLayoutForConfiguredAlgorithm } from '../../motor-universal/nesting-dispatcher';
-import { acomodarTanda } from '../produccion.service';
+import {
+  acomodarTanda,
+  claveCompatibilidadVariante,
+} from '../produccion.service';
+
+describe('compatibilidad física de variantes', () => {
+  it('ignora el ancho pero conserva color, gramaje y demás atributos', () => {
+    expect(
+      claveCompatibilidadVariante({
+        anchoMm: 600,
+        color: 'blanco',
+        gramaje: 90,
+      }),
+    ).toBe(
+      claveCompatibilidadVariante({
+        gramaje: 90,
+        color: 'blanco',
+        anchoMm: 1200,
+      }),
+    );
+    expect(
+      claveCompatibilidadVariante({
+        anchoMm: 600,
+        color: 'negro',
+        gramaje: 90,
+      }),
+    ).not.toBe(
+      claveCompatibilidadVariante({
+        anchoMm: 600,
+        color: 'blanco',
+        gramaje: 90,
+      }),
+    );
+  });
+});
 
 /**
  * El simulador GRAN FORMATO re-acomoda la tanda con el motor real. Este test
@@ -54,7 +88,8 @@ describe('simuladorNesting — paridad con el nesting cotizado', () => {
 
     const areaTotalMm2 = ROLLO_MM * result.consumedLengthMm;
     const aprovechamiento =
-      Math.round(((result.usefulAreaM2 * 1_000_000) / areaTotalMm2) * 10000) / 100;
+      Math.round(((result.usefulAreaM2 * 1_000_000) / areaTotalMm2) * 10000) /
+      100;
     expect(aprovechamiento).toBe(90.43);
   });
 
@@ -111,7 +146,12 @@ describe('acomodarTanda — desde el snapshot', () => {
                     heightMm: 280,
                   })),
                   visualConfig: {
-                    margins: { topMm: 100, leftMm: 15, rightMm: 15, bottomMm: 100 },
+                    margins: {
+                      topMm: 100,
+                      leftMm: 15,
+                      rightMm: 15,
+                      bottomMm: 100,
+                    },
                     spacing: { horizontalMm: 5, verticalMm: 5 },
                     allowRotation: true,
                     pieceBleedMm: 2.5,
@@ -140,7 +180,10 @@ describe('acomodarTanda — desde el snapshot', () => {
   });
 
   it('asigna cada pieza acomodada a su paso', () => {
-    const { anchos } = acomodarTanda([paso('paso-a', RUTA, 3), paso('paso-b', RUTA, 5)], [600]);
+    const { anchos } = acomodarTanda(
+      [paso('paso-a', RUTA, 3), paso('paso-b', RUTA, 5)],
+      [600],
+    );
 
     const porPaso = new Map<string | null, number>();
     for (const p of anchos[0].placements) {
@@ -156,7 +199,9 @@ describe('acomodarTanda — desde el snapshot', () => {
 
     expect(anchos.map((a) => a.anchoMm)).toEqual([600, 1600]);
     // Un rollo más ancho mete más piezas por fila: consume menos largo.
-    expect(anchos[1].consumedLengthMm!).toBeLessThan(anchos[0].consumedLengthMm!);
+    expect(anchos[1].consumedLengthMm!).toBeLessThan(
+      anchos[0].consumedLengthMm!,
+    );
   });
 
   it('marca el paso cuya pieza no entra en el ancho', () => {
@@ -169,9 +214,14 @@ describe('acomodarTanda — desde el snapshot', () => {
     const sinPiezas = {
       id: 'manual',
       rutaPasoId: RUTA,
-      item: { cotizacionItem: { jobContextJson: {}, trazabilidadJson: { pasos: [] } } },
+      item: {
+        cotizacionItem: { jobContextJson: {}, trazabilidadJson: { pasos: [] } },
+      },
     };
-    const { sinMedidas, anchos } = acomodarTanda([sinPiezas, paso('paso-a', RUTA, 4)], [600]);
+    const { sinMedidas, anchos } = acomodarTanda(
+      [sinPiezas, paso('paso-a', RUTA, 4)],
+      [600],
+    );
 
     expect(sinMedidas).toEqual(['manual']);
     expect(anchos[0].piezasAcomodadas).toBe(4);

@@ -24,6 +24,16 @@ import {
 import { evaluateRollLayoutForConfiguredAlgorithm } from '../motor-universal/nesting-dispatcher';
 import type { EstructuraBastidorEjecutada } from '../motor-universal/tipos';
 import type { SimularNestingDto } from './dto/simular-nesting.dto';
+import {
+  aplicarFallbackConfigLaser,
+  claveCompatibilidadLoteLaser,
+  extraerCompatibilidadLaser,
+  faltantesCompatibilidadLaser,
+} from './simulador-laser-compatibilidad';
+import {
+  normalizarTecnologiaMaquina,
+  TECNOLOGIAS_MAQUINA,
+} from '../common/tecnologia-maquina';
 
 /**
  * Mínimo de pasos hechos por familia para publicar su mediana histórica:
@@ -60,7 +70,12 @@ type TrazabilidadPasoSimulador = {
     consumedLengthMm?: number;
     algorithm?: unknown;
     visualConfig?: {
-      margins?: { topMm?: unknown; leftMm?: unknown; rightMm?: unknown; bottomMm?: unknown } | null;
+      margins?: {
+        topMm?: unknown;
+        leftMm?: unknown;
+        rightMm?: unknown;
+        bottomMm?: unknown;
+      } | null;
       spacing?: { horizontalMm?: unknown; verticalMm?: unknown } | null;
       allowRotation?: unknown;
       pieceBleedMm?: unknown;
@@ -101,7 +116,10 @@ function nestingConfigDeSnapshot(
   const margins = visual.margins ?? {};
   const spacing = visual.spacing ?? {};
   // Conservador: el lado más ancho manda, el rollo es uno solo.
-  const lateral = Math.max(numeroONull(margins.leftMm) ?? 0, numeroONull(margins.rightMm) ?? 0);
+  const lateral = Math.max(
+    numeroONull(margins.leftMm) ?? 0,
+    numeroONull(margins.rightMm) ?? 0,
+  );
   const longitudinal = Math.max(
     numeroONull(margins.topMm) ?? 0,
     numeroONull(margins.bottomMm) ?? 0,
@@ -117,12 +135,37 @@ function nestingConfigDeSnapshot(
     // Se respeta el algoritmo con el que se COTIZÓ: correr otro haría aparecer
     // un ahorro que viene del algoritmo y no de juntar los trabajos.
     algorithm:
-      algorithm === 'shelf-rollo' || algorithm === 'maxrects-rollo' ? algorithm : 'auto',
+      algorithm === 'shelf-rollo' || algorithm === 'maxrects-rollo'
+        ? algorithm
+        : 'auto',
   };
 }
 
 function numeroONull(valor: unknown): number | null {
   return typeof valor === 'number' && Number.isFinite(valor) ? valor : null;
+}
+
+/**
+ * Dos variantes pueden compartir materia prima y ancho sin ser el mismo
+ * material físico (color, gramaje, acabado, adhesivo…). Sólo el ancho se
+ * excluye porque es justamente el eje que compara el simulador.
+ */
+export function claveCompatibilidadVariante(
+  valor: Prisma.JsonValue | null,
+): string {
+  const normalizar = (entrada: unknown): unknown => {
+    if (Array.isArray(entrada)) return entrada.map(normalizar);
+    if (entrada && typeof entrada === 'object') {
+      return Object.fromEntries(
+        Object.entries(entrada as Record<string, unknown>)
+          .filter(([clave]) => clave !== 'anchoMm')
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([clave, contenido]) => [clave, normalizar(contenido)]),
+      );
+    }
+    return entrada;
+  };
+  return JSON.stringify(normalizar(valor ?? {}));
 }
 
 /**
@@ -154,7 +197,8 @@ function piezasDeSnapshot(
       .map((pieza) => {
         const anchoMm = numeroONull((pieza as { anchoMm?: unknown }).anchoMm);
         const altoMm = numeroONull((pieza as { altoMm?: unknown }).altoMm);
-        const cantidad = numeroONull((pieza as { cantidad?: unknown }).cantidad) ?? 1;
+        const cantidad =
+          numeroONull((pieza as { cantidad?: unknown }).cantidad) ?? 1;
         if (anchoMm === null || altoMm === null) return null;
         return { anchoMm, altoMm, cantidad: Math.max(1, Math.round(cantidad)) };
       })
@@ -183,14 +227,18 @@ type PasoParaAcomodar = {
 export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
   // Un `medidas[i]` por paso: el motor devuelve `piece-<i>-<copia>`, así se
   // sabe de qué trabajo es cada pieza acomodada.
-  const medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }> = [];
+  const medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }> =
+    [];
   const pasoDeMedida: string[] = [];
   const configs: NestingConfigSnapshot[] = [];
   const sinMedidas: string[] = [];
 
   for (const paso of pasos) {
     const jobContext =
-      (paso.item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ?? null;
+      (paso.item.cotizacionItem?.jobContextJson as Record<
+        string,
+        unknown
+      > | null) ?? null;
     const pasosTraza = (
       paso.item.cotizacionItem?.trazabilidadJson as {
         pasos?: TrazabilidadPasoSimulador[];
@@ -198,7 +246,9 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
     )?.pasos;
     const trazPaso =
       (Array.isArray(pasosTraza)
-        ? pasosTraza.find((t) => t.rutaPasoId && t.rutaPasoId === paso.rutaPasoId)
+        ? pasosTraza.find(
+            (t) => t.rutaPasoId && t.rutaPasoId === paso.rutaPasoId,
+          )
         : null) ?? null;
 
     const piezas = piezasDeSnapshot(trazPaso, jobContext);
@@ -209,7 +259,11 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
     const config = nestingConfigDeSnapshot(trazPaso);
     if (config) configs.push(config);
     for (const pieza of piezas) {
-      medidas.push({ anchoMm: pieza.anchoMm, altoMm: pieza.altoMm, cantidad: pieza.cantidad });
+      medidas.push({
+        anchoMm: pieza.anchoMm,
+        altoMm: pieza.altoMm,
+        cantidad: pieza.cantidad,
+      });
       pasoDeMedida.push(paso.id);
     }
   }
@@ -221,14 +275,17 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
         ? cur
         : {
             margenLateralMm: Math.max(acc.margenLateralMm, cur.margenLateralMm),
-            margenLongitudinalMm: Math.max(acc.margenLongitudinalMm, cur.margenLongitudinalMm),
+            margenLongitudinalMm: Math.max(
+              acc.margenLongitudinalMm,
+              cur.margenLongitudinalMm,
+            ),
             separacionHMm: Math.max(acc.separacionHMm, cur.separacionHMm),
             separacionVMm: Math.max(acc.separacionVMm, cur.separacionVMm),
             demasiaMm: Math.max(acc.demasiaMm, cur.demasiaMm),
             permitirRotacion: acc.permitirRotacion && cur.permitirRotacion,
             algorithm: acc.algorithm === cur.algorithm ? acc.algorithm : 'auto',
           },
-      null,
+    null,
   );
   if (!config || medidas.length === 0)
     return {
@@ -259,7 +316,9 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
       ...new Set(
         medidas
           .map((medida, idx) =>
-            Math.min(medida.anchoMm, medida.altoMm) > printableWidthMm ? pasoDeMedida[idx] : null,
+            Math.min(medida.anchoMm, medida.altoMm) > printableWidthMm
+              ? pasoDeMedida[idx]
+              : null,
           )
           .filter((pasoId): pasoId is string => pasoId !== null),
       ),
@@ -268,7 +327,8 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
       .map((_, idx) => idx)
       .filter((idx) => !incompatibles.includes(pasoDeMedida[idx]));
 
-    if (printableWidthMm <= 0 || indicesUsados.length === 0) return vacio(anchoMm, incompatibles);
+    if (printableWidthMm <= 0 || indicesUsados.length === 0)
+      return vacio(anchoMm, incompatibles);
 
     const candidato = evaluateRollLayoutForConfiguredAlgorithm(
       {
@@ -292,14 +352,19 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
       consumedLengthMm: result.consumedLengthMm,
       aprovechamientoPct:
         areaTotalMm2 > 0
-          ? Math.round(((result.usefulAreaM2 * 1_000_000) / areaTotalMm2) * 10000) / 100
+          ? Math.round(
+              ((result.usefulAreaM2 * 1_000_000) / areaTotalMm2) * 10000,
+            ) / 100
           : 0,
       piezasAcomodadas: result.placements.length,
       incompatibles,
       placements: result.placements.map((p) => {
         // `piece-<medidaIndex>-<copia>`; medidaIndex indexa el array que se le
         // pasó al motor, que acá viene filtrado por incompatibles.
-        const medidaIndex = Number.parseInt((p.sourcePieceId ?? '').split('-')[1] ?? '', 10);
+        const medidaIndex = Number.parseInt(
+          (p.sourcePieceId ?? '').split('-')[1] ?? '',
+          10,
+        );
         const idxOriginal = indicesUsados[medidaIndex];
         return {
           pasoId: idxOriginal !== undefined ? pasoDeMedida[idxOriginal] : null,
@@ -324,30 +389,6 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
     margenLongitudinalMm: bordeLongitudinalMm,
   };
 }
-
-/** Paso de trazabilidad para el simulador LÁSER (por hoja). */
-type TrazabilidadPasoLaser = {
-  rutaPasoId?: string | null;
-  configPasoId?: string | null;
-  materiales?: Array<{
-    tipoLineaCosto?: string;
-    materiaPrimaNombre?: string;
-    cantidad?: number;
-    unidad?: string;
-    atributosVarianteJson?: {
-      gramaje?: unknown;
-      gramajeGr?: unknown;
-      formatoComercial?: unknown;
-      anchoMm?: unknown;
-      altoMm?: unknown;
-    } | null;
-  }>;
-  outputsCanonicos?: {
-    pliegos_impresos?: unknown;
-    pliego_impresion_ancho_mm?: unknown;
-    pliego_impresion_alto_mm?: unknown;
-  } | null;
-};
 
 function buildLaserJob(
   orden: {
@@ -377,34 +418,11 @@ function buildLaserJob(
     iniciadoEl: Date | null;
   },
 ) {
-  const jobContext =
-    (item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ?? null;
-  const pasosTraza = (
-    item.cotizacionItem?.trazabilidadJson as { pasos?: TrazabilidadPasoLaser[] } | null
-  )?.pasos;
-  const trazPaso =
-    (Array.isArray(pasosTraza)
-      ? pasosTraza.find((paso) => paso.rutaPasoId && paso.rutaPasoId === frontera.rutaPasoId)
-      : null) ?? null;
-  const sustrato =
-    trazPaso?.materiales?.find((mat) => mat.tipoLineaCosto === 'MATERIAL') ?? null;
-  const atributos = sustrato?.atributosVarianteJson ?? null;
-
-  // Las claves por-paso del jobContext se indexan por CONFIG del paso
-  // (configPasoId), no por rutaPasoId.
-  const configPasoId = trazPaso?.configPasoId ?? null;
-  const modoPorPaso = (jobContext?.modoColorPorPaso as Record<string, unknown> | undefined)?.[
-    configPasoId ?? ''
-  ];
-  const modoColor =
-    (typeof modoPorPaso === 'string' && modoPorPaso) ||
-    (typeof jobContext?.modoColor === 'string' && jobContext.modoColor) ||
-    null;
-  // Máquina ASIGNADA al cotizar (elegible en el sheet); la default de la
-  // config se resuelve después si acá no hay nada.
-  const maquinaSeleccionada = jobContext?.[`maquinaSeleccionada_${configPasoId ?? ''}`];
-  const carasCrudo = numeroONull(jobContext?.caras);
-  const caras = carasCrudo === 1 || carasCrudo === 2 ? carasCrudo : null;
+  const compatibilidad = extraerCompatibilidadLaser(
+    item.cotizacionItem?.jobContextJson ?? null,
+    item.cotizacionItem?.trazabilidadJson ?? null,
+    frontera.rutaPasoId,
+  );
 
   // Adónde va DESPUÉS: los pasos siguientes del item, como contexto.
   const acabados = item.pasos
@@ -415,46 +433,60 @@ function buildLaserJob(
   // PLIEGO DE IMPRESIÓN (lo que se carga en la máquina) ≠ formato de
   // compra del papel: acá los outputs canónicos; si vienen null (cotización
   // vieja) se resuelve después desde la config del paso.
-  const pliegoAnchoMm = numeroONull(trazPaso?.outputsCanonicos?.pliego_impresion_ancho_mm);
-  const pliegoAltoMm = numeroONull(trazPaso?.outputsCanonicos?.pliego_impresion_alto_mm);
-
-  // Hojas físicas que pasan por la máquina = pliegos de impresión; los
-  // clics multiplican por caras.
-  const pliegos = numeroONull(trazPaso?.outputsCanonicos?.pliegos_impresos);
-  const gramaje = numeroONull(atributos?.gramaje) ?? numeroONull(atributos?.gramajeGr);
   const letraItem = String.fromCharCode(65 + (item.ordenIndice % 26));
   return {
     pasoId: frontera.id,
     itemId: item.id,
     ordenId: orden.id,
     codigo: `${orden.numero} · ${letraItem}`,
-    cliente: orden.cliente?.nombre ?? 'Sin cliente',
+    cliente: (orden.cliente?.nombre ?? 'Sin cliente') as string | null,
     producto: item.nombre,
-    fechaEntrega: orden.fechaEntrega ? orden.fechaEntrega.toISOString().slice(0, 10) : null,
+    fechaEntrega: orden.fechaEntrega
+      ? orden.fechaEntrega.toISOString().slice(0, 10)
+      : null,
     estado: frontera.estado as 'pendiente' | 'en_curso',
     iniciadoEl: frontera.iniciadoEl ? frontera.iniciadoEl.toISOString() : null,
     duracionEstimadaMin:
-      frontera.duracionEstimadaMin != null ? Number(frontera.duracionEstimadaMin) : null,
+      frontera.duracionEstimadaMin != null
+        ? Number(frontera.duracionEstimadaMin)
+        : null,
     centroCostoId: frontera.centroCostoId,
     centroCostoNombre: frontera.centroCostoNombre,
-    configPasoId,
-    maquinaId: typeof maquinaSeleccionada === 'string' ? maquinaSeleccionada : null,
+    configPasoId: compatibilidad.configPasoId,
+    maquinaId: compatibilidad.maquinaId,
     maquinaNombre: null as string | null, // se resuelve con el catálogo
-    papel: sustrato
-      ? {
-          nombre: sustrato.materiaPrimaNombre ?? 'Papel sin identificar',
-          gramaje,
-        }
-      : null,
+    papel:
+      compatibilidad.papelNombre || compatibilidad.varianteId
+        ? {
+            materiaPrimaId: compatibilidad.materiaPrimaId,
+            varianteId: compatibilidad.varianteId,
+            nombre: compatibilidad.papelNombre ?? 'Papel sin identificar',
+            gramaje: compatibilidad.gramaje,
+          }
+        : null,
     pliego:
-      pliegoAnchoMm !== null && pliegoAltoMm !== null
-        ? { preset: null as string | null, anchoMm: pliegoAnchoMm, altoMm: pliegoAltoMm }
-        : (null as { preset: string | null; anchoMm: number | null; altoMm: number | null } | null),
-    hojas: pliegos,
-    clics: pliegos !== null ? pliegos * (caras ?? 1) : null,
-    caras,
-    modoColor,
+      compatibilidad.pliegoAnchoMm !== null &&
+      compatibilidad.pliegoAltoMm !== null
+        ? {
+            preset: compatibilidad.pliegoPreset,
+            anchoMm: compatibilidad.pliegoAnchoMm,
+            altoMm: compatibilidad.pliegoAltoMm,
+          }
+        : (null as {
+            preset: string | null;
+            anchoMm: number | null;
+            altoMm: number | null;
+          } | null),
+    hojas: compatibilidad.pliegos,
+    clics:
+      compatibilidad.pliegos !== null
+        ? compatibilidad.pliegos * (compatibilidad.caras ?? 1)
+        : null,
+    caras: compatibilidad.caras,
+    modoColor: compatibilidad.modoColor,
     acabados,
+    compatibilidadKey: null as string | null,
+    faltantesCompatibilidad: [] as string[],
   };
 }
 
@@ -482,18 +514,24 @@ function buildSimuladorJob(
   },
 ) {
   const jobContext =
-    (item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ?? null;
+    (item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ??
+    null;
   const pasosTraza = (
-    item.cotizacionItem?.trazabilidadJson as { pasos?: TrazabilidadPasoSimulador[] } | null
+    item.cotizacionItem?.trazabilidadJson as {
+      pasos?: TrazabilidadPasoSimulador[];
+    } | null
   )?.pasos;
   const trazPaso =
     (Array.isArray(pasosTraza)
-      ? pasosTraza.find((paso) => paso.rutaPasoId && paso.rutaPasoId === frontera.rutaPasoId)
+      ? pasosTraza.find(
+          (paso) => paso.rutaPasoId && paso.rutaPasoId === frontera.rutaPasoId,
+        )
       : null) ?? null;
 
   // Sustrato: la línea MATERIAL del paso (las tintas son CONSUMIBLE_MAQUINA).
   const sustrato =
-    trazPaso?.materiales?.find((mat) => mat.tipoLineaCosto === 'MATERIAL') ?? null;
+    trazPaso?.materiales?.find((mat) => mat.tipoLineaCosto === 'MATERIAL') ??
+    null;
 
   // Tecnología elegida al cotizar: la del paso, o la global del job.
   const tecnologiaPaso = frontera.rutaPasoId
@@ -510,9 +548,11 @@ function buildSimuladorJob(
     itemId: item.id,
     ordenId: orden.id,
     codigo: `${orden.numero} · ${letraItem}`,
-    cliente: orden.cliente?.nombre ?? 'Sin cliente',
+    cliente: (orden.cliente?.nombre ?? 'Sin cliente') as string | null,
     producto: item.nombre,
-    fechaEntrega: orden.fechaEntrega ? orden.fechaEntrega.toISOString().slice(0, 10) : null,
+    fechaEntrega: orden.fechaEntrega
+      ? orden.fechaEntrega.toISOString().slice(0, 10)
+      : null,
     tecnologia,
     materiaPrimaId: null as string | null, // se resuelve abajo con la variante
     materiaPrimaNombre: sustrato?.materiaPrimaNombre ?? null,
@@ -522,6 +562,7 @@ function buildSimuladorJob(
           sku: sustrato.materialSku ?? '',
           anchoMm: numeroONull(sustrato.atributosVarianteJson?.anchoMm),
           precioMl: numeroONull(sustrato.precioUnitario),
+          compatibilidadClave: '',
         }
       : null,
     consumoCotizadoMm: numeroONull(trazPaso?.nestingResult?.consumedLengthMm),
@@ -585,6 +626,22 @@ export class ProduccionService {
       orderBy: [{ nombre: 'asc' }],
     });
     return rows.map((item) => this.toEstacion(item));
+  }
+
+  async recursosEstaciones(tenantId: string) {
+    const [empleados, maquinas] = await Promise.all([
+      this.prisma.empleado.findMany({
+        where: { tenantId, activo: true },
+        select: { id: true, nombreCompleto: true, sector: true },
+        orderBy: { nombreCompleto: 'asc' },
+      }),
+      this.prisma.maquina.findMany({
+        where: { tenantId, activo: true },
+        select: { id: true, codigo: true, nombre: true },
+        orderBy: { nombre: 'asc' },
+      }),
+    ]);
+    return { empleados, maquinas };
   }
 
   /**
@@ -693,7 +750,10 @@ export class ProduccionService {
 
   async simulador(auth: CurrentAuth) {
     const ordenes = await this.prisma.ordenTrabajo.findMany({
-      where: { tenantId: auth.tenantId, estado: { in: ['pendiente', 'produccion'] } },
+      where: {
+        tenantId: auth.tenantId,
+        estado: { in: ['pendiente', 'produccion'] },
+      },
       select: {
         id: true,
         numero: true,
@@ -758,7 +818,11 @@ export class ProduccionService {
     const variantes = varianteIds.length
       ? await this.prisma.materiaPrimaVariante.findMany({
           where: { tenantId: auth.tenantId, id: { in: varianteIds } },
-          select: { id: true, materiaPrimaId: true },
+          select: {
+            id: true,
+            materiaPrimaId: true,
+            atributosVarianteJson: true,
+          },
         })
       : [];
     const materiaPrimaPorVariante = new Map(
@@ -768,11 +832,23 @@ export class ProduccionService {
       job.materiaPrimaId = job.varianteCotizada?.id
         ? (materiaPrimaPorVariante.get(job.varianteCotizada.id) ?? null)
         : null;
+      if (job.varianteCotizada?.id) {
+        const variante = variantes.find(
+          (item) => item.id === job.varianteCotizada?.id,
+        );
+        job.varianteCotizada.compatibilidadClave = claveCompatibilidadVariante(
+          variante?.atributosVarianteJson ?? null,
+        );
+      }
     }
 
     // Catálogo de anchos por materia prima involucrada (variantes + stock).
     const materiaPrimaIds = [
-      ...new Set(jobs.map((job) => job.materiaPrimaId).filter((id): id is string => id !== null)),
+      ...new Set(
+        jobs
+          .map((job) => job.materiaPrimaId)
+          .filter((id): id is string => id !== null),
+      ),
     ];
     const materiasPrimas = materiaPrimaIds.length
       ? await this.prisma.materiaPrima.findMany({
@@ -799,8 +875,11 @@ export class ProduccionService {
       nombre: materiaPrima.nombre,
       anchos: materiaPrima.variantes
         .map((variante) => {
-          const atributos = variante.atributosVarianteJson as { anchoMm?: unknown } | null;
-          const anchoMm = typeof atributos?.anchoMm === 'number' ? atributos.anchoMm : null;
+          const atributos = variante.atributosVarianteJson as {
+            anchoMm?: unknown;
+          } | null;
+          const anchoMm =
+            typeof atributos?.anchoMm === 'number' ? atributos.anchoMm : null;
           if (anchoMm === null || anchoMm <= 0) return null;
           const stockMl = variante.stocks.reduce(
             (acc, stock) => acc + Number(stock.cantidadDisponible),
@@ -810,15 +889,40 @@ export class ProduccionService {
             varianteId: variante.id,
             sku: variante.sku,
             anchoMm,
-            precioMl: variante.precioReferencia != null ? Number(variante.precioReferencia) : null,
+            precioMl:
+              variante.precioReferencia != null
+                ? Number(variante.precioReferencia)
+                : null,
             stockMl: variante.stocks.length > 0 ? stockMl : null,
+            compatibilidadClave: claveCompatibilidadVariante(
+              variante.atributosVarianteJson,
+            ),
           };
         })
         .filter((ancho): ancho is NonNullable<typeof ancho> => ancho !== null)
         .sort((a, b) => a.anchoMm - b.anchoMm),
     }));
 
-    return { jobs, materiales };
+    const puedeVerImportes =
+      auth.permisos?.has('finanzas.ver_margenes') ?? false;
+    const puedeVerClientes =
+      auth.permisos?.has('comercial.ver') ||
+      auth.permisos?.has('registros.ver');
+    if (!puedeVerImportes || !puedeVerClientes) {
+      for (const job of jobs) {
+        if (!puedeVerClientes) job.cliente = null;
+        if (!puedeVerImportes && job.varianteCotizada) {
+          job.varianteCotizada.precioMl = null;
+        }
+      }
+      if (!puedeVerImportes) {
+        for (const material of materiales) {
+          for (const ancho of material.anchos) ancho.precioMl = null;
+        }
+      }
+    }
+
+    return { jobs, materiales, puedeVerImportes };
   }
 
   /**
@@ -838,12 +942,15 @@ export class ProduccionService {
         rutaPasoId: true,
         item: {
           select: {
-            cotizacionItem: { select: { jobContextJson: true, trazabilidadJson: true } },
+            cotizacionItem: {
+              select: { jobContextJson: true, trazabilidadJson: true },
+            },
           },
         },
       },
     });
-    if (pasos.length === 0) throw new NotFoundException('No se encontraron los pasos.');
+    if (pasos.length === 0)
+      throw new NotFoundException('No se encontraron los pasos.');
     const porId = new Map(pasos.map((paso) => [paso.id, paso]));
 
     return {
@@ -852,7 +959,9 @@ export class ProduccionService {
         ...acomodarTanda(
           grupo.pasoIds
             .map((id) => porId.get(id))
-            .filter((paso): paso is (typeof pasos)[number] => paso !== undefined),
+            .filter(
+              (paso): paso is (typeof pasos)[number] => paso !== undefined,
+            ),
           grupo.anchosMm,
         ),
       })),
@@ -917,7 +1026,10 @@ export class ProduccionService {
 
   async simuladorLaser(auth: CurrentAuth) {
     const ordenes = await this.prisma.ordenTrabajo.findMany({
-      where: { tenantId: auth.tenantId, estado: { in: ['pendiente', 'produccion'] } },
+      where: {
+        tenantId: auth.tenantId,
+        estado: { in: ['pendiente', 'produccion'] },
+      },
       select: {
         id: true,
         numero: true,
@@ -974,7 +1086,11 @@ export class ProduccionService {
     // (cotizaciones viejas no traen los outputs canónicos de pliego, y la
     // máquina del jobContext puede faltar → maquinaM1Id de la config).
     const configIds = [
-      ...new Set(jobs.map((job) => job.configPasoId).filter((id): id is string => id !== null)),
+      ...new Set(
+        jobs
+          .map((job) => job.configPasoId)
+          .filter((id): id is string => id !== null),
+      ),
     ];
     const configs = configIds.length
       ? await this.prisma.productoConfigPaso.findMany({
@@ -984,28 +1100,46 @@ export class ProduccionService {
       : [];
     const configPorId = new Map(configs.map((config) => [config.id, config]));
     for (const job of jobs) {
-      const config = job.configPasoId ? configPorId.get(job.configPasoId) : undefined;
-      if (!config) continue;
-      if (job.pliego === null) {
-        const nesting = (config.paramsPasoJson as {
-          nestingConfig?: { pliegoImpresion?: { preset?: unknown; anchoMm?: unknown; altoMm?: unknown } };
-        } | null)?.nestingConfig?.pliegoImpresion;
-        if (nesting) {
-          job.pliego = {
-            preset: typeof nesting.preset === 'string' ? nesting.preset : null,
-            anchoMm: numeroONull(nesting.anchoMm),
-            altoMm: numeroONull(nesting.altoMm),
-          };
-        }
-      }
-      if (job.maquinaId === null && config.maquinaM1Id) {
-        job.maquinaId = config.maquinaM1Id;
-      }
+      const config = job.configPasoId
+        ? configPorId.get(job.configPasoId)
+        : undefined;
+      const resuelta = aplicarFallbackConfigLaser(
+        {
+          configPasoId: job.configPasoId,
+          maquinaId: job.maquinaId,
+          varianteId: job.papel?.varianteId ?? null,
+          materiaPrimaId: job.papel?.materiaPrimaId ?? null,
+          papelNombre: job.papel?.nombre ?? null,
+          gramaje: job.papel?.gramaje ?? null,
+          pliegoAnchoMm: job.pliego?.anchoMm ?? null,
+          pliegoAltoMm: job.pliego?.altoMm ?? null,
+          pliegoPreset: job.pliego?.preset ?? null,
+          modoColor: job.modoColor,
+          caras: job.caras,
+          pliegos: job.hojas,
+        },
+        config,
+      );
+      job.maquinaId = resuelta.maquinaId;
+      job.pliego =
+        resuelta.pliegoAnchoMm !== null && resuelta.pliegoAltoMm !== null
+          ? {
+              preset: resuelta.pliegoPreset,
+              anchoMm: resuelta.pliegoAnchoMm,
+              altoMm: resuelta.pliegoAltoMm,
+            }
+          : null;
+      job.compatibilidadKey = claveCompatibilidadLoteLaser(resuelta);
+      job.faltantesCompatibilidad = faltantesCompatibilidadLaser(resuelta);
     }
 
     // Nombres de las máquinas asignadas.
     const maquinaIds = [
-      ...new Set(jobs.map((job) => job.maquinaId).filter((id): id is string => id !== null)),
+      ...new Set(
+        jobs
+          .map((job) => job.maquinaId)
+          .filter((id): id is string => id !== null),
+      ),
     ];
     const maquinas = maquinaIds.length
       ? await this.prisma.maquina.findMany({
@@ -1013,9 +1147,20 @@ export class ProduccionService {
           select: { id: true, nombre: true },
         })
       : [];
-    const maquinaPorId = new Map(maquinas.map((maquina) => [maquina.id, maquina.nombre]));
+    const maquinaPorId = new Map(
+      maquinas.map((maquina) => [maquina.id, maquina.nombre]),
+    );
     for (const job of jobs) {
-      job.maquinaNombre = job.maquinaId ? (maquinaPorId.get(job.maquinaId) ?? null) : null;
+      job.maquinaNombre = job.maquinaId
+        ? (maquinaPorId.get(job.maquinaId) ?? null)
+        : null;
+    }
+
+    const puedeVerClientes =
+      auth.permisos?.has('comercial.ver') ||
+      auth.permisos?.has('registros.ver');
+    if (!puedeVerClientes) {
+      for (const job of jobs) job.cliente = null;
     }
 
     return { jobs };
@@ -1073,7 +1218,10 @@ export class ProduccionService {
     return rows.map((row) => this.toDiaNoLaborable(row));
   }
 
-  async crearDiaNoLaborable(auth: CurrentAuth, payload: CrearDiaNoLaborableDto) {
+  async crearDiaNoLaborable(
+    auth: CurrentAuth,
+    payload: CrearDiaNoLaborableDto,
+  ) {
     // El DTO valida el formato; acá el calendario real (30/02 → inválida).
     const fecha = new Date(`${payload.fecha}T00:00:00.000Z`);
     if (
@@ -1093,7 +1241,9 @@ export class ProduccionService {
       return this.toDiaNoLaborable(creado);
     } catch (error: unknown) {
       if (isUniqueConstraintError(error)) {
-        throw new ConflictException('Esa fecha ya está cargada como no laborable.');
+        throw new ConflictException(
+          'Esa fecha ya está cargada como no laborable.',
+        );
       }
       throw error;
     }
@@ -1143,11 +1293,50 @@ export class ProduccionService {
       ).values(),
     ];
 
-    const invalidas = familias.filter((codigo) => !resolverFamilia(codigo));
+    const codigosPropios = [...new Set([
+      ...familias.filter((codigo) => !resolverFamilia(codigo)),
+      ...reglas
+        .filter((regla) => regla.tipo === 'paso' && !resolverFamilia(regla.valor))
+        .map((regla) => regla.valor),
+    ])];
+    const propiosEncontrados = codigosPropios.length
+      ? await this.prisma.pasoTenant.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            id: { in: codigosPropios },
+            activo: true,
+          },
+          select: { id: true },
+        })
+      : [];
+    const propiosValidos = new Set(propiosEncontrados.map((paso) => paso.id));
+    const invalidas = familias.filter(
+      (codigo) => !resolverFamilia(codigo) && !propiosValidos.has(codigo),
+    );
     if (invalidas.length > 0) {
       throw new BadRequestException(
         `Familias de pasos desconocidas: ${invalidas.join(', ')}.`,
       );
+    }
+
+    const reglasPasoInvalidas = reglas.filter(
+      (regla) =>
+        regla.tipo === 'paso' &&
+        !resolverFamilia(regla.valor) &&
+        !propiosValidos.has(regla.valor),
+    );
+    if (reglasPasoInvalidas.length > 0) {
+      throw new BadRequestException('Algún paso concreto no existe en este tenant.');
+    }
+    const tecnologiasInvalidas = reglas.filter(
+      (regla) =>
+        regla.tipo === 'tecnologia' &&
+        (!TECNOLOGIAS_MAQUINA.includes(
+          regla.valor as (typeof TECNOLOGIAS_MAQUINA)[number],
+        ) || normalizarTecnologiaMaquina(regla.valor) !== regla.valor),
+    );
+    if (tecnologiasInvalidas.length > 0) {
+      throw new BadRequestException('Alguna tecnología de estación no es válida.');
     }
 
     // Una familia puede repetirse entre estaciones CON máquinas (filtran por
@@ -1167,7 +1356,10 @@ export class ProduccionService {
         },
         include: {
           estacion: {
-            select: { nombre: true, maquinas: { select: { id: true }, take: 1 } },
+            select: {
+              nombre: true,
+              maquinas: { select: { id: true }, take: 1 },
+            },
           },
         },
       });
@@ -1204,7 +1396,10 @@ export class ProduccionService {
       });
       if (enConflicto.length > 0) {
         const detalle = enConflicto
-          .map((fila) => `${fila.tipo} "${fila.valor}" (en "${fila.estacion.nombre}")`)
+          .map(
+            (fila) =>
+              `${fila.tipo} "${fila.valor}" (en "${fila.estacion.nombre}")`,
+          )
           .join(' · ');
         throw new ConflictException(
           `Estas reglas ya las captura otra estación: ${detalle}. Cada tecnología o paso concreto vive en una sola estación.`,
@@ -1261,7 +1456,10 @@ export class ProduccionService {
     });
     const reglasAEscribir = [
       ...listas.familias.map((valor) => ({ tipo: 'familia', valor })),
-      ...listas.reglas.map((regla) => ({ tipo: regla.tipo, valor: regla.valor })),
+      ...listas.reglas.map((regla) => ({
+        tipo: regla.tipo,
+        valor: regla.valor,
+      })),
     ];
     if (reglasAEscribir.length > 0) {
       await tx.estacionRegla.createMany({
@@ -1304,6 +1502,43 @@ export class ProduccionService {
     }
   }
 
+  /** Revalida el estado final, incluyendo estaciones que perdieron máquinas. */
+  private async validarInvariantesRuteo(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+  ) {
+    const estaciones = await tx.estacion.findMany({
+      where: { tenantId },
+      select: {
+        id: true,
+        nombre: true,
+        maquinas: { select: { id: true }, take: 1 },
+        reglas: {
+          where: { tipo: 'familia' },
+          select: { valor: true },
+        },
+      },
+    });
+    const generalesPorFamilia = new Map<string, string[]>();
+    for (const estacion of estaciones) {
+      if (estacion.maquinas.length > 0) continue;
+      for (const regla of estacion.reglas) {
+        const nombres = generalesPorFamilia.get(regla.valor) ?? [];
+        nombres.push(estacion.nombre);
+        generalesPorFamilia.set(regla.valor, nombres);
+      }
+    }
+    const conflicto = [...generalesPorFamilia.entries()].find(
+      ([, nombres]) => nombres.length > 1,
+    );
+    if (conflicto) {
+      const [familia, nombres] = conflicto;
+      throw new ConflictException(
+        `Mover esas máquinas dejaría más de una estación general para ${resolverFamilia(familia)?.nombre ?? familia}: ${nombres.join(', ')}.`,
+      );
+    }
+  }
+
   async createEstacion(auth: CurrentAuth, payload: UpsertEstacionDto) {
     const listas = await this.validarReferencias(auth, payload);
     try {
@@ -1318,10 +1553,13 @@ export class ProduccionService {
             icono: payload.icono?.trim() || null,
             capacidadConcurrente: payload.capacidadConcurrente ?? 1,
             tiempoPreparacionMin: payload.tiempoPreparacionMin ?? null,
-            calendarioJson: calendarioAJson(parseCalendario(payload.calendario)),
+            calendarioJson: calendarioAJson(
+              parseCalendario(payload.calendario),
+            ),
           },
         });
         await this.sincronizarListas(tx, auth, estacion.id, listas);
+        await this.validarInvariantesRuteo(tx, auth.tenantId);
         return estacion;
       });
       return this.findEstacion(auth, creada.id);
@@ -1370,6 +1608,7 @@ export class ProduccionService {
           },
         });
         await this.sincronizarListas(tx, auth, id, listas);
+        await this.validarInvariantesRuteo(tx, auth.tenantId);
       });
       return this.findEstacion(auth, id);
     } catch (error: unknown) {

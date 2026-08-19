@@ -1,11 +1,34 @@
 import { PresupuestosView } from "@/components/comercial/presupuestos-view";
 import { getCurrentUserCached } from "@/lib/auth-server";
 import type { MembershipRole } from "@/lib/auth";
-import { listarPresupuestos, type PresupuestosListado } from "@/lib/presupuestos-api";
+import {
+  listarPresupuestos,
+  type PresupuestoEstado,
+  type PresupuestosListado,
+} from "@/lib/presupuestos-api";
 
 export const dynamic = "force-dynamic";
 
-export default async function PresupuestosPage() {
+const ESTADOS = new Set<PresupuestoEstado>([
+  "borrador",
+  "pendiente_aprobacion",
+  "enviado",
+  "aprobado",
+  "rechazado",
+  "vencido",
+  "convertido",
+]);
+
+export default async function PresupuestosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ estado?: string }>;
+}) {
+  const params = await searchParams;
+  const estado =
+    params.estado && ESTADOS.has(params.estado as PresupuestoEstado)
+      ? (params.estado as PresupuestoEstado)
+      : undefined;
   let listado: PresupuestosListado = {
     presupuestos: [],
     stats: [],
@@ -16,7 +39,7 @@ export default async function PresupuestosPage() {
   let rol: MembershipRole = "operador";
   try {
     const [datos, current] = await Promise.all([
-      listarPresupuestos(),
+      listarPresupuestos({ estado }),
       getCurrentUserCached(),
     ]);
     listado = datos;
@@ -24,5 +47,5 @@ export default async function PresupuestosPage() {
   } catch {
     // La vista muestra su estado vacío.
   }
-  return <PresupuestosView initial={listado} rol={rol} />;
+  return <PresupuestosView initial={listado} rol={rol} filtroInicial={estado} />;
 }

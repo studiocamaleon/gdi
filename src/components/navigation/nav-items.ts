@@ -160,7 +160,12 @@ export const NAV: NavItem[] = [
         label: "Simulador impresión láser",
         href: "/produccion/simulador-laser",
       },
-      { key: "estaciones", label: "Estaciones", href: "/produccion/estaciones" },
+      {
+        key: "estaciones",
+        label: "Estaciones",
+        href: "/produccion/estaciones",
+        permiso: "produccion.configurar",
+      },
     ],
   },
   {

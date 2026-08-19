@@ -89,6 +89,7 @@ import type { ProveedorOpcion } from "@/lib/proveedores";
 import type { PagoDeEgreso } from "@/lib/egresos";
 import type { Archivo } from "@/lib/archivos";
 import { listarArchivos } from "@/lib/archivos-api";
+import type { GastoFijo } from "@/lib/gastos-fijos-api";
 
 type Tab = "por-pagar" | "todos" | "proveedores" | "recurrentes" | "analisis";
 
@@ -424,8 +425,10 @@ export function EgresosView({
   proveedores,
   metodosPago,
   cuentas,
+  gastosFijos = [],
   modo = "egresos",
   valorEndosoInicialId,
+  altaInicial = false,
 }: {
   initialEgresos: Egreso[];
   initialResumen: ResumenEgresos | null;
@@ -433,10 +436,13 @@ export function EgresosView({
   proveedores: ProveedorOpcion[];
   metodosPago: MetodoPago[];
   cuentas: CuentaFondosResumen[];
+  gastosFijos?: GastoFijo[];
   /** Qué mitad del módulo se está mirando. Ver `ModoEgresos`. */
   modo?: ModoEgresos;
   /** Llega desde Cartera: mantiene el endoso dentro de una orden de pago. */
   valorEndosoInicialId?: string;
+  /** Permite abrir el alta desde una acción contextual, por ejemplo el Panel. */
+  altaInicial?: boolean;
 }) {
   const tabsVisibles = TABS_POR_MODO[modo];
   // Los permisos se resuelven en el cliente (patrón de la casa): el guard del
@@ -453,7 +459,7 @@ export function EgresosView({
   const [cargando, setCargando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [texto, setTexto] = React.useState("");
-  const [altaAbierta, setAltaAbierta] = React.useState(false);
+  const [altaAbierta, setAltaAbierta] = React.useState(altaInicial);
   const [pagoAbierto, setPagoAbierto] = React.useState(false);
   const [seleccion, setSeleccion] = React.useState<Set<string>>(new Set());
   const [detalle, setDetalle] = React.useState<Egreso | null>(null);
@@ -532,7 +538,7 @@ export function EgresosView({
         e.beneficiarioNombre.toLowerCase().includes(q) ||
         e.numero.toLowerCase().includes(q),
     );
-  }, [egresos, texto, tab]);
+  }, [egresos, texto]);
 
   const seleccionados = visibles.filter((e) => seleccion.has(e.id));
   const totalSeleccion = seleccionados.reduce((acc, e) => acc + e.saldo, 0);
@@ -657,6 +663,7 @@ export function EgresosView({
             recurrentes={recurrentes}
             categorias={categorias}
             proveedores={proveedores}
+            gastosFijos={gastosFijos}
             hoy={hoy}
             puedeGestionar={puedeGestionar}
             fmt={fmt}
@@ -888,6 +895,7 @@ function Recurrentes({
   recurrentes,
   categorias,
   proveedores,
+  gastosFijos,
   hoy,
   puedeGestionar,
   fmt,
@@ -896,12 +904,14 @@ function Recurrentes({
   recurrentes: GastoRecurrente[] | null;
   categorias: CategoriaEgreso[];
   proveedores: ProveedorOpcion[];
+  gastosFijos: GastoFijo[];
   hoy: string;
   puedeGestionar: boolean;
   fmt: (v: number) => string;
   onCambio: () => void;
 }) {
   const [alta, setAlta] = React.useState(false);
+  const [editando, setEditando] = React.useState<GastoRecurrente | null>(null);
   const [emitiendo, setEmitiendo] = React.useState(false);
   const [aviso, setAviso] = React.useState<string | null>(null);
   const activas = categorias.filter((c) => c.activo);
@@ -916,8 +926,24 @@ function Recurrentes({
     ],
     [proveedores],
   );
-  const cerrarAlta = React.useCallback(() => setAlta(false), []);
-  useCerrarConEscape(cerrarAlta, alta);
+  const opcionesGastoFijo = React.useMemo<OpcionSelect[]>(
+    () => [
+      { value: "", label: "Sin vincular" },
+      ...gastosFijos
+        .filter((g) => g.activo)
+        .map((g) => ({
+          value: g.id,
+          label: g.nombre,
+          detalle: `${g.categoriaNombre} · ${fmt(g.importeMensual)}/mes`,
+        })),
+    ],
+    [gastosFijos, fmt],
+  );
+  const cerrarFormulario = React.useCallback(() => {
+    setAlta(false);
+    setEditando(null);
+  }, []);
+  useCerrarConEscape(cerrarFormulario, alta || editando !== null);
 
   const [descripcion, setDescripcion] = React.useState("");
   const [categoriaId, setCategoriaId] = React.useState(activas[0]?.id ?? "");
@@ -926,6 +952,36 @@ function Recurrentes({
   const [frecuencia, setFrecuencia] = React.useState("mensual");
   const [dia, setDia] = React.useState(10);
   const [desde, setDesde] = React.useState(hoy.slice(0, 7));
+  const [hasta, setHasta] = React.useState("");
+  const [gastoFijoId, setGastoFijoId] = React.useState("");
+
+  const abrirAlta = () => {
+    setEditando(null);
+    setDescripcion("");
+    setCategoriaId(activas[0]?.id ?? "");
+    setProveedorId("");
+    setMonto(0);
+    setFrecuencia("mensual");
+    setDia(10);
+    setDesde(hoy.slice(0, 7));
+    setHasta("");
+    setGastoFijoId("");
+    setAlta(true);
+  };
+
+  const abrirEdicion = (r: GastoRecurrente) => {
+    setAlta(false);
+    setEditando(r);
+    setDescripcion(r.descripcion);
+    setCategoriaId(r.categoriaEgresoId);
+    setProveedorId(r.proveedorId ?? "");
+    setMonto(r.monto);
+    setFrecuencia(r.frecuencia);
+    setDia(r.diaVencimiento);
+    setDesde(r.vigenteDesde);
+    setHasta(r.vigenteHasta ?? "");
+    setGastoFijoId(r.gastoFijoEstructuraId ?? "");
+  };
 
   const emitir = async () => {
     setEmitiendo(true);
@@ -946,16 +1002,28 @@ function Recurrentes({
   };
 
   const guardar = async () => {
-    await crearRecurrente({
-      descripcion: descripcion.trim(),
-      categoriaEgresoId: categoriaId,
-      proveedorId: proveedorId || undefined,
-      monto,
-      frecuencia,
-      diaVencimiento: dia,
-      vigenteDesde: desde,
-    });
-    setAlta(false);
+    if (editando) {
+      await editarRecurrente(editando.id, {
+        descripcion: descripcion.trim(),
+        monto,
+        diaVencimiento: dia,
+        vigenteHasta: hasta || undefined,
+        gastoFijoEstructuraId: gastoFijoId || null,
+      });
+    } else {
+      await crearRecurrente({
+        descripcion: descripcion.trim(),
+        categoriaEgresoId: categoriaId,
+        proveedorId: proveedorId || undefined,
+        monto,
+        frecuencia,
+        diaVencimiento: dia,
+        vigenteDesde: desde,
+        vigenteHasta: hasta || undefined,
+        gastoFijoEstructuraId: gastoFijoId || undefined,
+      });
+    }
+    cerrarFormulario();
     setDescripcion("");
     setMonto(0);
     onCambio();
@@ -970,7 +1038,7 @@ function Recurrentes({
       <div className="egr-toolbar">
         {puedeGestionar ? (
           <>
-            <button type="button" className="btn" onClick={() => setAlta(true)}>
+            <button type="button" className="btn" onClick={abrirAlta}>
               Nueva plantilla
             </button>
             <button
@@ -1035,16 +1103,25 @@ function Recurrentes({
                   </td>
                   <td>
                     {puedeGestionar ? (
-                      <button
-                        type="button"
-                        className="egr-link"
-                        onClick={async () => {
-                          await editarRecurrente(r.id, { activo: !r.activo });
-                          onCambio();
-                        }}
-                      >
-                        {r.activo ? "Desactivar" : "Activar"}
-                      </button>
+                      <div className="egr-acciones-inline">
+                        <button
+                          type="button"
+                          className="egr-link"
+                          onClick={() => abrirEdicion(r)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="egr-link"
+                          onClick={async () => {
+                            await editarRecurrente(r.id, { activo: !r.activo });
+                            onCambio();
+                          }}
+                        >
+                          {r.activo ? "Desactivar" : "Activar"}
+                        </button>
+                      </div>
                     ) : (
                       <span
                         className={`egr-badge ${r.activo ? "" : "anulado"}`}
@@ -1060,15 +1137,15 @@ function Recurrentes({
         </div>
       )}
 
-      {alta ? (
+      {alta || editando ? (
         <div className="mod-bg" role="dialog" aria-modal="true">
           <div className="mod mod-sm">
             <div className="mod-head">
-              <h2>Nueva plantilla</h2>
+              <h2>{editando ? "Editar plantilla" : "Nueva plantilla"}</h2>
               <button
                 type="button"
                 className="mod-x"
-                onClick={() => setAlta(false)}
+                onClick={cerrarFormulario}
               >
                 ×
               </button>
@@ -1092,6 +1169,7 @@ function Recurrentes({
                     placeholder="Elegir categoría"
                     placeholderBusqueda="Buscar categoría…"
                     vacio="Ninguna categoría coincide."
+                    disabled={editando !== null}
                   />
                 </label>
                 <label className="egr-f">
@@ -1103,6 +1181,7 @@ function Recurrentes({
                     placeholder="Sin proveedor"
                     placeholderBusqueda="Buscar proveedor…"
                     vacio="Ningún proveedor coincide."
+                    disabled={editando !== null}
                   />
                 </label>
                 <label className="egr-f">
@@ -1122,6 +1201,7 @@ function Recurrentes({
                     value={frecuencia}
                     onChange={setFrecuencia}
                     opciones={OPCIONES_FRECUENCIA}
+                    disabled={editando !== null}
                   />
                 </label>
                 <label className="egr-f">
@@ -1147,7 +1227,32 @@ function Recurrentes({
                     type="month"
                     value={desde}
                     onChange={(e) => setDesde(e.target.value)}
+                    disabled={editando !== null}
                   />
+                </label>
+                <label className="egr-f">
+                  <span>Hasta</span>
+                  <input
+                    type="month"
+                    value={hasta}
+                    min={desde}
+                    onChange={(e) => setHasta(e.target.value)}
+                  />
+                  <small className="egr-hint">Vacío significa sin fecha de fin.</small>
+                </label>
+                <label className="egr-f egr-f-wide">
+                  <span>Gasto fijo presupuestado</span>
+                  <SelectBuscable
+                    value={gastoFijoId}
+                    onChange={setGastoFijoId}
+                    opciones={opcionesGastoFijo}
+                    placeholder="Sin vincular"
+                    placeholderBusqueda="Buscar gasto fijo…"
+                    vacio="Ningún gasto fijo coincide."
+                  />
+                  <small className="egr-hint">
+                    Vincularlo habilita la comparación entre lo presupuestado y lo realmente registrado.
+                  </small>
                 </label>
               </div>
             </div>
@@ -1155,7 +1260,7 @@ function Recurrentes({
               <button
                 type="button"
                 className="btn"
-                onClick={() => setAlta(false)}
+                onClick={cerrarFormulario}
               >
                 Cancelar
               </button>
@@ -1167,7 +1272,7 @@ function Recurrentes({
                 }
                 onClick={() => void guardar()}
               >
-                Crear
+                {editando ? "Guardar cambios" : "Crear"}
               </button>
             </div>
           </div>
@@ -1299,9 +1404,11 @@ function Analisis({
           <span className="h">costo de producción + estructura</span>
         </div>
         <div className="egr-kpi">
-          <span className="l">Salió de la caja</span>
+          <span className="l">Total registrado</span>
           <span className="v">{fmt(reporte.totalSalida)}</span>
-          <span className="h">{reporte.egresos} egresos</span>
+          <span className="h">
+            {reporte.egresos} egresos · incluye pagos y pendientes
+          </span>
         </div>
         <div className="egr-kpi">
           <span className="l">No es gasto</span>

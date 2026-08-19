@@ -380,6 +380,8 @@ export type Comprobante = {
   rechazo: { errores: string[] } | null;
   saldoPendiente: number;
   comprobanteOrigenId: string | null;
+  /** La factura tiene al menos una NC emitida y vigente asociada. */
+  corregido?: boolean;
 };
 
 export type CobroImputado = {
