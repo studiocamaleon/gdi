@@ -220,6 +220,7 @@ export const FAMILIA_ICONOS: Record<string, string> = {
   cnc: "Cnc",
   plegado: "Fold",
   corte_manual: "Scissors",
+  corte_hilo_caliente: "Scissors",
   laminado: "Brush",
   plastificado_pouch: "Brush",
   pintura_superficial: "Brush",

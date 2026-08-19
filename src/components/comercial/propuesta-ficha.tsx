@@ -12,6 +12,7 @@ import {
   ChevronRightIcon,
   CircleDollarSignIcon,
   CreditCardIcon,
+  DownloadIcon,
   Edit3Icon,
   XCircleIcon,
   ExternalLinkIcon,
@@ -182,6 +183,12 @@ import {
 } from "@/lib/modificaciones-fisicas";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
+import {
+  crearSvgDePlaca,
+  descargarTexto,
+  nombreBaseSvg,
+  obtenerFuenteVectorial,
+} from "@/lib/nesting-vectorial-export";
 import {
   layoutPliegosEnHoja,
   type LayoutPliegosEnHoja,
@@ -2024,6 +2031,10 @@ function ProduccionItemView({
   const pasosConNesting = pasosCosteoActivos.filter(
     (paso): paso is PanelEditorPaso => Boolean(paso.nestingResult),
   );
+  const fuenteVectorial = React.useMemo(
+    () => obtenerFuenteVectorial(item.jobContext),
+    [item.jobContext],
+  );
   const nestingTabs = pasosConNesting.map((paso, index) => ({
     key: nestingPasoKey(paso),
     label: nestingTabLabel(paso.nestingResult),
@@ -2186,6 +2197,47 @@ function ProduccionItemView({
               </div>
             ) : activeNestingTab ? (
               <div className="production-nesting" key={activeNestingTab.key}>
+                {activeNestingTab.paso.nestingResult?.algorithm ===
+                "irregular-2d-bottom-left-v1" ? (
+                  <div className="mb-3 flex flex-wrap justify-end gap-2">
+                    {fuenteVectorial ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          descargarTexto(
+                            fuenteVectorial.svg,
+                            fuenteVectorial.nombreArchivo,
+                          )
+                        }
+                      >
+                        <DownloadIcon />
+                        SVG original
+                      </Button>
+                    ) : null}
+                    {activeNestingTab.paso.nestingResult.substrates.map(
+                      (_, substrateIndex) => (
+                        <Button
+                          key={substrateIndex}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const result = activeNestingTab.paso.nestingResult!;
+                            descargarTexto(
+                              crearSvgDePlaca(result, substrateIndex),
+                              `${nombreBaseSvg(fuenteVectorial?.nombreArchivo ?? item.productoNombre)}-placa-${substrateIndex + 1}.svg`,
+                            );
+                          }}
+                        >
+                          <DownloadIcon />
+                          Placa {substrateIndex + 1} SVG
+                        </Button>
+                      ),
+                    )}
+                  </div>
+                ) : null}
                 {onEditPanels && isPanelEditableStep(activeNestingTab.paso) ? (
                   <div className="mb-3 flex justify-end">
                     <button
@@ -5262,9 +5314,7 @@ function rehidratarOrdenItem(
     (snap?.jobContext as Record<string, unknown> | null) ?? undefined;
   const unidadMedida = unidadDesdeCorta(producto.cantidadUnidad);
   const cantidadLibros =
-    unidadMedida === "libros"
-      ? cantidadLibrosCentroCopiado(jobContext)
-      : null;
+    unidadMedida === "libros" ? cantidadLibrosCentroCopiado(jobContext) : null;
   const cantidadVisible = cantidadLibros ?? producto.cantidad;
 
   const costosVacios = {
@@ -5411,8 +5461,7 @@ function rehidratarOrdenItem(
       producto.subcategoriaComercial || producto.familia,
     unidadMedida,
     cantidad: cantidadVisible,
-    precioUnitario:
-      cantidadVisible > 0 ? producto.total / cantidadVisible : 0,
+    precioUnitario: cantidadVisible > 0 ? producto.total / cantidadVisible : 0,
     subtotal: producto.subtotal,
     impuestoPorcentaje:
       producto.subtotal > 0

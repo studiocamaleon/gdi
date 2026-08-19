@@ -368,6 +368,7 @@ function serializarFamilia(
     categoria: f.categoria as string,
     descripcion: f.descripcion,
     visibleEnSelector: f.visibleEnSelector ?? true,
+    herramientasCotizacion: f.herramientasCotizacion ?? [],
     relacionMaquinaSoportada: f.relacionMaquinaSoportada,
     modoActivacionDefault: f.modoActivacionDefault as string,
     modosTiempoSoportados: f.modosTiempoSoportados,

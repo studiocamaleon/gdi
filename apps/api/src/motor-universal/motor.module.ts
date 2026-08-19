@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MotorUniversalController } from './motor.controller';
 import { MotorUniversalService } from './motor.service';
 import { PrecioModule } from '../productos-servicios/precio/precio.module';
+import { GeometriaVectorialCacheService } from './geometria-vectorial/geometria-vectorial-cache.service';
 
 /**
  * MotorUniversalModule importa PrecioModule para que MotorUniversalService pueda
@@ -12,7 +13,7 @@ import { PrecioModule } from '../productos-servicios/precio/precio.module';
 @Module({
   imports: [PrismaModule, PrecioModule],
   controllers: [MotorUniversalController],
-  providers: [MotorUniversalService],
+  providers: [MotorUniversalService, GeometriaVectorialCacheService],
   exports: [MotorUniversalService],
 })
 export class MotorUniversalModule {}

@@ -909,7 +909,8 @@ export interface NestingViewerInput {
     | "maxrects-rollo"
     | "secuencial-rollo"
     | "grid-2d-single"
-    | "grid-2d-multi";
+    | "grid-2d-multi"
+    | "irregular-2d-bottom-left-v1";
   cantidadCalculada: number;
   unidad: "m_lineales" | "pliegos" | "pouches" | "m2" | "piezas";
   aprovechamientoPct: number;
@@ -1076,6 +1077,12 @@ export interface CotizarRequest {
 
 export interface CotizarResponse {
   exitoso: boolean;
+  metadata?: {
+    quoteRunId: string;
+    motorVersion: string;
+    durationMs: number;
+    vectorCacheHit?: boolean;
+  };
   errores: Array<{
     codigo: string;
     severidad: string;
@@ -1335,12 +1342,118 @@ export interface CotizarResponse {
   };
 }
 
-export async function cotizar(req: CotizarRequest): Promise<CotizarResponse> {
+export async function cotizar(
+  req: CotizarRequest,
+  signal?: AbortSignal,
+): Promise<CotizarResponse> {
   return apiRequest<CotizarResponse>("/motor-universal/cotizar", {
     method: "POST",
     body: JSON.stringify(req),
     headers: { "Content-Type": "application/json" },
+    signal,
   });
+}
+
+export interface AnalisisSvgFabricacion {
+  nombreArchivo: string;
+  /** Identificador del resultado cacheado en el API; no contiene métricas confiadas. */
+  cacheKey?: string;
+  cacheHit?: boolean;
+  geometria: {
+    schemaVersion: 1;
+    anchoMm: number;
+    altoMm: number;
+    areaTotalMm2: number;
+    perimetroTotalMm: number;
+    hashFuente: string;
+    piezas: Array<{
+      id: string;
+      anchoMm: number;
+      altoMm: number;
+      areaMm2: number;
+      perimetroMm: number;
+      contornos: Array<{
+        esHueco: boolean;
+        puntos: Array<{ x: number; y: number }>;
+      }>;
+    }>;
+  };
+  nesting: {
+    algorithm: "irregular-2d-bottom-left-v1";
+    placas: number;
+    anchoPlacaMm: number;
+    altoPlacaMm: number;
+    anchoUtilMm: number;
+    altoUtilMm: number;
+    aprovechamientoPct: number;
+    areaPiezasMm2: number;
+    areaCompradaMm2: number;
+    placements: Array<{
+      pieceId: string;
+      copyIndex: number;
+      substrateIndex: number;
+      xMm: number;
+      yMm: number;
+      rotacion: number;
+      anchoMm: number;
+      altoMm: number;
+      contornos: Array<{
+        esHueco: boolean;
+        puntos: Array<{ x: number; y: number }>;
+      }>;
+      segmentacion?: {
+        piezaOrigenId: string;
+        indice: number;
+        total: number;
+        origenXmm: number;
+        origenYmm: number;
+        unionesIds: string[];
+      };
+    }>;
+    perimetroCorteMm?: number;
+    piezasOriginales?: number;
+    segmentos?: number;
+    unionesFisicas?: number;
+    uniones?: Array<{
+      id: string;
+      piezaOrigenId: string;
+      tipoEncastre: "cola_milano";
+      eje: "vertical" | "horizontal";
+      posicionMm: number;
+      largoMm: number;
+      cantidadEncastres: number;
+      anchoEncastreMm: number;
+      profundidadEncastreMm: number;
+      kerfMm: number;
+    }>;
+  };
+  diagnosticos: Array<{
+    codigo: string;
+    mensaje: string;
+    severidad: "ERROR" | "WARNING";
+  }>;
+}
+
+export async function analizarSvgFabricacion(req: {
+  svg: string;
+  nombreArchivo: string;
+  anchoFinalMm: number;
+  altoFinalMm?: number;
+  cantidad: number;
+  anchoPlacaMm: number;
+  altoPlacaMm: number;
+  margenMm?: number;
+  separacionMm?: number;
+  permitirRotacion?: boolean;
+}): Promise<AnalisisSvgFabricacion> {
+  return apiRequest<AnalisisSvgFabricacion>(
+    "/motor-universal/geometria-vectorial/analizar",
+    {
+      method: "POST",
+      body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export interface CotizarYGuardarResponse {

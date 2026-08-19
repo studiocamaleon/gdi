@@ -1151,6 +1151,9 @@ export class ProductosService {
               ...paso,
               familiaNombre:
                 resolverFamilia(paso.familiaCodigo)?.nombre ?? null,
+              herramientasCotizacion:
+                resolverFamilia(paso.familiaCodigo)
+                  ?.herramientasCotizacion ?? [],
             })),
         },
         // G-F3: extras de ESTA ruta alternativa (scope por ruta).
@@ -1158,6 +1161,8 @@ export class ProductosService {
           .filter((pe) => pe.rutaAlternativaId === rutaAlt.id)
           .map((pe) => ({
             ...pe,
+            herramientasCotizacion:
+              resolverFamilia(pe.familiaCodigo)?.herramientasCotizacion ?? [],
             maquinasCandidatas: pasoExtraCandidatas.get(pe.id) ?? [],
             slotsMateriales: pasoExtraSlots.get(pe.id) ?? [],
             cargosDirectosPaso: pasoExtraCargos.get(pe.id) ?? [],
@@ -1170,6 +1175,9 @@ export class ProductosService {
                 familiaNombre:
                   resolverFamilia(configPaso.rutaPaso.familiaCodigo)?.nombre ??
                   null,
+                herramientasCotizacion:
+                  resolverFamilia(configPaso.rutaPaso.familiaCodigo)
+                    ?.herramientasCotizacion ?? [],
               }
             : configPaso.rutaPaso,
           modoColorOptions: this.buildModoColorOptions(configPaso),

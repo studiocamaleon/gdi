@@ -80,6 +80,10 @@ const PIECE_COLORS = [
 type PieceStyle = (typeof PIECE_COLORS)[number];
 type Placement = NestingViewerInput["placements"][number];
 type VisualConfig = NonNullable<NestingViewerInput["visualConfig"]>;
+type VectorContour = {
+  esHueco: boolean;
+  puntos: Array<{ x: number; y: number }>;
+};
 type DisplayTransform = {
   rotated: boolean;
   substrateWidthMm: number;
@@ -149,6 +153,7 @@ function algorithmLabel(algorithm: NestingViewerInput["algorithm"]): string {
     "secuencial-rollo": "Acomodo secuencial en rollo",
     "grid-2d-single": "Acomodo en pliego",
     "grid-2d-multi": "Acomodo multi-placa",
+    "irregular-2d-bottom-left-v1": "Acomodo vectorial en placa",
   };
   // Snapshots viejos pueden traer un algoritmo ya retirado.
   return labels[algorithm] ?? "Acomodo";
@@ -1653,6 +1658,94 @@ function DimensionLabels({
   );
 }
 
+/** Convierte los contornos finales del solver desde metadata no confiable. */
+function getVectorContours(placement: Placement): VectorContour[] {
+  const meta = placement.meta;
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return [];
+  const raw = (meta as { contornos?: unknown }).contornos;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate))
+      return [];
+    const contour = candidate as { esHueco?: unknown; puntos?: unknown };
+    if (!Array.isArray(contour.puntos) || contour.puntos.length < 3) return [];
+    const puntos = contour.puntos.flatMap((point) => {
+      if (!point || typeof point !== "object" || Array.isArray(point)) return [];
+      const { x, y } = point as { x?: unknown; y?: unknown };
+      return typeof x === "number" &&
+        Number.isFinite(x) &&
+        typeof y === "number" &&
+        Number.isFinite(y)
+        ? [{ x, y }]
+        : [];
+    });
+    return puntos.length === contour.puntos.length
+      ? [{ esHueco: contour.esHueco === true, puntos }]
+      : [];
+  });
+}
+
+function mapDisplayPoint(
+  transform: DisplayTransform,
+  point: { x: number; y: number },
+) {
+  const { padPx, scale } = transform;
+  const padXPx = transform.padXPx ?? padPx;
+  const padYPx = transform.padYPx ?? padPx;
+  const displayX = point.x + (transform.offsetXMm ?? 0);
+  const displayY = point.y + (transform.offsetYMm ?? 0);
+  if (!transform.rotated) {
+    return {
+      x: padXPx + displayX * scale,
+      y: padYPx + displayY * scale,
+    };
+  }
+  return {
+    x: padXPx + (transform.substrateHeightMm - displayY) * scale,
+    y: padYPx + displayX * scale,
+  };
+}
+
+function vectorPathData(
+  contours: VectorContour[],
+  displayTransform: DisplayTransform,
+) {
+  return contours
+    .map(
+      (contour) =>
+        contour.puntos
+          .map((point, index) => {
+            const mapped = mapDisplayPoint(displayTransform, point);
+            return `${index === 0 ? "M" : "L"}${mapped.x} ${mapped.y}`;
+          })
+          .join(" ") + " Z",
+    )
+    .join(" ");
+}
+
+function contourAreaMm2(contour: VectorContour) {
+  let doubleArea = 0;
+  for (let index = 0; index < contour.puntos.length; index++) {
+    const current = contour.puntos[index];
+    const next = contour.puntos[(index + 1) % contour.puntos.length];
+    doubleArea += current.x * next.y - next.x * current.y;
+  }
+  return Math.abs(doubleArea) / 2;
+}
+
+function placementAreaMm2(placement: Placement) {
+  const contours = getVectorContours(placement);
+  if (contours.length === 0) return placement.widthMm * placement.heightMm;
+  return Math.max(
+    0,
+    contours.reduce(
+      (area, contour) =>
+        area + (contour.esHueco ? -1 : 1) * contourAreaMm2(contour),
+      0,
+    ),
+  );
+}
+
 function PlacementRect({
   placement,
   index,
@@ -1675,6 +1768,11 @@ function PlacementRect({
   );
   const { x, y, width: w, height: h } = rect;
   const style = colorForKey(placementGroupKey(placement));
+  const vectorContours = getVectorContours(placement);
+  const vectorPath =
+    vectorContours.length > 0
+      ? vectorPathData(vectorContours, displayTransform)
+      : null;
   const baseLabel = placementLabel(placement);
   const label =
     placement.panelIndex && placement.panelCount
@@ -1731,15 +1829,28 @@ function PlacementRect({
 
   return (
     <g>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        fill={style.fill}
-        stroke={style.stroke}
-        strokeWidth={0.8}
-      />
+      {vectorPath ? (
+        <path
+          d={vectorPath}
+          fill={style.fill}
+          fillRule="evenodd"
+          clipRule="evenodd"
+          stroke={style.stroke}
+          strokeWidth={0.8}
+          strokeLinejoin="miter"
+          strokeLinecap="square"
+        />
+      ) : (
+        <rect
+          x={x}
+          y={y}
+          width={w}
+          height={h}
+          fill={style.fill}
+          stroke={style.stroke}
+          strokeWidth={0.8}
+        />
+      )}
       {placement.panelAxis === "vertical" && verticalStart ? (
         <rect
           x={verticalStart.x}
@@ -1788,7 +1899,7 @@ function PlacementRect({
           strokeWidth={0.35}
         />
       ) : null}
-      {placement.rotated ? (
+      {placement.rotated && !vectorPath ? (
         <line
           x1={x}
           y1={y}
@@ -1841,7 +1952,7 @@ function PlacementRect({
 
 function NestingFooter({ result }: { result: NestingViewerInput }) {
   const placedAreaMm2 = result.placements.reduce(
-    (acc, p) => acc + p.widthMm * p.heightMm,
+    (acc, placement) => acc + placementAreaMm2(placement),
     0,
   );
   const chargedArea = result.costingPreview?.chargedAreaMm2;

@@ -85,6 +85,38 @@ export function jobContextCotizacionValido(value: unknown): boolean {
     }
   }
 
+  if (ctx.disenoVectorialFuente !== undefined) {
+    if (
+      !ctx.disenoVectorialFuente ||
+      typeof ctx.disenoVectorialFuente !== 'object' ||
+      Array.isArray(ctx.disenoVectorialFuente)
+    ) {
+      return false;
+    }
+    const fuente = ctx.disenoVectorialFuente as Record<string, unknown>;
+    if (
+      fuente.schemaVersion !== 1 ||
+      typeof fuente.nombreArchivo !== 'string' ||
+      fuente.nombreArchivo.length === 0 ||
+      fuente.nombreArchivo.length > 255 ||
+      typeof fuente.svg !== 'string' ||
+      fuente.svg.length === 0 ||
+      Buffer.byteLength(fuente.svg, 'utf8') > 512 * 1024 ||
+      !esNumeroPositivo(fuente.anchoFinalMm) ||
+      (fuente.altoFinalMm !== undefined &&
+        !esNumeroPositivo(fuente.altoFinalMm))
+    ) {
+      return false;
+    }
+  }
+  if (
+    ctx.disenoVectorialCacheKey !== undefined &&
+    (typeof ctx.disenoVectorialCacheKey !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(ctx.disenoVectorialCacheKey))
+  ) {
+    return false;
+  }
+
   if (ctx.caras !== undefined && ctx.caras !== 1 && ctx.caras !== 2) {
     return false;
   }

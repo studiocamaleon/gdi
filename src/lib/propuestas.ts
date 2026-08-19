@@ -1,4 +1,7 @@
-import type { CotizarResponse } from "@/lib/productos-servicios-api";
+import type {
+  AnalisisSvgFabricacion,
+  CotizarResponse,
+} from "@/lib/productos-servicios-api";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 
 export type TipoPropuesta = "orden_trabajo" | "presupuesto";
@@ -7,13 +10,11 @@ export type TipoPropuesta = "orden_trabajo" | "presupuesto";
 // la lógica de área/lineal); sólo cambian la etiqueta que se muestra. Las usa el
 // centro de copiado para distinguir un renglón encuadernado (libros) de hojas sueltas.
 export type UnidadPropuesta =
-  | "unidad"
-  | "m2"
-  | "metro_lineal"
-  | "libros"
-  | "hojas";
+  "unidad" | "m2" | "metro_lineal" | "libros" | "hojas";
 
-export type CotizacionPropuestaSnapshot = NonNullable<CotizarResponse["cotizacion"]>;
+export type CotizacionPropuestaSnapshot = NonNullable<
+  CotizarResponse["cotizacion"]
+>;
 
 export type PasoProduccionPropuesta = {
   nombre: string;
@@ -55,6 +56,8 @@ export type PropuestaItem = {
   notaProduccion?: string;
   rutaAlternativaId?: string | null;
   jobContext?: Record<string, unknown>;
+  /** Cache local del análisis validado para reabrir el editor sin reprocesar. */
+  disenoVectorialAnalisis?: AnalisisSvgFabricacion;
   /**
    * Descuento comercial que el vendedor aplicó a ESTA línea. Sólo el input
    * ({ tipo, valor }); el efecto (monto, neto de lista, margen resultante) lo
@@ -95,9 +98,7 @@ export type PropuestaCargoDirecto = {
   nombreSnapshot: string;
   descripcionSnapshot?: string | null;
   modoCalculoSnapshot:
-    | "MONTO_FIJO_PLANO"
-    | "PORCENTAJE_SOBRE_BASE"
-    | "POR_UNIDAD_INPUT";
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   configSnapshot: Record<string, unknown>;
   baseCalculo: number;
   cantidadInput?: number;

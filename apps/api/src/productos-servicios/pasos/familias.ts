@@ -52,6 +52,10 @@ const MP = {
       'TEXTIL_INDUMENTARIA',
     ],
   },
+  sustratoCorteVectorial: {
+    familiasMateriaPrima: ['SUSTRATO'],
+    subfamiliasMateriaPrima: ['SUSTRATO_RIGIDO'],
+  },
   aditiva3d: {
     familiasMateriaPrima: ['ADITIVA_3D'],
     subfamiliasMateriaPrima: ['FILAMENTO_3D', 'RESINA_3D'],
@@ -860,14 +864,35 @@ const corte_laser: DefinicionFamilia = {
     'Corte de placas (acrílico, madera, MDF, etc.) con láser. Atraviesa el material (distinto a grabado).',
   relacionMaquinaSoportada: ['M-1'],
   modosTiempoSoportados: ['T-3', 'T-4'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'CALCULADO_POR_PASO',
+  ],
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
   // El tiempo T-3 se mide por RECORRIDO: el perfil trae la velocidad (mm/s) y el
   // motor la aplica al perímetro de las piezas. Cortes calados usan T-4 manual.
   magnitudTiempoDefault: 'perimetro_piezas_m',
-  slotsRequeridos: [],
+  nestingConfig: {
+    superficie: 'pliegos_multiples',
+    estrategia: 'irregular_placa',
+    guardSinLayout: 'sustrato',
+  },
+  origenMargenesNesting: {
+    fuente: 'material',
+    campo: 'margenNoUtilizableMm',
+    forma: 'uniforme',
+  },
+  slotsRequeridos: [
+    {
+      codigo: 'sustrato_corte',
+      nombre: 'Placa a cortar (opcional)',
+      tipo: 'SUSTRATO',
+      requerido: false,
+      compatibilidadMaterial: MP.sustratoCorteVectorial,
+    },
+  ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: ['CORTE_LASER'],
   inputsRequeridos: ['cantidad'],
@@ -911,7 +936,10 @@ const cnc: DefinicionFamilia = {
     'Router CNC para piezas planas (3D fuera de scope hoy). Cortes complejos en MDF, PVC, foam.',
   relacionMaquinaSoportada: ['M-1'],
   modosTiempoSoportados: ['T-3', 'T-4'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'CALCULADO_POR_PASO',
+  ],
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
@@ -919,7 +947,25 @@ const cnc: DefinicionFamilia = {
   // rate) y el motor la aplica al perímetro de las piezas. Fresado/desbaste o
   // formas caladas usan T-4 manual.
   magnitudTiempoDefault: 'perimetro_piezas_m',
-  slotsRequeridos: [],
+  nestingConfig: {
+    superficie: 'pliegos_multiples',
+    estrategia: 'irregular_placa',
+    guardSinLayout: 'sustrato',
+  },
+  origenMargenesNesting: {
+    fuente: 'material',
+    campo: 'margenNoUtilizableMm',
+    forma: 'uniforme',
+  },
+  slotsRequeridos: [
+    {
+      codigo: 'sustrato_corte',
+      nombre: 'Placa a cortar (opcional)',
+      tipo: 'SUSTRATO',
+      requerido: false,
+      compatibilidadMaterial: MP.sustratoCorteVectorial,
+    },
+  ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: ['ROUTER_CNC'],
   inputsRequeridos: ['cantidad'],
@@ -990,6 +1036,64 @@ const corte_manual: DefinicionFamilia = {
   validaciones: [],
   paramsPasoSchema: [],
   productosTipicos: ['Señalética PVC chica', 'MDF fino'],
+};
+
+/** Corte de piezas corpóreas a partir de contornos vectoriales sobre placas.
+ * El SVG y su nesting son requisitos del PROCESO: cualquier producto cuya
+ * ruta use esta familia obtiene el configurador vectorial sin activar una
+ * herramienta particular en atributos comerciales. */
+const corte_hilo_caliente: DefinicionFamilia = {
+  codigo: 'corte_hilo_caliente',
+  nombre: 'Corte con hilo caliente',
+  categoria: 'corte_y_formado',
+  descripcion:
+    'Corte de Polyfan y espumas rígidas desde geometría vectorial, con nesting irregular sobre placas.',
+  herramientasCotizacion: ['diseno_vectorial'],
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
+  mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
+  modoActivacionDefault: 'OBLIGATORIO',
+  multiplicadoresSoportados: [],
+  magnitudTiempoDefault: 'perimetro_piezas_m',
+  ritmoDefault: {
+    unidad: 'ml_h',
+    modoCalculo: 'productivity',
+    fuenteCantidad: 'perimetro_piezas_m',
+  },
+  nestingConfig: {
+    superficie: 'pliegos_multiples',
+    estrategia: 'irregular_placa',
+    guardSinLayout: 'sustrato',
+  },
+  origenMargenesNesting: {
+    fuente: 'material',
+    campo: 'margenNoUtilizableMm',
+    forma: 'uniforme',
+  },
+  separacionNestingDefaultMm: 5,
+  // En hilo caliente, 5 mm es aire de seguridad entre cortes. No agranda la
+  // pieza ni debe sumarse a los márgenes físicos de la placa.
+  semanticaSeparacion: 'literal',
+  slotsRequeridos: [
+    {
+      codigo: 'sustrato_corte',
+      nombre: 'Placa para hilo caliente',
+      tipo: 'SUSTRATO',
+      requerido: true,
+      compatibilidadMaterial: MP.sustratoCorteVectorial,
+    },
+  ],
+  permiteSlotsAdicionales: false,
+  plantillasCompatibles: [],
+  inputsRequeridos: ['cantidad', 'disenoVectorialFuente'],
+  outputsCanonicos: ['piezas_cortadas'],
+  validaciones: [],
+  paramsPasoSchema: [],
+  productosTipicos: [
+    'Letras corpóreas en Polyfan',
+    'Logos y formas corpóreas en espuma rígida',
+  ],
 };
 
 // ============================================================================
@@ -2086,6 +2190,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   cnc,
   plegado,
   corte_manual,
+  corte_hilo_caliente,
   laminado,
   plastificado_pouch,
   pintura_superficial,

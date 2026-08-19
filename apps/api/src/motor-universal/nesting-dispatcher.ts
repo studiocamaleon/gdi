@@ -68,6 +68,14 @@ import {
   type PrintSheetCandidateMaterial,
 } from './nesting-config';
 import type { PasoCargado, JobContext, NestingVisualConfig } from './tipos';
+import {
+  nestearGeometriaIrregular,
+  NestingIrregularError,
+} from './geometria-vectorial/nesting-irregular';
+import {
+  marcarNestingVectorialReutilizado,
+  obtenerCacheVectorial,
+} from './geometria-vectorial/geometria-vectorial-cache.service';
 
 /**
  * Resultado del dispatcher con TODO lo que el motor + viewer necesitan.
@@ -78,7 +86,8 @@ export interface NestingDispatchResult {
     | 'maxrects-rollo'
     | 'secuencial-rollo'
     | 'grid-2d-single'
-    | 'grid-2d-multi';
+    | 'grid-2d-multi'
+    | 'irregular-2d-bottom-left-v1';
   /**
    * Cantidad CALCULADA del paso, en la unidad correcta:
    *  - Para shelf-rollo: metros lineales consumidos del rollo.
@@ -241,8 +250,15 @@ export async function runNestingForPaso(
 }
 
 /** Última barrera común: ningún algoritmo puede publicar piezas fuera del
- * material, superpuestas o con números no finitos. */
-function geometriaDispatchValida(result: NestingDispatchResult): boolean {
+ * material, superpuestas o con números no finitos.
+ *
+ * En geometría irregular los rectángulos envolventes sí pueden superponerse:
+ * justamente eso permite encastrar letras y logos. En ese caso la colisión de
+ * polígonos ya fue validada por el solver y aquí conservamos las verificaciones
+ * comunes de índices, límites y valores finitos. */
+export function geometriaDispatchValida(
+  result: NestingDispatchResult,
+): boolean {
   if (
     !Number.isFinite(result.cantidadCalculada) ||
     result.cantidadCalculada <= 0 ||
@@ -293,7 +309,9 @@ function geometriaDispatchValida(result: NestingDispatchResult): boolean {
     porSustrato.set(substrateIndex, group);
   }
 
-  // Barrido por X: exacto para resultados normales. El límite evita que una
+  if (result.algorithm === 'irregular-2d-bottom-left-v1') return true;
+
+  // Barrido por X: exacto para resultados rectangulares. El límite evita que una
   // validación defensiva vuelva a bloquear el API en tiradas masivas.
   for (const placements of porSustrato.values()) {
     if (placements.length > 5_000) continue;
@@ -393,6 +411,10 @@ type EstrategiaNestingFn = (
  * viven dentro de su estrategia, no en el dispatch.
  */
 const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
+  /** Contornos SVG normalizados por el servidor sobre una placa finita. */
+  irregular_placa: (_paso, jobContext, materialResuelto, config) =>
+    runIrregularPlaca(jobContext, materialResuelto, config),
+
   /** Corte sobre rollo: shelf sin panelizado. Si el material cargado es hoja/
    *  placa (no rollo) no acomoda en rollo — el formato lo dice el material. */
   corte_rollo: (paso, jobContext, materialResuelto, config) => {
@@ -442,6 +464,166 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
 // ────────────────────────────────────────────────────────────────────
 // Implementaciones
 // ────────────────────────────────────────────────────────────────────
+
+function runIrregularPlaca(
+  jobContext: JobContext,
+  materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  if (
+    !jobContext.geometriaVectorial ||
+    !materialResuelto ||
+    !config.sheetWidthMm ||
+    !config.sheetHeightMm
+  ) {
+    return null;
+  }
+  const margenUniforme = Math.max(
+    config.margins.leftMm,
+    config.margins.rightMm,
+    config.margins.topMm,
+    config.margins.bottomMm,
+  );
+  const separacionUniforme = Math.max(
+    config.separationHMm,
+    config.separationVMm,
+  );
+  try {
+    const cached = obtenerCacheVectorial(jobContext);
+    const cacheMatches =
+      cached?.analisis.geometria.hashFuente ===
+        jobContext.geometriaVectorial.hashFuente &&
+      cached.parametros.cantidad === jobContext.cantidad &&
+      cached.parametros.anchoPlacaMm === config.sheetWidthMm &&
+      cached.parametros.altoPlacaMm === config.sheetHeightMm &&
+      cached.parametros.margenMm === margenUniforme &&
+      cached.parametros.separacionMm === separacionUniforme &&
+      cached.parametros.permitirRotacion === config.allowRotation;
+    if (cacheMatches) marcarNestingVectorialReutilizado(jobContext);
+    const result =
+      cacheMatches && cached
+        ? cached.nesting
+        : nestearGeometriaIrregular({
+            geometria: jobContext.geometriaVectorial,
+            cantidad: jobContext.cantidad,
+            anchoPlacaMm: config.sheetWidthMm,
+            altoPlacaMm: config.sheetHeightMm,
+            margenMm: margenUniforme,
+            separacionMm: separacionUniforme,
+            permitirRotacion: config.allowRotation,
+          });
+    const substrates: SubstrateUsage[] = Array.from(
+      { length: result.placas },
+      () => ({
+        kind: 'sheet' as const,
+        count: 1,
+        widthMm: result.anchoPlacaMm,
+        heightMm: result.altoPlacaMm,
+      }),
+    );
+    const perSubstrate = substrates.map((_, index) => ({
+      areaUtilMm2: result.placements
+        .filter((placement) => placement.substrateIndex === index)
+        .reduce((sum, placement) => {
+          const areaPlacement = areaContornosVectoriales(placement.contornos);
+          return sum + areaPlacement;
+        }, 0),
+      consumedLengthMm: result.altoPlacaMm,
+    }));
+    // El corte real incluye las nuevas fronteras creadas por la división. Se
+    // publica antes de calcular el tiempo del paso para que el hilo caliente
+    // y la mano de obra coticen el trabajo efectivo, no el perímetro original.
+    jobContext.piezaPerimetroTotalM = result.perimetroCorteMm / 1_000;
+    jobContext.unionesVectoriales = result.unionesFisicas;
+    jobContext.encastresVectoriales =
+      result.uniones.reduce(
+        (total, union) => total + union.cantidadEncastres,
+        0,
+      ) * jobContext.cantidad;
+    return {
+      algorithm: result.algorithm,
+      cantidadCalculada: result.placas,
+      unidad: 'pliegos',
+      aprovechamientoPct: result.aprovechamientoPct,
+      substrates,
+      placements: result.placements.map((placement) => ({
+        pieceId: placement.pieceId,
+        substrateIndex: placement.substrateIndex,
+        xMm: placement.xMm,
+        yMm: placement.yMm,
+        widthMm: placement.anchoMm,
+        heightMm: placement.altoMm,
+        rotated: placement.rotacion !== 0,
+        meta: {
+          contornos: placement.contornos,
+          rotacionGrados: placement.rotacion,
+          segmentacion: placement.segmentacion,
+          label: placement.segmentacion
+            ? `${placement.segmentacion.piezaOrigenId} · parte ${placement.segmentacion.indice}/${placement.segmentacion.total}`
+            : placement.pieceId,
+        },
+      })),
+      metricasRaw: {
+        aprovechamientoPct: result.aprovechamientoPct,
+        areaUtilMm2: result.areaPiezasMm2,
+        areaTotalMm2: result.areaCompradaMm2,
+        perSubstrate,
+        perimetroCorteMm: result.perimetroCorteMm,
+        piezasOriginales: result.piezasOriginales,
+        segmentos: result.segmentos,
+        unionesFisicas: result.unionesFisicas,
+        uniones: result.uniones,
+      },
+      piezasAcomodadas: result.placements.length,
+      visualConfig: {
+        margins: {
+          leftMm: margenUniforme,
+          rightMm: margenUniforme,
+          topMm: margenUniforme,
+          bottomMm: margenUniforme,
+        },
+        spacing: {
+          horizontalMm: Math.max(config.separationHMm, config.separationVMm),
+          verticalMm: Math.max(config.separationHMm, config.separationVMm),
+        },
+        // La separación evita que dos cortes se toquen; no es demasía ni
+        // sangrado de la pieza. Declararlo evita que el visor la infiera como
+        // la mitad del gap, una regla válida sólo para layouts impresos legacy.
+        pieceBleedMm: 0,
+        allowRotation: config.allowRotation,
+        usableArea: {
+          xMm: margenUniforme,
+          yMm: margenUniforme,
+          widthMm: result.anchoUtilMm,
+          heightMm: result.altoUtilMm,
+        },
+      },
+    };
+  } catch (error) {
+    // Los errores geométricos esperables (pieza demasiado grande, márgenes que
+    // consumen la placa, etc.) permiten que el motor emita su diagnóstico
+    // habitual. Un error de programación inesperado no debe quedar oculto.
+    if (error instanceof NestingIrregularError) return null;
+    throw error;
+  }
+}
+
+function areaContornosVectoriales(
+  contornos: Array<{
+    esHueco: boolean;
+    puntos: Array<{ x: number; y: number }>;
+  }>,
+): number {
+  return contornos.reduce((total, contorno) => {
+    const area = Math.abs(
+      contorno.puntos.reduce((sum, punto, index) => {
+        const siguiente = contorno.puntos[(index + 1) % contorno.puntos.length];
+        return sum + punto.x * siguiente.y - siguiente.x * punto.y;
+      }, 0) / 2,
+    );
+    return total + (contorno.esHueco ? -area : area);
+  }, 0);
+}
 
 /**
  * Superficie de un paso que declara `segun_material`: la decide la máquina y
@@ -998,7 +1180,9 @@ function runShelfRollo(
     panelIndex: p.panelIndex ?? undefined,
     panelCount: p.panelCount ?? undefined,
     panelAxis: (p.panelAxis ?? undefined) as
-      'vertical' | 'horizontal' | undefined,
+      | 'vertical'
+      | 'horizontal'
+      | undefined,
     usefulWidthMm: p.usefulWidthMm,
     usefulHeightMm: p.usefulHeightMm,
     overlapStartMm: p.overlapStartMm,

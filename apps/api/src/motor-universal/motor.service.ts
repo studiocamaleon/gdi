@@ -128,6 +128,15 @@ import {
 } from '../productos-servicios/pasos/familias';
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import { paramsEfectivos } from './params-runtime';
+import {
+  adjuntarCacheVectorial,
+  GeometriaVectorialCacheService,
+  nestingVectorialFueReutilizado,
+} from './geometria-vectorial/geometria-vectorial-cache.service';
+import {
+  analizarSvgFabricacion,
+  SvgFabricacionError,
+} from './geometria-vectorial/svg-parser';
 import { MotorCotizacionError } from './motor-error';
 import { jobContextCotizacionValido } from './cotizar.dto';
 
@@ -469,6 +478,7 @@ export class MotorUniversalService {
     private readonly prisma: PrismaService,
     private readonly aplicarPrecio: AplicarPrecioService,
     private readonly preciosEspecialesClientes: PreciosEspecialesClientesService,
+    private readonly geometriaCache: GeometriaVectorialCacheService = new GeometriaVectorialCacheService(),
   ) {}
 
   /**
@@ -602,6 +612,67 @@ export class MotorUniversalService {
       caras: 1, // simple faz por defecto (se sobrescribe con input)
       ...input.jobContext,
     };
+    let vectorCacheHit = false;
+    // El navegador sólo captura la fuente. El servidor vuelve a derivar toda
+    // la geometría para que perímetro, área y cantidad de piezas usados en el
+    // precio no puedan ser adulterados desde el JobContext.
+    if (jobContext.disenoVectorialFuente) {
+      try {
+        const fuente = jobContext.disenoVectorialFuente;
+        const cached = this.geometriaCache.obtenerParaCotizacion({
+          tenantId: input.tenantId,
+          cacheKey: jobContext.disenoVectorialCacheKey,
+          svg: fuente.svg,
+          anchoFinalMm: fuente.anchoFinalMm,
+          altoFinalMm: fuente.altoFinalMm,
+        });
+        const geometria = cached
+          ? cached.analisis.geometria
+          : analizarSvgFabricacion({
+              svg: fuente.svg,
+              anchoFinalMm: fuente.anchoFinalMm,
+              altoFinalMm: fuente.altoFinalMm,
+            }).geometria;
+        if (cached) {
+          adjuntarCacheVectorial(jobContext, cached);
+        }
+        jobContext.geometriaVectorial = geometria;
+        jobContext.piezas = geometria.piezas.map((pieza) => ({
+          cantidad: jobContext.cantidad,
+          anchoMm: pieza.anchoMm,
+          altoMm: pieza.altoMm,
+          perimetroMm: pieza.perimetroMm,
+          sourcePieceId: pieza.id,
+        }));
+        jobContext.medidaCustomMm = {
+          anchoMm: geometria.anchoMm,
+          altoMm: geometria.altoMm,
+        };
+        jobContext.piezaAnchoMaxMm = Math.max(
+          ...geometria.piezas.map((pieza) => pieza.anchoMm),
+        );
+        jobContext.piezaAltoMaxMm = Math.max(
+          ...geometria.piezas.map((pieza) => pieza.altoMm),
+        );
+        jobContext.piezaAreaTotalM2 =
+          (geometria.areaTotalMm2 * jobContext.cantidad) / 1_000_000;
+        jobContext.piezaPerimetroTotalM =
+          (geometria.perimetroTotalMm * jobContext.cantidad) / 1_000;
+      } catch (error) {
+        if (error instanceof SvgFabricacionError) {
+          return fallar([
+            {
+              codigo: error.diagnosticos[0]?.codigo ?? 'svg_invalido',
+              severidad: 'ERROR',
+              mensaje: error.message,
+              sugerencia:
+                'Corregí el archivo vectorial y volvé a calcular la cotización.',
+            },
+          ]);
+        }
+        throw error;
+      }
+    }
     // Cobertura de tóner: es un default POR PASO (paramsPasoJson.coberturaDefault),
     // no del producto — lo resuelve resolverCoberturaComercial. Ver
     // docs/cobertura-toner-por-nivel-diseno.md.
@@ -1141,6 +1212,7 @@ export class MotorUniversalService {
       cotizacion.desglosePrecio = cotizacionReferenciaMinimo.desglosePrecio;
     }
 
+    vectorCacheHit = nestingVectorialFueReutilizado(jobContext);
     this.logger.log({
       event: 'motor_cotizacion_completada',
       quoteRunId,
@@ -1152,6 +1224,7 @@ export class MotorUniversalService {
       warningCodes: errores
         .filter((error) => error.severidad === 'WARNING')
         .map((error) => error.codigo),
+      vectorCacheHit,
       motorVersion: MOTOR_CONTRACT_VERSION,
     });
     return {
@@ -1161,6 +1234,7 @@ export class MotorUniversalService {
         quoteRunId,
         motorVersion: MOTOR_CONTRACT_VERSION,
         durationMs: Date.now() - startedAt,
+        vectorCacheHit,
       },
       cotizacion,
     };
@@ -6916,6 +6990,13 @@ export class MotorUniversalService {
           materialResuelto,
         )
       );
+    }
+
+    if (source === 'uniones_vectoriales') {
+      const cantidadUniones = Number(jobContext.unionesVectoriales ?? 0);
+      return Number.isFinite(cantidadUniones) && cantidadUniones >= 0
+        ? cantidadUniones
+        : 0;
     }
 
     // Magnitud DERIVADA como driver del tiempo (`derivada:<magnitud>`): el

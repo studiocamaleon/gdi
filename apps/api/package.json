@@ -42,6 +42,7 @@
     "class-validator": "^0.15.1",
     "compression": "^1.8.1",
     "express": "^5.2.1",
+    "fast-xml-parser": "^5.11.0",
     "helmet": "^8.2.0",
     "json-logic-js": "^2.0.5",
     "jspdf": "^4.2.1",
@@ -51,10 +52,12 @@
     "nestjs-pino": "^4.6.1",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "polygon-clipping": "^0.15.7",
     "prisma": "^6.19.2",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "svgpath": "^2.6.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

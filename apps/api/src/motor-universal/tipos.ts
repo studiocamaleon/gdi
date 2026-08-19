@@ -75,6 +75,19 @@ export interface MutacionAplicada {
 export interface JobContext {
   /** Cantidad pedida (talonarios, tarjetas, etc.). */
   cantidad: number;
+  /** Fuente vectorial de una capa. El motor vuelve a analizar el SVG y no
+   * confía en métricas calculadas por el navegador. */
+  disenoVectorialFuente?: {
+    schemaVersion: 1;
+    nombreArchivo: string;
+    svg: string;
+    anchoFinalMm: number;
+    altoFinalMm?: number;
+  };
+  /** Clave opaca del análisis previo; el servidor verifica hash y parámetros. */
+  disenoVectorialCacheKey?: string;
+  /** Geometría normalizada por el servidor para la ejecución actual. */
+  geometriaVectorial?: import('./geometria-vectorial/tipos').GeometriaVectorialCanonica;
   /** Lista de piezas para nesting (gap H7 — multi-medida). */
   piezas?: Array<{
     cantidad: number;
@@ -173,6 +186,9 @@ export interface JobContext {
    * (ojales, soldadura) usar `piezasVisibles`.
    */
   piezaPerimetroTotalM?: number;
+  /** Uniones y encastres derivados al fragmentar vectores mayores a la placa. */
+  unionesVectoriales?: number;
+  encastresVectoriales?: number;
   /** Ancho máximo entre las piezas (material, se recalcula tras mutar). */
   piezaAnchoMaxMm?: number;
   /** Alto máximo entre las piezas (material, se recalcula tras mutar). */
@@ -237,6 +253,7 @@ export interface CotizarOutput {
     quoteRunId: string;
     motorVersion: string;
     durationMs: number;
+    vectorCacheHit?: boolean;
   };
   /** Cotización (presente si exitoso=true). */
   cotizacion?: CotizacionResultado;
@@ -509,7 +526,8 @@ export interface NestingEjecutado {
     | 'maxrects-rollo'
     | 'secuencial-rollo'
     | 'grid-2d-single'
-    | 'grid-2d-multi';
+    | 'grid-2d-multi'
+    | 'irregular-2d-bottom-left-v1';
   /** Cantidad calculada en su unidad (m_lineales, pliegos, pouches, m2, piezas). */
   cantidadCalculada: number;
   unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';

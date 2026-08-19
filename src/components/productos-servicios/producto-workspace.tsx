@@ -1695,7 +1695,10 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
       await actualizarProducto(producto.id, {
         atributosComercialesJson: setHerramientaEditorSello(
           setHerramientaMedidasArchivo(
-            producto.atributosComercialesJson as Record<string, unknown> | null,
+            producto.atributosComercialesJson as Record<
+              string,
+              unknown
+            > | null,
             medidasDesdeArchivo,
           ),
           editorSello,

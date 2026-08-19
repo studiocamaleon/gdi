@@ -1,4 +1,8 @@
-import { fuenteMedidaEfectiva, runNestingForPaso } from '../nesting-dispatcher';
+import {
+  fuenteMedidaEfectiva,
+  geometriaDispatchValida,
+  runNestingForPaso,
+} from '../nesting-dispatcher';
 
 function buildPaso(algorithm: 'auto' | 'shelf-rollo' | 'maxrects-rollo') {
   return {
@@ -317,6 +321,124 @@ describe('runNestingForPaso rollo optimizado', () => {
     expect(auto!.algorithm).toBe('maxrects-rollo');
     expect(auto!.consumedLengthMm).toBeLessThan(shelf!.consumedLengthMm!);
   });
+});
+
+describe('runNestingForPaso geometría vectorial', () => {
+  it('acepta encastres irregulares aunque se superpongan sus rectángulos envolventes', () => {
+    const base = {
+      cantidadCalculada: 1,
+      unidad: 'pliegos' as const,
+      aprovechamientoPct: 50,
+      substrates: [
+        { kind: 'sheet' as const, count: 1, widthMm: 100, heightMm: 100 },
+      ],
+      placements: [
+        {
+          pieceId: 'pieza-a',
+          substrateIndex: 0,
+          xMm: 10,
+          yMm: 10,
+          widthMm: 60,
+          heightMm: 60,
+          rotated: false,
+        },
+        {
+          pieceId: 'pieza-b',
+          substrateIndex: 0,
+          xMm: 40,
+          yMm: 40,
+          widthMm: 50,
+          heightMm: 50,
+          rotated: false,
+        },
+      ],
+    };
+
+    expect(
+      geometriaDispatchValida({
+        ...base,
+        algorithm: 'irregular-2d-bottom-left-v1',
+      }),
+    ).toBe(true);
+    expect(
+      geometriaDispatchValida({
+        ...base,
+        algorithm: 'grid-2d-multi',
+      }),
+    ).toBe(false);
+  });
+
+  it.each(['cnc', 'corte_hilo_caliente'])(
+    'convierte el nesting irregular de %s en placas costeables por el motor',
+    async (familiaCodigo) => {
+      const paso = {
+        rutaPasoId: 'rp-cnc',
+        rutaPasoOrden: 1,
+        familiaCodigo,
+        configPasoId: 'cp-cnc',
+        modoActivacion: 'OBLIGATORIO',
+        condicionActivacionJson: null,
+        modoTiempo: 'T-3',
+        mecanismoCantidad: 'CALCULADO_POR_PASO',
+        mecanismoCantidadConfigJson: null,
+        multiplicadoresActivos: [],
+        paramsPasoJson: {
+          nestingConfig: { allowRotation: false, separationHMm: 0 },
+        },
+        slots: [],
+        cargosDirectosPaso: [],
+        maquina: null,
+      };
+      const result = await runNestingForPaso(
+        paso as never,
+        {
+          cantidad: 2,
+          geometriaVectorial: {
+            schemaVersion: 1,
+            anchoMm: 50,
+            altoMm: 50,
+            areaTotalMm2: 1_250,
+            perimetroTotalMm: 170.711,
+            hashFuente: 'fixture',
+            piezas: [
+              {
+                id: 'triangulo',
+                anchoMm: 50,
+                altoMm: 50,
+                areaMm2: 1_250,
+                perimetroMm: 170.711,
+                contornos: [
+                  {
+                    esHueco: false,
+                    puntos: [
+                      { x: 0, y: 50 },
+                      { x: 25, y: 0 },
+                      { x: 50, y: 50 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          id: 'polyfan-30',
+          subfamilia: 'SUSTRATO_RIGIDO',
+          precioReferencia: 1_000,
+          atributosVarianteJson: {
+            anchoMm: 140,
+            altoMm: 80,
+            margenNoUtilizableMm: 5,
+          },
+        },
+      );
+
+      expect(result?.algorithm).toBe('irregular-2d-bottom-left-v1');
+      expect(result?.cantidadCalculada).toBe(1);
+      expect(result?.unidad).toBe('pliegos');
+      expect(result?.placements).toHaveLength(2);
+    },
+  );
 });
 
 describe('runNestingForPaso plastificado pouch', () => {

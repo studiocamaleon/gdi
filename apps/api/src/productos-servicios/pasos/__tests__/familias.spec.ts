@@ -20,14 +20,30 @@ import type {
 } from '../types';
 
 describe('Catálogo de familias', () => {
-  it('contiene exactamente 31 familias', () => {
+  it('contiene exactamente 32 familias', () => {
     // Poda del catálogo 2026-08-03: se borraron 10 familias manuales sin uso ni
     // cableado y se sumó aplicacion_transfer_textil (plancha térmica).
     // 2026-08-04: se sumaron impresion_3d, abrochado_caballete y las dos de
     // cartelería F1 (estructura_bastidor, iluminacion_led).
     // 2026-08-07 (F4 efectos): se podó modificacion_pre — agrandar la medida
     // dejó de ser una familia y pasó a ser un efecto que declara el paso real.
-    expect(FAMILIAS_TOTAL).toBe(31);
+    // 2026-08-19: corte_hilo_caliente independiza el nesting vectorial de
+    // Polyfan de la familia genérica corte_manual.
+    expect(FAMILIAS_TOTAL).toBe(32);
+  });
+
+  it('corte con hilo caliente declara su cotizador y nesting vectorial', () => {
+    const familia = getFamilia('corte_hilo_caliente');
+
+    expect(familia.herramientasCotizacion).toContain('diseno_vectorial');
+    expect(familia.nestingConfig?.estrategia).toBe('irregular_placa');
+    expect(familia.semanticaSeparacion).toBe('literal');
+    expect(familia.inputsRequeridos).toContain('disenoVectorialFuente');
+    expect(familia.slotsRequeridos).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ codigo: 'sustrato_corte', requerido: true }),
+      ]),
+    );
   });
 
   it('todas las familias tienen categoría válida', () => {
@@ -279,8 +295,7 @@ describe('Helpers', () => {
     expect(() => getFamilia('familia_inexistente' as FamiliaCodigo)).toThrow();
   });
 
-  it('listarFamilias devuelve los 31 códigos', () => {
-    expect(listarFamilias().length).toBe(31);
+  it('listarFamilias devuelve los 32 códigos', () => {
+    expect(listarFamilias().length).toBe(32);
   });
 });
-

@@ -83,11 +83,13 @@ import {
 } from "@/lib/propuestas";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
+  type AnalisisSvgFabricacion,
   cotizar,
   getCatalogoFamilias,
   getProductoById,
   type CotizarResponse,
 } from "@/lib/productos-servicios-api";
+import { DisenoVectorialCotizador } from "@/components/comercial/diseno-vectorial-cotizador";
 import type {
   ConfigPasoDetalle,
   FamiliaListItem,
@@ -280,6 +282,14 @@ type MotorConfigState = {
   tiempoManualPorPaso: Record<string, number | null>;
   /** Diseño del sello (texto/tipografía) del configurador; null si no aplica. */
   disenoSello: DisenoSello | null;
+  disenoVectorialFuente: {
+    schemaVersion: 1;
+    nombreArchivo: string;
+    svg: string;
+    anchoFinalMm: number;
+    altoFinalMm?: number;
+  } | null;
+  disenoVectorialAnalisis: AnalisisSvgFabricacion | null;
   tipoCopia: 1 | 2 | 3;
   numerosXTalonario: number;
   /** Páginas del documento (imposición de cuadernillo); null = usar default del paso. */
@@ -541,6 +551,8 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   carasPorPaso: {},
   tiempoManualPorPaso: {},
   disenoSello: null,
+  disenoVectorialFuente: null,
+  disenoVectorialAnalisis: null,
   tipoCopia: 1,
   numerosXTalonario: 50,
   paginas: null,
@@ -951,6 +963,17 @@ function getRutaSeleccionada(
   );
 }
 
+function rutaRequiereHerramientaCotizacion(
+  ruta: RutaAlternativaDetalle | null,
+  herramienta: string,
+) {
+  return Boolean(
+    ruta?.configPasos.some((config) =>
+      config.rutaPaso.herramientasCotizacion?.includes(herramienta),
+    ),
+  );
+}
+
 function isExecutableConfigPaso(
   config: RutaAlternativaDetalle["configPasos"][number],
 ) {
@@ -981,6 +1004,7 @@ function pasoExtraToSyntheticConfig(
       id: extra.id,
       orden: baseOrden + (extra.ordenInterno + 1) / 1000,
       familiaCodigo: extra.familiaCodigo,
+      herramientasCotizacion: extra.herramientasCotizacion,
       activo: extra.activo,
     },
     modoActivacion: extra.modoActivacion,
@@ -1234,75 +1258,75 @@ function mapSlotMaterial(
   slot: RutaAlternativaDetalle["configPasos"][number]["slotsMateriales"][number],
 ): SlotComercialElige {
   return {
-          configPasoId: config.id,
-          familiaCodigo: config.rutaPaso.familiaCodigo,
-          modoActivacion: config.modoActivacion,
-          condicionActivacionJson: config.condicionActivacionJson,
-          modoSeleccion: slot.modoSeleccion,
-          formula: slot.formula,
-          slotCodigo: slot.slotCodigo,
-          nombrePaso: config.nombreVisible?.trim() || null,
-          candidatos: slot.candidatos.map((candidate) => ({
-            materiaPrimaId: candidate.materiaPrimaId,
-            label: candidate.materiaPrima.nombre,
-            defaultVarianteId: candidate.defaultVarianteId,
-            // Modo "todas las variantes": la lista fija del candidato viene
-            // vacía y la fuente son las variantes ACTIVAS del material (igual
-            // que el motor). Sin esto, los pickers quedaban mudos aunque el
-            // motor resolviera bien.
-            variantes: sortSlotMaterialVariantsByThickness(
-              (candidate.todasLasVariantes
-                ? (candidate.materiaPrima.variantes ?? []).map((v) => ({
-                    variante: {
-                      id: v.id,
-                      sku: v.sku,
-                      nombreVariante: v.nombreVariante,
-                      precioReferencia: v.precioReferencia,
+    configPasoId: config.id,
+    familiaCodigo: config.rutaPaso.familiaCodigo,
+    modoActivacion: config.modoActivacion,
+    condicionActivacionJson: config.condicionActivacionJson,
+    modoSeleccion: slot.modoSeleccion,
+    formula: slot.formula,
+    slotCodigo: slot.slotCodigo,
+    nombrePaso: config.nombreVisible?.trim() || null,
+    candidatos: slot.candidatos.map((candidate) => ({
+      materiaPrimaId: candidate.materiaPrimaId,
+      label: candidate.materiaPrima.nombre,
+      defaultVarianteId: candidate.defaultVarianteId,
+      // Modo "todas las variantes": la lista fija del candidato viene
+      // vacía y la fuente son las variantes ACTIVAS del material (igual
+      // que el motor). Sin esto, los pickers quedaban mudos aunque el
+      // motor resolviera bien.
+      variantes: sortSlotMaterialVariantsByThickness(
+        (candidate.todasLasVariantes
+          ? (candidate.materiaPrima.variantes ?? []).map((v) => ({
+              variante: {
+                id: v.id,
+                sku: v.sku,
+                nombreVariante: v.nombreVariante,
+                precioReferencia: v.precioReferencia,
                 atributosVarianteJson: (v.atributosVarianteJson ??
                   null) as Record<string, unknown> | null,
-                    },
-                  }))
-                : candidate.variantes
-              ).map((item) => {
-                const variante = {
-                  sku: item.variante.sku,
-                  nombreVariante: item.variante.nombreVariante,
-                  precioReferencia: item.variante.precioReferencia,
-                  atributosVarianteJson: item.variante.atributosVarianteJson,
-                };
-                const display = getSlotMaterialVariantDisplay(
-                  candidate.materiaPrima,
-                  variante,
-                );
-                return {
-                  variantId: item.variante.id,
-                  label: display.label,
-                  description: display.description,
-                  details: display.details,
-                  sku: display.fallbackCode,
-                  isFallbackLabel: display.details.length === 0,
+              },
+            }))
+          : candidate.variantes
+        ).map((item) => {
+          const variante = {
+            sku: item.variante.sku,
+            nombreVariante: item.variante.nombreVariante,
+            precioReferencia: item.variante.precioReferencia,
+            atributosVarianteJson: item.variante.atributosVarianteJson,
+          };
+          const display = getSlotMaterialVariantDisplay(
+            candidate.materiaPrima,
+            variante,
+          );
+          return {
+            variantId: item.variante.id,
+            label: display.label,
+            description: display.description,
+            details: display.details,
+            sku: display.fallbackCode,
+            isFallbackLabel: display.details.length === 0,
             atributosVarianteJson: item.variante.atributosVarianteJson ?? null,
-                  sortEspesor: getSlotMaterialVariantSortValue(variante),
-                  espesorLabel: getVariantThicknessLabel(
-                    item.variante.atributosVarianteJson,
-                  ),
-                  anchoLabel: getVariantWidthLabel(
-                    item.variante.atributosVarianteJson,
-                  ),
-            anchoMm: getVariantWidthMm(item.variante.atributosVarianteJson),
-                  colorLabel: getVariantColorLabel(
-                    item.variante.atributosVarianteJson,
-                  ),
-                  missingPrice: Number(item.variante.precioReferencia ?? 0) <= 0,
-                  sello: getSelloModelDeVariante(
-                    item.variante.atributosVarianteJson,
-                    display.label,
-                  ),
-                };
-              }),
+            sortEspesor: getSlotMaterialVariantSortValue(variante),
+            espesorLabel: getVariantThicknessLabel(
+              item.variante.atributosVarianteJson,
             ),
-          })),
-        };
+            anchoLabel: getVariantWidthLabel(
+              item.variante.atributosVarianteJson,
+            ),
+            anchoMm: getVariantWidthMm(item.variante.atributosVarianteJson),
+            colorLabel: getVariantColorLabel(
+              item.variante.atributosVarianteJson,
+            ),
+            missingPrice: Number(item.variante.precioReferencia ?? 0) <= 0,
+            sello: getSelloModelDeVariante(
+              item.variante.atributosVarianteJson,
+              display.label,
+            ),
+          };
+        }),
+      ),
+    })),
+  };
 }
 
 function getSlotsComercialElige(
@@ -1778,8 +1802,8 @@ function getModosColorComercial(
           (config.maquinasCandidatas?.length ?? 0) > 0;
         const allowedModes =
           !usaModosPorCandidata && Array.isArray(modoConfig.allowedModes)
-          ? modoConfig.allowedModes.map(normalizeModoColor).filter(Boolean)
-          : [];
+            ? modoConfig.allowedModes.map(normalizeModoColor).filter(Boolean)
+            : [];
         const options = getModoColorOptionsForConfig(
           config,
           motorConfig,
@@ -2074,18 +2098,18 @@ function getPasosConTecnologias(
         tecnologias: Array.from(
           (config.maquinasCandidatas ?? [])
             .reduce((map, candidate) => {
-            const value = getCandidateTechnology(candidate);
-            const current = map.get(value);
-            if (current) {
-              current.candidatas.push(candidate);
-            } else {
-              map.set(value, {
-                value,
-                label: machineTechnologyLabel(candidate.maquina),
-                candidatas: [candidate],
-              });
-            }
-            return map;
+              const value = getCandidateTechnology(candidate);
+              const current = map.get(value);
+              if (current) {
+                current.candidatas.push(candidate);
+              } else {
+                map.set(value, {
+                  value,
+                  label: machineTechnologyLabel(candidate.maquina),
+                  candidatas: [candidate],
+                });
+              }
+              return map;
             }, new Map<string, TecnologiaCandidataComercial>())
             .values(),
         ),
@@ -2614,8 +2638,7 @@ function getOpcionales(
           ...asRecord(cargo.configOverrideJson),
         },
         aplicaMargen:
-          cargo.aplicaMargenOverride ??
-          cargo.cargoDirectoCatalogo.aplicaMargen,
+          cargo.aplicaMargenOverride ?? cargo.cargoDirectoCatalogo.aplicaMargen,
       });
     }
   }
@@ -2657,10 +2680,7 @@ function getOpcionales(
         }
         for (const cargo of config.cargosDirectosPaso) {
           if (cargo.modoActivacion !== "OPCIONAL") continue;
-          if (
-            cargo.nivelCodigo &&
-            cargo.nivelCodigo !== nivelSeleccionado
-          ) {
+          if (cargo.nivelCodigo && cargo.nivelCodigo !== nivelSeleccionado) {
             continue;
           }
           const parentActive = motorConfig
@@ -2701,21 +2721,19 @@ function getCargoInputDescriptors(
   if (!producto) return [];
   const asociaciones = [
     ...producto.cargosDirectosCotizacion,
-    ...(ruta?.configPasos ?? [])
-      .filter(includeConfig)
-      .flatMap((config) => {
-        const niveles = leerNivelesPaso(config.paramsPasoJson);
-        const nivelSeleccionado = niveles
-          ? seleccionNivel[config.id] === NIVEL_PERSONALIZADO
-            ? null
-            : nivelEfectivo(niveles, seleccionNivel[config.id]).codigo
-          : null;
-        return config.cargosDirectosPaso.filter(
-          (asociacion) =>
-            !asociacion.nivelCodigo ||
-            asociacion.nivelCodigo === nivelSeleccionado,
-        );
-      }),
+    ...(ruta?.configPasos ?? []).filter(includeConfig).flatMap((config) => {
+      const niveles = leerNivelesPaso(config.paramsPasoJson);
+      const nivelSeleccionado = niveles
+        ? seleccionNivel[config.id] === NIVEL_PERSONALIZADO
+          ? null
+          : nivelEfectivo(niveles, seleccionNivel[config.id]).codigo
+        : null;
+      return config.cargosDirectosPaso.filter(
+        (asociacion) =>
+          !asociacion.nivelCodigo ||
+          asociacion.nivelCodigo === nivelSeleccionado,
+      );
+    }),
   ];
   const porKey = new Map<string, CargoInputDescriptor>();
 
@@ -3200,16 +3218,16 @@ function buildJobContext(
   const usaMedidaPersonalizadaReal =
     cotizaConPiezas && config.piezas.length > 0;
   const cantidadTrabajo = cotizaLinealDirecto
-      ? 1
-      : piezasUsanCantidadComercial
+    ? 1
+    : piezasUsanCantidadComercial
       ? qty
       : cotizaConPiezas
-      ? config.piezas.reduce(
-          (total, pieza) =>
-            total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
-          0,
-        ) || 1
-      : qty;
+        ? config.piezas.reduce(
+            (total, pieza) =>
+              total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
+            0,
+          ) || 1
+        : qty;
   const ctx: Record<string, unknown> = {
     cantidad: cantidadTrabajo,
     caras: config.caras,
@@ -3251,13 +3269,13 @@ function buildJobContext(
     }
   }
   const materialLinealMetrics = cotizaLinealDirecto
-      ? getSelectedLinearMaterialMetrics(
-          productoDetalle,
-          slotsComercialElige,
-          config,
-          includeConfig,
-        )
-      : null;
+    ? getSelectedLinearMaterialMetrics(
+        productoDetalle,
+        slotsComercialElige,
+        config,
+        includeConfig,
+      )
+    : null;
   const anchoMaterialLinealMm = materialLinealMetrics?.materialWidthMm ?? null;
   const anchoUtilLinealMm = materialLinealMetrics?.usableWidthMm ?? null;
   const piezaLinealDirecta =
@@ -3292,9 +3310,9 @@ function buildJobContext(
     }));
 
   const piezasContexto = usaMedidaPersonalizadaReal
-      ? config.piezas
-      : piezaLinealDirecta.length > 0
-        ? piezaLinealDirecta
+    ? config.piezas
+    : piezaLinealDirecta.length > 0
+      ? piezaLinealDirecta
       : medidaPredefinida
         ? [
             {
@@ -3304,9 +3322,9 @@ function buildJobContext(
               altoMm: medidaPredefinida.altoMm,
             },
           ]
-      : piezasDesdePersonalizaciones.length > 0
-        ? piezasDesdePersonalizaciones
-        : [];
+        : piezasDesdePersonalizaciones.length > 0
+          ? piezasDesdePersonalizaciones
+          : [];
 
   if (piezasContexto.length > 0) {
     ctx.piezas = piezasContexto.map((pieza) => ({
@@ -3514,6 +3532,34 @@ function buildJobContext(
   // costeo. Se refleja también en especificaciones para la ficha/OT.
   if (config.disenoSello) {
     ctx.disenoSello = config.disenoSello;
+  }
+  if (config.disenoVectorialFuente) {
+    ctx.disenoVectorialFuente = config.disenoVectorialFuente;
+    if (config.disenoVectorialAnalisis?.cacheKey) {
+      ctx.disenoVectorialCacheKey = config.disenoVectorialAnalisis.cacheKey;
+    }
+    const geometria = config.disenoVectorialAnalisis?.geometria;
+    if (geometria) {
+      ctx.piezas = geometria.piezas.map((pieza) => ({
+        cantidad: qty,
+        anchoMm: pieza.anchoMm,
+        altoMm: pieza.altoMm,
+        perimetroMm: pieza.perimetroMm,
+        sourcePieceId: pieza.id,
+      }));
+      ctx.medidaCustomMm = {
+        anchoMm: geometria.anchoMm,
+        altoMm: geometria.altoMm,
+      };
+      ctx.piezaAnchoMaxMm = Math.max(
+        ...geometria.piezas.map((pieza) => pieza.anchoMm),
+      );
+      ctx.piezaAltoMaxMm = Math.max(
+        ...geometria.piezas.map((pieza) => pieza.altoMm),
+      );
+      ctx.piezaAreaTotalM2 = (geometria.areaTotalMm2 * qty) / 1_000_000;
+      ctx.piezaPerimetroTotalM = (geometria.perimetroTotalMm * qty) / 1_000;
+    }
   }
 
   // Nivel del paso (zona de colocación, dificultad de diseño): la clave viaja
@@ -3766,7 +3812,15 @@ function buildPresentableSpecs(
   }
   const usaMedidasPersonalizadas =
     usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length > 0;
-  if (usaMedidasPersonalizadas) {
+  const geometriaVectorial = config.disenoVectorialAnalisis?.geometria;
+  if (geometriaVectorial) {
+    const medidas = `${qty.toLocaleString("es-AR")} u. × ${formatMedidasCm(
+      geometriaVectorial.anchoMm,
+      geometriaVectorial.altoMm,
+    )}`;
+    setSpec("medidas", medidas);
+    setSpec("formato_medidas", medidas);
+  } else if (usaMedidasPersonalizadas) {
     // Agrupamos por medida sumando cantidades para mostrar "N u. × ancho x alto".
     // Sin esto, dos piezas del mismo tamaño (frecuente al leer varios PDF)
     // colapsaban a una sola línea perdiendo la cantidad. La cantidad lleva
@@ -3899,9 +3953,9 @@ function buildPresentableSpecs(
   ): attrs is Record<string, unknown> =>
     Boolean(
       attrs &&
-        typeof attrs === "object" &&
-        (typeof attrs.tipoPrenda === "string" ||
-          typeof attrs.tipoObjeto === "string"),
+      typeof attrs === "object" &&
+      (typeof attrs.tipoPrenda === "string" ||
+        typeof attrs.tipoObjeto === "string"),
     );
   const blankAttrsCandidatos: Array<
     Record<string, unknown> | null | undefined
@@ -4210,8 +4264,84 @@ function buildItem(
     notaProduccion: notaProduccion || undefined,
     rutaAlternativaId: options?.motorConfig.rutaAlternativaId ?? null,
     jobContext,
+    disenoVectorialAnalisis:
+      options?.motorConfig.disenoVectorialAnalisis ?? undefined,
     atributosSchema,
   } satisfies PropuestaItem;
+}
+
+function analisisVectorialDesdeItem(
+  item: PropuestaItem,
+): AnalisisSvgFabricacion | null {
+  if (item.disenoVectorialAnalisis) return item.disenoVectorialAnalisis;
+
+  const ctx = (item.jobContext ?? {}) as Record<string, unknown>;
+  const fuente = ctx.disenoVectorialFuente as
+    MotorConfigState["disenoVectorialFuente"] | undefined;
+  const geometria = ctx.geometriaVectorial as
+    AnalisisSvgFabricacion["geometria"] | undefined;
+  const nestingResult = item.cotizacion.pasos
+    .map((paso) => paso.nestingResult)
+    .find((nesting) => nesting?.algorithm === "irregular-2d-bottom-left-v1");
+  const sheet = nestingResult?.substrates[0];
+  if (!fuente || !geometria || !nestingResult || sheet?.kind !== "sheet")
+    return null;
+
+  const copyIndexes = new Map<string, number>();
+  const placements = nestingResult.placements.map((placement) => {
+    const copyIndex = copyIndexes.get(placement.pieceId) ?? 0;
+    copyIndexes.set(placement.pieceId, copyIndex + 1);
+    const meta = placement.meta as
+      | {
+          contornos?: AnalisisSvgFabricacion["nesting"]["placements"][number]["contornos"];
+        }
+      | undefined;
+    return {
+      pieceId: placement.pieceId,
+      copyIndex,
+      substrateIndex: placement.substrateIndex ?? 0,
+      xMm: placement.xMm,
+      yMm: placement.yMm,
+      rotacion: placement.rotated ? (90 as const) : (0 as const),
+      anchoMm: placement.widthMm,
+      altoMm: placement.heightMm,
+      contornos: meta?.contornos ?? [],
+    };
+  });
+  if (placements.some((placement) => placement.contornos.length === 0))
+    return null;
+
+  const margin = nestingResult.visualConfig?.margins;
+  const placas = nestingResult.substrates.reduce(
+    (total, substrate) =>
+      total + (substrate.kind === "sheet" ? substrate.count : 0),
+    0,
+  );
+  return {
+    nombreArchivo: fuente.nombreArchivo,
+    cacheKey:
+      typeof ctx.disenoVectorialCacheKey === "string"
+        ? ctx.disenoVectorialCacheKey
+        : undefined,
+    geometria,
+    nesting: {
+      algorithm: "irregular-2d-bottom-left-v1",
+      placas,
+      anchoPlacaMm: sheet.widthMm,
+      altoPlacaMm: sheet.heightMm,
+      anchoUtilMm:
+        nestingResult.visualConfig?.usableArea.widthMm ??
+        sheet.widthMm - (margin?.leftMm ?? 0) - (margin?.rightMm ?? 0),
+      altoUtilMm:
+        nestingResult.visualConfig?.usableArea.heightMm ??
+        sheet.heightMm - (margin?.topMm ?? 0) - (margin?.bottomMm ?? 0),
+      aprovechamientoPct: nestingResult.aprovechamientoPct,
+      areaPiezasMm2: geometria.areaTotalMm2 * Math.max(1, item.cantidad),
+      areaCompradaMm2: sheet.widthMm * sheet.heightMm * placas,
+      placements,
+    },
+    diagnosticos: [],
+  };
 }
 
 function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
@@ -4337,6 +4467,11 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       ctx.disenoSello && typeof ctx.disenoSello === "object"
         ? (ctx.disenoSello as DisenoSello)
         : null,
+    disenoVectorialFuente:
+      ctx.disenoVectorialFuente && typeof ctx.disenoVectorialFuente === "object"
+        ? (ctx.disenoVectorialFuente as MotorConfigState["disenoVectorialFuente"])
+        : null,
+    disenoVectorialAnalisis: analisisVectorialDesdeItem(item),
     tipoCopia:
       Number(ctx.tipoCopia) === 3 ? 3 : Number(ctx.tipoCopia) === 2 ? 2 : 1,
     numerosXTalonario:
@@ -5118,6 +5253,38 @@ function ApConfigStep({
       getHerramientaMedidasArchivo(productoDetalle?.atributosComercialesJson),
     [productoDetalle],
   );
+  const editorVectorialHabilitado = rutaRequiereHerramientaCotizacion(
+    rutaSel,
+    "diseno_vectorial",
+  );
+  const placaVectorial = React.useMemo(() => {
+    if (!editorVectorialHabilitado) return null;
+    const slot = slotsComercialElige.find(
+      (candidate) => candidate.slotCodigo === "sustrato_corte",
+    );
+    if (!slot) return null;
+    const selectionKey = materialSelectionKey(
+      slot.configPasoId,
+      slot.slotCodigo,
+    );
+    const variantId =
+      motorConfig.seleccionMaterial[selectionKey] ??
+      defaultSlotCandidateId(slot);
+    const variant = slot.candidatos
+      .flatMap((candidate) => candidate.variantes)
+      .find((candidate) => candidate.variantId === variantId);
+    const attrs = variant?.atributosVarianteJson ?? {};
+    const anchoMm = Number(attrs.anchoMm ?? attrs.widthMm ?? 0);
+    const altoMm = Number(attrs.altoMm ?? attrs.largoMm ?? attrs.heightMm ?? 0);
+    const margenMm = Number(attrs.margenNoUtilizableMm ?? 0);
+    return anchoMm > 0 && altoMm > 0
+      ? { anchoMm, altoMm, margenMm: Math.max(0, margenMm) }
+      : null;
+  }, [
+    editorVectorialHabilitado,
+    motorConfig.seleccionMaterial,
+    slotsComercialElige,
+  ]);
   const [leyendoPlanos, setLeyendoPlanos] = React.useState(false);
   const [arrastrandoPlanos, setArrastrandoPlanos] = React.useState(false);
 
@@ -5228,19 +5395,19 @@ function ApConfigStep({
 
   const commitPiezaMeasure = React.useCallback(
     (pieza: PiezaInput, field: "anchoCm" | "altoCm") => {
-    setPiezaMeasureDrafts((current) => {
-      const currentDraft = current[pieza.uiKey];
-      if (!currentDraft || currentDraft[field] === undefined) return current;
-      const nextDraft = { ...currentDraft };
-      delete nextDraft[field];
-      const next = { ...current };
-      if (nextDraft.anchoCm === undefined && nextDraft.altoCm === undefined) {
-        delete next[pieza.uiKey];
-      } else {
-        next[pieza.uiKey] = nextDraft;
-      }
-      return next;
-    });
+      setPiezaMeasureDrafts((current) => {
+        const currentDraft = current[pieza.uiKey];
+        if (!currentDraft || currentDraft[field] === undefined) return current;
+        const nextDraft = { ...currentDraft };
+        delete nextDraft[field];
+        const next = { ...current };
+        if (nextDraft.anchoCm === undefined && nextDraft.altoCm === undefined) {
+          delete next[pieza.uiKey];
+        } else {
+          next[pieza.uiKey] = nextDraft;
+        }
+        return next;
+      });
     },
     [],
   );
@@ -6653,227 +6820,227 @@ function ApConfigStep({
       </>
     ) : null;
     return (
-    <div className={seC.card}>
-      <div className={seC.gh}>{options?.titulo ?? "Medida"}</div>
-      <div className={seC.body}>
-      <div className="ap-piezas">
-        <div
-          className={`ap-pieza-head${options?.hideCantidad ? " ap-pieza-head-medidas" : ""}`}
-          style={estiloGrid}
-          aria-hidden="true"
-        >
-          {options?.hideCantidad ? null : (
-            <>
-              <span>Cantidad</span>
+      <div className={seC.card}>
+        <div className={seC.gh}>{options?.titulo ?? "Medida"}</div>
+        <div className={seC.body}>
+          <div className="ap-piezas">
+            <div
+              className={`ap-pieza-head${options?.hideCantidad ? " ap-pieza-head-medidas" : ""}`}
+              style={estiloGrid}
+              aria-hidden="true"
+            >
+              {options?.hideCantidad ? null : (
+                <>
+                  <span>Cantidad</span>
+                  <span />
+                </>
+              )}
+              <span>Ancho</span>
               <span />
-            </>
-          )}
-          <span>Ancho</span>
-          <span />
-          <span>Alto</span>
-          <span />
-          {mostrarProf ? (
-            <>
-              <span>Prof.</span>
+              <span>Alto</span>
               <span />
-            </>
-          ) : null}
-        </div>
-        {motorConfig.piezas.map((pieza, index) => {
-          const ajustada =
-            pieza.origen != null &&
-            (pieza.anchoMm !== pieza.origen.anchoDetectadoMm ||
-              pieza.altoMm !== pieza.origen.altoDetectadoMm);
-          return (
-          <React.Fragment key={pieza.uiKey}>
-          <div
-            className={`ap-pieza-row${options?.hideCantidad ? " ap-pieza-row-medidas" : ""}`}
-            style={estiloGrid}
-          >
-            {options?.hideCantidad ? null : (
-              <>
-                <input
-                  ref={(node) => {
-                    piezaFocusRefs.current[pieza.uiKey] = node;
-                  }}
-                  type="number"
-                  min="1"
-                  value={pieza.cantidad}
-                  onChange={(event) =>
+              {mostrarProf ? (
+                <>
+                  <span>Prof.</span>
+                  <span />
+                </>
+              ) : null}
+            </div>
+            {motorConfig.piezas.map((pieza, index) => {
+              const ajustada =
+                pieza.origen != null &&
+                (pieza.anchoMm !== pieza.origen.anchoDetectadoMm ||
+                  pieza.altoMm !== pieza.origen.altoDetectadoMm);
+              return (
+                <React.Fragment key={pieza.uiKey}>
+                  <div
+                    className={`ap-pieza-row${options?.hideCantidad ? " ap-pieza-row-medidas" : ""}`}
+                    style={estiloGrid}
+                  >
+                    {options?.hideCantidad ? null : (
+                      <>
+                        <input
+                          ref={(node) => {
+                            piezaFocusRefs.current[pieza.uiKey] = node;
+                          }}
+                          type="number"
+                          min="1"
+                          value={pieza.cantidad}
+                          onChange={(event) =>
                             updatePieza(index, {
                               cantidad: Number(event.target.value) || 0,
                             })
-                  }
-                  aria-label="Cantidad de piezas"
-                />
-                <span>x</span>
-              </>
-            )}
-            <label className="ap-input-unit">
-              <input
-                ref={(node) => {
+                          }
+                          aria-label="Cantidad de piezas"
+                        />
+                        <span>x</span>
+                      </>
+                    )}
+                    <label className="ap-input-unit">
+                      <input
+                        ref={(node) => {
                           if (options?.hideCantidad)
                             piezaFocusRefs.current[pieza.uiKey] = node;
-                }}
-                type="text"
-                inputMode="decimal"
-                value={getPiezaMeasureValue(pieza, "anchoCm")}
-                onChange={(event) =>
+                        }}
+                        type="text"
+                        inputMode="decimal"
+                        value={getPiezaMeasureValue(pieza, "anchoCm")}
+                        onChange={(event) =>
                           updatePiezaMeasure(
                             index,
                             pieza,
                             "anchoCm",
                             event.target.value,
                           )
-                }
-                onBlur={() => commitPiezaMeasure(pieza, "anchoCm")}
-                aria-label="Ancho en cm"
-              />
-              <span>cm</span>
-            </label>
-            <span>x</span>
-            <label className="ap-input-unit">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={getPiezaMeasureValue(pieza, "altoCm")}
-                onChange={(event) =>
+                        }
+                        onBlur={() => commitPiezaMeasure(pieza, "anchoCm")}
+                        aria-label="Ancho en cm"
+                      />
+                      <span>cm</span>
+                    </label>
+                    <span>x</span>
+                    <label className="ap-input-unit">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={getPiezaMeasureValue(pieza, "altoCm")}
+                        onChange={(event) =>
                           updatePiezaMeasure(
                             index,
                             pieza,
                             "altoCm",
                             event.target.value,
                           )
-                }
-                onBlur={() => commitPiezaMeasure(pieza, "altoCm")}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.preventDefault();
-                  addPieza();
-                }}
-                aria-label="Alto en cm"
-              />
-              <span>cm</span>
-            </label>
-            {index === 0 ? inputProf : null}
-            <button
-              type="button"
-              className="ap-qty-btn"
-              onClick={() => removePieza(index)}
-              aria-label="Quitar pieza"
-            >
-              <XIcon />
-            </button>
-          </div>
-          {pieza.origen ? (
-            <div className="ap-pieza-origen">
-              <PaperclipIcon />
-              <span className="nm" title={pieza.origen.archivoNombre}>
-                {pieza.origen.archivoNombre}
-              </span>
-              {pieza.origen.totalPaginas > 1 ? (
-                <span className="pg">
-                  pág {pieza.origen.pagina}/{pieza.origen.totalPaginas}
-                </span>
-              ) : null}
-              {ajustada ? (
-                <span className="adj">· ajustada</span>
-              ) : (
-                <span className="det">
+                        }
+                        onBlur={() => commitPiezaMeasure(pieza, "altoCm")}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") return;
+                          event.preventDefault();
+                          addPieza();
+                        }}
+                        aria-label="Alto en cm"
+                      />
+                      <span>cm</span>
+                    </label>
+                    {index === 0 ? inputProf : null}
+                    <button
+                      type="button"
+                      className="ap-qty-btn"
+                      onClick={() => removePieza(index)}
+                      aria-label="Quitar pieza"
+                    >
+                      <XIcon />
+                    </button>
+                  </div>
+                  {pieza.origen ? (
+                    <div className="ap-pieza-origen">
+                      <PaperclipIcon />
+                      <span className="nm" title={pieza.origen.archivoNombre}>
+                        {pieza.origen.archivoNombre}
+                      </span>
+                      {pieza.origen.totalPaginas > 1 ? (
+                        <span className="pg">
+                          pág {pieza.origen.pagina}/{pieza.origen.totalPaginas}
+                        </span>
+                      ) : null}
+                      {ajustada ? (
+                        <span className="adj">· ajustada</span>
+                      ) : (
+                        <span className="det">
                           · leída{" "}
                           {formatCmFromMm(pieza.origen.anchoDetectadoMm)} ×{" "}
-                  {formatCmFromMm(pieza.origen.altoDetectadoMm)} cm
-                </span>
-              )}
-            </div>
-          ) : null}
-          </React.Fragment>
-          );
-        })}
-        {herramientaMedidasArchivo.enabled ? (
-          <div
-            className={`ap-planos-tool${arrastrandoPlanos ? " is-dragging" : ""}${leyendoPlanos ? " is-loading" : ""}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => {
-              if (!leyendoPlanos) planosInputRef.current?.click();
-            }}
-            onKeyDown={(event) => {
+                          {formatCmFromMm(pieza.origen.altoDetectadoMm)} cm
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+            {herramientaMedidasArchivo.enabled ? (
+              <div
+                className={`ap-planos-tool${arrastrandoPlanos ? " is-dragging" : ""}${leyendoPlanos ? " is-loading" : ""}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (!leyendoPlanos) planosInputRef.current?.click();
+                }}
+                onKeyDown={(event) => {
                   if (
                     (event.key === "Enter" || event.key === " ") &&
                     !leyendoPlanos
                   ) {
-                event.preventDefault();
-                planosInputRef.current?.click();
-              }
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              if (!arrastrandoPlanos) setArrastrandoPlanos(true);
-            }}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              setArrastrandoPlanos(true);
-            }}
-            onDragLeave={(event) => {
-              if (
-                event.relatedTarget instanceof Node &&
-                event.currentTarget.contains(event.relatedTarget)
-              ) {
-                return;
-              }
-              setArrastrandoPlanos(false);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              setArrastrandoPlanos(false);
-              if (event.dataTransfer.files?.length) {
-                handleAdjuntarPlanos(event.dataTransfer.files);
-              }
-            }}
-          >
-            <input
-              ref={planosInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              multiple
-              className="ap-planos-input"
-              style={{ display: "none" }}
-              onChange={(event) => {
+                    event.preventDefault();
+                    planosInputRef.current?.click();
+                  }
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (!arrastrandoPlanos) setArrastrandoPlanos(true);
+                }}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setArrastrandoPlanos(true);
+                }}
+                onDragLeave={(event) => {
+                  if (
+                    event.relatedTarget instanceof Node &&
+                    event.currentTarget.contains(event.relatedTarget)
+                  ) {
+                    return;
+                  }
+                  setArrastrandoPlanos(false);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setArrastrandoPlanos(false);
+                  if (event.dataTransfer.files?.length) {
+                    handleAdjuntarPlanos(event.dataTransfer.files);
+                  }
+                }}
+              >
+                <input
+                  ref={planosInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  className="ap-planos-input"
+                  style={{ display: "none" }}
+                  onChange={(event) => {
                     if (event.target.files)
                       handleAdjuntarPlanos(event.target.files);
-                event.target.value = "";
-              }}
-            />
-            <div className="ap-planos-cta">
-              <FileUpIcon />
-              <span className="ap-planos-title">
-                {leyendoPlanos
-                  ? "Leyendo archivos…"
-                  : arrastrandoPlanos
-                    ? "Soltá los archivos para leer sus medidas"
-                    : "Adjuntar archivos para medir"}
-              </span>
-              <span className="ap-planos-hint">
+                    event.target.value = "";
+                  }}
+                />
+                <div className="ap-planos-cta">
+                  <FileUpIcon />
+                  <span className="ap-planos-title">
+                    {leyendoPlanos
+                      ? "Leyendo archivos…"
+                      : arrastrandoPlanos
+                        ? "Soltá los archivos para leer sus medidas"
+                        : "Adjuntar archivos para medir"}
+                  </span>
+                  <span className="ap-planos-hint">
                     Arrastrá los PDF acá o hacé clic. Cada página se agrega como
                     una fila con su medida.
-              </span>
-            </div>
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            <button type="button" className="adi-add" onClick={addPieza}>
+              <PlusIcon />
+              Agregar pieza
+            </button>
           </div>
-        ) : null}
-        <button type="button" className="adi-add" onClick={addPieza}>
-          <PlusIcon />
-          Agregar pieza
-        </button>
-      </div>
-      {mostrarProf ? (
-        <span className="ap-section-hint">
+          {mostrarProf ? (
+            <span className="ap-section-hint">
               La profundidad define los metros de perfil, la cenefa y los
               conectores del bastidor.
-        </span>
-      ) : null}
+            </span>
+          ) : null}
+        </div>
       </div>
-    </div>
     );
   };
 
@@ -7038,7 +7205,25 @@ function ApConfigStep({
               />
             ) : null}
 
-            {metroLinealConMedidasVariables ? (
+            {editorVectorialHabilitado ? (
+              <>
+                {renderCantidadCard()}
+                <DisenoVectorialCotizador
+                  value={motorConfig.disenoVectorialFuente}
+                  analisis={motorConfig.disenoVectorialAnalisis}
+                  cantidad={qty}
+                  placa={placaVectorial}
+                  margenMm={placaVectorial?.margenMm}
+                  onChange={(fuente, analisis) =>
+                    setMotorConfig((current) => ({
+                      ...current,
+                      disenoVectorialFuente: fuente,
+                      disenoVectorialAnalisis: analisis,
+                    }))
+                  }
+                />
+              </>
+            ) : metroLinealConMedidasVariables ? (
               <>
                 <div className={seC.card}>
                   <div className={seC.gh}>Modo de cotización</div>
@@ -7119,63 +7304,63 @@ function ApConfigStep({
                   <div className={seC.card}>
                     <div className={seC.gh}>Medida</div>
                     <div className={seC.body}>
-                    {renderMedidaCards(
-                      usaMedidaMixta && motorConfig.piezas.length > 0
-                        ? CUSTOM_MEASURE_ID
+                      {renderMedidaCards(
+                        usaMedidaMixta && motorConfig.piezas.length > 0
+                          ? CUSTOM_MEASURE_ID
                           : (getSelectedPredefinedMeasure(
-                            productoDetalle,
-                            motorConfig.medidaPredefinidaId,
-                            medidasPredefinidas,
+                              productoDetalle,
+                              motorConfig.medidaPredefinidaId,
+                              medidasPredefinidas,
                             )?.id ?? ""),
-                      medidasPredefinidas,
-                      (value) => {
-                        if (value === CUSTOM_MEASURE_ID) {
-                          updateMotorConfig({
-                            medidaPredefinidaId: "",
-                            piezas:
-                              motorConfig.piezas.length > 0
-                                ? motorConfig.piezas
-                                : [createDefaultPiezaInput()],
-                          });
-                          return;
-                        }
+                        medidasPredefinidas,
+                        (value) => {
+                          if (value === CUSTOM_MEASURE_ID) {
+                            updateMotorConfig({
+                              medidaPredefinidaId: "",
+                              piezas:
+                                motorConfig.piezas.length > 0
+                                  ? motorConfig.piezas
+                                  : [createDefaultPiezaInput()],
+                            });
+                            return;
+                          }
                           updateMotorConfig({
                             medidaPredefinidaId: value,
                             piezas: [],
                           });
-                      },
-                      usaMedidaMixta,
-                    )}
+                        },
+                        usaMedidaMixta,
+                      )}
                     </div>
                   </div>
                 ) : null}
-              {usaMedidaMixta && motorConfig.piezas.length > 0
-                ? renderPiezasEditor({
-                    hideCantidad: piezasUsanCantidadComercial,
-                    titulo: "A medida",
-                  })
-                : null}
-              {renderCantidadCard()}
-              {entranPorPliego ? (
-                // Sin modificador is-warning/is-blocked: banda neutra
-                // informativa, misma anatomía que el aviso del mínimo.
-                <div className="ap-minimum-alert">
-                  <Grid2X2Icon />
-                  <span>{entranPorPliego}</span>
-                </div>
-              ) : null}
-              {minimoComercialStatus ? (
-                <div
-                  className={`ap-minimum-alert ${
+                {usaMedidaMixta && motorConfig.piezas.length > 0
+                  ? renderPiezasEditor({
+                      hideCantidad: piezasUsanCantidadComercial,
+                      titulo: "A medida",
+                    })
+                  : null}
+                {renderCantidadCard()}
+                {entranPorPliego ? (
+                  // Sin modificador is-warning/is-blocked: banda neutra
+                  // informativa, misma anatomía que el aviso del mínimo.
+                  <div className="ap-minimum-alert">
+                    <Grid2X2Icon />
+                    <span>{entranPorPliego}</span>
+                  </div>
+                ) : null}
+                {minimoComercialStatus ? (
+                  <div
+                    className={`ap-minimum-alert ${
                       minimoComercialStatus.kind === "blocked"
                         ? "is-blocked"
                         : "is-warning"
-                  }`}
-                >
-                  <CircleAlertIcon />
-                  <span>{minimoComercialStatus.message}</span>
-                </div>
-              ) : null}
+                    }`}
+                  >
+                    <CircleAlertIcon />
+                    <span>{minimoComercialStatus.message}</span>
+                  </div>
+                ) : null}
               </>
             )}
 
@@ -7208,71 +7393,71 @@ function ApConfigStep({
               <div className={seC.card}>
                 <div className={seC.gh}>Caras</div>
                 <div className={seC.body}>
-                {renderChoiceCards(
-                  "Caras",
-                  String(motorConfig.caras),
-                  [
-                    {
-                      value: "1",
-                      label: "Simple faz",
-                      desc: "Impresión de un solo lado",
-                      glyph: CARAS_ICONS["1"],
-                    },
-                    {
-                      value: "2",
-                      label: "Doble faz",
-                      desc: "Frente y dorso",
-                      glyph: CARAS_ICONS["2"],
-                    },
-                  ],
+                  {renderChoiceCards(
+                    "Caras",
+                    String(motorConfig.caras),
+                    [
+                      {
+                        value: "1",
+                        label: "Simple faz",
+                        desc: "Impresión de un solo lado",
+                        glyph: CARAS_ICONS["1"],
+                      },
+                      {
+                        value: "2",
+                        label: "Doble faz",
+                        desc: "Frente y dorso",
+                        glyph: CARAS_ICONS["2"],
+                      },
+                    ],
                     (value) =>
                       updateMotorConfig({ caras: Number(value) as 1 | 2 }),
-                  { columns: 2, layout: "row" },
-                )}
-                {pasosConCaras.length > 1 ? (
-                  <details className="ap-perfil-avanzado">
-                    <summary>
-                      {Object.keys(motorConfig.carasPorPaso).length > 0
-                        ? "Caras por paso (modificado)"
-                        : "Definir caras por paso"}
-                    </summary>
-                    {pasosConCaras.map((configPaso) => {
-                      const nombre =
-                        configPaso.nombreVisible?.trim() ||
-                        humanizeCodigo(configPaso.rutaPaso.familiaCodigo);
-                      const override =
-                        motorConfig.carasPorPaso[configPaso.id] ?? "";
-                      return (
-                        <div
-                          key={configPaso.id}
-                          className="mt-2 flex items-center justify-between gap-3"
-                        >
-                          <span className="min-w-0 truncate text-xs">
-                            {nombre}
-                          </span>
-                          <select
-                            className="ap-native-select"
-                            style={{ maxWidth: 220 }}
-                            value={String(override)}
-                            onChange={(event) =>
-                              setCarasPaso(configPaso.id, event.target.value)
-                            }
+                    { columns: 2, layout: "row" },
+                  )}
+                  {pasosConCaras.length > 1 ? (
+                    <details className="ap-perfil-avanzado">
+                      <summary>
+                        {Object.keys(motorConfig.carasPorPaso).length > 0
+                          ? "Caras por paso (modificado)"
+                          : "Definir caras por paso"}
+                      </summary>
+                      {pasosConCaras.map((configPaso) => {
+                        const nombre =
+                          configPaso.nombreVisible?.trim() ||
+                          humanizeCodigo(configPaso.rutaPaso.familiaCodigo);
+                        const override =
+                          motorConfig.carasPorPaso[configPaso.id] ?? "";
+                        return (
+                          <div
+                            key={configPaso.id}
+                            className="mt-2 flex items-center justify-between gap-3"
                           >
-                            <option value="">
-                              Global (
-                              {motorConfig.caras === 2
-                                ? "doble faz"
-                                : "simple faz"}
-                              )
-                            </option>
-                            <option value="1">Simple faz</option>
-                            <option value="2">Doble faz</option>
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </details>
-                ) : null}
+                            <span className="min-w-0 truncate text-xs">
+                              {nombre}
+                            </span>
+                            <select
+                              className="ap-native-select"
+                              style={{ maxWidth: 220 }}
+                              value={String(override)}
+                              onChange={(event) =>
+                                setCarasPaso(configPaso.id, event.target.value)
+                              }
+                            >
+                              <option value="">
+                                Global (
+                                {motorConfig.caras === 2
+                                  ? "doble faz"
+                                  : "simple faz"}
+                                )
+                              </option>
+                              <option value="1">Simple faz</option>
+                              <option value="2">Doble faz</option>
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </details>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -7670,82 +7855,82 @@ function ApConfigStep({
                       : `${modo.nombreVisible?.trim() || humanizeCodigo(modo.familiaCodigo)} · color`}
                   </div>
                   <div className={seC.body}>
-                  {renderChoiceCards(
-                    "Modo de color",
-                    value,
-                    modoOptions,
-                    seleccionarModo,
+                    {renderChoiceCards(
+                      "Modo de color",
+                      value,
+                      modoOptions,
+                      seleccionarModo,
                       {
                         columns: modoOptions.length <= 2 ? 2 : 3,
                         layout: "row",
                       },
-                  )}
-                  {(() => {
-                    // Avanzado: override explícito del perfil de impresión.
-                    // Sólo lista perfiles de la máquina activa que matchean el
-                    // modo de color elegido (option.perfilIds); el motor
-                    // resuelve automático salvo decisión técnica del comercial.
-                    const config = rutaSel?.configPasos.find(
-                      (item) => item.id === modo.configPasoId,
-                    );
-                    if (!config) return null;
-                    const candidataActiva = getActiveCandidateForConfig(
-                      config,
-                      motorConfig,
-                    );
-                    const maquinaActiva =
-                      candidataActiva?.maquina ?? config.maquinaM1;
-                    const opcionModo = modo.options.find(
-                      (option) =>
-                        (normalizeModoColor(option.value) ?? option.value) ===
-                        value,
-                    );
-                    const idsModo = new Set(opcionModo?.perfilIds ?? []);
-                    const perfilesDelModo = (
-                      maquinaActiva?.perfilesOperativos ?? []
-                    ).filter(
-                      (perfil) =>
-                        perfil.activo !== false &&
-                        perfil.nombre &&
-                        idsModo.has(perfil.id),
-                    );
-                    if (perfilesDelModo.length < 2) return null;
-                    const perfilDefaultId =
-                      candidataActiva?.perfilDefaultId ??
-                      config.perfilM1?.id ??
-                      null;
-                    const overrideActual =
-                      motorConfig.seleccionPerfil[modo.configPasoId] ?? "";
-                    const perfilOverride = perfilesDelModo.find(
-                      (perfil) => perfil.id === overrideActual,
-                    );
-                    return (
-                      <details className="ap-perfil-avanzado">
-                        <summary>
-                          {perfilOverride
-                            ? `Perfil de impresión: ${perfilOverride.nombre} (modificado)`
-                            : "Modificar perfil de impresión"}
-                        </summary>
-                        <select
-                          className="ap-native-select"
-                          value={overrideActual}
-                          onChange={(event) =>
-                            setPerfil(modo.configPasoId, event.target.value)
-                          }
-                        >
+                    )}
+                    {(() => {
+                      // Avanzado: override explícito del perfil de impresión.
+                      // Sólo lista perfiles de la máquina activa que matchean el
+                      // modo de color elegido (option.perfilIds); el motor
+                      // resuelve automático salvo decisión técnica del comercial.
+                      const config = rutaSel?.configPasos.find(
+                        (item) => item.id === modo.configPasoId,
+                      );
+                      if (!config) return null;
+                      const candidataActiva = getActiveCandidateForConfig(
+                        config,
+                        motorConfig,
+                      );
+                      const maquinaActiva =
+                        candidataActiva?.maquina ?? config.maquinaM1;
+                      const opcionModo = modo.options.find(
+                        (option) =>
+                          (normalizeModoColor(option.value) ?? option.value) ===
+                          value,
+                      );
+                      const idsModo = new Set(opcionModo?.perfilIds ?? []);
+                      const perfilesDelModo = (
+                        maquinaActiva?.perfilesOperativos ?? []
+                      ).filter(
+                        (perfil) =>
+                          perfil.activo !== false &&
+                          perfil.nombre &&
+                          idsModo.has(perfil.id),
+                      );
+                      if (perfilesDelModo.length < 2) return null;
+                      const perfilDefaultId =
+                        candidataActiva?.perfilDefaultId ??
+                        config.perfilM1?.id ??
+                        null;
+                      const overrideActual =
+                        motorConfig.seleccionPerfil[modo.configPasoId] ?? "";
+                      const perfilOverride = perfilesDelModo.find(
+                        (perfil) => perfil.id === overrideActual,
+                      );
+                      return (
+                        <details className="ap-perfil-avanzado">
+                          <summary>
+                            {perfilOverride
+                              ? `Perfil de impresión: ${perfilOverride.nombre} (modificado)`
+                              : "Modificar perfil de impresión"}
+                          </summary>
+                          <select
+                            className="ap-native-select"
+                            value={overrideActual}
+                            onChange={(event) =>
+                              setPerfil(modo.configPasoId, event.target.value)
+                            }
+                          >
                             <option value="">Automático (recomendado)</option>
-                          {perfilesDelModo.map((perfil) => (
-                            <option key={perfil.id} value={perfil.id}>
-                              {perfil.nombre}
-                              {perfilDefaultId === perfil.id
-                                ? " · default"
-                                : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </details>
-                    );
-                  })()}
+                            {perfilesDelModo.map((perfil) => (
+                              <option key={perfil.id} value={perfil.id}>
+                                {perfil.nombre}
+                                {perfilDefaultId === perfil.id
+                                  ? " · default"
+                                  : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </details>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -7927,73 +8112,73 @@ function ApConfigStep({
                   const arrastrado = opcional.configPasoId
                     ? arrastradosSheet.has(opcional.configPasoId)
                     : false;
-                const tiempoPendiente = Boolean(
+                  const tiempoPendiente = Boolean(
                     tiempoManual &&
                     getTiempoManualError(tiempoManual, motorConfig),
-                );
-                return (
-                  // UNA tarjeta por opcional: el nombre del paso VA en la barra
-                  // negra, con la × al lado. Adentro los bloques llevan rótulo
-                  // liviano — dos barras negras anidadas no jerarquizan nada.
-                  <div className={seC.card} key={opcional.code}>
-                    <div className={`${seC.gh} ${seC.ghRow}`}>
-                      <span>{opcional.name}</span>
-                      {/* El estado sólo habla cuando algo falta: un "Configurado"
+                  );
+                  return (
+                    // UNA tarjeta por opcional: el nombre del paso VA en la barra
+                    // negra, con la × al lado. Adentro los bloques llevan rótulo
+                    // liviano — dos barras negras anidadas no jerarquizan nada.
+                    <div className={seC.card} key={opcional.code}>
+                      <div className={`${seC.gh} ${seC.ghRow}`}>
+                        <span>{opcional.name}</span>
+                        {/* El estado sólo habla cuando algo falta: un "Configurado"
                           permanente ocupa lugar para decir lo que ya se ve. */}
-                      {tiempoPendiente ? (
-                        <span className={seC.ghNota}>falta el tiempo</span>
-                      ) : null}
-                      {arrastrado ? (
-                        // Lo encendió otro paso que lo necesita: quitarlo acá
-                        // dejaría la cotización inconsistente.
-                        <span className={seC.ghNota}>lo exige otro paso</span>
-                      ) : (
-                        <button
-                          type="button"
-                          className={seC.ghQuit}
-                          onClick={() => setOpcional(opcional.code, false)}
-                          title={`Quitar ${opcional.name}`}
-                          aria-label={`Quitar ${opcional.name}`}
-                        >
-                          <XIcon aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                    <div className={`${seC.body} ap-optional-config-fields`}>
-                      {nivel
-                        ? renderNivelField(nivel, { sinTarjeta: true })
-                        : null}
-                      {complejidad
-                        ? renderComplejidadField(complejidad, {
-                            sinTarjeta: true,
-                          })
-                        : null}
-                      {slots.length > 0 ? (
-                        <div className={matS.list}>
-                          {slots.map((slot) =>
-                            renderMaterialSelect(slot, {
-                              showHint: false,
-                              collapseSingleCandidate: true,
+                        {tiempoPendiente ? (
+                          <span className={seC.ghNota}>falta el tiempo</span>
+                        ) : null}
+                        {arrastrado ? (
+                          // Lo encendió otro paso que lo necesita: quitarlo acá
+                          // dejaría la cotización inconsistente.
+                          <span className={seC.ghNota}>lo exige otro paso</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className={seC.ghQuit}
+                            onClick={() => setOpcional(opcional.code, false)}
+                            title={`Quitar ${opcional.name}`}
+                            aria-label={`Quitar ${opcional.name}`}
+                          >
+                            <XIcon aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                      <div className={`${seC.body} ap-optional-config-fields`}>
+                        {nivel
+                          ? renderNivelField(nivel, { sinTarjeta: true })
+                          : null}
+                        {complejidad
+                          ? renderComplejidadField(complejidad, {
                               sinTarjeta: true,
-                            }),
-                          )}
-                        </div>
-                      ) : null}
-                      {tiempoManual
-                        ? renderTiempoManualField(tiempoManual, {
-                            sinTarjeta: true,
-                          })
-                        : null}
-                      {paramsComercial?.campos.map((campo) =>
-                        renderParamComercialField(paramsComercial, campo, {
-                          soloEtiqueta: true,
-                        }),
-                      )}
-                    </div>
-                    {/* Sin pie "Seleccionado: …": repetía lo que la tarjeta del
+                            })
+                          : null}
+                        {slots.length > 0 ? (
+                          <div className={matS.list}>
+                            {slots.map((slot) =>
+                              renderMaterialSelect(slot, {
+                                showHint: false,
+                                collapseSingleCandidate: true,
+                                sinTarjeta: true,
+                              }),
+                            )}
+                          </div>
+                        ) : null}
+                        {tiempoManual
+                          ? renderTiempoManualField(tiempoManual, {
+                              sinTarjeta: true,
+                            })
+                          : null}
+                        {paramsComercial?.campos.map((campo) =>
+                          renderParamComercialField(paramsComercial, campo, {
+                            soloEtiqueta: true,
+                          }),
+                        )}
+                      </div>
+                      {/* Sin pie "Seleccionado: …": repetía lo que la tarjeta del
                         material ya muestra en su propia fila. */}
-                  </div>
-                );
+                    </div>
+                  );
                 },
               )}
             </div>
@@ -8374,6 +8559,7 @@ export function AgregarProductoSheet({
   // Token de secuencia: descarta respuestas de cotizaciones que quedaron viejas
   // (el usuario cambió algo mientras una estaba en vuelo).
   const cotizacionSeqRef = React.useRef(0);
+  const cotizacionAbortRef = React.useRef<AbortController | null>(null);
   const catalogProducts = React.useMemo(
     () => productos.map(mapProductoReal),
     [productos],
@@ -8580,10 +8766,31 @@ export function AgregarProductoSheet({
 
   const cotizarActual = React.useCallback(async () => {
     if (!product?.real || !product.id || !productoDetalle) return;
+    const rutaSel = getRutaSeleccionada(
+      productoDetalle,
+      motorConfig.rutaAlternativaId,
+    );
+    const requiereDisenoVectorial = rutaRequiereHerramientaCotizacion(
+      rutaSel,
+      "diseno_vectorial",
+    );
+    const disenoVectorialListo = Boolean(
+      requiereDisenoVectorial &&
+      motorConfig.disenoVectorialFuente &&
+      motorConfig.disenoVectorialAnalisis,
+    );
+    if (requiereDisenoVectorial && !disenoVectorialListo) {
+      setCotizando(false);
+      setCotizacion(null);
+      return;
+    }
     // No cotizar mientras falten medidas válidas: enviar una pieza 0×0 al
     // motor de rígidos provoca un OOM que tumba la API. Cortamos antes de
     // marcar "Cotizando" para que el estado quede a la espera de la medida.
-    if (medidasPersonalizadasIncompletas(productoDetalle, motorConfig)) {
+    if (
+      !disenoVectorialListo &&
+      medidasPersonalizadasIncompletas(productoDetalle, motorConfig)
+    ) {
       setCotizando(false);
       return;
     }
@@ -8592,10 +8799,6 @@ export function AgregarProductoSheet({
       setQty(coercedQty);
       return;
     }
-    const rutaSel = getRutaSeleccionada(
-      productoDetalle,
-      motorConfig.rutaAlternativaId,
-    );
     const slotsParaReglas = getSlotsParaCotizacion(
       rutaSel,
       productoDetalle,
@@ -8628,14 +8831,28 @@ export function AgregarProductoSheet({
     // No limpiamos la cotización anterior: la mantenemos visible (atenuada)
     // mientras llega la nueva, para evitar el salto/parpadeo del panel.
     setCotizacionError(null);
+    cotizacionAbortRef.current?.abort();
+    const controller = new AbortController();
+    cotizacionAbortRef.current = controller;
+    // Un vector complejo normalmente cotiza por caché en milisegundos, pero
+    // después de reiniciar el API esa caché puede no existir. Permitimos que
+    // el servidor reconstruya el nesting una vez en vez de abortarlo siempre
+    // a los 20 s y dejar al usuario sin forma de recuperar la cotización.
+    const timeoutHandle = window.setTimeout(
+      () => controller.abort(),
+      disenoVectorialListo ? 120_000 : 20_000,
+    );
     try {
-      const res = await cotizar({
-        productoId: product.id,
-        rutaAlternativaId: motorConfig.rutaAlternativaId || null,
-        jobContext: jobContext as never,
-        clienteId,
-        periodo: getCurrentPeriodo(),
-      });
+      const res = await cotizar(
+        {
+          productoId: product.id,
+          rutaAlternativaId: motorConfig.rutaAlternativaId || null,
+          jobContext: jobContext as never,
+          clienteId,
+          periodo: getCurrentPeriodo(),
+        },
+        controller.signal,
+      );
       if (seq !== cotizacionSeqRef.current) return; // llegó una cotización más nueva
       setCotizacion(res);
       if (!res.exitoso) {
@@ -8653,6 +8870,10 @@ export function AgregarProductoSheet({
           : "No se pudo conectar con el motor.",
       );
     } finally {
+      window.clearTimeout(timeoutHandle);
+      if (cotizacionAbortRef.current === controller) {
+        cotizacionAbortRef.current = null;
+      }
       if (seq === cotizacionSeqRef.current) setCotizando(false);
     }
   }, [clienteId, motorConfig, product, productoDetalle, qty]);
@@ -8667,14 +8888,22 @@ export function AgregarProductoSheet({
     // Al hidratar un item existente conservamos la cotización guardada y no
     // recotizamos hasta el primer cambio real del usuario.
     if (suppressNextCotizacionClear.current) {
-      suppressNextCotizacionClear.current = false;
       setCotizacionDesactualizada(false);
-      return;
+      // React ejecuta nuevamente los efectos en desarrollo y la hidratación
+      // actualiza varias dependencias en el mismo ciclo. Liberar el guard de
+      // inmediato hacía que la segunda pasada recotizara el ítem sin cambios.
+      const releaseHydrationGuard = window.setTimeout(() => {
+        suppressNextCotizacionClear.current = false;
+      }, 0);
+      return () => window.clearTimeout(releaseHydrationGuard);
     }
     // Invalida también cualquier request que ya estuviera en vuelo. El precio
     // anterior queda visible, pero no se puede confirmar hasta que coincida con
     // la configuración actual.
     cotizacionSeqRef.current += 1;
+    cotizacionAbortRef.current?.abort();
+    cotizacionAbortRef.current = null;
+    setCotizando(false);
     setCotizacionDesactualizada(true);
     const handle = setTimeout(() => {
       void cotizarActual();
@@ -8793,6 +9022,8 @@ export function AgregarProductoSheet({
 
   React.useEffect(() => {
     if (!open) {
+      cotizacionAbortRef.current?.abort();
+      cotizacionAbortRef.current = null;
       setStep("select");
       setProduct(null);
       setProductoDetalle(null);
