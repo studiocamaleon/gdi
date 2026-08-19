@@ -20,7 +20,9 @@ let service: CentroCopiadoService;
 let papel: string;
 
 beforeAll(async () => {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: 'gdi-demo' },
+  });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
 
@@ -50,12 +52,54 @@ it('cotiza sueltos + un tomo: aritmética, agrupación y totales', async () => {
   const dto = {
     documentos: [
       // Suelto A: 12 págs × 2 copias, A4, B/N, doble faz ⇒ 24 carillas, 12 hojas
-      { id: 'A', paginas: 12, copias: 2, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const },
+      {
+        id: 'A',
+        paginas: 12,
+        copias: 2,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 2 as const,
+      },
       // Suelto B: 6 págs × 1, A3, color, simple faz ⇒ 6 carillas, 6 hojas
-      { id: 'B', paginas: 6, copias: 1, tamano: 'A3', tamanoAnchoMm: 297, tamanoAltoMm: 420, papelMateriaPrimaId: papel, color: 'COLOR' as const, faz: 1 as const },
+      {
+        id: 'B',
+        paginas: 6,
+        copias: 1,
+        tamano: 'A3',
+        tamanoAnchoMm: 297,
+        tamanoAltoMm: 420,
+        papelMateriaPrimaId: papel,
+        color: 'COLOR' as const,
+        faz: 1 as const,
+      },
       // Tomo T (2 juegos): C (10 págs, doble) + D (4 págs, simple)
-      { id: 'C', paginas: 10, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const, grupoId: 'T' },
-      { id: 'D', paginas: 4, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 1 as const, grupoId: 'T' },
+      {
+        id: 'C',
+        paginas: 10,
+        copias: 1,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 2 as const,
+        grupoId: 'T',
+      },
+      {
+        id: 'D',
+        paginas: 4,
+        copias: 1,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 1 as const,
+        grupoId: 'T',
+      },
     ],
     // Sin anillado: este spec verifica la ARITMÉTICA de impresión. Si el tomo
     // anillara (default) y hay anilladora cargada en paralelo, el subtotal del
@@ -101,4 +145,25 @@ it('cotiza sueltos + un tomo: aritmética, agrupación y totales', async () => {
   // Precios coherentes.
   expect(r.totales.subtotal).toBeGreaterThan(0);
   expect(r.totales.total).toBeGreaterThanOrEqual(r.totales.subtotal);
+});
+
+it('rechaza medidas que no coinciden con el formato declarado', async () => {
+  if (!tenantId) return;
+  await expect(
+    service.cotizar(tenantId, {
+      documentos: [
+        {
+          id: 'formato-adulterado',
+          paginas: 1,
+          copias: 1,
+          tamano: 'A4',
+          tamanoAnchoMm: 297,
+          tamanoAltoMm: 420,
+          papelMateriaPrimaId: papel,
+          color: 'BN',
+          faz: 1,
+        },
+      ],
+    }),
+  ).rejects.toThrow('no coincide con el catálogo');
 });

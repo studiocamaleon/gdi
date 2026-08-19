@@ -31,7 +31,9 @@ let maquinaColorId: string | null = null;
 let maquinaBnId: string | null = null;
 
 beforeAll(async () => {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: 'gdi-demo' },
+  });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
 
@@ -156,10 +158,20 @@ it('el papel se cuenta por hoja física, no por carilla (invariante a las caras)
   // Mismas 12 hojas físicas: simple faz (12 carillas) vs doble faz (24 carillas).
   // El papel NO debe duplicarse por las caras.
   const simple = await cotizar(
-    jobDocumento({ hojas: 12, caras: 1, modoColor: modoColorPref, maquinaId: maquinaPrefId }),
+    jobDocumento({
+      hojas: 12,
+      caras: 1,
+      modoColor: modoColorPref,
+      maquinaId: maquinaPrefId,
+    }),
   );
   const doble = await cotizar(
-    jobDocumento({ hojas: 12, caras: 2, modoColor: modoColorPref, maquinaId: maquinaPrefId }),
+    jobDocumento({
+      hojas: 12,
+      caras: 2,
+      modoColor: modoColorPref,
+      maquinaId: maquinaPrefId,
+    }),
   );
   expect(simple.exitoso && doble.exitoso).toBe(true);
   expect(sustratoCantidad(doble)).toBe(sustratoCantidad(simple));
@@ -190,7 +202,12 @@ it('color cuesta más que B/N (sólo si el seed tiene máquina de color y de B/N
     return;
   }
   const bn = await cotizar(
-    jobDocumento({ hojas: 12, caras: 2, modoColor: 'BN', maquinaId: maquinaBnId }),
+    jobDocumento({
+      hojas: 12,
+      caras: 2,
+      modoColor: 'BN',
+      maquinaId: maquinaBnId,
+    }),
   );
   const color = await cotizar(
     jobDocumento({

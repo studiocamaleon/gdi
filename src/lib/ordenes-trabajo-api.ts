@@ -138,7 +138,12 @@ export async function editarOrdenTrabajo(
 export type EditarOrdenTrabajoLotePayload = EditarOrdenTrabajoPayload & {
   expectedVersion: string;
   /** Conjunto final completo; con `id` actualiza, sin `id` crea. */
-  items?: Array<CrearOrdenTrabajoItemPayload & { id?: string }>;
+  items?: Array<
+    CrearOrdenTrabajoItemPayload & {
+      id?: string;
+      archivosOrigenItemIds?: string[];
+    }
+  >;
 };
 
 export async function editarOrdenTrabajoLote(

@@ -24,6 +24,7 @@ import {
   type FormatoTamano,
   type PapelOpcion,
   type CotizarCentroCopiadoResponse,
+  metaCentroCopiado,
 } from "@/lib/centro-copiado-api";
 import {
   NIVELES_COBERTURA,
@@ -33,7 +34,11 @@ import s from "./centro-copiado-sheet.module.css";
 import { ProductoSheetHeaderConstelacion } from "./producto-sheet-header";
 
 /** Un tamaño resuelto en una fila: nombre + medidas (para el payload y el motor). */
-type TamanoFila = { tamano: string; tamanoAnchoMm: number; tamanoAltoMm: number };
+type TamanoFila = {
+  tamano: string;
+  tamanoAnchoMm: number;
+  tamanoAltoMm: number;
+};
 
 type DocRow = TamanoFila & {
   id: string;
@@ -81,45 +86,6 @@ interface Props {
   editItems?: PropuestaItem[] | null;
 }
 
-type SegMeta = {
-  nombre?: string | null;
-  paginas: number;
-  tamano: string;
-  tamanoAnchoMm?: number;
-  tamanoAltoMm?: number;
-  papelMateriaPrimaId: string;
-  gramaje?: number | null;
-  color: ColorDoc;
-  faz: FazDoc;
-  cobertura?: string | null;
-};
-
-/** Metadata que el backend deja en jobContext._centroCopiado para rehidratar. */
-type MetaCarga = {
-  nombre?: string | null;
-  paginas?: number;
-  copias?: number;
-  tamano?: string;
-  tamanoAnchoMm?: number;
-  tamanoAltoMm?: number;
-  papelMateriaPrimaId?: string;
-  gramaje?: number | null;
-  color?: ColorDoc;
-  faz?: FazDoc;
-  cobertura?: string | null;
-  terminaciones?: string[];
-  /** Tipo de anillo elegido (para rehidratar la elección al editar). */
-  tipoAnillo?: string | null;
-  // Tomo compuesto:
-  esTomo?: boolean;
-  segmentos?: SegMeta[];
-  juegos?: number;
-  tomoNombre?: string;
-  // Renglón de anillado (derivado de la terminación, no es un documento): al
-  // rehidratar se saltea y se vuelve a derivar de las terminaciones.
-  esAnillado?: boolean;
-};
-
 let seqRow = 0;
 const nextId = () => `d${++seqRow}-${Date.now().toString(36)}`;
 const fmt = (n: number) =>
@@ -135,7 +101,9 @@ const CC_FALLBACK_DIMS: Record<string, { anchoMm: number; altoMm: number }> = {
   "SRA3+": { anchoMm: 330, altoMm: 480 },
   "SRA3++": { anchoMm: 325, altoMm: 500 },
 };
-const dimsPorNombre = (nombre: string): { anchoMm: number; altoMm: number } | null =>
+const dimsPorNombre = (
+  nombre: string,
+): { anchoMm: number; altoMm: number } | null =>
   CC_FALLBACK_DIMS[nombre] ?? null;
 
 /** Select con estética del sistema (base-ui) para las listas de la fila. */
@@ -203,7 +171,9 @@ function SysMultiSelect({
   ariaLabel?: string;
   triggerClassName?: string;
 }) {
-  const elegidas = options.filter((o) => values.includes(o.value)).map((o) => o.label);
+  const elegidas = options
+    .filter((o) => values.includes(o.value))
+    .map((o) => o.label);
   const resumen =
     elegidas.length === 0
       ? placeholder
@@ -211,7 +181,11 @@ function SysMultiSelect({
         ? elegidas.join(", ")
         : `${elegidas.length} terminaciones`;
   return (
-    <Select multiple value={values} onValueChange={(v) => onChange((v as string[]) ?? [])}>
+    <Select
+      multiple
+      value={values}
+      onValueChange={(v) => onChange((v as string[]) ?? [])}
+    >
       <SelectTrigger
         aria-label={ariaLabel}
         className={cn("h-8", triggerClassName)}
@@ -275,27 +249,36 @@ export default function CentroCopiadoSheet({
   // Resuelve un tamaño para (papel, gramaje): mantiene el preferido si se puede
   // producir; si no, cae al primero producible; null si el papel no produce nada.
   const resolverTamano = React.useCallback(
-    (papelId: string, gramaje: number | null, preferido?: string): TamanoFila | null => {
+    (
+      papelId: string,
+      gramaje: number | null,
+      preferido?: string,
+    ): TamanoFila | null => {
       const lista = tamanosDe(papelId, gramaje);
       if (lista.length === 0) return null;
       const f = lista.find((t) => t.nombre === preferido) ?? lista[0];
-      return { tamano: f.nombre, tamanoAnchoMm: f.anchoMm, tamanoAltoMm: f.altoMm };
+      return {
+        tamano: f.nombre,
+        tamanoAnchoMm: f.anchoMm,
+        tamanoAltoMm: f.altoMm,
+      };
     },
     [tamanosDe],
   );
 
   const [docs, setDocs] = React.useState<DocRow[]>([]);
-  const [grupos, setGrupos] = React.useState<
-    Record<string, GrupoState>
-  >({});
+  const [grupos, setGrupos] = React.useState<Record<string, GrupoState>>({});
   // Terminaciones (pasos opcionales) disponibles; las trae el backend.
-  const [terminacionesDisp, setTerminacionesDisp] = React.useState<string[]>([]);
+  const [terminacionesDisp, setTerminacionesDisp] = React.useState<string[]>(
+    [],
+  );
   // Tipos de anillo instalados (para el selector cuando hay Anillado).
   const [tiposAnilloDisp, setTiposAnilloDisp] = React.useState<
     { value: string; label: string }[]
   >([]);
   const [sel, setSel] = React.useState<Set<string>>(new Set());
-  const [preview, setPreview] = React.useState<CotizarCentroCopiadoResponse | null>(null);
+  const [preview, setPreview] =
+    React.useState<CotizarCentroCopiadoResponse | null>(null);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const [dragActive, setDragActive] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
@@ -315,10 +298,17 @@ export default function CentroCopiadoSheet({
         setTiposAnilloDisp(o.tiposAnillo ?? []);
         setTamanosOfrecidos(o.tamanosOfrecidos ?? null);
         if (o.papelDefaultId) {
-          const tipo = o.papeles.find((p) => p.materiaPrimaId === o.papelDefaultId);
+          const tipo = o.papeles.find(
+            (p) => p.materiaPrimaId === o.papelDefaultId,
+          );
           const g = tipo?.gramajes[0] ?? null;
-          const producibles = tamanosProducibles(tipo, g, o.tamanosOfrecidos ?? null);
-          const t = producibles.find((x) => x.nombre === "A4") ?? producibles[0];
+          const producibles = tamanosProducibles(
+            tipo,
+            g,
+            o.tamanosOfrecidos ?? null,
+          );
+          const t =
+            producibles.find((x) => x.nombre === "A4") ?? producibles[0];
           setDefaults((d) =>
             d.papelMateriaPrimaId
               ? d
@@ -327,7 +317,11 @@ export default function CentroCopiadoSheet({
                   papelMateriaPrimaId: o.papelDefaultId!,
                   gramaje: g,
                   ...(t
-                    ? { tamano: t.nombre, tamanoAnchoMm: t.anchoMm, tamanoAltoMm: t.altoMm }
+                    ? {
+                        tamano: t.nombre,
+                        tamanoAnchoMm: t.anchoMm,
+                        tamanoAltoMm: t.altoMm,
+                      }
                     : {}),
                 },
           );
@@ -366,13 +360,14 @@ export default function CentroCopiadoSheet({
   React.useEffect(() => {
     if (!open || !editItems?.length) return;
     const dims = (nombre: string, a?: number, b?: number) =>
-      a && b ? { anchoMm: a, altoMm: b } : (dimsPorNombre(nombre) ?? { anchoMm: 210, altoMm: 297 });
+      a && b
+        ? { anchoMm: a, altoMm: b }
+        : (dimsPorNombre(nombre) ?? { anchoMm: 210, altoMm: 297 });
     const nuevosDocs: DocRow[] = [];
     const nuevosGrupos: Record<string, GrupoState> = {};
     let g = 0;
     for (const it of editItems) {
-      const meta = (it.jobContext as { _centroCopiado?: MetaCarga } | undefined)
-        ?._centroCopiado;
+      const meta = metaCentroCopiado(it.jobContext);
       if (!meta) continue;
       // El renglón de anillado se re-deriva de la terminación del doc/tomo.
       if (meta.esAnillado) continue;
@@ -384,7 +379,7 @@ export default function CentroCopiadoSheet({
           terminaciones: meta.terminaciones ?? ["Anillado"],
           tipoAnillo: meta.tipoAnillo ?? "",
         };
-        for (const seg of meta.segmentos) {
+        for (const [segmentoIndex, seg] of meta.segmentos.entries()) {
           const tn = seg.tamano ?? "A4";
           const d = dims(tn, seg.tamanoAnchoMm, seg.tamanoAltoMm);
           nuevosDocs.push({
@@ -403,7 +398,9 @@ export default function CentroCopiadoSheet({
             copias: meta.juegos ?? 1,
             terminaciones: [], // las terminaciones viven en el tomo, no en el segmento
             tipoAnillo: "",
-            file: null, // al editar no se re-sube el archivo original (ya está en R2)
+            // Si la carga todavía no se guardó, conserva el File en memoria.
+            // En cargas persistidas queda null porque el original ya vive en R2.
+            file: it.archivosPendientes?.[segmentoIndex] ?? null,
             grupoId: gid,
           });
         }
@@ -426,7 +423,7 @@ export default function CentroCopiadoSheet({
           copias: Number(meta.copias) || 1,
           terminaciones: meta.terminaciones ?? [],
           tipoAnillo: meta.tipoAnillo ?? "",
-          file: null, // al editar no se re-sube el archivo original (ya está en R2)
+          file: it.archivosPendientes?.[0] ?? null,
           grupoId: null,
         });
       }
@@ -584,9 +581,15 @@ export default function CentroCopiadoSheet({
       prev.map((d) => {
         // El tamaño default puede no ser producible con el papel default de la
         // fila: se resuelve al primero producible si hace falta.
-        const t =
-          resolverTamano(defaults.papelMateriaPrimaId, defaults.gramaje, defaults.tamano) ??
-          { tamano: d.tamano, tamanoAnchoMm: d.tamanoAnchoMm, tamanoAltoMm: d.tamanoAltoMm };
+        const t = resolverTamano(
+          defaults.papelMateriaPrimaId,
+          defaults.gramaje,
+          defaults.tamano,
+        ) ?? {
+          tamano: d.tamano,
+          tamanoAnchoMm: d.tamanoAnchoMm,
+          tamanoAltoMm: d.tamanoAltoMm,
+        };
         return {
           ...d,
           ...t,
@@ -604,10 +607,18 @@ export default function CentroCopiadoSheet({
     setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
 
   // Cambiar el tamaño de una fila: setea nombre + medidas del formato elegido.
-  const cambiarTamano = (id: string, nombre: string, lista: FormatoTamano[]) => {
+  const cambiarTamano = (
+    id: string,
+    nombre: string,
+    lista: FormatoTamano[],
+  ) => {
     const f = lista.find((x) => x.nombre === nombre);
     if (!f) return;
-    editar(id, { tamano: f.nombre, tamanoAnchoMm: f.anchoMm, tamanoAltoMm: f.altoMm });
+    editar(id, {
+      tamano: f.nombre,
+      tamanoAnchoMm: f.anchoMm,
+      tamanoAltoMm: f.altoMm,
+    });
   };
 
   // Al cambiar el tipo de papel: resetear gramaje al primero y re-resolver el
@@ -623,7 +634,12 @@ export default function CentroCopiadoSheet({
   };
 
   // Al cambiar el gramaje: re-resolver el tamaño con el nuevo gramaje.
-  const cambiarGramaje = (id: string, papelId: string, gramaje: number, actual: string) => {
+  const cambiarGramaje = (
+    id: string,
+    papelId: string,
+    gramaje: number,
+    actual: string,
+  ) => {
     const t = resolverTamano(papelId, gramaje, actual);
     editar(id, { gramaje, ...(t ?? {}) });
   };
@@ -651,12 +667,16 @@ export default function CentroCopiadoSheet({
         tipoAnillo: tiposAnilloDisp[0]?.value ?? "",
       },
     }));
-    setDocs((prev) => prev.map((d) => (sel.has(d.id) ? { ...d, grupoId: gid } : d)));
+    setDocs((prev) =>
+      prev.map((d) => (sel.has(d.id) ? { ...d, grupoId: gid } : d)),
+    );
     setSel(new Set());
   }, [sel, terminacionesDisp, tiposAnilloDisp]);
 
   const desagrupar = (gid: string) => {
-    setDocs((prev) => prev.map((d) => (d.grupoId === gid ? { ...d, grupoId: null } : d)));
+    setDocs((prev) =>
+      prev.map((d) => (d.grupoId === gid ? { ...d, grupoId: null } : d)),
+    );
     setGrupos((prev) => {
       const n = { ...prev };
       delete n[gid];
@@ -677,15 +697,22 @@ export default function CentroCopiadoSheet({
     tiposAnilloDisp.find((t) => t.value === v)?.label ??
     (v ? v.replaceAll("_", " ") : "Anillado");
 
-  const previewDoc = (id: string) => preview?.documentos.find((d) => d.id === id);
-  const subtotalDoc = (id: string) => previewDoc(id)?.subtotal ?? null;
+  const previewDoc = (id: string) =>
+    preview?.documentos.find((d) => d.id === id);
+  const subtotalImpresionDoc = (id: string) => {
+    const p = previewDoc(id);
+    if (!p) return null;
+    const anillado = p.anillado && !p.anillado.error ? p.anillado.subtotal : 0;
+    return Math.max(0, p.subtotal - anillado);
+  };
   const errorDoc = (id: string) => previewDoc(id)?.error ?? null;
   // Precio (neto) por hoja física: le sirve al comercial para tenerlo claro. El
-  // subtotal del doc es impresión sola (el anillado es una línea aparte).
+  // El backend devuelve el total combinado y el incremental del anillado. Para
+  // la UI se resta ese incremental y se muestran dos conceptos auditables.
   const precioHojaDoc = (id: string) => {
     const p = previewDoc(id);
     if (!p || p.error || !p.hojas) return null;
-    return p.subtotal / p.hojas;
+    return (subtotalImpresionDoc(id) ?? 0) / p.hojas;
   };
   const fmtHoja = (n: number) =>
     "$" +
@@ -750,7 +777,9 @@ export default function CentroCopiadoSheet({
         return files.length ? { ...pi, archivosPendientes: files } : pi;
       });
       onAgregar(items);
-      toast.success(`${items.length} renglón(es) agregados desde el centro de copiado.`);
+      toast.success(
+        `${items.length} renglón(es) agregados desde el centro de copiado.`,
+      );
       // Reset.
       setDocs([]);
       setGrupos({});
@@ -758,7 +787,11 @@ export default function CentroCopiadoSheet({
       setPreview(null);
       onOpenChange(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudieron agregar los renglones.");
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "No se pudieron agregar los renglones.",
+      );
     } finally {
       setGuardando(false);
     }
@@ -767,18 +800,41 @@ export default function CentroCopiadoSheet({
   if (!open) return null;
 
   const t = preview?.totales;
+  const anilladoNeto = preview
+    ? [
+        ...preview.documentos.map((documento) => documento.anillado),
+        ...preview.grupos.map((grupo) => grupo.anillado),
+      ].reduce(
+        (total, anillado) =>
+          total + (anillado && !anillado.error ? anillado.subtotal : 0),
+        0,
+      )
+    : 0;
+  const impresionNeto = Math.max(0, (t?.subtotal ?? 0) - anilladoNeto);
   // Filas incompletas: sin páginas (manuales / no-PDF sin cargar) o sin papel.
   const incompletos = docs.filter(
     (d) => d.paginas < 1 || !d.papelMateriaPrimaId,
   ).length;
+  const tieneErroresCotizacion =
+    !!previewError ||
+    !!preview?.documentos.some((d) => d.error || d.anillado?.error) ||
+    !!preview?.grupos.some((g) => g.error || g.anillado?.error);
   // Orden de render: agrupados juntos por grupoId, sueltos después.
-  const grupoIds = Array.from(new Set(docs.map((d) => d.grupoId).filter((g): g is string => !!g)));
+  const grupoIds = Array.from(
+    new Set(docs.map((d) => d.grupoId).filter((g): g is string => !!g)),
+  );
   const sueltos = docs.filter((d) => !d.grupoId);
-  const papelOptions = papeles.map((p) => ({ value: p.materiaPrimaId, label: p.nombre }));
+  const papelOptions = papeles.map((p) => ({
+    value: p.materiaPrimaId,
+    label: p.nombre,
+  }));
 
   const renderCard = (d: DocRow, index: number, enGrupo: boolean) => {
     const tamanos = tamanosDe(d.papelMateriaPrimaId, d.gramaje);
-    const tamanoOptions = tamanos.map((tm) => ({ value: tm.nombre, label: tm.nombre }));
+    const tamanoOptions = tamanos.map((tm) => ({
+      value: tm.nombre,
+      label: tm.nombre,
+    }));
     const gramajes = gramajesDe(d.papelMateriaPrimaId);
     return (
       <div key={d.id} className={`${s.card} ${enGrupo ? s.cardGrupo : ""}`}>
@@ -806,21 +862,28 @@ export default function CentroCopiadoSheet({
               <span className={s.errChip} title={errorDoc(d.id)!}>
                 ⚠ sin precio
               </span>
-            ) : subtotalDoc(d.id) != null ? (
+            ) : subtotalImpresionDoc(d.id) != null ? (
               <>
                 {precioHojaDoc(d.id) != null ? (
                   <span className={s.cardUnit}>
                     {fmtHoja(precioHojaDoc(d.id)!)}/hoja
                   </span>
                 ) : null}
-                <span className={s.cardSub}>{fmt(subtotalDoc(d.id)!)}</span>
+                <span className={s.cardSub}>
+                  Hojas {fmt(subtotalImpresionDoc(d.id)!)}
+                </span>
                 <span className={s.cardIva}>sin IVA</span>
               </>
             ) : (
               <span className={s.muted}>…</span>
             )}
           </span>
-          <button type="button" className={s.del} onClick={() => eliminar(d.id)} aria-label="Quitar">
+          <button
+            type="button"
+            className={s.del}
+            onClick={() => eliminar(d.id)}
+            aria-label="Quitar"
+          >
             ✕
           </button>
         </div>
@@ -839,11 +902,7 @@ export default function CentroCopiadoSheet({
                 })
               }
               className={`${s.inputMini} ${
-                d.paginas < 1
-                  ? s.inputFalta
-                  : d.paginasAuto
-                    ? s.inputAuto
-                    : ""
+                d.paginas < 1 ? s.inputFalta : d.paginasAuto ? s.inputAuto : ""
               }`}
               title={d.paginasAuto ? "Páginas leídas del PDF" : undefined}
             />
@@ -857,7 +916,11 @@ export default function CentroCopiadoSheet({
                 type="number"
                 min={1}
                 value={d.copias}
-                onChange={(e) => editar(d.id, { copias: Math.max(1, Number(e.target.value) || 1) })}
+                onChange={(e) =>
+                  editar(d.id, {
+                    copias: Math.max(1, Number(e.target.value) || 1),
+                  })
+                }
                 className={s.inputMini}
               />
             )}
@@ -878,8 +941,18 @@ export default function CentroCopiadoSheet({
               <span>Gramaje</span>
               <SysSelect
                 value={d.gramaje != null ? String(d.gramaje) : ""}
-                onChange={(v) => cambiarGramaje(d.id, d.papelMateriaPrimaId, Number(v), d.tamano)}
-                options={gramajes.map((g) => ({ value: String(g), label: `${g} g` }))}
+                onChange={(v) =>
+                  cambiarGramaje(
+                    d.id,
+                    d.papelMateriaPrimaId,
+                    Number(v),
+                    d.tamano,
+                  )
+                }
+                options={gramajes.map((g) => ({
+                  value: String(g),
+                  label: `${g} g`,
+                }))}
                 ariaLabel="Gramaje"
                 triggerClassName="w-[92px]"
               />
@@ -983,7 +1056,8 @@ export default function CentroCopiadoSheet({
           previewDoc(d.id)?.anillado &&
           (previewDoc(d.id)!.anillado!.error ? (
             <div className={s.tomoAnilladoWarn}>
-              ⚠ {previewDoc(d.id)!.anillado!.error} — se cotiza sin anillado.
+              ⚠ {previewDoc(d.id)!.anillado!.error} No se puede agregar hasta
+              corregirlo.
             </div>
           ) : (
             <div className={s.tomoAnillado}>
@@ -994,7 +1068,9 @@ export default function CentroCopiadoSheet({
                   ? ` Ø${previewDoc(d.id)!.anillado!.diametroMm} mm`
                   : ""}
               </span>
-              <span className={s.tomoAnilladoPrecio}>incluido en el precio</span>
+              <span className={s.tomoAnilladoPrecio}>
+                + {fmt(previewDoc(d.id)!.anillado!.subtotal)} sin IVA
+              </span>
             </div>
           ))}
       </div>
@@ -1014,7 +1090,12 @@ export default function CentroCopiadoSheet({
   const contenido = (
     <>
       <div className={s.backdrop} onClick={intentarCerrar} />
-      <div className={s.sheet} role="dialog" aria-modal="true" aria-label="Centro de copiado">
+      <div
+        className={s.sheet}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Centro de copiado"
+      >
         <ProductoSheetHeaderConstelacion
           eyebrow={editItems?.length ? "Editar carga" : "Carga rápida"}
           name="Centro de copiado"
@@ -1050,7 +1131,8 @@ export default function CentroCopiadoSheet({
               onDrop={(e) => {
                 e.preventDefault();
                 setDragActive(false);
-                if (e.dataTransfer.files?.length) void onArchivos(e.dataTransfer.files);
+                if (e.dataTransfer.files?.length)
+                  void onArchivos(e.dataTransfer.files);
               }}
             >
               <input
@@ -1103,13 +1185,22 @@ export default function CentroCopiadoSheet({
                   <label className={s.campo}>
                     <span>Gramaje</span>
                     <SysSelect
-                      value={defaults.gramaje != null ? String(defaults.gramaje) : ""}
+                      value={
+                        defaults.gramaje != null ? String(defaults.gramaje) : ""
+                      }
                       onChange={(v) => {
                         const g = Number(v);
-                        const t = resolverTamano(defaults.papelMateriaPrimaId, g, defaults.tamano);
+                        const t = resolverTamano(
+                          defaults.papelMateriaPrimaId,
+                          g,
+                          defaults.tamano,
+                        );
                         setDefaults({ ...defaults, gramaje: g, ...(t ?? {}) });
                       }}
-                      options={defGramajes.map((g) => ({ value: String(g), label: `${g} g` }))}
+                      options={defGramajes.map((g) => ({
+                        value: String(g),
+                        label: `${g} g`,
+                      }))}
                       ariaLabel="Gramaje por defecto"
                       triggerClassName="w-[92px]"
                     />
@@ -1129,7 +1220,10 @@ export default function CentroCopiadoSheet({
                           tamanoAltoMm: f.altoMm,
                         });
                     }}
-                    options={defTamanos.map((tm) => ({ value: tm.nombre, label: tm.nombre }))}
+                    options={defTamanos.map((tm) => ({
+                      value: tm.nombre,
+                      label: tm.nombre,
+                    }))}
                     ariaLabel="Tamaño por defecto"
                     placeholder="—"
                     triggerClassName="w-[88px]"
@@ -1147,8 +1241,12 @@ export default function CentroCopiadoSheet({
                     </button>
                     <button
                       type="button"
-                      className={defaults.color === "COLOR" ? s.segOn : s.segOff}
-                      onClick={() => setDefaults({ ...defaults, color: "COLOR" })}
+                      className={
+                        defaults.color === "COLOR" ? s.segOn : s.segOff
+                      }
+                      onClick={() =>
+                        setDefaults({ ...defaults, color: "COLOR" })
+                      }
                     >
                       Color
                     </button>
@@ -1179,11 +1277,21 @@ export default function CentroCopiadoSheet({
                     type="number"
                     min={1}
                     value={defaults.copias}
-                    onChange={(e) => setDefaults({ ...defaults, copias: Math.max(1, Number(e.target.value) || 1) })}
+                    onChange={(e) =>
+                      setDefaults({
+                        ...defaults,
+                        copias: Math.max(1, Number(e.target.value) || 1),
+                      })
+                    }
                     className={s.inputMini}
                   />
                 </label>
-                <button type="button" className="btn" onClick={aplicarATodos} disabled={docs.length === 0}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={aplicarATodos}
+                  disabled={docs.length === 0}
+                >
                   Aplicar a todos
                 </button>
               </div>
@@ -1194,15 +1302,27 @@ export default function CentroCopiadoSheet({
             <div className={s.tablaHead}>
               <span>Documentos del trabajo</span>
               <div className={s.tablaHeadBtns}>
-                <button type="button" className="btn" onClick={agregarFilaManual}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={agregarFilaManual}
+                >
                   + Fila manual
                 </button>
                 <button
                   type="button"
                   className="btn"
                   onClick={anillarJuntos}
-                  disabled={sel.size < 2}
-                  title={sel.size < 2 ? "Seleccioná dos o más" : "Anillar juntos"}
+                  disabled={
+                    sel.size < 2 || !terminacionesDisp.includes("Anillado")
+                  }
+                  title={
+                    !terminacionesDisp.includes("Anillado")
+                      ? "Configurá una anilladora y anillos para crear tomos"
+                      : sel.size < 2
+                        ? "Seleccioná dos o más"
+                        : "Anillar juntos"
+                  }
                 >
                   Anillar juntos ({sel.size})
                 </button>
@@ -1243,7 +1363,10 @@ export default function CentroCopiadoSheet({
                                 ...prev,
                                 [gid]: {
                                   ...prev[gid],
-                                  juegos: Math.max(1, Number(e.target.value) || 1),
+                                  juegos: Math.max(
+                                    1,
+                                    Number(e.target.value) || 1,
+                                  ),
                                 },
                               }))
                             }
@@ -1260,7 +1383,10 @@ export default function CentroCopiadoSheet({
                                 [gid]: { ...prev[gid], terminaciones: v },
                               }))
                             }
-                            options={terminacionesDisp.map((t) => ({ value: t, label: t }))}
+                            options={terminacionesDisp.map((t) => ({
+                              value: t,
+                              label: t,
+                            }))}
                             ariaLabel="Terminaciones del tomo"
                             triggerClassName="w-[160px]"
                           />
@@ -1289,7 +1415,17 @@ export default function CentroCopiadoSheet({
                         <span className={s.tomoMeta}>
                           {gprev ? `${gprev.hojasPorLibro} hojas/juego` : ""}
                         </span>
-                        <span className={s.tomoSub}>{gprev ? fmt(gprev.subtotal) : "—"}</span>
+                        <span className={s.tomoSub}>
+                          {gprev
+                            ? `Hojas ${fmt(
+                                Math.max(
+                                  0,
+                                  gprev.subtotal -
+                                    (gprev.anillado?.subtotal ?? 0),
+                                ),
+                              )}`
+                            : "—"}
+                        </span>
                         <button
                           type="button"
                           className={s.del}
@@ -1302,8 +1438,8 @@ export default function CentroCopiadoSheet({
                       {gprev?.anillado &&
                         (gprev.anillado.error ? (
                           <div className={s.tomoAnilladoWarn}>
-                            ⚠ {gprev.anillado.error} — el tomo se cotiza sin
-                            anillado.
+                            ⚠ {gprev.anillado.error} No se puede agregar hasta
+                            corregirlo.
                           </div>
                         ) : (
                           <div className={s.tomoAnillado}>
@@ -1315,7 +1451,7 @@ export default function CentroCopiadoSheet({
                                 : ""}
                             </span>
                             <span className={s.tomoAnilladoPrecio}>
-                              incluido en el precio
+                              + {fmt(gprev.anillado.subtotal)} sin IVA
                             </span>
                           </div>
                         ))}
@@ -1359,27 +1495,37 @@ export default function CentroCopiadoSheet({
               <strong>{fmt((t?.subtotal ?? 0) + (t?.iva ?? 0))}</strong>
             </div>
             <div className={s.totalNetoSub}>
-              Neto {fmt(t?.subtotal ?? 0)} · IVA {fmt(t?.iva ?? 0)}
+              Hojas {fmt(impresionNeto)} · Anillado {fmt(anilladoNeto)} · IVA{" "}
+              {fmt(t?.iva ?? 0)}
             </div>
           </div>
           <button
             type="button"
             className="btn btn-primary"
             onClick={() => void agregar()}
-            disabled={docs.length === 0 || incompletos > 0 || guardando}
+            disabled={
+              docs.length === 0 ||
+              incompletos > 0 ||
+              tieneErroresCotizacion ||
+              guardando
+            }
             title={
               incompletos > 0
                 ? `${incompletos} fila(s) sin páginas o sin papel`
-                : undefined
+                : tieneErroresCotizacion
+                  ? "Corregí los errores de cotización antes de agregar la carga"
+                  : undefined
             }
           >
             {guardando
               ? "Guardando…"
               : incompletos > 0
                 ? `Completá ${incompletos} fila(s)`
-                : editItems?.length
-                  ? "Guardar cambios"
-                  : "Agregar a la OT"}
+                : tieneErroresCotizacion
+                  ? "Corregí los errores"
+                  : editItems?.length
+                    ? "Guardar cambios"
+                    : "Agregar a la OT"}
           </button>
         </footer>
       </div>

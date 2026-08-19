@@ -21,7 +21,9 @@ let service: CentroCopiadoService;
 let papel: string;
 
 beforeAll(async () => {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: 'gdi-demo' },
+  });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
 
@@ -87,10 +89,13 @@ it('construir-items → cotizarYGuardar → CotizacionItem materializable con me
   const ci = await prisma.cotizacionItem.findUniqueOrThrow({
     where: { id: res.cotizacionItemId! },
   });
-  const pasos = (ci.trazabilidadJson as { pasos?: { familiaCodigo?: string }[] })
-    .pasos;
+  const pasos = (
+    ci.trazabilidadJson as { pasos?: { familiaCodigo?: string }[] }
+  ).pasos;
   expect(Array.isArray(pasos)).toBe(true);
-  expect(pasos!.some((p) => p.familiaCodigo === 'impresion_por_hoja')).toBe(true);
+  expect(pasos!.some((p) => p.familiaCodigo === 'impresion_por_hoja')).toBe(
+    true,
+  );
 
   // 4) La metadata de la carga sobrevivió el guardado (para el alta de OT).
   const meta = (ci.jobContextJson as { _centroCopiado?: { hojas?: number } })

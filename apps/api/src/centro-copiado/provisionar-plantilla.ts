@@ -404,7 +404,10 @@ async function cargarTapasCC(db: Db, tenantId: string): Promise<TapaMP[]> {
     })
   )
     .filter((t) => t.variantes.length > 0)
-    .map((t) => ({ id: t.id, variantes: t.variantes.map((v) => ({ id: v.id })) }));
+    .map((t) => ({
+      id: t.id,
+      variantes: t.variantes.map((v) => ({ id: v.id })),
+    }));
 }
 
 /**

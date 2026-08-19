@@ -29,7 +29,9 @@ let modoColor: 'BN' | 'CMYK';
 let papelVarianteId: string;
 
 beforeAll(async () => {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: 'gdi-demo' },
+  });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
 
@@ -65,7 +67,8 @@ beforeAll(async () => {
     ) ?? producto.rutasAlternativas[0].configPasos[0];
   configPasoId = cp.id;
   const pref =
-    cp.maquinasCandidatas.find((c) => c.esPreferida) ?? cp.maquinasCandidatas[0];
+    cp.maquinasCandidatas.find((c) => c.esPreferida) ??
+    cp.maquinasCandidatas[0];
   maquinaId = pref.maquinaId;
   modoColor = pref.modoColorAllowedModes.includes('CMYK') ? 'CMYK' : 'BN';
 
@@ -100,7 +103,10 @@ async function cotizarDoc(pliego: PliegoDim, hojas: number) {
     jobContext,
   });
   if (!r.exitoso)
-    console.error(`ERRORES (${pliego.preset}):`, JSON.stringify(r.errores, null, 2));
+    console.error(
+      `ERRORES (${pliego.preset}):`,
+      JSON.stringify(r.errores, null, 2),
+    );
   const imp = r.cotizacion!.pasos.find(
     (p) => p.familiaCodigo === 'impresion_por_hoja',
   )!;

@@ -1519,7 +1519,13 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró el vendedor.');
 
     let itemsAutorizados:
-      Array<CrearOrdenTrabajoItemDto & { id?: string }> | undefined;
+      | Array<
+          CrearOrdenTrabajoItemDto & {
+            id?: string;
+            archivosOrigenItemIds?: string[];
+          }
+        >
+      | undefined;
     if (payload.items) {
       const idsExistentes = payload.items
         .map((item) => item.id)
@@ -1532,6 +1538,31 @@ export class OrdenesTrabajoService {
         throw new BadRequestException(
           'Algún producto editado no pertenece a esta orden.',
         );
+      }
+      const origenesArchivos = payload.items.flatMap(
+        (item) => item.archivosOrigenItemIds ?? [],
+      );
+      if (new Set(origenesArchivos).size !== origenesArchivos.length) {
+        throw new BadRequestException(
+          'Una línea anterior no puede transferir sus archivos a más de un producto.',
+        );
+      }
+      if (origenesArchivos.some((itemId) => !pertenecen.has(itemId))) {
+        throw new BadRequestException(
+          'Algún archivo a conservar pertenece a otro producto u otra orden.',
+        );
+      }
+      for (const item of payload.items) {
+        if (
+          item.archivosOrigenItemIds?.some(
+            (origenId) =>
+              idsExistentes.includes(origenId) && origenId !== item.id,
+          )
+        ) {
+          throw new BadRequestException(
+            'No se pueden transferir archivos desde un producto que permanece en la orden.',
+          );
+        }
       }
       const cotizacionIds = payload.items.map((item) => item.cotizacionItemId);
       if (new Set(cotizacionIds).size !== cotizacionIds.length) {
@@ -1582,6 +1613,7 @@ export class OrdenesTrabajoService {
           decimales,
         ),
         id: item.id,
+        archivosOrigenItemIds: item.archivosOrigenItemIds,
       }));
       this.validarMontosItems(itemsAutorizados);
 
@@ -1594,7 +1626,12 @@ export class OrdenesTrabajoService {
         payload.clienteId ?? orden.clienteId,
         itemsAutorizados,
         new Set(redenciones.map((redencion) => redencion.cuponId)),
-      )) as Array<CrearOrdenTrabajoItemDto & { id?: string }>;
+      )) as Array<
+        CrearOrdenTrabajoItemDto & {
+          id?: string;
+          archivosOrigenItemIds?: string[];
+        }
+      >;
       if (estado !== 'borrador') {
         await this.exigirDescuentoEmitible(
           auth,
@@ -1647,11 +1684,16 @@ export class OrdenesTrabajoService {
             .map((item) => item.id)
             .filter((itemId): itemId is string => Boolean(itemId)),
         );
-        await tx.ordenTrabajoItem.deleteMany({
-          where: { ordenId: orden.id, id: { notIn: [...conservados] } },
-        });
+        const eliminados = orden.items
+          .map((item) => item.id)
+          .filter((itemId) => !conservados.has(itemId));
         const materializables: ItemAMaterializar[] = [];
+        const transferenciasArchivos: Array<{
+          destinoId: string;
+          origenIds: string[];
+        }> = [];
         for (const [ordenIndice, item] of itemsAutorizados.entries()) {
+          let destinoId: string;
           if (item.id) {
             const actualizado = await tx.ordenTrabajoItem.update({
               where: { id: item.id },
@@ -1662,6 +1704,7 @@ export class OrdenesTrabajoService {
               ordenId: orden.id,
               cotizacionItemId: actualizado.cotizacionItemId,
             });
+            destinoId = actualizado.id;
           } else {
             const creado = await tx.ordenTrabajoItem.create({
               data: {
@@ -1676,8 +1719,22 @@ export class OrdenesTrabajoService {
               ordenId: orden.id,
               cotizacionItemId: creado.cotizacionItemId,
             });
+            destinoId = creado.id;
+          }
+          if (item.archivosOrigenItemIds?.length) {
+            transferenciasArchivos.push({
+              destinoId,
+              origenIds: item.archivosOrigenItemIds,
+            });
           }
         }
+        await this.reemplazarItemsConservandoArchivos(
+          tx,
+          auth.tenantId,
+          orden.id,
+          eliminados,
+          transferenciasArchivos,
+        );
         if (estado === 'pendiente') {
           await this.materializarPasosItems(
             tx,
@@ -1715,6 +1772,34 @@ export class OrdenesTrabajoService {
     });
 
     return this.findOne(auth, orden.id);
+  }
+
+  /**
+   * Reasigna primero los adjuntos y recién después elimina las líneas fuente.
+   * El orden es parte de la garantía: Archivo.ordenItem tiene onDelete Cascade.
+   */
+  private async reemplazarItemsConservandoArchivos(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    ordenId: string,
+    eliminados: string[],
+    transferencias: Array<{ destinoId: string; origenIds: string[] }>,
+  ): Promise<void> {
+    for (const transferencia of transferencias) {
+      await tx.archivo.updateMany({
+        where: {
+          tenantId,
+          scope: 'ORDEN_ITEM',
+          ordenItemId: { in: transferencia.origenIds },
+        },
+        data: { ordenItemId: transferencia.destinoId },
+      });
+    }
+    if (eliminados.length > 0) {
+      await tx.ordenTrabajoItem.deleteMany({
+        where: { ordenId, id: { in: eliminados } },
+      });
+    }
   }
 
   /**

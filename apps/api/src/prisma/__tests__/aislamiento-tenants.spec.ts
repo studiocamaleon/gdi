@@ -171,7 +171,11 @@ describe('Aislamiento entre tenants — cobertura del datamodel', () => {
         const codigo = readFileSync(ruta, 'utf8');
         for (const modelo of EXENTOS_CON_TENANT_ID) {
           const prop = modelo[0].toLowerCase() + modelo.slice(1);
-          if (new RegExp(`\\.${prop}\\.\\w`).test(codigo)) {
+          // Detecta accesos directos del cliente Prisma, no lecturas de una
+          // relación ya incluida (por ejemplo `credencial.membership.user`).
+          if (
+            new RegExp(`(?:prisma|db|tx|base|app)\\.${prop}\\.\\w`).test(codigo)
+          ) {
             infractores.push(`${relativo} → ${prop}`);
           }
         }

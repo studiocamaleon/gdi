@@ -71,6 +71,8 @@ describe('Control plane — escrituras y feature gates', () => {
     const estudio = planes.find((p) => p.codigo === 'estudio')!;
     expect(estudio.features.afip).toBe(true);
     expect(estudio.precioMensual).toBe(189000);
+    const diamante = planes.find((p) => p.codigo === 'diamante')!;
+    expect(diamante.features.centroCopiado).toBe(true);
   });
 
   it('sin suscripción el tenant es legacy: todo permitido (grandfathered)', async () => {

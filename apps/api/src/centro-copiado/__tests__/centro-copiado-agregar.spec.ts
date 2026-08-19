@@ -1,7 +1,6 @@
 /**
- * Etapa D — agregar-a-orden: persiste la carga como N CotizacionItem estándar
- * (un renglón por documento) en una cotización borrador, agrupados por
- * `grupoTomoId`. Anillado diferido ⇒ sin item compuesto.
+ * Etapa D — agregar-a-orden: persiste la representación canónica de la carga
+ * (un renglón por suelto y uno por tomo compuesto) en una cotización borrador.
  *
  * Corre contra gdi_saas_test (DB aislada).
  */
@@ -20,19 +19,55 @@ let papel: string;
 function dtoBoceto() {
   return {
     documentos: [
-      { id: 'A', nombre: 'Contrato.pdf', paginas: 12, copias: 2, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const },
-      { id: 'C', nombre: 'Escritura.pdf', paginas: 10, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const, grupoId: 'T' },
-      { id: 'D', nombre: 'Reglamento.pdf', paginas: 4, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 1 as const, grupoId: 'T' },
+      {
+        id: 'A',
+        nombre: 'Contrato.pdf',
+        paginas: 12,
+        copias: 2,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 2 as const,
+      },
+      {
+        id: 'C',
+        nombre: 'Escritura.pdf',
+        paginas: 10,
+        copias: 1,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 2 as const,
+        grupoId: 'T',
+      },
+      {
+        id: 'D',
+        nombre: 'Reglamento.pdf',
+        paginas: 4,
+        copias: 1,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 1 as const,
+        grupoId: 'T',
+      },
     ],
-    // Sin terminaciones: este spec verifica la estructura de IMPRESIÓN. Si el
-    // tomo anillara (default ['Anillado']) y hay anilladora cargada en paralelo,
-    // se sumaría un renglón de anillado y los conteos cambiarían.
+    // Sin terminaciones: este spec verifica la estructura de impresión y no
+    // depende de que exista una anilladora en la base compartida.
     grupos: [{ id: 'T', nombre: 'Expediente', juegos: 2, terminaciones: [] }],
   };
 }
 
 beforeAll(async () => {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: 'gdi-demo' },
+  });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
 
@@ -56,46 +91,56 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-it('crea N CotizacionItem estándar en una cotización, con metadata y agrupación', async () => {
+it('persiste sueltos y tomos con la misma representación canónica del staging', async () => {
   if (!tenantId) return;
 
   const r = await service.agregarAOrden(tenantId, dtoBoceto(), '2026-03');
 
   expect(r.cotizacionId).toBeTruthy();
-  expect(r.items).toHaveLength(3);
-  expect(r.items.every((i) => i.error === null && i.cotizacionItemId)).toBe(true);
-  // Un tomo (T) con 2 renglones + no suma como item compuesto.
+  expect(r.items).toHaveLength(2);
+  expect(r.items.every((i) => i.error === null && i.cotizacionItemId)).toBe(
+    true,
+  );
+  // Un suelto + un tomo compuesto.
   expect(r.totales.tomos).toBe(1);
-  expect(r.items.filter((i) => i.grupoTomoId === 'T')).toHaveLength(2);
+  expect(r.items.map((i) => i.documentoId).sort()).toEqual(['A', 'T']);
 
-  // Persistencia real: 3 CotizacionItem en esa cotización.
+  // Persistencia real: las mismas 2 unidades visibles del staging.
   const dbItems = await prisma.cotizacionItem.findMany({
     where: { cotizacionId: r.cotizacionId },
   });
-  expect(dbItems).toHaveLength(3);
+  expect(dbItems).toHaveLength(2);
 
   // Cada item es estándar (recotizable): tiene snapshot y trazabilidad.
   expect(
-    dbItems.every((i) => i.snapshotJson !== null && i.trazabilidadJson !== null),
+    dbItems.every(
+      (i) => i.snapshotJson !== null && i.trazabilidadJson !== null,
+    ),
   ).toBe(true);
 
   // Metadata de la carga persistida en jobContextJson, con un solo grupoCargaId.
   const metas = dbItems.map(
     (i) =>
-      (i.jobContextJson as Record<string, { grupoTomoId?: string | null; grupoCargaId?: string; nombre?: string }>)
-        ._centroCopiado,
+      (
+        i.jobContextJson as Record<
+          string,
+          {
+            grupoTomoId?: string | null;
+            grupoCargaId?: string;
+            nombre?: string;
+            esTomo?: boolean;
+            tomoNombre?: string;
+            segmentos?: unknown[];
+          }
+        >
+      )._centroCopiado,
   );
   expect(metas.every((m) => m?.grupoCargaId === r.grupoCargaId)).toBe(true);
   expect(new Set(metas.map((m) => m?.grupoCargaId)).size).toBe(1);
-  // Los 2 del tomo llevan grupoTomoId 'T'; el suelto no.
-  expect(metas.filter((m) => m?.grupoTomoId === 'T')).toHaveLength(2);
-  expect(metas.filter((m) => m?.grupoTomoId == null)).toHaveLength(1);
-  // Nombre del documento persistido (para el renglón de la OT).
-  expect(metas.map((m) => m?.nombre).sort()).toEqual([
-    'Contrato.pdf',
-    'Escritura.pdf',
-    'Reglamento.pdf',
-  ]);
+  const tomo = metas.find((m) => m?.esTomo);
+  expect(tomo?.tomoNombre).toBe('Expediente');
+  expect(tomo?.segmentos).toHaveLength(2);
+  expect(metas.find((m) => !m?.esTomo)?.nombre).toBe('Contrato.pdf');
 });
 
 it('construir-items: payload por doc con snapshot, especificaciones y jobContext', async () => {
@@ -144,5 +189,5 @@ it('agrega a una cotización borrador existente sin duplicarla', async () => {
   const dbItems = await prisma.cotizacionItem.findMany({
     where: { cotizacionId: primera.cotizacionId },
   });
-  expect(dbItems).toHaveLength(6); // 3 + 3
+  expect(dbItems).toHaveLength(4); // 2 + 2
 });

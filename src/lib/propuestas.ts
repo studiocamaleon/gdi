@@ -84,6 +84,8 @@ export type PropuestaItem = {
    * manda al backend; se sube por el flujo de Archivos al guardar la orden.
    */
   archivosPendientes?: File[];
+  /** Ítems persistidos cuyos adjuntos hereda al reemplazar una carga rápida. */
+  archivosOrigenItemIds?: string[];
 };
 
 export type PropuestaCargoDirecto = {

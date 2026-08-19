@@ -142,6 +142,8 @@ beforeAll(async () => {
       codigo: 'TEST-ANILLADORA-TOMO',
       nombre: 'Anilladora de prueba (tomo)',
       plantilla: 'ANILLADORA',
+      estado: 'ACTIVA',
+      estadoConfiguracion: 'LISTA',
       geometriaTrabajo: 'PLIEGO',
       unidadProduccionPrincipal: 'PIEZAS_H',
       plantaId,
@@ -283,7 +285,11 @@ beforeAll(async () => {
             sku: 'TEST-TAPA-POSTERIOR-A4',
             precioReferencia: 120,
             moneda: 'ARS',
-            atributosVarianteJson: { ancho: 210, alto: 297, material: 'carton' },
+            atributosVarianteJson: {
+              ancho: 210,
+              alto: 297,
+              material: 'carton',
+            },
           },
         ],
       },
@@ -556,6 +562,8 @@ it('documento suelto con Anillado: UN ítem con impresión + anillado', async ()
   expect(d.anillado).toBeTruthy();
   expect(d.anillado?.error).toBeNull();
   expect(d.anillado?.diametroMm).toBeTruthy();
+  expect(d.anillado?.subtotal ?? 0).toBeGreaterThan(0);
+  expect(d.subtotal).toBeGreaterThan(d.anillado?.subtotal ?? 0);
   // El total = el subtotal del doc (que ya incluye el anillado), sin extra.
   expect(r.totales.subtotal).toBeCloseTo(d.subtotal, 2);
 
@@ -664,7 +672,7 @@ it('documento suelto SIN anillado: se mide en hojas', async () => {
   expect(items.items[0].cantidad).toBeGreaterThan(2);
 });
 
-it('agregarAOrden (camino eager) también persiste el renglón de anillado', async () => {
+it('agregarAOrden persiste el mismo tomo compuesto que construir-items', async () => {
   if (!tenantId) return;
   const r = await service.agregarAOrden(
     tenantId,
@@ -675,11 +683,12 @@ it('agregarAOrden (camino eager) también persiste el renglón de anillado', asy
     PERIODO,
   );
   cotizacionCreada = r.cotizacionId;
-  const anillado = r.items.find((i) => i.documentoId.endsWith('::anillado'));
-  expect(anillado).toBeTruthy();
-  expect(anillado?.cotizacionItemId).toBeTruthy(); // persistido
-  expect(anillado?.subtotal ?? 0).toBeGreaterThan(0);
-  expect(anillado?.grupoTomoId).toBe('T');
+  expect(r.items).toHaveLength(1);
+  const tomo = r.items[0];
+  expect(tomo.documentoId).toBe('T');
+  expect(tomo.cotizacionItemId).toBeTruthy();
+  expect(tomo.subtotal).toBeGreaterThan(0);
+  expect(tomo.grupoTomoId).toBeNull();
 });
 
 it('sin Anillado activo, el tomo no suma línea de anillado', async () => {
@@ -695,7 +704,7 @@ it('sin Anillado activo, el tomo no suma línea de anillado', async () => {
   expect(r.grupos[0].anillado).toBeNull();
 });
 
-it('si ningún espiral cubre las hojas, degrada con motivo y sin línea', async () => {
+it('si ningún espiral cubre las hojas, marca el tomo inválido y no suma la terminación', async () => {
   if (!tenantId) return;
   // hojasPorLibro = 300 > 120 (máxima capacidad instalada) ⇒ sin anillo que cubra.
   const r = await service.cotizar(

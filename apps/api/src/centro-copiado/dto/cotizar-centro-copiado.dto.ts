@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
   IsArray,
   IsIn,
   IsInt,
@@ -7,9 +9,15 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+import {
+  CENTRO_COPIADO_COBERTURAS,
+  CENTRO_COPIADO_TERMINACIONES,
+  CENTRO_COPIADO_TIPOS_ANILLO,
+} from '../centro-copiado.domain';
 
 /**
  * Request del preview del TPV Centro de copiado (POST /centro-copiado/cotizar).
@@ -19,10 +27,12 @@ import {
  */
 export class DocumentoCentroCopiadoDto {
   @IsString()
+  @MaxLength(100)
   id!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   nombre?: string;
 
   @IsInt()
@@ -35,6 +45,7 @@ export class DocumentoCentroCopiadoDto {
 
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */
   @IsString()
+  @MaxLength(40)
   tamano!: string;
 
   /** Medidas del pliego (del catálogo de formatos del sistema). */
@@ -64,31 +75,36 @@ export class DocumentoCentroCopiadoDto {
 
   /** Cobertura de tóner del documento; ausente = 'alta'. */
   @IsOptional()
-  @IsIn(['borrador', 'normal', 'alta'])
+  @IsIn(CENTRO_COPIADO_COBERTURAS)
   cobertura?: string;
 
   /** Terminaciones (pasos opcionales) de un documento suelto. */
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @ArrayMaxSize(1)
+  @ArrayUnique()
+  @IsIn(CENTRO_COPIADO_TERMINACIONES, { each: true })
   terminaciones?: string[];
 
   /** Tipo de anillo elegido (ESPIRAL_PLASTICO | WIRE_O) para el anillado. */
   @IsOptional()
-  @IsString()
+  @IsIn(CENTRO_COPIADO_TIPOS_ANILLO)
   tipoAnillo?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   grupoId?: string | null;
 }
 
 export class GrupoCentroCopiadoDto {
   @IsString()
+  @MaxLength(100)
   id!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   nombre?: string;
 
   @IsInt()
@@ -98,34 +114,44 @@ export class GrupoCentroCopiadoDto {
   /** Terminaciones (pasos opcionales) del tomo entero. */
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @ArrayMaxSize(1)
+  @ArrayUnique()
+  @IsIn(CENTRO_COPIADO_TERMINACIONES, { each: true })
   terminaciones?: string[];
 
   /** Tipo de anillo elegido (ESPIRAL_PLASTICO | WIRE_O) para el anillado. */
   @IsOptional()
-  @IsString()
+  @IsIn(CENTRO_COPIADO_TIPOS_ANILLO)
   tipoAnillo?: string;
 }
 
 export class CotizarCentroCopiadoDto {
   @IsArray()
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => DocumentoCentroCopiadoDto)
   documentos!: DocumentoCentroCopiadoDto[];
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => GrupoCentroCopiadoDto)
   grupos?: GrupoCentroCopiadoDto[];
 }
 
 /**
- * Persiste la carga como N CotizacionItem (un renglón por documento), agrupados
- * por `grupoTomoId`. Se agregan a la cotización `cotizacionId` (borrador) o a una
- * nueva. La OrdenTrabajoItem se crea después, por el flujo normal de la OT.
+ * Persiste la carga en una cotización: un renglón por documento suelto y uno por
+ * tomo compuesto. Se agrega a `cotizacionId` (borrador) o a una nueva. La
+ * OrdenTrabajoItem se crea después, por el flujo normal de la OT.
  */
 export class AgregarAOrdenCentroCopiadoDto extends CotizarCentroCopiadoDto {
+  /** Evita duplicados ante doble clic o reintento de red. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  idempotencyKey?: string;
+
   /** Cotización borrador a la que agregar; si falta, se crea una. */
   @IsOptional()
   @IsUUID()
@@ -138,5 +164,6 @@ export class AgregarAOrdenCentroCopiadoDto extends CotizarCentroCopiadoDto {
   /** Id de esta carga (agrupa todos sus renglones en la ficha). Se genera si falta. */
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   grupoCargaId?: string;
 }

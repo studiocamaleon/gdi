@@ -5,11 +5,65 @@
  *  - POST /centro-copiado/construir-items   → payload para stagear PropuestaItem[].
  */
 import { apiRequest } from "@/lib/api";
-import type { PropuestaItem, CotizacionPropuestaSnapshot } from "@/lib/propuestas";
+import type {
+  PropuestaItem,
+  CotizacionPropuestaSnapshot,
+} from "@/lib/propuestas";
 import { SUSTRATO_HOJA_FORMATOS_PRESET } from "@/lib/materia-prima-templates";
 
 export type ColorDoc = "BN" | "COLOR";
 export type FazDoc = 1 | 2;
+
+export interface CentroCopiadoSegmentoMeta {
+  nombre?: string | null;
+  paginas: number;
+  tamano: string;
+  tamanoAnchoMm?: number;
+  tamanoAltoMm?: number;
+  papelMateriaPrimaId: string;
+  gramaje?: number | null;
+  color: ColorDoc;
+  faz: FazDoc;
+  cobertura?: string | null;
+}
+
+/** Contrato de rehidratación; `version` es opcional para cargas históricas. */
+export interface CentroCopiadoMeta {
+  version?: 1;
+  grupoCargaId?: string | null;
+  grupoTomoId?: string | null;
+  esTomo?: boolean;
+  esAnillado?: boolean;
+  tomoNombre?: string | null;
+  terminacion?: string;
+  terminaciones?: string[];
+  tipoAnillo?: string | null;
+  nombre?: string | null;
+  paginas?: number;
+  copias?: number;
+  tamano?: string;
+  tamanoAnchoMm?: number;
+  tamanoAltoMm?: number;
+  papelMateriaPrimaId?: string;
+  gramaje?: number | null;
+  papelLabel?: string;
+  color?: ColorDoc;
+  faz?: FazDoc;
+  cobertura?: string | null;
+  carillas?: number;
+  hojas?: number;
+  juegos?: number;
+  hojasPorLibro?: number;
+  documentos?: number;
+  segmentos?: CentroCopiadoSegmentoMeta[];
+}
+
+export function metaCentroCopiado(
+  jobContext: Record<string, unknown> | null | undefined,
+): CentroCopiadoMeta | null {
+  const raw = jobContext?._centroCopiado;
+  return raw && typeof raw === "object" ? (raw as CentroCopiadoMeta) : null;
+}
 
 export interface DocumentoCentroCopiado {
   id: string;
@@ -161,8 +215,13 @@ export async function opcionesCentroCopiado(): Promise<OpcionesCentroCopiado> {
 }
 
 /** Si el módulo está activo (para esconder el botón/atajo cuando está pausado). */
-export async function estadoCentroCopiado(): Promise<{ activo: boolean }> {
-  return apiRequest<{ activo: boolean }>("/centro-copiado/estado");
+export async function estadoCentroCopiado(): Promise<{
+  activo: boolean;
+  configurado: boolean;
+}> {
+  return apiRequest<{ activo: boolean; configurado: boolean }>(
+    "/centro-copiado/estado",
+  );
 }
 
 // ── Configuración del módulo (Configuración › Centro de copiado) ──────────────
@@ -180,6 +239,9 @@ export interface MaquinaOpcion {
 }
 
 export interface CentroCopiadoConfig {
+  /** Versión optimista: evita pisar cambios realizados desde otra sesión. */
+  version: number;
+  actualizadoEl: string | null;
   activo: boolean;
   /** Cobrar preparación/limpieza de máquina en cada documento (default false). */
   cobraSetup: boolean;
@@ -187,6 +249,10 @@ export interface CentroCopiadoConfig {
   margenPct: number;
   /** Margen mínimo % (piso de rentabilidad). */
   margenMinimoPct: number;
+  politicaPrecio: "MARGEN_FIJO" | "MARGEN_POR_VOLUMEN";
+  tramosMargen: { desdeCantidad: number; margenPct: number }[];
+  /** Mínimo de pliegos/hojas físicas facturables por documento; 0 = desactivado. */
+  minimoHojasFacturables: number;
   /** Minutos de setup por documento (override propio de CC). */
   setupMin: number;
   /** Minutos de cleanup por documento (override propio de CC). */
@@ -195,6 +261,7 @@ export interface CentroCopiadoConfig {
   papeles: PapelConfigItem[] | null;
   tamanos: string[] | null;
   terminaciones: string[] | null;
+  tiposAnillo: string[] | null;
   /** Máquinas elegidas; null = auto-resolver por rol. */
   maquinaColorId: string | null;
   maquinaBnId: string | null;
@@ -205,25 +272,47 @@ export interface CentroCopiadoConfig {
   tapaContratapaMateriaPrimaId: string | null;
   /** Universo para elegir (el menú de tamaños está en CC_FORMATOS_MENU). */
   disponibles: {
-    papeles: { materiaPrimaId: string; nombre: string; gramajes: number[] }[];
+    papeles: {
+      materiaPrimaId: string;
+      nombre: string;
+      gramajes: number[];
+      formatosProducibles: string[];
+    }[];
     terminaciones: string[];
+    terminacionesCatalogo: {
+      codigo: string;
+      etiqueta: string;
+      familiaCodigo: string;
+      requiereMaquina: boolean;
+    }[];
+    formatos: FormatoTamano[];
     maquinas: MaquinaOpcion[];
     anilladoras: { id: string; nombre: string }[];
+    tiposAnillo: {
+      value: "ESPIRAL_PLASTICO" | "WIRE_O";
+      label: string;
+      instalado: boolean;
+    }[];
     tapas: { materiaPrimaId: string; nombre: string; esFrontal: boolean }[];
   };
 }
 
 /** Campos a actualizar. Omitir = no tocar; enviar null = limpiar (default). */
 export interface ActualizarConfigRequest {
+  version?: number;
   activo?: boolean;
   cobraSetup?: boolean;
   margenPct?: number;
   margenMinimoPct?: number;
+  politicaPrecio?: "MARGEN_FIJO" | "MARGEN_POR_VOLUMEN";
+  tramosMargen?: { desdeCantidad: number; margenPct: number }[];
+  minimoHojasFacturables?: number;
   setupMin?: number;
   cleanupMin?: number;
   papeles?: PapelConfigItem[] | null;
   tamanos?: string[] | null;
   terminaciones?: string[] | null;
+  tiposAnillo?: string[] | null;
   maquinaColorId?: string | null;
   maquinaBnId?: string | null;
   maquinaAnilladoraId?: string | null;
@@ -242,6 +331,61 @@ export async function actualizarConfigCentroCopiado(
     method: "PUT",
     body: JSON.stringify(req),
   });
+}
+
+export async function inicializarCentroCopiado(): Promise<CentroCopiadoConfig> {
+  return apiRequest<CentroCopiadoConfig>("/centro-copiado/inicializar", {
+    method: "POST",
+  });
+}
+
+export type NivelSaludCentroCopiado = "OK" | "ADVERTENCIA" | "ERROR";
+
+export interface SaludCentroCopiado {
+  estado: "OPERATIVO" | "ADVERTENCIA" | "ERROR";
+  generadoEl: string;
+  inicializado: boolean;
+  activo: boolean;
+  puedeReparar: boolean;
+  resumen: {
+    impresoras: number;
+    papeles: number;
+    variantesPapel: number;
+    variantesCosteadas: number;
+    anilladoras: number;
+    tiposAnillo: number;
+    tapas: number;
+  };
+  chequeos: {
+    codigo: string;
+    etiqueta: string;
+    nivel: NivelSaludCentroCopiado;
+    detalle: string;
+    reparable: boolean;
+  }[];
+}
+
+export interface EventoCentroCopiado {
+  id: string;
+  tipo: string;
+  actorNombre: string;
+  descripcion: string;
+  datosJson: unknown;
+  createdAt: string;
+}
+
+export async function saludCentroCopiado(): Promise<SaludCentroCopiado> {
+  return apiRequest<SaludCentroCopiado>("/centro-copiado/salud");
+}
+
+export async function repararCentroCopiado(): Promise<SaludCentroCopiado> {
+  return apiRequest<SaludCentroCopiado>("/centro-copiado/reparar", {
+    method: "POST",
+  });
+}
+
+export async function historialCentroCopiado(): Promise<EventoCentroCopiado[]> {
+  return apiRequest<EventoCentroCopiado[]>("/centro-copiado/historial");
 }
 
 /** Un formato del catálogo del sistema, con sus medidas en milímetros. */
@@ -268,9 +412,14 @@ export const CC_FORMATOS_MENU: FormatoTamano[] = CC_MENU_NOMBRES.map((nombre) =>
   }));
 
 /** Medidas de un formato por su nombre (fallback A4 si no está en el menú). */
-export function dimsDeFormato(nombre: string): { anchoMm: number; altoMm: number } {
+export function dimsDeFormato(nombre: string): {
+  anchoMm: number;
+  altoMm: number;
+} {
   const f = CC_FORMATOS_MENU.find((x) => x.nombre === nombre);
-  return f ? { anchoMm: f.anchoMm, altoMm: f.altoMm } : { anchoMm: 210, altoMm: 297 };
+  return f
+    ? { anchoMm: f.anchoMm, altoMm: f.altoMm }
+    : { anchoMm: 210, altoMm: 297 };
 }
 
 /** Una hoja (variante) "cubre" un formato si puede producirlo (cortándolo). */
@@ -341,6 +490,7 @@ export async function guardarTomoCentroCopiado(
     grupoCargaId?: string;
     cotizacionId?: string;
     clienteId?: string | null;
+    idempotencyKey?: string;
   },
 ): Promise<GuardarTomoResponse> {
   return apiRequest<GuardarTomoResponse>("/centro-copiado/guardar-tomo", {
@@ -361,17 +511,14 @@ export async function guardarTomoCentroCopiado(
  */
 export const CC_NOMBRE_PRODUCTO = "Impresión por hoja";
 
-export function itemConstruidoAPropuestaItem(ic: ItemConstruido): PropuestaItem {
-  const meta = (
-    ic.jobContext as {
-      _centroCopiado?: { esTomo?: boolean; terminaciones?: string[] };
-    }
-  )._centroCopiado;
+export function itemConstruidoAPropuestaItem(
+  ic: ItemConstruido,
+): PropuestaItem {
+  const meta = metaCentroCopiado(ic.jobContext);
   const esTomo = Boolean(meta?.esTomo);
   // Terminaciones elegidas (chips en la ficha). Fallback: un tomo siempre lleva
   // Anillado aunque la metadata vieja no traiga la lista.
-  const terminaciones =
-    meta?.terminaciones ?? (esTomo ? ["Anillado"] : []);
+  const terminaciones = meta?.terminaciones ?? (esTomo ? ["Anillado"] : []);
   const refDocumento =
     ic.nombre && ic.nombre !== "Impresión de documento"
       ? ic.nombre
