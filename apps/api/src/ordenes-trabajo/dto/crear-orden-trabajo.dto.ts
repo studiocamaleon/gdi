@@ -241,6 +241,16 @@ export class EditarOrdenTrabajoItemLoteDto extends CrearOrdenTrabajoItemDto {
   @IsOptional()
   @IsUUID()
   id?: string;
+
+  /**
+   * Líneas reemplazadas cuyos adjuntos debe heredar esta línea. Sólo se usa al
+   * transformar una carga compuesta (por ejemplo, varios documentos en tomo).
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID('4', { each: true })
+  archivosOrigenItemIds?: string[];
 }
 
 /**

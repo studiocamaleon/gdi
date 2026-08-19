@@ -153,8 +153,10 @@ import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-pre
 import ccFicha from "@/components/comercial/centro-copiado-ficha.module.css";
 import {
   guardarTomoCentroCopiado,
+  cantidadLibrosCentroCopiado,
   dimsDeFormato,
   estadoCentroCopiado,
+  metaCentroCopiado,
 } from "@/lib/centro-copiado-api";
 import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
 import { Button } from "@/components/ui/button";
@@ -482,14 +484,23 @@ function applyCotizacionToItem(
   const total = getCotizacionTotal(cotizacion);
   const impuestoPorcentaje =
     subtotal > 0 ? (impuestoMonto / subtotal) * 100 : 0;
+  const cantidadLibros =
+    item.unidadMedida === "libros"
+      ? cantidadLibrosCentroCopiado(jobContext)
+      : null;
+  const cantidad =
+    cantidadLibros ??
+    cotizacion.cantidadComercialPricing ??
+    cotizacion.cantidadEfectiva ??
+    item.cantidad;
 
   return {
     ...item,
-    cantidad:
-      cotizacion.cantidadComercialPricing ??
-      cotizacion.cantidadEfectiva ??
-      item.cantidad,
-    precioUnitario: getCotizacionUnitario(cotizacion),
+    cantidad,
+    precioUnitario:
+      cantidadLibros && cantidad > 0
+        ? subtotal / cantidad
+        : getCotizacionUnitario(cotizacion),
     subtotal,
     impuestoMonto,
     impuestoPorcentaje,
@@ -5165,6 +5176,9 @@ function itemToOrdenItemPayload(
       valor: spec.val,
     })),
     adicionales: item.adicionales,
+    ...(item.archivosOrigenItemIds?.length
+      ? { archivosOrigenItemIds: item.archivosOrigenItemIds }
+      : {}),
   };
 }
 
@@ -5244,6 +5258,14 @@ function rehidratarOrdenItem(
   const resumen = (snap?.resumen ?? null) as SnapshotResumenOrden | null;
   const trazabilidad = (snap?.trazabilidad ??
     null) as SnapshotTrazabilidadOrden | null;
+  const jobContext =
+    (snap?.jobContext as Record<string, unknown> | null) ?? undefined;
+  const unidadMedida = unidadDesdeCorta(producto.cantidadUnidad);
+  const cantidadLibros =
+    unidadMedida === "libros"
+      ? cantidadLibrosCentroCopiado(jobContext)
+      : null;
+  const cantidadVisible = cantidadLibros ?? producto.cantidad;
 
   const costosVacios = {
     tiempoTotal: 0,
@@ -5387,10 +5409,10 @@ function rehidratarOrdenItem(
     subcategoriaComercialCodigo: "",
     subcategoriaComercialNombre:
       producto.subcategoriaComercial || producto.familia,
-    unidadMedida: unidadDesdeCorta(producto.cantidadUnidad),
-    cantidad: producto.cantidad,
+    unidadMedida,
+    cantidad: cantidadVisible,
     precioUnitario:
-      producto.cantidad > 0 ? producto.total / producto.cantidad : 0,
+      cantidadVisible > 0 ? producto.total / cantidadVisible : 0,
     subtotal: producto.subtotal,
     impuestoPorcentaje:
       producto.subtotal > 0
@@ -5412,7 +5434,7 @@ function rehidratarOrdenItem(
     pasos: trazabilidad?.pasos ? getCotizacionPasos(cotizacion) : [],
     adicionales: producto.adicionales,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
-    jobContext: (snap?.jobContext as Record<string, unknown>) ?? undefined,
+    jobContext,
     // Descuento que aplicó el vendedor (para reeditarlo si se recotiza el ítem).
     descuentoInput:
       producto.descuentoTipo && producto.descuentoValor != null
@@ -5589,15 +5611,17 @@ export function PropuestaFicha({
   const [addOpen, setAddOpen] = React.useState(false);
   const [copiadoOpen, setCopiadoOpen] = React.useState(false);
   // Módulo activo (config del tenant): esconde el botón/atajo si está pausado.
-  // Fail-open: ante error de red se asume activo (no esconder por un glitch).
-  const [ccActivo, setCcActivo] = React.useState(true);
+  // Se inicia cerrado hasta confirmar el estado; el backend también lo exige.
+  const [ccActivo, setCcActivo] = React.useState(false);
   React.useEffect(() => {
     let vivo = true;
     void estadoCentroCopiado()
       .then((e) => {
         if (vivo) setCcActivo(e.activo);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (vivo) setCcActivo(false);
+      });
     return () => {
       vivo = false;
     };
@@ -5789,6 +5813,7 @@ export function PropuestaFicha({
   const emisionOrdenIdRef = React.useRef<string | null>(null);
   const emisionIdempotencyRef = React.useRef<string | null>(null);
   const borradorIdempotencyRef = React.useRef<string | null>(null);
+  const tomosIdempotencyRef = React.useRef<Map<string, string>>(new Map());
   const [editandoOrden, setEditandoOrden] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
   const [trackCopiado, setTrackCopiado] = React.useState(false);
@@ -6047,10 +6072,14 @@ export function PropuestaFicha({
         if (!files?.length) continue;
         try {
           const previos = await listarArchivos("ORDEN_ITEM", p.id);
-          for (const a of previos) {
-            if (a.autogeneradoPor === MARCA) await eliminarArchivo(a.id);
-          }
           for (const file of files) {
+            // Reemplaza sólo el mismo original. En una edición parcial de un
+            // tomo no debe borrar los PDF de los demás documentos heredados.
+            for (const a of previos) {
+              if (a.autogeneradoPor === MARCA && a.nombre === file.name) {
+                await eliminarArchivo(a.id);
+              }
+            }
             await subirArchivo(file, {
               scope: "ORDEN_ITEM",
               entidadId: p.id,
@@ -6403,38 +6432,26 @@ export function PropuestaFicha({
   const esCentroCopiado = React.useCallback(
     (item: PropuestaItem) =>
       item.productoCodigo === "SYS-IMPRESION-DOC" ||
-      Boolean(
-        (item.jobContext as { _centroCopiado?: unknown } | undefined)
-          ?._centroCopiado,
-      ),
+      Boolean(metaCentroCopiado(item.jobContext)),
     [],
   );
 
   /** Id del tomo (grupo anillado) al que pertenece un renglón del centro de copiado. */
   const tomoDeItem = React.useCallback(
     (item: PropuestaItem | undefined): string | null =>
-      (
-        item?.jobContext as
-          { _centroCopiado?: { grupoTomoId?: string | null } } | undefined
-      )?._centroCopiado?.grupoTomoId ?? null,
+      metaCentroCopiado(item?.jobContext)?.grupoTomoId ?? null,
     [],
   );
   const tomoNombreDeItem = React.useCallback(
     (item: PropuestaItem): string | null =>
-      (
-        item.jobContext as
-          { _centroCopiado?: { tomoNombre?: string | null } } | undefined
-      )?._centroCopiado?.tomoNombre ?? null,
+      metaCentroCopiado(item.jobContext)?.tomoNombre ?? null,
     [],
   );
 
   /** Id de la carga (todos los renglones de una misma pasada del centro de copiado). */
   const cargaDeItem = React.useCallback(
     (item: PropuestaItem | undefined): string | null =>
-      (
-        item?.jobContext as
-          { _centroCopiado?: { grupoCargaId?: string | null } } | undefined
-      )?._centroCopiado?.grupoCargaId ?? null,
+      metaCentroCopiado(item?.jobContext)?.grupoCargaId ?? null,
     [],
   );
 
@@ -6481,29 +6498,12 @@ export function PropuestaFicha({
       }
       // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
       // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
-      const metaTomo = (
-        item.jobContext as
-          | {
-              _centroCopiado?: {
-                esTomo?: boolean;
-                tomoNombre?: string;
-                juegos?: number;
-                segmentos?: Array<{
-                  nombre?: string | null;
-                  paginas: number;
-                  tamano: string;
-                  tamanoAnchoMm?: number;
-                  tamanoAltoMm?: number;
-                  papelMateriaPrimaId: string;
-                  gramaje?: number | null;
-                  color: "BN" | "COLOR";
-                  faz: 1 | 2;
-                }>;
-              };
-            }
-          | undefined
-      )?._centroCopiado;
+      const metaTomo = metaCentroCopiado(item.jobContext);
       if (metaTomo?.esTomo) {
+        const huellaTomo = `${item.id}:${JSON.stringify(metaTomo)}`;
+        const idempotencyKey =
+          tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
+        tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
         const resp = await guardarTomoCentroCopiado({
           documentos: (metaTomo.segmentos ?? []).map((s, i) => ({
             id: `s${i}`,
@@ -6519,17 +6519,21 @@ export function PropuestaFicha({
             gramaje: s.gramaje,
             color: s.color,
             faz: s.faz,
+            cobertura: s.cobertura,
             grupoId: "T",
           })),
           grupos: [
             {
               id: "T",
-              nombre: metaTomo.tomoNombre,
+              nombre: metaTomo.tomoNombre ?? undefined,
               juegos: metaTomo.juegos ?? 1,
+              terminaciones: metaTomo.terminaciones ?? [],
+              tipoAnillo: metaTomo.tipoAnillo ?? undefined,
             },
           ],
           cotizacionId,
           clienteId: clienteId || null,
+          idempotencyKey,
         });
         if (resp.error || !resp.cotizacionItemId) {
           throw new Error(
@@ -8393,6 +8397,7 @@ export function PropuestaFicha({
       />
       <CentroCopiadoSheet
         open={copiadoOpen}
+        clienteId={clienteId || null}
         editItems={copiadoEditItems}
         onOpenChange={(open) => {
           setCopiadoOpen(open);
@@ -8404,17 +8409,29 @@ export function PropuestaFicha({
           const cargaEditada = copiadoEditItems?.length
             ? cargaDeItem(copiadoEditItems[0])
             : null;
+          const nuevosConHerencia = cargaEditada
+            ? nuevos.map((nuevo, indice) => ({
+                ...nuevo,
+                archivosOrigenItemIds: copiadoEditItems!
+                  .filter(
+                    (_, origenIndice) =>
+                      Math.min(origenIndice, nuevos.length - 1) === indice,
+                  )
+                  .map((origen) => origen.id)
+                  .filter((id) => persistedItemIds.has(id)),
+              }))
+            : nuevos;
           setItems((current) => {
             const base = cargaEditada
               ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
               : current;
-            return [...base, ...nuevos];
+            return [...base, ...nuevosConHerencia];
           });
           // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
           // demasiado). Se los diferencia por la referencia (varianteNombre).
           setCopiadoOpen(false);
           setCopiadoEditItems(null);
-          focusProductRow(nuevos[0].id);
+          focusProductRow(nuevosConHerencia[0].id);
         }}
       />
       <CentroCopiadoPreciosSheet

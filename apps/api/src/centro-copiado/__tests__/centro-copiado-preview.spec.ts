@@ -8,10 +8,12 @@
  * Corre contra gdi_saas_test (DB aislada, test/jest-setup-db.ts).
  */
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { MotorUniversalService } from '../../motor-universal/motor.service';
 import { AplicarPrecioService } from '../../productos-servicios/precio/aplicar-precio.service';
 import { PreciosEspecialesClientesService } from '../../productos-servicios/precio/precios-especiales-clientes/precios-especiales-clientes.service';
 import { CentroCopiadoService } from '../centro-copiado.service';
+import { CC_PRODUCTO_CODIGO } from '../provisionar-plantilla';
 
 const prisma = new PrismaClient();
 
@@ -20,7 +22,9 @@ let service: CentroCopiadoService;
 let papel: string;
 
 beforeAll(async () => {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: 'gdi-demo' },
+  });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
 
@@ -50,12 +54,54 @@ it('cotiza sueltos + un tomo: aritmética, agrupación y totales', async () => {
   const dto = {
     documentos: [
       // Suelto A: 12 págs × 2 copias, A4, B/N, doble faz ⇒ 24 carillas, 12 hojas
-      { id: 'A', paginas: 12, copias: 2, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const },
+      {
+        id: 'A',
+        paginas: 12,
+        copias: 2,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 2 as const,
+      },
       // Suelto B: 6 págs × 1, A3, color, simple faz ⇒ 6 carillas, 6 hojas
-      { id: 'B', paginas: 6, copias: 1, tamano: 'A3', tamanoAnchoMm: 297, tamanoAltoMm: 420, papelMateriaPrimaId: papel, color: 'COLOR' as const, faz: 1 as const },
+      {
+        id: 'B',
+        paginas: 6,
+        copias: 1,
+        tamano: 'A3',
+        tamanoAnchoMm: 297,
+        tamanoAltoMm: 420,
+        papelMateriaPrimaId: papel,
+        color: 'COLOR' as const,
+        faz: 1 as const,
+      },
       // Tomo T (2 juegos): C (10 págs, doble) + D (4 págs, simple)
-      { id: 'C', paginas: 10, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const, grupoId: 'T' },
-      { id: 'D', paginas: 4, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 1 as const, grupoId: 'T' },
+      {
+        id: 'C',
+        paginas: 10,
+        copias: 1,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 2 as const,
+        grupoId: 'T',
+      },
+      {
+        id: 'D',
+        paginas: 4,
+        copias: 1,
+        tamano: 'A4',
+        tamanoAnchoMm: 210,
+        tamanoAltoMm: 297,
+        papelMateriaPrimaId: papel,
+        color: 'BN' as const,
+        faz: 1 as const,
+        grupoId: 'T',
+      },
     ],
     // Sin anillado: este spec verifica la ARITMÉTICA de impresión. Si el tomo
     // anillara (default) y hay anilladora cargada en paralelo, el subtotal del
@@ -101,4 +147,92 @@ it('cotiza sueltos + un tomo: aritmética, agrupación y totales', async () => {
   // Precios coherentes.
   expect(r.totales.subtotal).toBeGreaterThan(0);
   expect(r.totales.total).toBeGreaterThanOrEqual(r.totales.subtotal);
+});
+
+it('rechaza medidas que no coinciden con el formato declarado', async () => {
+  if (!tenantId) return;
+  await expect(
+    service.cotizar(tenantId, {
+      documentos: [
+        {
+          id: 'formato-adulterado',
+          paginas: 1,
+          copias: 1,
+          tamano: 'A4',
+          tamanoAnchoMm: 297,
+          tamanoAltoMm: 420,
+          papelMateriaPrimaId: papel,
+          color: 'BN',
+          faz: 1,
+        },
+      ],
+    }),
+  ).rejects.toThrow('no coincide con el catálogo');
+});
+
+it('aplica y deja snapshot del precio especial del cliente en Carga rápida', async () => {
+  if (!tenantId) return;
+
+  await service.getConfig(tenantId);
+  const producto = await prisma.producto.findUniqueOrThrow({
+    where: {
+      tenantId_codigo: { tenantId, codigo: CC_PRODUCTO_CODIGO },
+    },
+    select: { id: true },
+  });
+  const sufijo = randomUUID().slice(0, 8);
+  const cliente = await prisma.cliente.create({
+    data: {
+      tenantId,
+      nombre: `Cliente CC especial ${sufijo}`,
+      emailPrincipal: `cc-${sufijo}@test.local`,
+      telefonoCodigo: '11',
+      telefonoNumero: '55550000',
+      paisCodigo: 'AR',
+    },
+  });
+  const especial = await prisma.productoPrecioEspecialClienteV2.create({
+    data: {
+      tenantId,
+      productoId: producto.id,
+      clienteId: cliente.id,
+      configJson: {
+        metodoCalculo: 'por_margen',
+        detalle: { marginPct: 5 },
+      },
+    },
+  });
+
+  try {
+    const r = await service.construirItems(
+      tenantId,
+      {
+        clienteId: cliente.id,
+        documentos: [
+          {
+            id: 'especial-cliente',
+            paginas: 2,
+            copias: 1,
+            tamano: 'A4',
+            tamanoAnchoMm: 210,
+            tamanoAltoMm: 297,
+            papelMateriaPrimaId: papel,
+            color: 'BN',
+            faz: 1,
+          },
+        ],
+      },
+      '2026-03',
+    );
+
+    expect(r.items[0].error).toBeNull();
+    expect(
+      r.items[0].cotizacion?.desglosePrecio?.precioEspecialCliente,
+    ).toEqual({ precioEspecialId: especial.id, clienteId: cliente.id });
+  } finally {
+    await prisma.productoPrecioEspecialClienteV2.delete({
+      where: { id: especial.id },
+    });
+    await prisma.cliente.delete({ where: { id: cliente.id } });
+  }
 });

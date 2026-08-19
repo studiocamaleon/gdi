@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Post,
   Put,
@@ -16,6 +17,9 @@ import {
 import { ActualizarCentroCopiadoConfigDto } from './dto/centro-copiado-config.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
+import { SuscripcionesService } from '../suscripciones/suscripciones.service';
+import { CentroCopiadoSaludService } from './centro-copiado-salud.service';
+import { CentroCopiadoAuditoriaService } from './centro-copiado-auditoria.service';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -25,29 +29,39 @@ interface RequestWithAuth extends Request {
 @Permiso('comercial.ver')
 @Controller('centro-copiado')
 export class CentroCopiadoController {
-  constructor(private readonly centroCopiado: CentroCopiadoService) {}
+  constructor(
+    private readonly centroCopiado: CentroCopiadoService,
+    private readonly suscripciones: SuscripcionesService,
+    private readonly saludCentroCopiado: CentroCopiadoSaludService,
+    private readonly auditoriaCentroCopiado: CentroCopiadoAuditoriaService,
+  ) {}
 
-  /** GET /centro-copiado/estado — si el módulo está activo (para el botón/atajo). */
-  @Get('estado')
-  async estado(@Req() req: RequestWithAuth) {
+  private async tenantHabilitado(req: RequestWithAuth): Promise<string> {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) {
       throw new UnauthorizedException(
         'Falta tenant en el contexto de autenticación',
       );
     }
+    if (!(await this.suscripciones.feature(tenantId, 'centroCopiado'))) {
+      throw new ForbiddenException(
+        'El plan actual no incluye el Centro de Copiado.',
+      );
+    }
+    return tenantId;
+  }
+
+  /** GET /centro-copiado/estado — si el módulo está activo (para el botón/atajo). */
+  @Get('estado')
+  async estado(@Req() req: RequestWithAuth) {
+    const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.estado(tenantId);
   }
 
   /** GET /centro-copiado/opciones — papeles disponibles para el modal. */
   @Get('opciones')
   async opciones(@Req() req: RequestWithAuth) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) {
-      throw new UnauthorizedException(
-        'Falta tenant en el contexto de autenticación',
-      );
-    }
+    const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.opciones(tenantId);
   }
 
@@ -62,12 +76,7 @@ export class CentroCopiadoController {
     @Body() dto: CotizarCentroCopiadoDto,
     @Req() req: RequestWithAuth,
   ) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) {
-      throw new UnauthorizedException(
-        'Falta tenant en el contexto de autenticación',
-      );
-    }
+    const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.cotizar(tenantId, dto);
   }
 
@@ -83,12 +92,7 @@ export class CentroCopiadoController {
     @Body() dto: AgregarAOrdenCentroCopiadoDto,
     @Req() req: RequestWithAuth,
   ) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) {
-      throw new UnauthorizedException(
-        'Falta tenant en el contexto de autenticación',
-      );
-    }
+    const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.construirItems(tenantId, dto);
   }
 
@@ -104,33 +108,23 @@ export class CentroCopiadoController {
     @Body() dto: AgregarAOrdenCentroCopiadoDto,
     @Req() req: RequestWithAuth,
   ) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) {
-      throw new UnauthorizedException(
-        'Falta tenant en el contexto de autenticación',
-      );
-    }
+    const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.guardarTomo(tenantId, dto);
   }
 
   /**
    * POST /centro-copiado/agregar-a-orden
    *
-   * Persiste la carga como N CotizacionItem (un renglón por documento) en una
-   * cotización borrador. No crea la OrdenTrabajo: eso sigue el flujo normal.
-   * (Camino alternativo/eager; el modal usa el flujo de staging con construir-items.)
+   * Persiste la carga en una cotización borrador con la misma representación
+   * canónica del staging: un ítem por suelto y uno por tomo compuesto. No crea
+   * la OrdenTrabajo: eso sigue el flujo normal.
    */
   @Post('agregar-a-orden')
   async agregarAOrden(
     @Body() dto: AgregarAOrdenCentroCopiadoDto,
     @Req() req: RequestWithAuth,
   ) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) {
-      throw new UnauthorizedException(
-        'Falta tenant en el contexto de autenticación',
-      );
-    }
+    const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.agregarAOrden(tenantId, dto);
   }
 
@@ -141,13 +135,16 @@ export class CentroCopiadoController {
   @Get('config')
   @Permiso('costos.gestionar')
   async getConfig(@Req() req: RequestWithAuth) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) {
-      throw new UnauthorizedException(
-        'Falta tenant en el contexto de autenticación',
-      );
-    }
+    const tenantId = await this.tenantHabilitado(req);
     return this.centroCopiado.getConfig(tenantId);
+  }
+
+  /** Diagnóstico operativo: nunca repara ni provisiona durante la lectura. */
+  @Get('salud')
+  @Permiso('costos.gestionar')
+  async salud(@Req() req: RequestWithAuth) {
+    const tenantId = await this.tenantHabilitado(req);
+    return this.saludCentroCopiado.obtener(tenantId);
   }
 
   /** PUT /centro-copiado/config — actualiza la curación del módulo. */
@@ -157,12 +154,31 @@ export class CentroCopiadoController {
     @Body() dto: ActualizarCentroCopiadoConfigDto,
     @Req() req: RequestWithAuth,
   ) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) {
-      throw new UnauthorizedException(
-        'Falta tenant en el contexto de autenticación',
-      );
-    }
-    return this.centroCopiado.actualizarConfig(tenantId, dto);
+    const tenantId = await this.tenantHabilitado(req);
+    return this.centroCopiado.actualizarConfig(tenantId, dto, req.auth?.userId);
+  }
+
+  /** POST explícito: crea/repara la plantilla; ningún GET escribe datos. */
+  @Post('inicializar')
+  @Permiso('costos.gestionar')
+  async inicializar(@Req() req: RequestWithAuth) {
+    const tenantId = await this.tenantHabilitado(req);
+    return this.centroCopiado.inicializar(tenantId, req.auth?.userId);
+  }
+
+  /** Reparación explícita e idempotente de la infraestructura del módulo. */
+  @Post('reparar')
+  @Permiso('costos.gestionar')
+  async reparar(@Req() req: RequestWithAuth) {
+    const tenantId = await this.tenantHabilitado(req);
+    await this.centroCopiado.reparar(tenantId, req.auth?.userId);
+    return this.saludCentroCopiado.obtener(tenantId);
+  }
+
+  @Get('historial')
+  @Permiso('costos.gestionar')
+  async historial(@Req() req: RequestWithAuth) {
+    const tenantId = await this.tenantHabilitado(req);
+    return this.auditoriaCentroCopiado.listar(tenantId);
   }
 }

@@ -91,6 +91,53 @@ describe('OrdenesTrabajoService — idempotencia de creación', () => {
   });
 });
 
+describe('edición de carga rápida — conservación de archivos', () => {
+  it('reasigna los adjuntos antes de borrar los items reemplazados', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const deleteMany = jest.fn().mockResolvedValue({ count: 2 });
+    const service = svc() as unknown as {
+      reemplazarItemsConservandoArchivos: (
+        tx: unknown,
+        tenantId: string,
+        ordenId: string,
+        eliminados: string[],
+        transferencias: Array<{ destinoId: string; origenIds: string[] }>,
+      ) => Promise<void>;
+    };
+
+    await service.reemplazarItemsConservandoArchivos(
+      { archivo: { updateMany }, ordenTrabajoItem: { deleteMany } },
+      'tenant-1',
+      'orden-1',
+      ['item-viejo-1', 'item-viejo-2'],
+      [
+        {
+          destinoId: 'item-nuevo',
+          origenIds: ['item-viejo-1', 'item-viejo-2'],
+        },
+      ],
+    );
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        scope: 'ORDEN_ITEM',
+        ordenItemId: { in: ['item-viejo-1', 'item-viejo-2'] },
+      },
+      data: { ordenItemId: 'item-nuevo' },
+    });
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: {
+        ordenId: 'orden-1',
+        id: { in: ['item-viejo-1', 'item-viejo-2'] },
+      },
+    });
+    expect(updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteMany.mock.invocationCallOrder[0],
+    );
+  });
+});
+
 describe('OrdenesTrabajoService — validarTransicion', () => {
   const casosValidos: Array<[OrdenTrabajoEstado, OrdenTrabajoEstado]> = [
     ['borrador', 'pendiente'],

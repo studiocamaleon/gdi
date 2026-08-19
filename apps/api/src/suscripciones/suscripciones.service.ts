@@ -36,9 +36,8 @@ export type LimitesPlan = {
 type Features = {
   afip?: boolean;
   whatsapp?: boolean;
-  /** Módulo Centro de copiado (TPV de impresión por hoja). El guard aún NO se
-   *  enforcea: encenderlo requiere marcar los planes que lo incluyen para no
-   *  apagarlo a quien ya lo usa. Ver docs/centro-copiado-modulo-configurable-diseno.md. */
+  /** Módulo Centro de copiado (TPV de impresión por hoja). Actualmente
+   * incluido en Diamante; tenants legacy sin suscripción conservan acceso. */
   centroCopiado?: boolean;
   usuariosMax?: number;
   ordenesMesMax?: number;

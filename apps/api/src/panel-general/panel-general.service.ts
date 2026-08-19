@@ -181,7 +181,10 @@ export class PanelGeneralService {
     const cobra = permisos.has('administracion.cobrar');
     const aprueba = permisos.has('comercial.aprobar_descuento');
     const perfilSoloProductivo =
-      gestionaProduccion && !veComercial && !gestionaAdministracion;
+      veProduccion &&
+      (gestionaProduccion || permisos.has('produccion.ejecutar')) &&
+      !veComercial &&
+      !gestionaAdministracion;
     const comercialSoloPropio =
       gestionaComercial &&
       !gestionaAdministracion &&

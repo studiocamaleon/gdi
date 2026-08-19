@@ -17,10 +17,45 @@ let papel: string;
 
 const dtoTomo = () => ({
   documentos: [
-    { id: 'C', nombre: 'Contrato.pdf', paginas: 10, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const, grupoId: 'T' },
-    { id: 'E', nombre: 'Escritura.pdf', paginas: 6, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 1 as const, grupoId: 'T' },
+    {
+      id: 'C',
+      nombre: 'Contrato.pdf',
+      paginas: 10,
+      copias: 1,
+      tamano: 'A4',
+      tamanoAnchoMm: 210,
+      tamanoAltoMm: 297,
+      papelMateriaPrimaId: papel,
+      color: 'BN' as const,
+      faz: 2 as const,
+      grupoId: 'T',
+    },
+    {
+      id: 'E',
+      nombre: 'Escritura.pdf',
+      paginas: 6,
+      copias: 1,
+      tamano: 'A4',
+      tamanoAnchoMm: 210,
+      tamanoAltoMm: 297,
+      papelMateriaPrimaId: papel,
+      color: 'BN' as const,
+      faz: 1 as const,
+      grupoId: 'T',
+    },
     // Un suelto para verificar que NO se colapsa.
-    { id: 'S', nombre: 'Suelto.pdf', paginas: 4, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 1 as const },
+    {
+      id: 'S',
+      nombre: 'Suelto.pdf',
+      paginas: 4,
+      copias: 1,
+      tamano: 'A4',
+      tamanoAnchoMm: 210,
+      tamanoAltoMm: 297,
+      papelMateriaPrimaId: papel,
+      color: 'BN' as const,
+      faz: 1 as const,
+    },
   ],
   // Sin terminaciones: verifica el COLAPSO del tomo, no el anillado (que sumaría
   // un renglón aparte si hay anilladora cargada en paralelo).
@@ -28,7 +63,9 @@ const dtoTomo = () => ({
 });
 
 beforeAll(async () => {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: 'gdi-demo' },
+  });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
   const motor = new MotorUniversalService(
@@ -67,10 +104,14 @@ it('construir-items colapsa el tomo en UN item compuesto (+ el suelto aparte)', 
   expect(tomo.cotizacion).not.toBeNull();
   // Agrega los 2 sub-documentos: al menos 2 pasos de impresión concatenados.
   const pasos =
-    (tomo.cotizacion as { pasos?: { familiaCodigo?: string; rutaPasoOrden?: number }[] })
-      .pasos ?? [];
-  expect(pasos.filter((p) => p.familiaCodigo === 'impresion_por_hoja').length)
-    .toBeGreaterThanOrEqual(2);
+    (
+      tomo.cotizacion as {
+        pasos?: { familiaCodigo?: string; rutaPasoOrden?: number }[];
+      }
+    ).pasos ?? [];
+  expect(
+    pasos.filter((p) => p.familiaCodigo === 'impresion_por_hoja').length,
+  ).toBeGreaterThanOrEqual(2);
   // rutaPasoOrden re-indexado y único (si no, la ficha colisiona keys de React).
   const ordenes = pasos.map((p) => p.rutaPasoOrden);
   expect(new Set(ordenes).size).toBe(ordenes.length);
@@ -92,7 +133,7 @@ it('construir-items colapsa el tomo en UN item compuesto (+ el suelto aparte)', 
   expect(iibb).toBeGreaterThanOrEqual(-1); // no negativo (salvo redondeo)
   expect(iibb / dg.precioNetoTotal).toBeLessThan(0.3); // no el 65% del bug
   // Especificaciones del tomo.
-  expect(tomo.especificaciones['Terminación']).toBe('Anillado');
+  expect(tomo.especificaciones['Terminación']).toBe('Ninguna');
   expect(tomo.especificaciones['Documentos']).toBe('2');
   expect(tomo.especificaciones['Documento 1']).toContain('Contrato.pdf');
   expect(tomo.cantidad).toBe(2); // juegos
@@ -107,7 +148,10 @@ it('guardar-tomo persiste UN CotizacionItem con pasos concatenados y metadata', 
   const dto = dtoTomo();
   const r = await service.guardarTomo(
     tenantId,
-    { documentos: dto.documentos.filter((d) => d.grupoId === 'T'), grupos: dto.grupos },
+    {
+      documentos: dto.documentos.filter((d) => d.grupoId === 'T'),
+      grupos: dto.grupos,
+    },
     '2026-03',
   );
   expect(r.error).toBeNull();
@@ -117,16 +161,51 @@ it('guardar-tomo persiste UN CotizacionItem con pasos concatenados y metadata', 
   const ci = await prisma.cotizacionItem.findUniqueOrThrow({
     where: { id: r.cotizacionItemId! },
   });
-  const pasos = (ci.trazabilidadJson as { pasos?: { familiaCodigo?: string }[] })
-    .pasos ?? [];
-  expect(pasos.filter((p) => p.familiaCodigo === 'impresion_por_hoja').length)
-    .toBeGreaterThanOrEqual(2);
-  const meta = (ci.jobContextJson as { _centroCopiado?: { esTomo?: boolean; segmentos?: unknown[] } })
-    ._centroCopiado;
+  const pasos =
+    (ci.trazabilidadJson as { pasos?: { familiaCodigo?: string }[] }).pasos ??
+    [];
+  expect(
+    pasos.filter((p) => p.familiaCodigo === 'impresion_por_hoja').length,
+  ).toBeGreaterThanOrEqual(2);
+  const meta = (
+    ci.jobContextJson as {
+      _centroCopiado?: { esTomo?: boolean; segmentos?: unknown[] };
+    }
+  )._centroCopiado;
   expect(meta?.esTomo).toBe(true);
   expect(meta?.segmentos).toHaveLength(2);
   expect(Number(ci.costoTotal)).toBeGreaterThan(0);
   expect(Number(ci.precioNetoTotal)).toBe(r.subtotal);
   expect(Number(ci.impuestosPorFueraTotal)).toBe(r.iva);
   expect(Number(ci.precioTotal)).toBe(r.total);
+});
+
+it('un fallo de cotización no deja una cotización vacía', async () => {
+  if (!tenantId) return;
+  const antes = await prisma.cotizacion.count({ where: { tenantId } });
+  const motorFallido = {
+    cotizar: jest.fn().mockResolvedValue({
+      exitoso: false,
+      errores: [{ mensaje: 'fallo inducido del motor' }],
+    }),
+  };
+  const servicioFallido = new CentroCopiadoService(
+    prisma as never,
+    motorFallido as never,
+  );
+  const dto = dtoTomo();
+
+  const resultado = await servicioFallido.guardarTomo(
+    tenantId,
+    {
+      documentos: dto.documentos.filter((d) => d.grupoId === 'T'),
+      grupos: dto.grupos,
+    },
+    '2026-03',
+  );
+
+  expect(resultado.error).toContain('fallo inducido');
+  await expect(prisma.cotizacion.count({ where: { tenantId } })).resolves.toBe(
+    antes,
+  );
 });

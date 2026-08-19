@@ -10,6 +10,7 @@ import {
   type DocumentoCentroCopiado,
   type ColorDoc,
   type FazDoc,
+  metaCentroCopiado,
 } from "@/lib/centro-copiado-api";
 import { formatCurrency } from "@/lib/propuestas";
 import type { PropuestaItem } from "@/lib/propuestas";
@@ -35,11 +36,6 @@ type Seg = {
   gramaje?: number | null;
   color?: ColorDoc;
   faz?: FazDoc;
-};
-type CcMeta = Seg & {
-  esTomo?: boolean;
-  juegos?: number;
-  segmentos?: Seg[];
 };
 
 /** Una config con sus montos consolidados en la OT. */
@@ -129,8 +125,7 @@ export default function CentroCopiadoPreciosSheet({
     const documentos: DocumentoCentroCopiado[] = [];
     const configPorId = new Map<string, Config>();
     for (const it of items) {
-      const meta = (it.jobContext as { _centroCopiado?: CcMeta } | undefined)
-        ?._centroCopiado;
+      const meta = metaCentroCopiado(it.jobContext);
       if (!meta) continue;
       const segs: Seg[] =
         meta.esTomo && meta.segmentos?.length
@@ -269,7 +264,8 @@ export default function CentroCopiadoPreciosSheet({
             <div className={s.eyebrow}>Centro de copiado</div>
             <h2 className={s.titulo}>Precios de impresión</h2>
             <p className={s.sub}>
-              Precio por hoja de cada papel y configuración (neto y final con IVA).
+              Precio por hoja de cada papel y configuración (neto y final con
+              IVA).
             </p>
           </div>
           <button
@@ -331,7 +327,8 @@ export default function CentroCopiadoPreciosSheet({
                   })}
                   <div className={s.papelTotal}>
                     <span className={s.papelTotalLbl}>
-                      Subtotal {g.papelLabel} · prom. {formatCurrency(subHoja.neto, moneda)}/hoja
+                      Subtotal {g.papelLabel} · prom.{" "}
+                      {formatCurrency(subHoja.neto, moneda)}/hoja
                     </span>
                     <span className={s.sub2Neto}>
                       {formatCurrency(g.netoTotal, moneda)}
