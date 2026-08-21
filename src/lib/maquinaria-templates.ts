@@ -1290,6 +1290,165 @@ function buildRouterCncSections(): MaquinariaTemplateSection[] {
   ];
 }
 
+function buildCorteHiloCalienteSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Área de recorrido",
+      description:
+        "Límites físicos dentro de los que puede desplazarse el hilo.",
+      fields: [
+        field({
+          key: "anchoUtil",
+          label: "Recorrido X",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          required: true,
+          placeholder: "1250",
+        }),
+        field({
+          key: "largoUtil",
+          label: "Recorrido Y",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          required: true,
+          placeholder: "600",
+        }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Control y archivo de máquina",
+      description:
+        "Define cómo se transforma el recorrido de corte en un archivo ejecutable.",
+      fields: [
+        field({
+          key: "postprocesadorRecorrido",
+          label: "Postprocesador",
+          scope: "maquina",
+          kind: "select",
+          required: true,
+          options: [option("HOTWIRE_TAP_V1", "TAP · Hotwire / GRBL")],
+        }),
+        field({
+          key: "origenMaquina",
+          label: "Origen",
+          scope: "maquina",
+          kind: "select",
+          required: true,
+          options: [
+            option("bottom-left", "Inferior izquierdo"),
+            option("bottom-right", "Inferior derecho"),
+            option("top-left", "Superior izquierdo"),
+            option("top-right", "Superior derecho"),
+          ],
+        }),
+        field({
+          key: "estrategiaOrigen",
+          label: "Referencia de inicio",
+          scope: "maquina",
+          kind: "select",
+          options: [
+            option("geometry-bounds", "Cerca de las piezas"),
+            option("plate-corner", "Esquina de la placa"),
+          ],
+        }),
+        field({
+          key: "estrategiaNestingVectorial",
+          label: "Cuando el cartel completo entra en una placa",
+          scope: "maquina",
+          kind: "select",
+          options: [
+            option(
+              "preserve-original-if-fits",
+              "Conservar la composición original",
+              "Mantiene posiciones y orientación para usar el negativo como molde.",
+            ),
+            option(
+              "optimize-material",
+              "Optimizar el uso del material",
+              "Reacomoda las piezas para ocupar el menor espacio posible.",
+            ),
+          ],
+          description:
+            "Si el vector completo no entra en el área útil, el sistema siempre vuelve al nesting optimizado con segmentación.",
+        }),
+        field({
+          key: "entradaMm",
+          label: "Entrada al material",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "8",
+        }),
+        field({
+          key: "decimalesTap",
+          label: "Decimales del TAP",
+          scope: "maquina",
+          kind: "number",
+          placeholder: "6",
+        }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Velocidades de corte",
+      description:
+        "Una velocidad en mm/min por material o espesor. La misma velocidad calcula el tiempo y genera la instrucción F del TAP.",
+      fields: [
+        field({
+          key: "nombre",
+          label: "Nombre del perfil",
+          scope: "perfil_operativo",
+          kind: "text",
+          required: true,
+          placeholder: "Polyfan estándar",
+        }),
+        field({
+          key: "material",
+          label: "Material",
+          scope: "perfil_operativo",
+          kind: "text",
+          placeholder: "Polyfan",
+        }),
+        field({
+          key: "espesorMinMm",
+          label: "Espesor mín.",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+        }),
+        field({
+          key: "espesorMaxMm",
+          label: "Espesor máx.",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+        }),
+        field({
+          key: "productivityValue",
+          label: "Velocidad de corte",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm_min",
+          required: true,
+          placeholder: "350",
+        }),
+        field({
+          key: "setupMin",
+          label: "Preparación",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "min",
+          placeholder: "5",
+        }),
+      ],
+    }),
+  ];
+}
+
 /** §13 — ANILLADORA con discriminante tipoAnillo. */
 function buildAnilladoraSections(): MaquinariaTemplateSection[] {
   return [
@@ -1837,6 +1996,28 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
         "Declarar operacionesSoportadas según las herramientas disponibles.",
       ],
       examples: ["Felder F500 CNC, ShopBot, AXYZ"],
+    },
+  }),
+  template({
+    id: "corte_hilo_caliente",
+    label: "Cortadora de hilo caliente",
+    family: "corte_mecanizado",
+    description:
+      "Corte vectorial continuo de Polyfan y espumas mediante archivo TAP.",
+    geometry: "plano",
+    defaultProductionUnit: "mm_min",
+    allowedProfileTypes: ["corte"],
+    visibleSections: commonTemplateSections,
+    sections: buildCorteHiloCalienteSections(),
+    help: {
+      summary:
+        "El recorrido CORTE enlaza contornos y el postprocesador genera un TAP con la velocidad del perfil.",
+      tips: [
+        "Cargá la velocidad real en mm/min para que tiempo, costo, simulación y TAP coincidan.",
+        "El área X/Y pertenece a la máquina; el margen sin usar pertenece a la placa de material.",
+        "Podés conservar la composición del SVG para reutilizar el negativo de la placa como molde de colocación.",
+      ],
+      examples: ["Corporearte 1250 × 600 mm"],
     },
   }),
   template({

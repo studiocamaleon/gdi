@@ -32,6 +32,7 @@ export type FamiliaCodigo =
   | 'cnc'
   | 'plegado'
   | 'corte_manual' // [Fase E]
+  | 'corte_hilo_caliente'
   // Terminaciones
   | 'laminado'
   | 'plastificado_pouch'
@@ -395,13 +396,15 @@ export type SuperficieNesting =
  *  - `montaje`: piezas propias o de outputs previos sobre otro sustrato.
  *  - `pliego_digital`: grid 2D single sobre pliego; si el paso tiene
  *    imposición de caballete configurada, corre el caballete.
+ *  - `irregular_placa`: contornos vectoriales sobre placa finita.
  */
 export type EstrategiaNesting =
   | 'corte_rollo'
   | 'laminado_rollo'
   | 'pouch'
   | 'montaje'
-  | 'pliego_digital';
+  | 'pliego_digital'
+  | 'irregular_placa';
 
 /**
  * Guard del motor cuando el acomodado declarado NO produjo layout: qué
@@ -459,6 +462,9 @@ export interface DefinicionFamilia {
   descripcion?: string;
   /** Si false, queda disponible para productos existentes pero no aparece al crear pasos nuevos. */
   visibleEnSelector?: boolean;
+  /** Herramientas que el cotizador debe montar por requerimiento del proceso,
+   *  no por una bandera particular del producto. */
+  herramientasCotizacion?: Array<'diseno_vectorial'>;
 
   // --- Comportamiento ---
   /** Tipos de relación máquina soportados. La mayoría tiene una sola, algunas pueden ser ['M-1', 'M-2'] o ['M-0', 'M-1']. */
@@ -552,7 +558,7 @@ export interface DefinicionFamilia {
    *  cantidad cuenta (montaje cuenta piezas a montar; instalación mide m²).
    *  [Tanda C: eran tres funciones con nombres cableados en el editor] */
   ritmoDefault?: {
-    unidad?: 'unidades_h' | 'm2_h' | 'ml_h';
+    unidad?: 'unidades_h' | 'm2_h' | 'ml_h' | 'mm_min';
     modoCalculo?: 'productivity' | 'batch_time';
     fuenteCantidad?: string;
   };

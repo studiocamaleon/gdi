@@ -15,6 +15,7 @@ export type PlantillaMaquinaria =
   | "laminadora_bopp_rollo"
   | "corte_laser"
   | "router_cnc"
+  | "corte_hilo_caliente"
   | "anilladora"
   | "mesa_de_corte"
   | "plancha_termica"

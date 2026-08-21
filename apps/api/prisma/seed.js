@@ -18,6 +18,9 @@ const { seedMaquinas } = require("./seed-modulos/maquinas");
 const { seedMaterialPresets } = require("./seed-modulos/material-presets");
 const { seedMateriales } = require("./seed-modulos/materiales");
 const { seedRutasYProductos } = require("./seed-modulos/rutas-productos");
+const {
+  provisionPolyfanProduct,
+} = require("./seed-modulos/polyfan-producto");
 
 /**
  * El seed EMPIEZA BORRANDO TODO. Por eso no corre en cualquier base: sólo en
@@ -618,6 +621,7 @@ async function main() {
     materialesCreados,
     catalogoComercial,
   );
+  await provisionPolyfanProduct(prisma, tenant.id);
 
   console.info("");
   console.info("✅ Seed COMPLETADO.");
@@ -628,10 +632,12 @@ async function main() {
   console.info("");
   console.info("Modelo Universal V2 cargado:");
   console.info("  • 7 máquinas + perfiles operativos");
-  console.info("  • 11 materias primas + variantes");
+  console.info("  • 12 materias primas + variantes");
   console.info("  • 5 cargos directos catálogo");
-  console.info("  • 5 rutas de producción");
-  console.info("  • 4 productos validados (Tarjetas, Vinilo, Talonarios, Rígidos)");
+  console.info("  • 6 rutas de producción");
+  console.info(
+    "  • 5 productos validados (Tarjetas, Vinilo, Talonarios, Rígidos, Polyfan)",
+  );
 }
 
 main()

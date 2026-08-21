@@ -1,0 +1,8145 @@
+{
+  "version": "1.0.0",
+  "profile": {
+    "id": "corporearte-polifan-grbl-vectorlinker",
+    "name": "Corporearte · cortadora de polifan 1250 × 600 mm",
+    "bedWidthMm": 1250,
+    "bedHeightMm": 600,
+    "feedRateMmPerMin": 350,
+    "decimals": 6,
+    "originCorner": "bottom-left",
+    "originStrategy": "geometry-bounds",
+    "originLeadInMm": 8,
+    "lineEnding": "CRLF",
+    "headerLines": [
+      "G17 G90 G21",
+      "G94",
+      "G92 X0 Y0 Z0",
+      "G54",
+      "T08",
+      "G00 S0 M03",
+      "Z.24"
+    ],
+    "feedCommand": "G1 F",
+    "trailingSpaceAfterFeed": true,
+    "duplicateInitialOriginLines": 2,
+    "footerLines": [],
+    "finalBlankLines": 1,
+    "strictBounds": true,
+    "calibration": {
+      "source": "andina.tap generado por VectorLinker",
+      "notes": "Origen inferior izquierdo, X hacia la derecha, Y hacia arriba, seis decimales y salida CRLF. Primera prueba física obligatoriamente en seco."
+    }
+  },
+  "originSvg": {
+    "x": 2,
+    "y": 414.463
+  },
+  "bridges": [
+    {
+      "id": "bridge-origin-1",
+      "kind": "origin",
+      "aNodeId": "__origin__",
+      "bNodeId": "pieza-5-6-1",
+      "b": {
+        "contourId": "pieza-5-6-1",
+        "segmentIndex": 4,
+        "t": 0.24294369162049573,
+        "point": {
+          "x": 31.981728262724737,
+          "y": 314.5658970069716
+        }
+      },
+      "originPoint": {
+        "x": 2,
+        "y": 414.463
+      },
+      "length": 104.29925798403166,
+      "score": 104.29925798403166
+    },
+    {
+      "id": "bridge-external-1",
+      "kind": "external",
+      "aNodeId": "pieza-1-1-1",
+      "bNodeId": "pieza-2-2-1",
+      "a": {
+        "contourId": "pieza-1-1-1",
+        "segmentIndex": 46,
+        "t": 0.5463559742191374,
+        "point": {
+          "x": 253.836,
+          "y": 131.392
+        }
+      },
+      "b": {
+        "contourId": "pieza-2-2-1",
+        "segmentIndex": 69,
+        "t": 0,
+        "point": {
+          "x": 258.836,
+          "y": 131.392
+        }
+      },
+      "length": 5,
+      "score": 5
+    },
+    {
+      "id": "bridge-external-2",
+      "kind": "external",
+      "aNodeId": "pieza-2-2-1",
+      "bNodeId": "pieza-6-3-1",
+      "a": {
+        "contourId": "pieza-2-2-1",
+        "segmentIndex": 245,
+        "t": 0,
+        "point": {
+          "x": 767.968,
+          "y": 26.206
+        }
+      },
+      "b": {
+        "contourId": "pieza-6-3-1",
+        "segmentIndex": 3,
+        "t": 0.7553589759072519,
+        "point": {
+          "x": 772.968,
+          "y": 26.20600000000001
+        }
+      },
+      "length": 5,
+      "score": 5
+    },
+    {
+      "id": "bridge-external-3",
+      "kind": "external",
+      "aNodeId": "pieza-6-3-1",
+      "bNodeId": "pieza-3-4-1",
+      "a": {
+        "contourId": "pieza-6-3-1",
+        "segmentIndex": 14,
+        "t": 0,
+        "point": {
+          "x": 1014.478,
+          "y": 31.546
+        }
+      },
+      "b": {
+        "contourId": "pieza-3-4-1",
+        "segmentIndex": 9,
+        "t": 0.09715383366700936,
+        "point": {
+          "x": 1019.478,
+          "y": 31.546
+        }
+      },
+      "length": 5,
+      "score": 5
+    },
+    {
+      "id": "bridge-external-4",
+      "kind": "external",
+      "aNodeId": "pieza-6-3-1",
+      "bNodeId": "pieza-4-5-1",
+      "a": {
+        "contourId": "pieza-6-3-1",
+        "segmentIndex": 24,
+        "t": 0,
+        "point": {
+          "x": 992.821,
+          "y": 165.04
+        }
+      },
+      "b": {
+        "contourId": "pieza-4-5-1",
+        "segmentIndex": 3,
+        "t": 0.9103266945468099,
+        "point": {
+          "x": 992.821,
+          "y": 170.04
+        }
+      },
+      "length": 5,
+      "score": 5
+    },
+    {
+      "id": "bridge-external-5",
+      "kind": "external",
+      "aNodeId": "pieza-1-1-1",
+      "bNodeId": "pieza-5-6-1",
+      "a": {
+        "contourId": "pieza-1-1-1",
+        "segmentIndex": 11,
+        "t": 0.42152844744455165,
+        "point": {
+          "x": 37.976,
+          "y": 251.509
+        }
+      },
+      "b": {
+        "contourId": "pieza-5-6-1",
+        "segmentIndex": 24,
+        "t": 0,
+        "point": {
+          "x": 37.976,
+          "y": 256.51
+        }
+      },
+      "length": 5.001000000000005,
+      "score": 5.001000000000005
+    },
+    {
+      "id": "bridge-external-6",
+      "kind": "external",
+      "aNodeId": "pieza-1-1-1",
+      "bNodeId": "pieza-7-7-1",
+      "a": {
+        "contourId": "pieza-1-1-1",
+        "segmentIndex": 12,
+        "t": 0,
+        "point": {
+          "x": 76.368,
+          "y": 251.509
+        }
+      },
+      "b": {
+        "contourId": "pieza-7-7-1",
+        "segmentIndex": 4,
+        "t": 0,
+        "point": {
+          "x": 76.416,
+          "y": 256.51
+        }
+      },
+      "length": 5.001230348624231,
+      "score": 5.001230348624231
+    },
+    {
+      "id": "bridge-internal-1",
+      "kind": "internal",
+      "aNodeId": "pieza-6-3-1",
+      "bNodeId": "pieza-6-3-2",
+      "a": {
+        "contourId": "pieza-6-3-1",
+        "segmentIndex": 14,
+        "t": 0.4997274717419469,
+        "point": {
+          "x": 1014.478,
+          "y": 87.473
+        }
+      },
+      "b": {
+        "contourId": "pieza-6-3-2",
+        "segmentIndex": 8,
+        "t": 0,
+        "point": {
+          "x": 985.586,
+          "y": 87.473
+        }
+      },
+      "length": 28.89199999999994,
+      "score": 28.89199999999994
+    },
+    {
+      "id": "bridge-internal-2",
+      "kind": "internal",
+      "aNodeId": "pieza-4-5-1",
+      "bNodeId": "pieza-4-5-2",
+      "a": {
+        "contourId": "pieza-4-5-1",
+        "segmentIndex": 4,
+        "t": 0.5799946141647467,
+        "point": {
+          "x": 1014.478,
+          "y": 247.576
+        }
+      },
+      "b": {
+        "contourId": "pieza-4-5-2",
+        "segmentIndex": 7,
+        "t": 0,
+        "point": {
+          "x": 985.713,
+          "y": 247.576
+        }
+      },
+      "length": 28.764999999999986,
+      "score": 28.764999999999986
+    },
+    {
+      "id": "bridge-internal-3",
+      "kind": "internal",
+      "aNodeId": "pieza-5-6-1",
+      "bNodeId": "pieza-5-6-2",
+      "a": {
+        "contourId": "pieza-5-6-1",
+        "segmentIndex": 9,
+        "t": 0.8598895704384528,
+        "point": {
+          "x": 13.876534208850682,
+          "y": 300.77287555868946
+        }
+      },
+      "b": {
+        "contourId": "pieza-5-6-2",
+        "segmentIndex": 21,
+        "t": 0,
+        "point": {
+          "x": 17.435,
+          "y": 298.486
+        }
+      },
+      "length": 4.229950189743518,
+      "score": 4.229950189743518
+    },
+    {
+      "id": "bridge-internal-4",
+      "kind": "internal",
+      "aNodeId": "pieza-7-7-1",
+      "bNodeId": "pieza-7-7-2",
+      "a": {
+        "contourId": "pieza-7-7-1",
+        "segmentIndex": 2,
+        "t": 0,
+        "point": {
+          "x": 89.342,
+          "y": 264.13
+        }
+      },
+      "b": {
+        "contourId": "pieza-7-7-2",
+        "segmentIndex": 13,
+        "t": 0.0035718491188078856,
+        "point": {
+          "x": 94.87264995878637,
+          "y": 264.61697546806926
+        }
+      },
+      "length": 5.552047736927786,
+      "score": 5.552047736927786
+    }
+  ],
+  "routeSvg": [
+    {
+      "x": 2,
+      "y": 414.463,
+      "via": "origin"
+    },
+    {
+      "x": 31.981728262724737,
+      "y": 314.5658970069716,
+      "via": "bridge",
+      "bridgeId": "bridge-origin-1"
+    },
+    {
+      "x": 28.98,
+      "y": 313.665,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 25.23,
+      "y": 311.943,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 21.753,
+      "y": 309.716,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 18.609,
+      "y": 307.01,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 15.856,
+      "y": 303.853,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 13.876534208850682,
+      "y": 300.77287555868946,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 17.435,
+      "y": 298.486,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-3"
+    },
+    {
+      "x": 15.752,
+      "y": 294.837,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 14.685,
+      "y": 290.929,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 14.281,
+      "y": 286.997,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 14.509,
+      "y": 283.108,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 15.339,
+      "y": 279.331,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 16.734,
+      "y": 275.73,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 18.667,
+      "y": 272.374,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 21.102,
+      "y": 269.327,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 24.009,
+      "y": 266.658,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 27.355,
+      "y": 264.433,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 31.108,
+      "y": 262.719,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 35.076,
+      "y": 261.623,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 39.065,
+      "y": 261.175,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 43.007,
+      "y": 261.343,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 46.832,
+      "y": 262.093,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 50.47,
+      "y": 263.395,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 53.851,
+      "y": 265.215,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 56.907,
+      "y": 267.522,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 59.565,
+      "y": 270.283,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 61.759,
+      "y": 273.465,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 63.416,
+      "y": 277.037,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 63.561,
+      "y": 277.435,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 64.616,
+      "y": 281.312,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 65.003,
+      "y": 285.214,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 64.757,
+      "y": 289.072,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 63.909,
+      "y": 292.821,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 62.494,
+      "y": 296.396,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 60.545,
+      "y": 299.729,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 58.095,
+      "y": 302.756,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 55.178,
+      "y": 305.41,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 51.827,
+      "y": 307.623,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 48.074,
+      "y": 309.333,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 44.099,
+      "y": 310.436,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 40.11,
+      "y": 310.894,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 36.173,
+      "y": 310.735,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 32.358,
+      "y": 309.989,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 28.729,
+      "y": 308.685,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 25.356,
+      "y": 306.854,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 22.304,
+      "y": 304.524,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 19.641,
+      "y": 301.725,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 17.435,
+      "y": 298.486,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 13.876534208850682,
+      "y": 300.77287555868946,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-3"
+    },
+    {
+      "x": 13.554,
+      "y": 300.271,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 11.761,
+      "y": 296.29,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 10.558,
+      "y": 292.046,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 10,
+      "y": 287.787,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 10.06,
+      "y": 283.57,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 10.712,
+      "y": 279.451,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 11.927,
+      "y": 275.49,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 13.68,
+      "y": 271.743,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 15.944,
+      "y": 268.269,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 18.691,
+      "y": 265.124,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 21.895,
+      "y": 262.366,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 25.527,
+      "y": 260.054,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 29.564,
+      "y": 258.245,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 33.751,
+      "y": 257.061,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 37.976,
+      "y": 256.51,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 37.976,
+      "y": 251.509,
+      "via": "bridge",
+      "bridgeId": "bridge-external-5"
+    },
+    {
+      "x": 76.368,
+      "y": 251.509,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 76.416,
+      "y": 256.51,
+      "via": "bridge",
+      "bridgeId": "bridge-external-6"
+    },
+    {
+      "x": 75.852,
+      "y": 262.949,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 89.342,
+      "y": 264.13,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 94.87264995878637,
+      "y": 264.61697546806926,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-4"
+    },
+    {
+      "x": 94.873,
+      "y": 264.613,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 104.147,
+      "y": 265.425,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 104.032,
+      "y": 266.741,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 103.642,
+      "y": 269.147,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 102.945,
+      "y": 271.001,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 101.943,
+      "y": 272.294,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 100.643,
+      "y": 273.016,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 99.05,
+      "y": 273.157,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 97.574,
+      "y": 272.827,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 96.404,
+      "y": 272.125,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 95.54,
+      "y": 271.056,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 94.981,
+      "y": 269.629,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 94.726,
+      "y": 267.85,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 94.775,
+      "y": 265.726,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 94.87264995878637,
+      "y": 264.61697546806926,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 89.342,
+      "y": 264.13,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-4"
+    },
+    {
+      "x": 74.965,
+      "y": 273.087,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 74.276,
+      "y": 280.968,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 89.509,
+      "y": 271.232,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 89.641,
+      "y": 271.717,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 90.461,
+      "y": 274.072,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 91.865,
+      "y": 276.116,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 93.754,
+      "y": 277.758,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 96.025,
+      "y": 278.904,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 98.578,
+      "y": 279.462,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 100.94,
+      "y": 279.439,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 103.041,
+      "y": 278.938,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 104.877,
+      "y": 277.966,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 106.444,
+      "y": 276.529,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 107.737,
+      "y": 274.634,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 108.752,
+      "y": 272.287,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 109.485,
+      "y": 269.495,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 109.931,
+      "y": 266.263,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 110.523,
+      "y": 259.494,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 76.416,
+      "y": 256.51,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 76.368,
+      "y": 251.509,
+      "via": "bridge",
+      "bridgeId": "bridge-external-6"
+    },
+    {
+      "x": 76.368,
+      "y": 49.839,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 76.68,
+      "y": 47.279,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 77.533,
+      "y": 44.941,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 78.86,
+      "y": 42.886,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 80.595,
+      "y": 41.178,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 82.671,
+      "y": 39.88,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 85.022,
+      "y": 39.056,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 87.582,
+      "y": 38.767,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 90.152,
+      "y": 39.049,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 92.509,
+      "y": 39.857,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 94.59,
+      "y": 41.13,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 96.331,
+      "y": 42.807,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 97.67,
+      "y": 44.829,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 98.544,
+      "y": 47.136,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 98.889,
+      "y": 49.666,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 98.889,
+      "y": 251.51,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 164.992,
+      "y": 251.51,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 164.992,
+      "y": 49.664,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 165.314,
+      "y": 47.134,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 166.171,
+      "y": 44.828,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 167.498,
+      "y": 42.806,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 169.231,
+      "y": 41.129,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 171.306,
+      "y": 39.856,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 173.657,
+      "y": 39.048,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 176.221,
+      "y": 38.765,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 178.773,
+      "y": 39.054,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 181.125,
+      "y": 39.879,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 183.208,
+      "y": 41.177,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 184.952,
+      "y": 42.885,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 186.29,
+      "y": 44.94,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 187.151,
+      "y": 47.278,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 187.467,
+      "y": 49.838,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 187.467,
+      "y": 251.51,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 253.836,
+      "y": 251.51,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 253.836,
+      "y": 131.392,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 258.836,
+      "y": 131.392,
+      "via": "bridge",
+      "bridgeId": "bridge-external-1"
+    },
+    {
+      "x": 259.682,
+      "y": 127.014,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 261.232,
+      "y": 123.197,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 263.404,
+      "y": 119.901,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 266.117,
+      "y": 117.086,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 269.29,
+      "y": 114.712,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 272.843,
+      "y": 112.739,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 276.693,
+      "y": 111.128,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 280.761,
+      "y": 109.839,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 284.964,
+      "y": 108.831,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 289.221,
+      "y": 108.065,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 293.452,
+      "y": 107.501,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 302.474,
+      "y": 107.269,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 310.08,
+      "y": 108.097,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 315.746,
+      "y": 109.228,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 318.946,
+      "y": 109.908,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 321.099,
+      "y": 109.9,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 322.846,
+      "y": 109.287,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 324.216,
+      "y": 108.173,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 325.239,
+      "y": 106.661,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 325.941,
+      "y": 104.856,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 326.352,
+      "y": 102.86,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 326.499,
+      "y": 100.779,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 326.412,
+      "y": 98.716,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 326.118,
+      "y": 96.775,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 325.119,
+      "y": 94.143,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 323.52,
+      "y": 92.157,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 321.431,
+      "y": 90.671,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 318.965,
+      "y": 89.541,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 316.233,
+      "y": 88.62,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 313.347,
+      "y": 87.763,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 309.735,
+      "y": 87.298,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 306.086,
+      "y": 87.735,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 302.493,
+      "y": 88.636,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 299.052,
+      "y": 89.563,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 295.854,
+      "y": 90.078,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 292.995,
+      "y": 89.744,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 289.236,
+      "y": 87.885,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 286.652,
+      "y": 85.626,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 284.271,
+      "y": 82.922,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 281.122,
+      "y": 79.726,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 278.26,
+      "y": 77.498,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 275.425,
+      "y": 75.594,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 272.768,
+      "y": 73.828,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 270.441,
+      "y": 72.013,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 268.594,
+      "y": 69.96,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 267.381,
+      "y": 67.482,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 266.952,
+      "y": 64.393,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 267.347,
+      "y": 61.887,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 268.412,
+      "y": 59.871,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 269.964,
+      "y": 58.19,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 271.819,
+      "y": 56.692,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 273.795,
+      "y": 55.223,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 275.709,
+      "y": 53.628,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 277.379,
+      "y": 51.756,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 278.621,
+      "y": 49.452,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 279.344,
+      "y": 46.879,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 279.734,
+      "y": 44.405,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 280.094,
+      "y": 42.182,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 280.729,
+      "y": 40.361,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 282.862,
+      "y": 37.622,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 285.46,
+      "y": 35.781,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 288.338,
+      "y": 34.325,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 291.309,
+      "y": 32.741,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 294.191,
+      "y": 30.516,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 297.63,
+      "y": 26.196,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 300.464,
+      "y": 21.323,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 302.854,
+      "y": 16.727,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 304.956,
+      "y": 13.238,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 306.93,
+      "y": 11.689,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 306.93,
+      "y": 11.69,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 308.46,
+      "y": 12.16,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 310.181,
+      "y": 13.726,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 312.015,
+      "y": 15.936,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 313.885,
+      "y": 18.338,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 315.715,
+      "y": 20.482,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 317.428,
+      "y": 21.913,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 318.946,
+      "y": 22.181,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 320.783,
+      "y": 20.933,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 322.807,
+      "y": 18.734,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 324.977,
+      "y": 16.135,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 327.252,
+      "y": 13.684,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 329.591,
+      "y": 11.93,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 331.952,
+      "y": 11.423,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 334.367,
+      "y": 14.081,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 337.716,
+      "y": 19.67,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 340.688,
+      "y": 25.208,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 341.97,
+      "y": 27.716,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 358.361,
+      "y": 29.992,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 375.088,
+      "y": 34.887,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 391.858,
+      "y": 41.896,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 408.378,
+      "y": 50.517,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 424.354,
+      "y": 60.244,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 439.494,
+      "y": 70.573,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 453.504,
+      "y": 81.001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 466.09,
+      "y": 91.023,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 476.96,
+      "y": 100.135,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 485.819,
+      "y": 107.833,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 492.376,
+      "y": 113.613,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 496.335,
+      "y": 116.97,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 503.041,
+      "y": 122.817,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 515.857,
+      "y": 133.21,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 534.907,
+      "y": 146.024,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 560.314,
+      "y": 159.134,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 572.08,
+      "y": 163.562,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 583.756,
+      "y": 166.504,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 595.232,
+      "y": 167.952,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 606.396,
+      "y": 167.894,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 613.797,
+      "y": 166.651,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 621.288,
+      "y": 164.045,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 628.746,
+      "y": 160.187,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 636.044,
+      "y": 155.19,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 643.056,
+      "y": 149.166,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 649.657,
+      "y": 142.226,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.723,
+      "y": 134.481,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 661.126,
+      "y": 126.044,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 665.158,
+      "y": 118.321,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 668.964,
+      "y": 109.847,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 672.723,
+      "y": 100.776,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 676.611,
+      "y": 91.257,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 680.806,
+      "y": 81.443,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 685.485,
+      "y": 71.485,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.825,
+      "y": 61.535,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 697.003,
+      "y": 51.745,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 704.197,
+      "y": 42.266,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 712.584,
+      "y": 33.249,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 722.341,
+      "y": 24.846,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 733.646,
+      "y": 17.209,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 735.701,
+      "y": 16.007,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 738.114,
+      "y": 14.671,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 740.818,
+      "y": 13.317,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 743.744,
+      "y": 12.059,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 746.825,
+      "y": 11.01,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 749.992,
+      "y": 10.286,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 753.177,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 756.312,
+      "y": 10.267,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 759.33,
+      "y": 11.201,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 762.161,
+      "y": 12.916,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 764.738,
+      "y": 15.527,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 766.656,
+      "y": 18.796,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 767.701,
+      "y": 22.394,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 767.968,
+      "y": 26.206,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 772.968,
+      "y": 26.20600000000001,
+      "via": "bridge",
+      "bridgeId": "bridge-external-2"
+    },
+    {
+      "x": 772.968,
+      "y": 76.244,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 833.597,
+      "y": 76.244,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 833.597,
+      "y": 98.765,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 772.968,
+      "y": 98.765,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 772.969,
+      "y": 165.04,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 992.821,
+      "y": 165.04,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 992.821,
+      "y": 170.04,
+      "via": "bridge",
+      "bridgeId": "bridge-external-4"
+    },
+    {
+      "x": 1014.478,
+      "y": 170.04,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1014.478,
+      "y": 247.576,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 985.713,
+      "y": 247.576,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-2"
+    },
+    {
+      "x": 985.428,
+      "y": 250.028,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 984.608,
+      "y": 252.348,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 983.302,
+      "y": 254.447,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 981.56,
+      "y": 256.233,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 979.432,
+      "y": 257.615,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 976.967,
+      "y": 258.503,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 974.216,
+      "y": 258.805,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 874.897,
+      "y": 258.805,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 872.164,
+      "y": 258.505,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 869.726,
+      "y": 257.624,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 867.628,
+      "y": 256.248,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 865.917,
+      "y": 254.467,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 864.637,
+      "y": 252.369,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 863.836,
+      "y": 250.043,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 863.558,
+      "y": 247.576,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 863.558,
+      "y": 236.315,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 985.713,
+      "y": 236.315,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 985.713,
+      "y": 247.576,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 1014.478,
+      "y": 247.576,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-2"
+    },
+    {
+      "x": 1014.478,
+      "y": 303.724,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1014.128,
+      "y": 307.607,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1013.119,
+      "y": 311.239,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1011.512,
+      "y": 314.567,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1009.368,
+      "y": 317.535,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1006.748,
+      "y": 320.087,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1003.713,
+      "y": 322.168,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1000.324,
+      "y": 323.723,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 996.641,
+      "y": 324.696,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 992.726,
+      "y": 325.033,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 855.411,
+      "y": 325.033,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 851.492,
+      "y": 324.684,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 847.807,
+      "y": 323.676,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 844.417,
+      "y": 322.072,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 841.383,
+      "y": 319.93,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 838.764,
+      "y": 317.313,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 836.622,
+      "y": 314.281,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 835.017,
+      "y": 310.893,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 834.01,
+      "y": 307.212,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 833.66,
+      "y": 303.298,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 833.66,
+      "y": 236.315,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 772.968,
+      "y": 236.315,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 772.968,
+      "y": 170.04,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 992.821,
+      "y": 170.04,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 992.821,
+      "y": 165.04,
+      "via": "bridge",
+      "bridgeId": "bridge-external-4"
+    },
+    {
+      "x": 996.724,
+      "y": 164.692,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1000.394,
+      "y": 163.689,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1003.769,
+      "y": 162.092,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1006.791,
+      "y": 159.962,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1009.398,
+      "y": 157.36,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1011.53,
+      "y": 154.348,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1013.128,
+      "y": 150.986,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1014.13,
+      "y": 147.337,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1014.478,
+      "y": 143.461,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1014.478,
+      "y": 87.473,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 985.586,
+      "y": 87.473,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-1"
+    },
+    {
+      "x": 985.307,
+      "y": 90.036,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 984.507,
+      "y": 92.387,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 983.245,
+      "y": 94.462,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 981.578,
+      "y": 96.2,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 979.562,
+      "y": 97.538,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 977.257,
+      "y": 98.414,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 974.718,
+      "y": 98.765,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 863.511,
+      "y": 98.765,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 863.511,
+      "y": 76.244,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 974.546,
+      "y": 76.244,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 977.089,
+      "y": 76.559,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 979.417,
+      "y": 77.42,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 981.466,
+      "y": 78.756,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 983.172,
+      "y": 80.499,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 984.47,
+      "y": 82.579,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 985.297,
+      "y": 84.927,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 985.586,
+      "y": 87.473,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 1014.478,
+      "y": 87.473,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-1"
+    },
+    {
+      "x": 1014.478,
+      "y": 31.546,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1019.478,
+      "y": 31.546,
+      "via": "bridge",
+      "bridgeId": "bridge-external-3"
+    },
+    {
+      "x": 1019.478,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1085.785,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1085.769,
+      "y": 211.185,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1086.072,
+      "y": 213.744,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1086.933,
+      "y": 216.095,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1088.277,
+      "y": 218.173,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1090.03,
+      "y": 219.914,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1092.117,
+      "y": 221.255,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1094.464,
+      "y": 222.131,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1096.998,
+      "y": 222.477,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1099.543,
+      "y": 222.131,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1101.899,
+      "y": 221.255,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1103.992,
+      "y": 219.914,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1105.748,
+      "y": 218.173,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1107.094,
+      "y": 216.095,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1107.955,
+      "y": 213.744,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1108.259,
+      "y": 211.185,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1108.322,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1174.566,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1174.566,
+      "y": 231.772,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1174.252,
+      "y": 235.311,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1173.349,
+      "y": 238.646,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1171.908,
+      "y": 241.719,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1169.983,
+      "y": 244.475,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1167.629,
+      "y": 246.857,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1164.898,
+      "y": 248.808,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1161.845,
+      "y": 250.272,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1158.523,
+      "y": 251.191,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1154.985,
+      "y": 251.51,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1039.089,
+      "y": 251.51,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1035.571,
+      "y": 251.191,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1032.257,
+      "y": 250.272,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1029.203,
+      "y": 248.808,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1026.465,
+      "y": 246.857,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1024.099,
+      "y": 244.475,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1022.161,
+      "y": 241.719,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1020.708,
+      "y": 238.646,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1019.795,
+      "y": 235.311,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1019.478,
+      "y": 231.772,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1019.478,
+      "y": 31.546,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1014.478,
+      "y": 31.546,
+      "via": "bridge",
+      "bridgeId": "bridge-external-3"
+    },
+    {
+      "x": 1014.13,
+      "y": 27.68,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1013.128,
+      "y": 24.038,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1011.53,
+      "y": 20.682,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1009.398,
+      "y": 17.674,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1006.791,
+      "y": 15.076,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1003.769,
+      "y": 12.947,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1000.394,
+      "y": 11.351,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 996.724,
+      "y": 10.348,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 992.821,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 772.968,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 772.968,
+      "y": 26.20600000000001,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 767.968,
+      "y": 26.206,
+      "via": "bridge",
+      "bridgeId": "bridge-external-2"
+    },
+    {
+      "x": 767.552,
+      "y": 30.118,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 766.547,
+      "y": 34.017,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 765.048,
+      "y": 37.787,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 763.148,
+      "y": 41.314,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 760.943,
+      "y": 44.486,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 758.527,
+      "y": 47.186,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 754.208,
+      "y": 50.686,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 748.089,
+      "y": 54.482,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 739.809,
+      "y": 58.853,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 729.006,
+      "y": 64.078,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 724.355,
+      "y": 66.698,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 719.24,
+      "y": 70.09,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 714.502,
+      "y": 73.5,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 710.982,
+      "y": 76.173,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 702.647,
+      "y": 84.151,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 694.937,
+      "y": 94.552,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 687.678,
+      "y": 106.988,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 680.701,
+      "y": 121.068,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 673.832,
+      "y": 136.405,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 666.899,
+      "y": 152.607,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 666.333,
+      "y": 153.89,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 664.368,
+      "y": 157.461,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 660.602,
+      "y": 162.903,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 654.636,
+      "y": 169.798,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 646.069,
+      "y": 177.729,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 634.5,
+      "y": 186.28,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 633.218,
+      "y": 187.348,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 632.639,
+      "y": 188.427,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 632.673,
+      "y": 189.564,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 633.231,
+      "y": 190.809,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 634.224,
+      "y": 192.211,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 635.562,
+      "y": 193.817,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 637.157,
+      "y": 195.677,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 638.919,
+      "y": 197.839,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 642.452,
+      "y": 204.022,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 646.461,
+      "y": 214.201,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 650.383,
+      "y": 228.16,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 653.653,
+      "y": 245.682,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.708,
+      "y": 266.551,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.984,
+      "y": 290.551,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 656.466,
+      "y": 296.519,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 658.097,
+      "y": 301.371,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 660.551,
+      "y": 305.912,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 663.501,
+      "y": 310.95,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 665.422,
+      "y": 313.841,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 667.558,
+      "y": 316.203,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 669.835,
+      "y": 318.157,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 672.178,
+      "y": 319.827,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 674.513,
+      "y": 321.336,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 676.766,
+      "y": 322.805,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 678.862,
+      "y": 324.357,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 680.728,
+      "y": 326.115,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 682.29,
+      "y": 328.201,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 683.472,
+      "y": 330.738,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 684.202,
+      "y": 333.849,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 684.404,
+      "y": 337.655,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 684.616,
+      "y": 342.926,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 685.406,
+      "y": 347.541,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 686.638,
+      "y": 351.579,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 688.177,
+      "y": 355.122,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 689.886,
+      "y": 358.252,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 691.63,
+      "y": 361.048,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 693.273,
+      "y": 363.593,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 694.68,
+      "y": 365.966,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 695.714,
+      "y": 368.25,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 696.24,
+      "y": 370.524,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 696.122,
+      "y": 372.87,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 695.224,
+      "y": 375.37,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 693.18,
+      "y": 381.006,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.489,
+      "y": 386.585,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.532,
+      "y": 392.132,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.691,
+      "y": 397.671,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.75,
+      "y": 398.971,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.862,
+      "y": 400.335,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.931,
+      "y": 401.701,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.858,
+      "y": 403.007,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.547,
+      "y": 404.191,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 691.902,
+      "y": 405.19,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.824,
+      "y": 405.943,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 689.216,
+      "y": 406.388,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 686.982,
+      "y": 406.463,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 681.741,
+      "y": 405.717,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 677.159,
+      "y": 404.214,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 673.191,
+      "y": 402.036,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 669.794,
+      "y": 399.268,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 666.927,
+      "y": 395.991,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 664.544,
+      "y": 392.292,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 662.604,
+      "y": 388.251,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 661.063,
+      "y": 383.954,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 659.879,
+      "y": 379.484,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 659.007,
+      "y": 374.923,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 658.405,
+      "y": 370.357,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 658.03,
+      "y": 365.867,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 657.838,
+      "y": 361.538,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 657.787,
+      "y": 357.454,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 657.833,
+      "y": 353.697,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 657.934,
+      "y": 350.351,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 658.045,
+      "y": 347.501,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 658.106,
+      "y": 345.84,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 657.73,
+      "y": 344.059,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 657.212,
+      "y": 342.611,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 656.849,
+      "y": 341.95,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 652.84,
+      "y": 338.872,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 645.456,
+      "y": 333.123,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 638.123,
+      "y": 327.344,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 634.264,
+      "y": 324.178,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 617.821,
+      "y": 306.333,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 604.323,
+      "y": 289.125,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 593.662,
+      "y": 272.265,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 585.729,
+      "y": 255.464,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 581.257,
+      "y": 244.343,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 576.337,
+      "y": 233.778,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 570.584,
+      "y": 224.242,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 563.616,
+      "y": 216.209,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 556.432,
+      "y": 210.467,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 548.833,
+      "y": 205.887,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 541.026,
+      "y": 202.53,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 533.219,
+      "y": 200.456,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 525.62,
+      "y": 199.727,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 508.925,
+      "y": 199.144,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 493.959,
+      "y": 197.646,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 480.589,
+      "y": 195.335,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 468.679,
+      "y": 192.313,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 458.095,
+      "y": 188.683,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 448.702,
+      "y": 184.546,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 440.366,
+      "y": 180.006,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 432.951,
+      "y": 175.163,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 426.323,
+      "y": 170.122,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 420.348,
+      "y": 164.983,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 414.89,
+      "y": 159.849,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 409.814,
+      "y": 154.823,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 404.987,
+      "y": 150.006,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 400.274,
+      "y": 145.5,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 395.539,
+      "y": 141.409,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 394.757,
+      "y": 140.905,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 393.647,
+      "y": 140.308,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 392.438,
+      "y": 139.795,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 391.355,
+      "y": 139.538,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 390.404,
+      "y": 139.852,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 389.55,
+      "y": 140.507,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 388.785,
+      "y": 141.283,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 388.1,
+      "y": 141.96,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 382.518,
+      "y": 147.017,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 376.771,
+      "y": 150.668,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 370.706,
+      "y": 153.077,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 364.173,
+      "y": 154.403,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 357.022,
+      "y": 154.809,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 348.061,
+      "y": 154.085,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 339.136,
+      "y": 152.146,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 330.42,
+      "y": 149.337,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 322.083,
+      "y": 146.008,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 314.298,
+      "y": 142.505,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 307.236,
+      "y": 139.176,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 301.068,
+      "y": 136.369,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 295.966,
+      "y": 134.431,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 292.101,
+      "y": 133.71,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 289.646,
+      "y": 134.552,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 288.481,
+      "y": 136.223,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 287.75,
+      "y": 138.145,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 287.291,
+      "y": 140.216,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 286.942,
+      "y": 142.331,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 286.541,
+      "y": 144.388,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 285.925,
+      "y": 146.284,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 284.932,
+      "y": 147.914,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 283.401,
+      "y": 149.176,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 281.169,
+      "y": 149.965,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 277.74,
+      "y": 150.262,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 274.365,
+      "y": 149.835,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 271.124,
+      "y": 148.776,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 268.096,
+      "y": 147.178,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 265.361,
+      "y": 145.131,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 262.996,
+      "y": 142.728,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 261.083,
+      "y": 140.061,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 259.699,
+      "y": 137.221,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 258.923,
+      "y": 134.301,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 258.836,
+      "y": 131.392,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 253.836,
+      "y": 131.392,
+      "via": "bridge",
+      "bridgeId": "bridge-external-1"
+    },
+    {
+      "x": 253.836,
+      "y": 31.657,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 253.487,
+      "y": 27.754,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 252.483,
+      "y": 24.084,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 250.884,
+      "y": 20.709,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 248.753,
+      "y": 17.687,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 246.152,
+      "y": 15.08,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 243.141,
+      "y": 12.948,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 239.784,
+      "y": 11.35,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 236.141,
+      "y": 10.348,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 232.274,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 131.903,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 31.546,
+      "y": 10,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 27.68,
+      "y": 10.348,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 24.038,
+      "y": 11.35,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 20.683,
+      "y": 12.948,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 17.675,
+      "y": 15.08,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 15.076,
+      "y": 17.687,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 12.947,
+      "y": 20.709,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 11.351,
+      "y": 24.084,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 10.348,
+      "y": 27.754,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 10,
+      "y": 31.657,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 10,
+      "y": 251.509,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 37.976,
+      "y": 251.509,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 37.976,
+      "y": 256.51,
+      "via": "bridge",
+      "bridgeId": "bridge-external-5"
+    },
+    {
+      "x": 42.178,
+      "y": 256.565,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 46.292,
+      "y": 257.198,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 50.258,
+      "y": 258.381,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 54.014,
+      "y": 260.087,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 57.497,
+      "y": 262.289,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 60.645,
+      "y": 264.958,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 63.397,
+      "y": 268.068,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 65.689,
+      "y": 271.59,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 67.459,
+      "y": 275.498,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 68.691,
+      "y": 279.813,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 69.276,
+      "y": 284.126,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 69.242,
+      "y": 288.382,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 68.613,
+      "y": 292.527,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 67.416,
+      "y": 296.505,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 65.678,
+      "y": 300.26,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 63.423,
+      "y": 303.738,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 60.679,
+      "y": 306.883,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 57.472,
+      "y": 309.64,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 53.828,
+      "y": 311.954,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 49.773,
+      "y": 313.769,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 45.539,
+      "y": 314.971,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 41.284,
+      "y": 315.535,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 37.066,
+      "y": 315.488,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 32.945,
+      "y": 314.855,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 31.981728262724737,
+      "y": 314.5658970069716,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 2,
+      "y": 414.463,
+      "via": "bridge",
+      "bridgeId": "bridge-origin-1"
+    }
+  ],
+  "routeMachine": [
+    {
+      "x": 0,
+      "y": 0,
+      "via": "origin"
+    },
+    {
+      "x": 29.981728262724737,
+      "y": 99.8971029930284,
+      "via": "bridge",
+      "bridgeId": "bridge-origin-1"
+    },
+    {
+      "x": 26.98,
+      "y": 100.798,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 23.23,
+      "y": 102.52000000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 19.753,
+      "y": 104.74700000000001,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 16.609,
+      "y": 107.45300000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 13.856,
+      "y": 110.61000000000001,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 11.876534208850682,
+      "y": 113.69012444131056,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 15.434999999999999,
+      "y": 115.97700000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-3"
+    },
+    {
+      "x": 13.752,
+      "y": 119.62600000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 12.685,
+      "y": 123.53400000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 12.281,
+      "y": 127.46600000000001,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 12.509,
+      "y": 131.35500000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 13.339,
+      "y": 135.132,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 14.734000000000002,
+      "y": 138.733,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 16.667,
+      "y": 142.089,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 19.102,
+      "y": 145.13600000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 22.009,
+      "y": 147.805,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 25.355,
+      "y": 150.03000000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 29.108,
+      "y": 151.74400000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 33.076,
+      "y": 152.84000000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 37.065,
+      "y": 153.288,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 41.007,
+      "y": 153.12,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 44.832,
+      "y": 152.37,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 48.47,
+      "y": 151.06800000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 51.851,
+      "y": 149.24800000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 54.907,
+      "y": 146.94100000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 57.565,
+      "y": 144.18,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 59.759,
+      "y": 140.99800000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 61.416,
+      "y": 137.42600000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 61.561,
+      "y": 137.02800000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 62.616,
+      "y": 133.151,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 63.003,
+      "y": 129.24900000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 62.757000000000005,
+      "y": 125.39100000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 61.909,
+      "y": 121.642,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 60.494,
+      "y": 118.06700000000001,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 58.545,
+      "y": 114.73400000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 56.095,
+      "y": 111.70700000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 53.178,
+      "y": 109.053,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 49.827,
+      "y": 106.84000000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 46.074,
+      "y": 105.13,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 42.099,
+      "y": 104.02700000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 38.11,
+      "y": 103.56900000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 34.173,
+      "y": 103.72800000000001,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 30.357999999999997,
+      "y": 104.47400000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 26.729,
+      "y": 105.77800000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 23.356,
+      "y": 107.60900000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 20.304,
+      "y": 109.93900000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 17.641,
+      "y": 112.738,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 15.434999999999999,
+      "y": 115.97700000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-2"
+    },
+    {
+      "x": 11.876534208850682,
+      "y": 113.69012444131056,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-3"
+    },
+    {
+      "x": 11.554,
+      "y": 114.19200000000001,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 9.761,
+      "y": 118.173,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 8.558,
+      "y": 122.41700000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 8,
+      "y": 126.67600000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 8.06,
+      "y": 130.89300000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 8.712,
+      "y": 135.012,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 9.927,
+      "y": 138.973,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 11.68,
+      "y": 142.72000000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 13.944,
+      "y": 146.19400000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 16.691,
+      "y": 149.339,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 19.895,
+      "y": 152.09700000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 23.527,
+      "y": 154.40900000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 27.564,
+      "y": 156.21800000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 31.750999999999998,
+      "y": 157.40200000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 35.976,
+      "y": 157.95300000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 35.976,
+      "y": 162.95400000000004,
+      "via": "bridge",
+      "bridgeId": "bridge-external-5"
+    },
+    {
+      "x": 74.368,
+      "y": 162.95400000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 74.416,
+      "y": 157.95300000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-external-6"
+    },
+    {
+      "x": 73.852,
+      "y": 151.514,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 87.342,
+      "y": 150.33300000000003,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 92.87264995878637,
+      "y": 149.84602453193077,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-4"
+    },
+    {
+      "x": 92.873,
+      "y": 149.85000000000002,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 102.147,
+      "y": 149.038,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 102.032,
+      "y": 147.72200000000004,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 101.642,
+      "y": 145.31600000000003,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 100.945,
+      "y": 143.46200000000005,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 99.943,
+      "y": 142.16900000000004,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 98.643,
+      "y": 141.447,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 97.05,
+      "y": 141.30600000000004,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 95.574,
+      "y": 141.63600000000002,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 94.404,
+      "y": 142.33800000000002,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 93.54,
+      "y": 143.40700000000004,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 92.981,
+      "y": 144.834,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 92.726,
+      "y": 146.613,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 92.775,
+      "y": 148.73700000000002,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 92.87264995878637,
+      "y": 149.84602453193077,
+      "via": "contour",
+      "contourId": "pieza-7-7-2"
+    },
+    {
+      "x": 87.342,
+      "y": 150.33300000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-4"
+    },
+    {
+      "x": 72.965,
+      "y": 141.37600000000003,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 72.276,
+      "y": 133.495,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 87.509,
+      "y": 143.231,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 87.641,
+      "y": 142.74600000000004,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 88.461,
+      "y": 140.39100000000002,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 89.865,
+      "y": 138.34700000000004,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 91.754,
+      "y": 136.70500000000004,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 94.025,
+      "y": 135.55900000000003,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 96.578,
+      "y": 135.00100000000003,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 98.94,
+      "y": 135.024,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 101.041,
+      "y": 135.52500000000003,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 102.877,
+      "y": 136.497,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 104.444,
+      "y": 137.93400000000003,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 105.737,
+      "y": 139.829,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 106.752,
+      "y": 142.17600000000004,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 107.485,
+      "y": 144.96800000000002,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 107.931,
+      "y": 148.20000000000005,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 108.523,
+      "y": 154.969,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 74.416,
+      "y": 157.95300000000003,
+      "via": "contour",
+      "contourId": "pieza-7-7-1"
+    },
+    {
+      "x": 74.368,
+      "y": 162.95400000000004,
+      "via": "bridge",
+      "bridgeId": "bridge-external-6"
+    },
+    {
+      "x": 74.368,
+      "y": 364.624,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 74.68,
+      "y": 367.184,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 75.533,
+      "y": 369.52200000000005,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 76.86,
+      "y": 371.577,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 78.595,
+      "y": 373.285,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 80.671,
+      "y": 374.583,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 83.022,
+      "y": 375.40700000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 85.582,
+      "y": 375.696,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 88.152,
+      "y": 375.41400000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 90.509,
+      "y": 374.606,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 92.59,
+      "y": 373.333,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 94.331,
+      "y": 371.656,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 95.67,
+      "y": 369.634,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 96.544,
+      "y": 367.327,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 96.889,
+      "y": 364.797,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 96.889,
+      "y": 162.95300000000003,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 162.992,
+      "y": 162.95300000000003,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 162.992,
+      "y": 364.79900000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 163.314,
+      "y": 367.329,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 164.171,
+      "y": 369.635,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 165.498,
+      "y": 371.65700000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 167.231,
+      "y": 373.334,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 169.306,
+      "y": 374.607,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 171.657,
+      "y": 375.415,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 174.221,
+      "y": 375.69800000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 176.773,
+      "y": 375.409,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 179.125,
+      "y": 374.584,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 181.208,
+      "y": 373.286,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 182.952,
+      "y": 371.57800000000003,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 184.29,
+      "y": 369.523,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 185.151,
+      "y": 367.185,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 185.467,
+      "y": 364.625,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 185.467,
+      "y": 162.95300000000003,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 251.836,
+      "y": 162.95300000000003,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 251.836,
+      "y": 283.071,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 256.836,
+      "y": 283.071,
+      "via": "bridge",
+      "bridgeId": "bridge-external-1"
+    },
+    {
+      "x": 257.682,
+      "y": 287.449,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 259.232,
+      "y": 291.266,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 261.404,
+      "y": 294.562,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 264.117,
+      "y": 297.377,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 267.29,
+      "y": 299.75100000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 270.843,
+      "y": 301.72400000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 274.693,
+      "y": 303.33500000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 278.761,
+      "y": 304.624,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 282.964,
+      "y": 305.632,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 287.221,
+      "y": 306.398,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 291.452,
+      "y": 306.962,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 300.474,
+      "y": 307.194,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 308.08,
+      "y": 306.36600000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 313.746,
+      "y": 305.235,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 316.946,
+      "y": 304.555,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 319.099,
+      "y": 304.563,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 320.846,
+      "y": 305.17600000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 322.216,
+      "y": 306.29,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 323.239,
+      "y": 307.802,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 323.941,
+      "y": 309.607,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 324.352,
+      "y": 311.603,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 324.499,
+      "y": 313.684,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 324.412,
+      "y": 315.747,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 324.118,
+      "y": 317.688,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 323.119,
+      "y": 320.32000000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 321.52,
+      "y": 322.30600000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 319.431,
+      "y": 323.79200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 316.965,
+      "y": 324.922,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 314.233,
+      "y": 325.843,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 311.347,
+      "y": 326.70000000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 307.735,
+      "y": 327.165,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 304.086,
+      "y": 326.728,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 300.493,
+      "y": 325.827,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 297.052,
+      "y": 324.90000000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 293.854,
+      "y": 324.385,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 290.995,
+      "y": 324.71900000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 287.236,
+      "y": 326.57800000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 284.652,
+      "y": 328.837,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 282.271,
+      "y": 331.54100000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 279.122,
+      "y": 334.737,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 276.26,
+      "y": 336.96500000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 273.425,
+      "y": 338.869,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 270.768,
+      "y": 340.635,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 268.441,
+      "y": 342.45000000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 266.594,
+      "y": 344.50300000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 265.381,
+      "y": 346.981,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 264.952,
+      "y": 350.07000000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 265.347,
+      "y": 352.576,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 266.412,
+      "y": 354.59200000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 267.964,
+      "y": 356.273,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 269.819,
+      "y": 357.771,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 271.795,
+      "y": 359.24,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 273.709,
+      "y": 360.83500000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 275.379,
+      "y": 362.707,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 276.621,
+      "y": 365.011,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 277.344,
+      "y": 367.584,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 277.734,
+      "y": 370.058,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 278.094,
+      "y": 372.281,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 278.729,
+      "y": 374.10200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 280.862,
+      "y": 376.841,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 283.46,
+      "y": 378.682,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 286.338,
+      "y": 380.13800000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 289.309,
+      "y": 381.72200000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 292.191,
+      "y": 383.947,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 295.63,
+      "y": 388.267,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 298.464,
+      "y": 393.14000000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 300.854,
+      "y": 397.73600000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 302.956,
+      "y": 401.225,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 304.93,
+      "y": 402.774,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 304.93,
+      "y": 402.773,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 306.46,
+      "y": 402.303,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 308.181,
+      "y": 400.737,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 310.015,
+      "y": 398.52700000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 311.885,
+      "y": 396.125,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 313.715,
+      "y": 393.981,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 315.428,
+      "y": 392.55,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 316.946,
+      "y": 392.28200000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 318.783,
+      "y": 393.53000000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 320.807,
+      "y": 395.72900000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 322.977,
+      "y": 398.32800000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 325.252,
+      "y": 400.779,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 327.591,
+      "y": 402.533,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 329.952,
+      "y": 403.04,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 332.367,
+      "y": 400.382,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 335.716,
+      "y": 394.793,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 338.688,
+      "y": 389.255,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 339.97,
+      "y": 386.747,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 356.361,
+      "y": 384.471,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 373.088,
+      "y": 379.576,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 389.858,
+      "y": 372.567,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 406.378,
+      "y": 363.946,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 422.354,
+      "y": 354.21900000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 437.494,
+      "y": 343.89000000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 451.504,
+      "y": 333.462,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 464.09,
+      "y": 323.44000000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 474.96,
+      "y": 314.32800000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 483.819,
+      "y": 306.63,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 490.376,
+      "y": 300.85,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 494.335,
+      "y": 297.49300000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 501.041,
+      "y": 291.646,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 513.857,
+      "y": 281.25300000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 532.907,
+      "y": 268.439,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 558.314,
+      "y": 255.32900000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 570.08,
+      "y": 250.901,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 581.756,
+      "y": 247.95900000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 593.232,
+      "y": 246.51100000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 604.396,
+      "y": 246.56900000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 611.797,
+      "y": 247.812,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 619.288,
+      "y": 250.41800000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 626.746,
+      "y": 254.276,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 634.044,
+      "y": 259.273,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 641.056,
+      "y": 265.297,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 647.657,
+      "y": 272.237,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 653.723,
+      "y": 279.982,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 659.126,
+      "y": 288.41900000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 663.158,
+      "y": 296.14200000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 666.964,
+      "y": 304.61600000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 670.723,
+      "y": 313.687,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 674.611,
+      "y": 323.206,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 678.806,
+      "y": 333.02000000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 683.485,
+      "y": 342.978,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 688.825,
+      "y": 352.928,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 695.003,
+      "y": 362.718,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 702.197,
+      "y": 372.197,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 710.584,
+      "y": 381.214,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 720.341,
+      "y": 389.617,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 731.646,
+      "y": 397.254,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 733.701,
+      "y": 398.456,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 736.114,
+      "y": 399.79200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 738.818,
+      "y": 401.146,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 741.744,
+      "y": 402.404,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 744.825,
+      "y": 403.45300000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 747.992,
+      "y": 404.177,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 751.177,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 754.312,
+      "y": 404.196,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 757.33,
+      "y": 403.262,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 760.161,
+      "y": 401.547,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 762.738,
+      "y": 398.93600000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 764.656,
+      "y": 395.66700000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 765.701,
+      "y": 392.069,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 765.968,
+      "y": 388.257,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 770.968,
+      "y": 388.257,
+      "via": "bridge",
+      "bridgeId": "bridge-external-2"
+    },
+    {
+      "x": 770.968,
+      "y": 338.21900000000005,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 831.597,
+      "y": 338.21900000000005,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 831.597,
+      "y": 315.69800000000004,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 770.968,
+      "y": 315.69800000000004,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 770.969,
+      "y": 249.42300000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 990.821,
+      "y": 249.42300000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 990.821,
+      "y": 244.42300000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-external-4"
+    },
+    {
+      "x": 1012.478,
+      "y": 244.42300000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1012.478,
+      "y": 166.88700000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 983.713,
+      "y": 166.88700000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-2"
+    },
+    {
+      "x": 983.428,
+      "y": 164.43500000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 982.608,
+      "y": 162.115,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 981.302,
+      "y": 160.01600000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 979.56,
+      "y": 158.23000000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 977.432,
+      "y": 156.848,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 974.967,
+      "y": 155.96000000000004,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 972.216,
+      "y": 155.65800000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 872.897,
+      "y": 155.65800000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 870.164,
+      "y": 155.95800000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 867.726,
+      "y": 156.839,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 865.628,
+      "y": 158.21500000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 863.917,
+      "y": 159.996,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 862.637,
+      "y": 162.09400000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 861.836,
+      "y": 164.42000000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 861.558,
+      "y": 166.88700000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 861.558,
+      "y": 178.14800000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 983.713,
+      "y": 178.14800000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 983.713,
+      "y": 166.88700000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-2"
+    },
+    {
+      "x": 1012.478,
+      "y": 166.88700000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-2"
+    },
+    {
+      "x": 1012.478,
+      "y": 110.73900000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1012.128,
+      "y": 106.856,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1011.119,
+      "y": 103.22400000000005,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1009.512,
+      "y": 99.89600000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1007.368,
+      "y": 96.928,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1004.748,
+      "y": 94.37600000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 1001.713,
+      "y": 92.29500000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 998.324,
+      "y": 90.74000000000001,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 994.641,
+      "y": 89.767,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 990.726,
+      "y": 89.43,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 853.411,
+      "y": 89.43,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 849.492,
+      "y": 89.779,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 845.807,
+      "y": 90.78700000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 842.417,
+      "y": 92.39100000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 839.383,
+      "y": 94.53300000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 836.764,
+      "y": 97.15000000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 834.622,
+      "y": 100.18200000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 833.017,
+      "y": 103.57000000000005,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 832.01,
+      "y": 107.25100000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 831.66,
+      "y": 111.16500000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 831.66,
+      "y": 178.14800000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 770.968,
+      "y": 178.14800000000002,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 770.968,
+      "y": 244.42300000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 990.821,
+      "y": 244.42300000000003,
+      "via": "contour",
+      "contourId": "pieza-4-5-1"
+    },
+    {
+      "x": 990.821,
+      "y": 249.42300000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-external-4"
+    },
+    {
+      "x": 994.724,
+      "y": 249.77100000000002,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 998.394,
+      "y": 250.77400000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1001.769,
+      "y": 252.371,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1004.791,
+      "y": 254.50100000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1007.398,
+      "y": 257.103,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1009.53,
+      "y": 260.115,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1011.128,
+      "y": 263.47700000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1012.13,
+      "y": 267.12600000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1012.478,
+      "y": 271.002,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1012.478,
+      "y": 326.99,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 983.586,
+      "y": 326.99,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-1"
+    },
+    {
+      "x": 983.307,
+      "y": 324.427,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 982.507,
+      "y": 322.076,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 981.245,
+      "y": 320.00100000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 979.578,
+      "y": 318.26300000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 977.562,
+      "y": 316.925,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 975.257,
+      "y": 316.04900000000004,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 972.718,
+      "y": 315.69800000000004,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 861.511,
+      "y": 315.69800000000004,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 861.511,
+      "y": 338.21900000000005,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 972.546,
+      "y": 338.21900000000005,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 975.089,
+      "y": 337.904,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 977.417,
+      "y": 337.043,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 979.466,
+      "y": 335.707,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 981.172,
+      "y": 333.96400000000006,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 982.47,
+      "y": 331.884,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 983.297,
+      "y": 329.536,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 983.586,
+      "y": 326.99,
+      "via": "contour",
+      "contourId": "pieza-6-3-2"
+    },
+    {
+      "x": 1012.478,
+      "y": 326.99,
+      "via": "bridge",
+      "bridgeId": "bridge-internal-1"
+    },
+    {
+      "x": 1012.478,
+      "y": 382.91700000000003,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1017.478,
+      "y": 382.91700000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-external-3"
+    },
+    {
+      "x": 1017.478,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1083.785,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1083.769,
+      "y": 203.27800000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1084.072,
+      "y": 200.71900000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1084.933,
+      "y": 198.36800000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1086.277,
+      "y": 196.29000000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1088.03,
+      "y": 194.54900000000004,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1090.117,
+      "y": 193.20800000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1092.464,
+      "y": 192.33200000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1094.998,
+      "y": 191.98600000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1097.543,
+      "y": 192.33200000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1099.899,
+      "y": 193.20800000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1101.992,
+      "y": 194.54900000000004,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1103.748,
+      "y": 196.29000000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1105.094,
+      "y": 198.36800000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1105.955,
+      "y": 200.71900000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1106.259,
+      "y": 203.27800000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1106.322,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1172.566,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1172.566,
+      "y": 182.69100000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1172.252,
+      "y": 179.15200000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1171.349,
+      "y": 175.81700000000004,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1169.908,
+      "y": 172.74400000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1167.983,
+      "y": 169.98800000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1165.629,
+      "y": 167.60600000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1162.898,
+      "y": 165.65500000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1159.845,
+      "y": 164.19100000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1156.523,
+      "y": 163.27200000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1152.985,
+      "y": 162.95300000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1037.089,
+      "y": 162.95300000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1033.571,
+      "y": 163.27200000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1030.257,
+      "y": 164.19100000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1027.203,
+      "y": 165.65500000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1024.465,
+      "y": 167.60600000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1022.0989999999999,
+      "y": 169.98800000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1020.161,
+      "y": 172.74400000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1018.708,
+      "y": 175.81700000000004,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1017.795,
+      "y": 179.15200000000002,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1017.478,
+      "y": 182.69100000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1017.478,
+      "y": 382.91700000000003,
+      "via": "contour",
+      "contourId": "pieza-3-4-1"
+    },
+    {
+      "x": 1012.478,
+      "y": 382.91700000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-external-3"
+    },
+    {
+      "x": 1012.13,
+      "y": 386.783,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1011.128,
+      "y": 390.425,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1009.53,
+      "y": 393.781,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1007.398,
+      "y": 396.78900000000004,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1004.791,
+      "y": 399.387,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 1001.769,
+      "y": 401.516,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 998.394,
+      "y": 403.112,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 994.724,
+      "y": 404.115,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 990.821,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 770.968,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 770.968,
+      "y": 388.257,
+      "via": "contour",
+      "contourId": "pieza-6-3-1"
+    },
+    {
+      "x": 765.968,
+      "y": 388.257,
+      "via": "bridge",
+      "bridgeId": "bridge-external-2"
+    },
+    {
+      "x": 765.552,
+      "y": 384.345,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 764.547,
+      "y": 380.446,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 763.048,
+      "y": 376.67600000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 761.148,
+      "y": 373.149,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 758.943,
+      "y": 369.97700000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 756.527,
+      "y": 367.27700000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 752.208,
+      "y": 363.77700000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 746.089,
+      "y": 359.981,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 737.809,
+      "y": 355.61,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 727.006,
+      "y": 350.385,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 722.355,
+      "y": 347.76500000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 717.24,
+      "y": 344.37300000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 712.502,
+      "y": 340.963,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 708.982,
+      "y": 338.29,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 700.647,
+      "y": 330.312,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.937,
+      "y": 319.911,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 685.678,
+      "y": 307.475,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 678.701,
+      "y": 293.39500000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 671.832,
+      "y": 278.058,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 664.899,
+      "y": 261.856,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 664.333,
+      "y": 260.57300000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 662.368,
+      "y": 257.002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 658.602,
+      "y": 251.56000000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 652.636,
+      "y": 244.66500000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 644.069,
+      "y": 236.734,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 632.5,
+      "y": 228.18300000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 631.218,
+      "y": 227.115,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 630.639,
+      "y": 226.03600000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 630.673,
+      "y": 224.89900000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 631.231,
+      "y": 223.65400000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 632.224,
+      "y": 222.252,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 633.562,
+      "y": 220.64600000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 635.157,
+      "y": 218.78600000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 636.919,
+      "y": 216.62400000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 640.452,
+      "y": 210.44100000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 644.461,
+      "y": 200.26200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 648.383,
+      "y": 186.30300000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 651.653,
+      "y": 168.78100000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 653.708,
+      "y": 147.91200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 653.984,
+      "y": 123.91200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 654.466,
+      "y": 117.94400000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 656.097,
+      "y": 113.09200000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 658.551,
+      "y": 108.55100000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 661.501,
+      "y": 103.51300000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 663.422,
+      "y": 100.62200000000001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 665.558,
+      "y": 98.26000000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 667.835,
+      "y": 96.30600000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 670.178,
+      "y": 94.63600000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 672.513,
+      "y": 93.12700000000001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 674.766,
+      "y": 91.65800000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 676.862,
+      "y": 90.106,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 678.728,
+      "y": 88.34800000000001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 680.29,
+      "y": 86.262,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 681.472,
+      "y": 83.72500000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 682.202,
+      "y": 80.61400000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 682.404,
+      "y": 76.80800000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 682.616,
+      "y": 71.53700000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 683.406,
+      "y": 66.92200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 684.638,
+      "y": 62.884000000000015,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 686.177,
+      "y": 59.34100000000001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 687.886,
+      "y": 56.21100000000001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 689.63,
+      "y": 53.41500000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 691.273,
+      "y": 50.870000000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 692.68,
+      "y": 48.497000000000014,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 693.714,
+      "y": 46.21300000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 694.24,
+      "y": 43.93900000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 694.122,
+      "y": 41.59300000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 693.224,
+      "y": 39.09300000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 691.18,
+      "y": 33.45700000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.489,
+      "y": 27.878000000000043,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.532,
+      "y": 22.331000000000017,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.691,
+      "y": 16.79200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.75,
+      "y": 15.492000000000019,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.862,
+      "y": 14.128000000000043,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.931,
+      "y": 12.762,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.858,
+      "y": 11.456000000000017,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 690.547,
+      "y": 10.272000000000048,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 689.902,
+      "y": 9.273000000000025,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 688.824,
+      "y": 8.520000000000039,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 687.216,
+      "y": 8.075000000000045,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 684.982,
+      "y": 8,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 679.741,
+      "y": 8.746000000000038,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 675.159,
+      "y": 10.249000000000024,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 671.191,
+      "y": 12.427000000000021,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 667.794,
+      "y": 15.19500000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 664.927,
+      "y": 18.472000000000037,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 662.544,
+      "y": 22.17100000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 660.604,
+      "y": 26.212000000000046,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 659.063,
+      "y": 30.509000000000015,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 657.879,
+      "y": 34.97900000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 657.007,
+      "y": 39.54000000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 656.405,
+      "y": 44.105999999999995,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 656.03,
+      "y": 48.596000000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.838,
+      "y": 52.92500000000001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.787,
+      "y": 57.009000000000015,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.833,
+      "y": 60.76600000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.934,
+      "y": 64.11200000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 656.045,
+      "y": 66.96200000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 656.106,
+      "y": 68.62300000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.73,
+      "y": 70.404,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 655.212,
+      "y": 71.85200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 654.849,
+      "y": 72.51300000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 650.84,
+      "y": 75.59100000000001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 643.456,
+      "y": 81.34000000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 636.123,
+      "y": 87.11900000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 632.264,
+      "y": 90.28500000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 615.821,
+      "y": 108.13,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 602.323,
+      "y": 125.33800000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 591.662,
+      "y": 142.19800000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 583.729,
+      "y": 158.99900000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 579.257,
+      "y": 170.12000000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 574.337,
+      "y": 180.68500000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 568.584,
+      "y": 190.22100000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 561.616,
+      "y": 198.25400000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 554.432,
+      "y": 203.996,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 546.833,
+      "y": 208.57600000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 539.026,
+      "y": 211.93300000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 531.219,
+      "y": 214.00700000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 523.62,
+      "y": 214.73600000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 506.925,
+      "y": 215.31900000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 491.959,
+      "y": 216.81700000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 478.589,
+      "y": 219.12800000000001,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 466.679,
+      "y": 222.15000000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 456.095,
+      "y": 225.78000000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 446.702,
+      "y": 229.91700000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 438.366,
+      "y": 234.45700000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 430.951,
+      "y": 239.3,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 424.323,
+      "y": 244.341,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 418.348,
+      "y": 249.48000000000002,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 412.89,
+      "y": 254.61400000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 407.814,
+      "y": 259.64,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 402.987,
+      "y": 264.457,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 398.274,
+      "y": 268.963,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 393.539,
+      "y": 273.05400000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 392.757,
+      "y": 273.558,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 391.647,
+      "y": 274.15500000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 390.438,
+      "y": 274.668,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 389.355,
+      "y": 274.925,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 388.404,
+      "y": 274.611,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 387.55,
+      "y": 273.956,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 386.785,
+      "y": 273.18000000000006,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 386.1,
+      "y": 272.50300000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 380.518,
+      "y": 267.446,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 374.771,
+      "y": 263.795,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 368.706,
+      "y": 261.386,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 362.173,
+      "y": 260.06000000000006,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 355.022,
+      "y": 259.654,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 346.061,
+      "y": 260.37800000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 337.136,
+      "y": 262.317,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 328.42,
+      "y": 265.12600000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 320.083,
+      "y": 268.45500000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 312.298,
+      "y": 271.958,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 305.236,
+      "y": 275.28700000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 299.068,
+      "y": 278.09400000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 293.966,
+      "y": 280.03200000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 290.101,
+      "y": 280.75300000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 287.646,
+      "y": 279.91100000000006,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 286.481,
+      "y": 278.24,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 285.75,
+      "y": 276.318,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 285.291,
+      "y": 274.247,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 284.942,
+      "y": 272.13200000000006,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 284.541,
+      "y": 270.07500000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 283.925,
+      "y": 268.17900000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 282.932,
+      "y": 266.54900000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 281.401,
+      "y": 265.28700000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 279.169,
+      "y": 264.49800000000005,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 275.74,
+      "y": 264.201,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 272.365,
+      "y": 264.62800000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 269.124,
+      "y": 265.687,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 266.096,
+      "y": 267.285,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 263.361,
+      "y": 269.332,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 260.996,
+      "y": 271.735,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 259.083,
+      "y": 274.40200000000004,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 257.699,
+      "y": 277.242,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 256.923,
+      "y": 280.16200000000003,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 256.836,
+      "y": 283.071,
+      "via": "contour",
+      "contourId": "pieza-2-2-1"
+    },
+    {
+      "x": 251.836,
+      "y": 283.071,
+      "via": "bridge",
+      "bridgeId": "bridge-external-1"
+    },
+    {
+      "x": 251.836,
+      "y": 382.80600000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 251.487,
+      "y": 386.709,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 250.483,
+      "y": 390.379,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 248.884,
+      "y": 393.754,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 246.753,
+      "y": 396.776,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 244.152,
+      "y": 399.38300000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 241.141,
+      "y": 401.51500000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 237.784,
+      "y": 403.113,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 234.141,
+      "y": 404.115,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 230.274,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 129.903,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 29.546,
+      "y": 404.463,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 25.68,
+      "y": 404.115,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 22.038,
+      "y": 403.113,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 18.683,
+      "y": 401.51500000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 15.675,
+      "y": 399.38300000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 13.076,
+      "y": 396.776,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 10.947,
+      "y": 393.754,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 9.351,
+      "y": 390.379,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 8.348,
+      "y": 386.709,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 8,
+      "y": 382.80600000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 8,
+      "y": 162.95400000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 35.976,
+      "y": 162.95400000000004,
+      "via": "contour",
+      "contourId": "pieza-1-1-1"
+    },
+    {
+      "x": 35.976,
+      "y": 157.95300000000003,
+      "via": "bridge",
+      "bridgeId": "bridge-external-5"
+    },
+    {
+      "x": 40.178,
+      "y": 157.89800000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 44.292,
+      "y": 157.26500000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 48.258,
+      "y": 156.08200000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 52.014,
+      "y": 154.37600000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 55.497,
+      "y": 152.17400000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 58.645,
+      "y": 149.505,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 61.397,
+      "y": 146.39500000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 63.68899999999999,
+      "y": 142.87300000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 65.459,
+      "y": 138.96500000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 66.691,
+      "y": 134.65000000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 67.276,
+      "y": 130.33700000000005,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 67.242,
+      "y": 126.08100000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 66.613,
+      "y": 121.93600000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 65.416,
+      "y": 117.95800000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 63.678,
+      "y": 114.20300000000003,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 61.423,
+      "y": 110.72500000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 58.679,
+      "y": 107.58000000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 55.472,
+      "y": 104.82300000000004,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 51.828,
+      "y": 102.50900000000001,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 47.773,
+      "y": 100.69400000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 43.539,
+      "y": 99.49200000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 39.284,
+      "y": 98.928,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 35.066,
+      "y": 98.97500000000002,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 30.945,
+      "y": 99.608,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 29.981728262724737,
+      "y": 99.8971029930284,
+      "via": "contour",
+      "contourId": "pieza-5-6-1"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "via": "bridge",
+      "bridgeId": "bridge-origin-1"
+    }
+  ],
+  "metrics": {
+    "contourLengthMm": 7611.108688774114,
+    "bridgeOneWayLengthMm": 201.7404862593271,
+    "bridgeTravelLengthMm": 403.4809725186542,
+    "totalLengthMm": 8014.589661292768,
+    "estimatedSeconds": 1373.9296562216173,
+    "contourCount": 11,
+    "pieceCount": 7,
+    "bridgeCount": 11
+  }
+}

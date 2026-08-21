@@ -130,7 +130,8 @@ export type NestingAlgorithm =
   | 'grid-2d-multi'
   | 'maxrects-rollo'
   | 'shelf-rollo'
-  | 'secuencial-rollo';
+  | 'secuencial-rollo'
+  | 'irregular-2d-bottom-left-v1';
 
 export interface NestingMetrics {
   /** Solo grid-2d-single: cantidad de columnas resultantes. */
@@ -157,4 +158,12 @@ export interface NestingMetrics {
   trailingMarginMm?: number;
   /** Solo multi/sólver externo: métricas por placa real acomodada. */
   perSubstrate?: Array<{ areaUtilMm2: number; consumedLengthMm: number }>;
+  /** Nesting vectorial: largo de corte real, incluyendo divisiones/encastres. */
+  perimetroCorteMm?: number;
+  /** Nesting vectorial: trazabilidad entre piezas originales y segmentos. */
+  piezasOriginales?: number;
+  segmentos?: number;
+  unionesFisicas?: number;
+  uniones?: unknown[];
+  estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
 }

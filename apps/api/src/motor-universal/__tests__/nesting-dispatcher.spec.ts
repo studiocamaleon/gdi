@@ -1,4 +1,60 @@
-import { fuenteMedidaEfectiva, runNestingForPaso } from '../nesting-dispatcher';
+import {
+  esSustratoRollo,
+  fuenteMedidaEfectiva,
+  geometriaDispatchValida,
+  resolverFormatoFisicoMaterial,
+  runNestingForPaso,
+} from '../nesting-dispatcher';
+
+describe('formato físico del material', () => {
+  it('reconoce un rollo especial por metadata sin confundir su subfamilia ambigua', () => {
+    const imanFlexible = {
+      subfamilia: 'IMAN_CERAMICO_FLEXIBLE',
+      materiaPrimaTemplateId: 'iman_flexible_rollo_v1',
+      materiaPrimaTipoTecnico: 'iman_flexible_rollo_heladera',
+      unidadStock: 'METRO_LINEAL',
+      atributosVarianteJson: {
+        anchoMm: 610,
+        largoRolloMm: 20_000,
+      },
+    };
+
+    expect(resolverFormatoFisicoMaterial(imanFlexible)).toBe('rollo');
+    expect(esSustratoRollo(imanFlexible)).toBe(true);
+  });
+
+  it('no convierte un imán cerámico unitario en rollo', () => {
+    expect(
+      resolverFormatoFisicoMaterial({
+        subfamilia: 'IMAN_CERAMICO_FLEXIBLE',
+        materiaPrimaTemplateId: 'iman_ceramico_redondo_v1',
+        materiaPrimaTipoTecnico: 'iman_ceramico_redondo',
+        unidadStock: 'UNIDAD',
+        atributosVarianteJson: { diametroMm: 20 },
+      }),
+    ).toBe('plano');
+  });
+
+  it('reconoce futuros sustratos en rollo por geometría y unidad canónicas', () => {
+    expect(
+      resolverFormatoFisicoMaterial({
+        subfamilia: 'OTRA_SUBFAMILIA',
+        unidadStock: 'METRO_LINEAL',
+        atributosVarianteJson: { anchoMm: 900, largoRolloMm: 30_000 },
+      }),
+    ).toBe('rollo');
+  });
+
+  it('prioriza una subfamilia plana aunque tenga atributos contradictorios', () => {
+    expect(
+      resolverFormatoFisicoMaterial({
+        subfamilia: 'SUSTRATO_HOJA',
+        unidadStock: 'METRO_LINEAL',
+        atributosVarianteJson: { anchoMm: 325, largoRolloMm: 50_000 },
+      }),
+    ).toBe('plano');
+  });
+});
 
 function buildPaso(algorithm: 'auto' | 'shelf-rollo' | 'maxrects-rollo') {
   return {
@@ -319,6 +375,124 @@ describe('runNestingForPaso rollo optimizado', () => {
   });
 });
 
+describe('runNestingForPaso geometría vectorial', () => {
+  it('acepta encastres irregulares aunque se superpongan sus rectángulos envolventes', () => {
+    const base = {
+      cantidadCalculada: 1,
+      unidad: 'pliegos' as const,
+      aprovechamientoPct: 50,
+      substrates: [
+        { kind: 'sheet' as const, count: 1, widthMm: 100, heightMm: 100 },
+      ],
+      placements: [
+        {
+          pieceId: 'pieza-a',
+          substrateIndex: 0,
+          xMm: 10,
+          yMm: 10,
+          widthMm: 60,
+          heightMm: 60,
+          rotated: false,
+        },
+        {
+          pieceId: 'pieza-b',
+          substrateIndex: 0,
+          xMm: 40,
+          yMm: 40,
+          widthMm: 50,
+          heightMm: 50,
+          rotated: false,
+        },
+      ],
+    };
+
+    expect(
+      geometriaDispatchValida({
+        ...base,
+        algorithm: 'irregular-2d-bottom-left-v1',
+      }),
+    ).toBe(true);
+    expect(
+      geometriaDispatchValida({
+        ...base,
+        algorithm: 'grid-2d-multi',
+      }),
+    ).toBe(false);
+  });
+
+  it.each(['cnc', 'corte_hilo_caliente'])(
+    'convierte el nesting irregular de %s en placas costeables por el motor',
+    async (familiaCodigo) => {
+      const paso = {
+        rutaPasoId: 'rp-cnc',
+        rutaPasoOrden: 1,
+        familiaCodigo,
+        configPasoId: 'cp-cnc',
+        modoActivacion: 'OBLIGATORIO',
+        condicionActivacionJson: null,
+        modoTiempo: 'T-3',
+        mecanismoCantidad: 'CALCULADO_POR_PASO',
+        mecanismoCantidadConfigJson: null,
+        multiplicadoresActivos: [],
+        paramsPasoJson: {
+          nestingConfig: { allowRotation: false, separationHMm: 0 },
+        },
+        slots: [],
+        cargosDirectosPaso: [],
+        maquina: null,
+      };
+      const result = await runNestingForPaso(
+        paso as never,
+        {
+          cantidad: 2,
+          geometriaVectorial: {
+            schemaVersion: 1,
+            anchoMm: 50,
+            altoMm: 50,
+            areaTotalMm2: 1_250,
+            perimetroTotalMm: 170.711,
+            hashFuente: 'fixture',
+            piezas: [
+              {
+                id: 'triangulo',
+                anchoMm: 50,
+                altoMm: 50,
+                areaMm2: 1_250,
+                perimetroMm: 170.711,
+                contornos: [
+                  {
+                    esHueco: false,
+                    puntos: [
+                      { x: 0, y: 50 },
+                      { x: 25, y: 0 },
+                      { x: 50, y: 50 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          id: 'polyfan-30',
+          subfamilia: 'SUSTRATO_RIGIDO',
+          precioReferencia: 1_000,
+          atributosVarianteJson: {
+            anchoMm: 140,
+            altoMm: 80,
+            margenNoUtilizableMm: 5,
+          },
+        },
+      );
+
+      expect(result?.algorithm).toBe('irregular-2d-bottom-left-v1');
+      expect(result?.cantidadCalculada).toBe(1);
+      expect(result?.unidad).toBe('pliegos');
+      expect(result?.placements).toHaveLength(2);
+    },
+  );
+});
+
 describe('runNestingForPaso plastificado pouch', () => {
   it('calcula piezas por pouch y pouches necesarios sin separación', async () => {
     const result = await runNestingForPaso(
@@ -503,6 +677,39 @@ describe('runNestingForPaso plotter de corte', () => {
 });
 
 describe('runNestingForPaso montaje sobre sustrato', () => {
+  it('monta pliegos impresos sobre imán flexible usando nesting de rollo', async () => {
+    const result = await runNestingForPaso(
+      buildPasoMontaje('auto', 'pliegos_impresos') as never,
+      {
+        cantidad: 100,
+        pliegos_impresos: 4,
+        pliego_impresion_ancho_mm: 325,
+        pliego_impresion_alto_mm: 475,
+      },
+      {
+        id: 'iman-heladera-610',
+        subfamilia: 'IMAN_CERAMICO_FLEXIBLE',
+        materiaPrimaTemplateId: 'iman_flexible_rollo_v1',
+        materiaPrimaTipoTecnico: 'iman_flexible_rollo_heladera',
+        unidadStock: 'METRO_LINEAL',
+        atributosVarianteJson: {
+          anchoMm: 610,
+          largoMm: 20_000,
+          largoRolloMm: 20_000,
+        },
+      },
+    );
+
+    expect(result).not.toBeNull();
+    expect(['shelf-rollo', 'maxrects-rollo']).toContain(result!.algorithm);
+    expect(result!.unidad).toBe('m_lineales');
+    expect(result!.substrates[0]).toMatchObject({
+      kind: 'roll',
+      widthMm: 610,
+    });
+    expect(result!.consumedLengthMm).toBeGreaterThan(0);
+  });
+
   it('calcula material de montaje en rollo usando pliegos impresos publicados', async () => {
     const result = await runNestingForPaso(
       buildPasoMontaje('shelf-rollo', 'pliegos_impresos') as never,

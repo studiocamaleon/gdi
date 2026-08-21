@@ -1,0 +1,463 @@
+{
+  "version": "1.0.0",
+  "status": "POSTPROCESSOR_CALIBRATED_DRY_RUN_REQUIRED",
+  "source": "puma-logo-placa-1.svg",
+  "svgWorkArea": {
+    "widthMm": 1200,
+    "heightMm": 600,
+    "yAxis": "down"
+  },
+  "machine": {
+    "profileId": "corporearte-polifan-grbl-vectorlinker",
+    "name": "Corporearte · cortadora de polifan 1250 × 600 mm",
+    "bedWidthMm": 1250,
+    "bedHeightMm": 600,
+    "originCorner": "bottom-left",
+    "originStrategy": "geometry-bounds",
+    "originLeadInMm": 8,
+    "originSvg": {
+      "x": 2,
+      "y": 414.463
+    },
+    "yAxis": "up",
+    "feedRateMmPerMin": 350,
+    "decimals": 6,
+    "lineEnding": "CRLF",
+    "headerLines": [
+      "G17 G90 G21",
+      "G94",
+      "G92 X0 Y0 Z0",
+      "G54",
+      "T08",
+      "G00 S0 M03",
+      "Z.24"
+    ],
+    "footerLines": [],
+    "calibration": {
+      "source": "andina.tap generado por VectorLinker",
+      "notes": "Origen inferior izquierdo, X hacia la derecha, Y hacia arriba, seis decimales y salida CRLF. Primera prueba física obligatoriamente en seco."
+    }
+  },
+  "pieces": [
+    {
+      "id": "pieza-1-1",
+      "contourIds": [
+        "pieza-1-1-1"
+      ]
+    },
+    {
+      "id": "pieza-2-2",
+      "contourIds": [
+        "pieza-2-2-1"
+      ]
+    },
+    {
+      "id": "pieza-6-3",
+      "contourIds": [
+        "pieza-6-3-1",
+        "pieza-6-3-2"
+      ]
+    },
+    {
+      "id": "pieza-3-4",
+      "contourIds": [
+        "pieza-3-4-1"
+      ]
+    },
+    {
+      "id": "pieza-4-5",
+      "contourIds": [
+        "pieza-4-5-1",
+        "pieza-4-5-2"
+      ]
+    },
+    {
+      "id": "pieza-5-6",
+      "contourIds": [
+        "pieza-5-6-1",
+        "pieza-5-6-2"
+      ]
+    },
+    {
+      "id": "pieza-7-7",
+      "contourIds": [
+        "pieza-7-7-1",
+        "pieza-7-7-2"
+      ]
+    }
+  ],
+  "contours": [
+    {
+      "id": "pieza-1-1-1",
+      "pieceId": "pieza-1-1",
+      "role": "outer",
+      "depth": 0,
+      "parentContourId": null,
+      "points": 57,
+      "areaMm2": 49222.17628549999,
+      "perimeterMm": 1783.7716818478143,
+      "boundsSvg": {
+        "minX": 10,
+        "minY": 10,
+        "maxX": 253.836,
+        "maxY": 251.51
+      }
+    },
+    {
+      "id": "pieza-2-2-1",
+      "pieceId": "pieza-2-2",
+      "role": "outer",
+      "depth": 0,
+      "parentContourId": null,
+      "points": 317,
+      "areaMm2": 46071.3144695,
+      "perimeterMm": 1895.6333714900552,
+      "boundsSvg": {
+        "minX": 258.836,
+        "minY": 10,
+        "maxX": 767.968,
+        "maxY": 406.463
+      }
+    },
+    {
+      "id": "pieza-6-3-1",
+      "pieceId": "pieza-6-3",
+      "role": "outer",
+      "depth": 0,
+      "parentContourId": null,
+      "points": 26,
+      "areaMm2": 35874.514076,
+      "perimeterMm": 895.7401632361751,
+      "boundsSvg": {
+        "minX": 772.968,
+        "minY": 10,
+        "maxX": 1014.478,
+        "maxY": 165.04
+      }
+    },
+    {
+      "id": "pieza-6-3-2",
+      "pieceId": "pieza-6-3",
+      "role": "hole",
+      "depth": 1,
+      "parentContourId": "pieza-6-3-1",
+      "points": 17,
+      "areaMm2": 2694.2177905000135,
+      "perimeterMm": 279.5430755277503,
+      "boundsSvg": {
+        "minX": 863.511,
+        "minY": 76.244,
+        "maxX": 985.586,
+        "maxY": 98.765
+      }
+    },
+    {
+      "id": "pieza-3-4-1",
+      "pieceId": "pieza-3-4",
+      "role": "outer",
+      "depth": 0,
+      "parentContourId": null,
+      "points": 39,
+      "areaMm2": 32560.92938850008,
+      "perimeterMm": 1191.2383050046626,
+      "boundsSvg": {
+        "minX": 1019.478,
+        "minY": 10,
+        "maxX": 1174.566,
+        "maxY": 251.51
+      }
+    },
+    {
+      "id": "pieza-4-5-1",
+      "pieceId": "pieza-4-5",
+      "role": "outer",
+      "depth": 0,
+      "parentContourId": null,
+      "points": 24,
+      "areaMm2": 31844.7401505,
+      "perimeterMm": 774.4179769571871,
+      "boundsSvg": {
+        "minX": 772.968,
+        "minY": 170.04,
+        "maxX": 1014.478,
+        "maxY": 325.033
+      }
+    },
+    {
+      "id": "pieza-4-5-2",
+      "pieceId": "pieza-4-5",
+      "role": "hole",
+      "depth": 1,
+      "parentContourId": "pieza-4-5-1",
+      "points": 18,
+      "areaMm2": 2691.017839499982,
+      "perimeterMm": 279.53785455930785,
+      "boundsSvg": {
+        "minX": 863.558,
+        "minY": 236.315,
+        "maxX": 985.713,
+        "maxY": 258.805
+      }
+    },
+    {
+      "id": "pieza-5-6-1",
+      "pieceId": "pieza-5-6",
+      "role": "outer",
+      "depth": 0,
+      "parentContourId": null,
+      "points": 44,
+      "areaMm2": 2751.622725499998,
+      "perimeterMm": 186.1120860292155,
+      "boundsSvg": {
+        "minX": 10,
+        "minY": 256.51,
+        "maxX": 69.276,
+        "maxY": 315.535
+      }
+    },
+    {
+      "id": "pieza-5-6-2",
+      "pieceId": "pieza-5-6",
+      "role": "hole",
+      "depth": 1,
+      "parentContourId": "pieza-5-6-1",
+      "points": 41,
+      "areaMm2": 1974.2913329999992,
+      "perimeterMm": 157.69262719346113,
+      "boundsSvg": {
+        "minX": 14.281,
+        "minY": 261.175,
+        "maxX": 65.003,
+        "maxY": 310.894
+      }
+    },
+    {
+      "id": "pieza-7-7-1",
+      "pieceId": "pieza-7-7",
+      "role": "outer",
+      "depth": 0,
+      "parentContourId": null,
+      "points": 21,
+      "areaMm2": 575.8514640000012,
+      "perimeterMm": 136.8278675859673,
+      "boundsSvg": {
+        "minX": 74.276,
+        "minY": 256.51,
+        "maxX": 110.523,
+        "maxY": 280.968
+      }
+    },
+    {
+      "id": "pieza-7-7-2",
+      "pieceId": "pieza-7-7",
+      "role": "hole",
+      "depth": 1,
+      "parentContourId": "pieza-7-7-1",
+      "points": 14,
+      "areaMm2": 64.20027749999826,
+      "perimeterMm": 30.5936793425167,
+      "boundsSvg": {
+        "minX": 94.726,
+        "minY": 264.613,
+        "maxX": 104.147,
+        "maxY": 273.157
+      }
+    }
+  ],
+  "bridges": [
+    {
+      "id": "bridge-origin-1",
+      "kind": "origin",
+      "fromNode": "__origin__",
+      "toNode": "pieza-5-6-1",
+      "fromSvg": {
+        "x": 2,
+        "y": 414.463
+      },
+      "toSvg": {
+        "x": 31.981728262724737,
+        "y": 314.5658970069716
+      },
+      "lengthMm": 104.29925798403166
+    },
+    {
+      "id": "bridge-external-1",
+      "kind": "external",
+      "fromNode": "pieza-1-1-1",
+      "toNode": "pieza-2-2-1",
+      "fromSvg": {
+        "x": 253.836,
+        "y": 131.392
+      },
+      "toSvg": {
+        "x": 258.836,
+        "y": 131.392
+      },
+      "lengthMm": 5
+    },
+    {
+      "id": "bridge-external-2",
+      "kind": "external",
+      "fromNode": "pieza-2-2-1",
+      "toNode": "pieza-6-3-1",
+      "fromSvg": {
+        "x": 767.968,
+        "y": 26.206
+      },
+      "toSvg": {
+        "x": 772.968,
+        "y": 26.20600000000001
+      },
+      "lengthMm": 5
+    },
+    {
+      "id": "bridge-external-3",
+      "kind": "external",
+      "fromNode": "pieza-6-3-1",
+      "toNode": "pieza-3-4-1",
+      "fromSvg": {
+        "x": 1014.478,
+        "y": 31.546
+      },
+      "toSvg": {
+        "x": 1019.478,
+        "y": 31.546
+      },
+      "lengthMm": 5
+    },
+    {
+      "id": "bridge-external-4",
+      "kind": "external",
+      "fromNode": "pieza-6-3-1",
+      "toNode": "pieza-4-5-1",
+      "fromSvg": {
+        "x": 992.821,
+        "y": 165.04
+      },
+      "toSvg": {
+        "x": 992.821,
+        "y": 170.04
+      },
+      "lengthMm": 5
+    },
+    {
+      "id": "bridge-external-5",
+      "kind": "external",
+      "fromNode": "pieza-1-1-1",
+      "toNode": "pieza-5-6-1",
+      "fromSvg": {
+        "x": 37.976,
+        "y": 251.509
+      },
+      "toSvg": {
+        "x": 37.976,
+        "y": 256.51
+      },
+      "lengthMm": 5.001000000000005
+    },
+    {
+      "id": "bridge-external-6",
+      "kind": "external",
+      "fromNode": "pieza-1-1-1",
+      "toNode": "pieza-7-7-1",
+      "fromSvg": {
+        "x": 76.368,
+        "y": 251.509
+      },
+      "toSvg": {
+        "x": 76.416,
+        "y": 256.51
+      },
+      "lengthMm": 5.001230348624231
+    },
+    {
+      "id": "bridge-internal-1",
+      "kind": "internal",
+      "fromNode": "pieza-6-3-1",
+      "toNode": "pieza-6-3-2",
+      "fromSvg": {
+        "x": 1014.478,
+        "y": 87.473
+      },
+      "toSvg": {
+        "x": 985.586,
+        "y": 87.473
+      },
+      "lengthMm": 28.89199999999994
+    },
+    {
+      "id": "bridge-internal-2",
+      "kind": "internal",
+      "fromNode": "pieza-4-5-1",
+      "toNode": "pieza-4-5-2",
+      "fromSvg": {
+        "x": 1014.478,
+        "y": 247.576
+      },
+      "toSvg": {
+        "x": 985.713,
+        "y": 247.576
+      },
+      "lengthMm": 28.764999999999986
+    },
+    {
+      "id": "bridge-internal-3",
+      "kind": "internal",
+      "fromNode": "pieza-5-6-1",
+      "toNode": "pieza-5-6-2",
+      "fromSvg": {
+        "x": 13.876534208850682,
+        "y": 300.77287555868946
+      },
+      "toSvg": {
+        "x": 17.435,
+        "y": 298.486
+      },
+      "lengthMm": 4.229950189743518
+    },
+    {
+      "id": "bridge-internal-4",
+      "kind": "internal",
+      "fromNode": "pieza-7-7-1",
+      "toNode": "pieza-7-7-2",
+      "fromSvg": {
+        "x": 89.342,
+        "y": 264.13
+      },
+      "toSvg": {
+        "x": 94.87264995878637,
+        "y": 264.61697546806926
+      },
+      "lengthMm": 5.552047736927786
+    }
+  ],
+  "route": {
+    "svgPointCount": 651,
+    "machinePointCount": 651,
+    "closedSvg": true,
+    "closedMachine": true,
+    "startsAtMachineZero": true,
+    "endsAtMachineZero": true,
+    "machineBounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 1172.566,
+      "maxY": 404.463
+    },
+    "lengthMm": 8014.589661292768
+  },
+  "metrics": {
+    "contourLengthMm": 7611.108688774114,
+    "bridgeOneWayLengthMm": 201.7404862593271,
+    "bridgeTravelLengthMm": 403.4809725186542,
+    "totalLengthMm": 8014.589661292768,
+    "estimatedSeconds": 1373.9296562216173,
+    "contourCount": 11,
+    "pieceCount": 7,
+    "bridgeCount": 11
+  },
+  "warnings": [
+    "El formato TAP fue calibrado contra un archivo real de VectorLinker, pero el primer uso debe validarse con una corrida en seco y el hilo apagado.",
+    "El parser espera paths SVG cerrados y aplanados con M/L/H/V/Z, sin transformaciones."
+  ]
+}

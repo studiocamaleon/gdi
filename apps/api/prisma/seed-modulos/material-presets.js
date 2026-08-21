@@ -45,6 +45,36 @@ const presets = [
     ],
   },
   {
+    key: 'POLYFAN_XPS',
+    nombreCanonico: 'Polyfan (XPS alta densidad)',
+    descripcionCorta:
+      'Placa de poliestireno extruido para letras y carteles corpóreos cortados con hilo caliente o CNC.',
+    tipoTecnico: 'polyfan_xps',
+    iconKind: 'foam',
+    aliasDisponibles: [
+      'Polyfan',
+      'Polifan',
+      'XPS alta densidad',
+      'Poliestireno extruido',
+    ],
+    usosRecomendados: ['letras_corporeas', 'router_cnc', 'hilo_caliente'],
+    procesosCompatibles: ['router_cnc', 'hilo_caliente'],
+    advertencias: [
+      'No cortar con láser.',
+      'Confirmar el área útil real de cada proveedor antes de cotizar.',
+    ],
+    variantes: [
+      vPolyfan('POLYFAN-1200-20-B', 20, 'Blanco', true),
+      vPolyfan('POLYFAN-1200-30-B', 30, 'Blanco', true),
+      vPolyfan('POLYFAN-1200-40-B', 40, 'Blanco', false),
+      vPolyfan('POLYFAN-1200-50-B', 50, 'Blanco', false),
+      vPolyfan('POLYFAN-1200-20-N', 20, 'Negro', true),
+      vPolyfan('POLYFAN-1200-30-N', 30, 'Negro', false),
+      vPolyfan('POLYFAN-1200-40-N', 40, 'Negro', false),
+      vPolyfan('POLYFAN-1200-50-N', 50, 'Negro', false),
+    ],
+  },
+  {
     key: 'MDF',
     nombreCanonico: 'MDF',
     descripcionCorta:
@@ -2956,6 +2986,25 @@ function v(sku, formato, ancho, alto, espesor, colorBase, recomendada) {
     unidadCompra: UnidadMateriaPrima.UNIDAD,
     precioReferencia: null,
     moneda: 'ARS',
+  };
+}
+
+function vPolyfan(sku, espesor, colorBase, recomendada) {
+  return {
+    ...v(sku, '1200 × 600 mm', 1.2, 0.6, espesor, colorBase, recomendada),
+    atributosVarianteJson: {
+      ancho: 1.2,
+      alto: 0.6,
+      anchoMm: 1200,
+      altoMm: 600,
+      anchoUtilMm: 1180,
+      altoUtilMm: 580,
+      margenNoUtilizableMm: 10,
+      espesor,
+      colorBase,
+      material: 'XPS',
+      procesoRecomendado: 'hilo_caliente',
+    },
   };
 }
 

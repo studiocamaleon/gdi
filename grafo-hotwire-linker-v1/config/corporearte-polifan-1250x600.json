@@ -1,0 +1,31 @@
+{
+  "id": "corporearte-polifan-grbl-vectorlinker",
+  "name": "Corporearte · cortadora de polifan 1250 × 600 mm",
+  "bedWidthMm": 1250,
+  "bedHeightMm": 600,
+  "feedRateMmPerMin": 350,
+  "decimals": 6,
+  "originCorner": "bottom-left",
+  "originStrategy": "geometry-bounds",
+  "originLeadInMm": 8,
+  "lineEnding": "CRLF",
+  "headerLines": [
+    "G17 G90 G21",
+    "G94",
+    "G92 X0 Y0 Z0",
+    "G54",
+    "T08",
+    "G00 S0 M03",
+    "Z.24"
+  ],
+  "feedCommand": "G1 F",
+  "trailingSpaceAfterFeed": true,
+  "duplicateInitialOriginLines": 2,
+  "footerLines": [],
+  "finalBlankLines": 1,
+  "strictBounds": true,
+  "calibration": {
+    "source": "andina.tap generado por VectorLinker",
+    "notes": "Origen inferior izquierdo, X hacia la derecha, Y hacia arriba, seis decimales y salida CRLF. Primera prueba física obligatoriamente en seco."
+  }
+}

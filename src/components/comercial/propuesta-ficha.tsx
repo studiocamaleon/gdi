@@ -12,6 +12,7 @@ import {
   ChevronRightIcon,
   CircleDollarSignIcon,
   CreditCardIcon,
+  DownloadIcon,
   Edit3Icon,
   XCircleIcon,
   ExternalLinkIcon,
@@ -182,6 +183,13 @@ import {
 } from "@/lib/modificaciones-fisicas";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
+import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-panel";
+import {
+  crearSvgDePlaca,
+  descargarTexto,
+  nombreBaseSvg,
+  obtenerFuenteVectorial,
+} from "@/lib/nesting-vectorial-export";
 import {
   layoutPliegosEnHoja,
   type LayoutPliegosEnHoja,
@@ -1997,6 +2005,7 @@ function ProduccionItemView({
   onEditPanels,
   onExpand,
   ampliada = false,
+  prepararCorte = false,
 }: {
   item: PropuestaItem;
   calculoPendiente: boolean;
@@ -2006,6 +2015,8 @@ function ProduccionItemView({
   onExpand?: () => void;
   /** Aprovecha el espacio extra del diálogo para agrandar el nesting. */
   ampliada?: boolean;
+  /** La preparación de máquina sólo existe cuando el item ya pertenece a una OT. */
+  prepararCorte?: boolean;
 }) {
   const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
   const pasosActivos = pasosCosteoActivos;
@@ -2023,6 +2034,10 @@ function ProduccionItemView({
       ?.estructuraBastidor ?? null;
   const pasosConNesting = pasosCosteoActivos.filter(
     (paso): paso is PanelEditorPaso => Boolean(paso.nestingResult),
+  );
+  const fuenteVectorial = React.useMemo(
+    () => obtenerFuenteVectorial(item.jobContext),
+    [item.jobContext],
   );
   const nestingTabs = pasosConNesting.map((paso, index) => ({
     key: nestingPasoKey(paso),
@@ -2186,6 +2201,47 @@ function ProduccionItemView({
               </div>
             ) : activeNestingTab ? (
               <div className="production-nesting" key={activeNestingTab.key}>
+                {activeNestingTab.paso.nestingResult?.algorithm ===
+                "irregular-2d-bottom-left-v1" ? (
+                  <div className="mb-3 flex flex-wrap justify-end gap-2">
+                    {fuenteVectorial ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          descargarTexto(
+                            fuenteVectorial.svg,
+                            fuenteVectorial.nombreArchivo,
+                          )
+                        }
+                      >
+                        <DownloadIcon />
+                        SVG original
+                      </Button>
+                    ) : null}
+                    {activeNestingTab.paso.nestingResult.substrates.map(
+                      (_, substrateIndex) => (
+                        <Button
+                          key={substrateIndex}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const result = activeNestingTab.paso.nestingResult!;
+                            descargarTexto(
+                              crearSvgDePlaca(result, substrateIndex),
+                              `${nombreBaseSvg(fuenteVectorial?.nombreArchivo ?? item.productoNombre)}-placa-${substrateIndex + 1}.svg`,
+                            );
+                          }}
+                        >
+                          <DownloadIcon />
+                          Placa {substrateIndex + 1} SVG
+                        </Button>
+                      ),
+                    )}
+                  </div>
+                ) : null}
                 {onEditPanels && isPanelEditableStep(activeNestingTab.paso) ? (
                   <div className="mb-3 flex justify-end">
                     <button
@@ -2212,6 +2268,11 @@ function ProduccionItemView({
                   }
                   modificaciones={modificacionesOverlay}
                 />
+                {prepararCorte &&
+                activeNestingTab.paso.familiaCodigo ===
+                  "corte_hilo_caliente" ? (
+                  <RecorridoCortePanel itemId={item.id} />
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -3631,6 +3692,7 @@ export function ProductRow({
             <ProduccionItemView
               item={item}
               calculoPendiente={calculoPendiente}
+              prepararCorte={readOnly}
               onExpand={() => setProduccionAmpliada(true)}
               onEditPanels={
                 readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
@@ -3655,6 +3717,7 @@ export function ProductRow({
                 item={item}
                 calculoPendiente={calculoPendiente}
                 ampliada
+                prepararCorte={readOnly}
                 onEditPanels={
                   readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
                 }
@@ -5262,9 +5325,7 @@ function rehidratarOrdenItem(
     (snap?.jobContext as Record<string, unknown> | null) ?? undefined;
   const unidadMedida = unidadDesdeCorta(producto.cantidadUnidad);
   const cantidadLibros =
-    unidadMedida === "libros"
-      ? cantidadLibrosCentroCopiado(jobContext)
-      : null;
+    unidadMedida === "libros" ? cantidadLibrosCentroCopiado(jobContext) : null;
   const cantidadVisible = cantidadLibros ?? producto.cantidad;
 
   const costosVacios = {
@@ -5411,8 +5472,7 @@ function rehidratarOrdenItem(
       producto.subcategoriaComercial || producto.familia,
     unidadMedida,
     cantidad: cantidadVisible,
-    precioUnitario:
-      cantidadVisible > 0 ? producto.total / cantidadVisible : 0,
+    precioUnitario: cantidadVisible > 0 ? producto.total / cantidadVisible : 0,
     subtotal: producto.subtotal,
     impuestoPorcentaje:
       producto.subtotal > 0

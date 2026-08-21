@@ -17,7 +17,9 @@ function getRecord(value: unknown): Record<string, unknown> {
 export function getHerramientaMedidasArchivo(
   atributos: Record<string, unknown> | null | undefined,
 ): HerramientaMedidasArchivo {
-  const config = getRecord(getRecord(atributos).herramientas).medidasDesdeArchivo;
+  const config = getRecord(
+    getRecord(atributos).herramientas,
+  ).medidasDesdeArchivo;
   const record = getRecord(config);
   return {
     enabled: record.enabled === true,
@@ -44,7 +46,9 @@ export type HerramientaEditorSello = {
 export function getHerramientaEditorSello(
   atributos: Record<string, unknown> | null | undefined,
 ): HerramientaEditorSello {
-  const record = getRecord(getRecord(getRecord(atributos).herramientas).editorSello);
+  const record = getRecord(
+    getRecord(getRecord(atributos).herramientas).editorSello,
+  );
   return { enabled: record.enabled === true };
 }
 

@@ -1,0 +1,39 @@
+{
+  "file": "puma-logo-placa-1.tap",
+  "lineEnding": "CRLF",
+  "totalLines": 662,
+  "nonEmptyLines": 660,
+  "headerLines": [
+    "G17 G90 G21",
+    "G94",
+    "G92 X0 Y0 Z0",
+    "G54",
+    "T08",
+    "G00 S0 M03",
+    "Z.24",
+    "G1 F350 "
+  ],
+  "coordinateCount": 652,
+  "zeroLengthMoves": 1,
+  "start": {
+    "x": 0,
+    "y": 0
+  },
+  "end": {
+    "x": 0,
+    "y": 0
+  },
+  "closed": true,
+  "bounds": {
+    "minX": 0,
+    "minY": 0,
+    "maxX": 1172.566,
+    "maxY": 404.463
+  },
+  "routeLengthMm": 8014.589661983651,
+  "feedRateMmPerMin": 350,
+  "estimatedSeconds": 1373.9296563400544,
+  "decimalsObserved": [
+    6
+  ]
+}

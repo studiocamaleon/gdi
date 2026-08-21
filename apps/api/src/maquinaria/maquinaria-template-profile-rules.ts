@@ -199,6 +199,13 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.mecanizado],
   }),
 
+  [PlantillaMaquinariaDto.corte_hilo_caliente]: buildRule({
+    detalleKeys: ['material', 'espesorMinMm', 'espesorMaxMm'],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
+    modeSourceKeys: ['material'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
+  }),
+
   // ─── §13 ANILLADORA ─────────────────────────────────────────────
   // Discriminantes (detalle): tipoAnillo (ESPIRAL_PLASTICO|WIRE_O).
   // paramsPerfilJson (detalle): diametrosSoportadosMm.

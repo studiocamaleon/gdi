@@ -156,6 +156,8 @@ export interface RutaPaso {
   /** Nombre de la familia resuelto en el server (para familias tenant el
    *  código es un UUID: nunca mostrarlo humanizado). */
   familiaNombre?: string | null;
+  /** Herramientas exigidas por la familia para cotizar este paso. */
+  herramientasCotizacion?: string[];
   /** Nombre operativo definido en la ruta; precede al nombre de familia. */
   nombreVisible?: string | null;
   icono?: string | null;
@@ -379,6 +381,8 @@ export interface PasoExtra {
   insertarDespuesDeRutaPasoId: string | null;
   ordenInterno: number;
   familiaCodigo: string;
+  /** Herramientas exigidas por la familia para cotizar este paso. */
+  herramientasCotizacion?: string[];
   nombreVisible: string | null;
   modoActivacion: string | null;
   condicionActivacionJson: unknown;
@@ -453,6 +457,7 @@ export interface FamiliaListItem {
    *  (pasos componibles, Etapa C/D). */
   origen?: "sistema" | "tenant";
   visibleEnSelector?: boolean;
+  herramientasCotizacion?: string[];
   relacionMaquinaSoportada: string[];
   modoActivacionDefault: string;
   modosTiempoSoportados: string[];

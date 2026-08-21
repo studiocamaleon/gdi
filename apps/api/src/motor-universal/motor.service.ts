@@ -128,8 +128,19 @@ import {
 } from '../productos-servicios/pasos/familias';
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import { paramsEfectivos } from './params-runtime';
+import {
+  adjuntarCacheVectorial,
+  GeometriaVectorialCacheService,
+  nestingVectorialFueReutilizado,
+} from './geometria-vectorial/geometria-vectorial-cache.service';
+import {
+  analizarSvgFabricacion,
+  SvgFabricacionError,
+} from './geometria-vectorial/svg-parser';
 import { MotorCotizacionError } from './motor-error';
 import { jobContextCotizacionValido } from './cotizar.dto';
+import { RecorridosVectorialesService } from '../recorridos-vectoriales/recorridos-vectoriales.service';
+import { crearSvgPlacaDesdeNesting } from '../recorridos-vectoriales/nesting-svg';
 
 const MOTOR_CONTRACT_VERSION = 'motor-universal-v4';
 
@@ -469,7 +480,98 @@ export class MotorUniversalService {
     private readonly prisma: PrismaService,
     private readonly aplicarPrecio: AplicarPrecioService,
     private readonly preciosEspecialesClientes: PreciosEspecialesClientesService,
+    private readonly geometriaCache: GeometriaVectorialCacheService = new GeometriaVectorialCacheService(),
+    private readonly recorridosVectoriales: RecorridosVectorialesService = new RecorridosVectorialesService(),
   ) {}
+
+  private async generarRecorridoCorteCotizacion(
+    paso: PasoCargado,
+    nesting: NestingDispatchResult,
+  ): Promise<NonNullable<PasoEjecutado['recorridoCorte']>> {
+    const profile = paso.perfil;
+    const machine = paso.maquina;
+    if (
+      !profile?.productivityValue ||
+      String(profile.productivityUnit).toUpperCase() !== 'MM_MIN'
+    ) {
+      throw new Error(
+        'El corte con hilo caliente necesita una velocidad de máquina en mm/min.',
+      );
+    }
+    const params = machine?.parametrosTecnicosJson ?? {};
+    if (params.postprocesadorRecorrido !== 'HOTWIRE_TAP_V1') {
+      throw new Error(
+        'La máquina de hilo caliente no tiene configurado el postprocesador TAP.',
+      );
+    }
+    const sheets = nesting.substrates.filter(
+      (
+        substrate,
+      ): substrate is Extract<
+        NestingDispatchResult['substrates'][number],
+        { kind: 'sheet' }
+      > => substrate.kind === 'sheet',
+    );
+    const machineWidth =
+      Number(machine?.anchoUtil) ||
+      Math.max(...sheets.map((sheet) => sheet.widthMm));
+    // `largoUtil` todavía no forma parte del snapshot liviano de PasoCargado;
+    // la altura física se valida nuevamente contra la máquina persistida al
+    // preparar la OT. Para cotización usamos como mínimo la placa calculada.
+    const machineHeight = Math.max(...sheets.map((sheet) => sheet.heightMm));
+    const result: NonNullable<PasoEjecutado['recorridoCorte']> = [];
+    for (let plateIndex = 0; plateIndex < sheets.length; plateIndex += 1) {
+      const svg = crearSvgPlacaDesdeNesting(
+        nesting as Parameters<typeof crearSvgPlacaDesdeNesting>[0],
+        plateIndex,
+      );
+      const job = await this.recorridosVectoriales.generar({
+        modo: 'CORTE',
+        svg,
+        nombreFuente: `cotizacion-placa-${plateIndex + 1}.svg`,
+        perfil: {
+          id: profile.id,
+          nombre: `${machine?.nombre ?? 'Cortadora'} · ${profile.nombre}`,
+          postprocesador: 'HOTWIRE_TAP_V1',
+          anchoUtilMm: machineWidth,
+          altoUtilMm: machineHeight,
+          velocidadMmMin: profile.productivityValue,
+          decimales: this.numeroEnteroSeguro(params.decimalesTap, 6),
+          entradaMm: this.numeroNoNegativo(params.entradaMm, 8),
+          origen:
+            params.origenMaquina === 'bottom-right' ||
+            params.origenMaquina === 'top-left' ||
+            params.origenMaquina === 'top-right'
+              ? params.origenMaquina
+              : 'bottom-left',
+          estrategiaOrigen:
+            params.estrategiaOrigen === 'plate-corner'
+              ? 'plate-corner'
+              : 'geometry-bounds',
+          strictBounds: true,
+        },
+      });
+      result.push({
+        placaIndice: plateIndex,
+        longitudTotalMm: job.metricas.longitudTotalMm,
+        tiempoEstimadoSeg: job.metricas.tiempoEstimadoSeg,
+        cantidadConexiones: job.metricas.cantidadConexiones,
+        velocidadMmMin: profile.productivityValue,
+        engineVersion: job.engine.version,
+        postprocesador: job.postprocesador,
+      });
+    }
+    return result;
+  }
+
+  private numeroNoNegativo(value: unknown, fallback: number) {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : fallback;
+  }
+
+  private numeroEnteroSeguro(value: unknown, fallback: number) {
+    return Math.trunc(this.numeroNoNegativo(value, fallback));
+  }
 
   /**
    * Params del paso con los campos que el modelador dejó ABIERTOS pisados por
@@ -602,6 +704,67 @@ export class MotorUniversalService {
       caras: 1, // simple faz por defecto (se sobrescribe con input)
       ...input.jobContext,
     };
+    let vectorCacheHit = false;
+    // El navegador sólo captura la fuente. El servidor vuelve a derivar toda
+    // la geometría para que perímetro, área y cantidad de piezas usados en el
+    // precio no puedan ser adulterados desde el JobContext.
+    if (jobContext.disenoVectorialFuente) {
+      try {
+        const fuente = jobContext.disenoVectorialFuente;
+        const cached = this.geometriaCache.obtenerParaCotizacion({
+          tenantId: input.tenantId,
+          cacheKey: jobContext.disenoVectorialCacheKey,
+          svg: fuente.svg,
+          anchoFinalMm: fuente.anchoFinalMm,
+          altoFinalMm: fuente.altoFinalMm,
+        });
+        const geometria = cached
+          ? cached.analisis.geometria
+          : analizarSvgFabricacion({
+              svg: fuente.svg,
+              anchoFinalMm: fuente.anchoFinalMm,
+              altoFinalMm: fuente.altoFinalMm,
+            }).geometria;
+        if (cached) {
+          adjuntarCacheVectorial(jobContext, cached);
+        }
+        jobContext.geometriaVectorial = geometria;
+        jobContext.piezas = geometria.piezas.map((pieza) => ({
+          cantidad: jobContext.cantidad,
+          anchoMm: pieza.anchoMm,
+          altoMm: pieza.altoMm,
+          perimetroMm: pieza.perimetroMm,
+          sourcePieceId: pieza.id,
+        }));
+        jobContext.medidaCustomMm = {
+          anchoMm: geometria.anchoMm,
+          altoMm: geometria.altoMm,
+        };
+        jobContext.piezaAnchoMaxMm = Math.max(
+          ...geometria.piezas.map((pieza) => pieza.anchoMm),
+        );
+        jobContext.piezaAltoMaxMm = Math.max(
+          ...geometria.piezas.map((pieza) => pieza.altoMm),
+        );
+        jobContext.piezaAreaTotalM2 =
+          (geometria.areaTotalMm2 * jobContext.cantidad) / 1_000_000;
+        jobContext.piezaPerimetroTotalM =
+          (geometria.perimetroTotalMm * jobContext.cantidad) / 1_000;
+      } catch (error) {
+        if (error instanceof SvgFabricacionError) {
+          return fallar([
+            {
+              codigo: error.diagnosticos[0]?.codigo ?? 'svg_invalido',
+              severidad: 'ERROR',
+              mensaje: error.message,
+              sugerencia:
+                'Corregí el archivo vectorial y volvé a calcular la cotización.',
+            },
+          ]);
+        }
+        throw error;
+      }
+    }
     // Cobertura de tóner: es un default POR PASO (paramsPasoJson.coberturaDefault),
     // no del producto — lo resuelve resolverCoberturaComercial. Ver
     // docs/cobertura-toner-por-nivel-diseno.md.
@@ -1141,6 +1304,7 @@ export class MotorUniversalService {
       cotizacion.desglosePrecio = cotizacionReferenciaMinimo.desglosePrecio;
     }
 
+    vectorCacheHit = nestingVectorialFueReutilizado(jobContext);
     this.logger.log({
       event: 'motor_cotizacion_completada',
       quoteRunId,
@@ -1152,6 +1316,7 @@ export class MotorUniversalService {
       warningCodes: errores
         .filter((error) => error.severidad === 'WARNING')
         .map((error) => error.codigo),
+      vectorCacheHit,
       motorVersion: MOTOR_CONTRACT_VERSION,
     });
     return {
@@ -1161,6 +1326,7 @@ export class MotorUniversalService {
         quoteRunId,
         motorVersion: MOTOR_CONTRACT_VERSION,
         durationMs: Date.now() - startedAt,
+        vectorCacheHit,
       },
       cotizacion,
     };
@@ -3073,6 +3239,38 @@ export class MotorUniversalService {
       });
       return this.pasoAbortado(pasoConPerfil);
     }
+    let recorridoCorte: PasoEjecutado['recorridoCorte'];
+    if (
+      pasoConPerfil.familiaCodigo === 'corte_hilo_caliente' &&
+      nestingDispatch
+    ) {
+      try {
+        recorridoCorte = await this.generarRecorridoCorteCotizacion(
+          pasoConPerfil,
+          nestingDispatch,
+        );
+        jobContext.piezaPerimetroTotalM =
+          recorridoCorte.reduce(
+            (sum, placa) => sum + placa.longitudTotalMm,
+            0,
+          ) / 1_000;
+      } catch (error) {
+        errores.push({
+          codigo: 'recorrido_corte_no_generable',
+          severidad: 'ERROR',
+          mensaje:
+            error instanceof Error
+              ? error.message
+              : 'No se pudo generar el recorrido de corte.',
+          rutaPasoId: pasoConPerfil.rutaPasoId,
+          rutaPasoOrden: pasoConPerfil.rutaPasoOrden,
+          familiaCodigo: pasoConPerfil.familiaCodigo,
+          sugerencia:
+            'Revisar la geometría del SVG y el perfil de la máquina de corte.',
+        });
+        return this.pasoAbortado(pasoConPerfil);
+      }
+    }
     const tiempo = sinImpresion
       ? this.tiempoCero()
       : this.calcularTiempo(
@@ -3168,6 +3366,7 @@ export class MotorUniversalService {
           piezasPorPliego: nestingDispatch.piezasPorPliego,
           consumedLengthMm: nestingDispatch.consumedLengthMm,
           piezasAcomodadas: nestingDispatch.piezasAcomodadas,
+          estrategiaDisposicion: nestingDispatch.estrategiaDisposicion,
           visualConfig: nestingDispatch.visualConfig,
           outputsCanonicos,
           costingPreview: this.buildNestingCostingPreview(
@@ -3204,6 +3403,7 @@ export class MotorUniversalService {
       outputsCanonicos,
       capacidades,
       nestingResult,
+      recorridoCorte,
       estructuraBastidor,
     };
   }
@@ -5801,7 +6001,7 @@ export class MotorUniversalService {
     if (areaPliegoImpresion > 0) return areaPliegoImpresion;
 
     const attrs = materialPreliminar?.atributosVarianteJson ?? null;
-    if (!esSustratoRollo(materialPreliminar?.subfamilia)) {
+    if (!esSustratoRollo(materialPreliminar)) {
       const areaSustratoM2 = this.getAreaM2FromAttrs(attrs);
       if (areaSustratoM2 > 0) {
         const cantidad = this.resolverCantidad(
@@ -6008,6 +6208,9 @@ export class MotorUniversalService {
                 id: v.id,
                 atributosVarianteJson: v.atributosVarianteJson ?? null,
                 subfamilia: v.subfamilia ?? null,
+                materiaPrimaTemplateId: v.materiaPrimaTemplateId ?? null,
+                materiaPrimaTipoTecnico: v.materiaPrimaTipoTecnico ?? null,
+                unidadStock: v.unidadStock ?? null,
               });
               return { v, aprovechamiento: dispatch?.aprovechamientoPct ?? -1 };
             }),
@@ -6310,7 +6513,13 @@ export class MotorUniversalService {
 
   private esPlotterCorteSobreHojas(
     paso: PasoCargado,
-    subfamilia: string | null | undefined,
+    material: {
+      subfamilia?: string | null;
+      materiaPrimaTemplateId?: string | null;
+      materiaPrimaTipoTecnico?: string | null;
+      unidadStock?: string | null;
+      atributosVarianteJson?: Record<string, unknown> | null;
+    } | null,
     jobContext: JobContext,
   ): boolean {
     // Corte sobre rollo (estrategia declarada): el formato lo dice el material
@@ -6320,8 +6529,8 @@ export class MotorUniversalService {
     if (estrategiaNestingDeFamilia(paso.familiaCodigo) !== 'corte_rollo') {
       return false;
     }
-    if (esCorteSobreHojas(subfamilia)) return true;
-    return !subfamilia && hayPliegosImpresosHeredados(jobContext);
+    if (esCorteSobreHojas(material)) return true;
+    return !material && hayPliegosImpresosHeredados(jobContext);
   }
 
   /** Metros lineales desde la lista de piezas (para fórmula por_metro_lineal). */
@@ -6604,13 +6813,7 @@ export class MotorUniversalService {
       // m² crudos de las piezas (sin desperdicio) cuando el dispatcher no
       // dio layout. [Tanda A: era un if con los dos nombres]
       if (fallbackSinLayoutDeFamilia(paso.familiaCodigo) === 'm2_crudos') {
-        if (
-          this.esPlotterCorteSobreHojas(
-            paso,
-            materialResuelto?.subfamilia,
-            jobContext,
-          )
-        ) {
+        if (this.esPlotterCorteSobreHojas(paso, materialResuelto, jobContext)) {
           const m2Pliegos = this.calcularM2DesdePliegosImpresos(jobContext);
           if (m2Pliegos > 0) return m2Pliegos;
         }
@@ -6916,6 +7119,13 @@ export class MotorUniversalService {
           materialResuelto,
         )
       );
+    }
+
+    if (source === 'uniones_vectoriales') {
+      const cantidadUniones = Number(jobContext.unionesVectoriales ?? 0);
+      return Number.isFinite(cantidadUniones) && cantidadUniones >= 0
+        ? cantidadUniones
+        : 0;
     }
 
     // Magnitud DERIVADA como driver del tiempo (`derivada:<magnitud>`): el

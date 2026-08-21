@@ -1240,13 +1240,78 @@ function formatMm(value: unknown) {
 function mmToCmInput(value: unknown) {
   const n = readOptionalNumber(value);
   if (n === undefined) return "";
-  return String(n / 10);
+  return String(n / 10).replace(".", ",");
+}
+
+function decimalInputText(value: unknown) {
+  const n = readOptionalNumber(value);
+  return n === undefined ? "" : String(n).replace(".", ",");
 }
 
 function cmInputToMm(value: string) {
   if (value.trim() === "") return null;
-  const parsed = Number(value);
+  const parsed = Number(value.replace(",", "."));
   return Number.isFinite(parsed) ? parsed * 10 : null;
+}
+
+function parseLocalizedDecimalInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || /[.,]$/.test(trimmed)) return null;
+  const parsed = Number(trimmed.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function DecimalDraftInput({
+  value,
+  onValueChange,
+  onBlurValue,
+  ...props
+}: Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange" | "onBlur"
+> & {
+  value: number | string | null | undefined;
+  onValueChange: (value: number | null) => void;
+  onBlurValue?: (value: number | null) => void;
+}) {
+  const externalText = value == null ? "" : String(value);
+  const [draft, setDraft] = React.useState(externalText);
+  const [focused, setFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!focused) setDraft(externalText);
+  }, [externalText, focused]);
+
+  return (
+    <input
+      {...props}
+      inputMode="decimal"
+      value={draft}
+      onFocus={(event) => {
+        setFocused(true);
+        props.onFocus?.(event);
+      }}
+      onChange={(event) => {
+        const raw = event.target.value;
+        // Permite estados intermedios necesarios para escribir con teclado
+        // español: "4," debe permanecer visible hasta que llegue el decimal.
+        if (raw !== "" && !/^\d*(?:[.,]\d*)?$/.test(raw)) return;
+        setDraft(raw);
+        if (raw === "") {
+          onValueChange(null);
+          return;
+        }
+        const parsed = parseLocalizedDecimalInput(raw);
+        if (parsed !== null) onValueChange(parsed);
+      }}
+      onBlur={(event) => {
+        const parsed = parseLocalizedDecimalInput(event.target.value);
+        if (parsed !== null) onValueChange(parsed);
+        onBlurValue?.(parsed);
+        setFocused(false);
+      }}
+    />
+  );
 }
 
 type PanelAxis = "vertical" | "horizontal";
@@ -8699,9 +8764,8 @@ function AcomodadoDetalladoEditor({
                                                       <span
                                                         className={trab.ctl}
                                                       >
-                                                        <input
+                                                        <DecimalDraftInput
                                                           className={trab.num}
-                                                          inputMode="decimal"
                                                           value={mmToCmInput(
                                                             getResolvedNestingNumber(
                                                               nestingMargins[
@@ -8713,15 +8777,13 @@ function AcomodadoDetalladoEditor({
                                                               0,
                                                             ),
                                                           )}
-                                                          onChange={(e) =>
+                                                          onValueChange={(value) =>
                                                             updateNestingMargins(
                                                               pasoId,
                                                               {
-                                                                [key]:
-                                                                  cmInputToMm(
-                                                                    e.target
-                                                                      .value,
-                                                                  ),
+                                                                [key]: value == null
+                                                                  ? null
+                                                                  : value * 10,
                                                               },
                                                             )
                                                           }
@@ -8768,26 +8830,18 @@ function AcomodadoDetalladoEditor({
                                                     {label}
                                                   </span>
                                                   <span className={trab.ctl}>
-                                                    <input
+                                                    <DecimalDraftInput
                                                       className={trab.num}
-                                                      inputMode="decimal"
-                                                      value={String(
+                                                      value={decimalInputText(
                                                         nestingExtraMargins[
                                                           key
-                                                        ] ?? "",
+                                                        ],
                                                       )}
-                                                      onChange={(e) =>
+                                                      onValueChange={(value) =>
                                                         updateNestingExtraMargins(
                                                           pasoId,
                                                           {
-                                                            [key]:
-                                                              e.target.value ===
-                                                              ""
-                                                                ? null
-                                                                : Number(
-                                                                    e.target
-                                                                      .value,
-                                                                  ),
+                                                            [key]: value,
                                                           },
                                                         )
                                                       }

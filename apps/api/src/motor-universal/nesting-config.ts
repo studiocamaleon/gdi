@@ -67,6 +67,7 @@ const MIN_PANEL_MAX_WIDTH_MM = 300;
 export interface NestingConfigResolved {
   algorithm: NestingAlgorithmPolicy;
   allowRotation: boolean;
+  preservarComposicionOriginalSiEntra: boolean;
   pieceBleedMm: number;
   separationHMm: number;
   separationVMm: number;
@@ -361,6 +362,9 @@ export function resolveNestingConfig(
       params.permitirRotacion,
       true,
     ),
+    preservarComposicionOriginalSiEntra:
+      maqParams.estrategiaNestingVectorial ===
+      'preserve-original-if-fits',
     pieceBleedMm,
     separationHMm,
     separationVMm,

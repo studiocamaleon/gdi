@@ -193,6 +193,7 @@ const REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE: Record<PlantillaMaquinaria, str
     "otro",
   ],
   router_cnc: ["fresa", "cuchilla", "filtro", "kit_mantenimiento", "otro"],
+  corte_hilo_caliente: ["hilo", "kit_mantenimiento", "otro"],
   corte_laser: ["filtro", "cuchilla", "kit_mantenimiento", "otro"],
   guillotina: ["cuchilla", "kit_mantenimiento", "otro"],
   laminadora_bopp_rollo: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
