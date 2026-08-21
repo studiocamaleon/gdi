@@ -122,10 +122,19 @@ enum PlantillaMaquinaria {
   LAMINADORA_BOPP_ROLLO
   CORTE_LASER
   ROUTER_CNC
+  CORTE_HILO_CALIENTE
   ANILLADORA
   MESA_DE_CORTE
   PLANCHA_TERMICA
   IMPRESORA_3D
+}
+
+enum EstadoRevisionRecorridoVectorial {
+  BORRADOR
+  REVISADA
+  APROBADA
+  ENVIADA_MAQUINA
+  REEMPLAZADA
 }
 
 enum EstadoMaquina {
@@ -655,6 +664,7 @@ model Tenant {
   productosComisionesAplicadas                     ProductoComisionAplicada[]
   ordenesTrabajo                                   OrdenTrabajo[]
   ordenTrabajoItems                                OrdenTrabajoItem[]
+  revisionesRecorridoVectorial                     RecorridoVectorialRevision[]
   ordenTrabajoItemPasos                            OrdenTrabajoItemPaso[]
   etaPromesas                                      EtaPromesa[]
   etaSnapshotsEstacion                             EtaSnapshotEstacion[]
@@ -3131,40 +3141,40 @@ model OrdenTrabajo {
 }
 
 model OrdenTrabajoItem {
-  id                    String                 @id @default(uuid()) @db.Uuid
-  tenantId              String                 @db.Uuid
-  ordenId               String                 @db.Uuid
+  id                    String                       @id @default(uuid()) @db.Uuid
+  tenantId              String                       @db.Uuid
+  ordenId               String                       @db.Uuid
   /// FK al snapshot completo (ruta + pasos + materiales + valores). Las
   /// secciones futuras de Costos/Producción por item leen de ahí.
   /// Null = OT manual/histórica sin cotización.
-  cotizacionItemId      String?                @db.Uuid
+  cotizacionItemId      String?                      @db.Uuid
   codigo                String
   nombre                String
   /// Etiqueta corta legada (subcategoría). Preferir los dos campos de abajo.
   familia               String
   /// Categoría/subcategoría comercial tal como se ven al crear la orden
   /// ("Gran formato flexible" / "Vinilos impresos").
-  categoriaComercial    String                 @default("")
-  subcategoriaComercial String                 @default("")
-  cantidad              Decimal                @db.Decimal(14, 2)
+  categoriaComercial    String                       @default("")
+  subcategoriaComercial String                       @default("")
+  cantidad              Decimal                      @db.Decimal(14, 2)
   cantidadUnidad        String
-  subtotal              Decimal                @db.Decimal(14, 2)
-  impuestos             Decimal                @db.Decimal(14, 2)
-  total                 Decimal                @db.Decimal(14, 2)
+  subtotal              Decimal                      @db.Decimal(14, 2)
+  impuestos             Decimal                      @db.Decimal(14, 2)
+  total                 Decimal                      @db.Decimal(14, 2)
   /// Descuento comercial de la línea (sobre el neto, antes del IVA). El efecto
   /// Cupón que originó el descuento (F4). Sin FK dura: el cupón puede
   /// borrarse del catálogo sin romper órdenes históricas.
-  descuentoCuponId      String?                @db.Uuid
+  descuentoCuponId      String?                      @db.Uuid
   /// YA está dentro de subtotal/impuestos/total; estos campos son la traza:
   /// tipo + valor ingresado + monto neto efectivamente descontado.
   descuentoTipo         String?
-  descuentoValor        Decimal?               @db.Decimal(14, 2)
-  descuentoMonto        Decimal?               @db.Decimal(14, 2)
+  descuentoValor        Decimal?                     @db.Decimal(14, 2)
+  descuentoMonto        Decimal?                     @db.Decimal(14, 2)
   /// Proyección visible: [{ etiqueta, valor }].
   specsJson             Json?
   /// string[] de adicionales incluidos.
   adicionalesJson       Json?
-  ordenIndice           Int                    @default(0)
+  ordenIndice           Int                          @default(0)
   /// ── Entrega en el mostrador (docs/entrega-por-escaneo-diseno.md).
   /// La entrega es POR ITEM: el cliente puede llevarse lo que está listo y
   /// dejar el resto en producción. La orden pasa a `entregada` recién cuando
@@ -3175,7 +3185,7 @@ model OrdenTrabajoItem {
   /// Si no lo retiró el cliente sino un tercero, con qué documento.
   retiradoPorNombre     String?
   retiradoPorDni        String?
-  createdAt             DateTime               @default(now())
+  createdAt             DateTime                     @default(now())
   /// ── Descomposición del ciclo real, calculada UNA vez al finalizar el
   /// item (docs/eta-metricas-historicas-diseno.md §4.4). null hasta el
   /// cierre; también null en items sin timestamps de pasos (OT vieja).
@@ -3185,16 +3195,52 @@ model OrdenTrabajoItem {
   trasladoMin           Int?
   proveedorMin          Int?
   /// trabajoRealMin / cicloTotalMin × 100 (0–100).
-  flowEfficiencyPct     Decimal?               @db.Decimal(5, 1)
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orden                 OrdenTrabajo           @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  cotizacionItem        CotizacionItem?        @relation(fields: [cotizacionItemId], references: [id])
+  flowEfficiencyPct     Decimal?                     @db.Decimal(5, 1)
+  tenant                Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden                 OrdenTrabajo                 @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  cotizacionItem        CotizacionItem?              @relation(fields: [cotizacionItemId], references: [id])
   pasos                 OrdenTrabajoItemPaso[]
   etaPromesas           EtaPromesa[]
   archivos              Archivo[]
+  revisionesRecorrido   RecorridoVectorialRevision[]
 
   @@index([tenantId, ordenId])
   @@index([ordenId, entregadoEl])
+}
+
+/// Preparación inmutable de una placa para una máquina de recorrido vectorial.
+/// CORTE sigue contornos; un futuro modo GRABADO tendrá su propio motor de
+/// barrido y no reutilizará esta estrategia geométrica.
+model RecorridoVectorialRevision {
+  id                 String                           @id @default(uuid()) @db.Uuid
+  tenantId           String                           @db.Uuid
+  ordenTrabajoItemId String                           @db.Uuid
+  placaIndice        Int
+  revision           Int
+  modo               String                           @default("CORTE")
+  postprocesador     String
+  engineId           String
+  engineVersion      String
+  sourceHash         String
+  nombreArchivo      String
+  sourceSvg          String                           @db.Text
+  linkedSvg          String                           @db.Text
+  tap                String                           @db.Text
+  routeJson          Json
+  reportJson         Json
+  metricsJson        Json
+  machineProfileJson Json
+  estado             EstadoRevisionRecorridoVectorial @default(BORRADOR)
+  creadaPorId        String?
+  creadaPorNombre    String?
+  createdAt          DateTime                         @default(now())
+  updatedAt          DateTime                         @updatedAt
+  tenant             Tenant                           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ordenTrabajoItem   OrdenTrabajoItem                 @relation(fields: [ordenTrabajoItemId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, ordenTrabajoItemId, placaIndice, revision], map: "rv_revision_unq")
+  @@index([tenantId, ordenTrabajoItemId, placaIndice, estado], map: "rv_item_estado_idx")
+  @@index([tenantId, sourceHash], map: "rv_source_hash_idx")
 }
 
 /// Promesa de ETA congelada en un hito de negocio

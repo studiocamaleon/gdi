@@ -34,6 +34,121 @@ const triangle: GeometriaVectorialCanonica = {
 };
 
 describe('nestearGeometriaIrregular', () => {
+  const composicionSeparada: GeometriaVectorialCanonica = {
+    schemaVersion: 1,
+    anchoMm: 100,
+    altoMm: 20,
+    piezas: [
+      {
+        id: 'izquierda',
+        origenXmm: 0,
+        origenYmm: 0,
+        anchoMm: 20,
+        altoMm: 20,
+        areaMm2: 400,
+        perimetroMm: 80,
+        contornos: [
+          {
+            esHueco: false,
+            puntos: [
+              { x: 0, y: 0 },
+              { x: 20, y: 0 },
+              { x: 20, y: 20 },
+              { x: 0, y: 20 },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'derecha',
+        origenXmm: 80,
+        origenYmm: 0,
+        anchoMm: 20,
+        altoMm: 20,
+        areaMm2: 400,
+        perimetroMm: 80,
+        contornos: [
+          {
+            esHueco: false,
+            puntos: [
+              { x: 0, y: 0 },
+              { x: 20, y: 0 },
+              { x: 20, y: 20 },
+              { x: 0, y: 20 },
+            ],
+          },
+        ],
+      },
+    ],
+    areaTotalMm2: 800,
+    perimetroTotalMm: 160,
+    hashFuente: 'composicion-separada',
+  };
+
+  it('conserva posiciones y orientación cuando el SVG completo entra', () => {
+    const result = nestearGeometriaIrregular({
+      geometria: composicionSeparada,
+      cantidad: 1,
+      anchoPlacaMm: 120,
+      altoPlacaMm: 60,
+      margenMm: 5,
+      permitirRotacion: true,
+      preservarComposicionOriginalSiEntra: true,
+    });
+
+    expect(result.estrategiaDisposicion).toBe('composicion_original');
+    expect(result.placas).toBe(1);
+    expect(result.uniones).toHaveLength(0);
+    expect(result.placements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pieceId: 'izquierda',
+          xMm: 10,
+          yMm: 20,
+          rotacion: 0,
+        }),
+        expect.objectContaining({
+          pieceId: 'derecha',
+          xMm: 90,
+          yMm: 20,
+          rotacion: 0,
+        }),
+      ]),
+    );
+  });
+
+  it('reserva un negativo completo por cada copia del cartel', () => {
+    const result = nestearGeometriaIrregular({
+      geometria: composicionSeparada,
+      cantidad: 2,
+      anchoPlacaMm: 120,
+      altoPlacaMm: 60,
+      margenMm: 5,
+      preservarComposicionOriginalSiEntra: true,
+    });
+
+    expect(result.placas).toBe(2);
+    expect(result.placements).toHaveLength(4);
+    expect(new Set(result.placements.map((item) => item.substrateIndex))).toEqual(
+      new Set([0, 1]),
+    );
+  });
+
+  it('vuelve al nesting optimizado cuando la composición completa no entra', () => {
+    const result = nestearGeometriaIrregular({
+      geometria: { ...composicionSeparada, anchoMm: 130 },
+      cantidad: 1,
+      anchoPlacaMm: 120,
+      altoPlacaMm: 60,
+      margenMm: 5,
+      preservarComposicionOriginalSiEntra: true,
+    });
+
+    expect(result.estrategiaDisposicion).toBe('nesting_optimizado');
+    expect(result.placements).toHaveLength(2);
+    expect(result.placements[1].xMm).toBeLessThan(90);
+  });
+
   it('acomoda copias completas y conserva cantidad comercial separada', () => {
     const result = nestearGeometriaIrregular({
       geometria: triangle,

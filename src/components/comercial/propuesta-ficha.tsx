@@ -183,6 +183,7 @@ import {
 } from "@/lib/modificaciones-fisicas";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
+import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-panel";
 import {
   crearSvgDePlaca,
   descargarTexto,
@@ -2004,6 +2005,7 @@ function ProduccionItemView({
   onEditPanels,
   onExpand,
   ampliada = false,
+  prepararCorte = false,
 }: {
   item: PropuestaItem;
   calculoPendiente: boolean;
@@ -2013,6 +2015,8 @@ function ProduccionItemView({
   onExpand?: () => void;
   /** Aprovecha el espacio extra del diálogo para agrandar el nesting. */
   ampliada?: boolean;
+  /** La preparación de máquina sólo existe cuando el item ya pertenece a una OT. */
+  prepararCorte?: boolean;
 }) {
   const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
   const pasosActivos = pasosCosteoActivos;
@@ -2264,6 +2268,11 @@ function ProduccionItemView({
                   }
                   modificaciones={modificacionesOverlay}
                 />
+                {prepararCorte &&
+                activeNestingTab.paso.familiaCodigo ===
+                  "corte_hilo_caliente" ? (
+                  <RecorridoCortePanel itemId={item.id} />
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -3683,6 +3692,7 @@ export function ProductRow({
             <ProduccionItemView
               item={item}
               calculoPendiente={calculoPendiente}
+              prepararCorte={readOnly}
               onExpand={() => setProduccionAmpliada(true)}
               onEditPanels={
                 readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
@@ -3707,6 +3717,7 @@ export function ProductRow({
                 item={item}
                 calculoPendiente={calculoPendiente}
                 ampliada
+                prepararCorte={readOnly}
                 onEditPanels={
                   readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
                 }

@@ -548,6 +548,8 @@ function construirPiezas(contornos: ContornoFuente[]): PiezaVectorial[] {
       piezas.push({
         id: `pieza-${piezas.length + 1}`,
         contornos: contornosPieza,
+        origenXmm: redondear(bounds.minX),
+        origenYmm: redondear(bounds.minY),
         anchoMm: redondear(bounds.width),
         altoMm: redondear(bounds.height),
         areaMm2: redondear(

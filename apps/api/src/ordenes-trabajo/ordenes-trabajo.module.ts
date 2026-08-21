@@ -7,6 +7,7 @@ import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
 import { OrdenesTrabajoController } from './ordenes-trabajo.controller';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { EntregaService } from './entrega.service';
+import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorridos-vectoriales.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { EntregaService } from './entrega.service';
     ArchivosModule,
     EnlacesPublicosModule,
     DatosEmpresaModule,
+    RecorridosVectorialesModule,
   ],
   controllers: [OrdenesTrabajoController],
   providers: [OrdenesTrabajoService, EntregaService],

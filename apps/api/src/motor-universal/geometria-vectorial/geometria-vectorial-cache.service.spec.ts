@@ -22,6 +22,7 @@ function input(tenantId = 'tenant-a') {
       margenMm: 10,
       separacionMm: 5,
       permitirRotacion: true,
+      preservarComposicionOriginalSiEntra: false,
     },
   };
 }
@@ -97,6 +98,24 @@ describe('GeometriaVectorialCacheService', () => {
     expect(changed.cacheHit).toBe(false);
     expect(changed.entry.cacheKey).not.toBe(first.entry.cacheKey);
     expect(changed.entry.nesting.placements).toHaveLength(2);
+  });
+
+  it('invalida el nesting cacheado cuando cambia la política de composición', () => {
+    const service = new GeometriaVectorialCacheService();
+    const first = service.analizar(input());
+    const changed = service.analizar({
+      ...input(),
+      parametros: {
+        ...input().parametros,
+        preservarComposicionOriginalSiEntra: true,
+      },
+    });
+
+    expect(changed.cacheHit).toBe(false);
+    expect(changed.entry.cacheKey).not.toBe(first.entry.cacheKey);
+    expect(changed.entry.nesting.estrategiaDisposicion).toBe(
+      'composicion_original',
+    );
   });
 
   it('registra el hit solamente cuando el dispatcher reutiliza el nesting', () => {

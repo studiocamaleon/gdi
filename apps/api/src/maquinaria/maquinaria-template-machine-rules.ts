@@ -98,6 +98,15 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
     requiredMachineKeys: ['anchoUtil', 'largoUtil', 'altoUtil'],
   },
 
+  [PlantillaMaquinariaDto.corte_hilo_caliente]: {
+    requiredMachineKeys: [
+      'anchoUtil',
+      'largoUtil',
+      'postprocesadorRecorrido',
+      'origenMaquina',
+    ],
+  },
+
   // ─── §13 ANILLADORA ─────────────────────────────────────────────
   // Sin campos requeridos de máquina: anchoUtil/altoUtil (largo/diámetro máx) y
   // tiposAnilloSoportados se retiraron de la plantilla (el motor NO los lee para

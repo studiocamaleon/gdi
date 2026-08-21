@@ -165,4 +165,5 @@ export interface NestingMetrics {
   segmentos?: number;
   unionesFisicas?: number;
   uniones?: unknown[];
+  estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
 }

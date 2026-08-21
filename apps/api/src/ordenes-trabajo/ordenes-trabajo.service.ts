@@ -321,6 +321,7 @@ function formatFechaCorta(iso: string | null): string {
 import type { OrdenesTrabajoQueryDto } from './dto/ordenes-trabajo-query.dto';
 import { filtrarSpecsPublicas } from './tracking-publico-specs';
 import { DatosEmpresaService } from '../tenants/datos-empresa.service';
+import { PreparacionesRecorridoService } from '../recorridos-vectoriales/preparaciones-recorrido.service';
 import { ComprobantesService } from '../administracion/comprobantes.service';
 import { NotificacionesOrdenesService } from '../integraciones/notificaciones/notificaciones-ordenes.service';
 import { formatearMoneda, type Moneda } from '../common/moneda';
@@ -620,7 +621,26 @@ export class OrdenesTrabajoService {
     // Administración no sabe nada de este módulo, así que no hay ciclo.
     private readonly comprobantes: ComprobantesService,
     private readonly facturacionOrdenes: FacturacionOrdenesService,
+    private readonly preparacionesRecorrido: PreparacionesRecorridoService,
   ) {}
+
+  private async prepararRecorridosDeItems(
+    auth: CurrentAuth,
+    itemIds: string[],
+  ): Promise<void> {
+    for (const itemId of itemIds) {
+      try {
+        await this.preparacionesRecorrido.asegurarParaItem(auth, itemId);
+      } catch (error) {
+        this.logger.warn({
+          event: 'preparacion_recorrido_corte_fallida',
+          tenantId: auth.tenantId,
+          itemId,
+          message: error instanceof Error ? error.message : 'Error desconocido',
+        });
+      }
+    }
+  }
 
   /**
    * Le avisa al cliente por WhatsApp si el estado de la orden lo amerita.
@@ -1352,6 +1372,15 @@ export class OrdenesTrabajoService {
     }
 
     this.avisarAlCliente(creada.id);
+
+    const itemsCreados = await this.prisma.ordenTrabajoItem.findMany({
+      where: { tenantId: auth.tenantId, ordenId: creada.id },
+      select: { id: true },
+    });
+    await this.prepararRecorridosDeItems(
+      auth,
+      itemsCreados.map((item) => item.id),
+    );
 
     return this.findOne(auth, creada.id);
   }
@@ -2461,7 +2490,8 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
+            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
+            | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -2677,6 +2707,7 @@ export class OrdenesTrabajoService {
       where: { ordenId: orden.id },
       _max: { ordenIndice: true },
     });
+    let creadoId = '';
     await this.prisma.$transaction(async (tx) => {
       const reclamo = await tx.ordenTrabajo.updateMany({
         where: {
@@ -2699,6 +2730,7 @@ export class OrdenesTrabajoService {
           ordenIndice: (ultimo._max.ordenIndice ?? -1) + 1,
         },
       });
+      creadoId = creado.id;
       // La orden ya está emitida: el item nuevo entra al Tablero con pasos.
       if (orden.estado === 'pendiente') {
         await this.materializarPasosItems(tx, auth.tenantId, [
@@ -2738,6 +2770,7 @@ export class OrdenesTrabajoService {
         },
       });
     });
+    await this.prepararRecorridosDeItems(auth, [creadoId]);
     return this.findOne(auth, orden.id);
   }
 
@@ -2898,6 +2931,7 @@ export class OrdenesTrabajoService {
         },
       });
     });
+    await this.prepararRecorridosDeItems(auth, [existente.id]);
     return this.findOne(auth, orden.id);
   }
 
@@ -4293,7 +4327,9 @@ export class OrdenesTrabajoService {
     paso: { familiaCodigo: string; maquinaId: string | null },
   ) {
     if (!(auth.permisos?.has('produccion.ejecutar') ?? false)) {
-      throw new ForbiddenException('No tenés permiso para ejecutar producción.');
+      throw new ForbiddenException(
+        'No tenés permiso para ejecutar producción.',
+      );
     }
     const [empleado, maquina, estaciones] = await Promise.all([
       this.prisma.empleado.findFirst({
@@ -4468,7 +4504,9 @@ export class OrdenesTrabajoService {
           (tramo) => tramo.usuarioId === auth.userId && !tramo.finEl,
         )
       ) {
-        throw new ForbiddenException('Este paso no está en tu mesa de trabajo.');
+        throw new ForbiddenException(
+          'Este paso no está en tu mesa de trabajo.',
+        );
       }
     }
     const ordenEstado = paso.orden.estado as OrdenTrabajoEstado;

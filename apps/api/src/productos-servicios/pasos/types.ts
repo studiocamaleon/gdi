@@ -558,7 +558,7 @@ export interface DefinicionFamilia {
    *  cantidad cuenta (montaje cuenta piezas a montar; instalación mide m²).
    *  [Tanda C: eran tres funciones con nombres cableados en el editor] */
   ritmoDefault?: {
-    unidad?: 'unidades_h' | 'm2_h' | 'ml_h';
+    unidad?: 'unidades_h' | 'm2_h' | 'ml_h' | 'mm_min';
     modoCalculo?: 'productivity' | 'batch_time';
     fuenteCantidad?: string;
   };

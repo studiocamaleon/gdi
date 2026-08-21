@@ -490,6 +490,17 @@ export interface PasoEjecutado {
    * placements para visualización en frontend.
    */
   nestingResult?: NestingEjecutado;
+  /** Preparación resumida del modo CORTE, calculada con la misma velocidad
+   * que costea el paso. Los archivos completos se versionan al persistir la OT. */
+  recorridoCorte?: Array<{
+    placaIndice: number;
+    longitudTotalMm: number;
+    tiempoEstimadoSeg: number;
+    cantidadConexiones: number;
+    velocidadMmMin: number;
+    engineVersion: string;
+    postprocesador: string;
+  }>;
   /**
    * Estructura del bastidor (cartelería) para el visor 3D de Producción: el
    * marco a fabricar, con los params EFECTIVOS del paso —incluye overrides del
@@ -559,6 +570,7 @@ export interface NestingEjecutado {
   piezasPorPouch?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
+  estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
   /** Datos normalizados para que el SVG muestre cómo pensó el motor. */
   visualConfig?: NestingVisualConfig;
   /** Outputs canónicos publicados por el paso que generó este nesting. */

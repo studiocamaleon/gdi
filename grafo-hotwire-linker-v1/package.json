@@ -1,0 +1,37 @@
+{
+  "name": "@grafo/hotwire-linker",
+  "version": "1.0.0",
+  "description": "Motor TypeScript para vincular contornos SVG y exportar TAP compatible con el flujo VectorLinker/GRBL de la cortadora de polifan de Corporearte.",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./tap-analyzer": {
+      "types": "./dist/tap-analyzer.d.ts",
+      "import": "./dist/tap-analyzer.js"
+    }
+  },
+  "bin": {
+    "grafo-hotwire": "./dist/index.js",
+    "grafo-tap-analyze": "./dist/tap-analyzer.js"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "convert:sample": "npm run build && node dist/index.js samples/puma-logo-placa-1.svg --output output --profile config/corporearte-polifan-1250x600.json",
+    "analyze:reference": "npm run build && node dist/tap-analyzer.js reference/andina.tap reference/andina-analysis.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.3"
+  }
+}

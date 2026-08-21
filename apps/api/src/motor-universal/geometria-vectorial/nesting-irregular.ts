@@ -35,6 +35,7 @@ export function nestearGeometriaIrregular(input: {
   margenMm?: number;
   separacionMm?: number;
   permitirRotacion?: boolean;
+  preservarComposicionOriginalSiEntra?: boolean;
 }): NestingIrregularResult {
   const cantidad = Math.ceil(input.cantidad);
   const margin = input.margenMm ?? 0;
@@ -55,6 +56,26 @@ export function nestearGeometriaIrregular(input: {
     throw new NestingIrregularError(
       'Los márgenes consumen toda el área de la placa.',
     );
+
+  if (
+    input.preservarComposicionOriginalSiEntra === true &&
+    input.geometria.anchoMm <= usableWidth + 0.001 &&
+    input.geometria.altoMm <= usableHeight + 0.001 &&
+    input.geometria.piezas.every(
+      (pieza) =>
+        Number.isFinite(pieza.origenXmm) && Number.isFinite(pieza.origenYmm),
+    )
+  ) {
+    return componerSinNestear({
+      geometria: input.geometria,
+      cantidad,
+      anchoPlacaMm: input.anchoPlacaMm,
+      altoPlacaMm: input.altoPlacaMm,
+      anchoUtilMm: usableWidth,
+      altoUtilMm: usableHeight,
+      margenMm: margin,
+    });
+  }
 
   let segmentacion: ReturnType<typeof segmentarPiezasConEncastres>;
   try {
@@ -176,6 +197,69 @@ export function nestearGeometriaIrregular(input: {
     unionesFisicas:
       (segmentacion.piezas.length - input.geometria.piezas.length) * cantidad,
     uniones: segmentacion.uniones,
+    estrategiaDisposicion: 'nesting_optimizado',
+  };
+}
+
+/** Conserva posiciones y orientación del SVG completo. Cada copia usa una
+ * placa propia: el material negativo que queda alrededor de las piezas es el
+ * molde físico de colocación, por lo que no puede compartirse entre carteles. */
+function componerSinNestear(input: {
+  geometria: GeometriaVectorialCanonica;
+  cantidad: number;
+  anchoPlacaMm: number;
+  altoPlacaMm: number;
+  anchoUtilMm: number;
+  altoUtilMm: number;
+  margenMm: number;
+}): NestingIrregularResult {
+  const offsetX =
+    input.margenMm + (input.anchoUtilMm - input.geometria.anchoMm) / 2;
+  const offsetY =
+    input.margenMm + (input.altoUtilMm - input.geometria.altoMm) / 2;
+  const placements: PlacementVectorial[] = [];
+  for (let copyIndex = 0; copyIndex < input.cantidad; copyIndex += 1) {
+    for (const pieza of input.geometria.piezas) {
+      const x = offsetX + (pieza.origenXmm ?? 0);
+      const y = offsetY + (pieza.origenYmm ?? 0);
+      placements.push({
+        pieceId: pieza.id,
+        copyIndex,
+        substrateIndex: copyIndex,
+        xMm: redondear(x),
+        yMm: redondear(y),
+        rotacion: 0,
+        anchoMm: pieza.anchoMm,
+        altoMm: pieza.altoMm,
+        contornos: trasladar(pieza.contornos, x, y),
+      });
+    }
+  }
+  const areaPiezasMm2 = input.geometria.areaTotalMm2 * input.cantidad;
+  const areaCompradaMm2 =
+    input.anchoPlacaMm * input.altoPlacaMm * input.cantidad;
+  return {
+    algorithm: 'irregular-2d-bottom-left-v1',
+    placas: input.cantidad,
+    anchoPlacaMm: input.anchoPlacaMm,
+    altoPlacaMm: input.altoPlacaMm,
+    anchoUtilMm: input.anchoUtilMm,
+    altoUtilMm: input.altoUtilMm,
+    placements,
+    aprovechamientoPct:
+      areaCompradaMm2 > 0
+        ? redondear((areaPiezasMm2 / areaCompradaMm2) * 100)
+        : 0,
+    areaPiezasMm2: redondear(areaPiezasMm2),
+    areaCompradaMm2: redondear(areaCompradaMm2),
+    perimetroCorteMm: redondear(
+      input.geometria.perimetroTotalMm * input.cantidad,
+    ),
+    piezasOriginales: input.geometria.piezas.length * input.cantidad,
+    segmentos: input.geometria.piezas.length * input.cantidad,
+    unionesFisicas: 0,
+    uniones: [],
+    estrategiaDisposicion: 'composicion_original',
   };
 }
 

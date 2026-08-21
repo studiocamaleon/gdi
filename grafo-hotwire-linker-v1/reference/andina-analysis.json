@@ -1,0 +1,39 @@
+{
+  "file": "andina.tap",
+  "lineEnding": "CRLF",
+  "totalLines": 21417,
+  "nonEmptyLines": 21415,
+  "headerLines": [
+    "G17 G90 G21",
+    "G94",
+    "G92 X0 Y0 Z0",
+    "G54",
+    "T08",
+    "G00 S0 M03",
+    "Z.24",
+    "G1 F350 "
+  ],
+  "coordinateCount": 21407,
+  "zeroLengthMoves": 95,
+  "start": {
+    "x": 0,
+    "y": 0
+  },
+  "end": {
+    "x": 0,
+    "y": 0
+  },
+  "closed": true,
+  "bounds": {
+    "minX": 0,
+    "minY": 0,
+    "maxX": 1226.961331,
+    "maxY": 555.855823
+  },
+  "routeLengthMm": 26568.599539790284,
+  "feedRateMmPerMin": 350,
+  "estimatedSeconds": 4554.617063964049,
+  "decimalsObserved": [
+    6
+  ]
+}

@@ -48,6 +48,7 @@ type Props = {
   margenMm?: number;
   separacionMm?: number;
   permitirRotacion?: boolean;
+  preservarComposicionOriginalSiEntra?: boolean;
   onChange: (
     value: FuenteDisenoVectorial | null,
     analisis: AnalisisSvgFabricacion | null,
@@ -62,6 +63,7 @@ export function DisenoVectorialCotizador({
   margenMm = 5,
   separacionMm = 5,
   permitirRotacion = true,
+  preservarComposicionOriginalSiEntra = false,
   onChange,
 }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -91,6 +93,7 @@ export function DisenoVectorialCotizador({
           margenMm,
           separacionMm,
           permitirRotacion,
+          preservarComposicionOriginalSiEntra,
         });
         const normalized: FuenteDisenoVectorial = {
           ...fuente,
@@ -108,7 +111,15 @@ export function DisenoVectorialCotizador({
         setProcesando(false);
       }
     },
-    [cantidad, margenMm, onChange, permitirRotacion, placa, separacionMm],
+    [
+      cantidad,
+      margenMm,
+      onChange,
+      permitirRotacion,
+      placa,
+      preservarComposicionOriginalSiEntra,
+      separacionMm,
+    ],
   );
 
   const cargarArchivo = async (file: File) => {
@@ -136,6 +147,7 @@ export function DisenoVectorialCotizador({
         cantidad,
         placa,
         margenMm,
+        preservarComposicionOriginalSiEntra,
       })
     )
       return;
@@ -158,6 +170,7 @@ export function DisenoVectorialCotizador({
     anchoCm,
     cantidad,
     margenMm,
+    preservarComposicionOriginalSiEntra,
     placa?.anchoMm,
     placa?.altoMm,
     value,
@@ -284,6 +297,28 @@ export function DisenoVectorialCotizador({
                 </span>
               </AlertDescription>
             </Alert>
+            {analisis.nesting.estrategiaDisposicion ===
+            "composicion_original" ? (
+              <Alert>
+                <ShapesIcon />
+                <AlertTitle>Composición original conservada</AlertTitle>
+                <AlertDescription>
+                  El diseño entra completo: las piezas mantienen su posición y
+                  orientación para que el negativo de la placa pueda utilizarse
+                  como molde de colocación.
+                </AlertDescription>
+              </Alert>
+            ) : preservarComposicionOriginalSiEntra ? (
+              <Alert>
+                <ShapesIcon />
+                <AlertTitle>Nesting optimizado por tamaño</AlertTitle>
+                <AlertDescription>
+                  El diseño completo no entra en el área útil; se aplicó el
+                  acomodo optimizado y, cuando corresponde, la segmentación con
+                  encastres.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {analisis.diagnosticos.some(
               (diagnostico) => diagnostico.severidad === "WARNING",
             ) ? (
@@ -380,6 +415,7 @@ function analisisCoincideConEntrada({
   cantidad,
   placa,
   margenMm,
+  preservarComposicionOriginalSiEntra,
 }: {
   analisis: AnalisisSvgFabricacion | null;
   fuente: FuenteDisenoVectorial;
@@ -387,12 +423,20 @@ function analisisCoincideConEntrada({
   cantidad: number;
   placa: { anchoMm: number; altoMm: number };
   margenMm: number;
+  preservarComposicionOriginalSiEntra: boolean;
 }): boolean {
   if (!analisis || analisis.nombreArchivo !== fuente.nombreArchivo)
     return false;
   const expectedPlacements =
     analisis.nesting.segmentos ??
     analisis.geometria.piezas.length * Math.max(1, Math.ceil(cantidad));
+  const entraComposicion =
+    analisis.geometria.anchoMm <= placa.anchoMm - margenMm * 2 + 0.001 &&
+    analisis.geometria.altoMm <= placa.altoMm - margenMm * 2 + 0.001;
+  const estrategiaEsperada =
+    preservarComposicionOriginalSiEntra && entraComposicion
+      ? "composicion_original"
+      : "nesting_optimizado";
   return (
     Math.abs(analisis.geometria.anchoMm - anchoFinalMm) < 0.01 &&
     analisis.nesting.anchoPlacaMm === placa.anchoMm &&
@@ -401,7 +445,8 @@ function analisisCoincideConEntrada({
       0.01 &&
     Math.abs(analisis.nesting.altoUtilMm - (placa.altoMm - margenMm * 2)) <
       0.01 &&
-    analisis.nesting.placements.length === expectedPlacements
+    analisis.nesting.placements.length === expectedPlacements &&
+    analisis.nesting.estrategiaDisposicion === estrategiaEsperada
   );
 }
 
@@ -427,7 +472,9 @@ function NestingPreview({ analisis }: { analisis: AnalisisSvgFabricacion }) {
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-medium">Distribución en placas</span>
           <span className="text-xs text-muted-foreground">
-            Vista previa del nesting automático
+            {nesting.estrategiaDisposicion === "composicion_original"
+              ? "Composición original centrada para conservar el negativo"
+              : "Vista previa del nesting automático"}
           </span>
         </div>
         {nesting.placas > shown ? (

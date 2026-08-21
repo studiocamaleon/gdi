@@ -11,6 +11,11 @@ export interface ContornoVectorial {
 export interface PiezaVectorial {
   id: string;
   contornos: ContornoVectorial[];
+  /** Posición de la pieza dentro de la composición completa del SVG. Los
+   *  contornos siguen siendo locales para que el nesting pueda moverlos, pero
+   *  estas coordenadas permiten reconstruir el negativo original. */
+  origenXmm?: number;
+  origenYmm?: number;
   anchoMm: number;
   altoMm: number;
   areaMm2: number;
@@ -83,4 +88,5 @@ export interface NestingIrregularResult {
   segmentos: number;
   unionesFisicas: number;
   uniones: UnionVectorial[];
+  estrategiaDisposicion: 'composicion_original' | 'nesting_optimizado';
 }

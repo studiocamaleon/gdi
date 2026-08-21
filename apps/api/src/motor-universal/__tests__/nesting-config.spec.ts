@@ -29,6 +29,27 @@ function paso(overrides: Partial<PasoCargado> = {}): PasoCargado {
 const jobContext: JobContext = { cantidad: 1 };
 
 describe('resolveNestingConfig', () => {
+  it('toma de la máquina la política para conservar la composición vectorial', () => {
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'corte_hilo_caliente',
+        maquina: {
+          id: 'hotwire-1',
+          codigo: 'HOTWIRE-001',
+          nombre: 'Cortadora',
+          plantilla: 'corte_hilo_caliente',
+          parametrosTecnicosJson: {
+            estrategiaNestingVectorial: 'preserve-original-if-fits',
+          },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.preservarComposicionOriginalSiEntra).toBe(true);
+  });
+
   it('hereda márgenes de la máquina', () => {
     const config = resolveNestingConfig(
       paso({

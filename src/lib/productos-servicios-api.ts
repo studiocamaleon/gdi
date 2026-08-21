@@ -939,6 +939,7 @@ export interface NestingViewerInput {
   piezasPorPouch?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
+  estrategiaDisposicion?: "composicion_original" | "nesting_optimizado";
   outputsCanonicos?: Record<string, unknown>;
   visualConfig?: {
     margins: {
@@ -1368,6 +1369,8 @@ export interface AnalisisSvgFabricacion {
     hashFuente: string;
     piezas: Array<{
       id: string;
+      origenXmm?: number;
+      origenYmm?: number;
       anchoMm: number;
       altoMm: number;
       areaMm2: number;
@@ -1426,6 +1429,7 @@ export interface AnalisisSvgFabricacion {
       profundidadEncastreMm: number;
       kerfMm: number;
     }>;
+    estrategiaDisposicion?: "composicion_original" | "nesting_optimizado";
   };
   diagnosticos: Array<{
     codigo: string;
@@ -1445,6 +1449,7 @@ export async function analizarSvgFabricacion(req: {
   margenMm?: number;
   separacionMm?: number;
   permitirRotacion?: boolean;
+  preservarComposicionOriginalSiEntra?: boolean;
 }): Promise<AnalisisSvgFabricacion> {
   return apiRequest<AnalisisSvgFabricacion>(
     "/motor-universal/geometria-vectorial/analizar",

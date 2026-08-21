@@ -59,4 +59,8 @@ export class AnalizarSvgFabricacionDto {
   @IsOptional()
   @IsBoolean()
   permitirRotacion?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  preservarComposicionOriginalSiEntra?: boolean;
 }

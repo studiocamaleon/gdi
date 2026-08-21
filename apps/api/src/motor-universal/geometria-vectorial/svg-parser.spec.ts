@@ -49,6 +49,26 @@ describe('analizarSvgFabricacion', () => {
     expect(result.geometria.areaTotalMm2).toBeCloseTo(3_200, 3);
   });
 
+  it('conserva el origen de cada pieza dentro de la composición completa', () => {
+    const svg = `
+      <svg viewBox="0 0 100 40" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="10" width="20" height="20" />
+        <rect x="80" y="10" width="20" height="20" />
+      </svg>`;
+
+    const result = analizarSvgFabricacion({ svg, anchoFinalMm: 100 });
+
+    expect(result.geometria.piezas).toHaveLength(2);
+    expect(result.geometria.piezas[0]).toMatchObject({
+      origenXmm: 0,
+      origenYmm: 0,
+    });
+    expect(result.geometria.piezas[1]).toMatchObject({
+      origenXmm: 80,
+      origenYmm: 0,
+    });
+  });
+
   it('no cierra automáticamente un path que sólo tiene trazo', () => {
     const svg = `
       <svg viewBox="0 0 100 40" xmlns="http://www.w3.org/2000/svg">

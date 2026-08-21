@@ -17,6 +17,7 @@ export interface ParametrosNestingVectorialCache {
   margenMm: number;
   separacionMm: number;
   permitirRotacion: boolean;
+  preservarComposicionOriginalSiEntra: boolean;
 }
 
 export interface EntradaGeometriaVectorialCache {

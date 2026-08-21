@@ -111,6 +111,8 @@ export interface NestingDispatchResult {
   consumedLengthMm?: number;
   /** Cantidad de instancias de pieza efectivamente acomodadas. */
   piezasAcomodadas: number;
+  /** Política efectiva aplicada al vector completo. */
+  estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
   /** Datos normalizados para que el SVG muestre márgenes, área útil y separación. */
   visualConfig?: NestingVisualConfig;
   /**
@@ -157,27 +159,103 @@ export interface MaterialResueltoParaNesting {
   /** Atributos: anchoMm (rollo o pliego), largoMm (pliego), largoRolloMm (rollo). */
   atributosVarianteJson?: Record<string, unknown> | null;
   precioReferencia?: number | null;
-  /** Subfamilia de la materia prima padre (SUSTRATO_ROLLO_FLEXIBLE, _HOJA,
-   *  _RIGIDO…). Dice el FORMATO del sustrato — rollo vs hoja/placa — sin
-   *  adivinarlo por los atributos. Reemplaza el sniffing de `isRollMaterial`. */
+  /** Metadatos canónicos de la materia prima padre. La subfamilia describe qué
+   *  material es; plantilla/unidad/atributos completan cómo se suministra. */
   subfamilia?: string | null;
+  materiaPrimaTemplateId?: string | null;
+  materiaPrimaTipoTecnico?: string | null;
+  unidadStock?: string | null;
 }
 
+type SenalFormatoMaterial =
+  | string
+  | Pick<
+      MaterialResueltoParaNesting,
+      | 'subfamilia'
+      | 'materiaPrimaTemplateId'
+      | 'materiaPrimaTipoTecnico'
+      | 'unidadStock'
+      | 'atributosVarianteJson'
+    >
+  | null
+  | undefined;
+
+const SUBFAMILIAS_ROLLO = new Set([
+  'SUSTRATO_ROLLO_FLEXIBLE',
+  'VINILO_CORTE',
+  'LAMINADO_FILM',
+]);
+
+const SUBFAMILIAS_PLANAS = new Set([
+  'SUSTRATO_HOJA',
+  'SUSTRATO_RIGIDO',
+  'LAMINADO_POUCH',
+]);
+
+function textoFormato(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toUpperCase() : '';
+}
+
+function numeroPositivo(value: unknown): boolean {
+  const numero = Number(value);
+  return Number.isFinite(numero) && numero > 0;
+}
+
+export type FormatoFisicoMaterial = 'rollo' | 'plano' | 'desconocido';
+
 /**
- * ¿El sustrato es un rollo? Lo dice la subfamilia de la materia prima, no los
- * atributos: hoy todo SUSTRATO_ROLLO_FLEXIBLE trae largo de rollo y ninguna
- * hoja/rígido lo trae, pero la subfamilia es la señal estructural y no depende
- * de que el atributo esté cargado. LAMINADO_FILM también es rollo (aunque
- * laminado rutea por su propia vía y no pasa por acá).
+ * ¿El material se suministra como rollo?
+ *
+ * La subfamilia no alcanza: `IMAN_CERAMICO_FLEXIBLE`, por ejemplo, agrupa
+ * tanto imanes flexibles en rollo como piezas cerámicas unitarias. Por eso se
+ * resuelve el formato con señales canónicas ya presentes en el material:
+ * subfamilias inequívocas primero y, para las ambiguas, plantilla/tipo,
+ * unidad de stock y dimensiones propias de rollo.
+ *
+ * Se mantiene el string como entrada por compatibilidad con callers viejos;
+ * los caminos productivos deben pasar el material completo.
  */
-export function esSustratoRollo(
-  subfamilia: string | null | undefined,
-): boolean {
-  return (
-    subfamilia === 'SUSTRATO_ROLLO_FLEXIBLE' ||
-    subfamilia === 'VINILO_CORTE' ||
-    subfamilia === 'LAMINADO_FILM'
+export function resolverFormatoFisicoMaterial(
+  material: SenalFormatoMaterial,
+): FormatoFisicoMaterial {
+  const subfamilia =
+    typeof material === 'string'
+      ? textoFormato(material)
+      : textoFormato(material?.subfamilia);
+  if (SUBFAMILIAS_ROLLO.has(subfamilia)) return 'rollo';
+  if (SUBFAMILIAS_PLANAS.has(subfamilia)) return 'plano';
+  if (!material || typeof material === 'string') {
+    return subfamilia ? 'plano' : 'desconocido';
+  }
+
+  const templateId = textoFormato(material.materiaPrimaTemplateId);
+  const tipoTecnico = textoFormato(material.materiaPrimaTipoTecnico);
+  const unidadStock = textoFormato(material.unidadStock);
+  const attrs = material.atributosVarianteJson ?? {};
+  const tieneAncho = numeroPositivo(attrs.anchoMm ?? attrs.widthMm);
+  const tieneLargoRollo = numeroPositivo(
+    attrs.largoRolloMm ?? attrs.longitudRolloMm,
   );
+  const metadataDeclaraRollo =
+    templateId.includes('ROLLO') || tipoTecnico.includes('ROLLO');
+  const unidadDeclaraRollo =
+    unidadStock === 'ROLLO' || unidadStock === 'METRO_LINEAL';
+
+  // La combinación evita convertir perfiles/cables vendidos por metro en
+  // sustratos de rollo: además de la unidad o plantilla debe existir la
+  // geometría física ancho + largo de rollo.
+  if (
+    tieneAncho &&
+    tieneLargoRollo &&
+    (metadataDeclaraRollo || unidadDeclaraRollo)
+  ) {
+    return 'rollo';
+  }
+  return subfamilia ? 'plano' : 'desconocido';
+}
+
+export function esSustratoRollo(material: SenalFormatoMaterial): boolean {
+  return resolverFormatoFisicoMaterial(material) === 'rollo';
 }
 
 /**
@@ -187,10 +265,9 @@ export function esSustratoRollo(
  * el material, no una bandera estática del perfil.
  */
 export function esCorteSobreHojas(
-  subfamilia: string | null | undefined,
+  material: SenalFormatoMaterial,
 ): boolean {
-  if (!subfamilia) return false;
-  return !esSustratoRollo(subfamilia);
+  return resolverFormatoFisicoMaterial(material) === 'plano';
 }
 
 /**
@@ -418,7 +495,7 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
   /** Corte sobre rollo: shelf sin panelizado. Si el material cargado es hoja/
    *  placa (no rollo) no acomoda en rollo — el formato lo dice el material. */
   corte_rollo: (paso, jobContext, materialResuelto, config) => {
-    if (esCorteSobreHojas(materialResuelto?.subfamilia)) {
+    if (esCorteSobreHojas(materialResuelto)) {
       return null;
     }
     // Heredado de una cadena de PLIEGOS (papel impreso): al plotter se montan
@@ -498,7 +575,9 @@ function runIrregularPlaca(
       cached.parametros.altoPlacaMm === config.sheetHeightMm &&
       cached.parametros.margenMm === margenUniforme &&
       cached.parametros.separacionMm === separacionUniforme &&
-      cached.parametros.permitirRotacion === config.allowRotation;
+      cached.parametros.permitirRotacion === config.allowRotation &&
+      cached.parametros.preservarComposicionOriginalSiEntra ===
+        config.preservarComposicionOriginalSiEntra;
     if (cacheMatches) marcarNestingVectorialReutilizado(jobContext);
     const result =
       cacheMatches && cached
@@ -511,6 +590,8 @@ function runIrregularPlaca(
             margenMm: margenUniforme,
             separacionMm: separacionUniforme,
             permitirRotacion: config.allowRotation,
+            preservarComposicionOriginalSiEntra:
+              config.preservarComposicionOriginalSiEntra,
           });
     const substrates: SubstrateUsage[] = Array.from(
       { length: result.placas },
@@ -573,8 +654,10 @@ function runIrregularPlaca(
         segmentos: result.segmentos,
         unionesFisicas: result.unionesFisicas,
         uniones: result.uniones,
+        estrategiaDisposicion: result.estrategiaDisposicion,
       },
       piezasAcomodadas: result.placements.length,
+      estrategiaDisposicion: result.estrategiaDisposicion,
       visualConfig: {
         margins: {
           leftMm: margenUniforme,
@@ -640,7 +723,7 @@ export function resolverSuperficieDinamica(
   materialResuelto: MaterialResueltoParaNesting | null,
 ): 'rollo' | 'pliegos_multiples' {
   if (config.machineGeometry === 'ROLLO') return 'rollo';
-  if (esSustratoRollo(materialResuelto?.subfamilia)) return 'rollo';
+  if (esSustratoRollo(materialResuelto)) return 'rollo';
   if (config.machineGeometry === 'MESA_EXTENSORA') return 'pliegos_multiples';
   if (config.sheetWidthMm && config.sheetHeightMm && !config.rollWidthMm) {
     return 'pliegos_multiples';
@@ -717,7 +800,7 @@ async function runMontajeSobreSustrato(
     return runGrid2DMultiForArea(paso, montajeContext, config);
   }
 
-  if (esSustratoRollo(materialResuelto?.subfamilia)) {
+  if (esSustratoRollo(materialResuelto)) {
     return runShelfRollo(paso, montajeContext, materialResuelto, config);
   }
   if (config.sheetWidthMm && config.sheetHeightMm) {

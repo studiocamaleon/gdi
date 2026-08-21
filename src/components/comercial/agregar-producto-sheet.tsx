@@ -4326,6 +4326,7 @@ function analisisVectorialDesdeItem(
     geometria,
     nesting: {
       algorithm: "irregular-2d-bottom-left-v1",
+      estrategiaDisposicion: nestingResult.estrategiaDisposicion,
       placas,
       anchoPlacaMm: sheet.widthMm,
       altoPlacaMm: sheet.heightMm,
@@ -5285,6 +5286,20 @@ function ApConfigStep({
     motorConfig.seleccionMaterial,
     slotsComercialElige,
   ]);
+  const preservarComposicionVectorial = React.useMemo(() => {
+    const pasoCorte = rutaSel?.configPasos.find(
+      (config) => config.rutaPaso.familiaCodigo === "corte_hilo_caliente",
+    );
+    if (!pasoCorte) return false;
+    const candidata = getActiveCandidateForConfig(pasoCorte, {
+      seleccionMaquina: motorConfig.seleccionMaquina,
+    });
+    const maquina = candidata?.maquina ?? pasoCorte.maquinaM1;
+    return (
+      maquina?.parametrosTecnicosJson?.estrategiaNestingVectorial ===
+      "preserve-original-if-fits"
+    );
+  }, [rutaSel, motorConfig.seleccionMaquina]);
   const [leyendoPlanos, setLeyendoPlanos] = React.useState(false);
   const [arrastrandoPlanos, setArrastrandoPlanos] = React.useState(false);
 
@@ -7214,6 +7229,9 @@ function ApConfigStep({
                   cantidad={qty}
                   placa={placaVectorial}
                   margenMm={placaVectorial?.margenMm}
+                  preservarComposicionOriginalSiEntra={
+                    preservarComposicionVectorial
+                  }
                   onChange={(fuente, analisis) =>
                     setMotorConfig((current) => ({
                       ...current,

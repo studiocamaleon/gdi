@@ -62,6 +62,8 @@ export class MotorUniversalController {
           margenMm: dto.margenMm ?? 0,
           separacionMm: dto.separacionMm ?? 0,
           permitirRotacion: dto.permitirRotacion !== false,
+          preservarComposicionOriginalSiEntra:
+            dto.preservarComposicionOriginalSiEntra === true,
         },
       });
       return {

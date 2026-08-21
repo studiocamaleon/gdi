@@ -208,6 +208,92 @@ async function installPolyfanProduct(prisma, tenantId, installedMaterial) {
       'Falta el centro de costo productivo IMP-003 para corte con hilo caliente.',
     );
   }
+  const plant = await prisma.planta.findFirst({
+    where: { tenantId, activa: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (!plant) {
+    throw new Error('Falta una planta activa para instalar la cortadora.');
+  }
+  let hotWireMachine = await prisma.maquina.upsert({
+    where: { tenantId_codigo: { tenantId, codigo: 'HOTWIRE-001' } },
+    create: {
+      tenantId,
+      codigo: 'HOTWIRE-001',
+      nombre: 'Cortadora de hilo caliente',
+      plantilla: 'CORTE_HILO_CALIENTE',
+      plantillaVersion: 1,
+      plantaId: plant.id,
+      centroCostoPrincipalId: hotWireCostCenter.id,
+      estado: 'ACTIVA',
+      estadoConfiguracion: 'LISTA',
+      geometriaTrabajo: 'PLANO',
+      unidadProduccionPrincipal: 'MM_MIN',
+      anchoUtil: '1250',
+      largoUtil: '600',
+      activo: true,
+      parametrosTecnicosJson: {
+        postprocesadorRecorrido: 'HOTWIRE_TAP_V1',
+        origenMaquina: 'bottom-left',
+        estrategiaOrigen: 'geometry-bounds',
+        estrategiaNestingVectorial: 'preserve-original-if-fits',
+        entradaMm: 8,
+        decimalesTap: 6,
+      },
+    },
+    update: {
+      plantilla: 'CORTE_HILO_CALIENTE',
+      centroCostoPrincipalId: hotWireCostCenter.id,
+      estadoConfiguracion: 'LISTA',
+      geometriaTrabajo: 'PLANO',
+      unidadProduccionPrincipal: 'MM_MIN',
+      activo: true,
+    },
+  });
+  const hotWireParams =
+    hotWireMachine.parametrosTecnicosJson &&
+    typeof hotWireMachine.parametrosTecnicosJson === 'object' &&
+    !Array.isArray(hotWireMachine.parametrosTecnicosJson)
+      ? hotWireMachine.parametrosTecnicosJson
+      : {};
+  // Sólo inicializa la política en máquinas existentes. Una preferencia que
+  // el tenant cambió explícitamente nunca debe ser pisada por el instalador.
+  if (!('estrategiaNestingVectorial' in hotWireParams)) {
+    hotWireMachine = await prisma.maquina.update({
+      where: { id: hotWireMachine.id },
+      data: {
+        parametrosTecnicosJson: {
+          ...hotWireParams,
+          estrategiaNestingVectorial: 'preserve-original-if-fits',
+        },
+      },
+    });
+  }
+  const hotWireProfile = await prisma.maquinaPerfilOperativo.upsert({
+    where: {
+      tenantId_maquinaId_nombre: {
+        tenantId,
+        maquinaId: hotWireMachine.id,
+        nombre: 'Polyfan estándar',
+      },
+    },
+    create: {
+      tenantId,
+      maquinaId: hotWireMachine.id,
+      nombre: 'Polyfan estándar',
+      tipoPerfil: 'CORTE',
+      productivityValue: '350',
+      productivityUnit: 'MM_MIN',
+      setupMin: '5',
+      detalleJson: { material: 'Polyfan' },
+      activo: true,
+    },
+    update: {
+      tipoPerfil: 'CORTE',
+      productivityUnit: 'MM_MIN',
+      activo: true,
+    },
+  });
 
   const route = await prisma.ruta.upsert({
     where: { tenantId_codigo: { tenantId, codigo: ROUTE_CODE } },
@@ -417,11 +503,12 @@ async function installPolyfanProduct(prisma, tenantId, installedMaterial) {
       productoRutaAlternativaId: alternative.id,
       rutaPasoId: step.id,
       modoActivacion: 'OBLIGATORIO',
-      modoTiempo: 'T-2',
+      modoTiempo: 'T-3',
       mecanismoCantidad: 'CALCULADO_POR_PASO',
       centroCostoId: hotWireCostCenter.id,
+      maquinaM1Id: hotWireMachine.id,
+      perfilM1Id: hotWireProfile.id,
       paramsPasoJson: {
-        productivityValue: 10,
         productivityQuantitySource: 'perimetro_piezas_m',
         nestingConfig: {
           algorithm: 'irregular-2d-bottom-left-v1',

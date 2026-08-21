@@ -293,7 +293,11 @@ export function NestingViewer({
       <div className="nesting-strat-row">
         <div className="nesting-strat on">
           <span className="ix">01</span>
-          <span>{algorithmLabel(result.algorithm)}</span>
+          <span>
+            {result.estrategiaDisposicion === "composicion_original"
+              ? "Composición original"
+              : algorithmLabel(result.algorithm)}
+          </span>
           <span className="yield">
             {formatNumber(result.aprovechamientoPct, 1)}%
           </span>
