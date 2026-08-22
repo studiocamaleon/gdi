@@ -41,6 +41,11 @@ export interface UnionVectorial {
   anchoEncastreMm: number;
   profundidadEncastreMm: number;
   kerfMm: number;
+  /** Para divisiones oblicuas. Las coordenadas pertenecen a la composición
+   * original del SVG; eje/posición se conservan por compatibilidad. */
+  anguloGrados?: number;
+  inicio?: PuntoVectorial;
+  fin?: PuntoVectorial;
 }
 
 export interface GeometriaVectorialCanonica {

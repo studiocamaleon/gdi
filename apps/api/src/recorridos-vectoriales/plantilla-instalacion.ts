@@ -268,8 +268,12 @@ function guiasUnionesVistaPrevia(input: {
       if (!pieza) return '';
       const origenX = input.bordeMm + (pieza.origenXmm ?? 0);
       const origenY = input.bordeMm + (pieza.origenYmm ?? 0);
-      const x1 = union.eje === 'vertical' ? origenX + union.posicionMm : origenX;
-      const y1 = union.eje === 'horizontal' ? origenY + union.posicionMm : origenY;
+      if (union.inicio && union.fin)
+        return `      <line x1="${num(origenX + union.inicio.x)}" y1="${num(origenY + union.inicio.y)}" x2="${num(origenX + union.fin.x)}" y2="${num(origenY + union.fin.y)}" />`;
+      const x1 =
+        union.eje === 'vertical' ? origenX + union.posicionMm : origenX;
+      const y1 =
+        union.eje === 'horizontal' ? origenY + union.posicionMm : origenY;
       const x2 = union.eje === 'vertical' ? x1 : origenX + pieza.anchoMm;
       const y2 = union.eje === 'horizontal' ? y1 : origenY + pieza.altoMm;
       return `      <line x1="${num(x1)}" y1="${num(y1)}" x2="${num(x2)}" y2="${num(y2)}" />`;
@@ -429,16 +433,26 @@ function guiasSvg(input: {
     if (!pieza) continue;
     const origenPiezaX = input.bordeMm + (pieza.origenXmm ?? 0);
     const origenPiezaY = input.bordeMm + (pieza.origenYmm ?? 0);
-    const x1Global =
-      union.eje === 'vertical' ? origenPiezaX + union.posicionMm : origenPiezaX;
-    const y1Global =
-      union.eje === 'horizontal'
+    const x1Global = union.inicio
+      ? origenPiezaX + union.inicio.x
+      : union.eje === 'vertical'
+        ? origenPiezaX + union.posicionMm
+        : origenPiezaX;
+    const y1Global = union.inicio
+      ? origenPiezaY + union.inicio.y
+      : union.eje === 'horizontal'
         ? origenPiezaY + union.posicionMm
         : origenPiezaY;
-    const x2Global =
-      union.eje === 'vertical' ? x1Global : origenPiezaX + pieza.anchoMm;
-    const y2Global =
-      union.eje === 'horizontal' ? y1Global : origenPiezaY + pieza.altoMm;
+    const x2Global = union.fin
+      ? origenPiezaX + union.fin.x
+      : union.eje === 'vertical'
+        ? x1Global
+        : origenPiezaX + pieza.anchoMm;
+    const y2Global = union.fin
+      ? origenPiezaY + union.fin.y
+      : union.eje === 'horizontal'
+        ? y1Global
+        : origenPiezaY + pieza.altoMm;
     const x1 = x1Global - input.origenXmm;
     const y1 = y1Global - input.origenYmm;
     const x2 = x2Global - input.origenXmm;

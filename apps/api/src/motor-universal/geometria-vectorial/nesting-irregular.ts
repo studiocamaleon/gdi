@@ -40,6 +40,16 @@ interface LayoutEvaluado {
   firma: string;
 }
 
+interface EstadoBusqueda {
+  plates: Plate[];
+  puntuacion: number;
+  firma: string;
+}
+
+interface PresupuestoBusqueda {
+  evaluacionesRestantes: number;
+}
+
 type OrientacionBase = Omit<PiezaPreparada, 'copyIndex'>;
 
 /** Una mejora menor a este porcentaje del área comprada no justifica girar
@@ -161,7 +171,19 @@ export function nestearGeometriaIrregular(input: {
       usableWidth * usableHeight * Math.max(a.plates.length, b.plates.length),
     ),
   )[0];
-  const plates = mejorLayout.plates;
+  const plates =
+    intentarReducirUnaPlaca({
+      instances,
+      layoutInicial: mejorLayout.plates,
+      plateWidth: input.anchoPlacaMm,
+      plateHeight: input.altoPlacaMm,
+      usableWidth,
+      usableHeight,
+      margin,
+      gap,
+      allowRotation: input.permitirRotacion !== false,
+      orientationCache,
+    }) ?? mejorLayout.plates;
 
   const placements = plates.flatMap((plate) => plate.placements);
   const areaPiezasMm2 = input.geometria.areaTotalMm2 * cantidad;
@@ -273,12 +295,14 @@ function buscarUbicacion(
     const maxY = plateHeight - margin - orientation.height;
     const candidates = posicionesCandidatas(
       plate,
+      orientation.contours,
       margin,
       gap,
       maxX,
       maxY,
       usarGrillaFina,
       orientation.piece.segmentacion != null,
+      false,
     );
     let bestForOrientation: PlacementVectorial | null = null;
     for (const { x, y } of candidates) {
@@ -349,12 +373,14 @@ function rectangulosPotencialmenteCercanos(
  * primeras piezas, donde todavía aporta encastre irregular a costo razonable. */
 function posicionesCandidatas(
   plate: Plate,
+  contornosPieza: ContornoVectorial[],
   margin: number,
   gap: number,
   maxX: number,
   maxY: number,
   usarGrillaFina: boolean,
   esSegmento: boolean,
+  incluirContactos: boolean,
 ): Array<{ x: number; y: number }> {
   const candidates = new Map<string, { x: number; y: number }>();
   const add = (x: number, y: number) => {
@@ -373,6 +399,24 @@ function posicionesCandidatas(
     add(margin, bottom);
   }
   const primaryKeys = new Set(candidates.keys());
+
+  // Las cajas exteriores alcanzan para rectángulos, pero no encuentran
+  // acomodos como una letra debajo de una silueta curva o una pieza dentro de
+  // un hueco. Se agregan traslaciones que acercan vértices representativos de
+  // ambos contornos. La validación posterior sigue usando la geometría real y
+  // la separación configurada, por lo que estos puntos sólo amplían la
+  // búsqueda: nunca permiten una superposición inválida.
+  if (incluirContactos && plate.placements.length > 0) {
+    for (const placed of plate.placements) {
+      agregarCandidatosContacto({
+        add,
+        contornosPieza,
+        contornosColocados: placed.contornos,
+        gap,
+      });
+    }
+  }
+  const contactKeys = new Set(candidates.keys());
 
   if (
     plate.placements.length > 0 &&
@@ -401,10 +445,54 @@ function posicionesCandidatas(
     .map(([, value]) => value)
     .sort(bottomLeft);
   const fallbackGrid = [...candidates.entries()]
-    .filter(([key]) => !primaryKeys.has(key))
+    .filter(([key]) => !contactKeys.has(key))
     .map(([, value]) => value)
     .sort(bottomLeft);
-  return [...primary, ...fallbackGrid];
+  const contacts = [...candidates.entries()]
+    .filter(([key]) => contactKeys.has(key) && !primaryKeys.has(key))
+    .map(([, value]) => value)
+    .sort(bottomLeft);
+  return [...primary, ...contacts, ...fallbackGrid];
+}
+
+function agregarCandidatosContacto(input: {
+  add: (x: number, y: number) => void;
+  contornosPieza: ContornoVectorial[];
+  contornosColocados: ContornoVectorial[];
+  gap: number;
+}) {
+  const pieza = muestrearPuntosContacto(input.contornosPieza, 28);
+  const colocados = muestrearPuntosContacto(input.contornosColocados, 28);
+  const distanciaDiagonal = input.gap / Math.SQRT2;
+  const offsets =
+    input.gap > 0
+      ? [
+          { x: -input.gap, y: 0 },
+          { x: input.gap, y: 0 },
+          { x: 0, y: -input.gap },
+          { x: 0, y: input.gap },
+          { x: -distanciaDiagonal, y: -distanciaDiagonal },
+          { x: distanciaDiagonal, y: -distanciaDiagonal },
+          { x: -distanciaDiagonal, y: distanciaDiagonal },
+          { x: distanciaDiagonal, y: distanciaDiagonal },
+        ]
+      : [{ x: 0, y: 0 }];
+  for (const fijo of colocados)
+    for (const movil of pieza)
+      for (const offset of offsets)
+        input.add(fijo.x - movil.x + offset.x, fijo.y - movil.y + offset.y);
+}
+
+function muestrearPuntosContacto(
+  contornos: ContornoVectorial[],
+  limite: number,
+): PuntoVectorial[] {
+  const puntos = contornos.flatMap((contorno) => contorno.puntos);
+  if (puntos.length <= limite) return puntos;
+  const result: PuntoVectorial[] = [];
+  for (let index = 0; index < limite; index += 1)
+    result.push(puntos[Math.floor((index * puntos.length) / limite)]);
+  return result;
 }
 
 function prepararOrientaciones(
@@ -540,6 +628,340 @@ function empacarInstancias(input: {
     plates.push(plate);
   }
   return plates;
+}
+
+/** Segunda oportunidad acotada para evitar una placa residual. El greedy
+ * normal es rápido, pero una decisión temprana puede dejar una única pieza en
+ * la última placa. Para vectores chicos se reconstruye el layout con varias
+ * alternativas simultáneas, usando contactos entre contornos reales y
+ * permitiendo volver atrás sin convertir la cotización en una búsqueda sin
+ * límite. */
+function intentarReducirUnaPlaca(input: {
+  instances: Array<{ piece: PiezaVectorial; copyIndex: number }>;
+  layoutInicial: Plate[];
+  plateWidth: number;
+  plateHeight: number;
+  usableWidth: number;
+  usableHeight: number;
+  margin: number;
+  gap: number;
+  allowRotation: boolean;
+  orientationCache: Map<string, OrientacionBase[]>;
+}): Plate[] | null {
+  if (
+    input.layoutInicial.length <= 1 ||
+    input.instances.length < 3 ||
+    input.instances.length > 12
+  )
+    return null;
+  const objetivo = input.layoutInicial.length - 1;
+  const areaUtil = input.usableWidth * input.usableHeight;
+  const ultimaPlaca = input.layoutInicial.at(-1);
+  if (!ultimaPlaca || ultimaPlaca.areaPiezasMm2 / areaUtil > 0.35) return null;
+  const areaTotal = input.instances.reduce(
+    (total, instance) => total + instance.piece.areaMm2,
+    0,
+  );
+  if (areaTotal > areaUtil * objetivo + 0.001) return null;
+
+  const presupuestoRapido: PresupuestoBusqueda = {
+    evaluacionesRestantes: 45_000,
+  };
+  const ordenes = generarOrdenesRescate(input.instances);
+  for (const orden of ordenes) {
+    const result = buscarLayoutConRetroceso({
+      ...input,
+      instances: orden,
+      maxPlates: objetivo,
+      incluirContactos: false,
+      presupuesto: presupuestoRapido,
+    });
+    if (result) return result;
+    if (presupuestoRapido.evaluacionesRestantes <= 0) break;
+  }
+
+  // Si la grilla y los contactos rectangulares no alcanzaron, reservar un
+  // segundo presupuesto breve para concavidades reales. Esta fase es más cara
+  // y por eso sólo corre cuando todavía existe una placa que podría eliminarse.
+  const presupuestoContactos: PresupuestoBusqueda = {
+    evaluacionesRestantes: 8_000,
+  };
+  for (const orden of ordenes) {
+    const result = buscarLayoutConRetroceso({
+      ...input,
+      instances: orden,
+      maxPlates: objetivo,
+      incluirContactos: true,
+      presupuesto: presupuestoContactos,
+    });
+    if (result) return result;
+    if (presupuestoContactos.evaluacionesRestantes <= 0) break;
+  }
+  return null;
+}
+
+function buscarLayoutConRetroceso(input: {
+  instances: Array<{ piece: PiezaVectorial; copyIndex: number }>;
+  maxPlates: number;
+  plateWidth: number;
+  plateHeight: number;
+  usableWidth: number;
+  usableHeight: number;
+  margin: number;
+  gap: number;
+  allowRotation: boolean;
+  orientationCache: Map<string, OrientacionBase[]>;
+  incluirContactos: boolean;
+  presupuesto: PresupuestoBusqueda;
+}): Plate[] | null {
+  const anchoArea = input.usableWidth * input.usableHeight;
+  let estados: EstadoBusqueda[] = [{ plates: [], puntuacion: 0, firma: '' }];
+  for (const instance of input.instances) {
+    if (input.presupuesto.evaluacionesRestantes <= 0) return null;
+    const orientations = prepararOrientaciones(
+      instance.piece,
+      instance.copyIndex,
+      input.allowRotation,
+      input.usableWidth,
+      input.usableHeight,
+      input.orientationCache,
+    );
+    const siguientes = new Map<string, EstadoBusqueda>();
+    for (const estado of estados) {
+      const cantidadPlacasCandidatas = Math.min(
+        input.maxPlates,
+        estado.plates.length + 1,
+      );
+      for (
+        let plateIndex = 0;
+        plateIndex < cantidadPlacasCandidatas;
+        plateIndex += 1
+      ) {
+        const plate = estado.plates[plateIndex] ?? {
+          placements: [],
+          areaPiezasMm2: 0,
+        };
+        if (plate.areaPiezasMm2 + instance.piece.areaMm2 > anchoArea + 0.001)
+          continue;
+        const placements = enumerarUbicacionesRescate({
+          orientations,
+          plate,
+          plateIndex,
+          plateWidth: input.plateWidth,
+          plateHeight: input.plateHeight,
+          margin: input.margin,
+          gap: input.gap,
+          incluirContactos: input.incluirContactos,
+          presupuesto: input.presupuesto,
+        });
+        for (const placement of placements) {
+          const plates = estado.plates.map((item) => ({
+            placements: [...item.placements],
+            areaPiezasMm2: item.areaPiezasMm2,
+          }));
+          if (!plates[plateIndex])
+            plates.push({ placements: [], areaPiezasMm2: 0 });
+          plates[plateIndex].placements.push(placement);
+          plates[plateIndex].areaPiezasMm2 += instance.piece.areaMm2;
+          const firma = firmaEstado(plates);
+          if (siguientes.has(firma)) continue;
+          siguientes.set(firma, {
+            plates,
+            puntuacion: puntuarEstado(plates, input.margin, input.maxPlates),
+            firma,
+          });
+        }
+      }
+    }
+    estados = seleccionarEstadosDiversos([...siguientes.values()], 72, 3);
+    if (estados.length === 0) return null;
+  }
+  return (
+    estados
+      .filter((estado) => estado.plates.length <= input.maxPlates)
+      .sort(
+        (a, b) => a.puntuacion - b.puntuacion || a.firma.localeCompare(b.firma),
+      )[0]?.plates ?? null
+  );
+}
+
+function seleccionarEstadosDiversos(
+  estados: EstadoBusqueda[],
+  limite: number,
+  porDistribucion: number,
+) {
+  const comparar = (a: EstadoBusqueda, b: EstadoBusqueda) =>
+    a.puntuacion - b.puntuacion || a.firma.localeCompare(b.firma);
+  const grupos = new Map<string, EstadoBusqueda[]>();
+  for (const estado of estados.sort(comparar)) {
+    const key = firmaDistribucion(estado.plates);
+    const grupo = grupos.get(key) ?? [];
+    if (grupo.length >= porDistribucion) continue;
+    grupo.push(estado);
+    grupos.set(key, grupo);
+  }
+  const result: EstadoBusqueda[] = [];
+  for (let ronda = 0; ronda < porDistribucion; ronda += 1) {
+    const candidatos = [...grupos.values()]
+      .map((grupo) => grupo[ronda])
+      .filter((estado): estado is EstadoBusqueda => estado != null)
+      .sort(comparar);
+    for (const estado of candidatos) {
+      result.push(estado);
+      if (result.length >= limite) return result;
+    }
+  }
+  return result;
+}
+
+function firmaDistribucion(plates: Plate[]) {
+  return plates
+    .map((plate) =>
+      plate.placements
+        .map((item) => `${item.pieceId}:${item.copyIndex}`)
+        .sort()
+        .join(','),
+    )
+    .join('|');
+}
+
+function enumerarUbicacionesRescate(input: {
+  orientations: PiezaPreparada[];
+  plate: Plate;
+  plateIndex: number;
+  plateWidth: number;
+  plateHeight: number;
+  margin: number;
+  gap: number;
+  incluirContactos: boolean;
+  presupuesto: PresupuestoBusqueda;
+}): PlacementVectorial[] {
+  const result: PlacementVectorial[] = [];
+  const orientacionesCardinales = input.orientations.filter((orientation) =>
+    esRotacionCardinal(orientation.rotacion),
+  );
+  const orientations =
+    orientacionesCardinales.length > 0
+      ? orientacionesCardinales
+      : input.orientations;
+  for (const orientation of orientations) {
+    if (input.presupuesto.evaluacionesRestantes <= 0) break;
+    const maxX = input.plateWidth - input.margin - orientation.width;
+    const maxY = input.plateHeight - input.margin - orientation.height;
+    if (maxX < input.margin - 0.001 || maxY < input.margin - 0.001) continue;
+    const candidates = posicionesCandidatas(
+      input.plate,
+      orientation.contours,
+      input.margin,
+      input.gap,
+      maxX,
+      maxY,
+      false,
+      orientation.piece.segmentacion != null,
+      input.incluirContactos,
+    );
+    let encontradasOrientacion = 0;
+    for (const { x, y } of candidates) {
+      input.presupuesto.evaluacionesRestantes -= 1;
+      if (input.presupuesto.evaluacionesRestantes < 0) break;
+      const nearbyPlacements = input.plate.placements.filter((placed) =>
+        rectangulosPotencialmenteCercanos(
+          x,
+          y,
+          orientation.width,
+          orientation.height,
+          placed,
+          input.gap,
+        ),
+      );
+      const contours = trasladar(orientation.contours, x, y);
+      if (
+        nearbyPlacements.some((placed) =>
+          colisionanContornos(contours, placed.contornos, input.gap),
+        )
+      )
+        continue;
+      result.push({
+        pieceId: orientation.piece.id,
+        copyIndex: orientation.copyIndex,
+        substrateIndex: input.plateIndex,
+        xMm: x,
+        yMm: y,
+        rotacion: orientation.rotacion,
+        anchoMm: orientation.width,
+        altoMm: orientation.height,
+        contornos: contours,
+        segmentacion: orientation.piece.segmentacion,
+      });
+      encontradasOrientacion += 1;
+      if (encontradasOrientacion >= 3 || result.length >= 18) break;
+    }
+    if (result.length >= 18) break;
+  }
+  return result;
+}
+
+function generarOrdenesRescate(
+  instances: Array<{ piece: PiezaVectorial; copyIndex: number }>,
+) {
+  const comparadores = [
+    (a: (typeof instances)[number], b: (typeof instances)[number]) =>
+      Number(a.piece.segmentacion != null) -
+        Number(b.piece.segmentacion != null) ||
+      b.piece.altoMm - a.piece.altoMm ||
+      a.piece.id.localeCompare(b.piece.id),
+    (a: (typeof instances)[number], b: (typeof instances)[number]) =>
+      b.piece.altoMm - a.piece.altoMm || b.piece.anchoMm - a.piece.anchoMm,
+    (a: (typeof instances)[number], b: (typeof instances)[number]) =>
+      b.piece.areaMm2 - a.piece.areaMm2 || b.piece.altoMm - a.piece.altoMm,
+    (a: (typeof instances)[number], b: (typeof instances)[number]) =>
+      Math.max(b.piece.anchoMm, b.piece.altoMm) -
+        Math.max(a.piece.anchoMm, a.piece.altoMm) ||
+      b.piece.areaMm2 - a.piece.areaMm2,
+  ];
+  const unique = new Map<string, typeof instances>();
+  for (const comparar of comparadores) {
+    const orden = [...instances].sort(
+      (a, b) =>
+        comparar(a, b) ||
+        a.piece.id.localeCompare(b.piece.id) ||
+        a.copyIndex - b.copyIndex,
+    );
+    unique.set(
+      orden.map(({ piece, copyIndex }) => `${piece.id}:${copyIndex}`).join('|'),
+      orden,
+    );
+  }
+  return [...unique.values()];
+}
+
+function puntuarEstado(plates: Plate[], margin: number, maxPlates: number) {
+  const areaEnvolvente = plates.reduce((total, plate) => {
+    const right = Math.max(
+      margin,
+      ...plate.placements.map((item) => item.xMm + item.anchoMm),
+    );
+    const bottom = Math.max(
+      margin,
+      ...plate.placements.map((item) => item.yMm + item.altoMm),
+    );
+    return total + (right - margin) * (bottom - margin);
+  }, 0);
+  // Conservar alternativas que ya abrieron la cantidad objetivo evita que el
+  // beam descarte demasiado pronto una distribución equilibrada entre placas.
+  const placasFaltantes = maxPlates - plates.length;
+  return areaEnvolvente + placasFaltantes * areaEnvolvente * 0.04;
+}
+
+function firmaEstado(plates: Plate[]) {
+  return plates
+    .flatMap((plate, plateIndex) =>
+      plate.placements.map(
+        (item) =>
+          `${plateIndex}:${item.pieceId}:${item.copyIndex}:${item.rotacion}:${Math.round(item.xMm)}:${Math.round(item.yMm)}`,
+      ),
+    )
+    .join('|');
 }
 
 function generarOrdenesCandidatos(
@@ -693,7 +1115,8 @@ function trasladar(
   }));
 }
 
-function colisionanContornos(
+/** @internal Exportada para regresiones geométricas del motor. */
+export function colisionanContornos(
   a: ContornoVectorial[],
   b: ContornoVectorial[],
   gap: number,

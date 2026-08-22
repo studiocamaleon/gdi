@@ -1533,6 +1533,9 @@ export interface AnalisisSvgFabricacion {
       anchoEncastreMm: number;
       profundidadEncastreMm: number;
       kerfMm: number;
+      anguloGrados?: number;
+      inicio?: { x: number; y: number };
+      fin?: { x: number; y: number };
     }>;
     estrategiaDisposicion?: "composicion_original" | "nesting_optimizado";
   };

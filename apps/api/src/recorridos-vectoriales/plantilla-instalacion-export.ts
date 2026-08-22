@@ -450,6 +450,15 @@ function dibujarUniones(
     if (!piece) continue;
     const pieceX = piece.origenXmm ?? 0;
     const pieceY = piece.origenYmm ?? 0;
+    if (union.inicio && union.fin) {
+      pdf.line(
+        origin.x + (pieceX + union.inicio.x) * scale,
+        origin.y + (pieceY + union.inicio.y) * scale,
+        origin.x + (pieceX + union.fin.x) * scale,
+        origin.y + (pieceY + union.fin.y) * scale,
+      );
+      continue;
+    }
     if (union.eje === 'vertical') {
       const x = origin.x + (pieceX + union.posicionMm) * scale;
       pdf.line(

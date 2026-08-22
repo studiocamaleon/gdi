@@ -6,6 +6,7 @@ import {
   CheckCircle2Icon,
   FileUpIcon,
   LoaderCircleIcon,
+  PlayIcon,
   ShapesIcon,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -139,49 +140,58 @@ export function DisenoVectorialCotizador({
       svg,
       anchoFinalMm: Math.max(10, anchoCm * 10),
     };
-    await analizar(fuente);
+    setError(null);
+    onChange(fuente, null);
   };
 
+  const anchoFinalMm = Math.max(10, anchoCm * 10);
+  const analisisActualizado = Boolean(
+    value &&
+    placa &&
+    analisisCoincideConEntrada({
+      analisis,
+      fuente: value,
+      anchoFinalMm,
+      cantidad,
+      placa,
+      margenMm,
+      preservarComposicionOriginalSiEntra,
+      configuracionEncastres,
+    }),
+  );
+
   React.useEffect(() => {
-    if (!value || !placa || procesando) return;
-    if (
-      analisisCoincideConEntrada({
-        analisis,
-        fuente: value,
-        anchoFinalMm: Math.max(10, anchoCm * 10),
-        cantidad,
-        placa,
-        margenMm,
-        preservarComposicionOriginalSiEntra,
-        configuracionEncastres,
-      })
-    )
-      return;
-    const timer = window.setTimeout(() => {
-      void analizar(
-        {
-          ...value,
-          anchoFinalMm: Math.max(10, anchoCm * 10),
-          altoFinalMm: undefined,
-        },
-        cantidad,
-      );
-    }, 350);
-    return () => window.clearTimeout(timer);
-    // `analizar` cambia cuando cambia cantidad/placa; eso es justamente lo que
-    // debe volver a calcular el consumo. `procesando` no debe rearmar el timer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    analisis,
-    anchoCm,
-    cantidad,
-    configuracionEncastres,
-    margenMm,
-    preservarComposicionOriginalSiEntra,
-    placa?.anchoMm,
-    placa?.altoMm,
-    value,
-  ]);
+    if (!value || !analisis || analisisActualizado || procesando) return;
+    // Cambiar medida, cantidad, placa o configuración invalida el resultado,
+    // pero no vuelve a ejecutar el nesting. El usuario decide cuándo calcular.
+    onChange(value, null);
+  }, [analisis, analisisActualizado, onChange, procesando, value]);
+
+  const actualizarAncho = (nextAnchoCm: number) => {
+    setAnchoCm(nextAnchoCm);
+    setError(null);
+    if (!value) return;
+    onChange(
+      {
+        ...value,
+        anchoFinalMm: Math.max(10, nextAnchoCm * 10),
+        altoFinalMm: undefined,
+      },
+      null,
+    );
+  };
+
+  const calcularNesting = () => {
+    if (!value) return;
+    void analizar(
+      {
+        ...value,
+        anchoFinalMm,
+        altoFinalMm: undefined,
+      },
+      cantidad,
+    );
+  };
 
   const unionReferencia = analisis?.nesting.uniones?.[0];
 
@@ -214,7 +224,9 @@ export function DisenoVectorialCotizador({
               min={1}
               step={0.1}
               value={anchoCm}
-              onChange={(event) => setAnchoCm(Number(event.target.value) || 0)}
+              onChange={(event) =>
+                actualizarAncho(Number(event.target.value) || 0)
+              }
             />
             <FieldDescription>
               En centímetros. El alto conserva la proporción.
@@ -267,21 +279,44 @@ export function DisenoVectorialCotizador({
             onClick={() => inputRef.current?.click()}
             className="w-full"
           >
+            <FileUpIcon data-icon="inline-start" />
+            {value ? "Reemplazar archivo" : "Seleccionar archivo SVG"}
+          </Button>
+        </div>
+
+        {value && !analisisActualizado ? (
+          <Alert>
+            <AlertCircleIcon />
+            <AlertTitle>Nesting pendiente</AlertTitle>
+            <AlertDescription>
+              Revisá la medida y la placa. El cálculo se ejecutará únicamente
+              cuando presiones el botón.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {value ? (
+          <Button
+            type="button"
+            disabled={!placa || procesando || anchoCm <= 0}
+            onClick={calcularNesting}
+            className="w-full"
+          >
             {procesando ? (
               <LoaderCircleIcon
                 data-icon="inline-start"
                 className="animate-spin"
               />
             ) : (
-              <FileUpIcon data-icon="inline-start" />
+              <PlayIcon data-icon="inline-start" />
             )}
             {procesando
-              ? "Analizando vector…"
-              : value
-                ? "Reemplazar archivo"
-                : "Seleccionar archivo SVG"}
+              ? "Calculando nesting…"
+              : analisisActualizado
+                ? "Volver a calcular nesting"
+                : "Calcular nesting"}
           </Button>
-        </div>
+        ) : null}
 
         {error ? (
           <Alert variant="destructive">

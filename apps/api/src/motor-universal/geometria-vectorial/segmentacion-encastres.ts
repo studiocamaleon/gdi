@@ -18,6 +18,18 @@ interface Fragmento {
   unionesIds: string[];
 }
 
+interface TransformacionRotacion {
+  anguloGrados: number;
+  cos: number;
+  sin: number;
+  minX: number;
+  minY: number;
+  originalMinX: number;
+  originalMaxX: number;
+  originalMinY: number;
+  originalMaxY: number;
+}
+
 export interface ResultadoSegmentacion {
   piezas: PiezaVectorial[];
   uniones: UnionVectorial[];
@@ -135,21 +147,15 @@ export function segmentarPiezasConEncastres(input: {
   const finales: Fragmento[] = [];
 
   for (const pieza of input.piezas) {
-    const inicial: Fragmento = {
-      piezaOrigenId: pieza.id,
-      contornos: pieza.contornos,
-      unionesIds: [],
-    };
-    dividirRecursivo(
-      inicial,
-      input.anchoUtilMm,
-      input.altoUtilMm,
-      input.permitirRotacion !== false,
+    const resultado = segmentarPiezaEnMejorOrientacion({
+      pieza,
+      anchoUtilMm: input.anchoUtilMm,
+      altoUtilMm: input.altoUtilMm,
+      permitirRotacion: input.permitirRotacion !== false,
       configuracion,
-      uniones,
-      finales,
-      0,
-    );
+    });
+    finales.push(...resultado.fragmentos);
+    uniones.push(...resultado.uniones);
   }
 
   const totalPorOrigen = new Map<string, number>();
@@ -166,6 +172,245 @@ export function segmentarPiezasConEncastres(input: {
     return normalizarFragmento(fragmento, indice, total);
   });
   return { piezas, uniones };
+}
+
+function segmentarPiezaEnMejorOrientacion(input: {
+  pieza: PiezaVectorial;
+  anchoUtilMm: number;
+  altoUtilMm: number;
+  permitirRotacion: boolean;
+  configuracion: ConfiguracionEncastresVectoriales;
+}): { fragmentos: Fragmento[]; uniones: UnionVectorial[] } {
+  if (
+    fragmentoEntraCompleto(
+      input.pieza.contornos,
+      input.anchoUtilMm,
+      input.altoUtilMm,
+      input.permitirRotacion,
+    )
+  )
+    return {
+      fragmentos: [
+        {
+          piezaOrigenId: input.pieza.id,
+          contornos: input.pieza.contornos,
+          unionesIds: [],
+        },
+      ],
+      uniones: [],
+    };
+
+  const angulos = input.permitirRotacion ? [0, 15, 30, 45, 60, 75] : [0];
+  const candidatos = angulos.flatMap((anguloGrados) => {
+    try {
+      return [segmentarPiezaEnOrientacion({ ...input, anguloGrados })];
+    } catch {
+      return [];
+    }
+  });
+  if (candidatos.length === 0)
+    throw new Error(
+      `No se encontró una división segura para ${input.pieza.id}.`,
+    );
+  return candidatos.sort((a, b) => {
+    if (a.fragmentos.length !== b.fragmentos.length)
+      return a.fragmentos.length - b.fragmentos.length;
+    return a.compactacion - b.compactacion || a.angulo - b.angulo;
+  })[0];
+}
+
+function segmentarPiezaEnOrientacion(input: {
+  pieza: PiezaVectorial;
+  anchoUtilMm: number;
+  altoUtilMm: number;
+  permitirRotacion: boolean;
+  configuracion: ConfiguracionEncastresVectoriales;
+  anguloGrados: number;
+}): {
+  fragmentos: Fragmento[];
+  uniones: UnionVectorial[];
+  angulo: number;
+  compactacion: number;
+} {
+  const rotacion = rotarParaSegmentar(
+    input.pieza.contornos,
+    input.anguloGrados,
+  );
+  const fragmentosRotados: Fragmento[] = [];
+  const unionesRotadas: UnionVectorial[] = [];
+  dividirRecursivo(
+    {
+      piezaOrigenId: input.pieza.id,
+      contornos: rotacion.contornos,
+      unionesIds: [],
+    },
+    input.anchoUtilMm,
+    input.altoUtilMm,
+    input.permitirRotacion,
+    input.configuracion,
+    unionesRotadas,
+    fragmentosRotados,
+    0,
+  );
+  const compactacion = fragmentosRotados.reduce((total, fragmento) => {
+    const caja = boundsContornos(fragmento.contornos);
+    return total + Math.max(caja.maxX - caja.minX, caja.maxY - caja.minY);
+  }, 0);
+  if (input.anguloGrados === 0)
+    return {
+      fragmentos: fragmentosRotados,
+      uniones: unionesRotadas,
+      angulo: 0,
+      compactacion,
+    };
+  return {
+    fragmentos: fragmentosRotados.map((fragmento) => ({
+      ...fragmento,
+      contornos: desrotarContornos(fragmento.contornos, rotacion.transform),
+    })),
+    uniones: unionesRotadas.map((union) =>
+      desrotarUnion(union, rotacion.transform),
+    ),
+    angulo: input.anguloGrados,
+    compactacion,
+  };
+}
+
+function rotarParaSegmentar(
+  contornos: ContornoVectorial[],
+  anguloGrados: number,
+): { contornos: ContornoVectorial[]; transform: TransformacionRotacion } {
+  if (anguloGrados === 0)
+    return {
+      contornos,
+      transform: {
+        anguloGrados: 0,
+        cos: 1,
+        sin: 0,
+        minX: 0,
+        minY: 0,
+        originalMinX: 0,
+        originalMaxX: 0,
+        originalMinY: 0,
+        originalMaxY: 0,
+      },
+    };
+  const radians = (anguloGrados * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const rotados = contornos.map((contorno) => ({
+    ...contorno,
+    puntos: contorno.puntos.map((punto) => ({
+      x: punto.x * cos - punto.y * sin,
+      y: punto.x * sin + punto.y * cos,
+    })),
+  }));
+  const caja = boundsContornos(rotados);
+  const cajaOriginal = boundsContornos(contornos);
+  return {
+    contornos: rotados.map((contorno) => ({
+      ...contorno,
+      puntos: contorno.puntos.map((punto) => ({
+        x: redondear(punto.x - caja.minX),
+        y: redondear(punto.y - caja.minY),
+      })),
+    })),
+    transform: {
+      anguloGrados,
+      cos,
+      sin,
+      minX: caja.minX,
+      minY: caja.minY,
+      originalMinX: cajaOriginal.minX,
+      originalMaxX: cajaOriginal.maxX,
+      originalMinY: cajaOriginal.minY,
+      originalMaxY: cajaOriginal.maxY,
+    },
+  };
+}
+
+function desrotarContornos(
+  contornos: ContornoVectorial[],
+  transform: TransformacionRotacion,
+): ContornoVectorial[] {
+  return contornos.map((contorno) => ({
+    ...contorno,
+    puntos: contorno.puntos.map((punto) => desrotarPunto(punto, transform)),
+  }));
+}
+
+function desrotarPunto(
+  punto: PuntoVectorial,
+  transform: TransformacionRotacion,
+): PuntoVectorial {
+  const x = punto.x + transform.minX;
+  const y = punto.y + transform.minY;
+  return {
+    x: redondear(x * transform.cos + y * transform.sin),
+    y: redondear(-x * transform.sin + y * transform.cos),
+  };
+}
+
+function desrotarUnion(
+  union: UnionVectorial,
+  transform: TransformacionRotacion,
+): UnionVectorial {
+  const inicioRotado =
+    union.eje === 'vertical'
+      ? { x: union.posicionMm, y: 0 }
+      : { x: 0, y: union.posicionMm };
+  const finRotado =
+    union.eje === 'vertical'
+      ? { x: union.posicionMm, y: union.largoMm }
+      : { x: union.largoMm, y: union.posicionMm };
+  const [inicio, fin] = recortarLineaAOriginal(
+    desrotarPunto(inicioRotado, transform),
+    desrotarPunto(finRotado, transform),
+    transform,
+  );
+  return {
+    ...union,
+    anguloGrados: transform.anguloGrados,
+    inicio,
+    fin,
+  };
+}
+
+function recortarLineaAOriginal(
+  inicio: PuntoVectorial,
+  fin: PuntoVectorial,
+  transform: TransformacionRotacion,
+): [PuntoVectorial, PuntoVectorial] {
+  const dx = fin.x - inicio.x;
+  const dy = fin.y - inicio.y;
+  let desde = 0;
+  let hasta = 1;
+  const limites: Array<[number, number]> = [
+    [-dx, inicio.x - transform.originalMinX],
+    [dx, transform.originalMaxX - inicio.x],
+    [-dy, inicio.y - transform.originalMinY],
+    [dy, transform.originalMaxY - inicio.y],
+  ];
+  for (const [p, q] of limites) {
+    if (Math.abs(p) < 1e-9) {
+      if (q < 0) return [inicio, fin];
+      continue;
+    }
+    const ratio = q / p;
+    if (p < 0) desde = Math.max(desde, ratio);
+    else hasta = Math.min(hasta, ratio);
+  }
+  if (desde > hasta) return [inicio, fin];
+  return [
+    {
+      x: redondear(inicio.x + dx * desde),
+      y: redondear(inicio.y + dy * desde),
+    },
+    {
+      x: redondear(inicio.x + dx * hasta),
+      y: redondear(inicio.y + dy * hasta),
+    },
+  ];
 }
 
 function dividirRecursivo(
@@ -222,7 +467,6 @@ function dividirRecursivo(
     corteMinimo <= corteMaximo
       ? Math.max(corteMinimo, Math.min(corteIdeal, corteMaximo))
       : Math.max(1, corteMaximo);
-  const posicion = inicioEje + corteDesdeInicio;
   const cantidadEncastres =
     configuracion.tipoUnion === 'recta'
       ? 0
@@ -242,31 +486,27 @@ function dividirRecursivo(
           (largo / cantidadEncastres) * 0.6,
         )
       : 0;
-  const union: UnionVectorial = {
-    id: `${fragmento.piezaOrigenId}-U${uniones.length + 1}`,
-    piezaOrigenId: fragmento.piezaOrigenId,
-    tipoEncastre: configuracion.tipoUnion,
-    eje,
-    posicionMm: redondear(posicion),
-    largoMm: redondear(largo),
-    cantidadEncastres,
-    anchoEncastreMm: redondear(anchoEncastreEfectivo),
-    profundidadEncastreMm: redondear(profundidadEncastre),
-    kerfMm: configuracion.kerfMm,
-  };
-  const [mascaraA, mascaraB] = crearMascarasEncastre(
+  const geometria = aMultiPolygon(fragmento.contornos);
+  const division = seleccionarDivisionSegura({
+    fragmento,
+    geometria,
     caja,
     eje,
-    posicion,
+    inicioEje,
+    corteMinimo,
+    corteMaximo,
+    corteIdeal: corteDesdeInicio,
+    largo,
     cantidadEncastres,
-    profundidadEncastre,
     anchoEncastreEfectivo,
-  );
-  const geometria = aMultiPolygon(fragmento.contornos);
-  const ladoA = polygonClipping.intersection(geometria, mascaraA);
-  const ladoB = polygonClipping.intersection(geometria, mascaraB);
-  const fragmentosA = desdeMultiPolygon(ladoA, fragmento, union.id);
-  const fragmentosB = desdeMultiPolygon(ladoB, fragmento, union.id);
+    profundidadEncastre,
+    configuracion,
+    unionId: `${fragmento.piezaOrigenId}-U${uniones.length + 1}`,
+    anchoUtilMm,
+    altoUtilMm,
+    permitirRotacion,
+  });
+  const { union, fragmentosA, fragmentosB } = division;
   if (!fragmentosA.length || !fragmentosB.length)
     throw new Error(
       `No se encontró una división segura para ${fragmento.piezaOrigenId}.`,
@@ -283,6 +523,133 @@ function dividirRecursivo(
       finales,
       profundidad + 1,
     );
+}
+
+function seleccionarDivisionSegura(input: {
+  fragmento: Fragmento;
+  geometria: MultiPolygon;
+  caja: ReturnType<typeof boundsContornos>;
+  eje: 'vertical' | 'horizontal';
+  inicioEje: number;
+  corteMinimo: number;
+  corteMaximo: number;
+  corteIdeal: number;
+  largo: number;
+  cantidadEncastres: number;
+  anchoEncastreEfectivo: number;
+  profundidadEncastre: number;
+  configuracion: ConfiguracionEncastresVectoriales;
+  unionId: string;
+  anchoUtilMm: number;
+  altoUtilMm: number;
+  permitirRotacion: boolean;
+}): {
+  union: UnionVectorial;
+  fragmentosA: Fragmento[];
+  fragmentosB: Fragmento[];
+} {
+  const candidatos = posicionesCorteCandidatas(
+    input.corteIdeal,
+    input.corteMinimo,
+    input.corteMaximo,
+  );
+  let mejor:
+    | {
+        union: UnionVectorial;
+        fragmentosA: Fragmento[];
+        fragmentosB: Fragmento[];
+        score: number;
+      }
+    | undefined;
+  for (const corte of candidatos) {
+    const posicion = input.inicioEje + corte;
+    const union: UnionVectorial = {
+      id: input.unionId,
+      piezaOrigenId: input.fragmento.piezaOrigenId,
+      tipoEncastre: input.configuracion.tipoUnion,
+      eje: input.eje,
+      posicionMm: redondear(posicion),
+      largoMm: redondear(input.largo),
+      cantidadEncastres: input.cantidadEncastres,
+      anchoEncastreMm: redondear(input.anchoEncastreEfectivo),
+      profundidadEncastreMm: redondear(input.profundidadEncastre),
+      kerfMm: input.configuracion.kerfMm,
+    };
+    const [mascaraA, mascaraB] = crearMascarasEncastre(
+      input.caja,
+      input.eje,
+      posicion,
+      input.cantidadEncastres,
+      input.profundidadEncastre,
+      input.anchoEncastreEfectivo,
+    );
+    const fragmentosA = desdeMultiPolygon(
+      polygonClipping.intersection(input.geometria, mascaraA),
+      input.fragmento,
+      union.id,
+    );
+    const fragmentosB = desdeMultiPolygon(
+      polygonClipping.intersection(input.geometria, mascaraB),
+      input.fragmento,
+      union.id,
+    );
+    if (!fragmentosA.length || !fragmentosB.length) continue;
+    const fragmentos = [...fragmentosA, ...fragmentosB];
+    const fragmentosDiminutos = fragmentos.filter((item) => {
+      const area = areaContornos(item.contornos);
+      return area < 100;
+    }).length;
+    const pendientes = fragmentos.filter(
+      (item) =>
+        !fragmentoEntraCompleto(
+          item.contornos,
+          input.anchoUtilMm,
+          input.altoUtilMm,
+          input.permitirRotacion,
+        ),
+    ).length;
+    const areaCajas = fragmentos.reduce((total, item) => {
+      const bounds = boundsContornos(item.contornos);
+      return total + (bounds.maxX - bounds.minX) * (bounds.maxY - bounds.minY);
+    }, 0);
+    const score =
+      fragmentosDiminutos * 1_000_000_000 +
+      Math.abs(fragmentos.length - 2) * 10_000_000 +
+      pendientes * 100_000 +
+      Math.abs(corte - input.corteIdeal) * 100 +
+      areaCajas / 1_000_000;
+    if (!mejor || score < mejor.score)
+      mejor = { union, fragmentosA, fragmentosB, score };
+  }
+  if (!mejor)
+    throw new Error(
+      `No se encontró una división segura para ${input.fragmento.piezaOrigenId}.`,
+    );
+  return mejor;
+}
+
+function posicionesCorteCandidatas(
+  ideal: number,
+  minimo: number,
+  maximo: number,
+): number[] {
+  // Cuando ninguna división puede producir dos hijos que entren de inmediato,
+  // se conserva el corte desplazado calculado por el algoritmo y la pieza
+  // restante se vuelve a dividir recursivamente.
+  if (minimo > maximo) return [redondear(ideal)];
+  const posiciones = new Set<number>();
+  const add = (value: number) => {
+    if (value < minimo - EPSILON || value > maximo + EPSILON) return;
+    posiciones.add(redondear(value));
+  };
+  add(ideal);
+  for (let distancia = 5; distancia <= maximo - minimo; distancia += 5) {
+    add(ideal - distancia);
+    add(ideal + distancia);
+  }
+  add(minimo);
+  add(maximo);
+  return [...posiciones];
 }
 
 function fragmentoEntraCompleto(

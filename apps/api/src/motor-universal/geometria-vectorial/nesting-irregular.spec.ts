@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { nestearGeometriaIrregular } from './nesting-irregular';
 import { segmentarPiezasConEncastres } from './segmentacion-encastres';
+import { analizarSvgFabricacion } from './svg-parser';
 import type { GeometriaVectorialCanonica, PiezaVectorial } from './tipos';
 
 const triangle: GeometriaVectorialCanonica = {
@@ -397,6 +400,42 @@ describe('nestearGeometriaIrregular', () => {
     expect(result.placas).toBe(1);
     expect(result.placements).toHaveLength(2);
     expect(result.placements[1]).toMatchObject({ xMm: 40, yMm: 25 });
+  });
+
+  it('divide el Puma de 200 cm en dos partes limpias con un corte oblicuo', () => {
+    const svg = readFileSync(
+      join(__dirname, 'fixtures', 'puma-logo.svg'),
+      'utf8',
+    );
+    const { geometria } = analizarSvgFabricacion({
+      svg,
+      anchoFinalMm: 2_000,
+      toleranciaCurvaMm: 1.5,
+    });
+
+    const result = segmentarPiezasConEncastres({
+      piezas: geometria.piezas,
+      anchoUtilMm: 1_180,
+      altoUtilMm: 580,
+      permitirRotacion: true,
+    });
+
+    const partesPuma = result.piezas.filter(
+      (pieza) => pieza.segmentacion?.piezaOrigenId === 'pieza-2',
+    );
+    expect(partesPuma).toHaveLength(2);
+    expect(result.piezas).toHaveLength(8);
+    expect(result.uniones).toHaveLength(1);
+    expect(result.uniones[0].anguloGrados).toBe(45);
+    expect(result.uniones[0].inicio).toBeDefined();
+    expect(result.uniones[0].fin).toBeDefined();
+    const puma = geometria.piezas.find((pieza) => pieza.id === 'pieza-2');
+    for (const punto of [result.uniones[0].inicio, result.uniones[0].fin]) {
+      expect(punto?.x).toBeGreaterThanOrEqual(0);
+      expect(punto?.x).toBeLessThanOrEqual(puma?.anchoMm ?? 0);
+      expect(punto?.y).toBeGreaterThanOrEqual(0);
+      expect(punto?.y).toBeLessThanOrEqual(puma?.altoMm ?? 0);
+    }
   });
 
   it('fragmenta una pieza mayor al área útil con encastres trazables', () => {
