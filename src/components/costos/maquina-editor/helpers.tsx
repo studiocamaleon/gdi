@@ -396,8 +396,28 @@ export function getMaquinaFieldValue(
   if (MAQUINA_DIRECT_FIELDS.has(key)) {
     return (form as unknown as Record<string, unknown>)[key];
   }
-  return (form.parametrosTecnicos ?? {})[key];
+  const value = (form.parametrosTecnicos ?? {})[key];
+  if (
+    value == null &&
+    form.plantilla === "corte_hilo_caliente" &&
+    key in HOTWIRE_ENCASTRE_DEFAULTS
+  ) {
+    return HOTWIRE_ENCASTRE_DEFAULTS[key];
+  }
+  return value;
 }
+
+const HOTWIRE_ENCASTRE_DEFAULTS: Record<string, string | number> = {
+  tipoUnionVectorial: "cola_milano",
+  anchoEncastreMm: 30,
+  profundidadEncastreMm: 30,
+  modoCantidadEncastres: "por_distancia",
+  distanciaMaximaEncastresMm: 100,
+  cantidadFijaEncastres: 1,
+  cantidadMinimaEncastres: 1,
+  cantidadMaximaEncastres: 100,
+  kerfEncastreMm: 0.3,
+};
 
 export function setMaquinaFieldValue(
   form: MaquinaPayload,
@@ -793,6 +813,37 @@ export function shouldShowMaquinaField(
   field: MaquinariaTemplateField,
   form: MaquinaPayload,
 ) {
+  if (form.plantilla === "corte_hilo_caliente") {
+    const tipoUnion = getMaquinaFieldValue(form, "tipoUnionVectorial");
+    const modoCantidad = getMaquinaFieldValue(
+      form,
+      "modoCantidadEncastres",
+    );
+    const soloConEncastre = new Set([
+      "anchoEncastreMm",
+      "profundidadEncastreMm",
+      "modoCantidadEncastres",
+      "distanciaMaximaEncastresMm",
+      "cantidadFijaEncastres",
+      "cantidadMinimaEncastres",
+      "cantidadMaximaEncastres",
+    ]);
+    if (tipoUnion === "recta" && soloConEncastre.has(field.key)) return false;
+    if (
+      modoCantidad === "cantidad_fija" &&
+      new Set([
+        "distanciaMaximaEncastresMm",
+        "cantidadMinimaEncastres",
+        "cantidadMaximaEncastres",
+      ]).has(field.key)
+    )
+      return false;
+    if (
+      modoCantidad !== "cantidad_fija" &&
+      field.key === "cantidadFijaEncastres"
+    )
+      return false;
+  }
   if (form.plantilla !== "impresora_gran_formato_por_area") return true;
   const geometria = getGranFormatoGeometria(form);
   const mesaOnly = new Set(["largoUtil", "anchoMesaMm", "largoMesaMm"]);

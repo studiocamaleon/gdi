@@ -21,6 +21,9 @@ const { seedRutasYProductos } = require("./seed-modulos/rutas-productos");
 const {
   provisionPolyfanProduct,
 } = require("./seed-modulos/polyfan-producto");
+const {
+  provisionViniloEsmeriladoProduct,
+} = require("./seed-modulos/vinilo-esmerilado-producto");
 
 /**
  * El seed EMPIEZA BORRANDO TODO. Por eso no corre en cualquier base: sólo en
@@ -622,6 +625,7 @@ async function main() {
     catalogoComercial,
   );
   await provisionPolyfanProduct(prisma, tenant.id);
+  await provisionViniloEsmeriladoProduct(prisma, tenant.id);
 
   console.info("");
   console.info("✅ Seed COMPLETADO.");
@@ -636,7 +640,7 @@ async function main() {
   console.info("  • 5 cargos directos catálogo");
   console.info("  • 6 rutas de producción");
   console.info(
-    "  • 5 productos validados (Tarjetas, Vinilo, Talonarios, Rígidos, Polyfan)",
+    "  • 6 productos validados (Tarjetas, Vinilo, Talonarios, Rígidos, Polyfan, Esmerilado)",
   );
 }
 

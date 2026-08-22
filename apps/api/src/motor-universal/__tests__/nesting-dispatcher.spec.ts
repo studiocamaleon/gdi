@@ -333,6 +333,35 @@ const materialPlaca = {
 };
 
 describe('runNestingForPaso rollo optimizado', () => {
+  it('acomoda cortes manuales sobre el ancho real de un rollo flexible', async () => {
+    const paso = {
+      ...buildPaso('auto'),
+      familiaCodigo: 'corte_manual',
+      modoTiempo: 'T-2',
+      maquina: null,
+    };
+    const result = await runNestingForPaso(
+      paso as never,
+      {
+        cantidad: 8,
+        piezas: [{ cantidad: 8, anchoMm: 280, altoMm: 400 }],
+      },
+      {
+        id: 'vinilo-esmerilado-61',
+        subfamilia: 'SUSTRATO_ROLLO_FLEXIBLE',
+        materiaPrimaTemplateId: 'vinilo_esmerilado_rollo_v1',
+        atributosVarianteJson: { anchoMm: 610, largoRolloMm: 50_000 },
+      },
+    );
+
+    expect(result).not.toBeNull();
+    expect(['shelf-rollo', 'maxrects-rollo']).toContain(result!.algorithm);
+    expect(result!.unidad).toBe('m_lineales');
+    expect(result!.visualConfig?.usableArea.widthMm).toBeGreaterThan(0);
+    expect(result!.visualConfig?.usableArea.widthMm).toBeLessThanOrEqual(610);
+    expect(result!.piezasAcomodadas).toBe(8);
+  });
+
   it('ejecuta maxrects-rollo cuando se configura explicitamente', async () => {
     const result = await runNestingForPaso(
       buildPaso('maxrects-rollo') as never,

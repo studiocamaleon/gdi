@@ -30,6 +30,7 @@ import { Progress, ProgressLabel } from "@/components/ui/progress";
 import {
   analizarSvgFabricacion,
   type AnalisisSvgFabricacion,
+  type ConfiguracionEncastresVectoriales,
 } from "@/lib/productos-servicios-api";
 
 export type FuenteDisenoVectorial = {
@@ -49,6 +50,7 @@ type Props = {
   separacionMm?: number;
   permitirRotacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
+  configuracionEncastres: ConfiguracionEncastresVectoriales;
   onChange: (
     value: FuenteDisenoVectorial | null,
     analisis: AnalisisSvgFabricacion | null,
@@ -64,6 +66,7 @@ export function DisenoVectorialCotizador({
   separacionMm = 5,
   permitirRotacion = true,
   preservarComposicionOriginalSiEntra = false,
+  configuracionEncastres,
   onChange,
 }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -94,6 +97,7 @@ export function DisenoVectorialCotizador({
           separacionMm,
           permitirRotacion,
           preservarComposicionOriginalSiEntra,
+          configuracionEncastres,
         });
         const normalized: FuenteDisenoVectorial = {
           ...fuente,
@@ -113,6 +117,7 @@ export function DisenoVectorialCotizador({
     },
     [
       cantidad,
+      configuracionEncastres,
       margenMm,
       onChange,
       permitirRotacion,
@@ -148,6 +153,7 @@ export function DisenoVectorialCotizador({
         placa,
         margenMm,
         preservarComposicionOriginalSiEntra,
+        configuracionEncastres,
       })
     )
       return;
@@ -169,12 +175,15 @@ export function DisenoVectorialCotizador({
     analisis,
     anchoCm,
     cantidad,
+    configuracionEncastres,
     margenMm,
     preservarComposicionOriginalSiEntra,
     placa?.anchoMm,
     placa?.altoMm,
     value,
   ]);
+
+  const unionReferencia = analisis?.nesting.uniones?.[0];
 
   return (
     <Card
@@ -375,9 +384,7 @@ export function DisenoVectorialCotizador({
             {(analisis.nesting.uniones?.length ?? 0) > 0 ? (
               <Alert>
                 <ShapesIcon />
-                <AlertTitle>
-                  El cartel se fabricará en partes encastrables
-                </AlertTitle>
+                <AlertTitle>El cartel se fabricará en partes</AlertTitle>
                 <AlertDescription>
                   {analisis.nesting.segmentos} partes ·{" "}
                   {analisis.nesting.unionesFisicas ??
@@ -386,8 +393,8 @@ export function DisenoVectorialCotizador({
                     (analisis.nesting.uniones?.length ?? 0) * cantidad) === 1
                     ? "unión"
                     : "uniones"}{" "}
-                  · encastres cola de milano de 3 × 3 cm. El corte adicional
-                  ya está incluido en el cálculo.
+                  · {descripcionUnion(unionReferencia)}. El corte adicional ya
+                  está incluido en el cálculo.
                 </AlertDescription>
               </Alert>
             ) : null}
@@ -416,6 +423,7 @@ function analisisCoincideConEntrada({
   placa,
   margenMm,
   preservarComposicionOriginalSiEntra,
+  configuracionEncastres,
 }: {
   analisis: AnalisisSvgFabricacion | null;
   fuente: FuenteDisenoVectorial;
@@ -424,6 +432,7 @@ function analisisCoincideConEntrada({
   placa: { anchoMm: number; altoMm: number };
   margenMm: number;
   preservarComposicionOriginalSiEntra: boolean;
+  configuracionEncastres: ConfiguracionEncastresVectoriales;
 }): boolean {
   if (!analisis || analisis.nombreArchivo !== fuente.nombreArchivo)
     return false;
@@ -446,7 +455,9 @@ function analisisCoincideConEntrada({
     Math.abs(analisis.nesting.altoUtilMm - (placa.altoMm - margenMm * 2)) <
       0.01 &&
     analisis.nesting.placements.length === expectedPlacements &&
-    analisis.nesting.estrategiaDisposicion === estrategiaEsperada
+    analisis.nesting.estrategiaDisposicion === estrategiaEsperada &&
+    JSON.stringify(analisis.configuracionEncastres) ===
+      JSON.stringify(configuracionEncastres)
   );
 }
 
@@ -461,6 +472,18 @@ function Metric({ label, value }: { label: string; value: React.ReactNode }) {
 
 function formatNumber(value: number) {
   return value.toLocaleString("es-AR", { maximumFractionDigits: 1 });
+}
+
+type UnionAnalisis = NonNullable<
+  AnalisisSvgFabricacion["nesting"]["uniones"]
+>[number];
+
+function descripcionUnion(union: UnionAnalisis | undefined) {
+  if (!union || union.tipoEncastre === "recta") {
+    return "unión recta, sin encastres";
+  }
+  const cantidad = union.cantidadEncastres;
+  return `${cantidad} ${cantidad === 1 ? "encastre" : "encastres"} cola de milano de hasta ${formatNumber(union.anchoEncastreMm)} × ${formatNumber(union.profundidadEncastreMm)} mm por unión`;
 }
 
 function NestingPreview({ analisis }: { analisis: AnalisisSvgFabricacion }) {

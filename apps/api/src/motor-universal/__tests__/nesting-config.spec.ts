@@ -50,6 +50,39 @@ describe('resolveNestingConfig', () => {
     expect(config.preservarComposicionOriginalSiEntra).toBe(true);
   });
 
+  it('resuelve la política de encastres configurada en la máquina', () => {
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'corte_hilo_caliente',
+        maquina: {
+          id: 'hotwire-1',
+          codigo: 'HOTWIRE-001',
+          nombre: 'Cortadora',
+          plantilla: 'corte_hilo_caliente',
+          parametrosTecnicosJson: {
+            tipoUnionVectorial: 'recta',
+            anchoEncastreMm: 45,
+            profundidadEncastreMm: 25,
+            modoCantidadEncastres: 'cantidad_fija',
+            cantidadFijaEncastres: 4,
+            kerfEncastreMm: 0.5,
+          },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.configuracionEncastres).toMatchObject({
+      tipoUnion: 'recta',
+      anchoEncastreMm: 45,
+      profundidadEncastreMm: 25,
+      modoCantidad: 'cantidad_fija',
+      cantidadFija: 4,
+      kerfMm: 0.5,
+    });
+  });
+
   it('hereda márgenes de la máquina', () => {
     const config = resolveNestingConfig(
       paso({

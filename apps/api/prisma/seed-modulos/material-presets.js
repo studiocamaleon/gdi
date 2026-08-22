@@ -947,6 +947,30 @@ const presets = [
     }),
   },
   {
+    key: 'VINILO_ESMERILADO',
+    nombreCanonico: 'Vinilo esmerilado',
+    descripcionCorta:
+      'Vinilo autoadhesivo de efecto esmerilado para privacidad, decoración y señalización sobre vidrios.',
+    iconKind: 'film',
+    aliasDisponibles: [
+      'Vinilo esmerilado',
+      'Vinil esmerilado',
+      'Vinilo arenado',
+      'Vinilo frost',
+      'Vinilo frosted',
+      'Vinilo ácido',
+      'Vinilo para privacidad',
+    ],
+    usosRecomendados: ['ploteo_vinilo', 'pop_signage'],
+    procesosCompatibles: ['ploteo_vinilo', 'corte_digital'],
+    advertencias: [
+      'Verificar el tono y la transmisión de luz con la muestra del proveedor.',
+    ],
+    ...rollPresetMeta('vinilo_esmerilado'),
+    templateId: 'vinilo_esmerilado_rollo_v1',
+    variantes: viniloEsmeriladoVariants(),
+  },
+  {
     key: 'VINILO_MICROPERFORADO_ONE_WAY',
     nombreCanonico: 'Vinilo microperforado one way',
     descripcionCorta:
@@ -2195,17 +2219,89 @@ const presets = [
       ['TRODAT-4630', 'Printy 4630', 30, 30, 'Redondo', 35100, true],
       ['TRODAT-46040', 'Printy 46040', 40, 40, 'Redondo', 21800, false],
       ['TRODAT-4642', 'Printy 4642', 42, 42, 'Redondo', 32000, false],
-      ['TRODAT-46050', 'Printy 46050 (sin almohadilla)', 50, 50, 'Redondo', 23000, false],
+      [
+        'TRODAT-46050',
+        'Printy 46050 (sin almohadilla)',
+        50,
+        50,
+        'Redondo',
+        23000,
+        false,
+      ],
       ['TRODAT-44045', 'Printy 44045', 45, 30, 'Ovalado', 32500, false],
       ['TRODAT-44055', 'Printy 44055', 55, 35, 'Ovalado', 37500, false],
-      ['TRODAT-46130', 'Printy fechador 46130', 30, 30, 'Redondo', 26000, false],
-      ['TRODAT-46140', 'Printy fechador 46140', 40, 40, 'Redondo', 36000, false],
-      ['TRODAT-46145', 'Printy fechador 46145', 45, 45, 'Redondo', 45000, false],
-      ['TRODAT-4726', 'Printy fechador 4726', 75, 38, 'Rectangular', 46000, false],
-      ['TRODAT-4727', 'Printy fechador 4727', 60, 40, 'Rectangular', 29500, false],
-      ['TRODAT-4729', 'Printy fechador 4729', 50, 30, 'Rectangular', 37500, false],
-      ['TRODAT-4750', 'Printy fechador 4750', 41, 24, 'Rectangular', 34000, false],
-      ['TRODAT-4850', 'Printy fechador 4850', 25, 5, 'Rectangular', 20000, false],
+      [
+        'TRODAT-46130',
+        'Printy fechador 46130',
+        30,
+        30,
+        'Redondo',
+        26000,
+        false,
+      ],
+      [
+        'TRODAT-46140',
+        'Printy fechador 46140',
+        40,
+        40,
+        'Redondo',
+        36000,
+        false,
+      ],
+      [
+        'TRODAT-46145',
+        'Printy fechador 46145',
+        45,
+        45,
+        'Redondo',
+        45000,
+        false,
+      ],
+      [
+        'TRODAT-4726',
+        'Printy fechador 4726',
+        75,
+        38,
+        'Rectangular',
+        46000,
+        false,
+      ],
+      [
+        'TRODAT-4727',
+        'Printy fechador 4727',
+        60,
+        40,
+        'Rectangular',
+        29500,
+        false,
+      ],
+      [
+        'TRODAT-4729',
+        'Printy fechador 4729',
+        50,
+        30,
+        'Rectangular',
+        37500,
+        false,
+      ],
+      [
+        'TRODAT-4750',
+        'Printy fechador 4750',
+        41,
+        24,
+        'Rectangular',
+        34000,
+        false,
+      ],
+      [
+        'TRODAT-4850',
+        'Printy fechador 4850',
+        25,
+        5,
+        'Rectangular',
+        20000,
+        false,
+      ],
     ],
   }),
   selloLineaTrodatPreset({
@@ -2215,11 +2311,51 @@ const presets = [
       'Sellos autoentintables Trodat línea Printy clásica (generación anterior a 4.0).',
     alias: ['Printy Clásico', 'Printy clásicos'],
     modelos: [
-      ['TRODAT-4910-CL', 'Printy 4910 Clásico', 26, 9, 'Rectangular', 4300, false],
-      ['TRODAT-4911-CL', 'Printy 4911 Clásico', 38, 14, 'Rectangular', 4800, true],
-      ['TRODAT-4912-CL', 'Printy 4912 Clásico', 47, 18, 'Rectangular', 6000, true],
-      ['TRODAT-4913-CL', 'Printy 4913 Clásico', 58, 23, 'Rectangular', 17700, false],
-      ['TRODAT-4724', 'Printy fechador 4724', 40, 40, 'Rectangular', 35000, false],
+      [
+        'TRODAT-4910-CL',
+        'Printy 4910 Clásico',
+        26,
+        9,
+        'Rectangular',
+        4300,
+        false,
+      ],
+      [
+        'TRODAT-4911-CL',
+        'Printy 4911 Clásico',
+        38,
+        14,
+        'Rectangular',
+        4800,
+        true,
+      ],
+      [
+        'TRODAT-4912-CL',
+        'Printy 4912 Clásico',
+        47,
+        18,
+        'Rectangular',
+        6000,
+        true,
+      ],
+      [
+        'TRODAT-4913-CL',
+        'Printy 4913 Clásico',
+        58,
+        23,
+        'Rectangular',
+        17700,
+        false,
+      ],
+      [
+        'TRODAT-4724',
+        'Printy fechador 4724',
+        40,
+        40,
+        'Rectangular',
+        35000,
+        false,
+      ],
     ],
   }),
   selloLineaTrodatPreset({
@@ -2242,7 +2378,8 @@ const presets = [
   selloLineaTrodatPreset({
     key: 'TRODAT_MICRO_PRINTY',
     nombreCanonico: 'Trodat Micro Printy',
-    descripcionCorta: 'Sellos redondos compactos de bolsillo Trodat Micro Printy.',
+    descripcionCorta:
+      'Sellos redondos compactos de bolsillo Trodat Micro Printy.',
     alias: ['Micro Printy'],
     modelos: [
       ['TRODAT-9330', 'Micro Printy 9330', 30, 30, 'Redondo', 13000, true],
@@ -2294,17 +2431,97 @@ const presets = [
       ['TRODAT-5207', 'Professional 5207', 60, 40, 'Rectangular', 57000, false],
       ['TRODAT-5208', 'Professional 5208', 68, 47, 'Rectangular', 71200, false],
       ['TRODAT-5211', 'Professional 5211', 85, 55, 'Rectangular', 42000, false],
-      ['TRODAT-5212', 'Professional 5212', 116, 70, 'Rectangular', 44000, false],
+      [
+        'TRODAT-5212',
+        'Professional 5212',
+        116,
+        70,
+        'Rectangular',
+        44000,
+        false,
+      ],
       ['TRODAT-5215', 'Professional 5215', 45, 45, 'Redondo', 38000, false],
-      ['TRODAT-5558', 'Professional numerador 5558', 56, 33, 'Rectangular', 82000, false],
-      ['TRODAT-54110', 'Professional fechador 54110', 85, 55, 'Rectangular', 62000, false],
-      ['TRODAT-5415', 'Professional fechador 5415', 45, 45, 'Redondo', 48000, false],
-      ['TRODAT-5431', 'Professional fechador 5431', 41, 24, 'Rectangular', 39000, false],
-      ['TRODAT-5440', 'Professional fechador 5440', 48, 28, 'Rectangular', 44000, false],
-      ['TRODAT-5460', 'Professional fechador 5460', 56, 33, 'Rectangular', 47000, false],
-      ['TRODAT-5470', 'Professional fechador 5470', 60, 40, 'Rectangular', 50000, false],
-      ['TRODAT-5474', 'Professional fechador 5474', 60, 40, 'Rectangular', 50000, false],
-      ['TRODAT-5480', 'Professional fechador 5480', 68, 47, 'Rectangular', 103000, false],
+      [
+        'TRODAT-5558',
+        'Professional numerador 5558',
+        56,
+        33,
+        'Rectangular',
+        82000,
+        false,
+      ],
+      [
+        'TRODAT-54110',
+        'Professional fechador 54110',
+        85,
+        55,
+        'Rectangular',
+        62000,
+        false,
+      ],
+      [
+        'TRODAT-5415',
+        'Professional fechador 5415',
+        45,
+        45,
+        'Redondo',
+        48000,
+        false,
+      ],
+      [
+        'TRODAT-5431',
+        'Professional fechador 5431',
+        41,
+        24,
+        'Rectangular',
+        39000,
+        false,
+      ],
+      [
+        'TRODAT-5440',
+        'Professional fechador 5440',
+        48,
+        28,
+        'Rectangular',
+        44000,
+        false,
+      ],
+      [
+        'TRODAT-5460',
+        'Professional fechador 5460',
+        56,
+        33,
+        'Rectangular',
+        47000,
+        false,
+      ],
+      [
+        'TRODAT-5470',
+        'Professional fechador 5470',
+        60,
+        40,
+        'Rectangular',
+        50000,
+        false,
+      ],
+      [
+        'TRODAT-5474',
+        'Professional fechador 5474',
+        60,
+        40,
+        'Rectangular',
+        50000,
+        false,
+      ],
+      [
+        'TRODAT-5480',
+        'Professional fechador 5480',
+        68,
+        47,
+        'Rectangular',
+        103000,
+        false,
+      ],
     ],
   }),
   {
@@ -2319,9 +2536,36 @@ const presets = [
     advertencias: [],
     ...selloManualPresetMeta(),
     variantes: [
-      vselloManual('SELLO-MAD-3030', 'Genérica', 'Mango madera 30 mm', 30, 30, 3, 'Madera', true),
-      vselloManual('SELLO-MAD-4040', 'Genérica', 'Mango madera 40 mm', 40, 40, 4, 'Madera', true),
-      vselloManual('SELLO-MAD-6040', 'Genérica', 'Mango madera 60×40 mm', 60, 40, 5, 'Madera', false),
+      vselloManual(
+        'SELLO-MAD-3030',
+        'Genérica',
+        'Mango madera 30 mm',
+        30,
+        30,
+        3,
+        'Madera',
+        true,
+      ),
+      vselloManual(
+        'SELLO-MAD-4040',
+        'Genérica',
+        'Mango madera 40 mm',
+        40,
+        40,
+        4,
+        'Madera',
+        true,
+      ),
+      vselloManual(
+        'SELLO-MAD-6040',
+        'Genérica',
+        'Mango madera 60×40 mm',
+        60,
+        40,
+        5,
+        'Madera',
+        false,
+      ),
     ],
   },
   {
@@ -2330,7 +2574,12 @@ const presets = [
     descripcionCorta:
       'Hoja de goma para grabar el cliché del sello con láser CO2. Tipos según tinta/uso. Se consume por área.',
     iconKind: 'stamp',
-    aliasDisponibles: ['Goma laser', 'Caucho laserable', 'Laser rubber', 'Goma Trodat'],
+    aliasDisponibles: [
+      'Goma laser',
+      'Caucho laserable',
+      'Laser rubber',
+      'Goma Trodat',
+    ],
     usosRecomendados: ['fabricacion_sellos'],
     procesosCompatibles: ['grabado_laser'],
     advertencias: [
@@ -2342,9 +2591,33 @@ const presets = [
     variantes: [
       vgoma('GOMA-TRODAT-CLASICA-23', 'Clásica', 2.3, 210, 297, 23000, true),
       vgoma('GOMA-TRODAT-AERO-23', 'Aero sin olor', 2.3, 210, 297, 29700, true),
-      vgoma('GOMA-TRODAT-TEMPO-23', 'Tempo rápida', 2.3, 210, 297, 27000, false),
-      vgoma('GOMA-TRODAT-OLIO-23', 'Olio tinta indeleble', 2.3, 210, 297, 35000, false),
-      vgoma('GOMA-TRODAT-CLASICA-15', 'Clásica bolígrafos', 1.5, 210, 297, 24000, false),
+      vgoma(
+        'GOMA-TRODAT-TEMPO-23',
+        'Tempo rápida',
+        2.3,
+        210,
+        297,
+        27000,
+        false,
+      ),
+      vgoma(
+        'GOMA-TRODAT-OLIO-23',
+        'Olio tinta indeleble',
+        2.3,
+        210,
+        297,
+        35000,
+        false,
+      ),
+      vgoma(
+        'GOMA-TRODAT-CLASICA-15',
+        'Clásica bolígrafos',
+        1.5,
+        210,
+        297,
+        24000,
+        false,
+      ),
       vgoma('GOMA-TRODAT-AERO-50', 'Aero bolsas', 5, 210, 297, 57500, false),
     ],
   },
@@ -2370,12 +2643,33 @@ const presets = [
       ['REP-6-4630-MCI', '6/4630', 'Printy 4630', 'MCI', 10800, false],
       ['REP-6-4630-NEGRO', '6/4630', 'Printy 4630', 'Negro', 5500, false],
       ['REP-6-4630-NEUTRO', '6/4630', 'Printy 4630', 'Neutro', 5500, false],
-      ['REP-6-4850-NEGRO', '6/4850', 'Printy fechador 4850', 'Negro', 4300, false],
+      [
+        'REP-6-4850-NEGRO',
+        '6/4850',
+        'Printy fechador 4850',
+        'Negro',
+        4300,
+        false,
+      ],
       ['REP-6-4910-NEGRO', '6/4910', 'Printy 4910', 'Negro', 4300, false],
       ['REP-6-4911-NEGRO', '6/4911', 'Printy 4911', 'Negro', 4300, true],
-      ['REP-6-4911-NEGRO-CM', '6/4911 Clothing Marker', 'Trodat 4911 Stamp n Stick', 'Negro', 7900, false],
+      [
+        'REP-6-4911-NEGRO-CM',
+        '6/4911 Clothing Marker',
+        'Trodat 4911 Stamp n Stick',
+        'Negro',
+        7900,
+        false,
+      ],
       ['REP-6-4911-NEUTRO', '6/4911', 'Printy 4911', 'Neutro', 4300, false],
-      ['REP-6-4911-NEUTRO-ESP', '6/4911 Esponja', 'Printy 4911', 'Neutro', 4300, false],
+      [
+        'REP-6-4911-NEUTRO-ESP',
+        '6/4911 Esponja',
+        'Printy 4911',
+        'Neutro',
+        4300,
+        false,
+      ],
       ['REP-6-4912-MCI', '6/4912', 'Printy 4912', 'MCI', 9500, false],
       ['REP-6-4912-NEGRO', '6/4912', 'Printy 4912', 'Negro', 4800, true],
       ['REP-6-4912-NEUTRO', '6/4912', 'Printy 4912', 'Neutro', 4800, false],
@@ -2412,16 +2706,65 @@ const presets = [
     repuestos: [
       ['REP-6-15-MCI', '6/15', 'Professional 5215 / 5415', 'MCI', 10200, false],
       ['REP-6-50-MCI', '6/50', null, 'MCI', 5200, false],
-      ['REP-6-511-MCI', '6/511', 'Professional 5211 / 54110', 'MCI', 23000, false],
-      ['REP-6-511-NEUTRO', '6/511', 'Professional 5211 / 54110', 'Neutro', 12600, false],
+      [
+        'REP-6-511-MCI',
+        '6/511',
+        'Professional 5211 / 54110',
+        'MCI',
+        23000,
+        false,
+      ],
+      [
+        'REP-6-511-NEUTRO',
+        '6/511',
+        'Professional 5211 / 54110',
+        'Neutro',
+        12600,
+        false,
+      ],
       ['REP-6-53-MCI', '6/53', 'Professional 5203', 'MCI', 5200, true],
       ['REP-6-55-MCI', '6/55', 'Professional 5205', 'MCI', 7000, false],
-      ['REP-6-56-MCI', '6/56', 'Professional 5206 / 5460 / 5558', 'MCI', 6000, true],
-      ['REP-6-56-NEGRO', '6/56', 'Professional 5206 / 5460 / 5558', 'Negro', 6000, false],
-      ['REP-6-56-2-BICOLOR', '6/56/2', 'Professional 5206 / 5460', 'Bicolor', 10500, false],
-      ['REP-6-57-MCI', '6/57', 'Professional 5207 / 5470 / 5474', 'MCI', 7400, false],
+      [
+        'REP-6-56-MCI',
+        '6/56',
+        'Professional 5206 / 5460 / 5558',
+        'MCI',
+        6000,
+        true,
+      ],
+      [
+        'REP-6-56-NEGRO',
+        '6/56',
+        'Professional 5206 / 5460 / 5558',
+        'Negro',
+        6000,
+        false,
+      ],
+      [
+        'REP-6-56-2-BICOLOR',
+        '6/56/2',
+        'Professional 5206 / 5460',
+        'Bicolor',
+        10500,
+        false,
+      ],
+      [
+        'REP-6-57-MCI',
+        '6/57',
+        'Professional 5207 / 5470 / 5474',
+        'MCI',
+        7400,
+        false,
+      ],
       ['REP-6-58-MCI', '6/58', 'Professional 5208 / 5480', 'MCI', 10800, false],
-      ['REP-6-58-NEGRO', '6/58', 'Professional 5208 / 5480', 'Negro', 10800, false],
+      [
+        'REP-6-58-NEGRO',
+        '6/58',
+        'Professional 5208 / 5480',
+        'Negro',
+        10800,
+        false,
+      ],
     ],
   }),
   repuestoAlmohadillaPreset({
@@ -2429,14 +2772,38 @@ const presets = [
     nombreCanonico: 'Repuestos de almohadilla Trodat Mobile / Pocket Printy',
     descripcionCorta:
       'Almohadillas de recambio para los sellos de bolsillo Mobile Printy y Pocket Printy.',
-    alias: ['Repuesto almohadilla Mobile Printy', 'Repuesto almohadilla Pocket'],
+    alias: [
+      'Repuesto almohadilla Mobile Printy',
+      'Repuesto almohadilla Pocket',
+    ],
     repuestos: [
       ['REP-6-9411-NEGRO', '6/9411', 'Mobile Printy 9411', 'Negro', 4300, true],
       ['REP-6-9412-MCI', '6/9412', 'Mobile Printy 9412', 'MCI', 9500, false],
       ['REP-6-9412-NEGRO', '6/9412', 'Mobile Printy 9412', 'Negro', 5000, true],
-      ['REP-6-9430-NEGRO', '6/9430', 'Mobile Printy 9430', 'Negro', 5500, false],
-      ['REP-6-9430-NEUTRO', '6/9430', 'Mobile Printy 9430', 'Neutro', 10800, false],
-      ['REP-6-9511-NEGRO', '6/9511', 'Pocket Printy 9511', 'Negro', 4300, false],
+      [
+        'REP-6-9430-NEGRO',
+        '6/9430',
+        'Mobile Printy 9430',
+        'Negro',
+        5500,
+        false,
+      ],
+      [
+        'REP-6-9430-NEUTRO',
+        '6/9430',
+        'Mobile Printy 9430',
+        'Neutro',
+        10800,
+        false,
+      ],
+      [
+        'REP-6-9511-NEGRO',
+        '6/9511',
+        'Pocket Printy 9511',
+        'Negro',
+        4300,
+        false,
+      ],
     ],
   }),
   {
@@ -2453,12 +2820,52 @@ const presets = [
     ],
     ...tintaSelloPresetMeta(),
     variantes: [
-      vtintaSello('TINTA-7011-NEGRO', '7011', 'Negro', 28, 'General', 4900, true),
+      vtintaSello(
+        'TINTA-7011-NEGRO',
+        '7011',
+        'Negro',
+        28,
+        'General',
+        4900,
+        true,
+      ),
       vtintaSello('TINTA-7011-AZUL', '7011', 'Azul', 28, 'General', 4900, true),
-      vtintaSello('TINTA-7011-ROJO', '7011', 'Rojo', 28, 'General', 4900, false),
-      vtintaSello('TINTA-7011-VERDE', '7011', 'Verde', 28, 'General', 4900, false),
-      vtintaSello('TINTA-7011-VIOLETA', '7011', 'Violeta', 28, 'General', 4900, false),
-      vtintaSello('TINTA-7750-NEGRO', '7750', 'Negro', 28, 'Telas', 9000, false),
+      vtintaSello(
+        'TINTA-7011-ROJO',
+        '7011',
+        'Rojo',
+        28,
+        'General',
+        4900,
+        false,
+      ),
+      vtintaSello(
+        'TINTA-7011-VERDE',
+        '7011',
+        'Verde',
+        28,
+        'General',
+        4900,
+        false,
+      ),
+      vtintaSello(
+        'TINTA-7011-VIOLETA',
+        '7011',
+        'Violeta',
+        28,
+        'General',
+        4900,
+        false,
+      ),
+      vtintaSello(
+        'TINTA-7750-NEGRO',
+        '7750',
+        'Negro',
+        28,
+        'Telas',
+        9000,
+        false,
+      ),
     ],
   },
   {
@@ -2467,7 +2874,12 @@ const presets = [
     descripcionCorta:
       'Tampones de escritorio Trodat para sellos manuales (N9051–N9054) y almohadilla dactilar 9094, por tamaño y color de tinta.',
     iconKind: 'stamp',
-    aliasDisponibles: ['Trodat', 'Tampón', 'Almohadilla de escritorio', 'N9052'],
+    aliasDisponibles: [
+      'Trodat',
+      'Tampón',
+      'Almohadilla de escritorio',
+      'N9052',
+    ],
     usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
     procesosCompatibles: [],
     advertencias: [
@@ -2488,10 +2900,46 @@ const presets = [
       ['ALM-N9053-NEGRO', 'N9053', 16, 9, 'Negro', 'Escritorio', 10700, false],
       ['ALM-N9053-AZUL', 'N9053', 16, 9, 'Azul', 'Escritorio', 10700, false],
       ['ALM-N9053-ROJO', 'N9053', 16, 9, 'Rojo', 'Escritorio', 10700, false],
-      ['ALM-N9053-NEUTRO', 'N9053', 16, 9, 'Neutro', 'Escritorio', 10700, false],
-      ['ALM-N9054-NEGRO', 'N9054', 21, 14.8, 'Negro', 'Escritorio', 16500, false],
-      ['ALM-N9054-NEUTRO', 'N9054', 21, 14.8, 'Neutro', 'Escritorio', 16500, false],
-      ['ALM-9094-DACTILAR', '9094', null, null, 'Negro', 'Dactilar', 6700, false],
+      [
+        'ALM-N9053-NEUTRO',
+        'N9053',
+        16,
+        9,
+        'Neutro',
+        'Escritorio',
+        10700,
+        false,
+      ],
+      [
+        'ALM-N9054-NEGRO',
+        'N9054',
+        21,
+        14.8,
+        'Negro',
+        'Escritorio',
+        16500,
+        false,
+      ],
+      [
+        'ALM-N9054-NEUTRO',
+        'N9054',
+        21,
+        14.8,
+        'Neutro',
+        'Escritorio',
+        16500,
+        false,
+      ],
+      [
+        'ALM-9094-DACTILAR',
+        '9094',
+        null,
+        null,
+        'Negro',
+        'Dactilar',
+        6700,
+        false,
+      ],
     ].map(valmohadillaEscritorio),
   },
   portabannerPreset({
@@ -2501,16 +2949,96 @@ const presets = [
       'Estructuras de tensores (varillas) para banner colgante: simple, doble, vertical, tres y cuatro tensores, en línea estándar y económica.',
     alias: ['Portabanner', 'Tensor', 'Portabanner de varillas'],
     filas: [
-      ['PB-TS-60X150', 'Tensor simple', 'Tensor simple', 60, 150, 'Estándar', true],
-      ['PB-TS-90X190', 'Tensor simple', 'Tensor simple', 90, 190, 'Estándar', true],
-      ['PB-TS-ECO-90X190', 'Tensor simple (Eco)', 'Tensor simple', 90, 190, 'Económica', false],
-      ['PB-DT-90X190', 'Doble tensor', 'Doble tensor', 90, 190, 'Estándar', true],
-      ['PB-DT-ECO-90X190', 'Doble tensor (Eco)', 'Doble tensor', 90, 190, 'Económica', false],
-      ['PB-DT-VERT-150X200', 'Doble tensor vertical', 'Doble tensor vertical', 150, 200, 'Estándar', false],
-      ['PB-3T-200X200', 'Tres tensores', 'Tres tensores', 200, 200, 'Estándar', false],
-      ['PB-3T-ECO-200X200', 'Tres tensores (Eco)', 'Tres tensores', 200, 200, 'Económica', false],
-      ['PB-4T-300X200', 'Cuatro tensores', 'Cuatro tensores', 300, 200, 'Estándar', false],
-      ['PB-4T-ECO-300X200', 'Cuatro tensores (Eco)', 'Cuatro tensores', 300, 200, 'Económica', false],
+      [
+        'PB-TS-60X150',
+        'Tensor simple',
+        'Tensor simple',
+        60,
+        150,
+        'Estándar',
+        true,
+      ],
+      [
+        'PB-TS-90X190',
+        'Tensor simple',
+        'Tensor simple',
+        90,
+        190,
+        'Estándar',
+        true,
+      ],
+      [
+        'PB-TS-ECO-90X190',
+        'Tensor simple (Eco)',
+        'Tensor simple',
+        90,
+        190,
+        'Económica',
+        false,
+      ],
+      [
+        'PB-DT-90X190',
+        'Doble tensor',
+        'Doble tensor',
+        90,
+        190,
+        'Estándar',
+        true,
+      ],
+      [
+        'PB-DT-ECO-90X190',
+        'Doble tensor (Eco)',
+        'Doble tensor',
+        90,
+        190,
+        'Económica',
+        false,
+      ],
+      [
+        'PB-DT-VERT-150X200',
+        'Doble tensor vertical',
+        'Doble tensor vertical',
+        150,
+        200,
+        'Estándar',
+        false,
+      ],
+      [
+        'PB-3T-200X200',
+        'Tres tensores',
+        'Tres tensores',
+        200,
+        200,
+        'Estándar',
+        false,
+      ],
+      [
+        'PB-3T-ECO-200X200',
+        'Tres tensores (Eco)',
+        'Tres tensores',
+        200,
+        200,
+        'Económica',
+        false,
+      ],
+      [
+        'PB-4T-300X200',
+        'Cuatro tensores',
+        'Cuatro tensores',
+        300,
+        200,
+        'Estándar',
+        false,
+      ],
+      [
+        'PB-4T-ECO-300X200',
+        'Cuatro tensores (Eco)',
+        'Cuatro tensores',
+        300,
+        200,
+        'Económica',
+        false,
+      ],
     ],
   }),
   portabannerPreset({
@@ -2528,11 +3056,33 @@ const presets = [
     nombreCanonico: 'Fly / Drop banner',
     descripcionCorta:
       'Estructuras con mástil flexible para banners tipo vela y gota (fly banner, drop banner).',
-    alias: ['Fly banner', 'Drop banner', 'Bandera vela', 'Bandera gota', 'Potencia'],
+    alias: [
+      'Fly banner',
+      'Drop banner',
+      'Bandera vela',
+      'Bandera gota',
+      'Potencia',
+    ],
     filas: [
       ['PB-FLY-50X260', 'Fly banner', 'Fly banner', 50, 260, 'Estándar', true],
-      ['PB-DROP-60X250', 'Drop banner', 'Drop banner', 60, 250, 'Estándar', false],
-      ['PB-DROP-GOTA-85X240', 'Drop banner (gota)', 'Drop banner gota', 85, 240, 'Estándar', false],
+      [
+        'PB-DROP-60X250',
+        'Drop banner',
+        'Drop banner',
+        60,
+        250,
+        'Estándar',
+        false,
+      ],
+      [
+        'PB-DROP-GOTA-85X240',
+        'Drop banner (gota)',
+        'Drop banner gota',
+        85,
+        240,
+        'Estándar',
+        false,
+      ],
     ],
   }),
   portabannerPreset({
@@ -2557,10 +3107,40 @@ const presets = [
     alias: ['Taza', 'Jarro', 'Mug'],
     tecnicas: ['sublimacion', 'dtf_uv'],
     variantes: [
-      { sku: 'TAZA-BLA-350', nombre: 'Taza blanca 350ml', formato: '350 ml', color: 'Blanco', capacidad: 350 },
-      { sku: 'TAZA-INT-NEG-350', nombre: 'Taza interior negro 350ml', formato: '350 ml', color: 'Negro', capacidad: 350, modelo: 'Interior de color', recomendada: false },
-      { sku: 'TAZA-INT-ROJ-350', nombre: 'Taza interior rojo 350ml', formato: '350 ml', color: 'Rojo', capacidad: 350, modelo: 'Interior de color', recomendada: false },
-      { sku: 'TAZA-CON-BLA-350', nombre: 'Taza cónica blanca 350ml', formato: '350 ml', color: 'Blanco', capacidad: 350, modelo: 'Cónica', recomendada: false },
+      {
+        sku: 'TAZA-BLA-350',
+        nombre: 'Taza blanca 350ml',
+        formato: '350 ml',
+        color: 'Blanco',
+        capacidad: 350,
+      },
+      {
+        sku: 'TAZA-INT-NEG-350',
+        nombre: 'Taza interior negro 350ml',
+        formato: '350 ml',
+        color: 'Negro',
+        capacidad: 350,
+        modelo: 'Interior de color',
+        recomendada: false,
+      },
+      {
+        sku: 'TAZA-INT-ROJ-350',
+        nombre: 'Taza interior rojo 350ml',
+        formato: '350 ml',
+        color: 'Rojo',
+        capacidad: 350,
+        modelo: 'Interior de color',
+        recomendada: false,
+      },
+      {
+        sku: 'TAZA-CON-BLA-350',
+        nombre: 'Taza cónica blanca 350ml',
+        formato: '350 ml',
+        color: 'Blanco',
+        capacidad: 350,
+        modelo: 'Cónica',
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2573,7 +3153,13 @@ const presets = [
     alias: ['Taza mágica', 'Taza termocrómica', 'Taza morphing'],
     tecnicas: ['sublimacion'],
     variantes: [
-      { sku: 'TAZA-MAG-350', nombre: 'Taza mágica 350ml', formato: '350 ml', color: 'Negro', capacidad: 350 },
+      {
+        sku: 'TAZA-MAG-350',
+        nombre: 'Taza mágica 350ml',
+        formato: '350 ml',
+        color: 'Negro',
+        capacidad: 350,
+      },
     ],
   }),
   objetoPreset({
@@ -2586,9 +3172,29 @@ const presets = [
     alias: ['Termo', 'Termo para mate'],
     tecnicas: ['grabado_laser', 'dtf_uv', 'tampografia'],
     variantes: [
-      { sku: 'TERMO-PLA-1L', nombre: 'Termo plata 1L', formato: '1 L', color: 'Plata', capacidad: 1000 },
-      { sku: 'TERMO-NEG-1L', nombre: 'Termo negro 1L', formato: '1 L', color: 'Negro', capacidad: 1000, recomendada: false },
-      { sku: 'TERMO-AZU-1L', nombre: 'Termo azul 1L', formato: '1 L', color: 'Azul', capacidad: 1000, recomendada: false },
+      {
+        sku: 'TERMO-PLA-1L',
+        nombre: 'Termo plata 1L',
+        formato: '1 L',
+        color: 'Plata',
+        capacidad: 1000,
+      },
+      {
+        sku: 'TERMO-NEG-1L',
+        nombre: 'Termo negro 1L',
+        formato: '1 L',
+        color: 'Negro',
+        capacidad: 1000,
+        recomendada: false,
+      },
+      {
+        sku: 'TERMO-AZU-1L',
+        nombre: 'Termo azul 1L',
+        formato: '1 L',
+        color: 'Azul',
+        capacidad: 1000,
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2601,9 +3207,29 @@ const presets = [
     alias: ['Botella', 'Squeeze', 'Caramañola', 'Bidón'],
     tecnicas: ['tampografia', 'dtf_uv', 'serigrafia'],
     variantes: [
-      { sku: 'BOT-NEG-750', nombre: 'Botella negra 750ml', formato: '750 ml', color: 'Negro', capacidad: 750 },
-      { sku: 'BOT-BLA-750', nombre: 'Botella blanca 750ml', formato: '750 ml', color: 'Blanco', capacidad: 750, recomendada: false },
-      { sku: 'BOT-AZU-750', nombre: 'Botella azul 750ml', formato: '750 ml', color: 'Azul', capacidad: 750, recomendada: false },
+      {
+        sku: 'BOT-NEG-750',
+        nombre: 'Botella negra 750ml',
+        formato: '750 ml',
+        color: 'Negro',
+        capacidad: 750,
+      },
+      {
+        sku: 'BOT-BLA-750',
+        nombre: 'Botella blanca 750ml',
+        formato: '750 ml',
+        color: 'Blanco',
+        capacidad: 750,
+        recomendada: false,
+      },
+      {
+        sku: 'BOT-AZU-750',
+        nombre: 'Botella azul 750ml',
+        formato: '750 ml',
+        color: 'Azul',
+        capacidad: 750,
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2616,9 +3242,29 @@ const presets = [
     alias: ['Mate', 'Mate imperial', 'Mate camionero'],
     tecnicas: ['grabado_laser', 'sublimacion', 'dtf_uv'],
     variantes: [
-      { sku: 'MATE-IMP-ACE', nombre: 'Mate imperial acero', formato: 'Imperial', color: 'Plata', modelo: 'Imperial' },
-      { sku: 'MATE-CAM-ACE', nombre: 'Mate camionero acero', formato: 'Camionero', color: 'Plata', modelo: 'Camionero', recomendada: false },
-      { sku: 'MATE-MAD', nombre: 'Mate de madera/algarrobo', formato: 'Madera', color: 'Natural', material: 'Madera', recomendada: false },
+      {
+        sku: 'MATE-IMP-ACE',
+        nombre: 'Mate imperial acero',
+        formato: 'Imperial',
+        color: 'Plata',
+        modelo: 'Imperial',
+      },
+      {
+        sku: 'MATE-CAM-ACE',
+        nombre: 'Mate camionero acero',
+        formato: 'Camionero',
+        color: 'Plata',
+        modelo: 'Camionero',
+        recomendada: false,
+      },
+      {
+        sku: 'MATE-MAD',
+        nombre: 'Mate de madera/algarrobo',
+        formato: 'Madera',
+        color: 'Natural',
+        material: 'Madera',
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2631,8 +3277,21 @@ const presets = [
     alias: ['Vaso térmico', 'Tumbler', 'Vaso con sorbete'],
     tecnicas: ['grabado_laser', 'dtf_uv', 'tampografia'],
     variantes: [
-      { sku: 'VASO-PLA-500', nombre: 'Vaso térmico plata 500ml', formato: '500 ml', color: 'Plata', capacidad: 500 },
-      { sku: 'VASO-NEG-500', nombre: 'Vaso térmico negro 500ml', formato: '500 ml', color: 'Negro', capacidad: 500, recomendada: false },
+      {
+        sku: 'VASO-PLA-500',
+        nombre: 'Vaso térmico plata 500ml',
+        formato: '500 ml',
+        color: 'Plata',
+        capacidad: 500,
+      },
+      {
+        sku: 'VASO-NEG-500',
+        nombre: 'Vaso térmico negro 500ml',
+        formato: '500 ml',
+        color: 'Negro',
+        capacidad: 500,
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2645,9 +3304,26 @@ const presets = [
     alias: ['Lapicera', 'Bolígrafo', 'Birome'],
     tecnicas: ['tampografia', 'serigrafia', 'dtf_uv'],
     variantes: [
-      { sku: 'LAP-BLA', nombre: 'Lapicera blanca', formato: 'Estándar', color: 'Blanco' },
-      { sku: 'LAP-NEG', nombre: 'Lapicera negra', formato: 'Estándar', color: 'Negro', recomendada: false },
-      { sku: 'LAP-AZU', nombre: 'Lapicera azul', formato: 'Estándar', color: 'Azul', recomendada: false },
+      {
+        sku: 'LAP-BLA',
+        nombre: 'Lapicera blanca',
+        formato: 'Estándar',
+        color: 'Blanco',
+      },
+      {
+        sku: 'LAP-NEG',
+        nombre: 'Lapicera negra',
+        formato: 'Estándar',
+        color: 'Negro',
+        recomendada: false,
+      },
+      {
+        sku: 'LAP-AZU',
+        nombre: 'Lapicera azul',
+        formato: 'Estándar',
+        color: 'Azul',
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2660,8 +3336,21 @@ const presets = [
     alias: ['Mousepad', 'Pad de mouse', 'Alfombrilla'],
     tecnicas: ['sublimacion', 'impresion_uv'],
     variantes: [
-      { sku: 'MPAD-RECT', nombre: 'Mousepad rectangular 22×18', formato: '22 × 18 cm', color: 'Blanco', modelo: 'Rectangular' },
-      { sku: 'MPAD-GAMER', nombre: 'Mousepad gamer XL', formato: '80 × 30 cm', color: 'Negro', modelo: 'Gamer XL', recomendada: false },
+      {
+        sku: 'MPAD-RECT',
+        nombre: 'Mousepad rectangular 22×18',
+        formato: '22 × 18 cm',
+        color: 'Blanco',
+        modelo: 'Rectangular',
+      },
+      {
+        sku: 'MPAD-GAMER',
+        nombre: 'Mousepad gamer XL',
+        formato: '80 × 30 cm',
+        color: 'Negro',
+        modelo: 'Gamer XL',
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2674,8 +3363,21 @@ const presets = [
     alias: ['Llavero', 'Llavero acrílico'],
     tecnicas: ['impresion_uv', 'sublimacion', 'grabado_laser'],
     variantes: [
-      { sku: 'LLAV-ACR-REC', nombre: 'Llavero acrílico rectangular', formato: '5 × 3 cm', color: 'Transparente', modelo: 'Rectangular' },
-      { sku: 'LLAV-ACR-RED', nombre: 'Llavero acrílico redondo', formato: 'Ø 4 cm', color: 'Transparente', modelo: 'Redondo', recomendada: false },
+      {
+        sku: 'LLAV-ACR-REC',
+        nombre: 'Llavero acrílico rectangular',
+        formato: '5 × 3 cm',
+        color: 'Transparente',
+        modelo: 'Rectangular',
+      },
+      {
+        sku: 'LLAV-ACR-RED',
+        nombre: 'Llavero acrílico redondo',
+        formato: 'Ø 4 cm',
+        color: 'Transparente',
+        modelo: 'Redondo',
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2688,8 +3390,19 @@ const presets = [
     alias: ['Cuaderno', 'Libreta tapa dura'],
     tecnicas: ['dtf_uv', 'grabado_laser', 'impresion_uv'],
     variantes: [
-      { sku: 'CUAD-A5-NEG', nombre: 'Cuaderno A5 negro', formato: 'A5', color: 'Negro' },
-      { sku: 'CUAD-A5-KRAFT', nombre: 'Cuaderno A5 kraft', formato: 'A5', color: 'Kraft', recomendada: false },
+      {
+        sku: 'CUAD-A5-NEG',
+        nombre: 'Cuaderno A5 negro',
+        formato: 'A5',
+        color: 'Negro',
+      },
+      {
+        sku: 'CUAD-A5-KRAFT',
+        nombre: 'Cuaderno A5 kraft',
+        formato: 'A5',
+        color: 'Kraft',
+        recomendada: false,
+      },
     ],
   }),
   objetoPreset({
@@ -2702,7 +3415,12 @@ const presets = [
     alias: ['Agenda', 'Planner'],
     tecnicas: ['dtf_uv', 'grabado_laser', 'impresion_uv'],
     variantes: [
-      { sku: 'AGENDA-A5-NEG', nombre: 'Agenda A5 negra', formato: 'A5', color: 'Negro' },
+      {
+        sku: 'AGENDA-A5-NEG',
+        nombre: 'Agenda A5 negra',
+        formato: 'A5',
+        color: 'Negro',
+      },
     ],
   }),
   objetoPreset({
@@ -2715,8 +3433,21 @@ const presets = [
     alias: ['Posavasos', 'Individual'],
     tecnicas: ['sublimacion', 'impresion_uv', 'grabado_laser'],
     variantes: [
-      { sku: 'POSA-RED', nombre: 'Posavasos redondo', formato: 'Ø 9 cm', color: 'Natural', modelo: 'Redondo' },
-      { sku: 'POSA-CUA', nombre: 'Posavasos cuadrado', formato: '9 × 9 cm', color: 'Natural', modelo: 'Cuadrado', recomendada: false },
+      {
+        sku: 'POSA-RED',
+        nombre: 'Posavasos redondo',
+        formato: 'Ø 9 cm',
+        color: 'Natural',
+        modelo: 'Redondo',
+      },
+      {
+        sku: 'POSA-CUA',
+        nombre: 'Posavasos cuadrado',
+        formato: '9 × 9 cm',
+        color: 'Natural',
+        modelo: 'Cuadrado',
+        recomendada: false,
+      },
     ],
   }),
 
@@ -2878,20 +3609,30 @@ function objetoPreset(cfg) {
     tipoTecnico: 'objeto_promocional_base',
     templateId: 'objeto_promocional_base_v1',
     variantes: cfg.variantes.map((vt) =>
-      blankVariant(vt.sku, vt.nombre, vt.formato, vt.color, {
-        categoria: cfg.categoria,
-        tipoObjeto: cfg.tipoObjeto,
-        material: vt.material || cfg.material,
-        color: vt.color,
-        ...(vt.modelo ? { modelo: vt.modelo } : {}),
-        ...(vt.capacidad ? { capacidad: vt.capacidad } : {}),
-      }, vt.recomendada !== false),
+      blankVariant(
+        vt.sku,
+        vt.nombre,
+        vt.formato,
+        vt.color,
+        {
+          categoria: cfg.categoria,
+          tipoObjeto: cfg.tipoObjeto,
+          material: vt.material || cfg.material,
+          color: vt.color,
+          ...(vt.modelo ? { modelo: vt.modelo } : {}),
+          ...(vt.capacidad ? { capacidad: vt.capacidad } : {}),
+        },
+        vt.recomendada !== false,
+      ),
     ),
   };
 }
 
 function colorSlug(color) {
-  return color.replace(/[^a-zA-Z0-9]+/g, '').slice(0, 3).toUpperCase();
+  return color
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .slice(0, 3)
+    .toUpperCase();
 }
 
 function textilPreset(cfg) {
@@ -3131,7 +3872,15 @@ function portabannerPresetMeta() {
 // alto cm|null, linea, recomendada]. La medida es la del banner de referencia
 // del fabricante: NO condiciona la lona, que se define en el producto/ruta.
 // Sin precio de lista: se completa manualmente al instalar.
-function vportabanner([sku, nombre, tipoPortabanner, ancho, alto, linea, recomendada]) {
+function vportabanner([
+  sku,
+  nombre,
+  tipoPortabanner,
+  ancho,
+  alto,
+  linea,
+  recomendada,
+]) {
   const medida = ancho && alto ? `${ancho}×${alto} cm` : 'Sin medida';
   return {
     skuSugerido: sku,
@@ -3153,7 +3902,13 @@ function vportabanner([sku, nombre, tipoPortabanner, ancho, alto, linea, recomen
   };
 }
 
-function portabannerPreset({ key, nombreCanonico, descripcionCorta, alias, filas }) {
+function portabannerPreset({
+  key,
+  nombreCanonico,
+  descripcionCorta,
+  alias,
+  filas,
+}) {
   return {
     key,
     nombreCanonico,
@@ -3175,7 +3930,14 @@ function portabannerPreset({ key, nombreCanonico, descripcionCorta, alias, filas
 // Multicolor, 2026-07). fila: [sku, códigoRepuesto, modeloCompatible|null,
 // colorTinta, precioARS, recomendada]. "Neutro" = sin entintar; "MCI" =
 // almohadilla de alto rendimiento Trodat.
-function vrepuestoAlmohadilla([sku, codigoRepuesto, modeloCompatible, colorTinta, precio, recomendada]) {
+function vrepuestoAlmohadilla([
+  sku,
+  codigoRepuesto,
+  modeloCompatible,
+  colorTinta,
+  precio,
+  recomendada,
+]) {
   return {
     skuSugerido: sku,
     nombreVarianteSugerido: `${codigoRepuesto} · ${colorTinta}${modeloCompatible ? ` (${modeloCompatible})` : ''}`,
@@ -3196,7 +3958,13 @@ function vrepuestoAlmohadilla([sku, codigoRepuesto, modeloCompatible, colorTinta
   };
 }
 
-function repuestoAlmohadillaPreset({ key, nombreCanonico, descripcionCorta, alias, repuestos }) {
+function repuestoAlmohadillaPreset({
+  key,
+  nombreCanonico,
+  descripcionCorta,
+  alias,
+  repuestos,
+}) {
   return {
     key,
     nombreCanonico,
@@ -3225,7 +3993,16 @@ function almohadillaEscritorioPresetMeta() {
 
 // Tampón de escritorio (catálogo Trodat del proveedor, 2026-07).
 // fila: [sku, referencia, ancho cm|null, alto cm|null, colorTinta, uso, precioARS, recomendada]
-function valmohadillaEscritorio([sku, referencia, ancho, alto, colorTinta, uso, precio, recomendada]) {
+function valmohadillaEscritorio([
+  sku,
+  referencia,
+  ancho,
+  alto,
+  colorTinta,
+  uso,
+  precio,
+  recomendada,
+]) {
   const medida = ancho && alto ? ` (${ancho}×${alto} cm)` : '';
   return {
     skuSugerido: sku,
@@ -3249,7 +4026,15 @@ function valmohadillaEscritorio([sku, referencia, ancho, alto, colorTinta, uso, 
   };
 }
 
-function vtintaSello(sku, referencia, colorTinta, volumen, uso, precio, recomendada) {
+function vtintaSello(
+  sku,
+  referencia,
+  colorTinta,
+  volumen,
+  uso,
+  precio,
+  recomendada,
+) {
   return {
     skuSugerido: sku,
     nombreVarianteSugerido: `Trodat ${referencia} ${colorTinta} · ${volumen} ml${uso === 'Telas' ? ' · telas' : ''}`,
@@ -3273,7 +4058,16 @@ function vtintaSello(sku, referencia, colorTinta, volumen, uso, precio, recomend
 
 // Variante de sello automático: el tamaño de polímero y las líneas de texto son
 // propiedades del modelo (Colop Printer 30 → 47×18 mm, 5 líneas).
-function vselloManual(sku, marca, modelo, anchoPolimero, altoPolimero, lineasTexto, material, recomendada) {
+function vselloManual(
+  sku,
+  marca,
+  modelo,
+  anchoPolimero,
+  altoPolimero,
+  lineasTexto,
+  material,
+  recomendada,
+) {
   return {
     skuSugerido: sku,
     nombreVarianteSugerido: `${modelo} · ${anchoPolimero}×${altoPolimero} mm · ${lineasTexto} líneas`,
@@ -3357,7 +4151,13 @@ function vselloTrodat([sku, modelo, ancho, alto, forma, precio, recomendada]) {
   };
 }
 
-function selloLineaTrodatPreset({ key, nombreCanonico, descripcionCorta, alias, modelos }) {
+function selloLineaTrodatPreset({
+  key,
+  nombreCanonico,
+  descripcionCorta,
+  alias,
+  modelos,
+}) {
   return {
     key,
     nombreCanonico,
@@ -3517,6 +4317,25 @@ function channelSku(canal) {
 
 function rollVariants(prefix, anchos, options) {
   return anchos.map((ancho) => vr(prefix, ancho, options));
+}
+
+function viniloEsmeriladoVariants() {
+  return [
+    { prefijo: 'VIN-ESM-BLANCO', color: 'Blanco' },
+    { prefijo: 'VIN-ESM-GRIS', color: 'Gris' },
+  ].flatMap(({ prefijo, color }) =>
+    rollVariants(prefijo, [0.61, 1.22], {
+      largo: 50,
+      // En este template la tercera dimensión visible se llama `acabado`.
+      // Para este material representa el tono comercial disponible.
+      acabado: color,
+      color,
+      recomendadas: new Set([0.61, 1.22]),
+    }).map((variante) => ({
+      ...variante,
+      nombreVarianteSugerido: `${variante.formato} · ${color} · Esmerilado`,
+    })),
+  );
 }
 
 function vr(prefix, ancho, options) {
@@ -3903,7 +4722,11 @@ function oppVariants() {
     { color: 'Holográfico oro', code: 'HOLO-ORO', acabados: ['Brillo'] },
     { color: 'Holográfico mosaico', code: 'HOLO-MOS', acabados: ['Brillo'] },
     { color: 'Metalizado oro', code: 'MET-ORO', acabados: ['Mate', 'Brillo'] },
-    { color: 'Metalizado plata', code: 'MET-PLA', acabados: ['Mate', 'Brillo'] },
+    {
+      color: 'Metalizado plata',
+      code: 'MET-PLA',
+      acabados: ['Mate', 'Brillo'],
+    },
   ];
   const recomendadas = new Set(['Blanco-Brillo', 'Transparente-Brillo']);
   return colores.flatMap(({ color, code, acabados }) =>
@@ -3991,30 +4814,32 @@ function brocheVariants() {
     [23, 20, 1000, 140, 170],
   ];
   const recomendadas = new Set(['20/6', '20/10', '26/6']);
-  return medidas.map(([calibre, pataMm, unidadesPorCaja, hojasDesde, hojasHasta]) => {
-    const medida = `${calibre}/${pataMm}`;
-    return {
-      skuSugerido: `BROCHE-${calibre}-${pataMm}-X${unidadesPorCaja}`,
-      nombreVarianteSugerido: `Broche ${medida} · ${hojasDesde}-${hojasHasta} hojas · caja x ${unidadesPorCaja}`,
-      formato: medida,
-      espesor: null,
-      color: 'Plateado',
-      recomendada: recomendadas.has(medida),
-      atributosVarianteJson: {
-        medida,
-        calibre,
-        largoPataMm: pataMm,
-        hojasDesde,
-        hojasHasta,
-        unidadesPorCaja,
-        material: 'Alambre metálico',
-      },
-      unidadStock: UnidadMateriaPrima.UNIDAD,
-      unidadCompra: UnidadMateriaPrima.CAJA,
-      precioReferencia: null,
-      moneda: 'ARS',
-    };
-  });
+  return medidas.map(
+    ([calibre, pataMm, unidadesPorCaja, hojasDesde, hojasHasta]) => {
+      const medida = `${calibre}/${pataMm}`;
+      return {
+        skuSugerido: `BROCHE-${calibre}-${pataMm}-X${unidadesPorCaja}`,
+        nombreVarianteSugerido: `Broche ${medida} · ${hojasDesde}-${hojasHasta} hojas · caja x ${unidadesPorCaja}`,
+        formato: medida,
+        espesor: null,
+        color: 'Plateado',
+        recomendada: recomendadas.has(medida),
+        atributosVarianteJson: {
+          medida,
+          calibre,
+          largoPataMm: pataMm,
+          hojasDesde,
+          hojasHasta,
+          unidadesPorCaja,
+          material: 'Alambre metálico',
+        },
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.CAJA,
+        precioReferencia: null,
+        moneda: 'ARS',
+      };
+    },
+  );
 }
 
 // Espiral plástico (PVC coil) paso 4:1: Ø → capacidad en hojas a 80g (tabla de la

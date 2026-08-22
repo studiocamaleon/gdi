@@ -6,7 +6,10 @@ import type {
   PlacementVectorial,
   PuntoVectorial,
 } from './tipos';
-import { segmentarPiezasConEncastres } from './segmentacion-encastres';
+import {
+  segmentarPiezasConEncastres,
+  type ConfiguracionEncastresVectoriales,
+} from './segmentacion-encastres';
 import {
   angulosVectoriales,
   rotarContornosVectoriales,
@@ -23,7 +26,26 @@ interface PiezaPreparada {
 
 interface Plate {
   placements: PlacementVectorial[];
+  areaPiezasMm2: number;
 }
+
+interface EstrategiaBusqueda {
+  preferirRotacionesCardinales: boolean;
+}
+
+interface LayoutEvaluado {
+  plates: Plate[];
+  rotacionesNoCardinales: number;
+  areaEnvolventeMm2: number;
+  firma: string;
+}
+
+type OrientacionBase = Omit<PiezaPreparada, 'copyIndex'>;
+
+/** Una mejora menor a este porcentaje del área comprada no justifica girar
+ * piezas en ángulos arbitrarios: cuesta lo mismo y complica identificación,
+ * armado y aprovechamiento del negativo. */
+const UMBRAL_COMPACTACION_SIGNIFICATIVA = 0.03;
 
 export class NestingIrregularError extends Error {}
 
@@ -36,6 +58,7 @@ export function nestearGeometriaIrregular(input: {
   separacionMm?: number;
   permitirRotacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
+  configuracionEncastres?: ConfiguracionEncastresVectoriales;
 }): NestingIrregularResult {
   const cantidad = Math.ceil(input.cantidad);
   const margin = input.margenMm ?? 0;
@@ -84,6 +107,7 @@ export function nestearGeometriaIrregular(input: {
       anchoUtilMm: usableWidth,
       altoUtilMm: usableHeight,
       permitirRotacion: input.permitirRotacion !== false,
+      configuracionEncastres: input.configuracionEncastres,
     });
   } catch (error) {
     throw new NestingIrregularError(
@@ -104,71 +128,40 @@ export function nestearGeometriaIrregular(input: {
     for (let copyIndex = 0; copyIndex < cantidad; copyIndex++)
       instances.push({ piece, copyIndex });
   }
-  instances.sort(
-    (a, b) =>
-      b.piece.areaMm2 - a.piece.areaMm2 || b.piece.altoMm - a.piece.altoMm,
+  const ordenes = generarOrdenesCandidatos(instances);
+  const orientationCache = new Map<string, OrientacionBase[]>();
+  const layouts = ordenes.flatMap((orden, index) =>
+    // Para vectores chicos se exploran más órdenes con sesgo cardinal. El
+    // modo libre completo se repite sólo cuando la cantidad de instancias lo
+    // permite; así una cotización grande no multiplica exponencialmente la
+    // grilla de colisiones.
+    (index === 0 ? [true, false] : [true]).map((preferirRotacionesCardinales) =>
+      evaluarLayout(
+        empacarInstancias({
+          instances: orden,
+          plateWidth: input.anchoPlacaMm,
+          plateHeight: input.altoPlacaMm,
+          usableWidth,
+          usableHeight,
+          margin,
+          gap,
+          usarGrillaFina,
+          allowRotation: input.permitirRotacion !== false,
+          estrategia: { preferirRotacionesCardinales },
+          orientationCache,
+        }),
+        margin,
+      ),
+    ),
   );
-
-  const plates: Plate[] = [];
-  for (const instance of instances) {
-    const orientations = prepararOrientaciones(
-      instance.piece,
-      instance.copyIndex,
-      input.permitirRotacion !== false,
-      usableWidth,
-      usableHeight,
-    );
-    if (
-      !orientations.some(
-        (o) => o.width <= usableWidth && o.height <= usableHeight,
-      )
-    ) {
-      throw new NestingIrregularError(
-        `${instance.piece.id} (${redondear(instance.piece.anchoMm)} × ${redondear(instance.piece.altoMm)} mm) no entra completa en el área útil de ${redondear(usableWidth)} × ${redondear(usableHeight)} mm.`,
-      );
-    }
-
-    let placed = false;
-    for (
-      let plateIndex = 0;
-      plateIndex < plates.length && !placed;
-      plateIndex++
-    ) {
-      const placement = buscarUbicacion(
-        orientations,
-        plates[plateIndex],
-        plateIndex,
-        input.anchoPlacaMm,
-        input.altoPlacaMm,
-        margin,
-        gap,
-        usarGrillaFina,
-      );
-      if (placement) {
-        plates[plateIndex].placements.push(placement);
-        placed = true;
-      }
-    }
-    if (!placed) {
-      const plate: Plate = { placements: [] };
-      const placement = buscarUbicacion(
-        orientations,
-        plate,
-        plates.length,
-        input.anchoPlacaMm,
-        input.altoPlacaMm,
-        margin,
-        gap,
-        usarGrillaFina,
-      );
-      if (!placement)
-        throw new NestingIrregularError(
-          `No se encontró una ubicación válida para ${instance.piece.id}.`,
-        );
-      plate.placements.push(placement);
-      plates.push(plate);
-    }
-  }
+  const mejorLayout = layouts.sort((a, b) =>
+    compararLayouts(
+      a,
+      b,
+      usableWidth * usableHeight * Math.max(a.plates.length, b.plates.length),
+    ),
+  )[0];
+  const plates = mejorLayout.plates;
 
   const placements = plates.flatMap((plate) => plate.placements);
   const areaPiezasMm2 = input.geometria.areaTotalMm2 * cantidad;
@@ -272,6 +265,7 @@ function buscarUbicacion(
   margin: number,
   gap: number,
   usarGrillaFina: boolean,
+  estrategia: EstrategiaBusqueda,
 ): PlacementVectorial | null {
   let best: PlacementVectorial | null = null;
   for (const orientation of orientations) {
@@ -284,6 +278,7 @@ function buscarUbicacion(
       maxX,
       maxY,
       usarGrillaFina,
+      orientation.piece.segmentacion != null,
     );
     let bestForOrientation: PlacementVectorial | null = null;
     for (const { x, y } of candidates) {
@@ -305,7 +300,7 @@ function buscarUbicacion(
       const contours = trasladar(orientation.contours, x, y);
       if (
         nearbyPlacements.some((placed) =>
-          colisionan(contours[0].puntos, placed.contornos[0].puntos, gap),
+          colisionanContornos(contours, placed.contornos, gap),
         )
       )
         continue;
@@ -325,12 +320,7 @@ function buscarUbicacion(
     }
     if (
       bestForOrientation &&
-      (!best ||
-        bestForOrientation.yMm + bestForOrientation.altoMm <
-          best.yMm + best.altoMm ||
-        (bestForOrientation.yMm + bestForOrientation.altoMm ===
-          best.yMm + best.altoMm &&
-          bestForOrientation.xMm < best.xMm))
+      (!best || esMejorUbicacion(bestForOrientation, best, estrategia))
     )
       best = bestForOrientation;
   }
@@ -364,6 +354,7 @@ function posicionesCandidatas(
   maxX: number,
   maxY: number,
   usarGrillaFina: boolean,
+  esSegmento: boolean,
 ): Array<{ x: number; y: number }> {
   const candidates = new Map<string, { x: number; y: number }>();
   const add = (x: number, y: number) => {
@@ -387,7 +378,13 @@ function posicionesCandidatas(
     plate.placements.length > 0 &&
     (usarGrillaFina ? plate.placements.length <= 12 : true)
   ) {
-    const maxGridCandidates = usarGrillaFina ? 4_000 : 900;
+    const maxGridCandidates = esSegmento
+      ? 300
+      : usarGrillaFina
+        ? plate.placements.length <= 4
+          ? 1_600
+          : 900
+        : 600;
     const area = Math.max(0, maxX - margin) * Math.max(0, maxY - margin);
     const gridStep = Math.max(2, gap || 5, Math.sqrt(area / maxGridCandidates));
     for (let y = margin; y <= maxY + 0.001; y += gridStep) {
@@ -416,14 +413,22 @@ function prepararOrientaciones(
   allowRotation: boolean,
   usableWidth: number,
   usableHeight: number,
+  cache?: Map<string, OrientacionBase[]>,
 ): PiezaPreparada[] {
+  const cacheKey = `${piece.id}:${allowRotation}:${usableWidth}:${usableHeight}`;
+  const cached = cache?.get(cacheKey);
+  if (cached)
+    return cached.map((orientation) => ({ ...orientation, copyIndex }));
   const angulos = angulosVectoriales(allowRotation);
   const orientaciones = angulos.map((rotacion) =>
     rotarPieza(piece, copyIndex, rotacion),
   );
-  if (!allowRotation) return orientaciones;
-  const cardinales = orientaciones.filter(
-    (orientation) => orientation.rotacion === 0 || orientation.rotacion === 90,
+  if (!allowRotation) {
+    cache?.set(cacheKey, orientaciones.map(aOrientacionBase));
+    return orientaciones;
+  }
+  const cardinales = orientaciones.filter((orientation) =>
+    esRotacionCardinal(orientation.rotacion),
   );
   const porCaja = [...orientaciones].sort(
     (a, b) =>
@@ -435,20 +440,217 @@ function prepararOrientaciones(
       orientation.width <= usableWidth + 0.001 &&
       orientation.height <= usableHeight + 0.001,
   );
-  const limite = piece.segmentacion ? 6 : 4;
+  const limite = 8;
   const elegidas = new Map<string, PiezaPreparada>();
   // La primera orientación que realmente entra no puede perderse por el
   // recorte de candidatos usado para mantener acotado el tiempo de nesting.
-  for (const orientation of [
-    ...queEntran.slice(0, 1),
-    ...cardinales,
-    ...porCaja,
-  ]) {
-    const key = `${Math.round(orientation.width * 10)}:${Math.round(orientation.height * 10)}`;
+  for (const orientation of [...cardinales, ...queEntran, ...porCaja]) {
+    // No deduplicar por ancho/alto: 0° y 180° comparten caja exterior, pero
+    // una silueta asimétrica puede encajar de una sola de esas maneras.
+    const key = `${orientation.rotacion}`;
     if (!elegidas.has(key)) elegidas.set(key, orientation);
     if (elegidas.size >= limite) break;
   }
-  return [...elegidas.values()];
+  const result = [...elegidas.values()];
+  cache?.set(cacheKey, result.map(aOrientacionBase));
+  return result;
+}
+
+function empacarInstancias(input: {
+  instances: Array<{ piece: PiezaVectorial; copyIndex: number }>;
+  plateWidth: number;
+  plateHeight: number;
+  usableWidth: number;
+  usableHeight: number;
+  margin: number;
+  gap: number;
+  usarGrillaFina: boolean;
+  allowRotation: boolean;
+  estrategia: EstrategiaBusqueda;
+  orientationCache: Map<string, OrientacionBase[]>;
+}): Plate[] {
+  const plates: Plate[] = [];
+  for (const instance of input.instances) {
+    const orientations = prepararOrientaciones(
+      instance.piece,
+      instance.copyIndex,
+      input.allowRotation,
+      input.usableWidth,
+      input.usableHeight,
+      input.orientationCache,
+    );
+    if (
+      !orientations.some(
+        (orientation) =>
+          orientation.width <= input.usableWidth + 0.001 &&
+          orientation.height <= input.usableHeight + 0.001,
+      )
+    ) {
+      throw new NestingIrregularError(
+        `${instance.piece.id} (${redondear(instance.piece.anchoMm)} × ${redondear(instance.piece.altoMm)} mm) no entra completa en el área útil de ${redondear(input.usableWidth)} × ${redondear(input.usableHeight)} mm.`,
+      );
+    }
+
+    let placement: PlacementVectorial | null = null;
+    for (let plateIndex = 0; plateIndex < plates.length; plateIndex += 1) {
+      // Condición necesaria barata: si ni siquiera entra por área real, no
+      // recorrer cientos de posiciones y colisiones vectoriales en esa placa.
+      if (
+        plates[plateIndex].areaPiezasMm2 + instance.piece.areaMm2 >
+        input.usableWidth * input.usableHeight + 0.001
+      )
+        continue;
+      placement = buscarUbicacion(
+        orientations,
+        plates[plateIndex],
+        plateIndex,
+        input.plateWidth,
+        input.plateHeight,
+        input.margin,
+        input.gap,
+        input.usarGrillaFina,
+        input.estrategia,
+      );
+      if (placement) {
+        plates[plateIndex].placements.push(placement);
+        plates[plateIndex].areaPiezasMm2 += instance.piece.areaMm2;
+        break;
+      }
+    }
+    if (placement) continue;
+
+    const plate: Plate = { placements: [], areaPiezasMm2: 0 };
+    placement = buscarUbicacion(
+      orientations,
+      plate,
+      plates.length,
+      input.plateWidth,
+      input.plateHeight,
+      input.margin,
+      input.gap,
+      input.usarGrillaFina,
+      input.estrategia,
+    );
+    if (!placement)
+      throw new NestingIrregularError(
+        `No se encontró una ubicación válida para ${instance.piece.id}.`,
+      );
+    plate.placements.push(placement);
+    plate.areaPiezasMm2 = instance.piece.areaMm2;
+    plates.push(plate);
+  }
+  return plates;
+}
+
+function generarOrdenesCandidatos(
+  instances: Array<{ piece: PiezaVectorial; copyIndex: number }>,
+): Array<Array<{ piece: PiezaVectorial; copyIndex: number }>> {
+  const comparadores = [
+    (a: (typeof instances)[number], b: (typeof instances)[number]) =>
+      b.piece.areaMm2 - a.piece.areaMm2 || b.piece.altoMm - a.piece.altoMm,
+    (a: (typeof instances)[number], b: (typeof instances)[number]) =>
+      Math.max(b.piece.anchoMm, b.piece.altoMm) -
+        Math.max(a.piece.anchoMm, a.piece.altoMm) ||
+      b.piece.areaMm2 - a.piece.areaMm2,
+    (a: (typeof instances)[number], b: (typeof instances)[number]) =>
+      b.piece.altoMm - a.piece.altoMm || b.piece.anchoMm - a.piece.anchoMm,
+    (a: (typeof instances)[number], b: (typeof instances)[number]) =>
+      b.piece.anchoMm - a.piece.anchoMm || b.piece.altoMm - a.piece.altoMm,
+  ];
+  const todasSegmentadas = instances.every(
+    (instance) => instance.piece.segmentacion != null,
+  );
+  const maxOrdenes = todasSegmentadas
+    ? 1
+    : instances.length <= 10
+      ? 4
+      : instances.length <= 24
+        ? 2
+        : 1;
+  const unique = new Map<string, Array<(typeof instances)[number]>>();
+  for (const comparar of comparadores.slice(0, maxOrdenes)) {
+    const orden = [...instances].sort(
+      (a, b) =>
+        comparar(a, b) ||
+        a.piece.id.localeCompare(b.piece.id) ||
+        a.copyIndex - b.copyIndex,
+    );
+    const key = orden
+      .map(({ piece, copyIndex }) => `${piece.id}:${copyIndex}`)
+      .join('|');
+    unique.set(key, orden);
+  }
+  return [...unique.values()];
+}
+
+function evaluarLayout(plates: Plate[], margin: number): LayoutEvaluado {
+  const placements = plates.flatMap((plate) => plate.placements);
+  const areaEnvolventeMm2 = plates.reduce((total, plate) => {
+    const right = Math.max(
+      margin,
+      ...plate.placements.map((item) => item.xMm + item.anchoMm),
+    );
+    const bottom = Math.max(
+      margin,
+      ...plate.placements.map((item) => item.yMm + item.altoMm),
+    );
+    return total + (right - margin) * (bottom - margin);
+  }, 0);
+  return {
+    plates,
+    rotacionesNoCardinales: placements.filter(
+      (item) => !esRotacionCardinal(item.rotacion),
+    ).length,
+    areaEnvolventeMm2,
+    firma: placements
+      .map(
+        (item) =>
+          `${item.substrateIndex}:${item.pieceId}:${item.copyIndex}:${item.rotacion}:${item.xMm}:${item.yMm}`,
+      )
+      .join('|'),
+  };
+}
+
+function compararLayouts(
+  a: LayoutEvaluado,
+  b: LayoutEvaluado,
+  areaCompradaMm2: number,
+): number {
+  if (a.plates.length !== b.plates.length)
+    return a.plates.length - b.plates.length;
+  const diferenciaEnvolvente = a.areaEnvolventeMm2 - b.areaEnvolventeMm2;
+  if (
+    Math.abs(diferenciaEnvolvente) >
+    areaCompradaMm2 * UMBRAL_COMPACTACION_SIGNIFICATIVA
+  )
+    return diferenciaEnvolvente;
+  if (a.rotacionesNoCardinales !== b.rotacionesNoCardinales)
+    return a.rotacionesNoCardinales - b.rotacionesNoCardinales;
+  if (diferenciaEnvolvente !== 0) return diferenciaEnvolvente;
+  return a.firma.localeCompare(b.firma);
+}
+
+function esRotacionCardinal(rotacion: number): boolean {
+  const normalizada = ((rotacion % 360) + 360) % 360;
+  return Math.abs(normalizada % 90) < 0.001;
+}
+
+function esMejorUbicacion(
+  candidate: PlacementVectorial,
+  current: PlacementVectorial,
+  estrategia: EstrategiaBusqueda,
+): boolean {
+  if (estrategia.preferirRotacionesCardinales) {
+    const candidateCardinal = esRotacionCardinal(candidate.rotacion);
+    const currentCardinal = esRotacionCardinal(current.rotacion);
+    if (candidateCardinal !== currentCardinal) return candidateCardinal;
+  }
+  const candidateBottom = candidate.yMm + candidate.altoMm;
+  const currentBottom = current.yMm + current.altoMm;
+  return (
+    candidateBottom < currentBottom ||
+    (candidateBottom === currentBottom && candidate.xMm < current.xMm)
+  );
 }
 
 function rotarPieza(
@@ -467,6 +669,16 @@ function rotarPieza(
   };
 }
 
+function aOrientacionBase(orientation: PiezaPreparada): OrientacionBase {
+  return {
+    piece: orientation.piece,
+    rotacion: orientation.rotacion,
+    width: orientation.width,
+    height: orientation.height,
+    contours: orientation.contours,
+  };
+}
+
 function trasladar(
   contours: ContornoVectorial[],
   x: number,
@@ -481,13 +693,15 @@ function trasladar(
   }));
 }
 
-function colisionan(
-  a: PuntoVectorial[],
-  b: PuntoVectorial[],
+function colisionanContornos(
+  a: ContornoVectorial[],
+  b: ContornoVectorial[],
   gap: number,
 ): boolean {
-  const ba = bounds(a);
-  const bb = bounds(b);
+  const puntosA = a.flatMap((contorno) => contorno.puntos);
+  const puntosB = b.flatMap((contorno) => contorno.puntos);
+  const ba = bounds(puntosA);
+  const bb = bounds(puntosB);
   if (
     ba.maxX + gap <= bb.minX ||
     bb.maxX + gap <= ba.minX ||
@@ -495,22 +709,94 @@ function colisionan(
     bb.maxY + gap <= ba.minY
   )
     return false;
-  if (segmentosSeCruzan(a, b)) return true;
-  if (puntoEnPoligono(a[0], b) || puntoEnPoligono(b[0], a)) return true;
   if (
-    puntoEnPoligono(centroideVertices(a), b) ||
-    puntoEnPoligono(centroideVertices(b), a)
+    a.some((contornoA) =>
+      b.some((contornoB) =>
+        segmentosSeCruzan(contornoA.puntos, contornoB.puntos),
+      ),
+    )
+  )
+    return true;
+  const exterioresA = a.filter((contorno) => !contorno.esHueco);
+  const exterioresB = b.filter((contorno) => !contorno.esHueco);
+  if (
+    exterioresA.some((contorno) =>
+      puntosInteriores(contorno.puntos, a).some((point) =>
+        puntoEnSolido(point, b),
+      ),
+    ) ||
+    exterioresB.some((contorno) =>
+      puntosInteriores(contorno.puntos, b).some((point) =>
+        puntoEnSolido(point, a),
+      ),
+    )
   )
     return true;
   if (gap <= 0) return false;
-  return poligonosMasCercaQue(a, b, gap - 0.001);
+  return a.some((contornoA) =>
+    b.some((contornoB) =>
+      poligonosMasCercaQue(contornoA.puntos, contornoB.puntos, gap - 0.001),
+    ),
+  );
 }
 
-function centroideVertices(points: PuntoVectorial[]): PuntoVectorial {
-  return {
+function puntosInteriores(
+  points: PuntoVectorial[],
+  contours: ContornoVectorial[],
+): PuntoVectorial[] {
+  const centro = {
     x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
     y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
   };
+  // Si no hubo cruces de bordes, un único punto interior alcanza para decidir
+  // contención. Evitar devolver todos los nodos es crítico para SVG complejos:
+  // comparar cada punto contra cada contorno volvía cuadrática cada colisión.
+  const candidates = [
+    centro,
+    ...points.map((point) => ({
+      x: point.x + (centro.x - point.x) * 0.01,
+      y: point.y + (centro.y - point.y) * 0.01,
+    })),
+  ];
+  const interior = candidates.find((point) => puntoEnSolido(point, contours));
+  return interior ? [interior] : [];
+}
+
+function puntoEnSolido(
+  point: PuntoVectorial,
+  contours: ContornoVectorial[],
+): boolean {
+  // Tocar el borde no implica superposición cuando gap=0. Con separación
+  // positiva la distancia entre contornos se valida después.
+  if (
+    contours.some((contorno) => puntoSobreBorde(point, contorno.puntos, 0.0001))
+  )
+    return false;
+  const dentroExterior = contours.some(
+    (contorno) => !contorno.esHueco && puntoEnPoligono(point, contorno.puntos),
+  );
+  if (!dentroExterior) return false;
+  return !contours.some(
+    (contorno) => contorno.esHueco && puntoEnPoligono(point, contorno.puntos),
+  );
+}
+
+function puntoSobreBorde(
+  point: PuntoVectorial,
+  polygon: PuntoVectorial[],
+  tolerancia: number,
+): boolean {
+  for (let index = 0; index < polygon.length; index += 1) {
+    if (
+      distanciaPuntoSegmento(
+        point,
+        polygon[index],
+        polygon[(index + 1) % polygon.length],
+      ) <= tolerancia
+    )
+      return true;
+  }
+  return false;
 }
 
 function segmentosSeCruzan(a: PuntoVectorial[], b: PuntoVectorial[]): boolean {

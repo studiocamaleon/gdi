@@ -1,13 +1,59 @@
 import {
   IsBoolean,
   IsInt,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class ConfiguracionEncastresVectorialesDto {
+  @IsIn(['cola_milano', 'recta'])
+  tipoUnion!: 'cola_milano' | 'recta';
+
+  @IsNumber()
+  @Min(1)
+  @Max(500)
+  anchoEncastreMm!: number;
+
+  @IsNumber()
+  @Min(1)
+  @Max(500)
+  profundidadEncastreMm!: number;
+
+  @IsIn(['por_distancia', 'cantidad_fija'])
+  modoCantidad!: 'por_distancia' | 'cantidad_fija';
+
+  @IsNumber()
+  @Min(10)
+  @Max(10_000)
+  distanciaMaximaMm!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  cantidadFija!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  cantidadMinima!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  cantidadMaxima!: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(10)
+  kerfMm!: number;
+}
 
 export class AnalizarSvgFabricacionDto {
   @IsString()
@@ -63,4 +109,9 @@ export class AnalizarSvgFabricacionDto {
   @IsOptional()
   @IsBoolean()
   preservarComposicionOriginalSiEntra?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ConfiguracionEncastresVectorialesDto)
+  configuracionEncastres?: ConfiguracionEncastresVectorialesDto;
 }

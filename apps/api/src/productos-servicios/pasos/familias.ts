@@ -38,11 +38,16 @@ const MP = {
       'PAPEL_TRANSFERENCIA',
     ],
   },
-  // Vinilo de corte de color (letras/stickers en plotter de corte). Subfamilia
-  // propia, separada del rollo flexible de impresión.
-  viniloCorte: {
-    familiasMateriaPrima: ['SUSTRATO'],
-    subfamiliasMateriaPrima: ['VINILO_CORTE'],
+  // Materiales continuos que una cuchilla móvil puede procesar. Se limita por
+  // template (y no por la subfamilia magnética completa) para no ofrecer
+  // imanes rígidos/redondos en un plotter.
+  materialFlexibleCortable: {
+    templateIds: [
+      'vinilo_de_corte_rollo_v1',
+      'sustrato_rollo_flexible_v1',
+      'vinilo_esmerilado_rollo_v1',
+      'iman_flexible_rollo_v1',
+    ],
   },
   sustratoPieza: {
     familiasMateriaPrima: ['SUSTRATO'],
@@ -801,18 +806,18 @@ const plotter_corte: DefinicionFamilia = {
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
-  // Slot de sustrato OPCIONAL: el plotter corta un vinilo de corte PROPIO
-  // (letras/stickers de color) o troquela lo que imprimió un paso anterior
+  // Slot de sustrato OPCIONAL: el plotter corta un material flexible PROPIO
+  // (vinilo, esmerilado o imán en rollo) o troquela lo que imprimió un paso anterior
   // (heredado, sin sustrato propio ni costo de material). Sin configurar el
   // slot, la conducta es la de siempre (nestea sobre el ancho de la máquina).
   // Ver docs/corte-sustrato-propio-o-heredado-diseno.md §7.
   slotsRequeridos: [
     {
       codigo: 'sustrato_corte',
-      nombre: 'Vinilo de corte (opcional)',
+      nombre: 'Material flexible a cortar (opcional)',
       tipo: 'SUSTRATO',
       requerido: false,
-      compatibilidadMaterial: MP.viniloCorte,
+      compatibilidadMaterial: MP.materialFlexibleCortable,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -1015,27 +1020,44 @@ const corte_manual: DefinicionFamilia = {
   mecanismoCantidadDefault: 'HEREDAR_DEL_OUTPUT_CANONICO',
   // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
   outputHeredadoDefault: 'pliegos_impresos',
-  nombre: 'Refilado manual',
+  nombre: 'Corte manual',
   categoria: 'corte_y_formado',
   descripcion:
-    'Corte manual con trincheta o sierra para señalética PVC, MDF fino. Sin máquina industrial.',
+    'Corte manual con trincheta, regla o sierra. Puede acomodar piezas sobre un rollo flexible y calcular el material consumido sin asignar una máquina.',
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: [
     'DIRECT_FROM_JOBCONTEXT',
     'HEREDAR_DEL_OUTPUT_CANONICO',
+    'CALCULADO_POR_PASO',
   ],
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
-  slotsRequeridos: [],
+  nestingConfig: {
+    superficie: 'segun_material',
+    fallbackSinLayout: 'm2_crudos',
+  },
+  slotsRequeridos: [
+    {
+      codigo: 'sustrato_corte',
+      nombre: 'Material flexible a cortar (opcional)',
+      tipo: 'SUSTRATO',
+      requerido: false,
+      compatibilidadMaterial: MP.materialFlexibleCortable,
+    },
+  ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [],
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_cortadas'],
   validaciones: [],
   paramsPasoSchema: [],
-  productosTipicos: ['Señalética PVC chica', 'MDF fino'],
+  productosTipicos: [
+    'Vinilo esmerilado con cortes rectos',
+    'Señalética PVC chica',
+    'MDF fino',
+  ],
 };
 
 /** Corte de piezas corpóreas a partir de contornos vectoriales sobre placas.

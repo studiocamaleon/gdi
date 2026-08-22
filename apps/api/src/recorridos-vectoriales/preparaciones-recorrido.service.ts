@@ -17,6 +17,22 @@ import {
   crearSvgPlacaDesdeNesting,
   type NestingVectorialParaRecorrido,
 } from './nesting-svg';
+import { analizarSvgFabricacion } from '../motor-universal/geometria-vectorial/svg-parser';
+import { segmentarPiezasConEncastres } from '../motor-universal/geometria-vectorial/segmentacion-encastres';
+import type { UnionVectorial } from '../motor-universal/geometria-vectorial/tipos';
+import {
+  crearPlantillaInstalacion,
+  type ConfiguracionPlantillaInstalacion,
+} from './plantilla-instalacion';
+import {
+  crearDxfPatronPounce,
+  crearDxfPlantillaRigida,
+  crearEpsPlantillaVinilo,
+  crearPaqueteInstalacion,
+  crearPlanoGeneralAcotadoPdf,
+  crearPlantillaPapelMosaicoPdf,
+  crearPlantillaPapelPlotterPdf,
+} from './plantilla-instalacion-export';
 
 type NestingPersistido = NestingVectorialParaRecorrido;
 
@@ -79,6 +95,149 @@ export class PreparacionesRecorridoService {
       );
     }
     return prepared;
+  }
+
+  async plantillaInstalacion(
+    auth: CurrentAuth,
+    itemId: string,
+    configuracion?: ConfiguracionPlantillaInstalacion,
+  ) {
+    const result = await this.generarPlantillaInstalacion(
+      auth,
+      itemId,
+      configuracion,
+    );
+    return {
+      schemaVersion: result.plantilla.schemaVersion,
+      nombreArchivo: result.nombreArchivo,
+      anchoDisenoMm: result.plantilla.anchoDisenoMm,
+      altoDisenoMm: result.plantilla.altoDisenoMm,
+      anchoPlantillaMm: result.plantilla.anchoPlantillaMm,
+      altoPlantillaMm: result.plantilla.altoPlantillaMm,
+      bordeMm: result.plantilla.bordeMm,
+      cantidadPiezas: result.plantilla.cantidadPiezas,
+      cantidadUniones: result.plantilla.cantidadUniones,
+      previewSvg: result.plantilla.previewSvg,
+      paneles: result.plantilla.paneles.map((panel) => ({
+        indice: panel.indice,
+        fila: panel.fila,
+        columna: panel.columna,
+        origenXmm: panel.origenXmm,
+        origenYmm: panel.origenYmm,
+        anchoMm: panel.anchoMm,
+        altoMm: panel.altoMm,
+      })),
+    };
+  }
+
+  async descargarPlantillaInstalacion(
+    auth: CurrentAuth,
+    itemId: string,
+    panelIndex: number | null,
+    configuracion?: ConfiguracionPlantillaInstalacion,
+  ) {
+    const result = await this.generarPlantillaInstalacion(
+      auth,
+      itemId,
+      configuracion,
+    );
+    if (panelIndex == null) {
+      return {
+        bytes: Buffer.from(result.plantilla.svg, 'utf8'),
+        mime: 'image/svg+xml; charset=utf-8',
+        name: `${result.nombreArchivo}-plantilla-completa.svg`,
+      };
+    }
+    const panel = result.plantilla.paneles[panelIndex];
+    if (!panel) {
+      throw new NotFoundException('No se encontró el panel de la plantilla.');
+    }
+    return {
+      bytes: Buffer.from(panel.svg, 'utf8'),
+      mime: 'image/svg+xml; charset=utf-8',
+      name: `${result.nombreArchivo}-plantilla-panel-${panelIndex + 1}.svg`,
+    };
+  }
+
+  async descargarArchivoInstalacion(
+    auth: CurrentAuth,
+    itemId: string,
+    formato:
+      | 'paquete'
+      | 'plano-pdf'
+      | 'papel-plotter-pdf'
+      | 'papel-mosaico-pdf'
+      | 'rigida-dxf'
+      | 'vinilo-eps'
+      | 'pounce-dxf',
+    panelIndex: number | null,
+    configuracion?: ConfiguracionPlantillaInstalacion,
+  ) {
+    const generated = await this.generarPlantillaInstalacion(
+      auth,
+      itemId,
+      configuracion,
+    );
+    const exportInput = {
+      nombre: generated.nombre,
+      nombreFuente: generated.nombreFuente,
+      geometria: generated.geometria,
+      plantilla: generated.plantilla,
+      uniones: generated.uniones,
+    };
+    const base = generated.nombreArchivo;
+    switch (formato) {
+      case 'paquete':
+        return file(
+          crearPaqueteInstalacion(exportInput),
+          'application/zip',
+          `${base}-paquete-instalacion.zip`,
+        );
+      case 'plano-pdf':
+        return file(
+          crearPlanoGeneralAcotadoPdf(exportInput),
+          'application/pdf',
+          `${base}-plano-general-acotado.pdf`,
+        );
+      case 'papel-plotter-pdf':
+        return file(
+          crearPlantillaPapelPlotterPdf(exportInput),
+          'application/pdf',
+          `${base}-plantilla-plotter-1a1.pdf`,
+        );
+      case 'papel-mosaico-pdf':
+        return file(
+          crearPlantillaPapelMosaicoPdf(exportInput),
+          'application/pdf',
+          `${base}-plantilla-mosaico-a4-1a1.pdf`,
+        );
+      case 'rigida-dxf': {
+        const dxf = crearDxfPlantillaRigida(exportInput, panelIndex);
+        return file(
+          Buffer.from(dxf, 'utf8'),
+          'application/dxf; charset=utf-8',
+          panelIndex == null
+            ? `${base}-plantilla-rigida.dxf`
+            : `${base}-plantilla-rigida-panel-${panelIndex + 1}.dxf`,
+        );
+      }
+      case 'vinilo-eps':
+        return file(
+          Buffer.from(crearEpsPlantillaVinilo(exportInput), 'ascii'),
+          'application/postscript',
+          `${base}-plantilla-vinilo.eps`,
+        );
+      case 'pounce-dxf':
+        return file(
+          Buffer.from(crearDxfPatronPounce(exportInput), 'utf8'),
+          'application/dxf; charset=utf-8',
+          `${base}-patron-pounce.dxf`,
+        );
+      default:
+        throw new BadRequestException(
+          'El formato de instalación solicitado no es válido.',
+        );
+    }
   }
 
   async descargar(
@@ -219,6 +378,100 @@ export class PreparacionesRecorridoService {
     return this.proyectar(created);
   }
 
+  private async generarPlantillaInstalacion(
+    auth: CurrentAuth,
+    itemId: string,
+    configuracion?: ConfiguracionPlantillaInstalacion,
+  ) {
+    const item = await this.prisma.ordenTrabajoItem.findFirst({
+      where: { id: itemId, tenantId: auth.tenantId },
+      select: {
+        id: true,
+        codigo: true,
+        nombre: true,
+        cotizacionItem: {
+          select: {
+            jobContextJson: true,
+            trazabilidadJson: true,
+          },
+        },
+      },
+    });
+    if (!item) throw new NotFoundException('No se encontró el item de la OT.');
+    const quoteItem = item.cotizacionItem;
+    if (!quoteItem) {
+      throw new BadRequestException(
+        'El item no conserva la fuente vectorial de la cotización.',
+      );
+    }
+    const paso = this.pasoCorte(quoteItem.trazabilidadJson);
+    if (!paso) {
+      throw new BadRequestException(
+        'La plantilla de instalación sólo está disponible para cortes vectoriales de Polyfan.',
+      );
+    }
+    const context = this.record(quoteItem.jobContextJson);
+    const source = this.record(context?.disenoVectorialFuente);
+    const svg = typeof source?.svg === 'string' ? source.svg : '';
+    const width = Number(source?.anchoFinalMm);
+    const height =
+      source?.altoFinalMm == null ? undefined : Number(source.altoFinalMm);
+    const sourceName =
+      typeof source?.nombreArchivo === 'string'
+        ? source.nombreArchivo
+        : item.nombre || item.codigo;
+    if (!svg || !Number.isFinite(width) || width <= 0) {
+      throw new BadRequestException(
+        'El item no contiene un SVG original válido para generar la plantilla.',
+      );
+    }
+    const geometria = analizarSvgFabricacion({
+      svg,
+      anchoFinalMm: width,
+      altoFinalMm: height,
+    }).geometria;
+    const nesting = this.nestingDelPaso(paso);
+    const firstSubstrate = nesting.substrates?.[0];
+    const visual = this.record(nesting.visualConfig);
+    const margins = this.record(visual?.margins);
+    const margin = Math.max(
+      Number(margins?.leftMm ?? 0),
+      Number(margins?.rightMm ?? 0),
+      Number(margins?.topMm ?? 0),
+      Number(margins?.bottomMm ?? 0),
+    );
+    const widthUsable = Number(firstSubstrate?.widthMm ?? 0) - margin * 2;
+    const heightUsable = Number(firstSubstrate?.heightMm ?? 0) - margin * 2;
+    const unionesPersistidas = this.unionesDelNesting(nesting);
+    let uniones: UnionVectorial[] = unionesPersistidas ?? [];
+    if (
+      unionesPersistidas === null &&
+      nesting.estrategiaDisposicion === 'nesting_optimizado' &&
+      widthUsable > 0 &&
+      heightUsable > 0
+    ) {
+      uniones = segmentarPiezasConEncastres({
+        piezas: geometria.piezas,
+        anchoUtilMm: widthUsable,
+        altoUtilMm: heightUsable,
+        permitirRotacion: true,
+      }).uniones;
+    }
+    return {
+      nombreArchivo: this.safeName(sourceName.replace(/\.svg$/i, '')),
+      nombre: item.nombre || item.codigo,
+      nombreFuente: sourceName,
+      geometria,
+      uniones,
+      plantilla: crearPlantillaInstalacion({
+        geometria,
+        nombre: item.nombre || item.codigo,
+        uniones,
+        configuracion,
+      }),
+    };
+  }
+
   private proyectar(revision: {
     id: string;
     placaIndice: number;
@@ -273,6 +526,26 @@ export class PreparacionesRecorridoService {
       );
     }
     return nesting;
+  }
+
+  private unionesDelNesting(
+    nesting: NestingPersistido,
+  ): UnionVectorial[] | null {
+    const root = this.record(nesting);
+    const metricas = this.record(root?.metricasRaw);
+    if (!Array.isArray(metricas?.uniones)) return null;
+    return metricas.uniones
+      .map((value) => this.record(value))
+      .filter(
+        (value): value is Record<string, unknown> =>
+          Boolean(
+            value &&
+              typeof value.id === 'string' &&
+              typeof value.piezaOrigenId === 'string' &&
+              (value.tipoEncastre === 'cola_milano' ||
+                value.tipoEncastre === 'recta'),
+          ),
+      ) as unknown as UnionVectorial[];
   }
 
   private async resolverPerfil(
@@ -379,4 +652,8 @@ export class PreparacionesRecorridoService {
         .replace(/^-+|-+$/g, '') || 'corte'
     );
   }
+}
+
+function file(bytes: Buffer, mime: string, name: string) {
+  return { bytes, mime, name };
 }

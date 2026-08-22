@@ -268,6 +268,40 @@ describe('Catálogo de familias', () => {
       ]),
     });
   });
+
+  it('plotter_corte admite vinilos, rollos flexibles e imán flexible', () => {
+    const familia = getFamilia('plotter_corte');
+    const sustrato = familia.slotsRequeridos.find(
+      (slot) => slot.codigo === 'sustrato_corte',
+    );
+
+    expect(sustrato?.compatibilidadMaterial?.templateIds).toEqual([
+      'vinilo_de_corte_rollo_v1',
+      'sustrato_rollo_flexible_v1',
+      'vinilo_esmerilado_rollo_v1',
+      'iman_flexible_rollo_v1',
+    ]);
+  });
+
+  it('corte_manual puede calcular nesting sobre material flexible propio', () => {
+    const familia = getFamilia('corte_manual');
+
+    expect(familia.mecanismosCantidadSoportados).toContain(
+      'CALCULADO_POR_PASO',
+    );
+    expect(familia.nestingConfig).toMatchObject({
+      superficie: 'segun_material',
+    });
+    expect(familia.slotsRequeridos[0]).toMatchObject({
+      codigo: 'sustrato_corte',
+      compatibilidadMaterial: {
+        templateIds: expect.arrayContaining([
+          'sustrato_rollo_flexible_v1',
+          'vinilo_esmerilado_rollo_v1',
+        ]),
+      },
+    });
+  });
 });
 
 describe('Categorías', () => {

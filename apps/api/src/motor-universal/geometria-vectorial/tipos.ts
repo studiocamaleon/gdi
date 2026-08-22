@@ -33,7 +33,7 @@ export interface PiezaVectorial {
 export interface UnionVectorial {
   id: string;
   piezaOrigenId: string;
-  tipoEncastre: 'cola_milano';
+  tipoEncastre: 'cola_milano' | 'recta';
   eje: 'vertical' | 'horizontal';
   posicionMm: number;
   largoMm: number;

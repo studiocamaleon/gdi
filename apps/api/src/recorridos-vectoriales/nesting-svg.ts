@@ -8,6 +8,14 @@ export type ContornoNestingVectorial = {
 export type NestingVectorialParaRecorrido = {
   algorithm?: string;
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
+  visualConfig?: {
+    margins?: {
+      leftMm?: number;
+      rightMm?: number;
+      topMm?: number;
+      bottomMm?: number;
+    };
+  };
   substrates?: Array<{
     kind?: string;
     widthMm?: number;

@@ -3,8 +3,9 @@ import {
   EstadoMaquina,
   RolSistema,
 } from '@prisma/client';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { CurrentAuth } from '../../auth/auth.types';
+import type { UpsertMaquinaDto } from '../dto/upsert-maquina.dto';
 import { MaquinariaService } from '../maquinaria.service';
 
 const auth: CurrentAuth = {
@@ -136,5 +137,45 @@ describe('MaquinariaService — disponibilidad', () => {
         where: { tenantId: auth.tenantId, maquinaId: maquina.id },
       }),
     );
+  });
+});
+
+describe('MaquinariaService — parámetros técnicos', () => {
+  const validarParametrosTecnicos = (
+    service: MaquinariaService,
+    parametrosTecnicos: Record<string, unknown>,
+  ) => {
+    const servicio = service as unknown as {
+      validateTechnicalPayload: (payload: UpsertMaquinaDto) => void;
+    };
+    servicio.validateTechnicalPayload({
+      parametrosTecnicos,
+    } as UpsertMaquinaDto);
+  };
+
+  it('admite la política configurable de uniones del corte con hilo caliente', () => {
+    const { service } = buildService({});
+
+    expect(() =>
+      validarParametrosTecnicos(service, {
+        tipoUnionVectorial: 'cola_milano',
+        anchoEncastreMm: 30,
+        profundidadEncastreMm: 30,
+        modoCantidadEncastres: 'por_distancia',
+        distanciaMaximaEncastresMm: 100,
+        cantidadFijaEncastres: 1,
+        cantidadMinimaEncastres: 1,
+        cantidadMaximaEncastres: 100,
+        kerfEncastreMm: 0.3,
+      }),
+    ).not.toThrow();
+  });
+
+  it('sigue rechazando parámetros que no pertenecen al catálogo', () => {
+    const { service } = buildService({});
+
+    expect(() =>
+      validarParametrosTecnicos(service, { parametroInventado: true }),
+    ).toThrow(BadRequestException);
   });
 });

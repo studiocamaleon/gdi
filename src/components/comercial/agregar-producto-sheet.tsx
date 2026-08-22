@@ -87,6 +87,7 @@ import {
   cotizar,
   getCatalogoFamilias,
   getProductoById,
+  resolverConfiguracionEncastresVectoriales,
   type CotizarResponse,
 } from "@/lib/productos-servicios-api";
 import { DisenoVectorialCotizador } from "@/components/comercial/diseno-vectorial-cotizador";
@@ -4323,6 +4324,11 @@ function analisisVectorialDesdeItem(
       typeof ctx.disenoVectorialCacheKey === "string"
         ? ctx.disenoVectorialCacheKey
         : undefined,
+    configuracionEncastres: resolverConfiguracionEncastresVectoriales(
+      (nestingResult.metricasRaw?.configuracionEncastres as
+        | Record<string, unknown>
+        | undefined) ?? null,
+    ),
     geometria,
     nesting: {
       algorithm: "irregular-2d-bottom-left-v1",
@@ -5298,6 +5304,19 @@ function ApConfigStep({
     return (
       maquina?.parametrosTecnicosJson?.estrategiaNestingVectorial ===
       "preserve-original-if-fits"
+    );
+  }, [rutaSel, motorConfig.seleccionMaquina]);
+  const configuracionEncastresVectoriales = React.useMemo(() => {
+    const pasoCorte = rutaSel?.configPasos.find(
+      (config) => config.rutaPaso.familiaCodigo === "corte_hilo_caliente",
+    );
+    if (!pasoCorte) return resolverConfiguracionEncastresVectoriales(null);
+    const candidata = getActiveCandidateForConfig(pasoCorte, {
+      seleccionMaquina: motorConfig.seleccionMaquina,
+    });
+    const maquina = candidata?.maquina ?? pasoCorte.maquinaM1;
+    return resolverConfiguracionEncastresVectoriales(
+      maquina?.parametrosTecnicosJson ?? null,
     );
   }, [rutaSel, motorConfig.seleccionMaquina]);
   const [leyendoPlanos, setLeyendoPlanos] = React.useState(false);
@@ -7232,6 +7251,7 @@ function ApConfigStep({
                   preservarComposicionOriginalSiEntra={
                     preservarComposicionVectorial
                   }
+                  configuracionEncastres={configuracionEncastresVectoriales}
                   onChange={(fuente, analisis) =>
                     setMotorConfig((current) => ({
                       ...current,

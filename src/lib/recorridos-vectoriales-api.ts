@@ -80,3 +80,80 @@ export function descargaPreparacionHref(
 ) {
   return `/api/backend/recorridos-vectoriales/revisiones/${revisionId}/${format}`;
 }
+
+export type ConfiguracionPlantillaInstalacion = {
+  bordeMm: number;
+  anchoPanelMm: number;
+  altoPanelMm: number;
+  solapeMm: number;
+};
+
+export type PlantillaInstalacion = {
+  schemaVersion: 1;
+  nombreArchivo: string;
+  anchoDisenoMm: number;
+  altoDisenoMm: number;
+  anchoPlantillaMm: number;
+  altoPlantillaMm: number;
+  bordeMm: number;
+  cantidadPiezas: number;
+  cantidadUniones: number;
+  previewSvg: string;
+  paneles: Array<{
+    indice: number;
+    fila: number;
+    columna: number;
+    origenXmm: number;
+    origenYmm: number;
+    anchoMm: number;
+    altoMm: number;
+  }>;
+};
+
+export function getPlantillaInstalacion(
+  itemId: string,
+  config: ConfiguracionPlantillaInstalacion,
+) {
+  return apiRequest<PlantillaInstalacion>(
+    `/recorridos-vectoriales/items/${itemId}/plantilla-instalacion?${templateParams(config)}`,
+  );
+}
+
+export function descargaPlantillaInstalacionHref(
+  itemId: string,
+  config: ConfiguracionPlantillaInstalacion,
+  panel?: number,
+) {
+  const params = templateParams(config);
+  if (panel != null) params.set("panel", String(panel));
+  return `/api/backend/recorridos-vectoriales/items/${itemId}/plantilla-instalacion/descargar?${params}`;
+}
+
+export type FormatoArchivoInstalacion =
+  | "paquete"
+  | "plano-pdf"
+  | "papel-plotter-pdf"
+  | "papel-mosaico-pdf"
+  | "rigida-dxf"
+  | "vinilo-eps"
+  | "pounce-dxf";
+
+export function descargaArchivoInstalacionHref(
+  itemId: string,
+  config: ConfiguracionPlantillaInstalacion,
+  formato: FormatoArchivoInstalacion,
+  panel?: number,
+) {
+  const params = templateParams(config);
+  if (panel != null) params.set("panel", String(panel));
+  return `/api/backend/recorridos-vectoriales/items/${itemId}/plantilla-instalacion/archivos/${formato}?${params}`;
+}
+
+function templateParams(config: ConfiguracionPlantillaInstalacion) {
+  return new URLSearchParams({
+    bordeMm: String(config.bordeMm),
+    anchoPanelMm: String(config.anchoPanelMm),
+    altoPanelMm: String(config.altoPanelMm),
+    solapeMm: String(config.solapeMm),
+  });
+}

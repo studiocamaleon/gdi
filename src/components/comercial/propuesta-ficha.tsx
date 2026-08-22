@@ -184,6 +184,7 @@ import {
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-panel";
+import { PlantillaInstalacionPanel } from "@/components/produccion/plantilla-instalacion-panel";
 import {
   crearSvgDePlaca,
   descargarTexto,
@@ -2271,7 +2272,10 @@ function ProduccionItemView({
                 {prepararCorte &&
                 activeNestingTab.paso.familiaCodigo ===
                   "corte_hilo_caliente" ? (
-                  <RecorridoCortePanel itemId={item.id} />
+                  <>
+                    <RecorridoCortePanel itemId={item.id} />
+                    <PlantillaInstalacionPanel itemId={item.id} />
+                  </>
                 ) : null}
               </div>
             ) : null}

@@ -577,7 +577,9 @@ function runIrregularPlaca(
       cached.parametros.separacionMm === separacionUniforme &&
       cached.parametros.permitirRotacion === config.allowRotation &&
       cached.parametros.preservarComposicionOriginalSiEntra ===
-        config.preservarComposicionOriginalSiEntra;
+        config.preservarComposicionOriginalSiEntra &&
+      JSON.stringify(cached.parametros.configuracionEncastres) ===
+        JSON.stringify(config.configuracionEncastres);
     if (cacheMatches) marcarNestingVectorialReutilizado(jobContext);
     const result =
       cacheMatches && cached
@@ -592,6 +594,7 @@ function runIrregularPlaca(
             permitirRotacion: config.allowRotation,
             preservarComposicionOriginalSiEntra:
               config.preservarComposicionOriginalSiEntra,
+            configuracionEncastres: config.configuracionEncastres,
           });
     const substrates: SubstrateUsage[] = Array.from(
       { length: result.placas },
@@ -654,6 +657,7 @@ function runIrregularPlaca(
         segmentos: result.segmentos,
         unionesFisicas: result.unionesFisicas,
         uniones: result.uniones,
+        configuracionEncastres: config.configuracionEncastres,
         estrategiaDisposicion: result.estrategiaDisposicion,
       },
       piezasAcomodadas: result.placements.length,

@@ -18,6 +18,7 @@ import { AnalizarSvgFabricacionDto } from './geometria-vectorial/analizar-svg.dt
 import { SvgFabricacionError } from './geometria-vectorial/svg-parser';
 import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
 import { GeometriaVectorialCacheService } from './geometria-vectorial/geometria-vectorial-cache.service';
+import { resolverConfiguracionEncastresVectoriales } from './geometria-vectorial/segmentacion-encastres';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -64,6 +65,9 @@ export class MotorUniversalController {
           permitirRotacion: dto.permitirRotacion !== false,
           preservarComposicionOriginalSiEntra:
             dto.preservarComposicionOriginalSiEntra === true,
+          configuracionEncastres: resolverConfiguracionEncastresVectoriales(
+            dto.configuracionEncastres,
+          ),
         },
       });
       return {
@@ -72,6 +76,7 @@ export class MotorUniversalController {
         cacheHit,
         geometria: entry.analisis.geometria,
         nesting: entry.nesting,
+        configuracionEncastres: entry.parametros.configuracionEncastres,
         diagnosticos: entry.analisis.diagnosticos,
       };
     } catch (error) {

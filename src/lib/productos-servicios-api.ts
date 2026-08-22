@@ -941,6 +941,7 @@ export interface NestingViewerInput {
   piezasAcomodadas: number;
   estrategiaDisposicion?: "composicion_original" | "nesting_optimizado";
   outputsCanonicos?: Record<string, unknown>;
+  metricasRaw?: Record<string, unknown>;
   visualConfig?: {
     margins: {
       leftMm: number;
@@ -1355,11 +1356,115 @@ export async function cotizar(
   });
 }
 
+export type ConfiguracionEncastresVectoriales = {
+  tipoUnion: "cola_milano" | "recta";
+  anchoEncastreMm: number;
+  profundidadEncastreMm: number;
+  modoCantidad: "por_distancia" | "cantidad_fija";
+  distanciaMaximaMm: number;
+  cantidadFija: number;
+  cantidadMinima: number;
+  cantidadMaxima: number;
+  kerfMm: number;
+};
+
+export const CONFIGURACION_ENCASTRES_VECTORIALES_DEFAULT: ConfiguracionEncastresVectoriales =
+  {
+    tipoUnion: "cola_milano",
+    anchoEncastreMm: 30,
+    profundidadEncastreMm: 30,
+    modoCantidad: "por_distancia",
+    distanciaMaximaMm: 100,
+    cantidadFija: 1,
+    cantidadMinima: 1,
+    cantidadMaxima: 100,
+    kerfMm: 0.3,
+  };
+
+export function resolverConfiguracionEncastresVectoriales(
+  value: Record<string, unknown> | null | undefined,
+): ConfiguracionEncastresVectoriales {
+  const defaults = CONFIGURACION_ENCASTRES_VECTORIALES_DEFAULT;
+  const cantidadMinima = Math.round(
+    numeroConfiguracion(
+      value?.cantidadMinimaEncastres ?? value?.cantidadMinima,
+      defaults.cantidadMinima,
+      1,
+      100,
+    ),
+  );
+  return {
+    tipoUnion:
+      value?.tipoUnionVectorial === "recta" || value?.tipoUnion === "recta"
+        ? "recta"
+        : "cola_milano",
+    anchoEncastreMm: numeroConfiguracion(
+      value?.anchoEncastreMm,
+      defaults.anchoEncastreMm,
+      1,
+      500,
+    ),
+    profundidadEncastreMm: numeroConfiguracion(
+      value?.profundidadEncastreMm,
+      defaults.profundidadEncastreMm,
+      1,
+      500,
+    ),
+    modoCantidad:
+      value?.modoCantidadEncastres === "cantidad_fija" ||
+      value?.modoCantidad === "cantidad_fija"
+        ? "cantidad_fija"
+        : "por_distancia",
+    distanciaMaximaMm: numeroConfiguracion(
+      value?.distanciaMaximaEncastresMm ?? value?.distanciaMaximaMm,
+      defaults.distanciaMaximaMm,
+      10,
+      10_000,
+    ),
+    cantidadFija: Math.round(
+      numeroConfiguracion(
+        value?.cantidadFijaEncastres ?? value?.cantidadFija,
+        defaults.cantidadFija,
+        1,
+        100,
+      ),
+    ),
+    cantidadMinima,
+    cantidadMaxima: Math.round(
+      numeroConfiguracion(
+        value?.cantidadMaximaEncastres ?? value?.cantidadMaxima,
+        defaults.cantidadMaxima,
+        cantidadMinima,
+        100,
+      ),
+    ),
+    kerfMm: numeroConfiguracion(
+      value?.kerfEncastreMm ?? value?.kerfMm,
+      defaults.kerfMm,
+      0,
+      10,
+    ),
+  };
+}
+
+function numeroConfiguracion(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? Math.max(min, Math.min(max, parsed))
+    : fallback;
+}
+
 export interface AnalisisSvgFabricacion {
   nombreArchivo: string;
   /** Identificador del resultado cacheado en el API; no contiene métricas confiadas. */
   cacheKey?: string;
   cacheHit?: boolean;
+  configuracionEncastres: ConfiguracionEncastresVectoriales;
   geometria: {
     schemaVersion: 1;
     anchoMm: number;
@@ -1420,7 +1525,7 @@ export interface AnalisisSvgFabricacion {
     uniones?: Array<{
       id: string;
       piezaOrigenId: string;
-      tipoEncastre: "cola_milano";
+      tipoEncastre: "cola_milano" | "recta";
       eje: "vertical" | "horizontal";
       posicionMm: number;
       largoMm: number;
@@ -1450,6 +1555,7 @@ export async function analizarSvgFabricacion(req: {
   separacionMm?: number;
   permitirRotacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
+  configuracionEncastres?: ConfiguracionEncastresVectoriales;
 }): Promise<AnalisisSvgFabricacion> {
   return apiRequest<AnalisisSvgFabricacion>(
     "/motor-universal/geometria-vectorial/analizar",

@@ -4,6 +4,7 @@ import {
   marcarNestingVectorialReutilizado,
   nestingVectorialFueReutilizado,
 } from './geometria-vectorial-cache.service';
+import { CONFIGURACION_ENCASTRES_DEFAULT } from './segmentacion-encastres';
 
 const SVG = `
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
@@ -23,6 +24,7 @@ function input(tenantId = 'tenant-a') {
       separacionMm: 5,
       permitirRotacion: true,
       preservarComposicionOriginalSiEntra: false,
+      configuracionEncastres: CONFIGURACION_ENCASTRES_DEFAULT,
     },
   };
 }
@@ -116,6 +118,24 @@ describe('GeometriaVectorialCacheService', () => {
     expect(changed.entry.nesting.estrategiaDisposicion).toBe(
       'composicion_original',
     );
+  });
+
+  it('invalida el nesting cacheado cuando cambia la política de encastres', () => {
+    const service = new GeometriaVectorialCacheService();
+    const first = service.analizar(input());
+    const changed = service.analizar({
+      ...input(),
+      parametros: {
+        ...input().parametros,
+        configuracionEncastres: {
+          ...CONFIGURACION_ENCASTRES_DEFAULT,
+          tipoUnion: 'recta' as const,
+        },
+      },
+    });
+
+    expect(changed.cacheHit).toBe(false);
+    expect(changed.entry.cacheKey).not.toBe(first.entry.cacheKey);
   });
 
   it('registra el hit solamente cuando el dispatcher reutiliza el nesting', () => {

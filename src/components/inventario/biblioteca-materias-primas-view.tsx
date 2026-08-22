@@ -1439,7 +1439,11 @@ function Wizard({
         </div>
         {step < 3 && (
           <div className={s.sheetFoot}>
-            <button className={`${s.btn} ghost`} onClick={onClose} type="button">
+            <button
+              className={`${s.btn} ghost`}
+              onClick={onClose}
+              type="button"
+            >
               Cancelar
             </button>
             <div className="spacer" />
@@ -1747,7 +1751,8 @@ function StepVariantes({
   const disponible = (variant: MaterialPresetVariant) =>
     separado || !variant.instalada;
   const selectedCount = item.variantes.filter(
-    (variant) => draft.selectedVariantIds.has(variant.id) && disponible(variant),
+    (variant) =>
+      draft.selectedVariantIds.has(variant.id) && disponible(variant),
   ).length;
   const totalAvailable = item.variantes.filter(disponible).length;
   const toggle = (variant: MaterialPresetVariant) => {
@@ -1835,9 +1840,7 @@ function StepVariantes({
                     </div>
                   </div>
                   {bloqueada ? (
-                    <span className={s.variantInstalledTag}>
-                      ya instalada
-                    </span>
+                    <span className={s.variantInstalledTag}>ya instalada</span>
                   ) : (
                     <span style={{ width: 70 }} />
                   )}
@@ -2100,7 +2103,10 @@ function variantHelpText(item: MaterialPresetListItem) {
   if (item.templateId === "sustrato_hoja_v1") {
     return "Seleccioná los formatos, gramajes y acabados que realmente usás.";
   }
-  if (item.templateId === "sustrato_rollo_flexible_v1") {
+  if (
+    item.templateId === "sustrato_rollo_flexible_v1" ||
+    item.templateId === "vinilo_esmerilado_rollo_v1"
+  ) {
     return "Seleccioná los anchos de rollo y acabados que realmente usás.";
   }
   if (item.templateId === "tinta_impresion_v1") {
@@ -2149,7 +2155,10 @@ function variantDescriptor(
       .filter(Boolean)
       .join(" · ");
   }
-  if (item.templateId === "sustrato_rollo_flexible_v1") {
+  if (
+    item.templateId === "sustrato_rollo_flexible_v1" ||
+    item.templateId === "vinilo_esmerilado_rollo_v1"
+  ) {
     const attrs = variant.atributosVariante;
     const ancho = numberAttr(attrs, "ancho");
     const largo = numberAttr(attrs, "largo");
@@ -2273,7 +2282,10 @@ function variantDescriptor(
     const attrs = variant.atributosVariante;
     const tipo = stringAttr(attrs, "tipoPortabanner");
     const linea = stringAttr(attrs, "linea");
-    return [tipo, linea && linea !== "Estándar" ? `línea ${linea.toLowerCase()}` : null]
+    return [
+      tipo,
+      linea && linea !== "Estándar" ? `línea ${linea.toLowerCase()}` : null,
+    ]
       .filter(Boolean)
       .join(" · ");
   }
