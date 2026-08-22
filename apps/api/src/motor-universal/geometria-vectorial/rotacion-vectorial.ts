@@ -1,7 +1,9 @@
 import type { ContornoVectorial } from './tipos';
 
 export const ANGULOS_ROTACION_VECTORIAL = Array.from(
-  { length: 36 },
+  // Las siluetas no son necesariamente simétricas: 0° y 180° pueden tener la
+  // misma caja exterior y, aun así, encajar de manera completamente distinta.
+  { length: 72 },
   (_, index) => index * 5,
 );
 

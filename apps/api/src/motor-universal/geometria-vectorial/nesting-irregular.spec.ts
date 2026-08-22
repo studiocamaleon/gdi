@@ -1,9 +1,6 @@
-import {
-  nestearGeometriaIrregular,
-  NestingIrregularError,
-} from './nesting-irregular';
+import { nestearGeometriaIrregular } from './nesting-irregular';
 import { segmentarPiezasConEncastres } from './segmentacion-encastres';
-import type { GeometriaVectorialCanonica } from './tipos';
+import type { GeometriaVectorialCanonica, PiezaVectorial } from './tipos';
 
 const triangle: GeometriaVectorialCanonica = {
   schemaVersion: 1,
@@ -129,9 +126,9 @@ describe('nestearGeometriaIrregular', () => {
 
     expect(result.placas).toBe(2);
     expect(result.placements).toHaveLength(4);
-    expect(new Set(result.placements.map((item) => item.substrateIndex))).toEqual(
-      new Set([0, 1]),
-    );
+    expect(
+      new Set(result.placements.map((item) => item.substrateIndex)),
+    ).toEqual(new Set([0, 1]));
   });
 
   it('vuelve al nesting optimizado cuando la composición completa no entra', () => {
@@ -162,6 +159,171 @@ describe('nestearGeometriaIrregular', () => {
     expect(result.placas).toBe(1);
     expect(result.placements).toHaveLength(2);
     expect(result.aprovechamientoPct).toBe(50);
+  });
+
+  it('prefiere una orientación cardinal cuando inclinar no ahorra placas', () => {
+    const result = nestearGeometriaIrregular({
+      geometria: triangle,
+      cantidad: 1,
+      anchoPlacaMm: 100,
+      altoPlacaMm: 100,
+      permitirRotacion: true,
+    });
+
+    expect(result.placas).toBe(1);
+    expect(result.placements[0].rotacion % 90).toBe(0);
+  });
+
+  it('conserva una rotación libre cuando es la única forma de evitar otra placa', () => {
+    const diamante: GeometriaVectorialCanonica = {
+      schemaVersion: 1,
+      anchoMm: 100,
+      altoMm: 100,
+      piezas: [
+        {
+          id: 'diamante',
+          anchoMm: 100,
+          altoMm: 100,
+          areaMm2: 5_000,
+          perimetroMm: 282.843,
+          contornos: [
+            {
+              esHueco: false,
+              puntos: [
+                { x: 50, y: 0 },
+                { x: 100, y: 50 },
+                { x: 50, y: 100 },
+                { x: 0, y: 50 },
+              ],
+            },
+          ],
+        },
+      ],
+      areaTotalMm2: 5_000,
+      perimetroTotalMm: 282.843,
+      hashFuente: 'diamante',
+    };
+    const result = nestearGeometriaIrregular({
+      geometria: diamante,
+      cantidad: 1,
+      anchoPlacaMm: 80,
+      altoPlacaMm: 80,
+      permitirRotacion: true,
+    });
+
+    expect(result.placas).toBe(1);
+    expect(result.placements[0].rotacion % 90).not.toBe(0);
+  });
+
+  it('no descarta 180° cuando comparte caja exterior con 0°', () => {
+    const medioRectangulo: GeometriaVectorialCanonica = {
+      schemaVersion: 1,
+      anchoMm: 80,
+      altoMm: 50,
+      piezas: [
+        {
+          id: 'triangulo-recto',
+          anchoMm: 80,
+          altoMm: 50,
+          areaMm2: 2_000,
+          perimetroMm: 224.34,
+          contornos: [
+            {
+              esHueco: false,
+              puntos: [
+                { x: 0, y: 0 },
+                { x: 80, y: 0 },
+                { x: 0, y: 50 },
+              ],
+            },
+          ],
+        },
+      ],
+      areaTotalMm2: 2_000,
+      perimetroTotalMm: 224.34,
+      hashFuente: 'medio-rectangulo',
+    };
+    const result = nestearGeometriaIrregular({
+      geometria: medioRectangulo,
+      cantidad: 2,
+      anchoPlacaMm: 80,
+      altoPlacaMm: 50,
+      permitirRotacion: true,
+    });
+
+    expect(result.placas).toBe(1);
+    expect(result.placements.map((item) => item.rotacion)).toContain(180);
+  });
+
+  it('puede ubicar una pieza dentro de un hueco real del vector', () => {
+    const geometriaConAro: GeometriaVectorialCanonica = {
+      schemaVersion: 1,
+      anchoMm: 100,
+      altoMm: 100,
+      piezas: [
+        {
+          id: 'aro',
+          anchoMm: 100,
+          altoMm: 100,
+          areaMm2: 8_400,
+          perimetroMm: 560,
+          contornos: [
+            {
+              esHueco: false,
+              puntos: [
+                { x: 0, y: 0 },
+                { x: 100, y: 0 },
+                { x: 100, y: 100 },
+                { x: 0, y: 100 },
+              ],
+            },
+            {
+              esHueco: true,
+              puntos: [
+                { x: 30, y: 30 },
+                { x: 70, y: 30 },
+                { x: 70, y: 70 },
+                { x: 30, y: 70 },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'cuadrado-interior',
+          anchoMm: 30,
+          altoMm: 30,
+          areaMm2: 900,
+          perimetroMm: 120,
+          contornos: [
+            {
+              esHueco: false,
+              puntos: [
+                { x: 0, y: 0 },
+                { x: 30, y: 0 },
+                { x: 30, y: 30 },
+                { x: 0, y: 30 },
+              ],
+            },
+          ],
+        },
+      ],
+      areaTotalMm2: 9_300,
+      perimetroTotalMm: 680,
+      hashFuente: 'aro-con-pieza',
+    };
+    const result = nestearGeometriaIrregular({
+      geometria: geometriaConAro,
+      cantidad: 1,
+      anchoPlacaMm: 100,
+      altoPlacaMm: 100,
+      separacionMm: 2,
+      permitirRotacion: false,
+    });
+
+    expect(result.placas).toBe(1);
+    expect(result.placements).toHaveLength(2);
+    expect(result.placements[1].xMm).toBeGreaterThanOrEqual(32);
+    expect(result.placements[1].yMm).toBeGreaterThanOrEqual(32);
   });
 
   it('abre otra placa cuando no hay lugar', () => {
@@ -445,4 +607,86 @@ describe('nestearGeometriaIrregular', () => {
       result.uniones.every((union) => union.profundidadEncastreMm === 30),
     ).toBe(true);
   });
+
+  it('permite dividir con uniones rectas sin encastres', () => {
+    const pieza = piezaRectangular('recta', 1_800, 400);
+    const result = segmentarPiezasConEncastres({
+      piezas: [pieza],
+      anchoUtilMm: 1_000,
+      altoUtilMm: 500,
+      configuracionEncastres: {
+        tipoUnion: 'recta',
+      },
+    });
+
+    expect(result.piezas.length).toBeGreaterThan(1);
+    expect(result.uniones.length).toBeGreaterThan(0);
+    expect(result.uniones).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tipoEncastre: 'recta',
+          cantidadEncastres: 0,
+          anchoEncastreMm: 0,
+          profundidadEncastreMm: 0,
+        }),
+      ]),
+    );
+  });
+
+  it('respeta tamaño, cantidad fija y kerf configurados', () => {
+    const pieza = piezaRectangular('personalizada', 1_800, 400);
+    const result = segmentarPiezasConEncastres({
+      piezas: [pieza],
+      anchoUtilMm: 1_000,
+      altoUtilMm: 500,
+      configuracionEncastres: {
+        tipoUnion: 'cola_milano',
+        anchoEncastreMm: 40,
+        profundidadEncastreMm: 20,
+        modoCantidad: 'cantidad_fija',
+        distanciaMaximaMm: 100,
+        cantidadFija: 3,
+        cantidadMinima: 1,
+        cantidadMaxima: 10,
+        kerfMm: 0.5,
+      },
+    });
+
+    expect(result.uniones.length).toBeGreaterThan(0);
+    expect(
+      result.uniones.every(
+        (union) =>
+          union.tipoEncastre === 'cola_milano' &&
+          union.anchoEncastreMm === 40 &&
+          union.profundidadEncastreMm === 20 &&
+          union.cantidadEncastres === 3 &&
+          union.kerfMm === 0.5,
+      ),
+    ).toBe(true);
+  });
 });
+
+function piezaRectangular(
+  id: string,
+  anchoMm: number,
+  altoMm: number,
+): PiezaVectorial {
+  return {
+    id,
+    anchoMm,
+    altoMm,
+    areaMm2: anchoMm * altoMm,
+    perimetroMm: (anchoMm + altoMm) * 2,
+    contornos: [
+      {
+        esHueco: false,
+        puntos: [
+          { x: 0, y: 0 },
+          { x: anchoMm, y: 0 },
+          { x: anchoMm, y: altoMm },
+          { x: 0, y: altoMm },
+        ],
+      },
+    ],
+  };
+}

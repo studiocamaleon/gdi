@@ -17,7 +17,10 @@ import { toast } from "sonner";
 
 import { updateMateriaPrima } from "@/lib/materias-primas-api";
 import { getKardex, getStockActual } from "@/lib/inventario-stock-api";
-import type { MovimientoStockMateriaPrima, StockMateriaPrimaItem } from "@/lib/inventario-stock";
+import type {
+  MovimientoStockMateriaPrima,
+  StockMateriaPrimaItem,
+} from "@/lib/inventario-stock";
 import {
   familiaMateriaPrimaItems,
   unidadMateriaPrimaItems,
@@ -73,17 +76,27 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { formatearMoneda, numeroMoneda, type Moneda } from "@/lib/moneda";
 import { MoneyInput } from "@/components/ui/money-input";
-import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
+import {
+  useConfigRegional,
+  useFecha,
+} from "@/components/navigation/config-regional-provider";
 
 const number2Formatter = new Intl.NumberFormat("es-AR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-const subfamiliaMateriaPrimaItems: Array<{ value: SubfamiliaMateriaPrima; label: string }> = [
+const subfamiliaMateriaPrimaItems: Array<{
+  value: SubfamiliaMateriaPrima;
+  label: string;
+}> = [
   { value: "sustrato_hoja", label: "Sustrato hoja" },
   { value: "sustrato_rollo_flexible", label: "Sustrato rollo flexible" },
   { value: "sustrato_rigido", label: "Sustrato rígido" },
@@ -123,7 +136,10 @@ const subfamiliaMateriaPrimaItems: Array<{ value: SubfamiliaMateriaPrima; label:
   { value: "sistema_colgado_montaje", label: "Sistema colgado/montaje" },
   { value: "perfil_bastidor_textil", label: "Perfil bastidor textil" },
   { value: "cinta_doble_faz_tecnica", label: "Cinta doble faz técnica" },
-  { value: "adhesivo_liquido_estructural", label: "Adhesivo líquido estructural" },
+  {
+    value: "adhesivo_liquido_estructural",
+    label: "Adhesivo líquido estructural",
+  },
   { value: "velcro_cierre_tecnico", label: "Velcro/cierre técnico" },
   { value: "embalaje_proteccion", label: "Embalaje/protección" },
   { value: "etiquetado_identificacion", label: "Etiquetado/identificación" },
@@ -159,7 +175,6 @@ function resolveVarianteUnits(
     unidadCompra: fallbackCompra,
   };
 }
-
 
 type LocalVariante = {
   id: string;
@@ -220,7 +235,11 @@ type InventarioVarianteResumen = {
  */
 function displayUnitFactor(
   field:
-    | { type: "text" | "number" | "boolean"; unit?: UnitCode; preferredDisplayUnit?: UnitCode }
+    | {
+        type: "text" | "number" | "boolean";
+        unit?: UnitCode;
+        preferredDisplayUnit?: UnitCode;
+      }
     | undefined,
 ): { factor: number; symbol: string } | null {
   if (!field || field.type !== "number") return null;
@@ -288,6 +307,12 @@ const SHEET_LIKE_TEMPLATE_IDS = new Set([
   "componente_editorial_hoja_v1",
 ]);
 
+const ROLL_LIKE_TEMPLATE_IDS = new Set([
+  "sustrato_rollo_flexible_v1",
+  "vinilo_esmerilado_rollo_v1",
+  "vinilo_de_corte_rollo_v1",
+]);
+
 function normalizeVarianteAtributos(
   attrs: Record<string, unknown>,
   templateId?: string,
@@ -297,12 +322,14 @@ function normalizeVarianteAtributos(
 
   if (SHEET_LIKE_TEMPLATE_IDS.has(normalizedTemplateId ?? "")) {
     setNumberIfMissing(normalized, "ancho", normalized.anchoMm, 10);
-    setNumberIfMissing(normalized, "alto", normalized.largoMm ?? normalized.altoMm, 10);
+    setNumberIfMissing(
+      normalized,
+      "alto",
+      normalized.largoMm ?? normalized.altoMm,
+      10,
+    );
     setNumberIfMissing(normalized, "gramaje", normalized.gramajeGr);
-  } else if (
-    normalizedTemplateId === "sustrato_rollo_flexible_v1" ||
-    normalizedTemplateId === "vinilo_de_corte_rollo_v1"
-  ) {
+  } else if (ROLL_LIKE_TEMPLATE_IDS.has(normalizedTemplateId ?? "")) {
     setNumberIfMissing(normalized, "ancho", normalized.anchoMm, 1000);
     setNumberIfMissing(
       normalized,
@@ -312,7 +339,12 @@ function normalizeVarianteAtributos(
     );
   } else if (normalizedTemplateId === "sustrato_rigido_v1") {
     setNumberIfMissing(normalized, "ancho", normalized.anchoMm, 1000);
-    setNumberIfMissing(normalized, "alto", normalized.largoMm ?? normalized.altoMm, 1000);
+    setNumberIfMissing(
+      normalized,
+      "alto",
+      normalized.largoMm ?? normalized.altoMm,
+      1000,
+    );
     setNumberIfMissing(normalized, "espesor", normalized.espesorMm);
   } else if (normalizedTemplateId === "laminado_film_v1") {
     setNumberIfMissing(normalized, "ancho", normalized.anchoMm);
@@ -324,8 +356,16 @@ function normalizeVarianteAtributos(
     );
   } else if (normalizedTemplateId === "laminado_pouch_v1") {
     setNumberIfMissing(normalized, "ancho", normalized.anchoMm);
-    setNumberIfMissing(normalized, "alto", normalized.altoMm ?? normalized.largoMm);
-    setNumberIfMissing(normalized, "margenNoUsable", normalized.margenNoUsableMm);
+    setNumberIfMissing(
+      normalized,
+      "alto",
+      normalized.altoMm ?? normalized.largoMm,
+    );
+    setNumberIfMissing(
+      normalized,
+      "margenNoUsable",
+      normalized.margenNoUsableMm,
+    );
     setNumberIfMissing(normalized, "espesor", normalized.espesorMicrones);
   } else if (normalizedTemplateId === "iman_flexible_rollo_v1") {
     setNumberIfMissing(normalized, "ancho", normalized.anchoMm);
@@ -437,7 +477,11 @@ function mapMateriaPrimaToForm(
     esRepuesto: materiaPrima.esRepuesto,
     esProductoBase: materiaPrima.esProductoBase ?? false,
     activo: materiaPrima.activo,
-    atributosTecnicosTexto: JSON.stringify(materiaPrima.atributosTecnicos ?? {}, null, 2),
+    atributosTecnicosTexto: JSON.stringify(
+      materiaPrima.atributosTecnicos ?? {},
+      null,
+      2,
+    ),
     variantes:
       materiaPrima.variantes.length > 0
         ? materiaPrima.variantes.map((variante) => ({
@@ -471,7 +515,9 @@ function buildPayload(
   templateFields: Array<{ key: string; type: "text" | "number" | "boolean" }>,
 ): MateriaPrimaPayload {
   const numberFieldKeys = new Set(
-    templateFields.filter((field) => field.type === "number").map((field) => field.key),
+    templateFields
+      .filter((field) => field.type === "number")
+      .map((field) => field.key),
   );
 
   const normalizeAttrsForSave = (attrs: Record<string, unknown>) => {
@@ -491,10 +537,7 @@ function buildPayload(
       setLegacyNumber(normalized, "altoMm", normalized.alto, 10);
       setLegacyNumber(normalized, "largoMm", normalized.alto, 10);
       setLegacyNumber(normalized, "gramajeGr", normalized.gramaje);
-    } else if (
-      normalizedTemplateId === "sustrato_rollo_flexible_v1" ||
-      normalizedTemplateId === "vinilo_de_corte_rollo_v1"
-    ) {
+    } else if (ROLL_LIKE_TEMPLATE_IDS.has(normalizedTemplateId ?? "")) {
       setLegacyNumber(normalized, "anchoMm", normalized.ancho, 1000);
       setLegacyNumber(normalized, "largoMm", normalized.largo, 1000);
       setLegacyNumber(normalized, "largoRolloMm", normalized.largo, 1000);
@@ -511,7 +554,11 @@ function buildPayload(
       setLegacyNumber(normalized, "anchoMm", normalized.ancho);
       setLegacyNumber(normalized, "altoMm", normalized.alto);
       setLegacyNumber(normalized, "largoMm", normalized.alto);
-      setLegacyNumber(normalized, "margenNoUsableMm", normalized.margenNoUsable);
+      setLegacyNumber(
+        normalized,
+        "margenNoUsableMm",
+        normalized.margenNoUsable,
+      );
       setLegacyNumber(normalized, "espesorMicrones", normalized.espesor);
     } else if (normalizedTemplateId === "iman_flexible_rollo_v1") {
       setLegacyNumber(normalized, "anchoMm", normalized.ancho);
@@ -530,7 +577,11 @@ function buildPayload(
       setLegacyNumber(normalized, "anchoMm", normalized.ancho, 10);
       setLegacyNumber(normalized, "altoMm", normalized.alto, 10);
       setLegacyNumber(normalized, "largoMm", normalized.alto, 10);
-      setLegacyNumber(normalized, "piezasPorCaja", normalized.capacidadUnidades);
+      setLegacyNumber(
+        normalized,
+        "piezasPorCaja",
+        normalized.capacidadUnidades,
+      );
     }
     return normalized;
   };
@@ -552,7 +603,9 @@ function buildPayload(
     atributosTecnicos: parseJsonField(form.atributosTecnicosTexto, {}),
     variantes: form.variantes
       .map((variante, index) => {
-        const attrs = normalizeAttrsForSave(parseJsonField(variante.atributosVarianteTexto, {}));
+        const attrs = normalizeAttrsForSave(
+          parseJsonField(variante.atributosVarianteTexto, {}),
+        );
         const hasDimensionValue = templateDimensiones.some((key) => {
           const value = attrs[key];
           if (typeof value === "number") return Number.isFinite(value);
@@ -578,9 +631,13 @@ function buildPayload(
 }
 
 function createFormSnapshot(form: FormState) {
-  const templateDimensiones = getMateriaPrimaTemplate(form.templateId)?.dimensionesVariante ?? [];
-  const templateFields = getMateriaPrimaTemplate(form.templateId)?.camposTecnicos ?? [];
-  return JSON.stringify(sortForStableJson(buildPayload(form, templateDimensiones, templateFields)));
+  const templateDimensiones =
+    getMateriaPrimaTemplate(form.templateId)?.dimensionesVariante ?? [];
+  const templateFields =
+    getMateriaPrimaTemplate(form.templateId)?.camposTecnicos ?? [];
+  return JSON.stringify(
+    sortForStableJson(buildPayload(form, templateDimensiones, templateFields)),
+  );
 }
 
 function formatFieldLabel(key: string) {
@@ -610,8 +667,13 @@ function getTemplateOptionLabel(fieldKey: string, value: string) {
   if (fieldKey === "unidadVidaUtil") {
     return unidadVidaUtilLabelMap[value] ?? formatFieldLabel(value);
   }
-  if (fieldKey === "plantillasCompatibles" || fieldKey === "plantillaCompatible") {
-    return getPlantillaMaquinariaLabel(value as Parameters<typeof getPlantillaMaquinariaLabel>[0]);
+  if (
+    fieldKey === "plantillasCompatibles" ||
+    fieldKey === "plantillaCompatible"
+  ) {
+    return getPlantillaMaquinariaLabel(
+      value as Parameters<typeof getPlantillaMaquinariaLabel>[0],
+    );
   }
 
   return value;
@@ -643,22 +705,35 @@ function getMovimientoTipoLabel(tipo: string) {
   }
 }
 
-export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: MateriaPrimaFichaProps) {
+export function MateriaPrimaFicha({
+  materiaPrima,
+  proveedores,
+  maquinas,
+}: MateriaPrimaFichaProps) {
   const { moneda } = useConfigRegional();
   const { fechaNumerica, hora } = useFecha();
-  const formatFechaCorta = (value: string) => `${fechaNumerica(value)} ${hora(value)}`;
+  const formatFechaCorta = (value: string) =>
+    `${fechaNumerica(value)} ${hora(value)}`;
   const router = useRouter();
-  const [form, setForm] = React.useState<FormState>(() => mapMateriaPrimaToForm(materiaPrima, moneda));
+  const [form, setForm] = React.useState<FormState>(() =>
+    mapMateriaPrimaToForm(materiaPrima, moneda),
+  );
   const [savedSnapshot, setSavedSnapshot] = React.useState(() =>
     createFormSnapshot(mapMateriaPrimaToForm(materiaPrima, moneda)),
   );
   const [activeTab, setActiveTab] = React.useState("datos-base");
   const [isSaving, setIsSaving] = React.useState(false);
-  const [inventarioResumen, setInventarioResumen] = React.useState<InventarioVarianteResumen[]>([]);
+  const [inventarioResumen, setInventarioResumen] = React.useState<
+    InventarioVarianteResumen[]
+  >([]);
   const [inventarioLoading, setInventarioLoading] = React.useState(false);
-  const [customFormatoModeByVariante, setCustomFormatoModeByVariante] = React.useState<Record<string, boolean>>({});
+  const [customFormatoModeByVariante, setCustomFormatoModeByVariante] =
+    React.useState<Record<string, boolean>>({});
 
-  const template = React.useMemo(() => getMateriaPrimaTemplate(form.templateId), [form.templateId]);
+  const template = React.useMemo(
+    () => getMateriaPrimaTemplate(form.templateId),
+    [form.templateId],
+  );
   const templateAvailability = React.useMemo(
     () => getMateriaPrimaTemplateAvailability(form.templateId),
     [form.templateId],
@@ -669,11 +744,18 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
     [templateFields],
   );
   const familiaLabel = getLabel(familiaMateriaPrimaItems, form.familia);
-  const subfamiliaLabel = getLabel(subfamiliaMateriaPrimaItems, form.subfamilia);
+  const subfamiliaLabel = getLabel(
+    subfamiliaMateriaPrimaItems,
+    form.subfamilia,
+  );
   const unidadStockLabel = getLabel(unidadMateriaPrimaItems, form.unidadStock);
-  const unidadCompraLabel = getLabel(unidadMateriaPrimaItems, form.unidadCompra);
+  const unidadCompraLabel = getLabel(
+    unidadMateriaPrimaItems,
+    form.unidadCompra,
+  );
   const proveedorLabelById = React.useMemo(
-    () => new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
+    () =>
+      new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
     [proveedores],
   );
   const maquinaLabelById = React.useMemo(
@@ -694,7 +776,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
     return [];
   }, [template]);
   const formatoHojaById = React.useMemo(
-    () => new Map(SUSTRATO_HOJA_FORMATOS_PRESET.map((formato) => [formato.id, formato])),
+    () =>
+      new Map(
+        SUSTRATO_HOJA_FORMATOS_PRESET.map((formato) => [formato.id, formato]),
+      ),
     [],
   );
   const currentSnapshot = React.useMemo(() => createFormSnapshot(form), [form]);
@@ -712,7 +797,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
       let changed = false;
       const next = { ...prev };
 
-      if (templateAvailability.lockEsRepuesto && prev.esRepuesto !== templateAvailability.esRepuesto) {
+      if (
+        templateAvailability.lockEsRepuesto &&
+        prev.esRepuesto !== templateAvailability.esRepuesto
+      ) {
         next.esRepuesto = templateAvailability.esRepuesto;
         changed = true;
       }
@@ -748,7 +836,9 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
     const loadInventario = async () => {
       setInventarioLoading(true);
       try {
-        const stockRows = await getStockActual({ materiaPrimaId: materiaPrima.id });
+        const stockRows = await getStockActual({
+          materiaPrimaId: materiaPrima.id,
+        });
         const byVariante = new Map<string, StockMateriaPrimaItem[]>();
 
         for (const row of stockRows) {
@@ -757,7 +847,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
           byVariante.set(row.varianteId, current);
         }
 
-        const ultimoMovimientoByVariante = new Map<string, MovimientoStockMateriaPrima | null>();
+        const ultimoMovimientoByVariante = new Map<
+          string,
+          MovimientoStockMateriaPrima | null
+        >();
         await Promise.all(
           materiaPrima.variantes.map(async (variante) => {
             try {
@@ -766,30 +859,48 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                 page: 1,
                 pageSize: 1,
               });
-              ultimoMovimientoByVariante.set(variante.id, result.items[0] ?? null);
+              ultimoMovimientoByVariante.set(
+                variante.id,
+                result.items[0] ?? null,
+              );
             } catch {
               ultimoMovimientoByVariante.set(variante.id, null);
             }
           }),
         );
 
-        const rows: InventarioVarianteResumen[] = materiaPrima.variantes.map((variante) => {
-          const stockItems = byVariante.get(variante.id) ?? [];
-          const stockTotal = stockItems.reduce((acc, item) => acc + item.cantidadDisponible, 0);
-          const valorStock = stockItems.reduce((acc, item) => acc + item.valorStock, 0);
-          const costoPromedio =
-            stockTotal > 0 ? valorStock / stockTotal : (variante.precioReferencia ?? 0);
+        const rows: InventarioVarianteResumen[] = materiaPrima.variantes.map(
+          (variante) => {
+            const stockItems = byVariante.get(variante.id) ?? [];
+            const stockTotal = stockItems.reduce(
+              (acc, item) => acc + item.cantidadDisponible,
+              0,
+            );
+            const valorStock = stockItems.reduce(
+              (acc, item) => acc + item.valorStock,
+              0,
+            );
+            const costoPromedio =
+              stockTotal > 0
+                ? valorStock / stockTotal
+                : (variante.precioReferencia ?? 0);
 
-          return {
-            varianteId: variante.id,
-            varianteLabel: getMateriaPrimaVarianteLabel(materiaPrima, variante, { maxDimensiones: 5 }),
-            stockTotal,
-            costoPromedio,
-            valorStock,
-            almacenesConStock: stockItems.length,
-            ultimoMovimiento: ultimoMovimientoByVariante.get(variante.id) ?? null,
-          };
-        });
+            return {
+              varianteId: variante.id,
+              varianteLabel: getMateriaPrimaVarianteLabel(
+                materiaPrima,
+                variante,
+                { maxDimensiones: 5 },
+              ),
+              stockTotal,
+              costoPromedio,
+              valorStock,
+              almacenesConStock: stockItems.length,
+              ultimoMovimiento:
+                ultimoMovimientoByVariante.get(variante.id) ?? null,
+            };
+          },
+        );
 
         if (!cancelled) {
           setInventarioResumen(rows);
@@ -868,7 +979,8 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
   );
 
   const variantesPrecio = React.useMemo(
-    () => form.variantes.filter((variante) => hasVarianteDimensionValue(variante)),
+    () =>
+      form.variantes.filter((variante) => hasVarianteDimensionValue(variante)),
     [form.variantes, hasVarianteDimensionValue],
   );
   const showLaserWearRecommendation = React.useMemo(() => {
@@ -876,7 +988,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
       return false;
     }
     return form.variantes.some((variante) => {
-      const plantillas = getVarianteAtributoLista(variante, "plantillasCompatibles");
+      const plantillas = getVarianteAtributoLista(
+        variante,
+        "plantillasCompatibles",
+      );
       return plantillas.includes("impresora_laser");
     });
   }, [form.variantes, template?.id]);
@@ -885,15 +1000,24 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
       return false;
     }
     return form.variantes.some((variante) => {
-      const plantillas = getVarianteAtributoLista(variante, "plantillasCompatibles");
+      const plantillas = getVarianteAtributoLista(
+        variante,
+        "plantillasCompatibles",
+      );
       if (!plantillas.includes("impresora_laser")) {
         return false;
       }
-      const tipo = getVarianteAtributo(variante, "tipoComponenteDesgaste").trim().toLowerCase();
+      const tipo = getVarianteAtributo(variante, "tipoComponenteDesgaste")
+        .trim()
+        .toLowerCase();
       return COMPONENTES_UNIDAD_IMAGEN_LASER.has(tipo);
     });
   }, [form.variantes, template?.id]);
-  const setVarianteAtributo = (varianteId: string, key: string, value: string) => {
+  const setVarianteAtributo = (
+    varianteId: string,
+    key: string,
+    value: string,
+  ) => {
     const variante = form.variantes.find((item) => item.id === varianteId);
     if (!variante) return;
     const attrs = getVarianteAtributos(variante);
@@ -908,7 +1032,11 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
     });
   };
 
-  const setVarianteAtributoLista = (varianteId: string, key: string, values: string[]) => {
+  const setVarianteAtributoLista = (
+    varianteId: string,
+    key: string,
+    values: string[],
+  ) => {
     const variante = form.variantes.find((item) => item.id === varianteId);
     if (!variante) return;
     const attrs = getVarianteAtributos(variante);
@@ -923,12 +1051,17 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
 
   const findFormatoHojaPreset = (variante: LocalVariante) => {
     const attrs = getVarianteAtributos(variante);
-    const formato = String(attrs.formatoComercial ?? "").trim().toLowerCase();
+    const formato = String(attrs.formatoComercial ?? "")
+      .trim()
+      .toLowerCase();
     const ancho = Number(attrs.ancho);
     const alto = Number(attrs.alto);
     return SUSTRATO_HOJA_FORMATOS_PRESET.find((item) => {
       if (item.nombre.toLowerCase() !== formato) return false;
-      return Math.abs(item.ancho - ancho) < 0.001 && Math.abs(item.alto - alto) < 0.001;
+      return (
+        Math.abs(item.ancho - ancho) < 0.001 &&
+        Math.abs(item.alto - alto) < 0.001
+      );
     });
   };
 
@@ -948,7 +1081,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
     });
   };
 
-  const isSustratoHojaDimensionLocked = (variante: LocalVariante, key: string) => {
+  const isSustratoHojaDimensionLocked = (
+    variante: LocalVariante,
+    key: string,
+  ) => {
     if (!SHEET_LIKE_TEMPLATE_IDS.has(template?.id ?? "")) return false;
     if (key !== "ancho" && key !== "alto") return false;
     if (customFormatoModeByVariante[variante.id] === true) return false;
@@ -956,7 +1092,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
   };
 
   const addVariante = () => {
-    setForm((prev) => ({ ...prev, variantes: [...prev.variantes, createEmptyVariante()] }));
+    setForm((prev) => ({
+      ...prev,
+      variantes: [...prev.variantes, createEmptyVariante()],
+    }));
   };
 
   const removeVariante = (id: string) => {
@@ -991,7 +1130,8 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
       setSavedSnapshot(createFormSnapshot(updatedForm));
       toast.success("Ficha de materia prima actualizada.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo guardar.";
+      const message =
+        error instanceof Error ? error.message : "No se pudo guardar.";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -1011,9 +1151,13 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                 <ArrowLeftIcon className="size-4" />
                 Volver al catálogo
               </Link>
-              <CardTitle className="text-2xl">{form.nombre || "Materia prima"}</CardTitle>
+              <CardTitle className="text-2xl">
+                {form.nombre || "Materia prima"}
+              </CardTitle>
               <div className="text-xs text-muted-foreground">
-                Canónico: {materiaPrima.canonicalMaterialName ?? "Personalizado por tenant"}
+                Canónico:{" "}
+                {materiaPrima.canonicalMaterialName ??
+                  "Personalizado por tenant"}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -1033,7 +1177,11 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
 
       <Card className="overflow-hidden">
         <CardContent className="p-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             <div className="flex items-center justify-between gap-3 border-b px-3 py-2 md:px-4">
               <TabsList
                 variant="line"
@@ -1074,7 +1222,9 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                 <span className="text-xs text-muted-foreground">Estado</span>
                 <Switch
                   checked={form.activo}
-                  onCheckedChange={(checked) => setForm((prev) => ({ ...prev, activo: checked }))}
+                  onCheckedChange={(checked) =>
+                    setForm((prev) => ({ ...prev, activo: checked }))
+                  }
                 />
               </div>
             </div>
@@ -1086,14 +1236,24 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     <FieldLabel>Código</FieldLabel>
                     <Input
                       value={form.codigo}
-                      onChange={(event) => setForm((prev) => ({ ...prev, codigo: event.target.value }))}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          codigo: event.target.value,
+                        }))
+                      }
                     />
                   </Field>
                   <Field>
                     <FieldLabel>Nombre</FieldLabel>
                     <Input
                       value={form.nombre}
-                      onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          nombre: event.target.value,
+                        }))
+                      }
                     />
                   </Field>
                 </div>
@@ -1102,7 +1262,12 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                   <FieldLabel>Descripción</FieldLabel>
                   <Textarea
                     value={form.descripcion}
-                    onChange={(event) => setForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        descripcion: event.target.value,
+                      }))
+                    }
                   />
                 </Field>
 
@@ -1112,7 +1277,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     <Select
                       value={form.familia}
                       onValueChange={(value) =>
-                        setForm((prev) => ({ ...prev, familia: value as FamiliaMateriaPrima }))
+                        setForm((prev) => ({
+                          ...prev,
+                          familia: value as FamiliaMateriaPrima,
+                        }))
                       }
                     >
                       <SelectTrigger>
@@ -1133,7 +1301,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     <Select
                       value={form.subfamilia}
                       onValueChange={(value) =>
-                        setForm((prev) => ({ ...prev, subfamilia: value as SubfamiliaMateriaPrima }))
+                        setForm((prev) => ({
+                          ...prev,
+                          subfamilia: value as SubfamiliaMateriaPrima,
+                        }))
                       }
                     >
                       <SelectTrigger>
@@ -1156,7 +1327,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     <Select
                       value={form.unidadStock}
                       onValueChange={(value) =>
-                        setForm((prev) => ({ ...prev, unidadStock: value as UnidadMateriaPrima }))
+                        setForm((prev) => ({
+                          ...prev,
+                          unidadStock: value as UnidadMateriaPrima,
+                        }))
                       }
                     >
                       <SelectTrigger>
@@ -1176,7 +1350,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     <Select
                       value={form.unidadCompra}
                       onValueChange={(value) =>
-                        setForm((prev) => ({ ...prev, unidadCompra: value as UnidadMateriaPrima }))
+                        setForm((prev) => ({
+                          ...prev,
+                          unidadCompra: value as UnidadMateriaPrima,
+                        }))
                       }
                     >
                       <SelectTrigger>
@@ -1201,7 +1378,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                         checked={form.esConsumible}
                         disabled={templateAvailability.lockEsConsumible}
                         onCheckedChange={(checked) =>
-                          setForm((prev) => ({ ...prev, esConsumible: checked }))
+                          setForm((prev) => ({
+                            ...prev,
+                            esConsumible: checked,
+                          }))
                         }
                       />
                     </div>
@@ -1224,24 +1404,30 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
 
             <TabsContent value="opciones-variantes" className="m-0 p-4 md:p-6">
               <div className="space-y-4">
-                <h4 className="text-sm font-semibold">{form.nombre || "Variantes"}</h4>
+                <h4 className="text-sm font-semibold">
+                  {form.nombre || "Variantes"}
+                </h4>
                 {showLaserWearRecommendation ? (
                   <div className="rounded-md border border-amber-300/70 bg-amber-50 p-3 text-sm">
                     <div className="flex items-start gap-2">
                       <InfoIcon className="mt-0.5 size-4 text-amber-700" />
                       <div className="space-y-1 text-amber-900">
-                        <p className="font-medium">Recomendación para impresión láser</p>
+                        <p className="font-medium">
+                          Recomendación para impresión láser
+                        </p>
                         <p>
                           En repuestos de unidad de imagen
                           {hasLaserImageUnitComponents
                             ? " (tambor OPC, unidad reveladora, unidad de carga y cuchilla de limpieza)"
                             : ""}{" "}
-                          la vida útil real puede caer hasta un 50% respecto del rendimiento estimado por el
-                          fabricante cuando se trabaja con papeles de alto gramaje.
+                          la vida útil real puede caer hasta un 50% respecto del
+                          rendimiento estimado por el fabricante cuando se
+                          trabaja con papeles de alto gramaje.
                         </p>
                         <p>
-                          Sugerencia: si el fabricante declara 100.000 copias, evaluar cargar 50.000 como
-                          referencia base para costeo conservador.
+                          Sugerencia: si el fabricante declara 100.000 copias,
+                          evaluar cargar 50.000 como referencia base para costeo
+                          conservador.
                         </p>
                       </div>
                     </div>
@@ -1260,9 +1446,12 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                               const unit = conversion
                                 ? { symbol: conversion.symbol }
                                 : getUnitDefinition(
-                                    field?.unit as unknown as Parameters<typeof getUnitDefinition>[0],
+                                    field?.unit as unknown as Parameters<
+                                      typeof getUnitDefinition
+                                    >[0],
                                   );
-                              const label = field?.label ?? formatFieldLabel(key);
+                              const label =
+                                field?.label ?? formatFieldLabel(key);
                               const tooltipText =
                                 key === "vidaUtilReferencia"
                                   ? "Vida útil esperada del repuesto en la unidad seleccionada."
@@ -1271,13 +1460,17 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                     : "";
                               return (
                                 <div className="inline-flex items-center gap-1">
-                                  <span>{unit ? `${label} (${unit.symbol})` : label}</span>
+                                  <span>
+                                    {unit ? `${label} (${unit.symbol})` : label}
+                                  </span>
                                   {tooltipText ? (
                                     <Tooltip>
                                       <TooltipTrigger>
                                         <InfoIcon className="size-3.5 text-muted-foreground" />
                                       </TooltipTrigger>
-                                      <TooltipContent>{tooltipText}</TooltipContent>
+                                      <TooltipContent>
+                                        {tooltipText}
+                                      </TooltipContent>
                                     </Tooltip>
                                   ) : null}
                                 </div>
@@ -1294,13 +1487,20 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                         <TableRow key={variante.id}>
                           {varianteColumns.map((key) => (
                             <TableCell key={`${variante.id}-${key}`}>
-                              {SHEET_LIKE_TEMPLATE_IDS.has(template?.id ?? "") &&
-                              key === "formatoComercial" ? (
+                              {SHEET_LIKE_TEMPLATE_IDS.has(
+                                template?.id ?? "",
+                              ) && key === "formatoComercial" ? (
                                 (() => {
-                                  const currentValue = getVarianteAtributo(variante, key);
-                                  const currentPreset = findFormatoHojaPreset(variante);
+                                  const currentValue = getVarianteAtributo(
+                                    variante,
+                                    key,
+                                  );
+                                  const currentPreset =
+                                    findFormatoHojaPreset(variante);
                                   const isPreset = Boolean(currentPreset);
-                                  const isCustomMode = customFormatoModeByVariante[variante.id] === true;
+                                  const isCustomMode =
+                                    customFormatoModeByVariante[variante.id] ===
+                                    true;
 
                                   if (isCustomMode) {
                                     return (
@@ -1309,7 +1509,11 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                           placeholder="Nombre personalizado"
                                           value={currentValue}
                                           onChange={(event) =>
-                                            setVarianteAtributo(variante.id, key, event.target.value)
+                                            setVarianteAtributo(
+                                              variante.id,
+                                              key,
+                                              event.target.value,
+                                            )
                                           }
                                         />
                                         <Button
@@ -1317,10 +1521,12 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                           variant="outline"
                                           size="sm"
                                           onClick={() =>
-                                            setCustomFormatoModeByVariante((prev) => ({
-                                              ...prev,
-                                              [variante.id]: false,
-                                            }))
+                                            setCustomFormatoModeByVariante(
+                                              (prev) => ({
+                                                ...prev,
+                                                [variante.id]: false,
+                                              }),
+                                            )
                                           }
                                         >
                                           Lista
@@ -1335,43 +1541,66 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                       onValueChange={(value) => {
                                         const next = value ?? "__none__";
                                         if (next === "__custom__") {
-                                          setCustomFormatoModeByVariante((prev) => ({
-                                            ...prev,
-                                            [variante.id]: true,
-                                          }));
+                                          setCustomFormatoModeByVariante(
+                                            (prev) => ({
+                                              ...prev,
+                                              [variante.id]: true,
+                                            }),
+                                          );
                                           if (isPreset) {
-                                            setVarianteAtributo(variante.id, key, "");
+                                            setVarianteAtributo(
+                                              variante.id,
+                                              key,
+                                              "",
+                                            );
                                           }
                                           return;
                                         }
                                         if (next === "__none__") {
                                           return;
                                         }
-                                        setCustomFormatoModeByVariante((prev) => ({
-                                          ...prev,
-                                          [variante.id]: false,
-                                        }));
+                                        setCustomFormatoModeByVariante(
+                                          (prev) => ({
+                                            ...prev,
+                                            [variante.id]: false,
+                                          }),
+                                        );
                                         setFormatoHojaPreset(variante.id, next);
                                       }}
                                     >
                                       <SelectTrigger>
                                         <SelectValue>
-                                          {currentPreset?.nombre ?? "Seleccionar formato"}
+                                          {currentPreset?.nombre ??
+                                            "Seleccionar formato"}
                                         </SelectValue>
                                       </SelectTrigger>
-                                      <SelectContent align="end" className="!w-auto min-w-[220px]">
+                                      <SelectContent
+                                        align="end"
+                                        className="!w-auto min-w-[220px]"
+                                      >
                                         <SelectItem value="__none__">
-                                          <span className="ml-auto w-full text-right">Seleccionar formato</span>
+                                          <span className="ml-auto w-full text-right">
+                                            Seleccionar formato
+                                          </span>
                                         </SelectItem>
-                                        {SUSTRATO_HOJA_FORMATOS_PRESET.map((formato) => (
-                                          <SelectItem key={formato.id} value={formato.id}>
-                                            <span className="ml-auto w-full text-right">
-                                              {formato.nombre} ({formato.ancho} x {formato.alto} cm)
-                                            </span>
-                                          </SelectItem>
-                                        ))}
+                                        {SUSTRATO_HOJA_FORMATOS_PRESET.map(
+                                          (formato) => (
+                                            <SelectItem
+                                              key={formato.id}
+                                              value={formato.id}
+                                            >
+                                              <span className="ml-auto w-full text-right">
+                                                {formato.nombre} (
+                                                {formato.ancho} x {formato.alto}{" "}
+                                                cm)
+                                              </span>
+                                            </SelectItem>
+                                          ),
+                                        )}
                                         <SelectItem value="__custom__">
-                                          <span className="ml-auto w-full text-right">Personalizado</span>
+                                          <span className="ml-auto w-full text-right">
+                                            Personalizado
+                                          </span>
                                         </SelectItem>
                                       </SelectContent>
                                     </Select>
@@ -1382,7 +1611,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                   <DropdownMenuTrigger className="flex h-9 w-full items-center justify-between rounded-md border px-3 text-left text-sm">
                                     <span>
                                       {(() => {
-                                        const count = getVarianteAtributoLista(variante, key).length;
+                                        const count = getVarianteAtributoLista(
+                                          variante,
+                                          key,
+                                        ).length;
                                         return count > 0
                                           ? `${count} maquina${count > 1 ? "s" : ""} seleccionada${count > 1 ? "s" : ""}`
                                           : "Seleccionar maquinas";
@@ -1392,8 +1624,11 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent className="w-[360px]">
                                     {maquinas.map((maquina) => {
-                                      const selectedValues = getVarianteAtributoLista(variante, key);
-                                      const isChecked = selectedValues.includes(maquina.id);
+                                      const selectedValues =
+                                        getVarianteAtributoLista(variante, key);
+                                      const isChecked = selectedValues.includes(
+                                        maquina.id,
+                                      );
                                       return (
                                         <DropdownMenuCheckboxItem
                                           key={`${key}-${maquina.id}`}
@@ -1401,24 +1636,37 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                           onCheckedChange={(checked) => {
                                             const nextValues = checked
                                               ? [...selectedValues, maquina.id]
-                                              : selectedValues.filter((item) => item !== maquina.id);
-                                            setVarianteAtributoLista(variante.id, key, nextValues);
+                                              : selectedValues.filter(
+                                                  (item) => item !== maquina.id,
+                                                );
+                                            setVarianteAtributoLista(
+                                              variante.id,
+                                              key,
+                                              nextValues,
+                                            );
                                           }}
                                         >
                                           {maquina.nombre}
-                                          {maquina.codigo ? ` (${maquina.codigo})` : ""}
+                                          {maquina.codigo
+                                            ? ` (${maquina.codigo})`
+                                            : ""}
                                         </DropdownMenuCheckboxItem>
                                       );
                                     })}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
-                              ) : templateFieldByKey.get(key)?.options?.length ? (
+                              ) : templateFieldByKey.get(key)?.options
+                                  ?.length ? (
                                 key === "plantillasCompatibles" ? (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger className="flex h-9 w-full items-center justify-between rounded-md border px-3 text-left text-sm">
                                       <span>
                                         {(() => {
-                                          const count = getVarianteAtributoLista(variante, key).length;
+                                          const count =
+                                            getVarianteAtributoLista(
+                                              variante,
+                                              key,
+                                            ).length;
                                           return count > 0
                                             ? `${count} plantilla${count > 1 ? "s" : ""} seleccionada${count > 1 ? "s" : ""}`
                                             : "Seleccionar plantillas";
@@ -1427,41 +1675,68 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                       <ChevronDownIcon className="size-4 text-muted-foreground" />
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent className="scrollbar-visible max-h-[260px] w-[320px] overflow-y-scroll">
-                                      {(templateFieldByKey.get(key)?.options ?? []).map((option) => {
-                                        const selectedValues = getVarianteAtributoLista(variante, key);
-                                        const isChecked = selectedValues.includes(option);
+                                      {(
+                                        templateFieldByKey.get(key)?.options ??
+                                        []
+                                      ).map((option) => {
+                                        const selectedValues =
+                                          getVarianteAtributoLista(
+                                            variante,
+                                            key,
+                                          );
+                                        const isChecked =
+                                          selectedValues.includes(option);
                                         return (
                                           <DropdownMenuCheckboxItem
                                             key={`${key}-${option}`}
                                             checked={isChecked}
-                                          onCheckedChange={(checked) => {
-                                            const nextValues = checked
-                                              ? [...selectedValues, option]
-                                              : selectedValues.filter((item) => item !== option);
-                                            setVarianteAtributoLista(variante.id, key, nextValues);
-                                            if (key === "plantillasCompatibles") {
-                                              const currentTipo = getVarianteAtributo(
-                                                variante,
-                                                "tipoComponenteDesgaste",
-                                              )
-                                                .trim()
-                                                .toLowerCase();
-                                              if (currentTipo.length === 0) {
-                                                return;
+                                            onCheckedChange={(checked) => {
+                                              const nextValues = checked
+                                                ? [...selectedValues, option]
+                                                : selectedValues.filter(
+                                                    (item) => item !== option,
+                                                  );
+                                              setVarianteAtributoLista(
+                                                variante.id,
+                                                key,
+                                                nextValues,
+                                              );
+                                              if (
+                                                key === "plantillasCompatibles"
+                                              ) {
+                                                const currentTipo =
+                                                  getVarianteAtributo(
+                                                    variante,
+                                                    "tipoComponenteDesgaste",
+                                                  )
+                                                    .trim()
+                                                    .toLowerCase();
+                                                if (currentTipo.length === 0) {
+                                                  return;
+                                                }
+                                                const availableTipos =
+                                                  getReplacementComponentOptionsForTemplates(
+                                                    nextValues,
+                                                  );
+                                                if (
+                                                  !availableTipos.some(
+                                                    (item) =>
+                                                      item === currentTipo,
+                                                  )
+                                                ) {
+                                                  setVarianteAtributo(
+                                                    variante.id,
+                                                    "tipoComponenteDesgaste",
+                                                    "",
+                                                  );
+                                                }
                                               }
-                                              const availableTipos =
-                                                getReplacementComponentOptionsForTemplates(nextValues);
-                                              if (!availableTipos.some((item) => item === currentTipo)) {
-                                                setVarianteAtributo(
-                                                  variante.id,
-                                                  "tipoComponenteDesgaste",
-                                                  "",
-                                                );
-                                              }
-                                            }
-                                          }}
-                                        >
-                                          {getTemplateOptionLabel(key, option)}
+                                            }}
+                                          >
+                                            {getTemplateOptionLabel(
+                                              key,
+                                              option,
+                                            )}
                                           </DropdownMenuCheckboxItem>
                                         );
                                       })}
@@ -1477,40 +1752,67 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                               "plantillasCompatibles",
                                             ),
                                           )
-                                        : (templateFieldByKey.get(key)?.options ?? []);
+                                        : (templateFieldByKey.get(key)
+                                            ?.options ?? []);
                                     return (
-                                  <Select
-                                    value={getVarianteAtributo(variante, key) || "__none__"}
-                                    onValueChange={(value) =>
-                                      setVarianteAtributo(
-                                        variante.id,
-                                        key,
-                                        value === "__none__" ? "" : (value ?? ""),
-                                      )
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      {(() => {
-                                        const currentValue = getVarianteAtributo(variante, key);
-                                        const currentLabel = currentValue
-                                          ? getTemplateOptionLabel(key, currentValue)
-                                          : "Seleccionar";
-                                        return <SelectValue>{currentLabel}</SelectValue>;
-                                      })()}
-                                    </SelectTrigger>
-                                    <SelectContent
-                                      className={
-                                        key === "tipoComponenteDesgaste" ? "min-w-[360px]" : undefined
-                                      }
-                                    >
-                                      <SelectItem value="__none__">Seleccionar</SelectItem>
-                                      {dynamicOptions.map((option) => (
-                                        <SelectItem key={`${key}-${option}`} value={option}>
-                                          {getTemplateOptionLabel(key, option)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                      <Select
+                                        value={
+                                          getVarianteAtributo(variante, key) ||
+                                          "__none__"
+                                        }
+                                        onValueChange={(value) =>
+                                          setVarianteAtributo(
+                                            variante.id,
+                                            key,
+                                            value === "__none__"
+                                              ? ""
+                                              : (value ?? ""),
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger>
+                                          {(() => {
+                                            const currentValue =
+                                              getVarianteAtributo(
+                                                variante,
+                                                key,
+                                              );
+                                            const currentLabel = currentValue
+                                              ? getTemplateOptionLabel(
+                                                  key,
+                                                  currentValue,
+                                                )
+                                              : "Seleccionar";
+                                            return (
+                                              <SelectValue>
+                                                {currentLabel}
+                                              </SelectValue>
+                                            );
+                                          })()}
+                                        </SelectTrigger>
+                                        <SelectContent
+                                          className={
+                                            key === "tipoComponenteDesgaste"
+                                              ? "min-w-[360px]"
+                                              : undefined
+                                          }
+                                        >
+                                          <SelectItem value="__none__">
+                                            Seleccionar
+                                          </SelectItem>
+                                          {dynamicOptions.map((option) => (
+                                            <SelectItem
+                                              key={`${key}-${option}`}
+                                              value={option}
+                                            >
+                                              {getTemplateOptionLabel(
+                                                key,
+                                                option,
+                                              )}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
                                     );
                                   })()
                                 )
@@ -1519,31 +1821,44 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                   const conversion = displayUnitFactor(
                                     templateFieldByKey.get(key),
                                   );
-                                  const raw = getVarianteAtributo(variante, key);
+                                  const raw = getVarianteAtributo(
+                                    variante,
+                                    key,
+                                  );
                                   const shown =
-                                    conversion && raw.trim() !== "" && Number.isFinite(Number(raw))
+                                    conversion &&
+                                    raw.trim() !== "" &&
+                                    Number.isFinite(Number(raw))
                                       ? String(Number(raw) * conversion.factor)
                                       : raw;
                                   return (
                                     <Input
                                       type="text"
                                       inputMode={
-                                        templateFieldByKey.get(key)?.type === "number"
+                                        templateFieldByKey.get(key)?.type ===
+                                        "number"
                                           ? "decimal"
                                           : undefined
                                       }
                                       value={shown}
-                                      disabled={isSustratoHojaDimensionLocked(variante, key)}
+                                      disabled={isSustratoHojaDimensionLocked(
+                                        variante,
+                                        key,
+                                      )}
                                       onChange={(event) => {
                                         const texto = event.target.value;
-                                        const numero = Number(texto.replace(",", "."));
+                                        const numero = Number(
+                                          texto.replace(",", "."),
+                                        );
                                         // Con unidad de display, lo tipeado se convierte a la
                                         // canónica al guardar (cm → mm); texto no numérico pasa
                                         // crudo para no comerse el tipeo.
                                         setVarianteAtributo(
                                           variante.id,
                                           key,
-                                          conversion && texto.trim() !== "" && Number.isFinite(numero)
+                                          conversion &&
+                                            texto.trim() !== "" &&
+                                            Number.isFinite(numero)
                                             ? String(numero / conversion.factor)
                                             : texto,
                                         );
@@ -1580,7 +1895,12 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                 </div>
 
                 <div className="flex justify-end">
-                  <Button type="button" variant="sidebar" size="sm" onClick={addVariante}>
+                  <Button
+                    type="button"
+                    variant="sidebar"
+                    size="sm"
+                    onClick={addVariante}
+                  >
                     <CirclePlusIcon className="size-4" />
                     Agregar variante
                   </Button>
@@ -1591,8 +1911,8 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
             <TabsContent value="precios" className="m-0 p-4 md:p-6">
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  El precio de referencia se define por variante y por unidad de uso (
-                  {unidadStockLabel}).
+                  El precio de referencia se define por variante y por unidad de
+                  uso ({unidadStockLabel}).
                 </p>
                 <div className="rounded-md border">
                   <Table>
@@ -1607,14 +1927,19 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     <TableBody>
                       {variantesPrecio.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-muted-foreground">
+                          <TableCell
+                            colSpan={4}
+                            className="text-muted-foreground"
+                          >
                             Cargá dimensiones en Variantes para definir precios.
                           </TableCell>
                         </TableRow>
                       ) : (
                         variantesPrecio.map((variante) => (
                           <TableRow key={variante.id}>
-                            <TableCell>{form.nombre || "Materia prima"}</TableCell>
+                            <TableCell>
+                              {form.nombre || "Materia prima"}
+                            </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap gap-1">
                                 {varianteColumns.map((key) => (
@@ -1622,22 +1947,42 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                     key={`${variante.id}-opt-${key}`}
                                     className="rounded border px-2 py-0.5 text-xs"
                                   >
-                                    {(templateFieldByKey.get(key)?.label ?? formatFieldLabel(key))}:{" "}
+                                    {templateFieldByKey.get(key)?.label ??
+                                      formatFieldLabel(key)}
+                                    :{" "}
                                     {(() => {
-                                      const rawValue = getVarianteAtributo(variante, key);
+                                      const rawValue = getVarianteAtributo(
+                                        variante,
+                                        key,
+                                      );
                                       if (key === "plantillasCompatibles") {
-                                        const values = getVarianteAtributoLista(variante, key);
+                                        const values = getVarianteAtributoLista(
+                                          variante,
+                                          key,
+                                        );
                                         return values.length > 0
                                           ? values
-                                              .map((value) => getTemplateOptionLabel(key, value))
+                                              .map((value) =>
+                                                getTemplateOptionLabel(
+                                                  key,
+                                                  value,
+                                                ),
+                                              )
                                               .join(", ")
                                           : "-";
                                       }
                                       if (key === "maquinasCompatibles") {
-                                        const values = getVarianteAtributoLista(variante, key);
+                                        const values = getVarianteAtributoLista(
+                                          variante,
+                                          key,
+                                        );
                                         return values.length > 0
                                           ? values
-                                              .map((value) => maquinaLabelById.get(value) ?? value)
+                                              .map(
+                                                (value) =>
+                                                  maquinaLabelById.get(value) ??
+                                                  value,
+                                              )
                                               .join(", ")
                                           : "-";
                                       }
@@ -1651,11 +1996,12 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                             </TableCell>
                             <TableCell>
                               {(() => {
-                                const { unidadStock, unidadCompra } = resolveVarianteUnits(
-                                  variante,
-                                  form.unidadStock,
-                                  form.unidadCompra,
-                                );
+                                const { unidadStock, unidadCompra } =
+                                  resolveVarianteUnits(
+                                    variante,
+                                    form.unidadStock,
+                                    form.unidadCompra,
+                                  );
                                 const unidadCompraLabelVariante = getLabel(
                                   unidadMateriaPrimaItems,
                                   unidadCompra,
@@ -1664,27 +2010,34 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                   unidadMateriaPrimaItems,
                                   unidadStock,
                                 );
-                                const precioReferencia = variante.precioReferencia ?? null;
+                                const precioReferencia =
+                                  variante.precioReferencia ?? null;
                                 const canConvert =
                                   typeof precioReferencia === "number" &&
                                   Number.isFinite(precioReferencia) &&
                                   precioReferencia > 0;
-                                const precioPorStock =
-                                  canConvert
-                                    ? areUnitsCompatible(unidadCompra, unidadStock)
-                                      ? convertUnitPrice(
+                                const precioPorStock = canConvert
+                                  ? areUnitsCompatible(
+                                      unidadCompra,
+                                      unidadStock,
+                                    )
+                                    ? convertUnitPrice(
+                                        precioReferencia as number,
+                                        unidadCompra,
+                                        unidadStock,
+                                      )
+                                    : convertFlexibleRollUnitPrice({
+                                        pricePerFromUnit:
                                           precioReferencia as number,
-                                          unidadCompra,
-                                          unidadStock,
-                                        )
-                                      : convertFlexibleRollUnitPrice({
-                                          pricePerFromUnit: precioReferencia as number,
-                                          from: unidadCompra,
-                                          to: unidadStock,
-                                          subfamilia: form.subfamilia,
-                                          attributes: parseJsonField(variante.atributosVarianteTexto, {}),
-                                        })
-                                    : null;
+                                        from: unidadCompra,
+                                        to: unidadStock,
+                                        subfamilia: form.subfamilia,
+                                        attributes: parseJsonField(
+                                          variante.atributosVarianteTexto,
+                                          {},
+                                        ),
+                                      })
+                                  : null;
 
                                 return (
                                   <div className="space-y-1">
@@ -1694,7 +2047,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                         value={
                                           variante.precioReferenciaTexto ??
                                           (variante.precioReferencia != null
-                                            ? numeroMoneda(variante.precioReferencia, moneda)
+                                            ? numeroMoneda(
+                                                variante.precioReferencia,
+                                                moneda,
+                                              )
                                             : "")
                                         }
                                         moneda={moneda}
@@ -1702,7 +2058,8 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                         onValueChange={(texto, numero) =>
                                           setVariante(variante.id, {
                                             precioReferenciaTexto: texto,
-                                            precioReferencia: numero ?? undefined,
+                                            precioReferencia:
+                                              numero ?? undefined,
                                           })
                                         }
                                       />
@@ -1712,14 +2069,24 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                     </div>
                                     <p className="text-xs text-muted-foreground">
                                       Precio cargado:{" "}
-                                      {typeof precioReferencia === "number" && Number.isFinite(precioReferencia)
-                                        ? formatCurrencyUnit(precioReferencia, unidadCompraLabelVariante, moneda)
+                                      {typeof precioReferencia === "number" &&
+                                      Number.isFinite(precioReferencia)
+                                        ? formatCurrencyUnit(
+                                            precioReferencia,
+                                            unidadCompraLabelVariante,
+                                            moneda,
+                                          )
                                         : `Sin definir por ${unidadCompraLabelVariante}`}
                                     </p>
-                                    {precioPorStock !== null && unidadCompra !== unidadStock ? (
+                                    {precioPorStock !== null &&
+                                    unidadCompra !== unidadStock ? (
                                       <p className="text-xs text-muted-foreground">
                                         Valor interno normalizado:{" "}
-                                        {formatCurrencyUnit(precioPorStock, unidadStockLabelVariante, moneda)}
+                                        {formatCurrencyUnit(
+                                          precioPorStock,
+                                          unidadStockLabelVariante,
+                                          moneda,
+                                        )}
                                       </p>
                                     ) : null}
                                   </div>
@@ -1728,26 +2095,37 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                             </TableCell>
                             <TableCell>
                               <Select
-                                value={variante.proveedorReferenciaId ?? "__none__"}
+                                value={
+                                  variante.proveedorReferenciaId ?? "__none__"
+                                }
                                 onValueChange={(value) => {
                                   const nextValue = value ?? "__none__";
                                   setVariante(variante.id, {
                                     proveedorReferenciaId:
-                                      nextValue === "__none__" ? undefined : nextValue,
+                                      nextValue === "__none__"
+                                        ? undefined
+                                        : nextValue,
                                   });
                                 }}
                               >
                                 <SelectTrigger>
                                   <SelectValue>
                                     {variante.proveedorReferenciaId
-                                      ? proveedorLabelById.get(variante.proveedorReferenciaId) ?? "Sin proveedor"
+                                      ? (proveedorLabelById.get(
+                                          variante.proveedorReferenciaId,
+                                        ) ?? "Sin proveedor")
                                       : "Sin proveedor"}
                                   </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="__none__">Sin proveedor</SelectItem>
+                                  <SelectItem value="__none__">
+                                    Sin proveedor
+                                  </SelectItem>
                                   {proveedores.map((proveedor) => (
-                                    <SelectItem key={proveedor.id} value={proveedor.id}>
+                                    <SelectItem
+                                      key={proveedor.id}
+                                      value={proveedor.id}
+                                    >
                                       {proveedor.nombre}
                                     </SelectItem>
                                   ))}
@@ -1772,7 +2150,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     </CardHeader>
                     <CardContent className="text-2xl font-semibold">
                       {number2Formatter.format(
-                        inventarioResumen.reduce((acc, item) => acc + item.stockTotal, 0),
+                        inventarioResumen.reduce(
+                          (acc, item) => acc + item.stockTotal,
+                          0,
+                        ),
                       )}
                     </CardContent>
                   </Card>
@@ -1782,7 +2163,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     </CardHeader>
                     <CardContent className="text-2xl font-semibold">
                       {formatearMoneda(
-                        inventarioResumen.reduce((acc, item) => acc + item.valorStock, 0),
+                        inventarioResumen.reduce(
+                          (acc, item) => acc + item.valorStock,
+                          0,
+                        ),
                         moneda,
                         { decimales: 2 },
                       )}
@@ -1790,10 +2174,15 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                   </Card>
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Variantes con stock</CardTitle>
+                      <CardTitle className="text-sm">
+                        Variantes con stock
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="text-2xl font-semibold">
-                      {inventarioResumen.filter((item) => item.stockTotal > 0).length}
+                      {
+                        inventarioResumen.filter((item) => item.stockTotal > 0)
+                          .length
+                      }
                     </CardContent>
                   </Card>
                 </div>
@@ -1803,9 +2192,15 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     <TableHeader>
                       <TableRow>
                         <TableHead>Variante</TableHead>
-                        <TableHead className="text-right">Stock total</TableHead>
-                        <TableHead className="text-right">Costo promedio</TableHead>
-                        <TableHead className="text-right">Valor stock</TableHead>
+                        <TableHead className="text-right">
+                          Stock total
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Costo promedio
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Valor stock
+                        </TableHead>
                         <TableHead className="text-right">Almacenes</TableHead>
                         <TableHead>Último movimiento</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
@@ -1814,14 +2209,21 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                     <TableBody>
                       {inventarioLoading ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-muted-foreground">
+                          <TableCell
+                            colSpan={7}
+                            className="text-muted-foreground"
+                          >
                             Cargando inventario...
                           </TableCell>
                         </TableRow>
                       ) : inventarioResumen.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-muted-foreground">
-                            Esta materia prima no tiene variantes definidas para inventario.
+                          <TableCell
+                            colSpan={7}
+                            className="text-muted-foreground"
+                          >
+                            Esta materia prima no tiene variantes definidas para
+                            inventario.
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -1832,12 +2234,18 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                               {number2Formatter.format(item.stockTotal)}
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatearMoneda(item.costoPromedio, moneda, { decimales: 2 })}
+                              {formatearMoneda(item.costoPromedio, moneda, {
+                                decimales: 2,
+                              })}
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatearMoneda(item.valorStock, moneda, { decimales: 2 })}
+                              {formatearMoneda(item.valorStock, moneda, {
+                                decimales: 2,
+                              })}
                             </TableCell>
-                            <TableCell className="text-right">{item.almacenesConStock}</TableCell>
+                            <TableCell className="text-right">
+                              {item.almacenesConStock}
+                            </TableCell>
                             <TableCell>
                               {item.ultimoMovimiento
                                 ? `${getMovimientoTipoLabel(item.ultimoMovimiento.tipo)} · ${formatFechaCorta(
@@ -1850,7 +2258,9 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => router.push("/inventario/centro-stock")}
+                                  onClick={() =>
+                                    router.push("/inventario/centro-stock")
+                                  }
                                 >
                                   <PackageIcon className="size-4" />
                                   Centro stock
@@ -1858,7 +2268,9 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => router.push("/inventario/movimientos")}
+                                  onClick={() =>
+                                    router.push("/inventario/movimientos")
+                                  }
                                 >
                                   <HistoryIcon className="size-4" />
                                   Historial
@@ -1876,7 +2288,8 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
 
             <TabsContent value="historial" className="m-0 p-4 md:p-6">
               <p className="text-sm text-muted-foreground">
-                Este tab queda reservado para auditoría de cambios de plantilla, datos técnicos y precios.
+                Este tab queda reservado para auditoría de cambios de plantilla,
+                datos técnicos y precios.
               </p>
             </TabsContent>
           </Tabs>

@@ -23,11 +23,97 @@ export interface ResultadoSegmentacion {
   uniones: UnionVectorial[];
 }
 
-const ANCHO_ENCASTRE_MM = 30;
-const PROFUNDIDAD_ENCASTRE_MM = 30;
-const DISTANCIA_MAX_ENCASTRES_MM = 100;
-const KERF_MM = 0.3;
+export type TipoUnionVectorial = 'cola_milano' | 'recta';
+export type ModoCantidadEncastres = 'por_distancia' | 'cantidad_fija';
+
+export interface ConfiguracionEncastresVectoriales {
+  tipoUnion: TipoUnionVectorial;
+  anchoEncastreMm: number;
+  profundidadEncastreMm: number;
+  modoCantidad: ModoCantidadEncastres;
+  distanciaMaximaMm: number;
+  cantidadFija: number;
+  cantidadMinima: number;
+  cantidadMaxima: number;
+  kerfMm: number;
+}
+
+export const CONFIGURACION_ENCASTRES_DEFAULT: ConfiguracionEncastresVectoriales =
+  {
+    tipoUnion: 'cola_milano',
+    anchoEncastreMm: 30,
+    profundidadEncastreMm: 30,
+    modoCantidad: 'por_distancia',
+    distanciaMaximaMm: 100,
+    cantidadFija: 1,
+    cantidadMinima: 1,
+    cantidadMaxima: 100,
+    kerfMm: 0.3,
+  };
 const EPSILON = 0.01;
+
+export function resolverConfiguracionEncastresVectoriales(
+  value?: Record<string, unknown> | Partial<ConfiguracionEncastresVectoriales>,
+): ConfiguracionEncastresVectoriales {
+  const source = (value ?? {}) as Record<string, unknown>;
+  const tipoUnion =
+    source.tipoUnion === 'recta' || source.tipoUnionVectorial === 'recta'
+      ? 'recta'
+      : 'cola_milano';
+  const modoCantidad =
+    source.modoCantidad === 'cantidad_fija' ||
+    source.modoCantidadEncastres === 'cantidad_fija'
+      ? 'cantidad_fija'
+      : 'por_distancia';
+  const cantidadMinima = enteroEnRango(
+    source.cantidadMinima ?? source.cantidadMinimaEncastres,
+    CONFIGURACION_ENCASTRES_DEFAULT.cantidadMinima,
+    1,
+    100,
+  );
+  const cantidadMaxima = enteroEnRango(
+    source.cantidadMaxima ?? source.cantidadMaximaEncastres,
+    CONFIGURACION_ENCASTRES_DEFAULT.cantidadMaxima,
+    cantidadMinima,
+    100,
+  );
+  return {
+    tipoUnion,
+    anchoEncastreMm: numeroEnRango(
+      source.anchoEncastreMm,
+      CONFIGURACION_ENCASTRES_DEFAULT.anchoEncastreMm,
+      1,
+      500,
+    ),
+    profundidadEncastreMm: numeroEnRango(
+      source.profundidadEncastreMm,
+      CONFIGURACION_ENCASTRES_DEFAULT.profundidadEncastreMm,
+      1,
+      500,
+    ),
+    modoCantidad,
+    distanciaMaximaMm: numeroEnRango(
+      source.distanciaMaximaMm ?? source.distanciaMaximaEncastresMm,
+      CONFIGURACION_ENCASTRES_DEFAULT.distanciaMaximaMm,
+      10,
+      10_000,
+    ),
+    cantidadFija: enteroEnRango(
+      source.cantidadFija ?? source.cantidadFijaEncastres,
+      CONFIGURACION_ENCASTRES_DEFAULT.cantidadFija,
+      1,
+      100,
+    ),
+    cantidadMinima,
+    cantidadMaxima,
+    kerfMm: numeroEnRango(
+      source.kerfMm ?? source.kerfEncastreMm,
+      CONFIGURACION_ENCASTRES_DEFAULT.kerfMm,
+      0,
+      10,
+    ),
+  };
+}
 
 /**
  * Fragmenta únicamente las piezas que no entran en el área útil. Cada línea
@@ -40,7 +126,11 @@ export function segmentarPiezasConEncastres(input: {
   anchoUtilMm: number;
   altoUtilMm: number;
   permitirRotacion?: boolean;
+  configuracionEncastres?: Partial<ConfiguracionEncastresVectoriales>;
 }): ResultadoSegmentacion {
+  const configuracion = resolverConfiguracionEncastresVectoriales(
+    input.configuracionEncastres,
+  );
   const uniones: UnionVectorial[] = [];
   const finales: Fragmento[] = [];
 
@@ -55,6 +145,7 @@ export function segmentarPiezasConEncastres(input: {
       input.anchoUtilMm,
       input.altoUtilMm,
       input.permitirRotacion !== false,
+      configuracion,
       uniones,
       finales,
       0,
@@ -82,6 +173,7 @@ function dividirRecursivo(
   anchoUtilMm: number,
   altoUtilMm: number,
   permitirRotacion: boolean,
+  configuracion: ConfiguracionEncastresVectoriales,
   uniones: UnionVectorial[],
   finales: Fragmento[],
   profundidad: number,
@@ -114,10 +206,12 @@ function dividirRecursivo(
   const largo = eje === 'vertical' ? alto : ancho;
   const capacidad = eje === 'vertical' ? anchoUtilMm : altoUtilMm;
   const profundidadEncastre = Math.min(
-    PROFUNDIDAD_ENCASTRE_MM,
+    configuracion.tipoUnion === 'recta'
+      ? 0
+      : configuracion.profundidadEncastreMm,
     Math.max(2, capacidad / 4),
   );
-  // El macho necesita espacio para su cuerpo y para los 30 mm de cabeza. Si
+  // El macho necesita espacio para su cuerpo y para la cabeza configurada. Si
   // cortar al medio no deja ese espacio, se desplaza la línea de división. La
   // pieza restante se vuelve a segmentar si todavía supera la placa: nunca se
   // achica el encastre sólo para forzar dos mitades.
@@ -129,21 +223,36 @@ function dividirRecursivo(
       ? Math.max(corteMinimo, Math.min(corteIdeal, corteMaximo))
       : Math.max(1, corteMaximo);
   const posicion = inicioEje + corteDesdeInicio;
-  const cantidadEncastres = Math.max(
-    1,
-    Math.ceil(largo / DISTANCIA_MAX_ENCASTRES_MM),
-  );
+  const cantidadEncastres =
+    configuracion.tipoUnion === 'recta'
+      ? 0
+      : configuracion.modoCantidad === 'cantidad_fija'
+        ? configuracion.cantidadFija
+        : Math.max(
+            configuracion.cantidadMinima,
+            Math.min(
+              configuracion.cantidadMaxima,
+              Math.ceil(largo / configuracion.distanciaMaximaMm),
+            ),
+          );
+  const anchoEncastreEfectivo =
+    cantidadEncastres > 0
+      ? Math.min(
+          configuracion.anchoEncastreMm,
+          (largo / cantidadEncastres) * 0.6,
+        )
+      : 0;
   const union: UnionVectorial = {
     id: `${fragmento.piezaOrigenId}-U${uniones.length + 1}`,
     piezaOrigenId: fragmento.piezaOrigenId,
-    tipoEncastre: 'cola_milano',
+    tipoEncastre: configuracion.tipoUnion,
     eje,
     posicionMm: redondear(posicion),
     largoMm: redondear(largo),
     cantidadEncastres,
-    anchoEncastreMm: ANCHO_ENCASTRE_MM,
+    anchoEncastreMm: redondear(anchoEncastreEfectivo),
     profundidadEncastreMm: redondear(profundidadEncastre),
-    kerfMm: KERF_MM,
+    kerfMm: configuracion.kerfMm,
   };
   const [mascaraA, mascaraB] = crearMascarasEncastre(
     caja,
@@ -151,6 +260,7 @@ function dividirRecursivo(
     posicion,
     cantidadEncastres,
     profundidadEncastre,
+    anchoEncastreEfectivo,
   );
   const geometria = aMultiPolygon(fragmento.contornos);
   const ladoA = polygonClipping.intersection(geometria, mascaraA);
@@ -168,6 +278,7 @@ function dividirRecursivo(
       anchoUtilMm,
       altoUtilMm,
       permitirRotacion,
+      configuracion,
       uniones,
       finales,
       profundidad + 1,
@@ -195,6 +306,7 @@ function crearMascarasEncastre(
   posicion: number,
   cantidad: number,
   profundidadEncastre: number,
+  anchoEncastreMm: number,
 ): [MultiPolygon, MultiPolygon] {
   const pad = profundidadEncastre + 10;
   const perfilInicio = eje === 'vertical' ? caja.minY : caja.minX;
@@ -209,14 +321,14 @@ function crearMascarasEncastre(
       ? [posicion + desplazamiento, longitudinal]
       : [longitudinal, posicion + desplazamiento];
   const frontera: Array<[number, number]> = [puntoFrontera(0, inicio)];
-  const tramo = (perfilFin - perfilInicio) / cantidad;
+  const tramo = cantidad > 0 ? (perfilFin - perfilInicio) / cantidad : 0;
   // Cola de milano verdadera: el cuello junto a la línea de unión es angosto
   // y la cabeza exterior es más ancha. El perfil anterior era el inverso
   // (base ancha y punta angosta) y, al muestrearlo como una curva, se percibía
   // redondeado en la vista previa.
   for (let index = 0; index < cantidad; index++) {
     const centro = perfilInicio + tramo * (index + 0.5);
-    const anchoCabeza = Math.min(ANCHO_ENCASTRE_MM, tramo * 0.6);
+    const anchoCabeza = Math.min(anchoEncastreMm, tramo * 0.6);
     const anchoCuello = anchoCabeza / 2;
     frontera.push(
       puntoFrontera(0, centro - anchoCuello / 2),
@@ -392,4 +504,24 @@ function puntoEnPoligono(point: PuntoVectorial, polygon: PuntoVectorial[]) {
 
 function redondear(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function numeroEnRango(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function enteroEnRango(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  return Math.round(numeroEnRango(value, fallback, min, max));
 }

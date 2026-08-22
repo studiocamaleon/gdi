@@ -16,6 +16,10 @@ import {
   separacionEsLiteral,
   separacionNestingDefaultDeFamilia,
 } from '../productos-servicios/pasos/familias';
+import {
+  resolverConfiguracionEncastresVectoriales,
+  type ConfiguracionEncastresVectoriales,
+} from './geometria-vectorial/segmentacion-encastres';
 
 export type NestingAlgorithmPolicy =
   | 'auto'
@@ -68,6 +72,7 @@ export interface NestingConfigResolved {
   algorithm: NestingAlgorithmPolicy;
   allowRotation: boolean;
   preservarComposicionOriginalSiEntra: boolean;
+  configuracionEncastres: ConfiguracionEncastresVectoriales;
   pieceBleedMm: number;
   separationHMm: number;
   separationVMm: number;
@@ -365,6 +370,8 @@ export function resolveNestingConfig(
     preservarComposicionOriginalSiEntra:
       maqParams.estrategiaNestingVectorial ===
       'preserve-original-if-fits',
+    configuracionEncastres:
+      resolverConfiguracionEncastresVectoriales(maqParams),
     pieceBleedMm,
     separationHMm,
     separationVMm,

@@ -237,6 +237,15 @@ async function installPolyfanProduct(prisma, tenantId, installedMaterial) {
         origenMaquina: 'bottom-left',
         estrategiaOrigen: 'geometry-bounds',
         estrategiaNestingVectorial: 'preserve-original-if-fits',
+        tipoUnionVectorial: 'cola_milano',
+        anchoEncastreMm: 30,
+        profundidadEncastreMm: 30,
+        modoCantidadEncastres: 'por_distancia',
+        distanciaMaximaEncastresMm: 100,
+        cantidadFijaEncastres: 1,
+        cantidadMinimaEncastres: 1,
+        cantidadMaximaEncastres: 100,
+        kerfEncastreMm: 0.3,
         entradaMm: 8,
         decimalesTap: 6,
       },
@@ -256,15 +265,32 @@ async function installPolyfanProduct(prisma, tenantId, installedMaterial) {
     !Array.isArray(hotWireMachine.parametrosTecnicosJson)
       ? hotWireMachine.parametrosTecnicosJson
       : {};
-  // Sólo inicializa la política en máquinas existentes. Una preferencia que
-  // el tenant cambió explícitamente nunca debe ser pisada por el instalador.
-  if (!('estrategiaNestingVectorial' in hotWireParams)) {
+  // Sólo completa políticas ausentes en máquinas existentes. Una preferencia
+  // que el tenant cambió explícitamente nunca debe ser pisada por el instalador.
+  const hotWireDefaults = {
+    estrategiaNestingVectorial: 'preserve-original-if-fits',
+    tipoUnionVectorial: 'cola_milano',
+    anchoEncastreMm: 30,
+    profundidadEncastreMm: 30,
+    modoCantidadEncastres: 'por_distancia',
+    distanciaMaximaEncastresMm: 100,
+    cantidadFijaEncastres: 1,
+    cantidadMinimaEncastres: 1,
+    cantidadMaximaEncastres: 100,
+    kerfEncastreMm: 0.3,
+  };
+  const missingHotWireDefaults = Object.fromEntries(
+    Object.entries(hotWireDefaults).filter(
+      ([key]) => !(key in hotWireParams),
+    ),
+  );
+  if (Object.keys(missingHotWireDefaults).length > 0) {
     hotWireMachine = await prisma.maquina.update({
       where: { id: hotWireMachine.id },
       data: {
         parametrosTecnicosJson: {
           ...hotWireParams,
-          estrategiaNestingVectorial: 'preserve-original-if-fits',
+          ...missingHotWireDefaults,
         },
       },
     });

@@ -4,6 +4,7 @@ import type { JobContext } from '../tipos';
 import { analizarSvgFabricacion } from './svg-parser';
 import { nestearGeometriaIrregular } from './nesting-irregular';
 import type { NestingIrregularResult } from './tipos';
+import type { ConfiguracionEncastresVectoriales } from './segmentacion-encastres';
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 100;
@@ -18,6 +19,7 @@ export interface ParametrosNestingVectorialCache {
   separacionMm: number;
   permitirRotacion: boolean;
   preservarComposicionOriginalSiEntra: boolean;
+  configuracionEncastres: ConfiguracionEncastresVectoriales;
 }
 
 export interface EntradaGeometriaVectorialCache {
