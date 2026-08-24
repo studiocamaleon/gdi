@@ -23,6 +23,19 @@ describe("exportación de nesting vectorial", () => {
     ).toBeNull();
   });
 
+  it("recupera fuentes v2 sin perder compatibilidad con la exportación", () => {
+    expect(
+      obtenerFuenteVectorial({
+        disenoVectorialFuente: {
+          schemaVersion: 2,
+          nombreArchivo: "logo-multicapa.svg",
+          svg: "<svg />",
+          anchoFinalMm: 1000,
+        },
+      })?.nombreArchivo,
+    ).toBe("logo-multicapa.svg");
+  });
+
   it("exporta sólo los contornos de la placa elegida", () => {
     const result = {
       algorithm: "irregular-2d-bottom-left-v1",
@@ -50,6 +63,15 @@ describe("exportación de nesting vectorial", () => {
                   { x: 50, y: 50 },
                   { x: 150, y: 50 },
                   { x: 50, y: 150 },
+                ],
+              },
+            ],
+            cortesInternos: [
+              {
+                puntos: [
+                  { x: 75, y: 75 },
+                  { x: 100, y: 75 },
+                  { x: 75, y: 100 },
                 ],
               },
             ],
@@ -81,6 +103,7 @@ describe("exportación de nesting vectorial", () => {
     const svg = crearSvgDePlaca(result, 0);
     expect(svg).toContain('width="1200mm"');
     expect(svg).toContain('id="P-01-1-1"');
+    expect(svg).toContain('id="P-01-1-2"');
     expect(svg).not.toContain("P-02");
   });
 });

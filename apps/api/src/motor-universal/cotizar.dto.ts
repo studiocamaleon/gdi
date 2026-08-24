@@ -33,6 +33,61 @@ function esEnteroPositivo(value: unknown): value is number {
   return Number.isSafeInteger(value) && esNumeroPositivo(value);
 }
 
+function esConfiguracionCapasValida(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const config = value as Record<string, unknown>;
+  if (
+    config.schemaVersion !== 1 ||
+    !Array.isArray(config.niveles) ||
+    config.niveles.length < 1 ||
+    config.niveles.length > 8 ||
+    !Array.isArray(config.asignaciones) ||
+    config.asignaciones.length > 500
+  ) {
+    return false;
+  }
+  const nivelIds = new Set<string>();
+  for (const raw of config.niveles) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    const nivel = raw as Record<string, unknown>;
+    if (
+      typeof nivel.id !== 'string' ||
+      nivel.id.length === 0 ||
+      nivel.id.length > 80 ||
+      nivelIds.has(nivel.id) ||
+      typeof nivel.nombre !== 'string' ||
+      nivel.nombre.length > 80 ||
+      !Number.isInteger(nivel.orden) ||
+      (nivel.orden as number) < 1 ||
+      (nivel.orden as number) > 8 ||
+      !Number.isInteger(nivel.colorVisual) ||
+      (nivel.colorVisual as number) < 1 ||
+      (nivel.colorVisual as number) > 5
+    ) {
+      return false;
+    }
+    nivelIds.add(nivel.id);
+  }
+  const objetoIds = new Set<string>();
+  for (const raw of config.asignaciones) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    const asignacion = raw as Record<string, unknown>;
+    if (
+      typeof asignacion.objetoId !== 'string' ||
+      asignacion.objetoId.length === 0 ||
+      asignacion.objetoId.length > 80 ||
+      objetoIds.has(asignacion.objetoId) ||
+      typeof asignacion.nivelId !== 'string' ||
+      !nivelIds.has(asignacion.nivelId) ||
+      !['pieza', 'encastre'].includes(String(asignacion.modo))
+    ) {
+      return false;
+    }
+    objetoIds.add(asignacion.objetoId);
+  }
+  return true;
+}
+
 /**
  * El JobContext mezcla un núcleo estable con campos dinámicos declarados por
  * cada producto/paso. No puede transformarse a un DTO anidado con whitelist:
@@ -95,7 +150,7 @@ export function jobContextCotizacionValido(value: unknown): boolean {
     }
     const fuente = ctx.disenoVectorialFuente as Record<string, unknown>;
     if (
-      fuente.schemaVersion !== 1 ||
+      (fuente.schemaVersion !== 1 && fuente.schemaVersion !== 2) ||
       typeof fuente.nombreArchivo !== 'string' ||
       fuente.nombreArchivo.length === 0 ||
       fuente.nombreArchivo.length > 255 ||
@@ -104,7 +159,11 @@ export function jobContextCotizacionValido(value: unknown): boolean {
       Buffer.byteLength(fuente.svg, 'utf8') > 512 * 1024 ||
       !esNumeroPositivo(fuente.anchoFinalMm) ||
       (fuente.altoFinalMm !== undefined &&
-        !esNumeroPositivo(fuente.altoFinalMm))
+        !esNumeroPositivo(fuente.altoFinalMm)) ||
+      (fuente.configuracionCapas !== undefined &&
+        !esConfiguracionCapasValida(fuente.configuracionCapas)) ||
+      (fuente.schemaVersion === 2 &&
+        !esConfiguracionCapasValida(fuente.configuracionCapas))
     ) {
       return false;
     }
@@ -134,6 +193,18 @@ export function jobContextCotizacionValido(value: unknown): boolean {
   ) {
     return false;
   }
+  if (
+    ctx.placasVectorialesManuales !== undefined &&
+    !esEnteroPositivo(ctx.placasVectorialesManuales)
+  ) {
+    return false;
+  }
+  if (
+    ctx.metrosCortePorPlacaVectorial !== undefined &&
+    !esNumeroPositivo(ctx.metrosCortePorPlacaVectorial)
+  ) {
+    return false;
+  }
 
   const noNegativos = [
     'distanciaKm',
@@ -143,6 +214,8 @@ export function jobContextCotizacionValido(value: unknown): boolean {
     'metrosLineales',
     'anchoMaterialMm',
     'largoMaterialMm',
+    'placasVectorialesManuales',
+    'metrosCortePorPlacaVectorial',
   ];
   for (const key of noNegativos) {
     const item = ctx[key];
@@ -322,6 +395,16 @@ export class JobContextDto {
   @IsOptional()
   @IsNumber()
   piezaPerimetroTotalM?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  placasVectorialesManuales?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  metrosCortePorPlacaVectorial?: number;
 
   @IsOptional()
   @IsNumber()

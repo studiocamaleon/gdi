@@ -420,8 +420,11 @@ describe('nestearGeometriaIrregular', () => {
       permitirRotacion: true,
     });
 
+    const piezaPuma = geometria.piezas.find(
+      (pieza) => pieza.id === result.uniones[0]?.piezaOrigenId,
+    );
     const partesPuma = result.piezas.filter(
-      (pieza) => pieza.segmentacion?.piezaOrigenId === 'pieza-2',
+      (pieza) => pieza.segmentacion?.piezaOrigenId === piezaPuma?.id,
     );
     expect(partesPuma).toHaveLength(2);
     expect(result.piezas).toHaveLength(8);
@@ -429,7 +432,7 @@ describe('nestearGeometriaIrregular', () => {
     expect(result.uniones[0].anguloGrados).toBe(45);
     expect(result.uniones[0].inicio).toBeDefined();
     expect(result.uniones[0].fin).toBeDefined();
-    const puma = geometria.piezas.find((pieza) => pieza.id === 'pieza-2');
+    const puma = piezaPuma;
     for (const punto of [result.uniones[0].inicio, result.uniones[0].fin]) {
       expect(punto?.x).toBeGreaterThanOrEqual(0);
       expect(punto?.x).toBeLessThanOrEqual(puma?.anchoMm ?? 0);

@@ -69,6 +69,93 @@ describe('analizarSvgFabricacion', () => {
     });
   });
 
+  it('identifica objetos seleccionables aunque el SVG no tenga colores ni ids', () => {
+    const svg = `
+      <svg viewBox="0 0 100 40" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="40" height="40" />
+        <circle cx="80" cy="20" r="20" />
+      </svg>`;
+
+    const result = analizarSvgFabricacion({ svg, anchoFinalMm: 100 });
+
+    expect(result.geometria.piezas.map((pieza) => pieza.objetoFuente)).toEqual([
+      {
+        id: 'objeto-1',
+        grupoRuta: [],
+        orden: 0,
+      },
+      {
+        id: 'objeto-2',
+        grupoRuta: [],
+        orden: 1,
+      },
+    ]);
+  });
+
+  it('conserva color, etiqueta y grupos como ayudas opcionales de selección', () => {
+    const svg = `
+      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <g id="base" fill="#111111">
+          <path id="silueta" d="M0 0H100V100H0Z" />
+        </g>
+        <g id="frente">
+          <circle aria-label="isotipo" fill="#ffb43c" cx="50" cy="50" r="30" />
+        </g>
+      </svg>`;
+
+    const result = analizarSvgFabricacion({ svg, anchoFinalMm: 100 });
+
+    expect(result.geometria.piezas[0].objetoFuente).toEqual({
+      id: 'objeto-1',
+      etiqueta: 'silueta',
+      grupoRuta: ['base'],
+      colorRelleno: '#111111',
+      orden: 0,
+    });
+    expect(result.geometria.piezas[1].objetoFuente).toEqual({
+      id: 'objeto-2',
+      etiqueta: 'isotipo',
+      grupoRuta: ['frente'],
+      colorRelleno: '#ffb43c',
+      orden: 1,
+    });
+  });
+
+  it('mantiene el orden visual aunque se intercalen tipos de elementos', () => {
+    const svg = `
+      <svg viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
+        <rect id="primero" x="0" width="30" height="40" />
+        <path id="segundo" d="M40 0H70V40H40Z" />
+        <circle id="tercero" cx="100" cy="20" r="20" />
+      </svg>`;
+
+    const result = analizarSvgFabricacion({ svg, anchoFinalMm: 120 });
+
+    expect(
+      result.geometria.piezas.map(
+        (pieza) => pieza.objetoFuente?.etiqueta,
+      ),
+    ).toEqual(['primero', 'segundo', 'tercero']);
+  });
+
+  it('agrupa subtrazados del mismo objeto para seleccionarlos juntos', () => {
+    const svg = `
+      <svg viewBox="0 0 100 40" xmlns="http://www.w3.org/2000/svg">
+        <path id="letras" d="M0 0H40V40H0Z M60 0H100V40H60Z" />
+      </svg>`;
+
+    const result = analizarSvgFabricacion({ svg, anchoFinalMm: 100 });
+
+    expect(result.geometria.piezas).toHaveLength(2);
+    expect(
+      new Set(
+        result.geometria.piezas.map(
+          (pieza) => pieza.objetoFuente?.id,
+        ),
+      ),
+    ).toEqual(new Set(['objeto-1']));
+  });
+
   it('no cierra automáticamente un path que sólo tiene trazo', () => {
     const svg = `
       <svg viewBox="0 0 100 40" xmlns="http://www.w3.org/2000/svg">

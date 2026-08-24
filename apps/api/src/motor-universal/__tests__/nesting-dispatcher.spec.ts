@@ -520,6 +520,46 @@ describe('runNestingForPaso geometría vectorial', () => {
       expect(result?.placements).toHaveLength(2);
     },
   );
+
+  it('cotiza directamente la cantidad manual de placas y el corte estimado', async () => {
+    const paso = {
+      rutaPasoId: 'rp-corte-manual',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'corte_hilo_caliente',
+      configPasoId: 'cp-corte-manual',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: { nestingConfig: { allowRotation: false } },
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: null,
+    };
+    const jobContext = {
+      cantidad: 1,
+      placasVectorialesManuales: 3,
+      metrosCortePorPlacaVectorial: 12,
+    };
+    const result = await runNestingForPaso(paso as never, jobContext, {
+      id: 'polyfan-30',
+      subfamilia: 'SUSTRATO_RIGIDO',
+      precioReferencia: 1_000,
+      atributosVarianteJson: { anchoMm: 1200, altoMm: 600 },
+    });
+
+    expect(result?.cantidadCalculada).toBe(3);
+    expect(result?.substrates).toEqual([
+      { kind: 'sheet', count: 3, widthMm: 1200, heightMm: 600 },
+    ]);
+    expect(result?.metricasRaw.perimetroCorteMm).toBe(36_000);
+    expect(jobContext).toMatchObject({
+      piezaAreaTotalM2: 2.16,
+      piezaPerimetroTotalM: 36,
+    });
+  });
 });
 
 describe('runNestingForPaso plastificado pouch', () => {

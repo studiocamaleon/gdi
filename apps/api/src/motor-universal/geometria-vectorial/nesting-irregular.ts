@@ -22,6 +22,7 @@ interface PiezaPreparada {
   width: number;
   height: number;
   contours: ContornoVectorial[];
+  internalCuts: ContornoVectorial[];
 }
 
 interface Plate {
@@ -188,7 +189,11 @@ export function nestearGeometriaIrregular(input: {
   const placements = plates.flatMap((plate) => plate.placements);
   const areaPiezasMm2 = input.geometria.areaTotalMm2 * cantidad;
   const perimetroCorteMm =
-    segmentacion.piezas.reduce((sum, pieza) => sum + pieza.perimetroMm, 0) *
+    (segmentacion.piezas.reduce((sum, pieza) => sum + pieza.perimetroMm, 0) +
+      input.geometria.piezas.reduce(
+        (sum, pieza) => sum + perimetroContornos(pieza.cortesInternos ?? []),
+        0,
+      )) *
     cantidad;
   const areaCompradaMm2 =
     input.anchoPlacaMm * input.altoPlacaMm * plates.length;
@@ -247,6 +252,7 @@ function componerSinNestear(input: {
         anchoMm: pieza.anchoMm,
         altoMm: pieza.altoMm,
         contornos: trasladar(pieza.contornos, x, y),
+        cortesInternos: trasladar(pieza.cortesInternos ?? [], x, y),
       });
     }
   }
@@ -338,6 +344,7 @@ function buscarUbicacion(
         anchoMm: orientation.width,
         altoMm: orientation.height,
         contornos: contours,
+        cortesInternos: trasladar(orientation.internalCuts, x, y),
         segmentacion: orientation.piece.segmentacion,
       };
       break;
@@ -891,6 +898,7 @@ function enumerarUbicacionesRescate(input: {
         anchoMm: orientation.width,
         altoMm: orientation.height,
         contornos: contours,
+        cortesInternos: trasladar(orientation.internalCuts, x, y),
         segmentacion: orientation.piece.segmentacion,
       });
       encontradasOrientacion += 1;
@@ -1080,14 +1088,19 @@ function rotarPieza(
   copyIndex: number,
   rotacion: number,
 ): PiezaPreparada {
-  const rotated = rotarContornosVectoriales(piece.contornos, rotacion);
+  const cantidadContornos = piece.contornos.length;
+  const rotated = rotarContornosVectoriales(
+    [...piece.contornos, ...(piece.cortesInternos ?? [])],
+    rotacion,
+  );
   return {
     piece,
     copyIndex,
     rotacion,
     width: rotated.anchoMm,
     height: rotated.altoMm,
-    contours: rotated.contornos,
+    contours: rotated.contornos.slice(0, cantidadContornos),
+    internalCuts: rotated.contornos.slice(cantidadContornos),
   };
 }
 
@@ -1098,6 +1111,7 @@ function aOrientacionBase(orientation: PiezaPreparada): OrientacionBase {
     width: orientation.width,
     height: orientation.height,
     contours: orientation.contours,
+    internalCuts: orientation.internalCuts,
   };
 }
 
@@ -1346,6 +1360,18 @@ function bounds(points: PuntoVectorial[]) {
     if (point.y > maxY) maxY = point.y;
   }
   return { minX, maxX, minY, maxY };
+}
+
+function perimetroContornos(contornos: ContornoVectorial[]): number {
+  return contornos.reduce(
+    (total, contorno) =>
+      total +
+      contorno.puntos.reduce((sum, punto, index) => {
+        const siguiente = contorno.puntos[(index + 1) % contorno.puntos.length];
+        return sum + Math.hypot(siguiente.x - punto.x, siguiente.y - punto.y);
+      }, 0),
+    0,
+  );
 }
 
 function validarNumero(value: number, message: string): void {

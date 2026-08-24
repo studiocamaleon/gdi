@@ -84,13 +84,17 @@ import {
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
   type AnalisisSvgFabricacion,
+  type ConfiguracionCapasVectoriales,
   cotizar,
   getCatalogoFamilias,
   getProductoById,
   resolverConfiguracionEncastresVectoriales,
   type CotizarResponse,
 } from "@/lib/productos-servicios-api";
-import { DisenoVectorialCotizador } from "@/components/comercial/diseno-vectorial-cotizador";
+import {
+  DisenoVectorialCotizador,
+  type CotizacionVectorialManual,
+} from "@/components/comercial/diseno-vectorial-cotizador";
 import { BriefDisenoForm } from "@/components/comercial/brief-diseno-form";
 import {
   BRIEF_DISENO_VACIO,
@@ -293,13 +297,16 @@ type MotorConfigState = {
   /** Diseño del sello (texto/tipografía) del configurador; null si no aplica. */
   disenoSello: DisenoSello | null;
   disenoVectorialFuente: {
-    schemaVersion: 1;
+    schemaVersion: 1 | 2;
     nombreArchivo: string;
     svg: string;
     anchoFinalMm: number;
     altoFinalMm?: number;
+    configuracionCapas?: ConfiguracionCapasVectoriales;
   } | null;
   disenoVectorialAnalisis: AnalisisSvgFabricacion | null;
+  modoCotizacionVectorial: "svg" | "placas";
+  cotizacionVectorialManual: CotizacionVectorialManual;
   tipoCopia: 1 | 2 | 3;
   numerosXTalonario: number;
   /** Páginas del documento (imposición de cuadernillo); null = usar default del paso. */
@@ -563,6 +570,11 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   disenoSello: null,
   disenoVectorialFuente: null,
   disenoVectorialAnalisis: null,
+  modoCotizacionVectorial: "svg",
+  cotizacionVectorialManual: {
+    placas: 1,
+    metrosCortePorPlaca: 10,
+  },
   tipoCopia: 1,
   numerosXTalonario: 50,
   paginas: null,
@@ -1097,12 +1109,7 @@ function tieneDisenoGraficoActivo(
   );
   if (!ruta) return false;
   const slots = getSlotsParaCotizacion(ruta, productoDetalle, motorConfig);
-  const ruleContext = buildJobContext(
-    productoDetalle,
-    motorConfig,
-    qty,
-    slots,
-  );
+  const ruleContext = buildJobContext(productoDetalle, motorConfig, qty, slots);
   return ruta.configPasos.some(
     (config) =>
       config.rutaPaso.familiaCodigo === "diseno_grafico" &&
@@ -2555,6 +2562,24 @@ function findSelectedCandidateVariant(
   return { candidate, variant };
 }
 
+function getPlacaVectorialSeleccionada(
+  slots: SlotComercialElige[],
+  config: Pick<MotorConfigState, "seleccionMaterial">,
+) {
+  const slot = slots.find(
+    (candidate) => candidate.slotCodigo === "sustrato_corte",
+  );
+  if (!slot) return null;
+  const { variant } = findSelectedCandidateVariant(slot, config);
+  const attrs = variant?.atributosVarianteJson ?? {};
+  const anchoMm = Number(attrs.anchoMm ?? attrs.widthMm ?? 0);
+  const altoMm = Number(attrs.altoMm ?? attrs.largoMm ?? attrs.heightMm ?? 0);
+  const margenMm = Number(attrs.margenNoUtilizableMm ?? 0);
+  return anchoMm > 0 && altoMm > 0
+    ? { anchoMm, altoMm, margenMm: Math.max(0, margenMm) }
+    : null;
+}
+
 function getSelectedMaterialSummaries(
   slotsComercialElige: SlotComercialElige[],
   config: MotorConfigState,
@@ -3567,7 +3592,32 @@ function buildJobContext(
   if (config.disenoSello) {
     ctx.disenoSello = config.disenoSello;
   }
-  if (config.disenoVectorialFuente) {
+  if (config.modoCotizacionVectorial === "placas") {
+    // En la cotización estimada no existe una geometría todavía. El producto
+    // puede haber inicializado una pieza vacía (0 × 0) para el flujo con SVG;
+    // si esa pieza viaja al motor, el validador rechaza correctamente todo el
+    // jobContext. Por placas sólo hacen falta material, placas y metros de
+    // corte, así que descartamos cualquier medida/pieza residual de la UI.
+    delete ctx.piezas;
+    delete ctx.medidaCustomMm;
+    delete ctx.medidaPredefinidaId;
+    delete ctx.medidaPredefinidaNombre;
+    delete ctx.piezaAnchoMaxMm;
+    delete ctx.piezaAltoMaxMm;
+    delete ctx.piezaAreaTotalM2;
+    const placasVectorialesManuales = Math.max(
+      1,
+      Math.ceil(config.cotizacionVectorialManual.placas),
+    );
+    const metrosCortePorPlacaVectorial = Math.max(
+      0.1,
+      config.cotizacionVectorialManual.metrosCortePorPlaca,
+    );
+    ctx.placasVectorialesManuales = placasVectorialesManuales;
+    ctx.metrosCortePorPlacaVectorial = metrosCortePorPlacaVectorial;
+    ctx.piezaPerimetroTotalM =
+      placasVectorialesManuales * metrosCortePorPlacaVectorial;
+  } else if (config.disenoVectorialFuente) {
     ctx.disenoVectorialFuente = config.disenoVectorialFuente;
     if (config.disenoVectorialAnalisis?.cacheKey) {
       ctx.disenoVectorialCacheKey = config.disenoVectorialAnalisis.cacheKey;
@@ -3847,7 +3897,22 @@ function buildPresentableSpecs(
   const usaMedidasPersonalizadas =
     usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length > 0;
   const geometriaVectorial = config.disenoVectorialAnalisis?.geometria;
-  if (geometriaVectorial) {
+  const cotizaVectorialPorPlacas = config.modoCotizacionVectorial === "placas";
+  if (cotizaVectorialPorPlacas) {
+    const placa = getPlacaVectorialSeleccionada(slotsComercialElige, config);
+    const cantidadPlacas = Math.max(
+      1,
+      Math.ceil(config.cotizacionVectorialManual.placas),
+    );
+    const medidas = placa
+      ? `${cantidadPlacas.toLocaleString("es-AR")} placas × ${formatMedidasCm(
+          placa.anchoMm,
+          placa.altoMm,
+        )}`
+      : `${cantidadPlacas.toLocaleString("es-AR")} placas`;
+    setSpec("medidas", medidas);
+    setSpec("formato_medidas", medidas);
+  } else if (geometriaVectorial) {
     const medidas = `${qty.toLocaleString("es-AR")} u. × ${formatMedidasCm(
       geometriaVectorial.anchoMm,
       geometriaVectorial.altoMm,
@@ -3899,7 +3964,8 @@ function buildPresentableSpecs(
     medidaPredefinida &&
     medidaPredefinida.anchoMm > 0 &&
     medidaPredefinida.altoMm > 0 &&
-    !usaMedidasPersonalizadas
+    !usaMedidasPersonalizadas &&
+    !cotizaVectorialPorPlacas
   ) {
     const medidas = formatMedidaPredefinidaSpec(medidaPredefinida);
     setSpec("medidas", medidas);
@@ -4363,8 +4429,7 @@ function analisisVectorialDesdeItem(
         : undefined,
     configuracionEncastres: resolverConfiguracionEncastresVectoriales(
       (nestingResult.metricasRaw?.configuracionEncastres as
-        | Record<string, unknown>
-        | undefined) ?? null,
+        Record<string, unknown> | undefined) ?? null,
     ),
     geometria,
     nesting: {
@@ -4516,6 +4581,18 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         ? (ctx.disenoVectorialFuente as MotorConfigState["disenoVectorialFuente"])
         : null,
     disenoVectorialAnalisis: analisisVectorialDesdeItem(item),
+    modoCotizacionVectorial:
+      Number(ctx.placasVectorialesManuales) > 0 ? "placas" : "svg",
+    cotizacionVectorialManual: {
+      placas:
+        Number(ctx.placasVectorialesManuales) > 0
+          ? Math.ceil(Number(ctx.placasVectorialesManuales))
+          : 1,
+      metrosCortePorPlaca:
+        Number(ctx.metrosCortePorPlacaVectorial) > 0
+          ? Number(ctx.metrosCortePorPlacaVectorial)
+          : 10,
+    },
     tipoCopia:
       Number(ctx.tipoCopia) === 3 ? 3 : Number(ctx.tipoCopia) === 2 ? 2 : 1,
     numerosXTalonario:
@@ -5343,27 +5420,7 @@ function ApConfigStep({
   );
   const placaVectorial = React.useMemo(() => {
     if (!editorVectorialHabilitado) return null;
-    const slot = slotsComercialElige.find(
-      (candidate) => candidate.slotCodigo === "sustrato_corte",
-    );
-    if (!slot) return null;
-    const selectionKey = materialSelectionKey(
-      slot.configPasoId,
-      slot.slotCodigo,
-    );
-    const variantId =
-      motorConfig.seleccionMaterial[selectionKey] ??
-      defaultSlotCandidateId(slot);
-    const variant = slot.candidatos
-      .flatMap((candidate) => candidate.variantes)
-      .find((candidate) => candidate.variantId === variantId);
-    const attrs = variant?.atributosVarianteJson ?? {};
-    const anchoMm = Number(attrs.anchoMm ?? attrs.widthMm ?? 0);
-    const altoMm = Number(attrs.altoMm ?? attrs.largoMm ?? attrs.heightMm ?? 0);
-    const margenMm = Number(attrs.margenNoUtilizableMm ?? 0);
-    return anchoMm > 0 && altoMm > 0
-      ? { anchoMm, altoMm, margenMm: Math.max(0, margenMm) }
-      : null;
+    return getPlacaVectorialSeleccionada(slotsComercialElige, motorConfig);
   }, [
     editorVectorialHabilitado,
     motorConfig.seleccionMaterial,
@@ -7322,6 +7379,8 @@ function ApConfigStep({
                 <DisenoVectorialCotizador
                   value={motorConfig.disenoVectorialFuente}
                   analisis={motorConfig.disenoVectorialAnalisis}
+                  modoCotizacion={motorConfig.modoCotizacionVectorial}
+                  cotizacionManual={motorConfig.cotizacionVectorialManual}
                   cantidad={qty}
                   placa={placaVectorial}
                   margenMm={placaVectorial?.margenMm}
@@ -7334,6 +7393,18 @@ function ApConfigStep({
                       ...current,
                       disenoVectorialFuente: fuente,
                       disenoVectorialAnalisis: analisis,
+                    }))
+                  }
+                  onModoCotizacionChange={(modoCotizacionVectorial) =>
+                    setMotorConfig((current) => ({
+                      ...current,
+                      modoCotizacionVectorial,
+                    }))
+                  }
+                  onCotizacionManualChange={(cotizacionVectorialManual) =>
+                    setMotorConfig((current) => ({
+                      ...current,
+                      cotizacionVectorialManual,
                     }))
                   }
                 />
@@ -8951,8 +9022,11 @@ export function AgregarProductoSheet({
     );
     const disenoVectorialListo = Boolean(
       requiereDisenoVectorial &&
-      motorConfig.disenoVectorialFuente &&
-      motorConfig.disenoVectorialAnalisis,
+      (motorConfig.modoCotizacionVectorial === "placas"
+        ? motorConfig.cotizacionVectorialManual.placas > 0 &&
+          motorConfig.cotizacionVectorialManual.metrosCortePorPlaca > 0
+        : motorConfig.disenoVectorialFuente &&
+          motorConfig.disenoVectorialAnalisis),
     );
     if (requiereDisenoVectorial && !disenoVectorialListo) {
       setCotizando(false);
@@ -9048,8 +9122,8 @@ export function AgregarProductoSheet({
       window.clearTimeout(timeoutHandle);
       if (cotizacionAbortRef.current === controller) {
         cotizacionAbortRef.current = null;
+        setCotizando(false);
       }
-      if (seq === cotizacionSeqRef.current) setCotizando(false);
     }
   }, [clienteId, motorConfig, product, productoDetalle, qty]);
 
@@ -9382,9 +9456,7 @@ export function AgregarProductoSheet({
               briefDisenoDraft={briefDisenoDraft}
               setBriefDisenoDraft={setBriefDisenoDraft}
               briefArchivosPendientesDraft={briefArchivosPendientesDraft}
-              setBriefArchivosPendientesDraft={
-                setBriefArchivosPendientesDraft
-              }
+              setBriefArchivosPendientesDraft={setBriefArchivosPendientesDraft}
               onSaveBrief={guardarBrief}
               cotizacion={cotizacion}
               cotizando={cotizando}

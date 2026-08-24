@@ -1,7 +1,7 @@
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
 
 export type FuenteVectorialPersistida = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   nombreArchivo: string;
   svg: string;
   anchoFinalMm: number;
@@ -18,7 +18,7 @@ export function obtenerFuenteVectorial(
   if (!value || typeof value !== "object") return null;
   const source = value as Partial<FuenteVectorialPersistida>;
   if (
-    source.schemaVersion !== 1 ||
+    (source.schemaVersion !== 1 && source.schemaVersion !== 2) ||
     typeof source.nombreArchivo !== "string" ||
     typeof source.svg !== "string" ||
     typeof source.anchoFinalMm !== "number"
@@ -38,12 +38,15 @@ export function crearSvgDePlaca(
   const paths = result.placements
     .filter((placement) => (placement.substrateIndex ?? 0) === substrateIndex)
     .flatMap((placement, placementIndex) => {
-      const meta = placement.meta as { contornos?: Contorno[] } | undefined;
-      return (meta?.contornos ?? []).map((contorno, contourIndex) => {
-        const d = puntosAPath(contorno.puntos);
-        if (!d) return "";
-        return `    <path id="${xmlAttr(placement.pieceId)}-${placementIndex + 1}-${contourIndex + 1}" d="${d}" />`;
-      });
+      const meta = placement.meta as
+        { contornos?: Contorno[]; cortesInternos?: Contorno[] } | undefined;
+      return [...(meta?.contornos ?? []), ...(meta?.cortesInternos ?? [])].map(
+        (contorno, contourIndex) => {
+          const d = puntosAPath(contorno.puntos);
+          if (!d) return "";
+          return `    <path id="${xmlAttr(placement.pieceId)}-${placementIndex + 1}-${contourIndex + 1}" d="${d}" />`;
+        },
+      );
     })
     .filter(Boolean)
     .join("\n");

@@ -1461,11 +1461,27 @@ function numeroConfiguracion(
     : fallback;
 }
 
+export interface ConfiguracionCapasVectoriales {
+  schemaVersion: 1;
+  niveles: Array<{
+    id: string;
+    nombre: string;
+    orden: number;
+    colorVisual: number;
+  }>;
+  asignaciones: Array<{
+    objetoId: string;
+    nivelId: string;
+    modo: "pieza" | "encastre";
+  }>;
+}
+
 export interface AnalisisSvgFabricacion {
   nombreArchivo: string;
   /** Identificador del resultado cacheado en el API; no contiene métricas confiadas. */
   cacheKey?: string;
   cacheHit?: boolean;
+  configuracionCapas?: ConfiguracionCapasVectoriales;
   configuracionEncastres: ConfiguracionEncastresVectoriales;
   geometria: {
     schemaVersion: 1;
@@ -1476,6 +1492,13 @@ export interface AnalisisSvgFabricacion {
     hashFuente: string;
     piezas: Array<{
       id: string;
+      objetoFuente?: {
+        id: string;
+        etiqueta?: string;
+        grupoRuta: string[];
+        colorRelleno?: string;
+        orden: number;
+      };
       origenXmm?: number;
       origenYmm?: number;
       anchoMm: number;
@@ -1483,6 +1506,10 @@ export interface AnalisisSvgFabricacion {
       areaMm2: number;
       perimetroMm: number;
       contornos: Array<{
+        esHueco: boolean;
+        puntos: Array<{ x: number; y: number }>;
+      }>;
+      cortesInternos?: Array<{
         esHueco: boolean;
         puntos: Array<{ x: number; y: number }>;
       }>;
@@ -1508,6 +1535,10 @@ export interface AnalisisSvgFabricacion {
       anchoMm: number;
       altoMm: number;
       contornos: Array<{
+        esHueco: boolean;
+        puntos: Array<{ x: number; y: number }>;
+      }>;
+      cortesInternos?: Array<{
         esHueco: boolean;
         puntos: Array<{ x: number; y: number }>;
       }>;
@@ -1561,6 +1592,7 @@ export async function analizarSvgFabricacion(req: {
   permitirRotacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
   configuracionEncastres?: ConfiguracionEncastresVectoriales;
+  configuracionCapas?: ConfiguracionCapasVectoriales;
 }): Promise<AnalisisSvgFabricacion> {
   return apiRequest<AnalisisSvgFabricacion>(
     "/motor-universal/geometria-vectorial/analizar",

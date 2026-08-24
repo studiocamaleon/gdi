@@ -264,9 +264,7 @@ export function esSustratoRollo(material: SenalFormatoMaterial): boolean {
  * Reemplaza al `modoOperacion` del perfil: el formato (rollo vs hoja) lo dice
  * el material, no una bandera estática del perfil.
  */
-export function esCorteSobreHojas(
-  material: SenalFormatoMaterial,
-): boolean {
+export function esCorteSobreHojas(material: SenalFormatoMaterial): boolean {
   return resolverFormatoFisicoMaterial(material) === 'plano';
 }
 
@@ -547,14 +545,49 @@ function runIrregularPlaca(
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
 ): NestingDispatchResult | null {
-  if (
-    !jobContext.geometriaVectorial ||
-    !materialResuelto ||
-    !config.sheetWidthMm ||
-    !config.sheetHeightMm
-  ) {
+  if (!materialResuelto || !config.sheetWidthMm || !config.sheetHeightMm) {
     return null;
   }
+  const placasManuales = Number(jobContext.placasVectorialesManuales ?? 0);
+  const metrosCortePorPlaca = Number(
+    jobContext.metrosCortePorPlacaVectorial ?? 0,
+  );
+  if (placasManuales > 0 && metrosCortePorPlaca > 0) {
+    const placas = Math.ceil(placasManuales);
+    const areaPorPlacaMm2 = config.sheetWidthMm * config.sheetHeightMm;
+    const perimetroCorteMm = placas * metrosCortePorPlaca * 1_000;
+    jobContext.piezaAreaTotalM2 = (areaPorPlacaMm2 * placas) / 1_000_000;
+    jobContext.piezaPerimetroTotalM = perimetroCorteMm / 1_000;
+    jobContext.piezaAnchoMaxMm = config.sheetWidthMm;
+    jobContext.piezaAltoMaxMm = config.sheetHeightMm;
+    return {
+      algorithm: 'irregular-2d-bottom-left-v1',
+      cantidadCalculada: placas,
+      unidad: 'pliegos',
+      aprovechamientoPct: 100,
+      substrates: [
+        {
+          kind: 'sheet',
+          count: placas,
+          widthMm: config.sheetWidthMm,
+          heightMm: config.sheetHeightMm,
+        },
+      ],
+      placements: [],
+      metricasRaw: {
+        aprovechamientoPct: 100,
+        areaUtilMm2: areaPorPlacaMm2 * placas,
+        areaTotalMm2: areaPorPlacaMm2 * placas,
+        perSubstrate: Array.from({ length: placas }, () => ({
+          areaUtilMm2: areaPorPlacaMm2,
+          consumedLengthMm: config.sheetHeightMm!,
+        })),
+        perimetroCorteMm,
+      },
+      piezasAcomodadas: 0,
+    };
+  }
+  if (!jobContext.geometriaVectorial) return null;
   const margenUniforme = Math.max(
     config.margins.leftMm,
     config.margins.rightMm,
@@ -640,6 +673,7 @@ function runIrregularPlaca(
         rotated: placement.rotacion !== 0,
         meta: {
           contornos: placement.contornos,
+          cortesInternos: placement.cortesInternos,
           rotacionGrados: placement.rotacion,
           segmentacion: placement.segmentacion,
           label: placement.segmentacion
@@ -1267,9 +1301,7 @@ function runShelfRollo(
     panelIndex: p.panelIndex ?? undefined,
     panelCount: p.panelCount ?? undefined,
     panelAxis: (p.panelAxis ?? undefined) as
-      | 'vertical'
-      | 'horizontal'
-      | undefined,
+      'vertical' | 'horizontal' | undefined,
     usefulWidthMm: p.usefulWidthMm,
     usefulHeightMm: p.usefulHeightMm,
     overlapStartMm: p.overlapStartMm,

@@ -120,4 +120,127 @@ describe('CotizarDto', () => {
 
     expect(jobContextCotizacionValido(jobContext)).toBe(false);
   });
+
+  it('acepta una configuración vectorial multicapa válida', () => {
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        disenoVectorialFuente: {
+          schemaVersion: 2,
+          nombreArchivo: 'logo.svg',
+          svg: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+          anchoFinalMm: 100,
+          configuracionCapas: {
+            schemaVersion: 1,
+            niveles: [
+              { id: 'base', nombre: 'Base', orden: 1, colorVisual: 1 },
+              { id: 'frente', nombre: 'Frente', orden: 2, colorVisual: 2 },
+            ],
+            asignaciones: [
+              { objetoId: 'objeto-1', nivelId: 'base', modo: 'pieza' },
+              {
+                objetoId: 'objeto-2',
+                nivelId: 'frente',
+                modo: 'pieza',
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('mantiene compatibilidad con fuentes vectoriales v1 sin capas', () => {
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        disenoVectorialFuente: {
+          schemaVersion: 1,
+          nombreArchivo: 'logo-anterior.svg',
+          svg: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+          anchoFinalMm: 100,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('rechaza fuentes vectoriales v2 sin configuración de capas', () => {
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        disenoVectorialFuente: {
+          schemaVersion: 2,
+          nombreArchivo: 'logo.svg',
+          svg: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+          anchoFinalMm: 100,
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('rechaza el tratamiento eliminado de solo pintura', () => {
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        disenoVectorialFuente: {
+          schemaVersion: 2,
+          nombreArchivo: 'logo.svg',
+          svg: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+          anchoFinalMm: 100,
+          configuracionCapas: {
+            schemaVersion: 1,
+            niveles: [{ id: 'base', nombre: 'Base', orden: 1, colorVisual: 1 }],
+            asignaciones: [
+              {
+                objetoId: 'objeto-1',
+                nivelId: 'base',
+                modo: 'solo_pintura',
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('rechaza asignaciones que apuntan a un nivel inexistente', () => {
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        disenoVectorialFuente: {
+          schemaVersion: 1,
+          nombreArchivo: 'logo.svg',
+          svg: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+          anchoFinalMm: 100,
+          configuracionCapas: {
+            schemaVersion: 1,
+            niveles: [{ id: 'base', nombre: 'Base', orden: 1, colorVisual: 1 }],
+            asignaciones: [
+              { objetoId: 'objeto-1', nivelId: 'otro', modo: 'pieza' },
+            ],
+          },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('acepta una cotización vectorial manual por placas', () => {
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        placasVectorialesManuales: 4,
+        metrosCortePorPlacaVectorial: 10,
+      }),
+    ).toBe(true);
+  });
+
+  it('rechaza cantidades manuales de placas fraccionarias', () => {
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        placasVectorialesManuales: 1.5,
+        metrosCortePorPlacaVectorial: 10,
+      }),
+    ).toBe(false);
+  });
 });

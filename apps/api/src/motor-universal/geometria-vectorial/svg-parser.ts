@@ -37,6 +37,7 @@ interface ContornoCrudo {
 interface ContornoFuente {
   puntos: PuntoVectorial[];
   grupo: number;
+  objetoFuente: NonNullable<PiezaVectorial['objetoFuente']>;
 }
 
 export function analizarSvgFabricacion(input: {
@@ -56,7 +57,7 @@ export function analizarSvgFabricacion(input: {
   });
   let parsed: unknown;
   try {
-    parsed = parser.parse(input.svg);
+    parsed = parser.parse(anotarOrdenElementosFabricables(input.svg));
   } catch {
     throw errorSvg('svg_invalido', 'El archivo no contiene un SVG válido.');
   }
@@ -75,9 +76,17 @@ export function analizarSvgFabricacion(input: {
     (input.toleranciaCurvaMm ?? 0.35) * (viewBox.width / input.anchoFinalMm),
   );
   const contornosFuente: ContornoFuente[] = [];
-  recorrerNodo(root, [], contornosFuente, diagnosticos, toleranceSource, {
-    value: 0,
-  });
+  recorrerNodo(
+    root,
+    [],
+    [],
+    undefined,
+    contornosFuente,
+    diagnosticos,
+    toleranceSource,
+    { value: 0 },
+    { value: 0 },
+  );
 
   if (contornosFuente.length === 0) {
     throw errorSvg(
@@ -127,6 +136,7 @@ export function analizarSvgFabricacion(input: {
 
   let normalizados = contornosFuente.map((contorno) => ({
     grupo: contorno.grupo,
+    objetoFuente: contorno.objetoFuente,
     puntos: limpiarContorno(
       contorno.puntos.map((p) => ({
         x: (p.x - bounds.minX) * scale,
@@ -241,6 +251,12 @@ function validarFuenteSvg(
       'El SVG contiene declaraciones XML no permitidas.',
     );
   }
+  if (/\bdata-gdi-source-order\s*=/i.test(svg)) {
+    throw errorSvg(
+      'atributo_reservado',
+      'El SVG utiliza un atributo interno reservado. Volvé a exportar el archivo antes de cotizar.',
+    );
+  }
   const prohibidos = ['script', 'foreignObject', 'image', 'use', 'text'];
   const encontrado = prohibidos.find((tag) =>
     new RegExp(`<\\s*${tag}\\b`, 'i').test(svg),
@@ -283,10 +299,13 @@ function leerViewBox(root: NodoXml): { width: number; height: number } {
 function recorrerNodo(
   node: NodoXml,
   parentTransforms: string[],
+  parentGroupPath: string[],
+  inheritedFill: string | undefined,
   output: ContornoFuente[],
   diagnosticos: DiagnosticoSvg[],
   tolerance: number,
   groupCounter: { value: number },
+  anonymousGroupCounter: { value: number },
 ): void {
   const ownTransform = texto(node['@_transform']);
   const transforms = ownTransform
@@ -302,6 +321,25 @@ function recorrerNodo(
       const childTransforms = texto(child['@_transform'])
         ? [...transforms, texto(child['@_transform']) as string]
         : transforms;
+      const childFill = leerRelleno(child) ?? inheritedFill;
+      const sourceOrder = numeroSvg(child['@_data-gdi-source-order']);
+      const sourceId = texto(child['@_id'])?.trim();
+      const sourceLabel =
+        texto(child['@_inkscape:label'])?.trim() ||
+        texto(child['@_aria-label'])?.trim() ||
+        sourceId;
+      const objetoFuente =
+        sourceOrder == null
+          ? null
+          : {
+              id: `objeto-${sourceOrder + 1}`,
+              ...(sourceLabel ? { etiqueta: sourceLabel } : {}),
+              grupoRuta: parentGroupPath,
+              ...(childFill && childFill !== 'none'
+                ? { colorRelleno: childFill }
+                : {}),
+              orden: sourceOrder,
+            };
       if (tag === 'path') {
         const d = texto(child['@_d']);
         if (!d) continue;
@@ -310,14 +348,14 @@ function recorrerNodo(
         // archivo no escriba `Z`. Es habitual en logos exportados (Puma es un
         // caso real). Los paths sólo de trazo sí deben seguir explícitamente
         // cerrados para considerarlos una pieza fabricable.
-        const fill = texto(child['@_fill'])?.trim().toLowerCase();
-        const style = texto(child['@_style']) ?? '';
-        const rellenoVisible =
-          fill !== 'none' &&
-          !/(?:^|;)\s*fill\s*:\s*none\s*(?:;|$)/i.test(style);
+        const rellenoVisible = childFill !== 'none';
         output.push(
           ...contornosDePath(d, childTransforms, tolerance, rellenoVisible).map(
-            (puntos) => ({ puntos, grupo }),
+            (puntos) => ({
+              puntos,
+              grupo,
+              objetoFuente: objetoFuente ?? objetoFuenteFallback(groupCounter.value),
+            }),
           ),
         );
       } else if (tag === 'polygon' || tag === 'polyline') {
@@ -334,6 +372,7 @@ function recorrerNodo(
         output.push({
           puntos: aplicarTransformPuntos(puntos, childTransforms),
           grupo: groupCounter.value++,
+          objetoFuente: objetoFuente ?? objetoFuenteFallback(groupCounter.value),
         });
       } else if (tag === 'rect') {
         const x = numeroSvg(child['@_x']) ?? 0;
@@ -352,6 +391,7 @@ function recorrerNodo(
               childTransforms,
             ),
             grupo: groupCounter.value++,
+            objetoFuente: objetoFuente ?? objetoFuenteFallback(groupCounter.value),
           });
         }
       } else if (tag === 'circle' || tag === 'ellipse') {
@@ -375,6 +415,7 @@ function recorrerNodo(
               childTransforms,
             ),
             grupo: groupCounter.value++,
+            objetoFuente: objetoFuente ?? objetoFuenteFallback(groupCounter.value),
           });
         }
       } else if (tag === 'line') {
@@ -385,13 +426,23 @@ function recorrerNodo(
           severidad: 'WARNING',
         });
       } else {
+        const nextGroupPath =
+          tag === 'g'
+            ? [
+                ...parentGroupPath,
+                sourceLabel || `grupo-${++anonymousGroupCounter.value}`,
+              ]
+            : parentGroupPath;
         recorrerNodo(
           child,
           transforms,
+          nextGroupPath,
+          childFill,
           output,
           diagnosticos,
           tolerance,
           groupCounter,
+          anonymousGroupCounter,
         );
       }
     }
@@ -499,17 +550,24 @@ function aplicarTransformPuntos(
 }
 
 function construirPiezas(contornos: ContornoFuente[]): PiezaVectorial[] {
-  const grupos = new Map<number, PuntoVectorial[][]>();
+  const grupos = new Map<
+    number,
+    {
+      puntos: PuntoVectorial[][];
+      objetoFuente: NonNullable<PiezaVectorial['objetoFuente']>;
+    }
+  >();
   for (const contorno of contornos) {
     if (contorno.puntos.length < 3) continue;
-    grupos.set(contorno.grupo, [
-      ...(grupos.get(contorno.grupo) ?? []),
-      contorno.puntos,
-    ]);
+    const grupo = grupos.get(contorno.grupo);
+    grupos.set(contorno.grupo, {
+      puntos: [...(grupo?.puntos ?? []), contorno.puntos],
+      objetoFuente: grupo?.objetoFuente ?? contorno.objetoFuente,
+    });
   }
-  const piezas: PiezaVectorial[] = [];
-  for (const pointsGroup of grupos.values()) {
-    const raw: ContornoCrudo[] = pointsGroup
+  const piezasSinId: Omit<PiezaVectorial, 'id'>[] = [];
+  for (const grupo of grupos.values()) {
+    const raw: ContornoCrudo[] = grupo.puntos
       .map((points) => ({
         puntos: points,
         areaFirmada: areaFirmada(points),
@@ -545,8 +603,8 @@ function construirPiezas(contornos: ContornoFuente[]): PiezaVectorial[] {
           esHueco: true,
         })),
       ];
-      piezas.push({
-        id: `pieza-${piezas.length + 1}`,
+      piezasSinId.push({
+        objetoFuente: grupo.objetoFuente,
         contornos: contornosPieza,
         origenXmm: redondear(bounds.minX),
         origenYmm: redondear(bounds.minY),
@@ -560,7 +618,40 @@ function construirPiezas(contornos: ContornoFuente[]): PiezaVectorial[] {
       });
     }
   }
-  return piezas;
+  return piezasSinId
+    .sort(
+      (a, b) =>
+        (a.objetoFuente?.orden ?? 0) - (b.objetoFuente?.orden ?? 0) ||
+        (a.origenYmm ?? 0) - (b.origenYmm ?? 0) ||
+        (a.origenXmm ?? 0) - (b.origenXmm ?? 0),
+    )
+    .map((pieza, index) => ({ ...pieza, id: `pieza-${index + 1}` }));
+}
+
+function anotarOrdenElementosFabricables(svg: string): string {
+  let order = 0;
+  return svg.replace(
+    /<(path|polygon|polyline|rect|circle|ellipse)\b/gi,
+    (match) => `${match} data-gdi-source-order="${order++}"`,
+  );
+}
+
+function leerRelleno(node: NodoXml): string | undefined {
+  const directo = texto(node['@_fill'])?.trim().toLowerCase();
+  if (directo) return directo;
+  const style = texto(node['@_style']) ?? '';
+  const match = /(?:^|;)\s*fill\s*:\s*([^;]+)/i.exec(style);
+  return match?.[1]?.trim().toLowerCase();
+}
+
+function objetoFuenteFallback(
+  index: number,
+): NonNullable<PiezaVectorial['objetoFuente']> {
+  return {
+    id: `objeto-${index}`,
+    grupoRuta: [],
+    orden: index - 1,
+  };
 }
 
 function pasosCurva(points: PuntoVectorial[], tolerance: number): number {

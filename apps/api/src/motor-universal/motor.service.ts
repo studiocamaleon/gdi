@@ -137,6 +137,7 @@ import {
   analizarSvgFabricacion,
   SvgFabricacionError,
 } from './geometria-vectorial/svg-parser';
+import { aplicarCapasAGeometria } from './geometria-vectorial/capas-vectoriales';
 import { MotorCotizacionError } from './motor-error';
 import { jobContextCotizacionValido } from './cotizar.dto';
 import { RecorridosVectorialesService } from '../recorridos-vectoriales/recorridos-vectoriales.service';
@@ -704,6 +705,14 @@ export class MotorUniversalService {
       caras: 1, // simple faz por defecto (se sobrescribe con input)
       ...input.jobContext,
     };
+    if (
+      Number(jobContext.placasVectorialesManuales) > 0 &&
+      Number(jobContext.metrosCortePorPlacaVectorial) > 0
+    ) {
+      jobContext.piezaPerimetroTotalM =
+        Number(jobContext.placasVectorialesManuales) *
+        Number(jobContext.metrosCortePorPlacaVectorial);
+    }
     let vectorCacheHit = false;
     // El navegador sólo captura la fuente. El servidor vuelve a derivar toda
     // la geometría para que perímetro, área y cantidad de piezas usados en el
@@ -717,14 +726,31 @@ export class MotorUniversalService {
           svg: fuente.svg,
           anchoFinalMm: fuente.anchoFinalMm,
           altoFinalMm: fuente.altoFinalMm,
+          configuracionCapas: fuente.configuracionCapas,
         });
         const geometria = cached
-          ? cached.analisis.geometria
-          : analizarSvgFabricacion({
-              svg: fuente.svg,
-              anchoFinalMm: fuente.anchoFinalMm,
-              altoFinalMm: fuente.altoFinalMm,
-            }).geometria;
+          ? cached.geometriaFabricacion
+          : aplicarCapasAGeometria(
+              analizarSvgFabricacion({
+                svg: fuente.svg,
+                anchoFinalMm: fuente.anchoFinalMm,
+                altoFinalMm: fuente.altoFinalMm,
+              }).geometria,
+              fuente.configuracionCapas,
+            );
+        if (geometria.piezas.length === 0) {
+          throw new SvgFabricacionError(
+            'El diseño no tiene piezas configuradas para cortar.',
+            [
+              {
+                codigo: 'svg_sin_piezas_de_corte',
+                mensaje:
+                  'Marcá al menos un objeto como pieza o encastre antes de cotizar.',
+                severidad: 'ERROR',
+              },
+            ],
+          );
+        }
         if (cached) {
           adjuntarCacheVectorial(jobContext, cached);
         }
@@ -1045,8 +1071,7 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            | PasoEjecutado['ojalesLayout']
-            | undefined;
+            PasoEjecutado['ojalesLayout'] | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -3242,7 +3267,8 @@ export class MotorUniversalService {
     let recorridoCorte: PasoEjecutado['recorridoCorte'];
     if (
       pasoConPerfil.familiaCodigo === 'corte_hilo_caliente' &&
-      nestingDispatch
+      nestingDispatch &&
+      !(Number(jobContext.placasVectorialesManuales) > 0)
     ) {
       try {
         recorridoCorte = await this.generarRecorridoCorteCotizacion(
@@ -3469,9 +3495,7 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          | 'MONTO_FIJO_PLANO'
-          | 'PORCENTAJE_SOBRE_BASE'
-          | 'POR_UNIDAD_INPUT',
+          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -3932,8 +3956,7 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        | { tarifa: unknown }
-        | undefined;
+        { tarifa: unknown } | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -4065,8 +4088,7 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          | { tarifa: unknown; nombre?: string | null }
-          | undefined;
+          { tarifa: unknown; nombre?: string | null } | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -5171,9 +5193,7 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          | 'HARDCODED'
-          | 'COMERCIAL_ELIGE'
-          | 'MOTOR_ELIGE_AUTO',
+          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -6583,19 +6603,16 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -6698,16 +6715,14 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              | Record<string, unknown>
-              | undefined;
+              Record<string, unknown> | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -7880,9 +7895,7 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          | 'MONTO_FIJO_PLANO'
-          | 'PORCENTAJE_SOBRE_BASE'
-          | 'POR_UNIDAD_INPUT',
+          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -7942,8 +7955,7 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        | Array<{ codigo: string; monto: number }>
-        | undefined;
+        Array<{ codigo: string; monto: number }> | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');

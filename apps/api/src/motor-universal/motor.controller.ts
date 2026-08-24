@@ -56,6 +56,7 @@ export class MotorUniversalController {
         svg: dto.svg,
         anchoFinalMm: dto.anchoFinalMm,
         altoFinalMm: dto.altoFinalMm,
+        configuracionCapas: dto.configuracionCapas,
         parametros: {
           cantidad: dto.cantidad,
           anchoPlacaMm: dto.anchoPlacaMm,
@@ -76,6 +77,7 @@ export class MotorUniversalController {
         cacheHit,
         geometria: entry.analisis.geometria,
         nesting: entry.nesting,
+        configuracionCapas: entry.configuracionCapas,
         configuracionEncastres: entry.parametros.configuracionEncastres,
         diagnosticos: entry.analisis.diagnosticos,
       };

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <g id="base">
+    <circle id="silueta" cx="50" cy="50" r="48" />
+  </g>
+  <g id="frente">
+    <path
+      id="isotipo"
+      d="M50 12 L60 38 L88 38 L66 55 L75 84 L50 67 L25 84 L34 55 L12 38 L40 38 Z"
+    />
+  </g>
+</svg>

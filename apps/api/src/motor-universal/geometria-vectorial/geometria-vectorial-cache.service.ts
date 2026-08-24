@@ -2,8 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { JobContext } from '../tipos';
 import { analizarSvgFabricacion } from './svg-parser';
-import { nestearGeometriaIrregular } from './nesting-irregular';
-import type { NestingIrregularResult } from './tipos';
+import { aplicarCapasAGeometria } from './capas-vectoriales';
+import {
+  NestingIrregularError,
+  nestearGeometriaIrregular,
+} from './nesting-irregular';
+import type {
+  ConfiguracionCapasVectoriales,
+  GeometriaVectorialCanonica,
+  NestingIrregularResult,
+} from './tipos';
 import type { ConfiguracionEncastresVectoriales } from './segmentacion-encastres';
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -29,7 +37,9 @@ export interface EntradaGeometriaVectorialCache {
   anchoFinalMm: number;
   altoFinalMm?: number;
   analisis: AnalisisSvgResultado;
+  geometriaFabricacion: GeometriaVectorialCanonica;
   nesting: NestingIrregularResult;
+  configuracionCapas?: ConfiguracionCapasVectoriales;
   parametros: ParametrosNestingVectorialCache;
   expiresAt: number;
 }
@@ -50,6 +60,7 @@ export class GeometriaVectorialCacheService {
     svg: string;
     anchoFinalMm: number;
     altoFinalMm?: number;
+    configuracionCapas?: ConfiguracionCapasVectoriales;
     parametros: ParametrosNestingVectorialCache;
   }): { entry: EntradaGeometriaVectorialCache; cacheHit: boolean } {
     const sourceHash = hash(input.svg);
@@ -58,6 +69,7 @@ export class GeometriaVectorialCacheService {
       sourceHash,
       anchoFinalMm: input.anchoFinalMm,
       altoFinalMm: input.altoFinalMm,
+      configuracionCapas: input.configuracionCapas,
       ...input.parametros,
     });
     const existing = this.get(input.tenantId, cacheKey);
@@ -68,8 +80,17 @@ export class GeometriaVectorialCacheService {
       anchoFinalMm: input.anchoFinalMm,
       altoFinalMm: input.altoFinalMm,
     });
+    const geometriaFabricacion = aplicarCapasAGeometria(
+      analisis.geometria,
+      input.configuracionCapas,
+    );
+    if (geometriaFabricacion.piezas.length === 0) {
+      throw new NestingIrregularError(
+        'El diseño no tiene piezas configuradas para cortar. Marcá al menos un objeto como pieza o encastre.',
+      );
+    }
     const nesting = nestearGeometriaIrregular({
-      geometria: analisis.geometria,
+      geometria: geometriaFabricacion,
       ...input.parametros,
     });
     const entry: EntradaGeometriaVectorialCache = {
@@ -79,7 +100,9 @@ export class GeometriaVectorialCacheService {
       anchoFinalMm: input.anchoFinalMm,
       altoFinalMm: input.altoFinalMm,
       analisis,
+      geometriaFabricacion,
       nesting,
+      configuracionCapas: input.configuracionCapas,
       parametros: input.parametros,
       expiresAt: Date.now() + CACHE_TTL_MS,
     };
@@ -94,6 +117,7 @@ export class GeometriaVectorialCacheService {
     svg: string;
     anchoFinalMm: number;
     altoFinalMm?: number;
+    configuracionCapas?: ConfiguracionCapasVectoriales;
   }): EntradaGeometriaVectorialCache | null {
     if (!input.cacheKey) return null;
     const entry = this.get(input.tenantId, input.cacheKey);
@@ -102,6 +126,8 @@ export class GeometriaVectorialCacheService {
       entry.sourceHash !== hash(input.svg) ||
       entry.anchoFinalMm !== input.anchoFinalMm ||
       entry.altoFinalMm !== input.altoFinalMm
+      || JSON.stringify(entry.configuracionCapas) !==
+        JSON.stringify(input.configuracionCapas)
     )
       return null;
     return entry;

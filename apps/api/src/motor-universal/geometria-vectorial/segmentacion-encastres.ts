@@ -15,6 +15,7 @@ type MultiPolygon = polygonClipping.MultiPolygon;
 interface Fragmento {
   piezaOrigenId: string;
   contornos: ContornoVectorial[];
+  cortesInternos?: ContornoVectorial[];
   unionesIds: string[];
 }
 
@@ -194,6 +195,7 @@ function segmentarPiezaEnMejorOrientacion(input: {
         {
           piezaOrigenId: input.pieza.id,
           contornos: input.pieza.contornos,
+          cortesInternos: input.pieza.cortesInternos,
           unionesIds: [],
         },
       ],
@@ -242,6 +244,10 @@ function segmentarPiezaEnOrientacion(input: {
     {
       piezaOrigenId: input.pieza.id,
       contornos: rotacion.contornos,
+      cortesInternos: rotarConTransformacion(
+        input.pieza.cortesInternos ?? [],
+        rotacion.transform,
+      ),
       unionesIds: [],
     },
     input.anchoUtilMm,
@@ -267,6 +273,10 @@ function segmentarPiezaEnOrientacion(input: {
     fragmentos: fragmentosRotados.map((fragmento) => ({
       ...fragmento,
       contornos: desrotarContornos(fragmento.contornos, rotacion.transform),
+      cortesInternos: desrotarContornos(
+        fragmento.cortesInternos ?? [],
+        rotacion.transform,
+      ),
     })),
     uniones: unionesRotadas.map((union) =>
       desrotarUnion(union, rotacion.transform),
@@ -336,6 +346,24 @@ function desrotarContornos(
   return contornos.map((contorno) => ({
     ...contorno,
     puntos: contorno.puntos.map((punto) => desrotarPunto(punto, transform)),
+  }));
+}
+
+function rotarConTransformacion(
+  contornos: ContornoVectorial[],
+  transform: TransformacionRotacion,
+): ContornoVectorial[] {
+  if (transform.anguloGrados === 0) return contornos;
+  return contornos.map((contorno) => ({
+    ...contorno,
+    puntos: contorno.puntos.map((punto) => ({
+      x: redondear(
+        punto.x * transform.cos - punto.y * transform.sin - transform.minX,
+      ),
+      y: redondear(
+        punto.x * transform.sin + punto.y * transform.cos - transform.minY,
+      ),
+    })),
   }));
 }
 
@@ -763,10 +791,35 @@ function desdeMultiPolygon(
       {
         piezaOrigenId: padre.piezaOrigenId,
         contornos,
+        cortesInternos: recortarCortesInternos(
+          padre.cortesInternos ?? [],
+          polygon,
+        ),
         unionesIds: [...new Set([...padre.unionesIds, unionId])],
       },
     ];
   });
+}
+
+function recortarCortesInternos(
+  cortes: ContornoVectorial[],
+  fragmento: polygonClipping.Polygon,
+): ContornoVectorial[] {
+  if (!cortes.length) return [];
+  const geometriaCortes: MultiPolygon = cortes.map((contorno) => [
+    cerrar(contorno.puntos),
+  ]);
+  return polygonClipping
+    .intersection(geometriaCortes, [fragmento])
+    .flatMap((polygon) =>
+      polygon.map((ring) => ({
+        esHueco: false,
+        puntos: ring.slice(0, -1).map(([x, y]) => ({
+          x: redondear(x),
+          y: redondear(y),
+        })),
+      })),
+    );
 }
 
 function normalizarFragmento(
@@ -782,12 +835,20 @@ function normalizarFragmento(
       y: redondear(p.y - caja.minY),
     })),
   }));
+  const cortesInternos = (fragmento.cortesInternos ?? []).map((contorno) => ({
+    ...contorno,
+    puntos: contorno.puntos.map((p) => ({
+      x: redondear(p.x - caja.minX),
+      y: redondear(p.y - caja.minY),
+    })),
+  }));
   const segmentada = total > 1;
   return {
     id: segmentada
       ? `${fragmento.piezaOrigenId}-S${String(indice).padStart(2, '0')}`
       : fragmento.piezaOrigenId,
     contornos,
+    ...(cortesInternos.length ? { cortesInternos } : {}),
     anchoMm: redondear(caja.maxX - caja.minX),
     altoMm: redondear(caja.maxY - caja.minY),
     areaMm2: redondear(areaContornos(contornos)),

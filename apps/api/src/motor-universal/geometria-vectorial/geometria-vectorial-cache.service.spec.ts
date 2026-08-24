@@ -138,6 +138,28 @@ describe('GeometriaVectorialCacheService', () => {
     expect(changed.entry.cacheKey).not.toBe(first.entry.cacheKey);
   });
 
+  it('incluye la configuración de niveles en la clave', () => {
+    const service = new GeometriaVectorialCacheService();
+    const config = {
+      schemaVersion: 1 as const,
+      niveles: [{ id: 'nivel-1', nombre: 'Base', orden: 1, colorVisual: 1 }],
+      asignaciones: [
+        { objetoId: 'objeto-1', nivelId: 'nivel-1', modo: 'pieza' as const },
+      ],
+    };
+    const first = service.analizar({ ...input(), configuracionCapas: config });
+    const changed = service.analizar({
+      ...input(),
+      configuracionCapas: {
+        ...config,
+        niveles: [{ ...config.niveles[0], nombre: 'Frente' }],
+      },
+    });
+
+    expect(changed.cacheHit).toBe(false);
+    expect(changed.entry.cacheKey).not.toBe(first.entry.cacheKey);
+  });
+
   it('registra el hit solamente cuando el dispatcher reutiliza el nesting', () => {
     const service = new GeometriaVectorialCacheService();
     const { entry } = service.analizar(input());

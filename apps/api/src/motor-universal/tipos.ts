@@ -75,17 +75,21 @@ export interface MutacionAplicada {
 export interface JobContext {
   /** Cantidad pedida (talonarios, tarjetas, etc.). */
   cantidad: number;
-  /** Fuente vectorial de una capa. El motor vuelve a analizar el SVG y no
+  /** Fuente vectorial. El motor vuelve a analizar el SVG y no
    * confía en métricas calculadas por el navegador. */
   disenoVectorialFuente?: {
-    schemaVersion: 1;
+    schemaVersion: 1 | 2;
     nombreArchivo: string;
     svg: string;
     anchoFinalMm: number;
     altoFinalMm?: number;
+    configuracionCapas?: import('./geometria-vectorial/tipos').ConfiguracionCapasVectoriales;
   };
   /** Clave opaca del análisis previo; el servidor verifica hash y parámetros. */
   disenoVectorialCacheKey?: string;
+  /** Cotización manual de cartelería cuando todavía no existe un SVG. */
+  placasVectorialesManuales?: number;
+  metrosCortePorPlacaVectorial?: number;
   /** Geometría normalizada por el servidor para la ejecución actual. */
   geometriaVectorial?: import('./geometria-vectorial/tipos').GeometriaVectorialCanonica;
   /** Lista de piezas para nesting (gap H7 — multi-medida). */
@@ -767,9 +771,7 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    | 'MONTO_FIJO_PLANO'
-    | 'PORCENTAJE_SOBRE_BASE'
-    | 'POR_UNIDAD_INPUT';
+    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;
