@@ -186,7 +186,19 @@ describe('alcance seguro del Tablero de producción', () => {
           cantidad: 1,
           cantidadUnidad: 'u',
           specsJson: [{ etiqueta: 'Dato', valor: 'SPEC SECRETO' }],
-          cotizacionItem: null,
+          cotizacionItem: {
+            producto: null,
+            jobContextJson: {
+              caras: 2,
+              briefDiseno: {
+                frente: 'Texto del frente',
+                dorso: 'Texto del dorso',
+                colores: 'Azul',
+                indicaciones: '',
+                archivos: [],
+              },
+            },
+          },
           _count: { archivos: 0 },
           pasos: [paso('propio', 'usuario-1'), paso('ajeno', 'usuario-2')],
         },
@@ -219,6 +231,13 @@ describe('alcance seguro del Tablero de producción', () => {
     expect(respuesta.alcance).toBe('completo');
     expect(respuesta.items).toHaveLength(1);
     expect(respuesta.items[0]?.pasos.map((p) => p.id)).toEqual(['propio', 'ajeno']);
+    expect(respuesta.items[0]).toMatchObject({
+      caras: 2,
+      briefDiseno: {
+        frente: 'Texto del frente',
+        dorso: 'Texto del dorso',
+      },
+    });
     expect(serializado).toContain('CLIENTE SECRETO');
     expect(respuesta.estacionIdsEjecutables).toEqual([]);
   });

@@ -114,6 +114,10 @@ export type TableroItemData = {
   fechaEntrega: string | null;
   /** Cuántos archivos tiene el item (arte de producción). */
   archivosCount: number;
+  /** Brief comercial de diseño; sólo se incluye cuando el producto lo usa. */
+  briefDiseno?: unknown;
+  /** Cantidad de caras necesaria para interpretar frente/dorso del brief. */
+  caras?: 1 | 2;
   /** Item manual/histórico sin snapshot: no tiene ruta de producción. */
   sinRuta: boolean;
   pasos: TableroPasoData[];

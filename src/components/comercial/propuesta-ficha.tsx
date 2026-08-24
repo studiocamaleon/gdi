@@ -87,6 +87,7 @@ import {
   listarArchivos,
   eliminarArchivo,
 } from "@/lib/archivos-api";
+import type { BriefDisenoArchivoPendiente } from "@/lib/brief-diseno";
 import {
   getConfiguracionProduccion,
   getDiasNoLaborables,
@@ -149,6 +150,12 @@ import {
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import {
+  BriefDisenoDialog,
+  BriefDisenoEspecificaciones,
+  BriefDisenoProduccion,
+} from "@/components/comercial/brief-diseno-resumen";
+import { briefDisenoTieneContenido, leerBriefDiseno } from "@/lib/brief-diseno";
 import CentroCopiadoSheet from "@/components/comercial/centro-copiado-sheet";
 import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-precios-sheet";
 import ccFicha from "@/components/comercial/centro-copiado-ficha.module.css";
@@ -2005,6 +2012,7 @@ function ProduccionItemView({
   calculoPendiente,
   onEditPanels,
   onExpand,
+  onOpenBrief,
   ampliada = false,
   prepararCorte = false,
 }: {
@@ -2014,11 +2022,19 @@ function ProduccionItemView({
   onEditPanels?: (paso: PanelEditorPaso) => void;
   /** Abre la producción por encima del resto de la orden. */
   onExpand?: () => void;
+  /** Abre el brief compartido de la ficha sin duplicar su contenido. */
+  onOpenBrief?: () => void;
   /** Aprovecha el espacio extra del diálogo para agrandar el nesting. */
   ampliada?: boolean;
   /** La preparación de máquina sólo existe cuando el item ya pertenece a una OT. */
   prepararCorte?: boolean;
 }) {
+  const briefDiseno = React.useMemo(
+    () => leerBriefDiseno(item.jobContext?.briefDiseno),
+    [item.jobContext],
+  );
+  const carasBrief = getCarasItem(item) === 2 ? 2 : 1;
+  const tieneBrief = briefDisenoTieneContenido(briefDiseno);
   const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
   const pasosActivos = pasosCosteoActivos;
   // Cartelería con estructura de bastidor: se muestra el visor 3D del marco a
@@ -2140,6 +2156,15 @@ function ProduccionItemView({
                 <div>
                   <strong>{title}</strong>
                   <small>{detail}</small>
+                  {paso.familiaCodigo === "diseno_grafico" &&
+                  tieneBrief &&
+                  onOpenBrief ? (
+                    <BriefDisenoProduccion
+                      brief={briefDiseno}
+                      caras={carasBrief}
+                      onOpen={onOpenBrief}
+                    />
+                  ) : null}
                 </div>
               </div>
             );
@@ -3277,6 +3302,7 @@ export function ProductRow({
   const { moneda, zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
   const [produccionAmpliada, setProduccionAmpliada] = React.useState(false);
+  const [briefAbierto, setBriefAbierto] = React.useState(false);
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
   const costo = calcularCostoTotal(item);
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
@@ -3305,6 +3331,11 @@ export function ProductRow({
   // extraídas a buildOrdenItemSpecs para que la emisión de OT persista
   // exactamente estas mismas filas.
   const specs = React.useMemo(() => buildOrdenItemSpecs(item), [item]);
+  const briefDiseno = React.useMemo(
+    () => leerBriefDiseno(item.jobContext?.briefDiseno),
+    [item.jobContext],
+  );
+  const carasBrief = getCarasItem(item) === 2 ? 2 : 1;
 
   // Neto por ítem cuando la orden es sin comprobante: Total = subtotal (sin
   // IVA) y el unitario se recalcula sobre el neto. El snapshot no se toca.
@@ -3575,6 +3606,11 @@ export function ProductRow({
                       </div>
                     ) : null}
                     {largas.map(renderSpec)}
+                    <BriefDisenoEspecificaciones
+                      brief={briefDiseno}
+                      caras={carasBrief}
+                      onOpen={() => setBriefAbierto(true)}
+                    />
                   </div>
                 );
               })()}
@@ -3698,6 +3734,7 @@ export function ProductRow({
               calculoPendiente={calculoPendiente}
               prepararCorte={readOnly}
               onExpand={() => setProduccionAmpliada(true)}
+              onOpenBrief={() => setBriefAbierto(true)}
               onEditPanels={
                 readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
               }
@@ -3722,6 +3759,7 @@ export function ProductRow({
                 calculoPendiente={calculoPendiente}
                 ampliada
                 prepararCorte={readOnly}
+                onOpenBrief={() => setBriefAbierto(true)}
                 onEditPanels={
                   readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
                 }
@@ -3730,6 +3768,14 @@ export function ProductRow({
           </div>
         </DialogContent>
       </Dialog>
+
+      <BriefDisenoDialog
+        brief={briefDiseno}
+        caras={carasBrief}
+        productoNombre={item.productoNombre}
+        open={briefAbierto}
+        onOpenChange={setBriefAbierto}
+      />
     </div>
   );
 }
@@ -6186,6 +6232,77 @@ export function PropuestaFicha({
     [],
   );
 
+  const mapaArchivosBrief = React.useCallback(
+    (
+      itemsConSnapshot: Array<{
+        item: PropuestaItem;
+        cotizacionItemId?: string;
+      }>,
+    ): Map<string, BriefDisenoArchivoPendiente[]> => {
+      const mapa = new Map<string, BriefDisenoArchivoPendiente[]>();
+      for (const { item, cotizacionItemId } of itemsConSnapshot) {
+        if (
+          cotizacionItemId &&
+          item.briefDisenoArchivosPendientes?.length
+        ) {
+          mapa.set(cotizacionItemId, item.briefDisenoArchivosPendientes);
+        }
+      }
+      return mapa;
+    },
+    [],
+  );
+
+  /** Publica logos y referencias del brief una vez que existe el ítem real. */
+  const subirArchivosBriefDiseno = React.useCallback(
+    async (
+      productos: OrdenTrabajoProducto[],
+      archivosPorCotItem: Map<string, BriefDisenoArchivoPendiente[]>,
+    ) => {
+      if (archivosPorCotItem.size === 0) return;
+      const marca = "brief-diseno";
+      const fallidos: string[] = [];
+      for (const producto of productos) {
+        const pendientes = producto.cotizacionItemId
+          ? archivosPorCotItem.get(producto.cotizacionItemId)
+          : undefined;
+        if (!pendientes?.length) continue;
+        try {
+          const previos = await listarArchivos("ORDEN_ITEM", producto.id);
+          for (const pendiente of pendientes) {
+            for (const previo of previos) {
+              if (
+                previo.autogeneradoPor === marca &&
+                previo.nombre === pendiente.file.name
+              ) {
+                await eliminarArchivo(previo.id);
+              }
+            }
+            await subirArchivo(pendiente.file, {
+              scope: "ORDEN_ITEM",
+              entidadId: producto.id,
+              descripcion: pendiente.requiereVectorizacion
+                ? "Brief de diseño · Requiere vectorización"
+                : "Brief de diseño",
+              autogeneradoPor: marca,
+            });
+          }
+        } catch (error) {
+          fallidos.push(
+            error instanceof Error ? error.message : "no se pudo subir",
+          );
+        }
+      }
+      if (fallidos.length > 0) {
+        toast.warning(
+          `${fallidos.length} tarea(s) de archivos del brief no se pudieron completar. Revisá los adjuntos del producto.`,
+          { duration: 10000 },
+        );
+      }
+    },
+    [],
+  );
+
   /**
    * Persiste alta/edición de un item: primero el snapshot del cotizador
    * (recotizar si ya existía, cotizar-y-guardar encadenado a la Cotizacion
@@ -6329,6 +6446,10 @@ export function PropuestaFicha({
             productos,
             mapaArchivosCC([preparado]),
           );
+          await subirArchivosBriefDiseno(
+            productos,
+            mapaArchivosBrief([preparado]),
+          );
           if (preparado.item.planosPendientes?.length && productos[0]?.id) {
             const { errores } = await publicarPlanos([
               {
@@ -6381,6 +6502,8 @@ export function PropuestaFicha({
       publicarArtes,
       subirArchivosCentroCopiado,
       mapaArchivosCC,
+      subirArchivosBriefDiseno,
+      mapaArchivosBrief,
       router,
     ],
   );
@@ -6802,6 +6925,10 @@ export function PropuestaFicha({
           orden.productos,
           mapaArchivosCC(itemsConSnapshot),
         ),
+        subirArchivosBriefDiseno(
+          orden.productos,
+          mapaArchivosBrief(itemsConSnapshot),
+        ),
         publicarPlanosDeOrden(itemsConSnapshot, orden.productos),
       ]);
       const adjuntosFallidos = adjuntos.filter(
@@ -6835,6 +6962,8 @@ export function PropuestaFicha({
     publicarArtes,
     subirArchivosCentroCopiado,
     mapaArchivosCC,
+    subirArchivosBriefDiseno,
+    mapaArchivosBrief,
     publicarPlanosDeOrden,
     sinComprobante,
   ]);
@@ -6886,6 +7015,10 @@ export function PropuestaFicha({
           orden.productos,
           mapaArchivosCC(itemsConSnapshot),
         ),
+        subirArchivosBriefDiseno(
+          orden.productos,
+          mapaArchivosBrief(itemsConSnapshot),
+        ),
         publicarPlanosDeOrden(itemsConSnapshot, orden.productos),
       ]);
       const adjuntosFallidos = adjuntos.filter(
@@ -6920,6 +7053,8 @@ export function PropuestaFicha({
     publicarArtes,
     subirArchivosCentroCopiado,
     mapaArchivosCC,
+    subirArchivosBriefDiseno,
+    mapaArchivosBrief,
     publicarPlanosDeOrden,
     router,
     sinComprobante,

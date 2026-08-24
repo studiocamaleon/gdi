@@ -4179,7 +4179,10 @@ export class OrdenesTrabajoService {
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
             cotizacionItem: {
-              select: { producto: { select: { nombre: true } } },
+              select: {
+                jobContextJson: true,
+                producto: { select: { nombre: true } },
+              },
             },
             // Sólo el conteo de archivos LISTO: el tablero muestra un clip
             // con el número, no la lista. Traer las filas para contarlas
@@ -4272,7 +4275,10 @@ export class OrdenesTrabajoService {
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
             cotizacionItem: {
-              select: { producto: { select: { nombre: true } } },
+              select: {
+                jobContextJson: true,
+                producto: { select: { nombre: true } },
+              },
             },
             // Sólo el conteo de archivos LISTO: el tablero muestra un clip
             // con el número, no la lista. Traer las filas para contarlas
@@ -5207,7 +5213,12 @@ export class OrdenesTrabajoService {
     const item = await this.prisma.ordenTrabajoItem.findFirst({
       where: { id: itemId, tenantId: auth.tenantId },
       include: {
-        cotizacionItem: { select: { producto: { select: { nombre: true } } } },
+        cotizacionItem: {
+          select: {
+            jobContextJson: true,
+            producto: { select: { nombre: true } },
+          },
+        },
         pasos: {
           orderBy: { indice: 'asc' as const },
           include: {
@@ -5415,7 +5426,10 @@ export class OrdenesTrabajoService {
       cotizacionItemId: string | null;
       /** Producto vivo (vía la cotización): su nombre ACTUAL, para no mostrar
        *  el snapshot viejo si se renombró el producto. Null en OT manuales. */
-      cotizacionItem?: { producto: { nombre: string } | null } | null;
+      cotizacionItem?: {
+        jobContextJson: Prisma.JsonValue;
+        producto: { nombre: string } | null;
+      } | null;
       /** Sólo el conteo: el tablero muestra un clip, no la lista. */
       _count?: { archivos: number };
       pasos: Array<{
@@ -5465,6 +5479,12 @@ export class OrdenesTrabajoService {
      */
     tecnologiaPorMaquina: Map<string, string | null> = new Map(),
   ) {
+    const jobContext =
+      item.cotizacionItem?.jobContextJson &&
+      typeof item.cotizacionItem.jobContextJson === 'object' &&
+      !Array.isArray(item.cotizacionItem.jobContextJson)
+        ? (item.cotizacionItem.jobContextJson as Record<string, unknown>)
+        : null;
     return {
       id: item.id,
       ordenId: orden.id,
@@ -5487,6 +5507,10 @@ export class OrdenesTrabajoService {
         ? orden.fechaEntrega.toISOString().slice(0, 10)
         : null,
       archivosCount: item._count?.archivos ?? 0,
+      // El operario necesita estas instrucciones antes de iniciar Diseño
+      // gráfico. Se proyecta sólo el brief, no todo el jobContext comercial.
+      briefDiseno: jobContext?.briefDiseno ?? null,
+      caras: jobContext?.caras === 2 ? 2 : 1,
       sinRuta: item.pasos.length === 0,
       pasos: item.pasos.map((paso) => ({
         id: paso.id,

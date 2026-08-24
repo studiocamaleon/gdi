@@ -1,0 +1,238 @@
+.theme {
+  --muted: var(--surface-2);
+  --muted-foreground: var(--muted-text);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--ink);
+
+  width: 100%;
+}
+
+.summary {
+  margin-top: 16px;
+}
+
+.summaryTitle {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted-text, #6e6e76);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.summaryBody {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.summaryBody button {
+  flex-shrink: 0;
+}
+
+.shield {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--background) 18%, transparent);
+  cursor: default;
+}
+
+.panel {
+  position: fixed;
+  top: 14px;
+  right: calc(min(720px, 92vw) + 28px);
+  bottom: 14px;
+  display: flex;
+  width: min(480px, calc(100vw - min(720px, 92vw) - 42px));
+  min-width: 390px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--background);
+  box-shadow: 0 24px 64px color-mix(in srgb, var(--foreground) 18%, transparent);
+  animation: brief-panel-in 180ms ease-out;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 15% 0%, var(--accent), transparent 45%),
+    var(--background);
+}
+
+.headerIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.headerIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.headerText {
+  min-width: 0;
+}
+
+.headerText h2 {
+  margin: 1px 0;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.headerText p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eyebrow {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.upload {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--muted);
+  color: var(--foreground);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.upload:hover {
+  border-color: var(--ring);
+  background: var(--accent);
+}
+
+.upload svg {
+  width: 22px;
+  height: 22px;
+  color: var(--primary);
+}
+
+.upload span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.upload strong {
+  font-size: 13px;
+}
+
+.upload small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--background);
+}
+
+.footer > span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+@keyframes brief-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 1240px) {
+  .panel {
+    right: 14px;
+    width: min(520px, calc(100vw - 28px));
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .summaryBody {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .panel {
+    inset: 0;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .header > :nth-child(3) {
+    display: none;
+  }
+
+  .footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .footer > span {
+    display: none;
+  }
+
+  .actions > * {
+    flex: 1;
+  }
+}

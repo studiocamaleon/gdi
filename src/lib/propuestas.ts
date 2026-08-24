@@ -3,6 +3,7 @@ import type {
   CotizarResponse,
 } from "@/lib/productos-servicios-api";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import type { BriefDisenoArchivoPendiente } from "@/lib/brief-diseno";
 
 export type TipoPropuesta = "orden_trabajo" | "presupuesto";
 
@@ -87,6 +88,12 @@ export type PropuestaItem = {
    * manda al backend; se sube por el flujo de Archivos al guardar la orden.
    */
   archivosPendientes?: File[];
+  /**
+   * Logos, imágenes y referencias elegidos dentro del brief. Se conservan en
+   * memoria hasta que el ítem de la OT existe y pueden subirse con scope
+   * ORDEN_ITEM. La metadata legible vive en jobContext.briefDiseno.
+   */
+  briefDisenoArchivosPendientes?: BriefDisenoArchivoPendiente[];
   /** Ítems persistidos cuyos adjuntos hereda al reemplazar una carga rápida. */
   archivosOrigenItemIds?: string[];
 };

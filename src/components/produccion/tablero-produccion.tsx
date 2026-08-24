@@ -103,6 +103,8 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { BriefDisenoProduccion } from "@/components/comercial/brief-diseno-resumen";
+import { leerBriefDiseno, type BriefDiseno } from "@/lib/brief-diseno";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban" | "simulacion";
@@ -870,6 +872,8 @@ function PasoAcciones({
 
 function DetailRuta({
   item,
+  briefDiseno,
+  carasBrief,
   busy,
   canManage,
   canSupervise,
@@ -878,6 +882,8 @@ function DetailRuta({
   onAccion,
 }: {
   item: ItemView;
+  briefDiseno: BriefDiseno;
+  carasBrief: 1 | 2;
   busy: boolean;
   canManage: boolean;
   canSupervise: boolean;
@@ -953,6 +959,14 @@ function DetailRuta({
                     : "Sin tiempo registrado"}
                   {paso.completadoPorNombre ? ` · por ${paso.completadoPorNombre}` : ""}
                 </div>
+              ) : null}
+              {(paso.familiaCodigo === "diseno_grafico" ||
+                paso.plantillaCodigo === "diseno_grafico") ? (
+                <BriefDisenoProduccion
+                  brief={briefDiseno}
+                  caras={carasBrief}
+                  detalleInline
+                />
               ) : null}
               <PasoAcciones
                 item={item}
@@ -1188,6 +1202,8 @@ function ItemDetailSheet({
   const estimadoTotal = etiquetaDuracion(
     item.data.pasos.reduce((acc, paso) => acc + (paso.duracionEstimadaMin ?? 0), 0),
   );
+  const briefDiseno = leerBriefDiseno(item.data.briefDiseno);
+  const carasBrief = item.data.caras === 2 ? 2 : 1;
 
   return (
     <>
@@ -1278,6 +1294,8 @@ function ItemDetailSheet({
           {tab === "ruta" ? (
             <DetailRuta
               item={item}
+              briefDiseno={briefDiseno}
+              carasBrief={carasBrief}
               busy={busy}
               canManage={canManage}
               canSupervise={canSupervise}

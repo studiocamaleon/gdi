@@ -91,6 +91,15 @@ import {
   type CotizarResponse,
 } from "@/lib/productos-servicios-api";
 import { DisenoVectorialCotizador } from "@/components/comercial/diseno-vectorial-cotizador";
+import { BriefDisenoForm } from "@/components/comercial/brief-diseno-form";
+import {
+  BRIEF_DISENO_VACIO,
+  errorBriefDiseno,
+  leerBriefDiseno,
+  prepararBriefDiseno,
+  type BriefDiseno,
+  type BriefDisenoArchivoPendiente,
+} from "@/lib/brief-diseno";
 import type {
   ConfigPasoDetalle,
   FamiliaListItem,
@@ -1075,6 +1084,30 @@ function isConfigPasoVisibleForContext(
     );
   }
   return modo === "OBLIGATORIO";
+}
+
+function tieneDisenoGraficoActivo(
+  productoDetalle: ProductoDetalle | null,
+  motorConfig: MotorConfigState,
+  qty: number,
+): boolean {
+  const ruta = getRutaSeleccionada(
+    productoDetalle,
+    motorConfig.rutaAlternativaId,
+  );
+  if (!ruta) return false;
+  const slots = getSlotsParaCotizacion(ruta, productoDetalle, motorConfig);
+  const ruleContext = buildJobContext(
+    productoDetalle,
+    motorConfig,
+    qty,
+    slots,
+  );
+  return ruta.configPasos.some(
+    (config) =>
+      config.rutaPaso.familiaCodigo === "diseno_grafico" &&
+      isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
+  );
 }
 
 function isConfigPasoAvailableForOptionalToggle(
@@ -4128,6 +4161,7 @@ function buildItem(
     ruleContext: Record<string, unknown>;
     cotizacion?: CotizarResponse | null;
     notaProduccion?: string;
+    briefDiseno?: BriefDiseno;
     itemId?: string;
     fechaEntrega?: string;
   },
@@ -4197,6 +4231,9 @@ function buildItem(
   const notaProduccion = options?.notaProduccion?.trim() ?? "";
   if (jobContext && notaProduccion) {
     jobContext.notasProduccion = notaProduccion;
+  }
+  if (jobContext && options?.briefDiseno) {
+    jobContext.briefDiseno = options.briefDiseno;
   }
   const atributosSchema = product.specs.map((spec, index) => ({
     key: spec.key,
@@ -4795,6 +4832,18 @@ type ConfigStepProps = {
   setPlanosAdjuntos: React.Dispatch<React.SetStateAction<File[]>>;
   notaProduccion: string;
   setNotaProduccion: (value: string) => void;
+  briefDiseno: BriefDiseno;
+  briefArchivosPendientes: BriefDisenoArchivoPendiente[];
+  briefEditorOpen: boolean;
+  onOpenBrief: () => void;
+  onCloseBrief: () => void;
+  briefDisenoDraft: BriefDiseno;
+  setBriefDisenoDraft: (value: BriefDiseno) => void;
+  briefArchivosPendientesDraft: BriefDisenoArchivoPendiente[];
+  setBriefArchivosPendientesDraft: (
+    value: BriefDisenoArchivoPendiente[],
+  ) => void;
+  onSaveBrief: () => void;
   cotizacion: CotizarResponse | null;
   cotizando: boolean;
   cotizacionError: string | null;
@@ -4815,6 +4864,16 @@ function ApConfigStep({
   setPlanosAdjuntos,
   notaProduccion,
   setNotaProduccion,
+  briefDiseno,
+  briefArchivosPendientes,
+  briefEditorOpen,
+  onOpenBrief,
+  onCloseBrief,
+  briefDisenoDraft,
+  setBriefDisenoDraft,
+  briefArchivosPendientesDraft,
+  setBriefArchivosPendientesDraft,
+  onSaveBrief,
   cotizacion,
   cotizando,
   cotizacionError,
@@ -4875,6 +4934,19 @@ function ApConfigStep({
     (config: ConfigPasoDetalle) =>
       isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
     [motorConfig, ruleContext],
+  );
+  const configPasosDisenoGrafico = React.useMemo(
+    () =>
+      new Set(
+        (rutaSel?.configPasos ?? [])
+          .filter(
+            (config) =>
+              config.rutaPaso.familiaCodigo === "diseno_grafico" &&
+              includeVisibleConfig(config),
+          )
+          .map((config) => config.id),
+      ),
+    [includeVisibleConfig, rutaSel],
   );
   const opcionalesRuta = React.useMemo(
     () =>
@@ -5111,6 +5183,9 @@ function ApConfigStep({
           complejidad: opcional.configPasoId
             ? (complejidadPorConfigPaso.get(opcional.configPasoId) ?? null)
             : null,
+          esDisenoGrafico: opcional.configPasoId
+            ? configPasosDisenoGrafico.has(opcional.configPasoId)
+            : false,
         }))
         .filter(
           (item) =>
@@ -5123,11 +5198,13 @@ function ApConfigStep({
               item.tiempoManual !== null ||
               item.paramsComercial !== null ||
               item.nivel !== null ||
-              item.complejidad !== null),
+              item.complejidad !== null ||
+              item.esDisenoGrafico),
         ),
     [
       adi,
       complejidadPorConfigPaso,
+      configPasosDisenoGrafico,
       nivelesPorConfigPaso,
       opcionalesEfectivosSheet,
       opcionalesPasos,
@@ -7187,8 +7264,8 @@ function ApConfigStep({
         name={product.name}
         desc={product.descripcion}
         eyebrow={`${product.family} · ${product.cobro}`}
-        onBack={onBack}
-        onClose={onClose}
+        onBack={briefEditorOpen ? onCloseBrief : onBack}
+        onClose={briefEditorOpen ? onCloseBrief : onClose}
         sticky
       />
 
@@ -8146,6 +8223,7 @@ function ApConfigStep({
                   paramsComercial,
                   nivel,
                   complejidad,
+                  esDisenoGrafico,
                 }) => {
                   const arrastrado = opcional.configPasoId
                     ? arrastradosSheet.has(opcional.configPasoId)
@@ -8186,6 +8264,24 @@ function ApConfigStep({
                         {nivel
                           ? renderNivelField(nivel, { sinTarjeta: true })
                           : null}
+                        {esDisenoGrafico ? (
+                          <BriefDisenoForm
+                            productName={product.name}
+                            caras={motorConfig.caras}
+                            value={briefDiseno}
+                            pendientes={briefArchivosPendientes}
+                            open={briefEditorOpen}
+                            onOpen={onOpenBrief}
+                            onClose={onCloseBrief}
+                            draft={briefDisenoDraft}
+                            onDraftChange={setBriefDisenoDraft}
+                            pendientesDraft={briefArchivosPendientesDraft}
+                            onPendientesDraftChange={
+                              setBriefArchivosPendientesDraft
+                            }
+                            onSave={onSaveBrief}
+                          />
+                        ) : null}
                         {complejidad
                           ? renderComplejidadField(complejidad, {
                               sinTarjeta: true,
@@ -8579,6 +8675,39 @@ export function AgregarProductoSheet({
   // del lector de planos). Transitorio; ver docs/planos-persistir-diseno.md.
   const [planosAdjuntos, setPlanosAdjuntos] = React.useState<File[]>([]);
   const [notaProduccion, setNotaProduccion] = React.useState("");
+  const [briefDiseno, setBriefDiseno] = React.useState<BriefDiseno>(() => ({
+    ...BRIEF_DISENO_VACIO,
+    archivos: [],
+  }));
+  const [briefArchivosPendientes, setBriefArchivosPendientes] = React.useState<
+    BriefDisenoArchivoPendiente[]
+  >([]);
+  const [briefEditorOpen, setBriefEditorOpen] = React.useState(false);
+  const [briefDisenoDraft, setBriefDisenoDraft] = React.useState<BriefDiseno>(
+    () => ({ ...BRIEF_DISENO_VACIO, archivos: [] }),
+  );
+  const [briefArchivosPendientesDraft, setBriefArchivosPendientesDraft] =
+    React.useState<BriefDisenoArchivoPendiente[]>([]);
+
+  const abrirBrief = React.useCallback(() => {
+    setBriefDisenoDraft({
+      ...briefDiseno,
+      archivos: briefDiseno.archivos.map((archivo) => ({ ...archivo })),
+    });
+    setBriefArchivosPendientesDraft([...briefArchivosPendientes]);
+    setBriefEditorOpen(true);
+  }, [briefArchivosPendientes, briefDiseno]);
+
+  const cerrarBrief = React.useCallback(() => {
+    setBriefEditorOpen(false);
+  }, []);
+
+  const guardarBrief = React.useCallback(() => {
+    setBriefDiseno(briefDisenoDraft);
+    setBriefArchivosPendientes(briefArchivosPendientesDraft);
+    setBriefEditorOpen(false);
+    toast.success("Brief guardado para este producto.");
+  }, [briefArchivosPendientesDraft, briefDisenoDraft]);
   const [loadingProductId, setLoadingProductId] = React.useState<string | null>(
     null,
   );
@@ -8732,6 +8861,11 @@ export function AgregarProductoSheet({
       setAdi(selectedAdicionales);
       setMotorConfig(nextMotorConfig);
       setNotaProduccion(itemToEdit.notaProduccion ?? "");
+      setBriefDiseno(leerBriefDiseno(itemToEdit.jobContext?.briefDiseno));
+      setBriefArchivosPendientes(
+        itemToEdit.briefDisenoArchivosPendientes ?? [],
+      );
+      setBriefEditorOpen(false);
       setCotizacion(cotizacionFromItem(itemToEdit));
       setCotizacionDesactualizada(false);
       setCotizacionError(null);
@@ -8771,6 +8905,9 @@ export function AgregarProductoSheet({
     setSpecs(defaultSpecs(next));
     setAdi([]);
     setNotaProduccion("");
+    setBriefDiseno({ ...BRIEF_DISENO_VACIO, archivos: [] });
+    setBriefArchivosPendientes([]);
+    setBriefEditorOpen(false);
     setCotizacion(null);
     setCotizacionDesactualizada(true);
     setCotizacionError(null);
@@ -8973,6 +9110,23 @@ export function AgregarProductoSheet({
         toast.error(tiempoManualBloqueo);
         return;
       }
+      const disenoGraficoActivo = tieneDisenoGraficoActivo(
+        productoDetalle,
+        motorConfig,
+        qty,
+      );
+      const briefPreparado = prepararBriefDiseno(
+        briefDiseno,
+        briefArchivosPendientes,
+      );
+      if (disenoGraficoActivo) {
+        const error = errorBriefDiseno(briefPreparado);
+        if (error) {
+          toast.error(error);
+          abrirBrief();
+          return;
+        }
+      }
       const rutaSel = getRutaSeleccionada(
         productoDetalle,
         motorConfig.rutaAlternativaId,
@@ -9002,6 +9156,7 @@ export function AgregarProductoSheet({
         ruleContext,
         cotizacion,
         notaProduccion,
+        briefDiseno: disenoGraficoActivo ? briefPreparado : undefined,
         itemId: editingItem?.id,
         fechaEntrega: editingItem?.fechaEntrega ?? fechaEntregaDefault,
       });
@@ -9010,6 +9165,9 @@ export function AgregarProductoSheet({
         planosAdjuntos.length > 0
           ? { ...construido, planosPendientes: planosAdjuntos }
           : construido;
+      if (briefArchivosPendientes.length > 0) {
+        nextItem.briefDisenoArchivosPendientes = briefArchivosPendientes;
+      }
       if (editingItem) {
         onSaveItem?.(nextItem);
         toast.success(`${product.name} actualizado.`);
@@ -9026,6 +9184,9 @@ export function AgregarProductoSheet({
         setSpecs({});
         setAdi([]);
         setNotaProduccion("");
+        setBriefDiseno({ ...BRIEF_DISENO_VACIO, archivos: [] });
+        setBriefArchivosPendientes([]);
+        setBriefEditorOpen(false);
         setMotorConfig(DEFAULT_MOTOR_CONFIG);
         setCotizacion(null);
         setCotizacionDesactualizada(true);
@@ -9050,6 +9211,9 @@ export function AgregarProductoSheet({
       productoDetalle,
       qty,
       notaProduccion,
+      briefDiseno,
+      briefArchivosPendientes,
+      abrirBrief,
       // Sin esta dep el callback puede quedarse con una lista vieja de planos
       // y no subir los que el comercial acaba de adjuntar.
       planosAdjuntos,
@@ -9071,6 +9235,9 @@ export function AgregarProductoSheet({
       setSpecs({});
       setAdi([]);
       setNotaProduccion("");
+      setBriefDiseno({ ...BRIEF_DISENO_VACIO, archivos: [] });
+      setBriefArchivosPendientes([]);
+      setBriefEditorOpen(false);
       setMotorConfig(DEFAULT_MOTOR_CONFIG);
       setLoadingProductId(null);
       setCotizacion(null);
@@ -9118,12 +9285,16 @@ export function AgregarProductoSheet({
     if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (briefEditorOpen) {
+        cerrarBrief();
+        return;
+      }
       if (step === "config") back();
       else close();
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [back, close, open, step]);
+  }, [back, briefEditorOpen, cerrarBrief, close, open, step]);
 
   if (!open) return null;
 
@@ -9141,7 +9312,10 @@ export function AgregarProductoSheet({
 
   return (
     <>
-      <div className="sheet-backdrop" onClick={close} />
+      <div
+        className="sheet-backdrop"
+        onClick={briefEditorOpen ? cerrarBrief : close}
+      />
       <div
         ref={dialogRef}
         className={`sheet sheet-ap${esCarteleriaFull ? ` ${cartS.sheetFull}` : ""}`}
@@ -9200,6 +9374,18 @@ export function AgregarProductoSheet({
               setPlanosAdjuntos={setPlanosAdjuntos}
               notaProduccion={notaProduccion}
               setNotaProduccion={setNotaProduccion}
+              briefDiseno={briefDiseno}
+              briefArchivosPendientes={briefArchivosPendientes}
+              briefEditorOpen={briefEditorOpen}
+              onOpenBrief={abrirBrief}
+              onCloseBrief={cerrarBrief}
+              briefDisenoDraft={briefDisenoDraft}
+              setBriefDisenoDraft={setBriefDisenoDraft}
+              briefArchivosPendientesDraft={briefArchivosPendientesDraft}
+              setBriefArchivosPendientesDraft={
+                setBriefArchivosPendientesDraft
+              }
+              onSaveBrief={guardarBrief}
               cotizacion={cotizacion}
               cotizando={cotizando}
               cotizacionError={cotizacionError}
@@ -9213,7 +9399,12 @@ export function AgregarProductoSheet({
         <div className="sheet-foot ap-foot">
           {step === "config" && product && totals ? (
             <>
-              <button type="button" className="btn" onClick={back}>
+              <button
+                type="button"
+                className="btn"
+                onClick={back}
+                disabled={briefEditorOpen}
+              >
                 <ArrowLeftIcon />
                 Volver
               </button>
@@ -9239,12 +9430,13 @@ export function AgregarProductoSheet({
                   className="btn"
                   onClick={() => addCurrent(true)}
                   disabled={
-                    product.real &&
-                    (!cotizacionExitosa ||
-                      cotizacionDesactualizada ||
-                      cotizando ||
-                      isBlockedByMinimum ||
-                      isBlockedByTiempoManual)
+                    briefEditorOpen ||
+                    (product.real &&
+                      (!cotizacionExitosa ||
+                        cotizacionDesactualizada ||
+                        cotizando ||
+                        isBlockedByMinimum ||
+                        isBlockedByTiempoManual))
                   }
                 >
                   Guardar y agregar otro
@@ -9255,12 +9447,13 @@ export function AgregarProductoSheet({
                 className="btn btn-primary"
                 onClick={() => addCurrent(false)}
                 disabled={
-                  product.real &&
-                  (!cotizacionExitosa ||
-                    cotizacionDesactualizada ||
-                    cotizando ||
-                    isBlockedByMinimum ||
-                    isBlockedByTiempoManual)
+                  briefEditorOpen ||
+                  (product.real &&
+                    (!cotizacionExitosa ||
+                      cotizacionDesactualizada ||
+                      cotizando ||
+                      isBlockedByMinimum ||
+                      isBlockedByTiempoManual))
                 }
               >
                 {isEditing ? <CheckIcon /> : <PlusIcon />}
