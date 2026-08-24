@@ -766,6 +766,23 @@ export function normalizePlotterCortePerfil(
   return { ...perfil, detalle, productivityUnit: "m2_h" };
 }
 
+/**
+ * En una cortadora láser, el tipo universal y la operación representan la
+ * misma decisión. La UI muestra sólo Operación; el detalle se mantiene para
+ * el selector automático del motor y para compatibilidad con datos previos.
+ */
+export function normalizeCorteLaserPerfil(
+  perfil: LocalPerfil,
+  form: MaquinaPayload,
+): LocalPerfil {
+  if (form.plantilla !== "corte_laser") return perfil;
+  const tipoOperacion = perfil.tipoPerfil === "grabado" ? "GRABADO" : "CORTE";
+  return {
+    ...perfil,
+    detalle: { ...(perfil.detalle ?? {}), tipoOperacion },
+  };
+}
+
 export function setPerfilFieldValueForTemplate(
   perfil: LocalPerfil,
   form: MaquinaPayload,
@@ -795,16 +812,22 @@ export function normalizePerfilTypeForTemplate(
         : defaultUnit,
   };
   if (allowedTypes.includes(perfilWithDefaults.tipoPerfil)) {
-    return normalizePlotterCortePerfil(
-      cleanPerfilDetailsForType(perfilWithDefaults),
+    return normalizeCorteLaserPerfil(
+      normalizePlotterCortePerfil(
+        cleanPerfilDetailsForType(perfilWithDefaults),
+        form,
+      ),
       form,
     );
   }
-  return normalizePlotterCortePerfil(
-    cleanPerfilDetailsForType({
-      ...perfilWithDefaults,
-      tipoPerfil: getDefaultProfileType(form),
-    }),
+  return normalizeCorteLaserPerfil(
+    normalizePlotterCortePerfil(
+      cleanPerfilDetailsForType({
+        ...perfilWithDefaults,
+        tipoPerfil: getDefaultProfileType(form),
+      }),
+      form,
+    ),
     form,
   );
 }
@@ -815,10 +838,7 @@ export function shouldShowMaquinaField(
 ) {
   if (form.plantilla === "corte_hilo_caliente") {
     const tipoUnion = getMaquinaFieldValue(form, "tipoUnionVectorial");
-    const modoCantidad = getMaquinaFieldValue(
-      form,
-      "modoCantidadEncastres",
-    );
+    const modoCantidad = getMaquinaFieldValue(form, "modoCantidadEncastres");
     const soloConEncastre = new Set([
       "anchoEncastreMm",
       "profundidadEncastreMm",

@@ -13,6 +13,7 @@ import {
   type UpsertMaquinaDto,
 } from '../dto/upsert-maquina.dto';
 import { getMaquinaDiagnosticoConfiguracion } from '../maquinaria-configuracion';
+import { validatePerfilOperativoByTemplate } from '../maquinaria-template-profile-rules';
 
 function base(plantilla: PlantillaMaquinariaDto): UpsertMaquinaDto {
   return {
@@ -173,6 +174,36 @@ describe('diagnóstico de configuración de maquinaria', () => {
     ];
 
     expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([]);
+  });
+
+  it('acepta sólo Corte o Grabado y exige que la operación láser coincida', () => {
+    const corte = {
+      nombre: 'Corte MDF',
+      tipoPerfil: TipoPerfilOperativoMaquinaDto.corte,
+      activo: true,
+      productivityValue: 30,
+      productivityUnit: UnidadProduccionMaquinaDto.mm_s,
+      detalle: { tipoOperacion: 'CORTE' },
+    };
+    expect(() =>
+      validatePerfilOperativoByTemplate(
+        PlantillaMaquinariaDto.corte_laser,
+        corte,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validatePerfilOperativoByTemplate(PlantillaMaquinariaDto.corte_laser, {
+        ...corte,
+        detalle: { tipoOperacion: 'SEMICORTE' },
+      }),
+    ).toThrow('debe ser Corte o Grabado');
+    expect(() =>
+      validatePerfilOperativoByTemplate(PlantillaMaquinariaDto.corte_laser, {
+        ...corte,
+        tipoPerfil: TipoPerfilOperativoMaquinaDto.grabado,
+        detalle: { tipoOperacion: 'CORTE' },
+      }),
+    ).toThrow('su operación debe coincidir');
   });
 
   it('al Plotter CAD le exige sus tintas CMYK y un único cabezal por ml', () => {

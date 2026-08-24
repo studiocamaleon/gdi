@@ -7590,6 +7590,50 @@ body {
     font-size: 12px;
   }
 
+  /* Selector múltiple de materiales del perfil láser. El buscador conserva
+     siempre su fila y la selección crece debajo sin deformarlo. */
+  .maq-perfiles .maq-material-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 340px;
+  }
+
+  .maq-perfiles .maq-material-chips {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .maq-perfiles .maq-material-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 210px;
+    padding: 4px 8px;
+    color: var(--ink);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .maq-perfiles .maq-material-chip span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .maq-perfiles .maq-material-chip svg {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+  }
+
   /* ── Desgaste y repuestos: misma tabla que Perfiles ── */
 
   /* Pocas columnas y una tabla al 100%: sin esto el sobrante se lo repartían
@@ -18004,6 +18048,13 @@ button.est-card {
   box-shadow: -16px 0 40px -8px rgba(20, 20, 26, 0.2);
 }
 
+/* El formulario necesita espacio para sus selectores y grillas de tres
+   columnas. Se separa del sheet más compacto de calendario. */
+.est-sheet.est-editor-sheet {
+  width: min(900px, calc(100vw - 48px));
+  max-width: none;
+}
+
 .est-sheet .sheet-head {
   display: flex;
   align-items: flex-start;
@@ -18371,6 +18422,10 @@ button.est-card {
   .est-sheet {
     width: min(100vw, 760px);
   }
+
+  .est-sheet.est-editor-sheet {
+    width: 100vw;
+  }
 }
 
 /* ═══ Estaciones: sección del DISEÑO (Grafoprint styles.css, verbatim; tokens
@@ -18728,9 +18783,6 @@ button.est-card {
 }
 
 /* ─── Form sheet ─── */
-.est-sheet {
-  width: min(720px, 88vw);
-}
 .est-sheet-head {
   display: flex;
   align-items: flex-start;

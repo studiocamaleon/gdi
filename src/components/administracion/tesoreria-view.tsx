@@ -1363,6 +1363,11 @@ export function TesoreriaView({
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
+                                  className={cn(
+                                    movimiento.estadoConciliacion ===
+                                      "conciliado" &&
+                                      "text-[var(--ok)] disabled:opacity-100",
+                                  )}
                                   disabled={
                                     movimiento.estadoConciliacion ===
                                     "conciliado"
@@ -1381,7 +1386,10 @@ export function TesoreriaView({
                                 >
                                   <CheckCircle2Icon />
                                   <span className="sr-only">
-                                    Marcar conciliado
+                                    {movimiento.estadoConciliacion ===
+                                    "conciliado"
+                                      ? "Movimiento conciliado"
+                                      : "Marcar conciliado"}
                                   </span>
                                 </Button>
                               </TableCell>

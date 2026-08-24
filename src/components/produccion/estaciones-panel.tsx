@@ -755,7 +755,7 @@ function StationForm({
 
   return (
     <Sheet open onOpenChange={(open) => { if (!open) onCancel(); }}>
-      <SheetContent className="est-sheet gap-0 p-0 sm:max-w-none" showCloseButton={false}>
+      <SheetContent className="est-sheet est-editor-sheet gap-0 p-0 sm:max-w-none" showCloseButton={false}>
         <div className="sheet-head est-sheet-head">
           <div className="head-icon" style={{ background: etapa.color }}>{iconEl(draft.icono)}</div>
           <div className="body">

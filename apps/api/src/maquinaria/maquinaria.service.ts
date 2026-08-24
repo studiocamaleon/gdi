@@ -11,6 +11,7 @@ import {
   GeometriaTrabajoMaquina,
   PlantillaMaquinaria,
   Prisma,
+  SubfamiliaMateriaPrima,
   TipoComponenteDesgasteMaquina,
   TipoConsumibleMaquina,
   TipoPerfilOperativoMaquina,
@@ -1323,6 +1324,45 @@ export class MaquinariaService {
       }
 
       normalizedPerfilNames.add(key);
+    }
+
+    // Los perfiles nuevos de corte láser guardan IDs reales de materia prima.
+    // Los códigos en mayúsculas pertenecen al selector legado y se toleran
+    // hasta que el usuario los reemplace desde la UI.
+    if (payload.plantilla === PlantillaMaquinariaDto.corte_laser) {
+      const materialIds = Array.from(
+        new Set(
+          payload.perfilesOperativos.flatMap((perfil) => {
+            const raw = perfil.detalle?.material;
+            const valores = Array.isArray(raw) ? raw : raw ? [raw] : [];
+            return valores
+              .map(String)
+              .filter(
+                (value) => value.length > 0 && !/^[A-Z][A-Z0-9_]*$/.test(value),
+              );
+          }),
+        ),
+      );
+      if (materialIds.length > 0) {
+        const materialesValidos = await this.prisma.materiaPrima.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            id: { in: materialIds },
+            activo: true,
+            subfamilia: SubfamiliaMateriaPrima.SUSTRATO_RIGIDO,
+            esConsumible: false,
+            esRepuesto: false,
+            esProductoBase: false,
+            variantes: { some: { activo: true } },
+          },
+          select: { id: true },
+        });
+        if (materialesValidos.length !== materialIds.length) {
+          throw new BadRequestException(
+            'Un perfil de corte laser referencia un material inexistente, inactivo o no utilizable del inventario.',
+          );
+        }
+      }
     }
 
     const varianteIds = Array.from(

@@ -287,6 +287,21 @@ function getPerfilFieldValue(
   return directRecord[fieldKey];
 }
 
+function operacionLaserCoincideConTipo(
+  perfil: MaquinaPerfilOperativoItemDto,
+): boolean {
+  const operacion = String(getPerfilFieldValue(perfil, 'tipoOperacion') ?? '')
+    .trim()
+    .toUpperCase();
+  if (perfil.tipoPerfil === TipoPerfilOperativoMaquinaDto.corte) {
+    return operacion === 'CORTE';
+  }
+  if (perfil.tipoPerfil === TipoPerfilOperativoMaquinaDto.grabado) {
+    return operacion === 'GRABADO';
+  }
+  return false;
+}
+
 export function validatePerfilOperativoByTemplate(
   plantilla: PlantillaMaquinariaDto,
   perfil: MaquinaPerfilOperativoItemDto,
@@ -306,6 +321,15 @@ export function validatePerfilOperativoByTemplate(
   if (!allowedProfileTypes.has(perfil.tipoPerfil)) {
     throw new Error(
       `El perfil operativo ${perfilName} usa tipo ${perfil.tipoPerfil}, que no corresponde a la plantilla ${plantilla}.`,
+    );
+  }
+
+  if (
+    plantilla === PlantillaMaquinariaDto.corte_laser &&
+    !operacionLaserCoincideConTipo(perfil)
+  ) {
+    throw new Error(
+      `El perfil operativo ${perfilName} debe ser Corte o Grabado y su operación debe coincidir.`,
     );
   }
 
@@ -369,6 +393,16 @@ export function getPerfilOperativoConfigurationIssues(
     if (!hasValue(getPerfilFieldValue(perfil, requiredKey))) {
       issues.push({ tipo: 'campo', fieldKey: requiredKey });
     }
+  }
+
+  if (
+    plantilla === PlantillaMaquinariaDto.corte_laser &&
+    !operacionLaserCoincideConTipo(perfil) &&
+    !issues.some(
+      (issue) => issue.tipo === 'campo' && issue.fieldKey === 'tipoOperacion',
+    )
+  ) {
+    issues.push({ tipo: 'campo', fieldKey: 'tipoOperacion' });
   }
 
   if (

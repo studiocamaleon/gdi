@@ -366,7 +366,6 @@ export function MaquinariaPanel({
             <TableRow>
               <TableHead>Nombre</TableHead>
               <TableHead>Tipo</TableHead>
-              <TableHead>Planta</TableHead>
               <TableHead>Centro de costos</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Configuración</TableHead>
@@ -379,7 +378,7 @@ export function MaquinariaPanel({
           <TableBody>
             {maquinas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="maq-vacio">
+                <TableCell colSpan={7} className="maq-vacio">
                   <div>
                     {sinResultadosPorFiltros
                       ? "Ninguna máquina coincide con los filtros."
@@ -427,7 +426,6 @@ export function MaquinariaPanel({
                   />
                   {getPlantillaMaquinariaLabel(maquina.plantilla)}
                 </TableCell>
-                <TableCell>{maquina.plantaNombre || "—"}</TableCell>
                 <TableCell>
                   {maquina.centroCostoPrincipalNombre || "—"}
                 </TableCell>

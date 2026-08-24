@@ -12,7 +12,7 @@
  * cortar o grabar), así que no se puede auto-filtrar por familia.
  */
 export const OPERACIONES_POR_FAMILIA: Record<string, string[]> = {
-  corte_laser: ['CORTE', 'SEMICORTE'],
+  corte_laser: ['CORTE'],
   grabado_laser: ['GRABADO'],
 };
 

@@ -116,13 +116,6 @@ const calidad3dOptions = [
   option("ALTA", "Alta (capa fina)"),
 ];
 
-// Operación de cada FILA de perfil (una velocidad por operación×material×espesor).
-const tipoOperacionLaserOptions = [
-  option("CORTE", "Corte"),
-  option("GRABADO", "Grabado (vector)"),
-  option("SEMICORTE", "Semicorte"),
-];
-
 const tipoOperacionCncOptions = [
   option("CORTE", "Corte pasante"),
   option("GRABADO", "Grabado / V-carve"),
@@ -1101,22 +1094,13 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
           description: "Ej. Corte MDF 6mm.",
         }),
         field({
-          key: "tipoOperacion",
-          label: "Operación",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          options: tipoOperacionLaserOptions,
-          description: "Corte, grabado vectorial o semicorte.",
-        }),
-        field({
           key: "material",
           label: "Materiales",
           scope: "perfil_operativo",
           kind: "multiselect",
           options: materialLaserOptions,
           description:
-            "Materiales que cubre este perfil. Un mismo perfil puede valer para varios (ej. grabado sobre MDF, madera y acrílico).",
+            "Sustratos rígidos reales del inventario que cubre este perfil. Un mismo perfil puede vincularse con varios materiales.",
         }),
         field({
           key: "espesorMinMm",

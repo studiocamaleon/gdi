@@ -16,6 +16,10 @@ import {
 } from "@/lib/maquinaria";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import {
+  SelectBuscable,
+  type OpcionSelect,
+} from "@/components/ui/select-buscable";
 
 import { PerfilTintasModal } from "./consumibles-editor";
 import {
@@ -37,6 +41,108 @@ import {
 } from "./helpers";
 
 // ─── Sub-componente: editor de perfiles ────────────────────────────
+
+const FAMILIAS_MATERIAL: Record<string, string> = {
+  sustrato: "Sustratos",
+  transferencia_laminacion: "Transferencia y laminación",
+  quimico_auxiliar: "Químicos y auxiliares",
+  aditiva_3d: "Materiales 3D",
+  metal_estructura: "Estructuras",
+  terminacion_editorial: "Terminación editorial",
+  magnetico_fijacion: "Magnéticos y fijación",
+  pop_exhibidor: "POP y exhibidores",
+  adhesivo_tecnico: "Adhesivos técnicos",
+  sellos: "Sellos",
+};
+
+function MaterialesPerfilPicker({
+  value,
+  onChange,
+  materiasPrimas,
+  loading,
+  opcionesLegadas,
+}: {
+  value: unknown;
+  onChange: (value: string[]) => void;
+  materiasPrimas: MateriaPrima[];
+  loading: boolean;
+  opcionesLegadas?: MaquinariaTemplateField["options"];
+}) {
+  const seleccionados = Array.isArray(value)
+    ? value.map(String)
+    : typeof value === "string" && value
+      ? [value]
+      : [];
+  const porId = new Map(
+    materiasPrimas.map((material) => [material.id, material]),
+  );
+  const opciones: OpcionSelect[] = materiasPrimas
+    .filter(
+      (material) =>
+        material.activo &&
+        material.subfamilia === "sustrato_rigido" &&
+        !material.esConsumible &&
+        !material.esRepuesto &&
+        !material.esProductoBase &&
+        material.variantes.some((variante) => variante.activo) &&
+        !seleccionados.includes(material.id),
+    )
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+    .map((material) => {
+      const variantesActivas = material.variantes.filter(
+        (variante) => variante.activo,
+      ).length;
+      return {
+        value: material.id,
+        label: material.nombre,
+        grupo: FAMILIAS_MATERIAL[material.familia] ?? "Otros materiales",
+        detalle: `${material.codigo} · ${variantesActivas} ${variantesActivas === 1 ? "variante" : "variantes"}`,
+      };
+    });
+
+  const quitar = (id: string) =>
+    onChange(seleccionados.filter((seleccionado) => seleccionado !== id));
+
+  return (
+    <div className="maq-material-field">
+      <SelectBuscable
+        value=""
+        opciones={opciones}
+        onChange={(id) => id && onChange([...seleccionados, id])}
+        placeholder={loading ? "Cargando materiales…" : "Buscar material…"}
+        placeholderBusqueda="Escribí un material y presioná Enter…"
+        vacio="No hay sustratos rígidos activos que coincidan."
+        disabled={loading || opciones.length === 0}
+        ariaLabel="Agregar material de inventario al perfil"
+        minimoParaBuscar={0}
+      />
+      {seleccionados.length > 0 ? (
+        <div className="maq-material-chips">
+          {seleccionados.map((id) => {
+            const material = porId.get(id);
+            const legado = opcionesLegadas?.find(
+              (opcion) => opcion.value === id,
+            );
+            const label = material?.nombre ?? legado?.label ?? id;
+            return (
+              <button
+                key={id}
+                type="button"
+                className="maq-material-chip"
+                title={`Quitar ${label}${material && !material.activo ? " (inactivo)" : ""}`}
+                onClick={() => quitar(id)}
+              >
+                <span>{label}</span>
+                <XIcon aria-hidden />
+                <span className="sr-only">Quitar</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 interface PerfilesProps {
   perfiles: LocalPerfil[];
@@ -72,6 +178,8 @@ export function PerfilesOperativosEditor({
   );
   // La columna Tipo sólo aparece si hay algo que elegir.
   const conColumnaTipo = allowedProfileTypeItems.length > 1;
+  const etiquetaColumnaTipo =
+    form.plantilla === "corte_laser" ? "Operación" : "Tipo";
   // Tintas por perfil en todas las impresoras de la familia, láser incluida:
   // el consumo de tóner cambia con el papel, igual que la productividad.
   const conColumnaTinta = PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(
@@ -111,7 +219,9 @@ export function PerfilesOperativosEditor({
           <table className="maq-perfiles-tabla">
             <thead>
               <tr>
-                {conColumnaTipo ? <th className="tipo">Tipo</th> : null}
+                {conColumnaTipo ? (
+                  <th className="tipo">{etiquetaColumnaTipo}</th>
+                ) : null}
                 {visibleFields.map((field) => (
                   <th
                     key={field.key}
@@ -200,22 +310,41 @@ export function PerfilesOperativosEditor({
                           key={field.key}
                           className={esNum ? "num" : undefined}
                         >
-                          <FieldInput
-                            field={cellField}
-                            value={valor}
-                            // Los modos de color van como pills, no como una
-                            // pila de checkboxes dentro de la celda.
-                            renderColorModeCards={field.key === "colores"}
-                            onChange={(v) => {
-                              const next = setPerfilFieldValueForTemplate(
-                                perfil,
-                                form,
-                                field.key,
-                                v,
-                              );
-                              updatePerfil(perfil.uiKey, next);
-                            }}
-                          />
+                          {form.plantilla === "corte_laser" &&
+                          field.key === "material" ? (
+                            <MaterialesPerfilPicker
+                              value={valor}
+                              materiasPrimas={materiasPrimas}
+                              loading={loadingMaterias}
+                              opcionesLegadas={field.options}
+                              onChange={(v) => {
+                                const next = setPerfilFieldValueForTemplate(
+                                  perfil,
+                                  form,
+                                  field.key,
+                                  v,
+                                );
+                                updatePerfil(perfil.uiKey, next);
+                              }}
+                            />
+                          ) : (
+                            <FieldInput
+                              field={cellField}
+                              value={valor}
+                              // Los modos de color van como pills, no como una
+                              // pila de checkboxes dentro de la celda.
+                              renderColorModeCards={field.key === "colores"}
+                              onChange={(v) => {
+                                const next = setPerfilFieldValueForTemplate(
+                                  perfil,
+                                  form,
+                                  field.key,
+                                  v,
+                                );
+                                updatePerfil(perfil.uiKey, next);
+                              }}
+                            />
+                          )}
                         </td>
                       );
                     })}
