@@ -38,6 +38,10 @@ export class ListProductosQueryDto extends PaginationDto {
   subcategoriaCodigo?: string;
 
   @IsOptional()
+  @IsString()
+  categoriaCodigo?: string;
+
+  @IsOptional()
   @IsEnum(OrdenProductosDto)
   orden: OrdenProductosDto = OrdenProductosDto.recientes;
 }

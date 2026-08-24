@@ -40,6 +40,7 @@ export class ProductosService {
       search?: string;
       unidadComercial?: 'unidad' | 'm2' | 'metro_lineal';
       subcategoriaCodigo?: string;
+      categoriaCodigo?: string;
       orden?: OrdenProductosDto;
     },
   ) {
@@ -49,6 +50,7 @@ export class ProductosService {
       search,
       unidadComercial,
       subcategoriaCodigo,
+      categoriaCodigo,
       orden = OrdenProductosDto.recientes,
     } = opts;
     const where: Prisma.ProductoWhereInput = {
@@ -60,6 +62,8 @@ export class ProductosService {
       ...(unidadComercial ? { unidadComercial } : {}),
       ...(subcategoriaCodigo
         ? { subcategoriaComercial: { codigo: subcategoriaCodigo } }
+        : categoriaCodigo
+          ? { subcategoriaComercial: { categoria: { codigo: categoriaCodigo } } }
         : {}),
       // Búsqueda por título (nombre) y código, no por la descripción.
       ...(search

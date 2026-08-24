@@ -149,7 +149,7 @@ export function BriefDisenoEspecificaciones({
   return (
     <div className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-t bg-card px-4 py-4 sm:px-6">
       <div
-        className="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground shadow-xs"
+        className="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground shadow-xs"
         aria-hidden="true"
       >
         <FileTextIcon className="size-7" />

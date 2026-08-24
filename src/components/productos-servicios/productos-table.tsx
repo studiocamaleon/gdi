@@ -1,13 +1,24 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { CopyIcon, Loader2Icon, PlusIcon, SearchIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CopyIcon,
+  Grid2X2Icon,
+  Loader2Icon,
+  PlusIcon,
+  SearchIcon,
+  Table2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -35,24 +46,62 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { duplicarProducto, listProductos } from "@/lib/productos-servicios-api";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 import { getLabel, modoMedidasLabels, unidadComercialLabels } from "@/lib/labels-humanos";
 
 type OrdenProductos = "recientes" | "nombre_asc" | "nombre_desc";
+type VistaProductos = "tabla" | "categorias";
 
 export interface ProductosQueryInicial {
   page: number;
   search: string;
   unidadComercial: "" | "unidad" | "m2" | "metro_lineal";
   subcategoriaCodigo: string;
+  categoriaCodigo: string;
   estado: "" | "activo" | "inactivo";
   orden: OrdenProductos;
+  vista: VistaProductos;
 }
 
 interface SelectOption {
   value: string;
   label: string;
+}
+
+interface CategoriaCatalogo {
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  subcategorias: number;
+  productos: number;
+  items: SubcategoriaCatalogo[];
+}
+
+interface SubcategoriaCatalogo {
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  productos: number;
+}
+
+const imagenCategoria: Record<string, string> = {
+  impresion_hoja: "/catalogo/categorias/impresion-hoja.jpg",
+  editorial_encuadernacion: "/catalogo/categorias/editorial-encuadernacion.jpg",
+  gran_formato_flexible: "/catalogo/categorias/gran-formato-flexible.jpg",
+  senalectica_rigidos: "/catalogo/categorias/senaletica-rigidos.jpg",
+  packaging_pop: "/catalogo/categorias/packaging-pop.jpg",
+  textil_personalizacion: "/catalogo/categorias/textil-personalizacion.jpg",
+  grabado_corte_decorativo: "/catalogo/categorias/grabado-corte-decorativo.jpg",
+  terminaciones_postproduccion: "/catalogo/categorias/terminaciones-postproduccion.jpg",
+  carteleria_montaje: "/catalogo/categorias/carteleria-montaje.jpg",
+  servicios_logistica: "/catalogo/categorias/servicios-logistica.jpg",
+  sellos: "/catalogo/categorias/sellos.jpg",
+};
+
+function imagenSubcategoria(codigo: string) {
+  return `/catalogo/subcategorias/${codigo.replaceAll("_", "-")}.jpg`;
 }
 
 function highlightMatch(text: string, query: string): React.ReactNode {
@@ -83,8 +132,10 @@ function queryString(query: ProductosQueryInicial) {
   if (query.search.trim()) params.set("search", query.search.trim());
   if (query.unidadComercial) params.set("unidad", query.unidadComercial);
   if (query.subcategoriaCodigo) params.set("categoria", query.subcategoriaCodigo);
+  if (query.categoriaCodigo) params.set("categoriaGrupo", query.categoriaCodigo);
   if (query.estado) params.set("estado", query.estado);
   if (query.orden !== "recientes") params.set("orden", query.orden);
+  if (query.vista === "categorias") params.set("vista", "categorias");
   return params.toString();
 }
 
@@ -95,6 +146,7 @@ export function ProductosServiciosTable({
   pageSize,
   initialQuery,
   subcategorias,
+  categorias,
   canManage,
 }: {
   initialProductos: ProductoListItem[];
@@ -103,6 +155,7 @@ export function ProductosServiciosTable({
   pageSize: number;
   initialQuery: ProductosQueryInicial;
   subcategorias: SelectOption[];
+  categorias: CategoriaCatalogo[];
   canManage: boolean;
 }) {
   const [productos, setProductos] = React.useState(initialProductos);
@@ -116,6 +169,9 @@ export function ProductosServiciosTable({
   const [duplicando, setDuplicando] = React.useState(false);
   const mounted = React.useRef(false);
   const requestId = React.useRef(0);
+  const categoriaSeleccionada = categorias.find(
+    (categoria) => categoria.codigo === query.categoriaCodigo,
+  );
 
   const updateQuery = React.useCallback((patch: Partial<ProductosQueryInicial>) => {
     setQuery((current) => ({ ...current, ...patch }));
@@ -141,6 +197,7 @@ export function ProductosServiciosTable({
           activo: query.estado === "activo" ? true : query.estado === "inactivo" ? false : undefined,
           unidadComercial: query.unidadComercial || undefined,
           subcategoriaCodigo: query.subcategoriaCodigo || undefined,
+          categoriaCodigo: query.categoriaCodigo || undefined,
           orden: query.orden,
         });
         if (id !== requestId.current) return;
@@ -205,8 +262,11 @@ export function ProductosServiciosTable({
         <CatalogSelect label="Cobro" value={query.unidadComercial || "all"}
           onChange={(value) => updateQuery({ unidadComercial: value === "all" ? "" : value as ProductosQueryInicial["unidadComercial"], page: 1 })}
           options={[{ value: "all", label: "Todos" }, { value: "unidad", label: "Por unidad" }, { value: "m2", label: "Por metro cuadrado" }, { value: "metro_lineal", label: "Por metro lineal" }]} />
-        <CatalogSelect label="Categoría" value={query.subcategoriaCodigo || "all"}
-          onChange={(value) => updateQuery({ subcategoriaCodigo: value === "all" ? "" : value, page: 1 })}
+        <CatalogSelect label="Categoría" value={query.categoriaCodigo || "all"}
+          onChange={(value) => updateQuery({ categoriaCodigo: value === "all" ? "" : value, subcategoriaCodigo: "", page: 1 })}
+          options={[{ value: "all", label: "Todas" }, ...categorias.map((categoria) => ({ value: categoria.codigo, label: categoria.nombre }))]} />
+        <CatalogSelect label="Subcategoría" value={query.subcategoriaCodigo || "all"}
+          onChange={(value) => updateQuery({ subcategoriaCodigo: value === "all" ? "" : value, categoriaCodigo: "", page: 1 })}
           options={[{ value: "all", label: "Todas" }, ...subcategorias]} />
         <CatalogSelect label="Estado" value={query.estado || "all"}
           onChange={(value) => updateQuery({ estado: value === "all" ? "" : value as ProductosQueryInicial["estado"], page: 1 })}
@@ -214,6 +274,35 @@ export function ProductosServiciosTable({
         <CatalogSelect label="Orden" value={query.orden}
           onChange={(value) => updateQuery({ orden: value as OrdenProductos, page: 1 })}
           options={[{ value: "recientes", label: "Más recientes" }, { value: "nombre_asc", label: "Nombre A–Z" }, { value: "nombre_desc", label: "Nombre Z–A" }]} />
+        <ToggleGroup
+          multiple={false}
+          variant="outline"
+          size="sm"
+          spacing={0}
+          value={[query.vista]}
+          onValueChange={(values) => {
+            const vista = values.at(-1) as VistaProductos | undefined;
+            if (vista) {
+              updateQuery({
+                vista,
+                page: 1,
+                ...(vista === "categorias"
+                  ? { categoriaCodigo: "", subcategoriaCodigo: "" }
+                  : {}),
+              });
+            }
+          }}
+          aria-label="Cambiar vista del catálogo"
+        >
+          <ToggleGroupItem value="tabla" aria-label="Vista de tabla">
+            <Table2Icon />
+            Tabla
+          </ToggleGroupItem>
+          <ToggleGroupItem value="categorias" aria-label="Vista por categorías">
+            <Grid2X2Icon />
+            Categorías
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {error ? (
@@ -223,7 +312,125 @@ export function ProductosServiciosTable({
         </Alert>
       ) : null}
 
-      {total === 0 && !query.search ? (
+      {query.vista === "categorias" ? (
+        <div aria-busy={loading}>
+          <div className="mb-4 flex items-end justify-between gap-4">
+            {categoriaSeleccionada ? (
+              <div className="flex items-start gap-3">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Volver a todas las categorías"
+                  onClick={() => updateQuery({ categoriaCodigo: "", page: 1 })}
+                >
+                  <ArrowLeftIcon />
+                </Button>
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-lg font-medium">{categoriaSeleccionada.nombre}</h2>
+                  <p className="max-w-2xl text-sm text-muted-foreground">
+                    {categoriaSeleccionada.descripcion}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <h2 className="text-lg font-medium">Explorar por categoría</h2>
+                <p className="text-sm text-muted-foreground">
+                  Elegí una categoría y después la subcategoría específica.
+                </p>
+              </div>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {categoriaSeleccionada
+                ? `${categoriaSeleccionada.subcategorias} subcategorías`
+                : `${categorias.length} categorías`}
+            </span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {categoriaSeleccionada ? categoriaSeleccionada.items.map((subcategoria) => {
+              const hrefQuery: ProductosQueryInicial = {
+                ...query,
+                page: 1,
+                categoriaCodigo: "",
+                subcategoriaCodigo: subcategoria.codigo,
+                vista: "tabla",
+              };
+              const href = queryString(hrefQuery);
+              return (
+                <Link
+                  key={subcategoria.codigo}
+                  href={`/productos-servicios${href ? `?${href}` : ""}`}
+                  onClick={() => setQuery(hrefQuery)}
+                  className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Card className="h-full gap-0 py-0 transition-[transform,box-shadow] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md">
+                    <Image
+                      src={imagenSubcategoria(subcategoria.codigo)}
+                      alt=""
+                      width={960}
+                      height={768}
+                      className="aspect-[4/3] w-full object-cover"
+                    />
+                    <CardHeader className="py-4">
+                      <CardTitle className="pr-7">{subcategoria.nombre}</CardTitle>
+                      <CardDescription className="line-clamp-2">
+                        {subcategoria.descripcion}
+                      </CardDescription>
+                      <CardAction className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground">
+                        <ArrowRightIcon aria-hidden="true" />
+                      </CardAction>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {subcategoria.productos} {subcategoria.productos === 1 ? "producto" : "productos"}
+                      </div>
+                    </CardHeader>
+                  </Card>
+                </Link>
+              );
+            }) : categorias.map((categoria) => {
+              const hrefQuery: ProductosQueryInicial = {
+                ...query,
+                page: 1,
+                categoriaCodigo: categoria.codigo,
+                subcategoriaCodigo: "",
+                vista: "categorias",
+              };
+              const href = queryString(hrefQuery);
+              return (
+                <Link
+                  key={categoria.codigo}
+                  href={`/productos-servicios${href ? `?${href}` : ""}`}
+                  onClick={() => setQuery(hrefQuery)}
+                  className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Card className="h-full gap-0 py-0 transition-[transform,box-shadow] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md">
+                    <Image
+                      src={imagenCategoria[categoria.codigo]}
+                      alt=""
+                      width={960}
+                      height={768}
+                      className="aspect-[4/3] w-full object-cover"
+                    />
+                    <CardHeader className="py-4">
+                      <CardTitle className="pr-7">{categoria.nombre}</CardTitle>
+                      <CardDescription className="line-clamp-2">
+                        {categoria.descripcion}
+                      </CardDescription>
+                      <CardAction className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground">
+                        <ArrowRightIcon aria-hidden="true" />
+                      </CardAction>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{categoria.productos} {categoria.productos === 1 ? "producto" : "productos"}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{categoria.subcategorias} subcategorías</span>
+                      </div>
+                    </CardHeader>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ) : total === 0 && !query.search ? (
         <EstadoVacio titulo="Sin productos cargados"
           descripcion="Empezá creando un producto. Se guardará como borrador hasta que esté listo para publicar."
           cta={canManage ? { label: "Crear producto", href: "/productos-servicios/nuevo", icon: PlusIcon } : undefined} />
@@ -271,13 +478,15 @@ export function ProductosServiciosTable({
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-        <span>Página {query.page} de {Math.max(1, pages)} · {total} productos</span>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={query.page <= 1 || loading} onClick={() => updateQuery({ page: Math.max(1, query.page - 1) })}>Anterior</Button>
-          <Button variant="outline" size="sm" disabled={query.page >= pages || loading} onClick={() => updateQuery({ page: query.page + 1 })}>Siguiente</Button>
+      {query.vista === "tabla" ? (
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+          <span>Página {query.page} de {Math.max(1, pages)} · {total} productos</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={query.page <= 1 || loading} onClick={() => updateQuery({ page: Math.max(1, query.page - 1) })}>Anterior</Button>
+            <Button variant="outline" size="sm" disabled={query.page >= pages || loading} onClick={() => updateQuery({ page: query.page + 1 })}>Siguiente</Button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <Dialog open={Boolean(productoADuplicar)} onOpenChange={(open) => {
         if (!open && !duplicando) { setProductoADuplicar(null); setNombreCopia(""); }

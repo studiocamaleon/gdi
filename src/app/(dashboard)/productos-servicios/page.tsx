@@ -2,7 +2,7 @@ import { Suspense } from "react";
 
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { ProductosServiciosTable } from "@/components/productos-servicios/productos-table";
-import { getCatalogoComercial, listProductos } from "@/lib/productos-servicios-api";
+import { getCatalogoComercial, getProductos, listProductos } from "@/lib/productos-servicios-api";
 import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,9 @@ async function ProductosServiciosPageContent({
   const orden = normalizarOrden(first(params.orden));
   const search = first(params.search)?.trim() ?? "";
   const categoria = first(params.categoria)?.trim() ?? "";
-  const [res, catalogo, canManage] = await Promise.all([
+  const categoriaGrupo = first(params.categoriaGrupo)?.trim() ?? "";
+  const vista = first(params.vista) === "categorias" ? "categorias" : "tabla";
+  const [res, catalogo, todosLosProductos, canManage] = await Promise.all([
     listProductos({
       page,
       limit: PAGE_SIZE,
@@ -41,9 +43,11 @@ async function ProductosServiciosPageContent({
       activo: estado === "activo" ? true : estado === "inactivo" ? false : undefined,
       unidadComercial: unidad || undefined,
       subcategoriaCodigo: categoria || undefined,
+      categoriaCodigo: categoriaGrupo || undefined,
       orden,
     }),
     getCatalogoComercial(),
+    getProductos(),
     tienePermiso("costos.gestionar"),
   ]);
   return (
@@ -58,9 +62,28 @@ async function ProductosServiciosPageContent({
         search,
         unidadComercial: unidad,
         subcategoriaCodigo: categoria,
+        categoriaCodigo: categoriaGrupo,
         estado,
         orden,
+        vista,
       }}
+      categorias={catalogo.map((grupo) => ({
+        codigo: grupo.codigo,
+        nombre: grupo.nombre,
+        descripcion: grupo.descripcion,
+        subcategorias: grupo.subcategorias.length,
+        productos: todosLosProductos.filter(
+          (producto) => producto.subcategoriaComercial.categoria.codigo === grupo.codigo,
+        ).length,
+        items: grupo.subcategorias.map((subcategoria) => ({
+          codigo: subcategoria.codigo,
+          nombre: subcategoria.nombre,
+          descripcion: subcategoria.descripcion,
+          productos: todosLosProductos.filter(
+            (producto) => producto.subcategoriaComercial.codigo === subcategoria.codigo,
+          ).length,
+        })),
+      }))}
       subcategorias={catalogo.flatMap((grupo) =>
         grupo.subcategorias.map((subcategoria) => ({
           value: subcategoria.codigo,

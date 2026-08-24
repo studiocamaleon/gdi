@@ -83,6 +83,32 @@ describe('Catálogo de productos', () => {
     });
   });
 
+  it('filtra productos por categoría comercial', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      producto: { findMany, count: jest.fn().mockResolvedValue(0) },
+      $transaction: jest
+        .fn()
+        .mockImplementation((promises) => Promise.all(promises)),
+    };
+    const service = new ProductosService(prisma as never);
+
+    await service.listarProductos('tenant-1', {
+      pagination: { page: 1, limit: 25, skip: 0 } as never,
+      categoriaCodigo: 'gran_formato_flexible',
+    });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          subcategoriaComercial: {
+            categoria: { codigo: 'gran_formato_flexible' },
+          },
+        }),
+      }),
+    );
+  });
+
   it('bloquea publicación inválida y mantiene el producto como borrador', async () => {
     const actualizarProducto = jest.fn().mockResolvedValue({ id: 'p1' });
     const facade = new ProductosServiciosService(

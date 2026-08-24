@@ -54,6 +54,7 @@ export class ProductosServiciosService {
       search?: string;
       unidadComercial?: 'unidad' | 'm2' | 'metro_lineal';
       subcategoriaCodigo?: string;
+      categoriaCodigo?: string;
       orden?: OrdenProductosDto;
     },
   ) {

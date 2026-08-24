@@ -28,6 +28,7 @@ export interface ProductosListParams {
   activo?: boolean;
   unidadComercial?: "unidad" | "m2" | "metro_lineal";
   subcategoriaCodigo?: string;
+  categoriaCodigo?: string;
   orden?: "recientes" | "nombre_asc" | "nombre_desc";
 }
 
@@ -49,6 +50,7 @@ function buildProductosPath(params: ProductosListParams = {}) {
   if (params.subcategoriaCodigo) {
     sp.set("subcategoriaCodigo", params.subcategoriaCodigo);
   }
+  if (params.categoriaCodigo) sp.set("categoriaCodigo", params.categoriaCodigo);
   if (params.orden) sp.set("orden", params.orden);
   const qs = sp.toString();
   return `/productos-servicios/productos${qs ? `?${qs}` : ""}`;

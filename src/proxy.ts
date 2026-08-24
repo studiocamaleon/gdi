@@ -133,5 +133,5 @@ function limpiando(response: NextResponse, hayQueBorrar: boolean) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand|api).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand|catalogo|api).*)"],
 };

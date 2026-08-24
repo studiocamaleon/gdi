@@ -86,6 +86,7 @@ export class ProductosServiciosController {
       search: query.search?.trim() || undefined,
       unidadComercial: query.unidadComercial,
       subcategoriaCodigo: query.subcategoriaCodigo?.trim() || undefined,
+      categoriaCodigo: query.categoriaCodigo?.trim() || undefined,
       orden: query.orden,
     });
   }
