@@ -50,6 +50,17 @@ describe('Catálogo de familias', () => {
     ]);
   });
 
+  it('trabajo manual permite seleccionar una pegatina raspadita', () => {
+    const familia = getFamilia('trabajo_manual');
+    const insumo = familia.slotsRequeridos.find(
+      (slot) => slot.codigo === 'insumo_manual',
+    );
+
+    expect(
+      insumo?.compatibilidadMaterial?.subfamiliasMateriaPrima,
+    ).toContain('PEGATINA_RASPADITA');
+  });
+
   it('corte con hilo caliente declara su cotizador y nesting vectorial', () => {
     const familia = getFamilia('corte_hilo_caliente');
 
