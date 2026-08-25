@@ -88,12 +88,17 @@ export class CobroWebhookController {
           eventoId: evento.eventId,
           tipo: evento.eventType,
           payloadJson: evento.data as object,
+          ocurridoEl: evento.occurredAt,
         },
         select: { id: true, procesadoEl: true },
       }));
 
     try {
-      const resultado = await this.procesar(evento.eventType, evento.data);
+      const resultado = await this.procesar(
+        evento.eventType,
+        evento.data,
+        evento.occurredAt,
+      );
       await this.prisma.eventoCobro.update({
         where: { id: registro.id },
         data: {
@@ -124,6 +129,7 @@ export class CobroWebhookController {
   private async procesar(
     tipo: string,
     data: unknown,
+    ocurridoEl: Date | null,
   ): Promise<{ nota?: string; respuesta: Record<string, unknown> }> {
     if (!tipo.startsWith('subscription.')) {
       return { respuesta: { ignorado: tipo } };
@@ -135,7 +141,10 @@ export class CobroWebhookController {
         respuesta: { ignorado: tipo },
       };
     }
-    const resultado = await this.sync.aplicar(externa);
+    const resultado = await this.sync.aplicar(externa, {
+      ocurridoEl,
+      origen: 'webhook',
+    });
     return resultado.aplicado
       ? {
           respuesta: { tenantId: resultado.tenantId, estado: resultado.estado },

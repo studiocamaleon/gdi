@@ -46,6 +46,7 @@ import { SuscripcionesModule } from './suscripciones/suscripciones.module';
 import { CentroCopiadoModule } from './centro-copiado/centro-copiado.module';
 import { PanelGeneralModule } from './panel-general/panel-general.module';
 import { RecorridosVectorialesModule } from './recorridos-vectoriales/recorridos-vectoriales.module';
+import { SuscripcionAccesoGuard } from './suscripciones/suscripcion-acceso.guard';
 
 @Module({
   imports: [
@@ -146,6 +147,10 @@ import { RecorridosVectorialesModule } from './recorridos-vectoriales/recorridos
     {
       provide: APP_GUARD,
       useClass: ImpersonacionGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: SuscripcionAccesoGuard,
     },
     {
       provide: APP_GUARD,

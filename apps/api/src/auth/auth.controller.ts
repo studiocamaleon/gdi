@@ -12,6 +12,7 @@ import { Public } from './public.decorator';
 import { SoloAutenticado } from './permiso.decorator';
 import { SinTenant } from '../common/sin-tenant.decorator';
 import type { CurrentAuth } from './auth.types';
+import { PermitirSuscripcionInactiva } from '../suscripciones/permitir-suscripcion-inactiva.decorator';
 
 /**
  * Nada de acá pide permiso: es la puerta de entrada y lo que todo usuario tiene
@@ -20,6 +21,7 @@ import type { CurrentAuth } from './auth.types';
  * ni desloguearse.
  */
 @SoloAutenticado()
+@PermitirSuscripcionInactiva()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

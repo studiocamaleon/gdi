@@ -332,11 +332,23 @@ function getParentKey(nav: NavItem[], activeKey: string | undefined) {
 // texto neutro cuando el dato no está, en vez de rellenar con un supuesto.
 // Ver docs/suscripciones-cobro-diseno.md
 function formatPlanTier(susc: TenantSummary["suscripcion"]) {
+  if (susc?.soloLectura) {
+    return "Solo lectura · revisar pago";
+  }
+  if (susc?.estadoProveedor === "past_due") {
+    const dias = susc.diasGraciaRestantes ?? null;
+    return dias === null
+      ? "Pago pendiente"
+      : `Pago pendiente · ${dias} ${dias === 1 ? "día" : "días"}`;
+  }
   const dias = susc?.diasRestantes;
   if (dias == null) {
     return "Ver plan y facturación";
   }
   if (dias <= 0) {
+    // El período local puede quedar viejo si un webhook se demoró. El estado
+    // autoritativo activo nunca se presenta como una cuenta vencida.
+    if (susc?.estadoProveedor === "active") return "Activa · actualizando";
     return susc?.enPrueba ? "Prueba vencida" : "Vencida";
   }
   const unidad = dias === 1 ? "día" : "días";

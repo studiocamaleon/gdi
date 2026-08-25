@@ -888,6 +888,10 @@ export class AuthService {
       where: { tenantId },
       select: {
         estado: true,
+        estadoProveedor: true,
+        moraDesde: true,
+        graciaHasta: true,
+        ultimaSyncProveedorEl: true,
         trialHasta: true,
         periodoDesde: true,
         proximoCobro: true,
@@ -899,6 +903,20 @@ export class AuthService {
     return {
       planNombre: suscripcion.plan.nombre,
       estado: suscripcion.estado,
+      estadoProveedor: suscripcion.estadoProveedor,
+      moraDesde: suscripcion.moraDesde?.toISOString() ?? null,
+      graciaHasta: suscripcion.graciaHasta?.toISOString() ?? null,
+      diasGraciaRestantes: suscripcion.graciaHasta
+        ? Math.max(
+            0,
+            Math.ceil(
+              (suscripcion.graciaHasta.getTime() - Date.now()) / 86_400_000,
+            ),
+          )
+        : null,
+      soloLectura: suscripcion.estado !== 'activa',
+      ultimaSyncProveedorEl:
+        suscripcion.ultimaSyncProveedorEl?.toISOString() ?? null,
       ...estadoDeCiclo(suscripcion, suscripcion.plan.trialDias),
     };
   }

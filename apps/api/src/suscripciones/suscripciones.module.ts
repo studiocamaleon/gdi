@@ -4,6 +4,7 @@ import { CobroModule } from '../cobro/cobro.module';
 import { SuscripcionController } from './suscripcion.controller';
 import { SuscripcionesService } from './suscripciones.service';
 import { TrialScheduler } from './trial.scheduler';
+import { SuscripcionReconciliacionScheduler } from './suscripcion-reconciliacion.scheduler';
 
 /**
  * Lecturas de plan/suscripción, compartidas entre el tenant plane (feature
@@ -12,7 +13,15 @@ import { TrialScheduler } from './trial.scheduler';
 @Module({
   imports: [PrismaModule, CobroModule],
   controllers: [SuscripcionController],
-  providers: [SuscripcionesService, TrialScheduler],
-  exports: [SuscripcionesService, TrialScheduler],
+  providers: [
+    SuscripcionesService,
+    TrialScheduler,
+    SuscripcionReconciliacionScheduler,
+  ],
+  exports: [
+    SuscripcionesService,
+    TrialScheduler,
+    SuscripcionReconciliacionScheduler,
+  ],
 })
 export class SuscripcionesModule {}

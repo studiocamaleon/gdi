@@ -15,6 +15,7 @@ import { ProhibidoImpersonando } from '../auth/prohibido-impersonando.decorator'
 import { SuscripcionesService } from './suscripciones.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
+import { PermitirSuscripcionInactiva } from './permitir-suscripcion-inactiva.decorator';
 
 export class CambiarPlanTenantDto {
   @IsString()
@@ -44,6 +45,7 @@ export class SincronizarDto {
  * Ver docs/suscripciones-cobro-diseno.md
  */
 @Permiso('configuracion.ver')
+@PermitirSuscripcionInactiva()
 @Controller('suscripcion')
 export class SuscripcionController {
   constructor(private readonly suscripciones: SuscripcionesService) {}
@@ -52,7 +54,21 @@ export class SuscripcionController {
   @Roles(RolSistema.ADMINISTRADOR)
   @ProhibidoImpersonando()
   estado(@CurrentSession() auth: CurrentAuth) {
-    return this.suscripciones.estadoParaTenant(auth.tenantId, auth.email);
+    return this.suscripciones.sincronizarEstadoActual(
+      auth.tenantId,
+      auth.email,
+    );
+  }
+
+  /** Fuerza una verificación después de actualizar el medio de pago. */
+  @Post('actualizar-estado')
+  @Roles(RolSistema.ADMINISTRADOR)
+  @ProhibidoImpersonando()
+  actualizarEstado(@CurrentSession() auth: CurrentAuth) {
+    return this.suscripciones.sincronizarEstadoActual(
+      auth.tenantId,
+      auth.email,
+    );
   }
 
   /**

@@ -40,6 +40,11 @@ export type EstadoSuscripcion = {
     /** Cancelación programada: sigue activa hasta esta fecha. */
     cambioProgramado: string | null;
     cambioProgramadoEl: string | null;
+    moraDesde: string | null;
+    graciaHasta: string | null;
+    diasGraciaRestantes: number | null;
+    soloLectura: boolean;
+    ultimaSyncProveedorEl: string | null;
   } | null;
   planes: PlanContratable[];
   checkout: { tenantId: string; email: string };
@@ -100,6 +105,11 @@ export async function sincronizarSuscripcion(
     method: "POST",
     body: JSON.stringify({ transaccionId }),
   });
+}
+
+/** Relee el estado autoritativo de Paddle, sin necesitar una transacción. */
+export async function actualizarEstadoSuscripcion(): Promise<EstadoSuscripcion> {
+  return apiRequest("/suscripcion/actualizar-estado", { method: "POST" });
 }
 
 /** URL de descarga del PDF de una factura (Paddle la firma con vencimiento). */

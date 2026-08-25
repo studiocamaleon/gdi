@@ -60,7 +60,12 @@ export class PaddleService {
   async verificarEvento(
     bodyCrudo: string,
     firma: string,
-  ): Promise<{ eventId: string; eventType: string; data: unknown } | null> {
+  ): Promise<{
+    eventId: string;
+    eventType: string;
+    data: unknown;
+    occurredAt: Date | null;
+  } | null> {
     if (!this.cliente || !this.webhookSecret) return null;
 
     // 1) La verificación de firma va SOLA y primero: es la única barrera de
@@ -93,10 +98,18 @@ export class PaddleService {
         firma,
       );
       if (evento) {
+        const occurredAt = (evento as unknown as Record<string, unknown>)[
+          'occurredAt'
+        ];
         return {
           eventId: evento.eventId,
           eventType: evento.eventType as string,
           data: evento.data,
+          occurredAt:
+            typeof occurredAt === 'string' &&
+            !Number.isNaN(Date.parse(occurredAt))
+              ? new Date(occurredAt)
+              : null,
         };
       }
     } catch (error) {
@@ -114,8 +127,33 @@ export class PaddleService {
       if (typeof eventId !== 'string' || typeof eventType !== 'string') {
         return null;
       }
-      return { eventId, eventType, data: crudo.data };
+      const occurredAt = crudo.occurred_at ?? crudo.occurredAt;
+      return {
+        eventId,
+        eventType,
+        data: crudo.data,
+        occurredAt:
+          typeof occurredAt === 'string' &&
+          !Number.isNaN(Date.parse(occurredAt))
+            ? new Date(occurredAt)
+            : null,
+      };
     } catch {
+      return null;
+    }
+  }
+
+  /** Estado autoritativo de una suscripción, usado por la reconciliación. */
+  async obtenerSuscripcion(suscripcionId: string): Promise<unknown | null> {
+    if (!this.cliente) return null;
+    try {
+      return await this.cliente.subscriptions.get(suscripcionId);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo leer la suscripción ${suscripcionId} de Paddle: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
       return null;
     }
   }

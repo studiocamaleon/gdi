@@ -7,6 +7,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PaddleService } from '../cobro/paddle.service';
 import { SuscripcionSyncService } from '../cobro/suscripcion-sync.service';
 import { estadoDePrueba, type EstadoPrueba } from './trial';
+import { SuscripcionReconciliacionScheduler } from './suscripcion-reconciliacion.scheduler';
+
+const DIA_MS = 86_400_000;
 
 /**
  * Lecturas de la suscripción de un tenant — el ÚNICO lugar que interpreta
@@ -93,6 +96,11 @@ export type EstadoSuscripcion = {
      *  esta fecha. Sin esto la pantalla diría "Activa" a secas. */
     cambioProgramado: string | null;
     cambioProgramadoEl: string | null;
+    moraDesde: string | null;
+    graciaHasta: string | null;
+    diasGraciaRestantes: number | null;
+    soloLectura: boolean;
+    ultimaSyncProveedorEl: string | null;
   } | null;
   planes: PlanContratable[];
   checkout: { tenantId: string; email: string };
@@ -125,7 +133,28 @@ export class SuscripcionesService {
     private readonly prisma: PrismaService,
     private readonly paddle: PaddleService,
     private readonly sync: SuscripcionSyncService,
+    private readonly reconciliacion: SuscripcionReconciliacionScheduler,
   ) {}
+
+  /**
+   * Relee una suscripción de Paddle a pedido. Se usa al abrir Facturación y
+   * después de corregir el medio de pago, sin esperar al próximo cron.
+   */
+  async sincronizarEstadoActual(tenantId: string, email = '') {
+    const suscripcion = await this.prisma.suscripcion.findFirst({
+      where: { tenantId },
+      select: { referenciaExterna: true, proveedor: true },
+    });
+    if (
+      suscripcion?.proveedor === 'paddle' &&
+      suscripcion.referenciaExterna
+    ) {
+      await this.reconciliacion.sincronizarReferencia(
+        suscripcion.referenciaExterna,
+      );
+    }
+    return this.estadoParaTenant(tenantId, email);
+  }
 
   /** La suscripción del tenant con su plan, o null (legacy, sin plan). */
   async de(tenantId: string): Promise<SuscripcionDe> {
@@ -226,6 +255,19 @@ export class SuscripcionesService {
             cambioProgramado: suscripcion.cambioProgramado,
             cambioProgramadoEl:
               suscripcion.cambioProgramadoEl?.toISOString() ?? null,
+            moraDesde: suscripcion.moraDesde?.toISOString() ?? null,
+            graciaHasta: suscripcion.graciaHasta?.toISOString() ?? null,
+            diasGraciaRestantes: suscripcion.graciaHasta
+              ? Math.max(
+                  0,
+                  Math.ceil(
+                    (suscripcion.graciaHasta.getTime() - Date.now()) / DIA_MS,
+                  ),
+                )
+              : null,
+            soloLectura: suscripcion.estado !== 'activa',
+            ultimaSyncProveedorEl:
+              suscripcion.ultimaSyncProveedorEl?.toISOString() ?? null,
           }
         : null,
       planes: contratables.map((p) => {

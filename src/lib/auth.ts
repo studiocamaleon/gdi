@@ -24,6 +24,12 @@ export type TenantSummary = {
   suscripcion?: {
     planNombre?: string | null;
     estado?: string | null;
+    estadoProveedor?: string | null;
+    moraDesde?: string | null;
+    graciaHasta?: string | null;
+    diasGraciaRestantes?: number | null;
+    soloLectura?: boolean;
+    ultimaSyncProveedorEl?: string | null;
     diasRestantes?: number | null;
     /** Largo del período. Null si no se conoce su inicio — ahí se muestran
      *  sólo los días restantes, sin fracción. */

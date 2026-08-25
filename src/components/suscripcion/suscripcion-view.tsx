@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
@@ -14,6 +15,7 @@ import {
   reactivarSuscripcion,
   urlFacturaPdf,
   sincronizarSuscripcion,
+  actualizarEstadoSuscripcion,
   type EstadoSuscripcion,
   type PlanContratable,
 } from "@/lib/suscripcion-api";
@@ -215,6 +217,7 @@ const LogoPaddle = ({ s = 26 }: { s?: number }) => (
 );
 
 export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
+  const router = useRouter();
   const { fechaCorta } = useFecha();
   const fechaLarga = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
   const [datos, setDatos] = React.useState(inicial);
@@ -452,6 +455,30 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     }
   };
 
+  const [verificandoPago, setVerificandoPago] = React.useState(false);
+  const verificarPago = async () => {
+    if (verificandoPago) return;
+    setVerificandoPago(true);
+    try {
+      const fresco = await actualizarEstadoSuscripcion();
+      setDatos(fresco);
+      router.refresh();
+      if (fresco.actual?.estadoProveedor === "active") {
+        toast.success("El pago y la suscripción están al día.");
+      } else {
+        toast.info("Paddle todavía informa el pago como pendiente.");
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo verificar el pago.",
+      );
+    } finally {
+      setVerificandoPago(false);
+    }
+  };
+
   const actual = datos.actual;
   const enMora = actual?.estadoProveedor === "past_due";
   // Paddle deja la suscripción en `active` con un cambio programado hasta el
@@ -515,10 +542,31 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       ) : null}
 
       {enMora ? (
-        <div className="sub-alert warn">
-          <b>No pudimos cobrar tu último pago.</b> Tu cuenta sigue activa
-          mientras reintentamos, pero revisá el medio de pago para no perder el
-          servicio.
+        <div className="sub-alert warn sub-alert-accion">
+          <div>
+            <b>No pudimos cobrar tu último pago.</b>{" "}
+            {actual?.soloLectura
+              ? "La cuenta quedó en modo solo lectura hasta regularizarlo."
+              : `Te quedan ${actual?.diasGraciaRestantes ?? 7} días de gracia antes de pasar a solo lectura.`}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={verificarPago}
+              disabled={verificandoPago}
+            >
+              {verificandoPago ? "Verificando…" : "Verificar pago"}
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={irAlPortal}
+              disabled={yendoAlPortal}
+            >
+              Actualizar medio de pago
+            </button>
+          </div>
         </div>
       ) : null}
 

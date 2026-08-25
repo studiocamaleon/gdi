@@ -11,6 +11,7 @@ import { PasosEnCursoWidget } from "@/components/produccion/pasos-en-curso-widge
 import { EntregaEscaneoWatcher } from "@/components/mostrador/entrega-escaneo-watcher";
 import { LogoutButton } from "@/components/logout-button";
 import { ImpersonacionBanner } from "@/components/plataforma/impersonacion-banner";
+import { SuscripcionGlobalBanner } from "@/components/suscripcion/suscripcion-global-banner";
 import {
   SidebarInset,
   SidebarProvider,
@@ -76,6 +77,8 @@ export default async function DashboardLayout({
                   <LogoutButton />
                 </div>
               </header>
+
+              <SuscripcionGlobalBanner currentUser={currentUser} />
 
               <main
                 className="gp-main flex flex-1"

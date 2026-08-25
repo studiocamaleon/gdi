@@ -8,10 +8,9 @@ import { PrismaService } from '../prisma/prisma.service';
  * mira el gate por plan; el estado de la pasarela se guarda aparte, crudo. Así
  * el día que entre MercadoPago, el gate no se entera de nada.
  *
- * Regla de negocio que NO es obvia: `past_due` mapea a estado **activa**. Al
- * fallar un cobro, Paddle abre una ventana de dunning (30 días por defecto) y
- * reintenta; cortarle el acceso al tenant en el primer rechazo sería un
- * autogol — se le muestra un banner y se le da tiempo a arreglar la tarjeta.
+ * Regla de negocio que NO es obvia: `past_due` abre una gracia propia de siete
+ * días. Durante esa ventana sigue activa y ve un aviso; vencida la gracia queda
+ * en solo lectura. Un `active` posterior la desbloquea en el acto.
  * Ver docs/suscripciones-cobro-diseno.md
  */
 
@@ -23,6 +22,9 @@ const ESTADO: Record<string, 'activa' | 'suspendida' | 'baja'> = {
   paused: 'suspendida',
   canceled: 'baja',
 };
+
+export const DIAS_GRACIA_COBRO = 7;
+const DIA_MS = 86_400_000;
 
 export type SuscripcionExterna = {
   /** subscription_id en la pasarela. */
@@ -53,6 +55,14 @@ export type ResultadoSync =
       planCodigo: string | null;
     }
   | { aplicado: false; motivo: string };
+
+export type OpcionesSync = {
+  /** occurred_at del webhook. Null en una consulta directa a la API. */
+  ocurridoEl?: Date | null;
+  /** La reconciliación registra cuándo obtuvo una respuesta autoritativa. */
+  origen?: 'webhook' | 'reconciliacion' | 'accion';
+  ahora?: Date;
+};
 
 @Injectable()
 export class SuscripcionSyncService {
@@ -153,9 +163,12 @@ export class SuscripcionSyncService {
    * webhook: se deja constancia y se sigue — puede ser una suscripción de
    * Paddle que no corresponde a este entorno.
    */
-  async aplicar(externa: SuscripcionExterna): Promise<ResultadoSync> {
-    const estado = ESTADO[externa.estadoProveedor];
-    if (!estado) {
+  async aplicar(
+    externa: SuscripcionExterna,
+    opciones: OpcionesSync = {},
+  ): Promise<ResultadoSync> {
+    const estadoBase = ESTADO[externa.estadoProveedor];
+    if (!estadoBase) {
       return {
         aplicado: false,
         motivo: `Estado desconocido de la pasarela: ${externa.estadoProveedor}`,
@@ -164,8 +177,27 @@ export class SuscripcionSyncService {
 
     const existente = await this.prisma.suscripcion.findFirst({
       where: { referenciaExterna: externa.referencia },
-      select: { id: true, tenantId: true },
+      select: {
+        id: true,
+        tenantId: true,
+        moraDesde: true,
+        graciaHasta: true,
+        ultimoEventoProveedorEl: true,
+      },
     });
+
+    // Paddle no garantiza orden de entrega. Un evento viejo se audita, pero no
+    // puede regresar una suscripción que ya fue activada por uno más nuevo.
+    if (
+      opciones.ocurridoEl &&
+      existente?.ultimoEventoProveedorEl &&
+      opciones.ocurridoEl < existente.ultimoEventoProveedorEl
+    ) {
+      return {
+        aplicado: false,
+        motivo: `Evento anterior al último aplicado (${existente.ultimoEventoProveedorEl.toISOString()}).`,
+      };
+    }
 
     const tenantId = existente?.tenantId ?? externa.tenantId;
     if (!tenantId) {
@@ -185,6 +217,25 @@ export class SuscripcionSyncService {
         })
       : null;
 
+    const ahora = opciones.ahora ?? new Date();
+    const iniciaMora =
+      externa.estadoProveedor === 'past_due' && !existente?.moraDesde;
+    const moraDesde =
+      externa.estadoProveedor === 'past_due'
+        ? (existente?.moraDesde ?? opciones.ocurridoEl ?? ahora)
+        : null;
+    const graciaHasta =
+      externa.estadoProveedor === 'past_due'
+        ? (existente?.graciaHasta ??
+          new Date((moraDesde as Date).getTime() + DIAS_GRACIA_COBRO * DIA_MS))
+        : null;
+    const estado =
+      externa.estadoProveedor === 'past_due' &&
+      graciaHasta &&
+      graciaHasta <= ahora
+        ? 'suspendida'
+        : estadoBase;
+
     const datos = {
       estado,
       proveedor: 'paddle',
@@ -195,6 +246,14 @@ export class SuscripcionSyncService {
       periodoDesde: externa.periodoDesde,
       cambioProgramado: externa.cambioProgramado,
       cambioProgramadoEl: externa.cambioProgramadoEl,
+      moraDesde,
+      graciaHasta,
+      ...(opciones.origen !== 'webhook'
+        ? { ultimaSyncProveedorEl: ahora }
+        : {}),
+      ...(opciones.ocurridoEl
+        ? { ultimoEventoProveedorEl: opciones.ocurridoEl }
+        : {}),
       ...(plan ? { planId: plan.id } : {}),
       ...(estado === 'baja' ? { hasta: new Date() } : { hasta: null }),
     };
@@ -225,7 +284,9 @@ export class SuscripcionSyncService {
     }
 
     this.logger.log(
-      `Suscripción de ${tenantId} → ${estado} (${externa.estadoProveedor})`,
+      `Suscripción de ${tenantId} → ${estado} (${externa.estadoProveedor})${
+        iniciaMora ? `, gracia hasta ${graciaHasta?.toISOString()}` : ''
+      }`,
     );
     return {
       aplicado: true,

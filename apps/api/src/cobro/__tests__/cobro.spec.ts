@@ -8,7 +8,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 /**
  * Lo que fija este spec:
  *  - la FIRMA del webhook: sin ella el endpoint es una puerta abierta;
- *  - la normalización de estados, sobre todo que `past_due` NO corta el acceso;
+ *  - la normalización de estados y la gracia de siete días para `past_due`;
  *  - la resolución de tenant y de plan (por referencia, por custom_data, y por
  *    paddlePriceId), que es lo que hace que un upgrade se refleje solo.
  */
@@ -185,7 +185,8 @@ describe('Cobro · normalización a nuestra suscripción', () => {
     expect(s?.referenciaExterna).toBe('sub_alta');
   });
 
-  it('past_due NO corta el acceso (hay ventana de dunning), pero se registra', async () => {
+  it('past_due da siete días, no reinicia la gracia y después deja solo lectura', async () => {
+    const inicio = new Date('2026-08-25T12:00:00Z');
     await sync.aplicar({
       referencia: 'sub_alta',
       estadoProveedor: 'past_due',
@@ -195,10 +196,69 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       tenantId: null, // resuelve por la referencia ya vinculada
       cambioProgramado: null,
       cambioProgramadoEl: null,
-    });
-    const s = await prisma.suscripcion.findFirst({ where: { tenantId } });
+    }, { ocurridoEl: inicio, origen: 'webhook', ahora: inicio });
+    let s = await prisma.suscripcion.findFirst({ where: { tenantId } });
     expect(s?.estado).toBe('activa');
     expect(s?.estadoProveedor).toBe('past_due');
+    expect(s?.moraDesde?.toISOString()).toBe(inicio.toISOString());
+    expect(s?.graciaHasta?.toISOString()).toBe('2026-09-01T12:00:00.000Z');
+
+    // Un reintento de cobro no regala otros siete días.
+    await sync.aplicar(
+      {
+        referencia: 'sub_alta',
+        estadoProveedor: 'past_due',
+        clienteExterno: 'ctm_1',
+        proximoCobro: null,
+        precios: [priceId],
+        tenantId: null,
+        cambioProgramado: null,
+        cambioProgramadoEl: null,
+      },
+      { origen: 'reconciliacion', ahora: new Date('2026-09-02T12:00:00Z') },
+    );
+    s = await prisma.suscripcion.findFirst({ where: { tenantId } });
+    expect(s?.estado).toBe('suspendida');
+    expect(s?.graciaHasta?.toISOString()).toBe('2026-09-01T12:00:00.000Z');
+  });
+
+  it('active desbloquea y un webhook anterior no puede regresarla', async () => {
+    const activoEl = new Date('2026-09-03T12:00:00Z');
+    await sync.aplicar(
+      {
+        referencia: 'sub_alta',
+        estadoProveedor: 'active',
+        clienteExterno: 'ctm_1',
+        proximoCobro: null,
+        precios: [priceId],
+        tenantId: null,
+        cambioProgramado: null,
+        cambioProgramadoEl: null,
+      },
+      { ocurridoEl: activoEl, origen: 'webhook', ahora: activoEl },
+    );
+    const viejo = await sync.aplicar(
+      {
+        referencia: 'sub_alta',
+        estadoProveedor: 'canceled',
+        clienteExterno: 'ctm_1',
+        proximoCobro: null,
+        precios: [priceId],
+        tenantId: null,
+        cambioProgramado: null,
+        cambioProgramadoEl: null,
+      },
+      {
+        ocurridoEl: new Date('2026-09-02T12:00:00Z'),
+        origen: 'webhook',
+      },
+    );
+    expect(viejo.aplicado).toBe(false);
+    const s = await prisma.suscripcion.findFirst({ where: { tenantId } });
+    expect(s?.estado).toBe('activa');
+    expect(s?.estadoProveedor).toBe('active');
+    expect(s?.moraDesde).toBeNull();
+    expect(s?.graciaHasta).toBeNull();
   });
 
   it('canceled da de baja y sella la fecha', async () => {

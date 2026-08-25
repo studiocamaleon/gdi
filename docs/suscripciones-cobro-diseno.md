@@ -33,8 +33,9 @@ Verificado contra doc oficial de Paddle:
   **sin parsear**. SDK oficial `@paddle/paddle-node-sdk`.
 - **Customer portal**: app hosteada de Paddle (medio de pago, facturas,
   cancelar). Se generan *portal sessions* por API pasando `subscription_ids`.
-- **Dunning**: al fallar el cobro pasa a `past_due` y entra en Retain; ventana
-  configurable (default 30 días) y acción final configurable.
+- **Dunning**: al fallar el cobro pasa a `past_due` y entra en Retain. El
+  sistema aplica una gracia propia de 7 días; después deja la cuenta en solo
+  lectura hasta que Paddle vuelva a informar `active`.
 - **Payouts**: mensual, mínimo USD 100, wire (fee USD 15) o Payoneer. Fee de
   Paddle 5% + USD 0,50. Argentina **no** está en la lista de países excluidos
   para vender.
@@ -104,8 +105,9 @@ mano). El MRR de la consola queda en USD.
 `Suscripcion`: `proveedor` ('paddle' | 'mercadopago' | 'manual'),
 `referenciaExterna` (subscription id, unique), `clienteExternoId` (customer id),
 `estadoProveedor` (el status crudo, para no perder información al normalizar),
-`proximoCobro`.
-Nuevo `EventoCobro`: `{ proveedor, eventoId @unique, tipo, payloadJson, procesadoEl }`
+`proximoCobro`, `moraDesde`, `graciaHasta`, `ultimaSyncProveedorEl` y
+`ultimoEventoProveedorEl`.
+Nuevo `EventoCobro`: `{ proveedor, eventoId @unique, tipo, payloadJson, ocurridoEl, procesadoEl }`
 — **idempotencia**: Paddle reintenta webhooks. Sin `tenantId` (el webhook llega
 sin contexto), así que va a `SIN_TENANT_ID_JUSTIFICADOS` del spec de aislamiento.
 
@@ -114,14 +116,18 @@ sin contexto), así que va a `SIN_TENANT_ID_JUSTIFICADOS` del spec de aislamient
 | Paddle | Nuestro `estado` | Efecto |
 |---|---|---|
 | `active`, `trialing` | `activa` | acceso normal |
-| `past_due` | `activa` | **acceso con banner** — hay 30 días de dunning, no se corta al primer fallo |
-| `paused`, `canceled` | `suspendida` / `baja` | se corta |
+| `past_due` (primeros 7 días) | `activa` | acceso normal con banner y cuenta regresiva |
+| `past_due` (gracia vencida) | `suspendida` | sólo lectura; facturación y recuperación siguen disponibles |
+| `paused`, `canceled` | `suspendida` / `baja` | sólo lectura |
 
 ### Seguridad
 
 - El webhook es público pero **siempre** verifica la firma antes de tocar nada.
   Body crudo, HMAC-SHA256 de `ts:rawBody`, tolerancia de tiempo contra replay.
 - Idempotencia por `eventoId`: un reintento no duplica efectos.
+- Los eventos se ordenan por `occurred_at`: uno demorado no pisa un estado más
+  nuevo. Además, una reconciliación cada 10 minutos consulta Paddle para
+  reparar automáticamente webhooks perdidos y desbloquear pagos regularizados.
 - Las credenciales (`PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`) van por `.env`,
   nunca al repo.
 

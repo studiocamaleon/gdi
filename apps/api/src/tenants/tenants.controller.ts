@@ -10,6 +10,7 @@ import { GuardarDatosEmpresaDto } from './dto/datos-empresa.dto';
 import { DatosEmpresaService } from './datos-empresa.service';
 import { TenantsService } from './tenants.service';
 import type { CurrentAuth } from '../auth/auth.types';
+import { PermitirSuscripcionInactiva } from '../suscripciones/permitir-suscripcion-inactiva.decorator';
 
 /**
  * Leer la empresa en la que estoy parado y cambiar de empresa son cosas de la
@@ -80,6 +81,7 @@ export class TenantsController {
   }
 
   @Post('switch')
+  @PermitirSuscripcionInactiva()
   switchTenant(
     @CurrentSession() auth: CurrentAuth,
     @Body() payload: SwitchTenantDto,
