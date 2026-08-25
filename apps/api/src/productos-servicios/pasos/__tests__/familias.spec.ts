@@ -20,7 +20,7 @@ import type {
 } from '../types';
 
 describe('Catálogo de familias', () => {
-  it('contiene exactamente 32 familias', () => {
+  it('contiene exactamente 33 familias', () => {
     // Poda del catálogo 2026-08-03: se borraron 10 familias manuales sin uso ni
     // cableado y se sumó aplicacion_transfer_textil (plancha térmica).
     // 2026-08-04: se sumaron impresion_3d, abrochado_caballete y las dos de
@@ -29,7 +29,25 @@ describe('Catálogo de familias', () => {
     // dejó de ser una familia y pasó a ser un efecto que declara el paso real.
     // 2026-08-19: corte_hilo_caliente independiza el nesting vectorial de
     // Polyfan de la familia genérica corte_manual.
-    expect(FAMILIAS_TOTAL).toBe(32);
+    // 2026-08-25: colocacion_raspadita agrega el acabado manual por pieza.
+    expect(FAMILIAS_TOTAL).toBe(33);
+  });
+
+  it('colocación de raspadita consume la pegatina por pieza pedida', () => {
+    const familia = getFamilia('colocacion_raspadita');
+
+    expect(familia.relacionMaquinaSoportada).toEqual(['M-0']);
+    expect(familia.slotsRequeridos).toEqual([
+      expect.objectContaining({
+        codigo: 'raspadita',
+        requerido: true,
+        formulaForzada: 'por_pieza',
+        compatibilidadMaterial: expect.objectContaining({
+          subfamiliasMateriaPrima: ['PEGATINA_RASPADITA'],
+          templateIds: ['pegatina_raspadita_v1'],
+        }),
+      }),
+    ]);
   });
 
   it('corte con hilo caliente declara su cotizador y nesting vectorial', () => {
@@ -329,7 +347,7 @@ describe('Helpers', () => {
     expect(() => getFamilia('familia_inexistente' as FamiliaCodigo)).toThrow();
   });
 
-  it('listarFamilias devuelve los 32 códigos', () => {
-    expect(listarFamilias().length).toBe(32);
+  it('listarFamilias devuelve los 33 códigos', () => {
+    expect(listarFamilias().length).toBe(33);
   });
 });

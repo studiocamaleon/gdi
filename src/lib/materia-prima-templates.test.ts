@@ -15,3 +15,18 @@ describe("plantilla de vinilo esmerilado", () => {
     expect(acabado?.options).toEqual(["Blanco", "Gris"]);
   });
 });
+
+describe("plantilla de pegatina raspadita", () => {
+  it("la costea por unidad y define ancho antes que alto", () => {
+    const template = getMateriaPrimaTemplate("pegatina_raspadita_v1");
+
+    expect(template).toMatchObject({
+      familia: "terminacion_editorial",
+      subfamilia: "pegatina_raspadita",
+      unidadStock: "unidad",
+      dimensionesVariante: ["ancho", "alto", "forma", "color"],
+      requiredAtributos: ["ancho", "alto"],
+    });
+    expect(template?.defaults?.esConsumible).toBe(true);
+  });
+});

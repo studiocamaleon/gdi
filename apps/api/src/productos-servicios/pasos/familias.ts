@@ -2131,6 +2131,52 @@ const colocacion_ojales: DefinicionFamilia = {
   productosTipicos: ['Lona con ojales', 'Banner para colgar'],
 };
 
+const colocacion_raspadita: DefinicionFamilia = {
+  codigo: 'colocacion_raspadita',
+  nombre: 'Colocación de raspadita',
+  categoria: 'operaciones_manuales',
+  descripcion:
+    'Colocación manual de una o más pegatinas raspables sobre cada pieza impresa. El consumo normal es una raspadita por unidad pedida; el factor del material permite configurar más de una por pieza.',
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
+  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
+  modosActivacionSoportados: ['OPCIONAL', 'OBLIGATORIO', 'CONDICIONAL'],
+  modoActivacionDefault: 'OPCIONAL',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'raspadita',
+      nombre: 'Pegatina raspadita',
+      tipo: 'INSUMO_PASO',
+      requerido: true,
+      compatibilidadMaterial: {
+        familiasMateriaPrima: ['TERMINACION_EDITORIAL'],
+        subfamiliasMateriaPrima: ['PEGATINA_RASPADITA'],
+        templateIds: ['pegatina_raspadita_v1'],
+      },
+      formulaForzada: 'por_pieza',
+    },
+  ],
+  permiteSlotsAdicionales: false,
+  plantillasCompatibles: [],
+  inputsRequeridos: ['cantidad'],
+  outputsCanonicos: ['raspaditas_colocadas'],
+  validaciones: [
+    {
+      codigo: 'requires_cantidad',
+      tipo: 'REQUIRES_INPUT',
+      campo: 'cantidad',
+      mensaje: 'Falta declarar la cantidad de piezas que llevan raspadita',
+    },
+  ],
+  paramsPasoSchema: [],
+  productosTipicos: [
+    'Tarjetas personales con raspadita',
+    'Cupones promocionales',
+    'Tickets de premios',
+  ],
+};
+
 // ============================================================================
 // 3.8 Logística / instalación in situ (1)
 // ============================================================================
@@ -2229,6 +2275,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   trabajo_manual,
   modificacion_post,
   colocacion_ojales,
+  colocacion_raspadita,
   instalacion_in_situ,
   diseno_grafico,
 };

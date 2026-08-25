@@ -87,6 +87,7 @@ const subfamiliaMateriaPrimaLabels: Record<SubfamiliaMateriaPrima, string> = {
   anillado_encuadernacion: "Anillado encuadernación",
   tapa_encuadernacion: "Tapa encuadernación",
   componente_editorial: "Componente editorial / carpeta",
+  pegatina_raspadita: "Pegatina raspadita",
   iman_ceramico_flexible: "Imán cerámico/flexible",
   fijacion_auxiliar: "Fijación auxiliar",
   accesorio_exhibidor_carton: "Accesorio exhibidor cartón",
@@ -378,7 +379,10 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
                 <SelectContent>
                   {materiaPrimaTemplatesV1.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
-                      {template.nombre}
+                      {template.nombre} ·{" "}
+                      {familiaMateriaPrimaItems.find(
+                        (familia) => familia.value === template.familia,
+                      )?.label ?? template.familia}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -386,8 +390,18 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
             </Field>
 
             {templateNuevo ? (
-              <div className="rounded-lg border p-3 text-sm text-muted-foreground">
-                {getMateriaPrimaTemplate(templateNuevo)?.descripcion}
+              <div className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground">
+                <div className="font-medium text-foreground">
+                  Familia: {selectedTemplate
+                    ? (familiaMateriaPrimaItems.find(
+                        (familia) => familia.value === selectedTemplate.familia,
+                      )?.label ?? selectedTemplate.familia)
+                    : "—"}
+                  {selectedTemplate
+                    ? ` · Subfamilia: ${subfamiliaMateriaPrimaLabels[selectedTemplate.subfamilia] ?? selectedTemplate.subfamilia}`
+                    : ""}
+                </div>
+                <div>{getMateriaPrimaTemplate(templateNuevo)?.descripcion}</div>
               </div>
             ) : null}
           </div>

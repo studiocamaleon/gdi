@@ -54,6 +54,7 @@ export type FamiliaCodigo =
   // una familia y pasó a ser un EFECTO que declara cualquier paso real.
   | 'modificacion_post'
   | 'colocacion_ojales'
+  | 'colocacion_raspadita'
   // Logística / instalación
   | 'instalacion_in_situ'
   // Servicios profesionales
@@ -182,6 +183,7 @@ export type SubfamiliaMateriaPrimaCompat =
   | 'ANILLADO_ENCUADERNACION'
   | 'TAPA_ENCUADERNACION'
   | 'COMPONENTE_EDITORIAL'
+  | 'PEGATINA_RASPADITA'
   | 'IMAN_CERAMICO_FLEXIBLE'
   | 'FIJACION_AUXILIAR'
   | 'ACCESORIO_EXHIBIDOR_CARTON'

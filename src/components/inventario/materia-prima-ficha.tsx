@@ -125,6 +125,7 @@ const subfamiliaMateriaPrimaItems: Array<{
   { value: "anillado_encuadernacion", label: "Anillado encuadernación" },
   { value: "tapa_encuadernacion", label: "Tapa encuadernación" },
   { value: "componente_editorial", label: "Componente editorial / carpeta" },
+  { value: "pegatina_raspadita", label: "Pegatina raspadita" },
   { value: "iman_ceramico_flexible", label: "Imán cerámico/flexible" },
   { value: "fijacion_auxiliar", label: "Fijación auxiliar" },
   { value: "accesorio_exhibidor_carton", label: "Accesorio exhibidor cartón" },

@@ -236,6 +236,7 @@ export const FAMILIA_ICONOS: Record<string, string> = {
   trabajo_manual: "Tool",
   modificacion_post: "Tool",
   colocacion_ojales: "Tool",
+  colocacion_raspadita: "Stamp",
   instalacion_in_situ: "Wrench",
 };
 

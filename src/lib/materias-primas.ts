@@ -46,6 +46,7 @@ export type SubfamiliaMateriaPrima =
   | "anillado_encuadernacion"
   | "tapa_encuadernacion"
   | "componente_editorial"
+  | "pegatina_raspadita"
   | "iman_ceramico_flexible"
   | "fijacion_auxiliar"
   | "accesorio_exhibidor_carton"

@@ -117,6 +117,7 @@ const DEFAULT_ICON_BY_FAMILY: Record<string, string> = {
   corte_laser: "Beam",
   encuadernacion: "Book",
   engomado_emblocado: "Book",
+  colocacion_raspadita: "Stamp",
   embalaje: "Package",
   instalacion_in_situ: "Wrench",
 };
