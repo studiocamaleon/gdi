@@ -8583,6 +8583,9 @@ export class MotorUniversalService {
         return cp.rutaPaso.version === rutaAlt.rutaVersion;
       })
       .sort((a, b) => {
+        if (a.ordenFlujo != null && b.ordenFlujo != null) {
+          return a.ordenFlujo - b.ordenFlujo;
+        }
         const ordenA =
           snapshotById.get(a.rutaPasoId)?.orden ?? a.rutaPaso.orden;
         const ordenB =
@@ -8891,10 +8894,13 @@ export class MotorUniversalService {
       producto.id,
       rutaAlt.id,
     );
-    const pasosConExtras =
-      pasosExtras.length > 0
-        ? this.insertarPasosExtras(pasos, pasosExtras)
-        : pasos;
+    const pasosConExtras = this.ordenarPasosProducto(
+      pasos,
+      pasosExtras,
+      new Map(
+        configPasosVersionados.map((cp) => [cp.rutaPasoId, cp.ordenFlujo]),
+      ),
+    );
 
     return {
       productoId: producto.id,
@@ -8990,6 +8996,7 @@ export class MotorUniversalService {
       paso: PasoCargado;
       insertarDespuesDeRutaPasoId: string | null;
       ordenInterno: number;
+      ordenFlujo: number | null;
     }>
   > {
     const rows = await this.prisma.productoPasoExtra.findMany({
@@ -9132,6 +9139,7 @@ export class MotorUniversalService {
         ),
         insertarDespuesDeRutaPasoId: row.insertarDespuesDeRutaPasoId,
         ordenInterno: row.ordenInterno,
+        ordenFlujo: row.ordenFlujo,
       })),
     );
   }
@@ -9695,6 +9703,43 @@ export class MotorUniversalService {
     }
 
     // Renumerar orden de display 1..N.
+    resultado.forEach((paso, index) => {
+      paso.rutaPasoOrden = index + 1;
+    });
+    return resultado;
+  }
+
+  private ordenarPasosProducto(
+    pasos: PasoCargado[],
+    extras: Array<{
+      paso: PasoCargado;
+      insertarDespuesDeRutaPasoId: string | null;
+      ordenInterno: number;
+      ordenFlujo: number | null;
+    }>,
+    ordenBase: Map<string, number | null>,
+  ): PasoCargado[] {
+    const usaOrdenUnificado =
+      [...ordenBase.values()].some((orden) => orden != null) ||
+      extras.some((extra) => extra.ordenFlujo != null);
+    if (!usaOrdenUnificado) return this.insertarPasosExtras(pasos, extras);
+
+    const ordenExtra = new Map(
+      extras.map((extra) => [extra.paso.rutaPasoId, extra.ordenFlujo]),
+    );
+    const resultado = [...pasos, ...extras.map((extra) => extra.paso)].sort(
+      (a, b) => {
+        const ordenA =
+          ordenBase.get(a.rutaPasoId) ?? ordenExtra.get(a.rutaPasoId) ?? null;
+        const ordenB =
+          ordenBase.get(b.rutaPasoId) ?? ordenExtra.get(b.rutaPasoId) ?? null;
+        if (ordenA == null && ordenB == null)
+          return a.rutaPasoOrden - b.rutaPasoOrden;
+        if (ordenA == null) return 1;
+        if (ordenB == null) return -1;
+        return ordenA - ordenB;
+      },
+    );
     resultado.forEach((paso, index) => {
       paso.rutaPasoOrden = index + 1;
     });

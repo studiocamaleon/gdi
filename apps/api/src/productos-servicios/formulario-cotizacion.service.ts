@@ -191,7 +191,13 @@ export class FormularioCotizacionService {
     const ejecutables = [
       ...ruta.configPasos.filter(esEjecutable),
       ...extras.filter(esEjecutable),
-    ];
+    ].sort((a, b) => {
+      const ordenA =
+        a.ordenFlujo ?? a.rutaPaso?.orden ?? Number.MAX_SAFE_INTEGER;
+      const ordenB =
+        b.ordenFlujo ?? b.rutaPaso?.orden ?? Number.MAX_SAFE_INTEGER;
+      return ordenA - ordenB;
+    });
     // rutaPasoId → configPasoId, para traducir requiereRutaPasoIds (arrastre).
     const rutaPasoAConfig = new Map(
       ruta.configPasos.map((c) => [c.rutaPasoId, c.id]),

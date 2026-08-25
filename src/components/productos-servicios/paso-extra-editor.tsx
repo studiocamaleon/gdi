@@ -29,6 +29,7 @@ import {
   agregarPasoExtra,
   actualizarPasoExtra,
   eliminarPasoExtra,
+  reordenarPasosRutaAlt,
   type LookupsConfigPaso,
 } from "@/lib/productos-servicios-api";
 import type {
@@ -56,6 +57,7 @@ interface Props {
   ruleExtraFields: RuleFieldDefinition[];
   /** null = alta de un paso extra nuevo; PasoExtra = edición. */
   extra: PasoExtra | null;
+  pasosOrdenados: Array<{ id: string; nombre: string; esExtra: boolean }>;
   onSaved: () => void;
   /** Alta mínima creada: el padre lo selecciona para configurarlo. */
   onCreated: (creado: PasoExtra) => void;
@@ -64,6 +66,18 @@ interface Props {
 }
 
 const AL_INICIO = "__inicio__";
+
+function insertarEnSecuencia(
+  pasoIds: string[],
+  pasoId: string,
+  despuesDeId: string,
+) {
+  const siguiente = pasoIds.filter((id) => id !== pasoId);
+  if (despuesDeId === AL_INICIO) return [pasoId, ...siguiente];
+  const indice = siguiente.indexOf(despuesDeId);
+  siguiente.splice(indice < 0 ? siguiente.length : indice + 1, 0, pasoId);
+  return siguiente;
+}
 
 function getHorasEstimadas(paramsPasoJson: unknown): string {
   if (
@@ -86,6 +100,7 @@ export function PasoExtraEditor({
   includeMeasureFields,
   ruleExtraFields,
   extra,
+  pasosOrdenados,
   onSaved,
   onCreated,
   onDeleted,
@@ -102,9 +117,11 @@ export function PasoExtraEditor({
   const [familiaCodigo, setFamiliaCodigo] = React.useState(
     extra?.familiaCodigo ?? "",
   );
-  const [posicion, setPosicion] = React.useState(
-    extra?.insertarDespuesDeRutaPasoId ?? AL_INICIO,
-  );
+  const [posicion, setPosicion] = React.useState(() => {
+    if (!extra) return AL_INICIO;
+    const indice = pasosOrdenados.findIndex((paso) => paso.id === extra.id);
+    return indice > 0 ? pasosOrdenados[indice - 1].id : AL_INICIO;
+  });
   const [modoActivacion, setModoActivacion] = React.useState<ModoActivacion>(
     (extra?.modoActivacion as ModoActivacion) ?? "OBLIGATORIO",
   );
@@ -167,20 +184,16 @@ export function PasoExtraEditor({
   }, [familias]);
 
   const posicionOptions = React.useMemo<HumanSelectOption[]>(() => {
-    const pasos = [...rutaAlternativa.ruta.pasos].sort(
-      (a, b) => a.orden - b.orden,
-    );
     return [
       { value: AL_INICIO, label: "Al inicio del flujo" },
-      ...pasos.map((paso) => {
-        const fam = familias.find((f) => f.codigo === paso.familiaCodigo);
-        return {
+      ...pasosOrdenados
+        .filter((paso) => paso.id !== extra?.id)
+        .map((paso) => ({
           value: paso.id,
-          label: `Después de: ${fam?.nombre ?? paso.familiaCodigo}`,
-        };
-      }),
+          label: `Después de: ${paso.nombre}${paso.esExtra ? " (Extra)" : ""}`,
+        })),
     ];
-  }, [rutaAlternativa.ruta.pasos, familias]);
+  }, [pasosOrdenados, extra?.id]);
 
   const maquinaOptions = React.useMemo<HumanSelectOption[]>(
     () =>
@@ -225,15 +238,34 @@ export function PasoExtraEditor({
     // con el mismo panel que el resto de los pasos.
     if (esCreacion) {
       setGuardando(true);
+      let creado: PasoExtra | null = null;
       try {
-        const creado = (await agregarPasoExtra(productoId, {
+        const pasoAnterior = pasosOrdenados.find(
+          (paso) => paso.id === posicion,
+        );
+        creado = (await agregarPasoExtra(productoId, {
           familiaCodigo,
           rutaAlternativaId: rutaAlternativa.id,
-          insertarDespuesDeRutaPasoId: posicion === AL_INICIO ? null : posicion,
+          insertarDespuesDeRutaPasoId:
+            posicion === AL_INICIO || pasoAnterior?.esExtra ? null : posicion,
         })) as PasoExtra;
+        const nuevoOrden = insertarEnSecuencia(
+          pasosOrdenados.map((paso) => paso.id),
+          creado.id,
+          posicion,
+        );
+        await reordenarPasosRutaAlt(rutaAlternativa.id, nuevoOrden);
         toast.success("Paso extra agregado al flujo");
         onCreated(creado);
       } catch (err) {
+        if (creado) {
+          try {
+            await eliminarPasoExtra(creado.id);
+          } catch {
+            // El alta quedó creada pero el reordenamiento falló; el refresh
+            // permite recuperarla y eliminarla desde el editor.
+          }
+        }
         toast.error(err instanceof Error ? err.message : "Error agregando");
       } finally {
         setGuardando(false);
@@ -263,9 +295,12 @@ export function PasoExtraEditor({
     setGuardando(true);
     try {
       if (extra) {
+        const pasoAnterior = pasosOrdenados.find(
+          (paso) => paso.id === posicion,
+        );
         await actualizarPasoExtra(extra.id, {
           insertarDespuesDeRutaPasoId:
-            posicion === AL_INICIO ? null : posicion,
+            posicion === AL_INICIO || pasoAnterior?.esExtra ? null : posicion,
           modoActivacion,
           condicionActivacionJson:
             modoActivacion === "CONDICIONAL" ? condicion : null,
@@ -276,6 +311,14 @@ export function PasoExtraEditor({
           perfilM1Id: esMaquina ? perfilM1Id || null : null,
           centroCostoId: esMaquina ? null : centroCostoId,
         });
+        await reordenarPasosRutaAlt(
+          rutaAlternativa.id,
+          insertarEnSecuencia(
+            pasosOrdenados.map((paso) => paso.id),
+            extra.id,
+            posicion,
+          ),
+        );
         toast.success("Paso extra actualizado");
       } else {
         await agregarPasoExtra(productoId, {

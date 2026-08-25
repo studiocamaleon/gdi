@@ -483,6 +483,7 @@ export class ProductosService {
                 tenantId,
                 productoRutaAlternativaId: rutaDuplicada.id,
                 rutaPasoId: config.rutaPasoId,
+                ordenFlujo: config.ordenFlujo,
                 modoActivacion: config.modoActivacion,
                 condicionActivacionJson: this.jsonOrNull(
                   config.condicionActivacionJson,
@@ -623,6 +624,7 @@ export class ProductosService {
                 : null,
               insertarDespuesDeRutaPasoId: paso.insertarDespuesDeRutaPasoId,
               ordenInterno: paso.ordenInterno,
+              ordenFlujo: paso.ordenFlujo,
               familiaCodigo: paso.familiaCodigo,
               nombreVisible: paso.nombreVisible,
               modoActivacion: paso.modoActivacion,

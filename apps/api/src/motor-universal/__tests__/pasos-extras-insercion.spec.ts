@@ -30,7 +30,7 @@ describe('MotorUniversalService.insertarPasosExtras', () => {
     ).insertarPasosExtras(pasos, extras);
 
   const paso = (id: string, orden: number): PasoCargado =>
-    ({ rutaPasoId: id, rutaPasoOrden: orden } as unknown as PasoCargado);
+    ({ rutaPasoId: id, rutaPasoOrden: orden }) as unknown as PasoCargado;
   const extra = (
     id: string,
     insertarDespuesDeRutaPasoId: string | null,
@@ -39,6 +39,7 @@ describe('MotorUniversalService.insertarPasosExtras', () => {
     paso: paso(id, 0),
     insertarDespuesDeRutaPasoId,
     ordenInterno,
+    ordenFlujo: null,
   });
 
   const base = [paso('A', 1), paso('B', 2)];
@@ -60,10 +61,7 @@ describe('MotorUniversalService.insertarPasosExtras', () => {
   });
 
   it('respeta ordenInterno entre varios extras en la misma posición', () => {
-    const res = insertar(base, [
-      extra('X2', 'A', 2),
-      extra('X1', 'A', 1),
-    ]);
+    const res = insertar(base, [extra('X2', 'A', 2), extra('X1', 'A', 1)]);
     expect(res.map((p) => p.rutaPasoId)).toEqual(['A', 'X1', 'X2', 'B']);
   });
 
@@ -76,5 +74,31 @@ describe('MotorUniversalService.insertarPasosExtras', () => {
   it('agrega al final (defensa) un extra que apunta a un RutaPaso ausente', () => {
     const res = insertar(base, [extra('X', 'NO_EXISTE')]);
     expect(res.map((p) => p.rutaPasoId)).toEqual(['A', 'B', 'X']);
+  });
+
+  it('prioriza el orden unificado específico del producto', () => {
+    const ordenar = (
+      service as unknown as {
+        ordenarPasosProducto: (
+          p: PasoCargado[],
+          e: ReturnType<typeof extra>[],
+          ordenBase: Map<string, number | null>,
+        ) => PasoCargado[];
+      }
+    ).ordenarPasosProducto;
+    const extras = [{ ...extra('X', 'A'), ordenFlujo: 1 }];
+
+    const resultado = ordenar.call(
+      service,
+      base,
+      extras,
+      new Map([
+        ['A', 2],
+        ['B', 0],
+      ]),
+    );
+
+    expect(resultado.map((item) => item.rutaPasoId)).toEqual(['B', 'X', 'A']);
+    expect(resultado.map((item) => item.rutaPasoOrden)).toEqual([1, 2, 3]);
   });
 });

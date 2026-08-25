@@ -167,6 +167,7 @@ export interface RutaPaso {
 export interface ConfigPasoDetalle {
   id: string;
   rutaPasoId: string;
+  ordenFlujo?: number | null;
   rutaPaso: RutaPaso;
   modoActivacion: string | null;
   condicionActivacionJson: unknown;
@@ -380,6 +381,7 @@ export interface PasoExtra {
   rutaAlternativaId: string | null;
   insertarDespuesDeRutaPasoId: string | null;
   ordenInterno: number;
+  ordenFlujo?: number | null;
   familiaCodigo: string;
   /** Herramientas exigidas por la familia para cotizar este paso. */
   herramientasCotizacion?: string[];

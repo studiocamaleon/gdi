@@ -2523,6 +2523,9 @@ model ProductoConfigPaso {
   tenantId                    String                               @db.Uuid
   productoRutaAlternativaId   String                               @db.Uuid
   rutaPasoId                  String                               @db.Uuid
+  /// Posición específica dentro del flujo de ESTA ruta del producto. Null
+  /// conserva el orden heredado de la ruta base hasta el primer reordenamiento.
+  ordenFlujo                  Int?
   /// 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL' (cuando familia soporta varios).
   modoActivacion              String?
   condicionActivacionJson     Json?
@@ -2586,6 +2589,7 @@ model ProductoConfigPaso {
 
   @@unique([tenantId, productoRutaAlternativaId, rutaPasoId])
   @@index([tenantId, productoRutaAlternativaId])
+  @@index([productoRutaAlternativaId, ordenFlujo])
   @@index([tenantId, centroCostoId])
   @@index([tenantId, maquinaM1Id])
   @@index([tenantId, perfilM1Id])
@@ -2740,6 +2744,8 @@ model ProductoPasoExtra {
   /// null = al inicio del flujo. UUID = después de ese RutaPaso.
   insertarDespuesDeRutaPasoId  String?                  @db.Uuid
   ordenInterno                 Int                      @default(0)
+  /// Posición en la secuencia unificada (pasos base + extras) del producto.
+  ordenFlujo                   Int?
   familiaCodigo                String
   /// Nombre visible del paso (mismo rol que en ProductoConfigPaso).
   nombreVisible                String?
@@ -2776,6 +2782,7 @@ model ProductoPasoExtra {
 
   @@index([tenantId, productoId, activo])
   @@index([tenantId, rutaAlternativaId, activo])
+  @@index([rutaAlternativaId, ordenFlujo])
 }
 
 // === CARGOS DIRECTOS (D.6) ===

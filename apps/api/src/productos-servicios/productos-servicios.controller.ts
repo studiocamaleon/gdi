@@ -34,6 +34,7 @@ import {
 import {
   ActualizarPasoExtraDto,
   ActualizarProductoRutaAlternativaDto,
+  ReordenarPasosRutaAlternativaDto,
   AgregarPasoExtraDto,
   CrearProductoRutaAlternativaDto,
   DuplicarProductoRutaAlternativaDto,
@@ -275,6 +276,18 @@ export class ProductosServiciosController {
       rutaAltId,
       dto,
     );
+  }
+
+  @Permiso('costos.gestionar')
+  @Patch('productos/rutas-alternativas/:rutaAltId/orden-pasos')
+  async reordenarPasosRutaAlternativa(
+    @Req() req: RequestWithAuth,
+    @Param('rutaAltId') rutaAltId: string,
+    @Body() dto: ReordenarPasosRutaAlternativaDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.reordenarPasosRutaAlternativa(tenantId, rutaAltId, dto);
   }
 
   @Permiso('costos.gestionar')

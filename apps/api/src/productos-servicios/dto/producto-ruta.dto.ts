@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMinSize,
+  ArrayUnique,
   IsBoolean,
   IsEnum,
   IsIn,
@@ -86,6 +88,14 @@ export class ActualizarProductoRutaAlternativaDto {
   @IsOptional()
   @IsBoolean()
   activo?: boolean;
+}
+
+export class ReordenarPasosRutaAlternativaDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  pasoIds!: string[];
 }
 
 export class DuplicarProductoRutaAlternativaDto {

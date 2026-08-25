@@ -339,6 +339,20 @@ export async function actualizarProductoRutaAlt(
   );
 }
 
+export async function reordenarPasosRutaAlt(
+  rutaAltId: string,
+  pasoIds: string[],
+) {
+  return apiRequest(
+    `/productos-servicios/productos/rutas-alternativas/${rutaAltId}/orden-pasos`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ pasoIds }),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
 export interface DuplicarProductoRutaAltPayload {
   nombre?: string;
 }

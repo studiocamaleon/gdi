@@ -13,6 +13,7 @@ import type {
 import type {
   ActualizarPasoExtraDto,
   ActualizarProductoRutaAlternativaDto,
+  ReordenarPasosRutaAlternativaDto,
   AgregarPasoExtraDto,
   CrearProductoRutaAlternativaDto,
   DuplicarProductoRutaAlternativaDto,
@@ -169,6 +170,18 @@ export class ProductosServiciosService {
     dto: ActualizarProductoRutaAlternativaDto,
   ) {
     return this.productoRutas.actualizarProductoRutaAlternativa(
+      tenantId,
+      rutaAltId,
+      dto,
+    );
+  }
+
+  reordenarPasosRutaAlternativa(
+    tenantId: string,
+    rutaAltId: string,
+    dto: ReordenarPasosRutaAlternativaDto,
+  ) {
+    return this.productoRutas.reordenarPasosRutaAlternativa(
       tenantId,
       rutaAltId,
       dto,

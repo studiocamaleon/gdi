@@ -11,6 +11,7 @@ import {
   ClockIcon,
   DropletIcon,
   Grid2X2Icon,
+  GripVerticalIcon,
   LockIcon,
   LockOpenIcon,
   PackageIcon,
@@ -113,6 +114,7 @@ import {
   buscarMateriasPrimasConfigPaso,
   guardarConfiguracionBaseFamiliaSistema,
   guardarConfiguracionBasePasoTenant,
+  reordenarPasosRutaAlt,
   upsertConfigPaso,
   type LookupsConfigPaso,
   type MateriaPrimaBusquedaItem,
@@ -3244,7 +3246,18 @@ export function ConfigPasosEditorView({
   const [editingExtra, setEditingExtra] = React.useState<
     PasoExtra | "new" | null
   >(null);
-  const pasosExtras = rutaAlternativa.pasosExtras ?? [];
+  const [ordenOptimista, setOrdenOptimista] = React.useState<string[] | null>(
+    null,
+  );
+  const [pasoArrastradoId, setPasoArrastradoId] = React.useState<string | null>(
+    null,
+  );
+  const [pasoDestinoId, setPasoDestinoId] = React.useState<string | null>(null);
+  const [guardandoOrden, setGuardandoOrden] = React.useState(false);
+  const pasosExtras = React.useMemo(
+    () => rutaAlternativa.pasosExtras ?? [],
+    [rutaAlternativa.pasosExtras],
+  );
   // Sync: un extra creado después del mount (o traído por refresh) necesita su
   // borrador en `configs`/`jsonTexts` para poder editarse en el panel.
   React.useEffect(() => {
@@ -4456,6 +4469,38 @@ export function ConfigPasosEditorView({
       rutaAlternativa.ruta.pasos[0]);
   // Secuencia unificada (base + extras por posición) para numerar el display.
   const pasosUnificados = React.useMemo(() => {
+    const ordenBase = new Map(
+      rutaAlternativa.configPasos.map((config) => [
+        config.rutaPasoId,
+        config.ordenFlujo,
+      ]),
+    );
+    const hayOrdenExplicito =
+      [...ordenBase.values()].some((orden) => orden != null) ||
+      pasosExtras.some((extra) => extra.ordenFlujo != null);
+    if (hayOrdenExplicito) {
+      const ids = [
+        ...rutaAlternativa.ruta.pasos.map((paso) => paso.id),
+        ...pasosExtras.map((extra) => extra.id),
+      ].sort((a, b) => {
+        const extraA = pasosExtras.find((extra) => extra.id === a);
+        const extraB = pasosExtras.find((extra) => extra.id === b);
+        const ordenA = ordenBase.get(a) ?? extraA?.ordenFlujo ?? null;
+        const ordenB = ordenBase.get(b) ?? extraB?.ordenFlujo ?? null;
+        if (ordenA == null && ordenB == null) return 0;
+        if (ordenA == null) return 1;
+        if (ordenB == null) return -1;
+        return ordenA - ordenB;
+      });
+      if (
+        ordenOptimista?.length === ids.length &&
+        ordenOptimista.every((id) => ids.includes(id))
+      ) {
+        return ordenOptimista;
+      }
+      return ids;
+    }
+
     const alInicio = pasosExtras
       .filter((e) => e.insertarDespuesDeRutaPasoId == null)
       .sort((a, b) => a.ordenInterno - b.ordenInterno);
@@ -4477,8 +4522,52 @@ export function ConfigPasosEditorView({
         ids.push(e.id);
       }
     }
+    if (
+      ordenOptimista?.length === ids.length &&
+      ordenOptimista.every((id) => ids.includes(id))
+    ) {
+      return ordenOptimista;
+    }
     return ids;
-  }, [rutaAlternativa.ruta.pasos, pasosExtras]);
+  }, [
+    rutaAlternativa.ruta.pasos,
+    rutaAlternativa.configPasos,
+    pasosExtras,
+    ordenOptimista,
+  ]);
+
+  const guardarOrdenPasos = async (pasoIds: string[]) => {
+    if (guardandoOrden || pasoIds.join("|") === pasosUnificados.join("|"))
+      return;
+    const anterior = [...pasosUnificados];
+    setOrdenOptimista(pasoIds);
+    setGuardandoOrden(true);
+    try {
+      await reordenarPasosRutaAlt(rutaAlternativa.id, pasoIds);
+      toast.success("Orden de la ruta actualizado");
+      router.refresh();
+    } catch (error) {
+      setOrdenOptimista(anterior);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cambiar el orden de la ruta",
+      );
+    } finally {
+      setGuardandoOrden(false);
+      setPasoArrastradoId(null);
+      setPasoDestinoId(null);
+    }
+  };
+
+  const moverPaso = (origenId: string, destinoId: string, despues: boolean) => {
+    if (origenId === destinoId) return;
+    const siguiente = pasosUnificados.filter((id) => id !== origenId);
+    const destino = siguiente.indexOf(destinoId);
+    if (destino < 0) return;
+    siguiente.splice(destino + (despues ? 1 : 0), 0, origenId);
+    void guardarOrdenPasos(siguiente);
+  };
   // Secuencia unificada en el shape que consumen las vistas del esquema
   // (asistente flotante y vista guiada expandida).
   const pasosAsistente: PasoAsistente[] = pasosUnificados.map((id) => {
@@ -4660,7 +4749,83 @@ export function ConfigPasosEditorView({
             </div>
           </div>
           <div className="pasos">
-            {rutaAlternativa.ruta.pasos.map((paso, idx) => {
+            {pasosUnificados.map((pasoId) => {
+              const extra = pasosExtras.find((item) => item.id === pasoId);
+              if (extra) {
+                const familiaExtra = familiasMap.get(extra.familiaCodigo);
+                const activo = extra.id === activePasoId;
+                const nombreExtra =
+                  configs[extra.id]?.nombreVisible?.trim() ||
+                  familiaExtra?.nombre ||
+                  extra.familiaCodigo;
+                return (
+                  <button
+                    type="button"
+                    key={extra.id}
+                    draggable={!guardandoOrden}
+                    className={`paso-item extra ${activo ? "active" : ""}`}
+                    style={{
+                      cursor: guardandoOrden ? "wait" : "grab",
+                      opacity: pasoArrastradoId === extra.id ? 0.55 : 1,
+                      outline:
+                        pasoDestinoId === extra.id &&
+                        pasoArrastradoId !== extra.id
+                          ? "2px solid var(--ink)"
+                          : undefined,
+                    }}
+                    onDragStart={(event) => {
+                      setPasoArrastradoId(extra.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", extra.id);
+                    }}
+                    onDragEnd={() => {
+                      setPasoArrastradoId(null);
+                      setPasoDestinoId(null);
+                    }}
+                    onDragOver={(event) => {
+                      if (!pasoArrastradoId) return;
+                      event.preventDefault();
+                      setPasoDestinoId(extra.id);
+                      event.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setPasoDestinoId(null);
+                      const origen =
+                        pasoArrastradoId ||
+                        event.dataTransfer.getData("text/plain");
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      moverPaso(
+                        origen,
+                        extra.id,
+                        event.clientY > rect.top + rect.height / 2,
+                      );
+                    }}
+                    onClick={() => {
+                      setActivePasoId(extra.id);
+                      setEditingExtra(null);
+                    }}
+                  >
+                    <span className="ix" aria-hidden>
+                      <GripVerticalIcon className="size-3.5" />
+                    </span>
+                    <span className="body">
+                      <span className="ttl">{nombreExtra}</span>
+                      <span className="sub">
+                        {extra.maquinaM1?.nombre ??
+                          extra.centroCosto?.nombre ??
+                          "Sin recurso"}
+                      </span>
+                    </span>
+                    <span className="status">Extra</span>
+                  </button>
+                );
+              }
+
+              const paso = rutaAlternativa.ruta.pasos.find(
+                (item) => item.id === pasoId,
+              );
+              if (!paso) return null;
               const summary = getPasoSummary(paso);
               const pasoLabel =
                 configs[paso.id]?.nombreVisible?.trim() ||
@@ -4677,7 +4842,44 @@ export function ConfigPasosEditorView({
                 <button
                   type="button"
                   key={paso.id}
+                  draggable={!guardandoOrden && !configuracionBase}
                   className={`paso-item ${summary.status} ${summary.optional ? "optional" : ""} ${paso.id === activePasoId ? "active" : ""}`}
+                  style={{
+                    cursor: guardandoOrden ? "wait" : "grab",
+                    opacity: pasoArrastradoId === paso.id ? 0.55 : 1,
+                    outline:
+                      pasoDestinoId === paso.id && pasoArrastradoId !== paso.id
+                        ? "2px solid var(--ink)"
+                        : undefined,
+                  }}
+                  onDragStart={(event) => {
+                    setPasoArrastradoId(paso.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", paso.id);
+                  }}
+                  onDragEnd={() => {
+                    setPasoArrastradoId(null);
+                    setPasoDestinoId(null);
+                  }}
+                  onDragOver={(event) => {
+                    if (!pasoArrastradoId) return;
+                    event.preventDefault();
+                    setPasoDestinoId(paso.id);
+                    event.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setPasoDestinoId(null);
+                    const origen =
+                      pasoArrastradoId ||
+                      event.dataTransfer.getData("text/plain");
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    moverPaso(
+                      origen,
+                      paso.id,
+                      event.clientY > rect.top + rect.height / 2,
+                    );
+                  }}
                   onClick={() => {
                     setActivePasoId(paso.id);
                     setEditingExtra(null);
@@ -4768,12 +4970,23 @@ export function ConfigPasosEditorView({
                   </span>
                   <span
                     className="status"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
                     title={
                       !summary.optional && !summary.skipped
                         ? "Paso obligatorio"
                         : "Paso opcional"
                     }
                   >
+                    {!configuracionBase ? (
+                      <GripVerticalIcon
+                        className="size-3.5"
+                        aria-label="Arrastrar para cambiar posición"
+                      />
+                    ) : null}
                     {!summary.optional && !summary.skipped ? (
                       // Cerrado (OBLIGATORIO) en ámbar para diferenciarlo a
                       // simple vista del abierto (opcional), que queda gris.
@@ -4795,40 +5008,7 @@ export function ConfigPasosEditorView({
               );
             })}
           </div>
-          {/* G-F3 — Pasos extras inline de esta ruta. Una configuración base
-              describe un único paso reutilizable, no una ruta concreta. */}
           {!configuracionBase ? <div className="pasos-extras-side">
-            <div className="pe-side-head">Pasos extras</div>
-            {pasosExtras.map((pe) => {
-              const fam = familiasMap.get(pe.familiaCodigo);
-              const activo = editingExtra !== "new" && pe.id === activePasoId;
-              const nombre =
-                configs[pe.id]?.nombreVisible?.trim() ||
-                fam?.nombre ||
-                pe.familiaCodigo;
-              return (
-                <button
-                  type="button"
-                  key={pe.id}
-                  className={`paso-item extra ${activo ? "active" : ""}`}
-                  onClick={() => {
-                    setActivePasoId(pe.id);
-                    setEditingExtra(null);
-                  }}
-                >
-                  <span className="ix">+</span>
-                  <span className="body">
-                    <span className="ttl">{nombre}</span>
-                    <span className="sub">
-                      {pe.maquinaM1?.nombre ??
-                        pe.centroCosto?.nombre ??
-                        "Sin recurso"}
-                    </span>
-                  </span>
-                  <span className="status">Extra</span>
-                </button>
-              );
-            })}
             <button
               type="button"
               className={`pe-add-btn ${editingExtra === "new" ? "active" : ""}`}
@@ -4839,7 +5019,7 @@ export function ConfigPasosEditorView({
           </div> : null}
           {!configuracionBase ? <div className="kbd-panel">
             <span className="kbd-hint">
-              Navegar pasos con <span className="k">↑</span>{" "}
+              Arrastrá para ordenar · Navegá con <span className="k">↑</span>{" "}
               <span className="k">↓</span>
             </span>
           </div> : null}
@@ -4848,7 +5028,7 @@ export function ConfigPasosEditorView({
         <main className="editor-main">
           {/* G-F3: el alta mínima (familia + posición) usa un form aparte; la
               configuración del extra usa el mismo panel que los demás pasos. */}
-          {editingExtra === "new" ? (
+          {editingExtra ? (
             <PasoExtraEditor
               productoId={producto.id}
               rutaAlternativa={rutaAlternativa}
@@ -4859,7 +5039,12 @@ export function ConfigPasosEditorView({
                 producto.modoMedidas === "MIXTA"
               }
               ruleExtraFields={technologyRuleFields}
-              extra={null}
+              extra={editingExtra === "new" ? null : editingExtra}
+              pasosOrdenados={pasosAsistente.map((paso) => ({
+                id: paso.id,
+                nombre: paso.nombre,
+                esExtra: paso.esExtra,
+              }))}
               onSaved={() => {
                 setEditingExtra(null);
                 router.refresh();
@@ -4872,6 +5057,7 @@ export function ConfigPasosEditorView({
                 router.refresh();
               }}
               onDeleted={() => {
+                setActivePasoId(rutaAlternativa.ruta.pasos[0]?.id ?? "");
                 setEditingExtra(null);
                 router.refresh();
               }}
@@ -5144,7 +5330,18 @@ export function ConfigPasosEditorView({
                           fijo). Queda sólo el toggle de vista (feedback del
                           usuario, 2026-08-11). */}
                       <div className="step-head">
-                        <div style={{ flex: 1 }} />
+                        <div style={{ flex: 1 }}>
+                          {activeExtra ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingExtra(activeExtra)}
+                            >
+                              Editar ubicación o eliminar
+                            </Button>
+                          ) : null}
+                        </div>
                         {/* Re-habilitado 2026-08-11 (pedido del usuario):
                             el toggle Detallado/Guiado vuelve para comparar
                             vistas. OJO: el detallado está CONGELADO — las
@@ -5209,7 +5406,7 @@ export function ConfigPasosEditorView({
                                   familia?.nombre ||
                                   paso.familiaCodigo,
                                 familiaCodigo: paso.familiaCodigo,
-                                esExtra: false,
+                                esExtra,
                                 orden: paso.orden,
                               }}
                               cfg={cfg}

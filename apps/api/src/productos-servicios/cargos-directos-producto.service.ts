@@ -692,6 +692,31 @@ export class CargosDirectosProductoService {
       ordenInterno = (last?.ordenInterno ?? 0) + 1;
     }
 
+    const [maxOrdenBase, maxOrdenExtra] = await Promise.all([
+      dto.rutaAlternativaId
+        ? this.prisma.productoConfigPaso.aggregate({
+            where: {
+              tenantId,
+              productoRutaAlternativaId: dto.rutaAlternativaId,
+            },
+            _max: { ordenFlujo: true },
+          })
+        : null,
+      dto.rutaAlternativaId
+        ? this.prisma.productoPasoExtra.aggregate({
+            where: {
+              tenantId,
+              rutaAlternativaId: dto.rutaAlternativaId,
+            },
+            _max: { ordenFlujo: true },
+          })
+        : null,
+    ]);
+    const maxOrdenFlujo = Math.max(
+      maxOrdenBase?._max.ordenFlujo ?? -1,
+      maxOrdenExtra?._max.ordenFlujo ?? -1,
+    );
+
     return this.prisma.productoPasoExtra.create({
       data: {
         tenantId,
@@ -700,6 +725,7 @@ export class CargosDirectosProductoService {
         familiaCodigo: dto.familiaCodigo,
         insertarDespuesDeRutaPasoId: dto.insertarDespuesDeRutaPasoId ?? null,
         ordenInterno,
+        ordenFlujo: maxOrdenFlujo >= 0 ? maxOrdenFlujo + 1 : null,
         nombreVisible: base.nombreVisible ?? null,
         modoActivacion,
         condicionActivacionJson:

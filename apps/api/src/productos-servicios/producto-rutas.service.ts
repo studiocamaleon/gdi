@@ -9,6 +9,7 @@ import type {
   ActualizarProductoRutaAlternativaDto,
   CrearProductoRutaAlternativaDto,
   DuplicarProductoRutaAlternativaDto,
+  ReordenarPasosRutaAlternativaDto,
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
 import { ConfigPasosService } from './config-pasos.service';
@@ -137,6 +138,88 @@ export class ProductoRutasService {
     });
   }
 
+  async reordenarPasosRutaAlternativa(
+    tenantId: string,
+    rutaAltId: string,
+    dto: ReordenarPasosRutaAlternativaDto,
+  ) {
+    const alternativa = await this.prisma.productoRutaAlternativa.findFirst({
+      where: { id: rutaAltId, tenantId },
+      include: {
+        ruta: { include: { pasos: true } },
+        configPasos: {
+          select: {
+            rutaPasoId: true,
+            requiereRutaPasoIds: true,
+          },
+        },
+        pasosExtras: {
+          select: { id: true },
+        },
+      },
+    });
+    if (!alternativa) {
+      throw new NotFoundException(
+        `Ruta alternativa ${rutaAltId} no encontrada`,
+      );
+    }
+
+    const pasosBase = alternativa.ruta.pasos.filter(
+      (paso) => paso.version === alternativa.rutaVersion,
+    );
+    const baseIds = new Set(pasosBase.map((paso) => paso.id));
+    const extraIds = new Set(alternativa.pasosExtras.map((paso) => paso.id));
+    const esperados = new Set([...baseIds, ...extraIds]);
+    const recibidos = new Set(dto.pasoIds);
+    const faltantes = [...esperados].filter((id) => !recibidos.has(id));
+    const ajenos = dto.pasoIds.filter((id) => !esperados.has(id));
+    if (
+      dto.pasoIds.length !== esperados.size ||
+      faltantes.length > 0 ||
+      ajenos.length > 0
+    ) {
+      throw new BadRequestException(
+        'El nuevo orden debe incluir exactamente todos los pasos activos de esta ruta.',
+      );
+    }
+
+    const posicion = new Map(dto.pasoIds.map((id, index) => [id, index]));
+    for (const config of alternativa.configPasos) {
+      const pasoPos = posicion.get(config.rutaPasoId);
+      if (pasoPos === undefined) continue;
+      for (const requeridoId of config.requiereRutaPasoIds) {
+        const requeridoPos = posicion.get(requeridoId);
+        if (requeridoPos !== undefined && requeridoPos >= pasoPos) {
+          const paso = pasosBase.find((item) => item.id === config.rutaPasoId);
+          const requerido = pasosBase.find((item) => item.id === requeridoId);
+          throw new BadRequestException(
+            `No se puede mover "${paso?.nombreVisible ?? paso?.familiaCodigo ?? 'el paso'}" antes de "${requerido?.nombreVisible ?? requerido?.familiaCodigo ?? 'su dependencia'}".`,
+          );
+        }
+      }
+    }
+
+    await this.prisma.$transaction(
+      dto.pasoIds.map((id, ordenFlujo) =>
+        baseIds.has(id)
+          ? this.prisma.productoConfigPaso.updateMany({
+              where: {
+                tenantId,
+                productoRutaAlternativaId: rutaAltId,
+                rutaPasoId: id,
+              },
+              data: { ordenFlujo },
+            })
+          : this.prisma.productoPasoExtra.update({
+              where: { id },
+              data: { ordenFlujo },
+            }),
+      ),
+    );
+
+    return { rutaAlternativaId: rutaAltId, pasoIds: dto.pasoIds };
+  }
+
   async duplicarProductoRutaAlternativa(
     tenantId: string,
     rutaAltId: string,
@@ -212,6 +295,7 @@ export class ProductoRutasService {
             tenantId,
             productoRutaAlternativaId: alternativaDuplicada.id,
             rutaPasoId: config.rutaPasoId,
+            ordenFlujo: config.ordenFlujo,
             modoActivacion: config.modoActivacion,
             condicionActivacionJson: this.jsonOrNull(
               config.condicionActivacionJson,
