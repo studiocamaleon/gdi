@@ -430,22 +430,6 @@ export const modoOperacionPlotterLabels: DiccionarioLabels = {
   HOJAS: { label: "Hojas individuales", descripcion: "Carga material en hojas pre-cortadas." },
 };
 
-/** Modos de laminado BOPP (paramsTecnicos.modosOperacionSoportados). */
-export const modoLaminadoLabels: DiccionarioLabels = {
-  UNA_CARA: {
-    label: "Una cara",
-    descripcion: "Lamina solo una cara del pliego en una pasada.",
-  },
-  DOS_CARAS_1_PASADA: {
-    label: "Dos caras (1 pasada)",
-    descripcion: "Máquinas dobles que laminan ambas caras simultáneamente.",
-  },
-  DOS_CARAS_2_PASADAS: {
-    label: "Dos caras (2 pasadas)",
-    descripcion: "Máquinas simples que laminan cara A, dan vuelta el pliego, y laminan cara B.",
-  },
-};
-
 /** Tipo de láser (CO2 / Fibra). */
 export const tipoLaserLabels: DiccionarioLabels = {
   CO2: {

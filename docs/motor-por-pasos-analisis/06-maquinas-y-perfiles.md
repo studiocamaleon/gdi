@@ -635,9 +635,9 @@ Máquina que aplica film transparente (BOPP brillo, mate, UV, lustre) sobre plie
 
 1. Setup (~8 min): cargar rollo, calibrar temperatura/alineación. (Calentamiento incluido en setup, no se modela aparte).
 2. Proceso: pliegos pasan entre rodillos a velocidad nominal en mm/min.
-3. Modos:
-   - UNA_CARA: 1 pasada.
-   - DOS_CARAS: 1 pasada (máquinas dobles) o 2 pasadas (máquinas simples).
+3. Una cara requiere una pasada. En doble faz, el perfil operativo indica si
+   la máquina aplica ambos films simultáneamente (1 pasada) o si hay que dar
+   vuelta los pliegos (2 pasadas).
 
 ### MÁQUINA
 
@@ -650,11 +650,6 @@ Físicos universales (columnas):
   espesorMaxMm    = 1       (espesor máximo del pliego)
 
 paramsTecnicosJson (específico LAMINADORA_BOPP_ROLLO):
-  modosOperacionSoportados: [
-    "UNA_CARA",                  // todas
-    "DOS_CARAS_2_PASADAS"        // las simples
-    // o "DOS_CARAS_1_PASADA"   (las modernas dobles)
-  ]
   margenesDesperdicioMm: {
     inicio: 50,       // arranque del rollo (descartado)
     fin: 50,          // cierre del trabajo (descartado)
@@ -678,9 +673,13 @@ Universales (columnas):
   cleanupMin          = 2
   feedReloadMin       = 5      (cambio de rollo de film)
 
-Discriminantes: ninguno (solo 1 perfil)
+detalleJson:
+  pasadasDobleFaz = 1 | 2
 
-paramsPerfilJson: {}
+El film doble faz siempre consume dos largos. `pasadasDobleFaz` modifica sólo
+el recorrido productivo de la máquina y, por lo tanto, el tiempo y la ETA.
+
+Discriminantes: ninguno (solo 1 perfil)
 
 Componentes desgaste: NINGUNO
   Razón: rodillos duran mucho, ya cubierto por amortización del CC.
@@ -712,12 +711,11 @@ El comercial elige el film al cotizar. Motor calcula consumo según márgenes de
 ### Fórmula del motor para laminadora
 
 ```
-// 1. Resolver pasadas necesarias según capacidad de la máquina
-pasadas = 1
-si JobContext.caras = "DOS_CARAS":
-  si máquina.modos contiene "DOS_CARAS_1_PASADA": pasadas = 1
-  sino si máquina.modos contiene "DOS_CARAS_2_PASADAS": pasadas = 2
-  sino: ERROR "máquina no soporta DOS_CARAS"
+// 1. Resolver recorrido según el perfil operativo
+caras = JobContext.caras == "DOS_CARAS" ? 2 : 1
+pasadas_maquina = JobContext.caras == "DOS_CARAS"
+  ? perfil.pasadasDobleFaz
+  : 1
 
 // 2. Calcular consumo de film (mini-nesting de laminado)
 ancho_film_mm = ancho_pliego + margenIzq + margenDer
@@ -725,10 +723,11 @@ largo_film_total_mm = margenInicio
                     + (N_pliegos × largo_pliego_mm) 
                     + ((N_pliegos - 1) × margenEntrePliegos) 
                     + margenFin
-metros_lineales_film = (largo_film_total_mm × pasadas) / 1000
+metros_lineales_film = (largo_film_total_mm × caras) / 1000
 
 // 3. Calcular tiempo
-tiempo_proceso_min = (largo_film_total_mm × pasadas) / productivityValue   // mm/min
+recorrido_maquina_m = (largo_film_total_mm × pasadas_maquina) / 1000
+tiempo_proceso_min = recorrido_maquina_m / productivityValue   // m/min
 tiempo_total_min = setupMin 
                  + tiempo_proceso_min 
                  + cleanupMin 

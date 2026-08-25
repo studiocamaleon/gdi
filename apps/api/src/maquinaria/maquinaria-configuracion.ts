@@ -51,6 +51,9 @@ const FIELD_LABELS: Record<string, string> = {
   tipoTrabajo: 'Tipo de trabajo',
   calidad: 'Calidad',
   tipoOperacion: 'Operación',
+  material: 'Material',
+  espesorMinMm: 'Espesor mínimo',
+  espesorMaxMm: 'Espesor máximo',
   tipoAnillo: 'Tipo de anillo',
   tiempoPrensadoSeg: 'Tiempo de planchado',
 };

@@ -230,7 +230,6 @@ export function PasoExtraEditor({
           familiaCodigo,
           rutaAlternativaId: rutaAlternativa.id,
           insertarDespuesDeRutaPasoId: posicion === AL_INICIO ? null : posicion,
-          modoActivacion: "OBLIGATORIO",
         })) as PasoExtra;
         toast.success("Paso extra agregado al flujo");
         onCreated(creado);

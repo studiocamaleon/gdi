@@ -66,12 +66,11 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   },
 
   // ─── §9 LAMINADORA_BOPP_ROLLO ───────────────────────────────────
-  // paramsTecnicos: modosOperacionSoportados[], margenesDesperdicioMm,
-  //   margenEntrePliegosMm.
+  // paramsTecnicos: margenesDesperdicioMm, margenEntrePliegosMm. La cantidad
+  // de pasadas de doble faz vive en el perfil porque modifica productividad.
   [PlantillaMaquinariaDto.laminadora_bopp_rollo]: {
     requiredMachineKeys: [
       'anchoUtil',
-      'modosOperacionSoportados',
       'margenesDesperdicioMm',
       'margenEntrePliegosMm',
     ],

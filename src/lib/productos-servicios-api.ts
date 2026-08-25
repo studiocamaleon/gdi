@@ -522,11 +522,13 @@ export async function guardarConfiguracionBaseFamiliaSistema(
   codigo: string,
   input: UpsertConfigPasoPayload,
 ): Promise<{ familiaCodigo: string; configBase: Record<string, unknown> }> {
+  const { rutaPasoId: _rutaPasoId, ...configuracion } = input;
+  void _rutaPasoId;
   return apiRequest(
     `/productos-servicios/familias/${encodeURIComponent(codigo)}/configuracion-base`,
     {
       method: "PUT",
-      body: JSON.stringify({ ...input, rutaPasoId: codigo }),
+      body: JSON.stringify(configuracion),
     },
   );
 }
@@ -940,6 +942,7 @@ export interface NestingViewerInput {
   piezasPorPliego?: number;
   piezasPorPouch?: number;
   consumedLengthMm?: number;
+  machineRunLengthMm?: number;
   piezasAcomodadas: number;
   estrategiaDisposicion?: "composicion_original" | "nesting_optimizado";
   outputsCanonicos?: Record<string, unknown>;

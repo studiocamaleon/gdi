@@ -87,10 +87,9 @@ const modoOperacionPlotterOptions = [
   option("HOJAS", "Hojas"),
 ];
 
-const modoLaminadoOptions = [
-  option("UNA_CARA", "Una cara"),
-  option("DOS_CARAS_1_PASADA", "Dos caras (1 pasada)"),
-  option("DOS_CARAS_2_PASADAS", "Dos caras (2 pasadas)"),
+const pasadasDobleFazLaminadoOptions = [
+  option("1", "1 pasada"),
+  option("2", "2 pasadas"),
 ];
 
 const tecnologia3dOptions = [
@@ -951,19 +950,8 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
     section({
       id: "parametros_tecnicos",
       title: "Parámetros técnicos",
-      description:
-        "Modos de operación y márgenes de desperdicio del rollo de film.",
+      description: "Márgenes de desperdicio del rollo de film.",
       fields: [
-        field({
-          key: "modosOperacionSoportados",
-          label: "Modos soportados",
-          scope: "maquina",
-          kind: "multiselect",
-          required: true,
-          options: modoLaminadoOptions,
-          description:
-            "Una cara siempre + dos caras (1 o 2 pasadas según máquina).",
-        }),
         field({
           key: "margenesDesperdicioMm",
           label: "Márgenes de desperdicio",
@@ -1006,6 +994,16 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
           unit: "m_min",
           required: true,
           description: "m/min de avance.",
+        }),
+        field({
+          key: "pasadasDobleFaz",
+          label: "Doble faz",
+          scope: "perfil_operativo",
+          kind: "select",
+          required: true,
+          options: pasadasDobleFazLaminadoOptions,
+          description:
+            "Cantidad de pasadas necesarias para laminar ambas caras. El film siempre se consume por las dos caras.",
         }),
         field({
           key: "setupMin",
@@ -1100,7 +1098,7 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
           kind: "multiselect",
           options: materialLaserOptions,
           description:
-            "Sustratos rígidos reales del inventario que cubre este perfil. Un mismo perfil puede vincularse con varios materiales.",
+            "Sustratos rígidos que cubre el perfil. Es obligatorio para Corte y permite elegir automáticamente la velocidad correcta.",
         }),
         field({
           key: "espesorMinMm",
@@ -1108,7 +1106,7 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
           scope: "perfil_operativo",
           kind: "number",
           unit: "mm",
-          description: "Desde qué espesor aplica (0 = sin mínimo).",
+          description: "Desde qué espesor aplica. Obligatorio para Corte.",
         }),
         field({
           key: "espesorMaxMm",
@@ -1116,7 +1114,7 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
           scope: "perfil_operativo",
           kind: "number",
           unit: "mm",
-          description: "Hasta qué espesor aplica.",
+          description: "Hasta qué espesor aplica. Obligatorio para Corte.",
         }),
         field({
           key: "productivityValue",
@@ -2036,7 +2034,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     help: {
       summary: "Perfil único 'Estándar'. Velocidad medida en m/min.",
       tips: [
-        "Declarar modosOperacionSoportados según las capacidades reales (1 o 2 pasadas para doble cara).",
+        "Indicá en el perfil si el doble faz se procesa en 1 o 2 pasadas.",
         "Los márgenes de desperdicio impactan el cálculo de consumo de film.",
       ],
       examples: ["GMP Excelam-II"],

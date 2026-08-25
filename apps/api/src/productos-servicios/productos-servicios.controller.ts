@@ -37,6 +37,7 @@ import {
   AgregarPasoExtraDto,
   CrearProductoRutaAlternativaDto,
   DuplicarProductoRutaAlternativaDto,
+  UpsertConfiguracionBaseFamiliaSistemaDto,
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
 import {
@@ -383,14 +384,14 @@ export class ProductosServiciosController {
   actualizarConfiguracionBaseFamiliaSistema(
     @Req() req: RequestWithAuth,
     @Param('codigo') codigo: string,
-    @Body() dto: UpsertProductoConfigPasoDto,
+    @Body() dto: UpsertConfiguracionBaseFamiliaSistemaDto,
   ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.pasosTenant.actualizarConfiguracionBaseSistema(
       tenantId,
       codigo,
-      dto,
+      { ...dto, rutaPasoId: codigo },
     );
   }
 

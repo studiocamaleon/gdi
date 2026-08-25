@@ -519,8 +519,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
 
   // ============================================================================
   // 6. LAMINADORA_BOPP_ROLLO — laminado de tarjetas
-  //    Doc §9: paramsTecnicos.modosOperacionSoportados, margenesDesperdicioMm,
-  //    margenEntrePliegosMm. Perfil único "Estándar".
+  //    Doc §9: márgenes en máquina; pasadas de doble faz en el perfil.
   // ============================================================================
   const laminadora = await prisma.maquina.create({
     data: {
@@ -541,7 +540,6 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       espesorMaximo: "1",
       activo: true,
       parametrosTecnicosJson: {
-        modosOperacionSoportados: ["UNA_CARA", "DOS_CARAS_2_PASADAS"],
         margenesDesperdicioMm: { inicio: 50, fin: 50, izquierdo: 10, derecho: 10 },
         margenEntrePliegosMm: 5,
       },
@@ -559,7 +557,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       productivityUnit: UnidadProduccionMaquina.M_MIN,
       setupMin: "8",
       cleanupMin: "2",
-      detalleJson: {},
+      detalleJson: { pasadasDobleFaz: 2 },
     },
   });
 

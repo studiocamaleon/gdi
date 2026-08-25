@@ -1,4 +1,22 @@
-import { runMinPorProductividad } from '../productividad-tiempo';
+import {
+  modoTiempoEfectivo,
+  runMinPorProductividad,
+} from '../productividad-tiempo';
+
+describe('modoTiempoEfectivo', () => {
+  it('fuerza T-3 para corte láser aunque el registro histórico esté vacío', () => {
+    expect(modoTiempoEfectivo('corte_laser', null)).toBe('T-3');
+  });
+
+  it('fuerza T-3 para corte láser aunque conserve el antiguo T-4', () => {
+    expect(modoTiempoEfectivo('corte_laser', 'T-4')).toBe('T-3');
+  });
+
+  it('mantiene el fallback histórico para otras familias', () => {
+    expect(modoTiempoEfectivo('trabajo_manual', null)).toBe('T-1');
+    expect(modoTiempoEfectivo('trabajo_manual', 'T-2')).toBe('T-2');
+  });
+});
 
 describe('runMinPorProductividad — unidades de velocidad', () => {
   describe('láser / CNC por recorrido (magnitud en METROS)', () => {

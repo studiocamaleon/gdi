@@ -31,6 +31,7 @@ import {
   getDefaultProfileType,
   getPerfilFieldValue,
   getTemplateUnitLabel,
+  isPerfilFieldRequired,
   normalizePerfilTypeForTemplate,
   productividadPlanchaEnVivo,
   restringirColoresDelPerfil,
@@ -235,7 +236,11 @@ export function PerfilesOperativosEditor({
                         ({getTemplateUnitLabel(field.unit)})
                       </span>
                     ) : null}
-                    {field.required ? <span className="req"> *</span> : null}
+                    {perfiles.some((perfil) =>
+                      isPerfilFieldRequired(field, form, perfil),
+                    ) ? (
+                      <span className="req"> *</span>
+                    ) : null}
                   </th>
                 ))}
                 {conColumnaProductividad ? (
@@ -296,9 +301,16 @@ export function PerfilesOperativosEditor({
                       }
                       const valor = getPerfilFieldValue(perfil, field.key);
                       // La unidad vive en el encabezado; la celda va limpia.
-                      const sinUnidad: MaquinariaTemplateField = field.unit
-                        ? { ...field, unit: undefined }
-                        : field;
+                      const requerido = isPerfilFieldRequired(
+                        field,
+                        form,
+                        perfil,
+                      );
+                      const sinUnidad: MaquinariaTemplateField = {
+                        ...field,
+                        unit: undefined,
+                        required: requerido,
+                      };
                       // Los colores del perfil no pueden exceder los de la máquina.
                       const cellField = restringirColoresDelPerfil(
                         sinUnidad,

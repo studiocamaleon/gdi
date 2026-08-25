@@ -127,10 +127,10 @@ export class UpsertMaquinaCandidataDto {
   orden?: number;
 }
 
-export class UpsertProductoConfigPasoDto {
-  @IsUUID()
-  rutaPasoId!: string;
-
+/** Campos compartidos por una configuración de paso concreta y por la
+ * configuración reutilizable de una familia del sistema. La segunda no tiene
+ * `rutaPasoId`: su identidad sale de `familias/:codigo`, no de un UUID. */
+export class ConfiguracionPasoDto {
   @IsOptional()
   @IsEnum(ModoActivacionPasoDto)
   modoActivacion?: ModoActivacionPasoDto | null;
@@ -253,6 +253,13 @@ export class UpsertProductoConfigPasoDto {
   @Type(() => UpsertPasoTercerizadoEntradaDto)
   tercerizadoEntradas?: UpsertPasoTercerizadoEntradaDto[];
 }
+
+export class UpsertProductoConfigPasoDto extends ConfiguracionPasoDto {
+  @IsUUID()
+  rutaPasoId!: string;
+}
+
+export class UpsertConfiguracionBaseFamiliaSistemaDto extends ConfiguracionPasoDto {}
 
 export class UpsertPasoTercerizadoEntradaDto {
   /** { ejeClave: valorClave } — la combinación de esta fila. */

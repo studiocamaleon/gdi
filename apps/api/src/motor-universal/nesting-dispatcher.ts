@@ -109,6 +109,12 @@ export interface NestingDispatchResult {
   piezasPorPouch?: number;
   /** Solo shelf-rollo: largo consumido del rollo en mm. */
   consumedLengthMm?: number;
+  /**
+   * Recorrido productivo real de la máquina. Puede diferir del material
+   * consumido: una laminadora doble usa dos largos de film simultáneamente,
+   * pero recorre el trabajo una sola vez.
+   */
+  machineRunLengthMm?: number;
   /** Cantidad de instancias de pieza efectivamente acomodadas. */
   piezasAcomodadas: number;
   /** Política efectiva aplicada al vector completo. */
@@ -1301,7 +1307,9 @@ function runShelfRollo(
     panelIndex: p.panelIndex ?? undefined,
     panelCount: p.panelCount ?? undefined,
     panelAxis: (p.panelAxis ?? undefined) as
-      'vertical' | 'horizontal' | undefined,
+      | 'vertical'
+      | 'horizontal'
+      | undefined,
     usefulWidthMm: p.usefulWidthMm,
     usefulHeightMm: p.usefulHeightMm,
     overlapStartMm: p.overlapStartMm,

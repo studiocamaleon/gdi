@@ -1,3 +1,14 @@
+/** Corte láser siempre es productividad de máquina por recorrido. El fallback
+ * evita que configuraciones históricas con `modoTiempo=null` caigan a T-1 y
+ * cobren solamente el setup. */
+export function modoTiempoEfectivo(
+  familiaCodigo: string,
+  modoConfigurado: string | null | undefined,
+): string {
+  if (familiaCodigo === 'corte_laser') return 'T-3';
+  return modoConfigurado ?? 'T-1';
+}
+
 /**
  * Convierte una cantidad + productividad de perfil en minutos de run, según la
  * UNIDAD de la productividad. Función pura (testeable sin el pipeline del motor).

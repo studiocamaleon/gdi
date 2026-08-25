@@ -868,7 +868,9 @@ const corte_laser: DefinicionFamilia = {
   descripcion:
     'Corte de placas (acrílico, madera, MDF, etc.) con láser. Atraviesa el material (distinto a grabado).',
   relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-3', 'T-4'],
+  // Siempre calcula el recorrido con la velocidad del perfil operativo de la
+  // máquina. No admite tiempo fijo/manual como modo del paso.
+  modosTiempoSoportados: ['T-3'],
   mecanismosCantidadSoportados: [
     'DIRECT_FROM_JOBCONTEXT',
     'CALCULADO_POR_PASO',
@@ -877,7 +879,7 @@ const corte_laser: DefinicionFamilia = {
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
   // El tiempo T-3 se mide por RECORRIDO: el perfil trae la velocidad (mm/s) y el
-  // motor la aplica al perímetro de las piezas. Cortes calados usan T-4 manual.
+  // motor la aplica al perímetro de las piezas.
   magnitudTiempoDefault: 'perimetro_piezas_m',
   nestingConfig: {
     superficie: 'pliegos_multiples',

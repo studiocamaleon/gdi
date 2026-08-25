@@ -1394,7 +1394,6 @@ describe('MotorUniversalService — smoke tests', () => {
     const filmBrillo = await prisma.materiaPrimaVariante.findFirstOrThrow({
       where: { tenantId, sku: 'BOPP-BRILLO-650' },
     });
-
     const result = await motorService.cotizar({
       tenantId,
       productoId: tarjetas.id,
@@ -1509,7 +1508,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(nesting.visualConfig?.pieceBleedMm).toBe(2.5);
   });
 
-  it('Laminado: respeta allowRotation=false sin duplicar otra vez el consumo por caras', async () => {
+  it('Laminado doble faz duplica sólo las pasadas, el film y el run; no los pliegos comprados', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -1526,32 +1525,116 @@ describe('MotorUniversalService — smoke tests', () => {
     const filmBrillo = await prisma.materiaPrimaVariante.findFirstOrThrow({
       where: { tenantId, sku: 'BOPP-BRILLO-650' },
     });
-
-    const result = await motorService.cotizar({
-      tenantId,
-      productoId: tarjetas.id,
-      jobContext: {
-        cantidad: 100,
-        caras: 2,
-        opcionalesActivados: { [laminado!.id]: true },
-        slotMateriales: {
-          [`${laminado!.id}_film`]: filmBrillo.id,
-        },
-        configPasoRuntime: {
-          [laminado!.id]: {
-            nestingConfig: { allowRotation: false },
+    const perfilOriginal =
+      await prisma.maquinaPerfilOperativo.findUniqueOrThrow({
+        where: { id: laminado!.perfilM1Id! },
+      });
+    const detalleOriginal = (perfilOriginal.detalleJson ??
+      {}) as Prisma.JsonObject;
+    const configurarPasadas = (pasadasDobleFaz: 1 | 2) =>
+      prisma.maquinaPerfilOperativo.update({
+        where: { id: perfilOriginal.id },
+        data: {
+          detalleJson: {
+            ...detalleOriginal,
+            pasadasDobleFaz,
           },
         },
-      } as never,
-    });
+      });
 
-    expect(result.exitoso).toBe(true);
-    const pasoLaminado = result.cotizacion!.pasos.find(
+    const cotizar = (caras: 1 | 2) =>
+      motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        jobContext: {
+          cantidad: 100,
+          caras,
+          opcionalesActivados: { [laminado!.id]: true },
+          slotMateriales: {
+            [`${laminado!.id}_film`]: filmBrillo.id,
+          },
+          configPasoRuntime: {
+            [laminado!.id]: {
+              nestingConfig: { allowRotation: false },
+            },
+          },
+        } as never,
+      });
+
+    let simple: Awaited<ReturnType<typeof cotizar>>;
+    let dobleDosPasadas: Awaited<ReturnType<typeof cotizar>>;
+    let dobleUnaPasada: Awaited<ReturnType<typeof cotizar>>;
+    try {
+      await configurarPasadas(2);
+      simple = await cotizar(1);
+      dobleDosPasadas = await cotizar(2);
+      await configurarPasadas(1);
+      dobleUnaPasada = await cotizar(2);
+    } finally {
+      await prisma.maquinaPerfilOperativo.update({
+        where: { id: perfilOriginal.id },
+        data: { detalleJson: detalleOriginal },
+      });
+    }
+
+    expect(simple.exitoso).toBe(true);
+    expect(dobleDosPasadas.exitoso).toBe(true);
+    expect(dobleUnaPasada.exitoso).toBe(true);
+
+    const laminadoSimple = simple.cotizacion!.pasos.find(
       (p) => p.familiaCodigo === 'laminado',
     )!;
-    const film = pasoLaminado.materiales![0];
-    expect(pasoLaminado.nestingResult!.consumedLengthMm).toBeCloseTo(1610, 0);
-    expect(film.cantidad).toBeCloseTo(1.61, 2);
+    const laminadoDobleDosPasadas = dobleDosPasadas.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'laminado',
+    )!;
+    const laminadoDobleUnaPasada = dobleUnaPasada.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'laminado',
+    )!;
+    const filmSimple = laminadoSimple.materiales![0];
+    const filmDobleDosPasadas = laminadoDobleDosPasadas.materiales![0];
+    const filmDobleUnaPasada = laminadoDobleUnaPasada.materiales![0];
+
+    expect(laminadoSimple.nestingResult!.consumedLengthMm).toBeCloseTo(1610, 0);
+    expect(laminadoDobleDosPasadas.nestingResult!.consumedLengthMm).toBeCloseTo(
+      laminadoSimple.nestingResult!.consumedLengthMm! * 2,
+      5,
+    );
+    expect(laminadoDobleUnaPasada.nestingResult!.consumedLengthMm).toBeCloseTo(
+      laminadoSimple.nestingResult!.consumedLengthMm! * 2,
+      5,
+    );
+    expect(filmDobleDosPasadas.cantidad).toBeCloseTo(
+      filmSimple.cantidad * 2,
+      5,
+    );
+    expect(filmDobleUnaPasada.cantidad).toBeCloseTo(filmSimple.cantidad * 2, 5);
+    expect(laminadoDobleDosPasadas.tiempo!.runMin).toBeCloseTo(
+      laminadoSimple.tiempo!.runMin * 2,
+      5,
+    );
+    expect(laminadoDobleUnaPasada.tiempo!.runMin).toBeCloseTo(
+      laminadoSimple.tiempo!.runMin,
+      5,
+    );
+    expect(laminadoDobleDosPasadas.tiempo!.setupMin).toBe(
+      laminadoSimple.tiempo!.setupMin,
+    );
+    expect(laminadoDobleDosPasadas.tiempo!.cleanupMin).toBe(
+      laminadoSimple.tiempo!.cleanupMin,
+    );
+
+    const sustratoImpresion = (resultado: typeof simple) =>
+      resultado
+        .cotizacion!.pasos.find(
+          (p) => p.familiaCodigo === 'impresion_por_hoja',
+        )!
+        .materiales!.find((m) => m.slotCodigo === 'sustrato_principal')!;
+    expect(sustratoImpresion(dobleDosPasadas).cantidad).toBe(
+      sustratoImpresion(simple).cantidad,
+    );
+    expect(sustratoImpresion(dobleUnaPasada).cantidad).toBe(
+      sustratoImpresion(simple).cantidad,
+    );
   });
 
   it('F.2.5: clave legacy de material por slot sigue funcionando temporalmente', async () => {

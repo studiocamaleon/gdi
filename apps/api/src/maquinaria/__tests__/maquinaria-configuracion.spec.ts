@@ -125,7 +125,12 @@ describe('diagnóstico de configuración de maquinaria', () => {
         activo: true,
         productivityValue: 1700,
         productivityUnit: UnidadProduccionMaquinaDto.mm_min,
-        detalle: { tipoOperacion: 'CORTE' },
+        detalle: {
+          tipoOperacion: 'CORTE',
+          material: ['MDF'],
+          espesorMinMm: 3,
+          espesorMaxMm: 6,
+        },
       },
     ];
 
@@ -158,6 +163,41 @@ describe('diagnóstico de configuración de maquinaria', () => {
     expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([]);
   });
 
+  it('la laminadora exige las pasadas de doble faz en el perfil, no en la máquina', () => {
+    const payload = base(PlantillaMaquinariaDto.laminadora_bopp_rollo);
+    payload.anchoUtil = 760;
+    payload.parametrosTecnicos = {
+      margenesDesperdicioMm: {
+        inicio: 50,
+        fin: 50,
+        izquierdo: 0,
+        derecho: 0,
+      },
+      margenEntrePliegosMm: 5,
+    };
+    payload.perfilesOperativos = [
+      {
+        nombre: 'Estándar',
+        tipoPerfil: TipoPerfilOperativoMaquinaDto.laminado,
+        activo: true,
+        productivityValue: 1.8,
+        productivityUnit: UnidadProduccionMaquinaDto.m_min,
+        detalle: { pasadasDobleFaz: 2 },
+      },
+    ];
+
+    expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([]);
+    expect(() =>
+      validatePerfilOperativoByTemplate(
+        PlantillaMaquinariaDto.laminadora_bopp_rollo,
+        {
+          ...payload.perfilesOperativos[0]!,
+          detalle: { pasadasDobleFaz: 3 },
+        },
+      ),
+    ).toThrow('debe indicar 1 o 2 pasadas');
+  });
+
   it('no exige desgaste a una cortadora láser', () => {
     const payload = base(PlantillaMaquinariaDto.corte_laser);
     payload.anchoUtil = 1300;
@@ -169,7 +209,12 @@ describe('diagnóstico de configuración de maquinaria', () => {
         activo: true,
         productivityValue: 30,
         productivityUnit: UnidadProduccionMaquinaDto.mm_s,
-        detalle: { tipoOperacion: 'CORTE' },
+        detalle: {
+          tipoOperacion: 'CORTE',
+          material: ['MDF'],
+          espesorMinMm: 3,
+          espesorMaxMm: 6,
+        },
       },
     ];
 
@@ -183,7 +228,12 @@ describe('diagnóstico de configuración de maquinaria', () => {
       activo: true,
       productivityValue: 30,
       productivityUnit: UnidadProduccionMaquinaDto.mm_s,
-      detalle: { tipoOperacion: 'CORTE' },
+      detalle: {
+        tipoOperacion: 'CORTE',
+        material: ['ACRILICO'],
+        espesorMinMm: 3,
+        espesorMaxMm: 5,
+      },
     };
     expect(() =>
       validatePerfilOperativoByTemplate(
@@ -204,6 +254,21 @@ describe('diagnóstico de configuración de maquinaria', () => {
         detalle: { tipoOperacion: 'CORTE' },
       }),
     ).toThrow('su operación debe coincidir');
+
+    expect(() =>
+      validatePerfilOperativoByTemplate(PlantillaMaquinariaDto.corte_laser, {
+        ...corte,
+        detalle: { tipoOperacion: 'CORTE' },
+      }),
+    ).toThrow('debe completar el campo material');
+
+    expect(() =>
+      validatePerfilOperativoByTemplate(PlantillaMaquinariaDto.corte_laser, {
+        ...corte,
+        tipoPerfil: TipoPerfilOperativoMaquinaDto.grabado,
+        detalle: { tipoOperacion: 'GRABADO', material: ['ACRILICO'] },
+      }),
+    ).not.toThrow();
   });
 
   it('al Plotter CAD le exige sus tintas CMYK y un único cabezal por ml', () => {

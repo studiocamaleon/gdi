@@ -158,10 +158,16 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   }),
 
   // ─── §9 LAMINADORA_BOPP_ROLLO ───────────────────────────────────
-  // Perfil único "Estándar". Sin discriminantes.
+  // Perfil único "Estándar". Las pasadas de doble faz afectan el tiempo de
+  // máquina, no el consumo: ambas caras siempre consumen dos largos de film.
   [PlantillaMaquinariaDto.laminadora_bopp_rollo]: buildRule({
-    detalleKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
+    detalleKeys: ['pasadasDobleFaz'],
+    requiredFieldKeys: [
+      'nombre',
+      'productivityValue',
+      'productivityUnit',
+      'pasadasDobleFaz',
+    ],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.laminado],
   }),
 
@@ -302,6 +308,22 @@ function operacionLaserCoincideConTipo(
   return false;
 }
 
+function esPerfilCorteLaser(
+  plantilla: PlantillaMaquinariaDto,
+  perfil: MaquinaPerfilOperativoItemDto,
+) {
+  return (
+    plantilla === PlantillaMaquinariaDto.corte_laser &&
+    perfil.tipoPerfil === TipoPerfilOperativoMaquinaDto.corte
+  );
+}
+
+const CAMPOS_REQUERIDOS_CORTE_LASER = [
+  'material',
+  'espesorMinMm',
+  'espesorMaxMm',
+] as const;
+
 export function validatePerfilOperativoByTemplate(
   plantilla: PlantillaMaquinariaDto,
   perfil: MaquinaPerfilOperativoItemDto,
@@ -331,6 +353,42 @@ export function validatePerfilOperativoByTemplate(
     throw new Error(
       `El perfil operativo ${perfilName} debe ser Corte o Grabado y su operación debe coincidir.`,
     );
+  }
+
+  if (esPerfilCorteLaser(plantilla, perfil)) {
+    for (const fieldKey of CAMPOS_REQUERIDOS_CORTE_LASER) {
+      if (!hasValue(getPerfilFieldValue(perfil, fieldKey))) {
+        throw new Error(
+          `El perfil operativo ${perfilName} debe completar el campo ${fieldKey} para seleccionar automáticamente por material y espesor.`,
+        );
+      }
+    }
+    const min = Number(getPerfilFieldValue(perfil, 'espesorMinMm'));
+    const max = Number(getPerfilFieldValue(perfil, 'espesorMaxMm'));
+    if (
+      !Number.isFinite(min) ||
+      min <= 0 ||
+      !Number.isFinite(max) ||
+      max <= 0
+    ) {
+      throw new Error(
+        `El perfil operativo ${perfilName} debe indicar espesores mínimo y máximo mayores a 0.`,
+      );
+    }
+    if (max < min) {
+      throw new Error(
+        `El perfil operativo ${perfilName} tiene un espesor máximo menor que el mínimo.`,
+      );
+    }
+  }
+
+  if (plantilla === PlantillaMaquinariaDto.laminadora_bopp_rollo) {
+    const pasadas = Number(getPerfilFieldValue(perfil, 'pasadasDobleFaz'));
+    if (pasadas !== 1 && pasadas !== 2) {
+      throw new Error(
+        `El perfil operativo ${perfilName} debe indicar 1 o 2 pasadas para doble faz.`,
+      );
+    }
   }
 
   for (const detailKey of Object.keys(perfil.detalle ?? {})) {
@@ -403,6 +461,52 @@ export function getPerfilOperativoConfigurationIssues(
     )
   ) {
     issues.push({ tipo: 'campo', fieldKey: 'tipoOperacion' });
+  }
+
+  if (esPerfilCorteLaser(plantilla, perfil)) {
+    for (const fieldKey of CAMPOS_REQUERIDOS_CORTE_LASER) {
+      const value = getPerfilFieldValue(perfil, fieldKey);
+      const numero = fieldKey === 'material' ? null : Number(value);
+      if (
+        !hasValue(value) ||
+        (fieldKey !== 'material' &&
+          (!Number.isFinite(numero) || Number(numero) <= 0))
+      ) {
+        if (
+          !issues.some(
+            (issue) => issue.tipo === 'campo' && issue.fieldKey === fieldKey,
+          )
+        ) {
+          issues.push({ tipo: 'campo', fieldKey });
+        }
+      }
+    }
+    const min = Number(getPerfilFieldValue(perfil, 'espesorMinMm'));
+    const max = Number(getPerfilFieldValue(perfil, 'espesorMaxMm'));
+    if (Number.isFinite(min) && Number.isFinite(max) && max < min) {
+      if (
+        !issues.some(
+          (issue) =>
+            issue.tipo === 'campo' && issue.fieldKey === 'espesorMaxMm',
+        )
+      ) {
+        issues.push({ tipo: 'campo', fieldKey: 'espesorMaxMm' });
+      }
+    }
+  }
+
+  if (plantilla === PlantillaMaquinariaDto.laminadora_bopp_rollo) {
+    const pasadas = Number(getPerfilFieldValue(perfil, 'pasadasDobleFaz'));
+    if (
+      pasadas !== 1 &&
+      pasadas !== 2 &&
+      !issues.some(
+        (issue) =>
+          issue.tipo === 'campo' && issue.fieldKey === 'pasadasDobleFaz',
+      )
+    ) {
+      issues.push({ tipo: 'campo', fieldKey: 'pasadasDobleFaz' });
+    }
   }
 
   if (

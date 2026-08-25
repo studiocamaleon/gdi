@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { normalizarBusqueda } from "@/components/ui/select-buscable";
 import {
   Select,
   SelectContent,
@@ -103,7 +104,7 @@ export function PasosFamiliasView({
     [sistema],
   );
   const sistemaFiltrado = React.useMemo(() => {
-    const query = busquedaCatalogo.trim().toLocaleLowerCase("es");
+    const query = normalizarBusqueda(busquedaCatalogo);
     return sistema.filter((familia) => {
       if (
         categoriaCatalogo !== "todas" &&
@@ -120,7 +121,7 @@ export function PasosFamiliasView({
         familia.nombre,
         descripcionPasoParaUsuario(familia.descripcion),
         categoria,
-      ].some((texto) => texto.toLocaleLowerCase("es").includes(query));
+      ].some((texto) => normalizarBusqueda(texto).includes(query));
     });
   }, [busquedaCatalogo, categoriaCatalogo, sistema]);
 

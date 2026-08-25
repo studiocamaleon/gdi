@@ -114,7 +114,10 @@ import {
 } from '../productos-servicios/cobertura-toner';
 import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
 import { indicePerfilUnicoPorOperacion } from './seleccion-perfil-operacion';
-import { runMinPorProductividad } from './productividad-tiempo';
+import {
+  modoTiempoEfectivo,
+  runMinPorProductividad,
+} from './productividad-tiempo';
 import {
   calcularPerimetroPiezasM,
   congelarMedidaVisible,
@@ -1071,7 +1074,8 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            PasoEjecutado['ojalesLayout'] | undefined;
+            | PasoEjecutado['ojalesLayout']
+            | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -2945,17 +2949,13 @@ export class MotorUniversalService {
         costoTotal: 0,
       };
     }
-    const perfilResuelto = sinImpresion
-      ? null
-      : this.resolverPerfil(pasoConMaquina, jobContext);
-    if (!sinImpresion) {
-      this.emitirAvisosDeFamilia(
-        errores,
-        pasoConMaquina,
-        jobContext,
-        perfilResuelto,
-      );
-    }
+    const perfilDependeDelSustrato =
+      pasoConMaquina.familiaCodigo === 'corte_laser' ||
+      pasoConMaquina.familiaCodigo === 'grabado_laser';
+    let perfilResuelto =
+      sinImpresion || perfilDependeDelSustrato
+        ? null
+        : this.resolverPerfil(pasoConMaquina, jobContext);
     paso = pasoConMaquina; // todo lo siguiente usa el paso con máquina resuelta
 
     // c.0) DOBLE FAZ — si el sustrato de este paso se duplica (aplicaMultiCaras),
@@ -2984,6 +2984,29 @@ export class MotorUniversalService {
           paso,
         )
       : null;
+
+    // En láser, primero hay que conocer la variante realmente elegida por el
+    // slot (también cuando MOTOR_ELIGE_AUTO) para seleccionar la velocidad del
+    // perfil que cubre ese material y espesor.
+    if (!sinImpresion && perfilDependeDelSustrato) {
+      const attrs = materialPreliminar?.atributosVarianteJson ?? {};
+      const espesorMm = this.numeroPositivo(
+        attrs.espesorMm ?? attrs.espesor_mm ?? attrs.espesor,
+      );
+      perfilResuelto = this.resolverPerfil(pasoConMaquina, jobContext, {
+        materiaPrimaId: materialPreliminar?.materiaPrimaId ?? null,
+        canonicalMaterialKey: materialPreliminar?.canonicalMaterialKey ?? null,
+        espesorMm: espesorMm ?? null,
+      });
+    }
+    if (!sinImpresion) {
+      this.emitirAvisosDeFamilia(
+        errores,
+        pasoConMaquina,
+        jobContext,
+        perfilResuelto,
+      );
+    }
 
     // Derivador geométrico — SE CORRE UNA VEZ POR PASO, antes de resolver los
     // slots (la fuente LED se selecciona por los watts derivados) y del
@@ -3047,6 +3070,11 @@ export class MotorUniversalService {
           loadPrintSheetMaterial: (varianteId) =>
             this.cargarPrintSheetMaterial(tenantId, varianteId),
         },
+      );
+      nestingDispatch = this.aplicarPasadasLaminadoPorCaras(
+        paso,
+        jobContext,
+        nestingDispatch,
       );
     }
     // FRONTERA-NESTING: cada familia del sistema que DEBE acomodar declara
@@ -3391,6 +3419,7 @@ export class MotorUniversalService {
           placements: nestingDispatch.placements,
           piezasPorPliego: nestingDispatch.piezasPorPliego,
           consumedLengthMm: nestingDispatch.consumedLengthMm,
+          machineRunLengthMm: nestingDispatch.machineRunLengthMm,
           piezasAcomodadas: nestingDispatch.piezasAcomodadas,
           estrategiaDisposicion: nestingDispatch.estrategiaDisposicion,
           visualConfig: nestingDispatch.visualConfig,
@@ -3495,7 +3524,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -3768,7 +3799,7 @@ export class MotorUniversalService {
       atributosVarianteJson?: Record<string, unknown> | null;
     } | null = null,
   ): NonNullable<PasoEjecutado['tiempo']> {
-    const modoTiempo = paso.modoTiempo ?? 'T-1';
+    const modoTiempo = modoTiempoEfectivo(paso.familiaCodigo, paso.modoTiempo);
 
     // Tiempo manual del comercial (docs/tiempo-manual-por-paso-diseno.md):
     // gana sobre cualquier modoTiempo. Es una estimación ABSOLUTA del trabajo
@@ -3920,6 +3951,23 @@ export class MotorUniversalService {
                 : 0;
           cantidadEfectiva = nestingDispatch.cantidadCalculada * ancho; // m_lin × ancho_m = m²
         }
+        // Una máquina cuya productividad está expresada en metros por minuto
+        // trabaja sobre el largo REAL consumido del rollo. El mecanismo de
+        // cantidad del laminado hereda pliegos impresos para saber qué montar,
+        // pero esos pliegos no son metros: usar esa cantidad hacía que 50
+        // pliegos se interpretaran como 50 m. El nesting es la fuente física
+        // correcta y ya incluye las pasadas de cara y contracara.
+        if (
+          (nestingDispatch?.algorithm === 'shelf-rollo' ||
+            nestingDispatch?.algorithm === 'maxrects-rollo' ||
+            nestingDispatch?.algorithm === 'secuencial-rollo') &&
+          paso.perfil?.productivityUnit === 'M_MIN'
+        ) {
+          cantidadEfectiva =
+            (nestingDispatch.machineRunLengthMm ??
+              nestingDispatch.consumedLengthMm ??
+              0) / 1000;
+        }
         // F.2.6 — aplicar multiplicadores activos después de normalizar la
         // unidad efectiva. En rollo M2_H, hacerlo antes se perdía al convertir
         // metros lineales a m².
@@ -3956,7 +4004,8 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        { tarifa: unknown } | undefined;
+        | { tarifa: unknown }
+        | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -4088,7 +4137,8 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          { tarifa: unknown; nombre?: string | null } | undefined;
+          | { tarifa: unknown; nombre?: string | null }
+          | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -4325,6 +4375,89 @@ export class MotorUniversalService {
           slot.slotCodigo === 'film' && slot.formula === 'por_metro_lineal',
       )
     );
+  }
+
+  /**
+   * El laminado doble faz son dos PASADAS sobre los mismos pliegos físicos.
+   * `duplicarJobContextPorCaras` duplica las piezas comerciales, pero esta
+   * familia nestea el output heredado `pliegos_impresos`; por diseño no debemos
+   * modificar ese output porque también representa el papel comprado.
+   *
+   * Por eso repetimos exclusivamente el consumo del laminado: largo de film,
+   * área usada/desperdiciada y placements de la segunda cara. El recorrido de
+   * máquina queda separado y depende del perfil: una laminadora doble recorre
+   * una vez; una simple necesita dos pasadas. Setup/cleanup se calculan una sola
+   * vez a nivel paso y los pliegos de impresión permanecen intactos.
+   */
+  private aplicarPasadasLaminadoPorCaras(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nesting: NestingDispatchResult | null,
+  ): NestingDispatchResult | null {
+    if (
+      !nesting ||
+      estrategiaNestingDeFamilia(paso.familiaCodigo) !== 'laminado_rollo'
+    ) {
+      return nesting;
+    }
+
+    const pasadas = Number(
+      (jobContext as Record<string, unknown>)[KEY_CARAS_DUPLICADAS] ?? 1,
+    );
+    if (!Number.isInteger(pasadas) || pasadas <= 1) return nesting;
+
+    const largoBaseMm = Number(nesting.consumedLengthMm ?? 0);
+    if (!(largoBaseMm > 0)) return nesting;
+
+    const detallePerfil = this.asRecord(paso.perfil?.detalleJson);
+    const pasadasConfiguradas = Number(detallePerfil.pasadasDobleFaz ?? 2);
+    const pasadasMaquina = pasadasConfiguradas === 1 ? 1 : 2;
+
+    const placements = Array.from({ length: pasadas }, (_, pasada) =>
+      nesting.placements.map((placement) => ({
+        ...placement,
+        yMm: placement.yMm + pasada * largoBaseMm,
+      })),
+    ).flat();
+    const escalar = (valor: number | undefined) =>
+      typeof valor === 'number' ? valor * pasadas : valor;
+
+    return {
+      ...nesting,
+      cantidadCalculada: nesting.cantidadCalculada * pasadas,
+      consumedLengthMm: largoBaseMm * pasadas,
+      machineRunLengthMm: largoBaseMm * pasadasMaquina,
+      substrates: nesting.substrates.map((substrate) =>
+        substrate.kind === 'roll'
+          ? { ...substrate, lengthMm: substrate.lengthMm * pasadas }
+          : substrate,
+      ),
+      placements,
+      piezasAcomodadas: nesting.piezasAcomodadas * pasadas,
+      metricasRaw: {
+        ...nesting.metricasRaw,
+        areaUtilMm2: nesting.metricasRaw.areaUtilMm2 * pasadas,
+        areaTotalMm2: nesting.metricasRaw.areaTotalMm2 * pasadas,
+        consumedLengthMm: escalar(nesting.metricasRaw.consumedLengthMm),
+        wasteAreaM2: escalar(nesting.metricasRaw.wasteAreaM2),
+      },
+      visualConfig: nesting.visualConfig
+        ? {
+            ...nesting.visualConfig,
+            usableArea: {
+              ...nesting.visualConfig.usableArea,
+              heightMm: nesting.visualConfig.usableArea.heightMm * pasadas,
+            },
+            printableArea: nesting.visualConfig.printableArea
+              ? {
+                  ...nesting.visualConfig.printableArea,
+                  heightMm:
+                    nesting.visualConfig.printableArea.heightMm * pasadas,
+                }
+              : undefined,
+          }
+        : undefined,
+    };
   }
 
   /** Paso que se activó pero se cortó por error: cotiza en 0. La forma la
@@ -5193,7 +5326,9 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
+          | 'HARDCODED'
+          | 'COMERCIAL_ELIGE'
+          | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -6123,7 +6258,9 @@ export class MotorUniversalService {
     id: string;
     sku: string;
     nombreVariante?: string | null;
+    materiaPrimaId?: string | null;
     materiaPrimaNombre?: string | null;
+    canonicalMaterialKey?: string | null;
     materiaPrimaTemplateId?: string | null;
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
@@ -6396,7 +6533,9 @@ export class MotorUniversalService {
     id: string;
     sku: string;
     nombreVariante?: string | null;
+    materiaPrimaId?: string | null;
     materiaPrimaNombre?: string | null;
+    canonicalMaterialKey?: string | null;
     materiaPrimaTemplateId?: string | null;
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
@@ -6422,6 +6561,8 @@ export class MotorUniversalService {
         materiaPrima: {
           select: {
             nombre: true,
+            id: true,
+            canonicalMaterialKey: true,
             activo: true,
             unidadStock: true,
             subfamilia: true,
@@ -6437,7 +6578,9 @@ export class MotorUniversalService {
       id: v.id,
       sku: v.sku,
       nombreVariante: v.nombreVariante,
+      materiaPrimaId: v.materiaPrima?.id ?? null,
       materiaPrimaNombre: v.materiaPrima?.nombre ?? null,
+      canonicalMaterialKey: v.materiaPrima?.canonicalMaterialKey ?? null,
       materiaPrimaTemplateId: v.materiaPrima?.templateId ?? null,
       materiaPrimaTipoTecnico: v.materiaPrima?.tipoTecnico ?? null,
       precioReferencia: v.precioReferencia ? Number(v.precioReferencia) : null,
@@ -6603,16 +6746,19 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -6715,14 +6861,16 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              Record<string, unknown> | undefined;
+              | Record<string, unknown>
+              | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -7604,6 +7752,11 @@ export class MotorUniversalService {
   private resolverPerfil(
     paso: PasoCargado,
     jobContext: JobContext,
+    contextoMaterial?: {
+      materiaPrimaId?: string | null;
+      canonicalMaterialKey?: string | null;
+      espesorMm?: number | null;
+    } | null,
   ): NonNullable<PasoCargado['perfil']> | null {
     const perfilesDisponibles = this.filtrarPerfilesCompatibles(
       paso.familiaCodigo,
@@ -7649,14 +7802,14 @@ export class MotorUniversalService {
       // sigue la resolución automática.
     }
 
-    // ─── Láser/CNC: auto-selección por OPERACIÓN ────────────────────
-    // Una máquina con un perfil por operación (un CORTE, un GRABADO) resuelve
-    // sola: el paso corte_laser toma el de CORTE, grabado_laser el de GRABADO.
-    // Con varios perfiles de la misma operación (por material×espesor) elige el
-    // comercial hasta que el contexto exponga material+espesor (Fase 3).
+    // ─── Láser: auto-selección por OPERACIÓN + MATERIAL + ESPESOR ───
+    // El paso define CORTE/GRABADO y el sustrato preliminar aporta la materia
+    // prima y el espesor. Los perfiles legados con códigos canónicos también
+    // siguen siendo compatibles.
     const idxPorOperacion = indicePerfilUnicoPorOperacion(
       paso.familiaCodigo,
       perfilesDisponibles,
+      contextoMaterial,
     );
     if (idxPorOperacion !== null) {
       const elegido = perfilesDisponibles[idxPorOperacion];
@@ -7895,7 +8048,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -7955,7 +8110,8 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        Array<{ codigo: string; monto: number }> | undefined;
+        | Array<{ codigo: string; monto: number }>
+        | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');
@@ -8246,7 +8402,9 @@ export class MotorUniversalService {
                       include: {
                         materiaPrima: {
                           select: {
+                            id: true,
                             nombre: true,
+                            canonicalMaterialKey: true,
                             activo: true,
                             unidadStock: true,
                             subfamilia: true,
@@ -8684,8 +8842,11 @@ export class MotorUniversalService {
                 materiaPrimaActiva:
                   s.materialVariante.materiaPrima?.activo ?? false,
                 nombreVariante: s.materialVariante.nombreVariante,
+                materiaPrimaId: s.materialVariante.materiaPrima?.id ?? null,
                 materiaPrimaNombre:
                   s.materialVariante.materiaPrima?.nombre ?? null,
+                canonicalMaterialKey:
+                  s.materialVariante.materiaPrima?.canonicalMaterialKey ?? null,
                 materiaPrimaTemplateId:
                   s.materialVariante.materiaPrima?.templateId ?? null,
                 materiaPrimaTipoTecnico:

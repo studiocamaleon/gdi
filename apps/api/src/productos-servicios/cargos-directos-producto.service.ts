@@ -9,6 +9,7 @@ import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilida
 import type {
   ActualizarPasoExtraDto,
   AgregarPasoExtraDto,
+  ConfiguracionPasoDto,
   PasoExtraCargoDirectoDto,
 } from './dto/producto-ruta.dto';
 import type {
@@ -585,6 +586,35 @@ export class CargosDirectosProductoService {
     throw err;
   }
 
+  /**
+   * Los pasos extra también son instancias de una familia. Al crearlos se
+   * materializa (snapshot) la configuración reutilizable vigente, igual que
+   * al agregar una ruta al producto. Así, cambios futuros del preset no pisan
+   * la configuración particular que el comercial edite en este producto.
+   */
+  private async obtenerConfiguracionBasePasoExtra(
+    tenantId: string,
+    familiaCodigo: string,
+  ): Promise<ConfiguracionPasoDto> {
+    const esPasoTenant =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        familiaCodigo,
+      );
+    const fila = esPasoTenant
+      ? await this.prisma.pasoTenant.findFirst({
+          where: { id: familiaCodigo, tenantId, activo: true },
+          select: { configBaseJson: true },
+        })
+      : await this.prisma.familiaPasoDefaults.findUnique({
+          where: { tenantId_familiaCodigo: { tenantId, familiaCodigo } },
+          select: { configBaseJson: true },
+        });
+    const base = fila?.configBaseJson;
+    return base && typeof base === 'object' && !Array.isArray(base)
+      ? (base as unknown as ConfiguracionPasoDto)
+      : {};
+  }
+
   async agregarPasoExtra(
     tenantId: string,
     productoId: string,
@@ -597,12 +627,33 @@ export class CargosDirectosProductoService {
       throw new NotFoundException(`Producto ${productoId} no encontrado`);
 
     await this.familias.assertFamiliaExiste(tenantId, dto.familiaCodigo);
-    this.validarReglaPasoExtra(dto.modoActivacion, dto.condicionActivacionJson);
+    const base = await this.obtenerConfiguracionBasePasoExtra(
+      tenantId,
+      dto.familiaCodigo,
+    );
+    const modoActivacion = dto.modoActivacion ?? base.modoActivacion ?? null;
+    const condicionActivacionJson =
+      dto.condicionActivacionJson !== undefined
+        ? dto.condicionActivacionJson
+        : (base.condicionActivacionJson ?? null);
+    const maquinaM1Id = dto.maquinaM1Id ?? base.maquinaM1Id ?? null;
+    // Si el alta elige expresamente otra máquina, no se arrastra el perfil de
+    // la máquina configurada en el preset.
+    const perfilM1Id = maquinaM1Id
+      ? dto.maquinaM1Id !== undefined
+        ? (dto.perfilM1Id ?? null)
+        : (base.perfilM1Id ?? null)
+      : null;
+    const centroCostoId = maquinaM1Id
+      ? null
+      : (dto.centroCostoId ?? base.centroCostoId ?? null);
 
-    // Validar que las FK provistas pertenezcan al tenant (evita referencias
-    // cross-tenant a máquinas/perfiles/pasos de ruta ajenos).
-    if (dto.maquinaM1Id) {
-      await this.assertMaquinaPerfil(tenantId, dto.maquinaM1Id, dto.perfilM1Id);
+    this.validarReglaPasoExtra(modoActivacion, condicionActivacionJson);
+
+    // Validar las FK efectivas (incluidas las heredadas) para no materializar
+    // referencias inactivas o pertenecientes a otro tenant.
+    if (maquinaM1Id) {
+      await this.assertMaquinaPerfil(tenantId, maquinaM1Id, perfilM1Id);
     }
     if (dto.insertarDespuesDeRutaPasoId) {
       const rutaPaso = await this.prisma.rutaPaso.findFirst({
@@ -622,8 +673,8 @@ export class CargosDirectosProductoService {
         dto.rutaAlternativaId,
       );
     }
-    if (dto.centroCostoId) {
-      await this.assertCentroCosto(tenantId, dto.centroCostoId);
+    if (centroCostoId) {
+      await this.assertCentroCosto(tenantId, centroCostoId);
     }
 
     // ordenInterno se calcula por ruta alternativa (el orden es dentro del
@@ -649,16 +700,31 @@ export class CargosDirectosProductoService {
         familiaCodigo: dto.familiaCodigo,
         insertarDespuesDeRutaPasoId: dto.insertarDespuesDeRutaPasoId ?? null,
         ordenInterno,
-        modoActivacion: dto.modoActivacion ?? null,
+        nombreVisible: base.nombreVisible ?? null,
+        modoActivacion,
         condicionActivacionJson:
-          (dto.condicionActivacionJson as never) ?? Prisma.JsonNull,
-        modoTiempo: dto.modoTiempo ?? null,
-        mecanismoCantidad: dto.mecanismoCantidad ?? null,
-        paramsPasoJson: (dto.paramsPasoJson as never) ?? Prisma.JsonNull,
-        maquinaM1Id: dto.maquinaM1Id ?? null,
-        perfilM1Id: dto.maquinaM1Id ? (dto.perfilM1Id ?? null) : null,
+          (condicionActivacionJson as never) ?? Prisma.JsonNull,
+        modoTiempo: dto.modoTiempo ?? base.modoTiempo ?? null,
+        mecanismoCantidad:
+          dto.mecanismoCantidad ?? base.mecanismoCantidad ?? null,
+        mecanismoCantidadConfigJson:
+          (base.mecanismoCantidadConfigJson as never) ?? Prisma.JsonNull,
+        multiplicadoresActivos: base.multiplicadoresActivos ?? [],
+        paramsPasoJson:
+          ((dto.paramsPasoJson !== undefined
+            ? dto.paramsPasoJson
+            : base.paramsPasoJson) as never) ?? Prisma.JsonNull,
+        setupOverrideMin: base.setupOverrideMin ?? null,
+        cleanupOverrideMin: base.cleanupOverrideMin ?? null,
+        tiempoFijoOverrideMin: base.tiempoFijoOverrideMin ?? null,
+        maquinaM1Id,
+        perfilM1Id,
         // Centro de costo sólo aplica si el paso NO tiene máquina.
-        centroCostoId: dto.maquinaM1Id ? null : (dto.centroCostoId ?? null),
+        centroCostoId,
+        configSlotsMaterialesJson:
+          (base.slotsMateriales as never) ?? Prisma.JsonNull,
+        configMaquinasCandidatasJson:
+          (base.maquinasCandidatas as never) ?? Prisma.JsonNull,
         activo: true,
       },
     });

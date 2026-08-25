@@ -573,6 +573,8 @@ export interface NestingEjecutado {
   piezasPorPliego?: number;
   piezasPorPouch?: number;
   consumedLengthMm?: number;
+  /** Metros recorridos por la máquina, separados del consumo de material. */
+  machineRunLengthMm?: number;
   piezasAcomodadas: number;
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
   /** Datos normalizados para que el SVG muestre cómo pensó el motor. */
@@ -771,7 +773,9 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;
@@ -1089,7 +1093,9 @@ export interface SlotCargado {
     activo?: boolean;
     materiaPrimaActiva?: boolean;
     nombreVariante?: string | null;
+    materiaPrimaId?: string | null;
     materiaPrimaNombre?: string | null;
+    canonicalMaterialKey?: string | null;
     materiaPrimaTemplateId?: string | null;
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;

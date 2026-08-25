@@ -930,6 +930,10 @@ export function shouldShowPerfilField(
   form: MaquinaPayload,
   perfil?: MaquinaPayload["perfilesOperativos"][number],
 ) {
+  if (form.plantilla === "corte_laser") {
+    const soloCorte = new Set(["espesorMinMm", "espesorMaxMm"]);
+    if (soloCorte.has(field.key)) return perfil?.tipoPerfil === "corte";
+  }
   if (form.plantilla !== "impresora_gran_formato_por_area") return true;
   const corteFieldKeys = new Set(["factorComplejidad"]);
   const impresionFieldKeys = new Set(["colores"]);
@@ -939,6 +943,19 @@ export function shouldShowPerfilField(
   if (corteFieldKeys.has(field.key)) return isCorte || isMixto;
   if (impresionFieldKeys.has(field.key)) return !isCorte || isMixto;
   return true;
+}
+
+export function isPerfilFieldRequired(
+  field: MaquinariaTemplateField,
+  form: MaquinaPayload,
+  perfil?: MaquinaPayload["perfilesOperativos"][number],
+) {
+  if (field.required) return true;
+  return (
+    form.plantilla === "corte_laser" &&
+    perfil?.tipoPerfil === "corte" &&
+    new Set(["material", "espesorMinMm", "espesorMaxMm"]).has(field.key)
+  );
 }
 
 export function cleanGranFormatoGeometryFields(
