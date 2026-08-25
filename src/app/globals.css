@@ -6809,6 +6809,11 @@ body {
     color: var(--text-muted);
   }
 
+  .maq-buscador:focus-within {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 3px rgba(20, 20, 26, 0.06);
+  }
+
   .maq-buscador input {
     flex: 1 1 auto;
     min-width: 0;

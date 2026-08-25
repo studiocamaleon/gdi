@@ -222,6 +222,7 @@ export function MaquinariaPanel({
           <SearchIcon />
           <Input
             type="search"
+            className="h-auto border-0 bg-transparent px-0 py-2 shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
             placeholder="Buscar por nombre, código, fabricante, modelo o ubicación"
             value={filterText}
             onChange={(event) => setFilterText(event.target.value)}
