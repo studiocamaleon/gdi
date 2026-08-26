@@ -45,6 +45,7 @@ import { CobroModule } from './cobro/cobro.module';
 import { SuscripcionesModule } from './suscripciones/suscripciones.module';
 import { CentroCopiadoModule } from './centro-copiado/centro-copiado.module';
 import { PanelGeneralModule } from './panel-general/panel-general.module';
+import { FidelizacionModule } from './fidelizacion/fidelizacion.module';
 import { RecorridosVectorialesModule } from './recorridos-vectoriales/recorridos-vectoriales.module';
 import { SuscripcionAccesoGuard } from './suscripciones/suscripcion-acceso.guard';
 
@@ -116,6 +117,7 @@ import { SuscripcionAccesoGuard } from './suscripciones/suscripcion-acceso.guard
     IntegracionesModule,
     CentroCopiadoModule,
     PanelGeneralModule,
+    FidelizacionModule,
     RecorridosVectorialesModule,
   ],
   controllers: [AppController],

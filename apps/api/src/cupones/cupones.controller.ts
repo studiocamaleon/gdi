@@ -22,7 +22,7 @@ import {
   ValidarCuponDto,
 } from './dto/cupones.dto';
 
-@Permiso('comercial.ver')
+@Permiso('crm.ver')
 @Controller('cupones')
 export class CuponesController {
   constructor(private readonly service: CuponesService) {}

@@ -233,7 +233,7 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
       }}
     >
       <div className="acc-wrap">
-        <Link className="acc-crumb" href="/clientes">
+        <Link className="acc-crumb" href="/crm/clientes">
           <ArrowLeftIcon />
           Clientes
         </Link>
@@ -273,7 +273,7 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
                 <div className="l">Cuenta corriente</div>
                 <div className="sin-limite">
                   No habilitada. Las órdenes vencen al finalizar.{" "}
-                  <Link href={`/clientes/${cc.cliente.id}`}>Configurar</Link>
+                  <Link href={`/crm/clientes/${cc.cliente.id}`}>Configurar</Link>
                 </div>
               </>
             ) : limite === null ? (
@@ -282,7 +282,7 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
                 <div className="sin-limite">
                   Cuenta corriente sin límite ·{" "}
                   {cc.cliente.plazoCuentaCorrienteDias} días.{" "}
-                  <Link href={`/clientes/${cc.cliente.id}`}>Configurar</Link>
+                  <Link href={`/crm/clientes/${cc.cliente.id}`}>Configurar</Link>
                 </div>
               </>
             ) : (

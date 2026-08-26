@@ -36,6 +36,7 @@ import {
   generarTokenPublico,
 } from '../enlaces-publicos/enlaces-publicos.service';
 import { CuponesService } from '../cupones/cupones.service';
+import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
 
 /**
  * Presupuestos — el ciclo comercial de la cotización
@@ -63,6 +64,7 @@ type EmisionJson = {
   cargosDirectos?: number;
   cargos?: unknown[];
   items: CrearOrdenTrabajoItemDto[];
+  fidelizacionCanjePuntos?: number;
 };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -100,6 +102,7 @@ export class PresupuestosService {
     private readonly enlaces: EnlacesPublicosService,
     private readonly empresa: DatosEmpresaService,
     private readonly cupones: CuponesService,
+    private readonly fidelizacion: FidelizacionService,
   ) {}
 
   /**
@@ -221,7 +224,23 @@ export class PresupuestosService {
     const cargosDirectos = r2(
       cargos.reduce((a, cargo) => a + Number(cargo.total ?? 0), 0),
     );
-    const total = r2(items.reduce((a, i) => a + i.total, 0) + cargosDirectos);
+    const totalAntesCanje = r2(
+      items.reduce((a, i) => a + i.total, 0) + cargosDirectos,
+    );
+    const fidelizacion = await this.fidelizacion.simularCotizacion(
+      auth.tenantId,
+      dto.clienteId,
+      dto.cotizacionId,
+      totalAntesCanje,
+      cargos.reduce((a, cargo) => a + Number(cargo.montoNeto ?? 0), 0),
+      dto.fidelizacionCanjePuntos ?? 0,
+    );
+    if ((dto.fidelizacionCanjePuntos ?? 0) > fidelizacion.maximoCanjeable) {
+      throw new BadRequestException(
+        'El cliente ya no tiene suficientes puntos para ese canje.',
+      );
+    }
+    const total = r2(totalAntesCanje - fidelizacion.canjeMonto);
     const emisionJson: EmisionJson = {
       fechaEntrega: dto.fechaEntrega,
       canalVenta: dto.canalVenta,
@@ -229,6 +248,7 @@ export class PresupuestosService {
       cargosDirectos,
       cargos,
       items,
+      fidelizacionCanjePuntos: fidelizacion.canjePuntos,
     };
 
     const numero = await this.prisma.$transaction(async (tx) => {
@@ -254,6 +274,11 @@ export class PresupuestosService {
           subtotal,
           impuestos,
           total,
+          fidelizacionMargenBase: fidelizacion.margen,
+          fidelizacionPuntosEstimados: fidelizacion.puntosEstimados,
+          fidelizacionCanjePuntos: fidelizacion.canjePuntos,
+          fidelizacionCanjeMonto: fidelizacion.canjeMonto,
+          fidelizacionSnapshotJson: fidelizacion.snapshot as never,
           cargosDirectosCotizacionJson:
             cargos as unknown as Prisma.InputJsonValue,
           emisionJson: emisionJson as unknown as Prisma.InputJsonValue,
@@ -353,6 +378,9 @@ export class PresupuestosService {
       cargosDirectos: detalle.cargosDirectos,
       total: detalle.total,
       descuentoTotal: detalle.descuentoTotal,
+      fidelizacionPuntosEstimados: detalle.fidelizacion.puntosEstimados,
+      fidelizacionCanjePuntos: detalle.fidelizacion.canjePuntos,
+      fidelizacionCanjeMonto: detalle.fidelizacion.canjeMonto,
       items: detalle.items,
     });
 
@@ -588,6 +616,15 @@ export class PresupuestosService {
       impuestos: Number(c.impuestos ?? 0),
       total: Number(c.total ?? 0),
       descuentoTotal: this.descuentoTotalDe(emision),
+      fidelizacion: {
+        puntosEstimados: Number(c.fidelizacionPuntosEstimados ?? 0),
+        canjePuntos: Number(c.fidelizacionCanjePuntos ?? 0),
+        canjeMonto: Number(c.fidelizacionCanjeMonto ?? 0),
+        estado:
+          Number(c.fidelizacionCanjePuntos ?? 0) > 0
+            ? 'CANJE_RESERVADO'
+            : 'PENDIENTES_DE_ACREDITACION',
+      },
       cargosDirectos: emision.cargosDirectos ?? 0,
       fechaEntrega: emision.fechaEntrega ?? null,
       publicToken: c.publicToken,
@@ -691,6 +728,7 @@ export class PresupuestosService {
       publicToken: string | null;
       fechaValidez?: Date | null;
       emisionJson?: Prisma.JsonValue | null;
+      fidelizacionCanjePuntos?: number;
     },
     opts: { reenvio: boolean; descripcion?: string },
   ) {
@@ -711,6 +749,19 @@ export class PresupuestosService {
         c.clienteId ?? null,
         emision.items,
       );
+      if (
+        !opts.reenvio &&
+        c.clienteId &&
+        Number(c.fidelizacionCanjePuntos ?? 0) > 0
+      ) {
+        await this.fidelizacion.reservar(tx, {
+          tenantId: auth.tenantId,
+          clienteId: c.clienteId,
+          cotizacionId: c.id,
+          puntos: Number(c.fidelizacionCanjePuntos),
+          expiraEl: fechaValidez,
+        });
+      }
       const actualizada = await tx.cotizacion.updateMany({
         where: {
           id: c.id,
@@ -892,6 +943,12 @@ export class PresupuestosService {
           id,
           'Presupuesto rechazado.',
         );
+        await this.fidelizacion.liberarReservas(
+          tx,
+          auth.tenantId,
+          { cotizacionId: id },
+          'Presupuesto rechazado.',
+        );
       }
     });
     await this.evento(auth, id, {
@@ -975,6 +1032,31 @@ export class PresupuestosService {
       }
     }
     const parcial = items.length < emision.items.length;
+    const reservaFidelizacion = await this.prisma.fidelizacionReserva.findFirst(
+      {
+        where: {
+          tenantId: auth.tenantId,
+          cotizacionId: id,
+          estado: 'RESERVADA',
+          ordenId: null,
+        },
+      },
+    );
+    const totalRestante = restantes.reduce(
+      (suma, item) => suma + Number(item.total ?? 0),
+      0,
+    );
+    const totalSeleccionado = items.reduce(
+      (suma, item) => suma + Number(item.total ?? 0),
+      0,
+    );
+    const puntosCanjeConversion = reservaFidelizacion
+      ? parcial && totalRestante > 0
+        ? Math.floor(
+            (reservaFidelizacion.puntos * totalSeleccionado) / totalRestante,
+          )
+        : reservaFidelizacion.puntos
+      : 0;
 
     // La fecha de entrega cotizada puede haber quedado en el pasado: la OT
     // nace en borrador para revisarla y emitirla desde su propia ficha.
@@ -997,6 +1079,7 @@ export class PresupuestosService {
       canalVenta: emision.canalVenta,
       cargosDirectos: parcial ? undefined : emision.cargosDirectos,
       observaciones: c.observaciones ?? undefined,
+      fidelizacionCanjePuntos: puntosCanjeConversion,
       items,
     });
 
@@ -1071,6 +1154,12 @@ export class PresupuestosService {
             c.id,
             'Presupuesto vencido.',
           );
+          await this.fidelizacion.liberarReservas(
+            tx,
+            c.tenantId,
+            { cotizacionId: c.id },
+            'Presupuesto vencido.',
+          );
         }
         return cambio;
       });
@@ -1119,6 +1208,12 @@ export class PresupuestosService {
       cargosDirectos: emision.cargosDirectos ?? 0,
       total: Number(c.total ?? 0),
       descuentoTotal: this.descuentoTotalDe(emision),
+      fidelizacion: {
+        puntosEstimados: Number(c.fidelizacionPuntosEstimados ?? 0),
+        canjePuntos: Number(c.fidelizacionCanjePuntos ?? 0),
+        canjeMonto: Number(c.fidelizacionCanjeMonto ?? 0),
+        condicion: 'Se acreditan al completar, pagar y retirar el trabajo.',
+      },
       items: emision.items.map((i) => ({
         nombre: i.nombre,
         cantidad: i.cantidad,
@@ -1168,6 +1263,12 @@ export class PresupuestosService {
           c.id,
           'Presupuesto vencido.',
         );
+        await this.fidelizacion.liberarReservas(
+          tx,
+          c.tenantId,
+          { cotizacionId: c.id },
+          'Presupuesto vencido.',
+        );
       });
       throw new BadRequestException(
         'El presupuesto está vencido: pedí una actualización.',
@@ -1195,6 +1296,12 @@ export class PresupuestosService {
           tx,
           c.tenantId,
           c.id,
+          'Presupuesto rechazado por el cliente.',
+        );
+        await this.fidelizacion.liberarReservas(
+          tx,
+          c.tenantId,
+          { cotizacionId: c.id },
           'Presupuesto rechazado por el cliente.',
         );
       }
@@ -1244,6 +1351,12 @@ export class PresupuestosService {
             c.id,
             'Presupuesto vencido.',
           );
+          await this.fidelizacion.liberarReservas(
+            tx,
+            c.tenantId,
+            { cotizacionId: c.id },
+            'Presupuesto vencido.',
+          );
         }
         return cambio;
       });
@@ -1286,6 +1399,12 @@ export class PresupuestosService {
             tx,
             tenantId,
             vencido.id,
+            'Presupuesto vencido.',
+          );
+          await this.fidelizacion.liberarReservas(
+            tx,
+            tenantId,
+            { cotizacionId: vencido.id },
             'Presupuesto vencido.',
           );
         }

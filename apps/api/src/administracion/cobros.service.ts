@@ -27,6 +27,7 @@ import {
   claveInstrumentoValor,
   numeroValorNormalizado,
 } from './valor-identidad';
+import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
 
 /**
  * Cobros — el registro de cómo entra la plata, con las tres cifras:
@@ -41,6 +42,7 @@ export class CobrosService {
     private readonly facturacionOrdenes: FacturacionOrdenesService,
     private readonly recibos: RecibosService,
     private readonly avisos: NotificacionesCobrosService,
+    private readonly fidelizacion: FidelizacionService,
   ) {}
 
   /** Cálculo canónico de las tres cifras. */
@@ -399,6 +401,11 @@ export class CobrosService {
           auth.tenantId,
           cobro.id,
         );
+        if (acreditaInmediato) {
+          for (const aplicacion of aplicaciones) {
+            await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, aplicacion.ordenId);
+          }
+        }
 
         if (orden) {
           await tx.ordenTrabajoEvento.create({
@@ -648,6 +655,10 @@ export class CobrosService {
         ordenId: cobro.ordenId,
         operacionId: randomUUID(),
       });
+      const aplicaciones = await tx.cobroOrden.findMany({ where: { cobroId: cobro.id }, select: { ordenId: true } });
+      for (const aplicacion of aplicaciones) {
+        await this.fidelizacion.reconciliarOrden(tx, cobro.tenantId, aplicacion.ordenId);
+      }
       return true;
     });
   }
@@ -665,6 +676,7 @@ export class CobrosService {
           movimientos: { orderBy: { createdAt: 'asc' } },
           valores: true,
           orden: { select: { id: true, numero: true } },
+          aplicacionesOrden: { select: { ordenId: true } },
         },
       });
       if (!cobro) throw new NotFoundException('No se encontró el cobro.');
@@ -740,6 +752,9 @@ export class CobrosService {
         });
       }
       await this.facturacionOrdenes.revertirCobro(tx, auth.tenantId, cobro.id);
+      for (const aplicacion of cobro.aplicacionesOrden) {
+        await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, aplicacion.ordenId);
+      }
       return { ok: true };
     });
   }

@@ -189,7 +189,7 @@ export function ClientesTable({
 
   const handleEditSelection = () => {
     if (selectedRows.length !== 1) return;
-    const href = `/clientes/${selectedRows[0].id}`;
+    const href = `/crm/clientes/${selectedRows[0].id}`;
     startNavigation(href);
     router.push(href);
   };
@@ -414,7 +414,7 @@ export function ClientesTable({
                 </DropdownMenu>
                 {canManage ? (
                   <NavLink
-                    href="/clientes/nuevo"
+                    href="/crm/clientes/nuevo"
                     className={buttonVariants({ variant: "brand" })}
                   >
                     <PlusIcon data-icon="inline-start" />
@@ -482,7 +482,7 @@ export function ClientesTable({
                         </TableCell>
                         <TableCell className="font-medium">
                           <NavLink
-                            href={`/clientes/${cliente.id}`}
+                            href={`/crm/clientes/${cliente.id}`}
                             className="underline-offset-4 hover:underline"
                           >
                             {cliente.nombre}

@@ -194,6 +194,7 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
   // ── modificaciones físicas (lona) ───────────────────────────────────
   piezas_modificadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas modificadas' },
   ojales_colocados: { capacidad: 'unidades_procesadas', etiqueta: 'ojales colocados' },
+  raspaditas_colocadas: { capacidad: 'unidades_procesadas', etiqueta: 'raspaditas colocadas' },
 };
 
 /**

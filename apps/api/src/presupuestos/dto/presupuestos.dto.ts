@@ -86,6 +86,11 @@ export class EmitirPresupuestoDto {
   @Max(100)
   senaSugeridaPct?: number;
 
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  fidelizacionCanjePuntos?: number;
+
   /**
    * Decisiones del comercial sobre cargos. El backend vuelve a buscar el
    * catálogo y calcula sus importes; nunca acepta un total agregado del front.

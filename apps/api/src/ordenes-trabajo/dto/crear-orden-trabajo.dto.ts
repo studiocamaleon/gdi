@@ -162,6 +162,11 @@ export class CrearOrdenTrabajoDto {
   @IsUUID()
   cotizacionId?: string;
 
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  fidelizacionCanjePuntos?: number;
+
   /** Estado inicial: borrador (guardar) o pendiente (emitir al taller). */
   @IsOptional()
   @IsIn(['borrador', 'pendiente'])

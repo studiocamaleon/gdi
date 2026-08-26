@@ -66,6 +66,17 @@ function escenario(actualizadas = 1) {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
+    {
+      simularCotizacion: jest.fn().mockResolvedValue({
+        margen: 500,
+        puntosEstimados: 0,
+        canjePuntos: 0,
+        canjeMonto: 0,
+        maximoCanjeable: 0,
+        snapshot: {},
+      }),
+    } as never,
   );
   jest
     .spyOn(service, 'enviar')

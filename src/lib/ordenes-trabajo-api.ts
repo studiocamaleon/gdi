@@ -59,6 +59,8 @@ export type CrearOrdenTrabajoPayload = {
   cargosDirectos?: number;
   /** Sin comprobante fiscal desde el vamos (§6 cuaderno de margen). */
   tratamientoFiscal?: "FISCAL" | "SIN_COMPROBANTE";
+  /** Puntos enteros a aplicar como bonificación comercial. */
+  fidelizacionCanjePuntos?: number;
   /** Inputs comerciales; nombres, configuración derivada e importes los resuelve la API. */
   cargos?: Array<{
     cargoDirectoCatalogoId: string;

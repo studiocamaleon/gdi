@@ -9,11 +9,7 @@
 import { apiRequest } from "@/lib/api";
 
 export type TrackingPasoEstado =
-  | "pendiente"
-  | "en_curso"
-  | "pausado"
-  | "hecho"
-  | "bloqueado";
+  "pendiente" | "en_curso" | "pausado" | "hecho" | "bloqueado";
 
 export type TrackingPaso = {
   indice: number;
@@ -56,6 +52,14 @@ export type TrackingPublico = {
   creadaEl: string;
   fechaEntrega: string | null;
   progresoPct: number;
+  /** Sólo esta operación; nunca incluye el saldo global del cliente. */
+  fidelizacion: {
+    puntos: number;
+    tipo: "CANJE" | "GANANCIA";
+    montoCanje: number;
+    estado:
+      "RESERVADOS" | "CANJEADOS" | "PENDIENTES" | "ACREDITADOS" | "REVERTIDOS";
+  };
   /** Sin logo cargado van las iniciales, como antes de que existiera. */
   imprenta: {
     nombre: string;
@@ -79,7 +83,11 @@ export type TrackingPublico = {
     };
   };
   cliente: { nombre: string; iniciales: string };
-  vendedor: { nombre: string; iniciales: string; telefono: string | null } | null;
+  vendedor: {
+    nombre: string;
+    iniciales: string;
+    telefono: string | null;
+  } | null;
   items: TrackingItem[];
   /** Adjuntos públicos de la orden entera (no de un producto puntual). */
   archivos: TrackingArchivo[];
@@ -91,7 +99,9 @@ export function urlArchivoTracking(token: string, archivoId: string): string {
   return `/api/backend/ordenes-trabajo/track/${encodeURIComponent(token)}/archivos/${archivoId}`;
 }
 
-export async function getTrackingPublico(token: string): Promise<TrackingPublico> {
+export async function getTrackingPublico(
+  token: string,
+): Promise<TrackingPublico> {
   // Ruta pública: sin sesión (auth: false → no adjunta token de staff).
   return apiRequest<TrackingPublico>(
     `/ordenes-trabajo/track/${encodeURIComponent(token)}`,
@@ -135,7 +145,10 @@ const COPY_FAMILIA: Record<string, CopyPaso> = {
     simple: "Estampado textil",
     desc: "Planchamos el transfer sobre tu prenda.",
   },
-  grabado_laser: { simple: "Grabado láser", desc: "Grabamos tu diseño con láser." },
+  grabado_laser: {
+    simple: "Grabado láser",
+    desc: "Grabamos tu diseño con láser.",
+  },
   corte_guillotina: {
     simple: "Cortamos a medida",
     desc: "Refilamos tu pedido a la medida final.",
@@ -144,7 +157,10 @@ const COPY_FAMILIA: Record<string, CopyPaso> = {
     simple: "Corte de vinilo",
     desc: "Cortamos el vinilo con el plotter de corte.",
   },
-  corte_laser: { simple: "Corte láser", desc: "Cortamos las piezas con láser." },
+  corte_laser: {
+    simple: "Corte láser",
+    desc: "Cortamos las piezas con láser.",
+  },
   troquelado_digital: {
     simple: "Troquelado",
     desc: "Damos la forma final a cada pieza.",
@@ -227,11 +243,15 @@ export function resumenEstadoTracking(
   return `${progresoPct}% completado. Te avisaremos ni bien esté listo para retirar.`;
 }
 
-export function estadoPill(
-  estado: string,
-): { label: string; tone: "ok" | "warm" | "wait" } {
+export function estadoPill(estado: string): {
+  label: string;
+  tone: "ok" | "warm" | "wait";
+} {
   if (estado === "finalizada" || estado === "entregada") {
-    return { label: estado === "entregada" ? "Entregado" : "Listo", tone: "ok" };
+    return {
+      label: estado === "entregada" ? "Entregado" : "Listo",
+      tone: "ok",
+    };
   }
   if (estado === "produccion") return { label: "En producción", tone: "warm" };
   // "pendiente" (y cualquier estado previo a producción): está en cola, no
@@ -240,7 +260,20 @@ export function estadoPill(
 }
 
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const MESES = [
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dic",
+];
 
 function fechaLocal(iso: string): Date | null {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
@@ -249,7 +282,9 @@ function fechaLocal(iso: string): Date | null {
 }
 
 /** "Mié 21 May" a partir de una fecha ISO (date-only). */
-export function fechaLarga(iso: string | null): { dia: string; num: string; mes: string } | null {
+export function fechaLarga(
+  iso: string | null,
+): { dia: string; num: string; mes: string } | null {
   if (!iso) return null;
   const f = fechaLocal(iso);
   if (!f) return null;

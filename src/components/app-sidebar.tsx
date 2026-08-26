@@ -384,7 +384,7 @@ const SECCIONES: ReadonlyArray<{ label: string; keys: string[] }> = [
   },
   {
     label: "Gestión",
-    keys: ["registros", "costos", "administracion", "reportes"],
+    keys: ["crm", "registros", "costos", "administracion", "reportes"],
   },
 ];
 

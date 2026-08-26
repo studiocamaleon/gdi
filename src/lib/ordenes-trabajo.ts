@@ -261,6 +261,11 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   subtotal: number;
   impuestos: number;
   descuentoTotal: number;
+  fidelizacion: {
+    puntosEstimados: number;
+    canjePuntos: number;
+    canjeMonto: number;
+  };
   /** Snapshots detallados de los cargos; vacío en órdenes históricas. */
   cargos?: PropuestaCargoDirecto[];
   /** Tratamiento fiscal: 'FISCAL' (con IVA y comprobante) | 'SIN_COMPROBANTE'
@@ -380,6 +385,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
       subtotal: item.total,
       impuestos: 0,
       descuentoTotal: 0,
+      fidelizacion: { puntosEstimados: 0, canjePuntos: 0, canjeMonto: 0 },
       tratamientoFiscal: "FISCAL",
       publicToken: null,
       facturadoTotal: 0,
@@ -400,6 +406,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
     subtotal: 211798,
     impuestos: 0,
     descuentoTotal: 0,
+    fidelizacion: { puntosEstimados: 0, canjePuntos: 0, canjeMonto: 0 },
     tratamientoFiscal: "FISCAL",
     publicToken: null,
     facturadoTotal: 0,

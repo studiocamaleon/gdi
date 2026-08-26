@@ -108,6 +108,12 @@ export type PresupuestoDetalle = {
   advertenciaEnvio?: string;
   /** Σ del descuento comercial de los items (0 = sin descuento). */
   descuentoTotal: number;
+  fidelizacion: {
+    puntosEstimados: number;
+    canjePuntos: number;
+    canjeMonto: number;
+    estado: string;
+  };
   items: Array<{
     cotizacionItemId: string | null;
     codigo: string;
@@ -159,6 +165,12 @@ export type PresupuestoPublico = {
   total: number;
   /** Σ del descuento comercial de los items (0 = sin descuento). */
   descuentoTotal: number;
+  fidelizacion: {
+    puntosEstimados: number;
+    canjePuntos: number;
+    canjeMonto: number;
+    condicion: string;
+  };
   items: Array<{
     nombre: string;
     cantidad: number;
@@ -216,6 +228,7 @@ export function emitirPresupuesto(payload: {
   validezDias?: number;
   observaciones?: string;
   senaSugeridaPct?: number;
+  fidelizacionCanjePuntos?: number;
   cargos?: PresupuestoCargoPayload[];
   items: PresupuestoItemPayload[];
 }) {
@@ -233,7 +246,11 @@ export function enviarPresupuesto(id: string) {
 
 export function resolverPresupuesto(
   id: string,
-  payload: { resultado: "aprobado" | "rechazado"; motivoPerdida?: string; motivoPerdidaDetalle?: string },
+  payload: {
+    resultado: "aprobado" | "rechazado";
+    motivoPerdida?: string;
+    motivoPerdidaDetalle?: string;
+  },
 ) {
   return apiRequest<PresupuestoDetalle>(`/presupuestos/${id}/resolver`, {
     method: "PATCH",
@@ -241,17 +258,20 @@ export function resolverPresupuesto(
   });
 }
 
-export function convertirPresupuesto(id: string, payload?: { itemIds?: string[] }) {
+export function convertirPresupuesto(
+  id: string,
+  payload?: { itemIds?: string[] },
+) {
   return apiRequest<{
     ordenId: string;
     ordenNumero: string;
     parcial: boolean;
     completa: boolean;
     itemsPendientes: number;
-  }>(
-    `/presupuestos/${id}/convertir`,
-    { method: "POST", body: JSON.stringify(payload ?? {}) },
-  );
+  }>(`/presupuestos/${id}/convertir`, {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
 }
 
 /** Resolución de una aprobación pendiente (SUPERVISOR/ADMIN). */
@@ -269,7 +289,9 @@ export function getConfigPresupuestos() {
   return apiRequest<ConfigPresupuestos>(`/presupuestos/config`);
 }
 
-export function actualizarConfigPresupuestos(payload: Partial<ConfigPresupuestos>) {
+export function actualizarConfigPresupuestos(
+  payload: Partial<ConfigPresupuestos>,
+) {
   return apiRequest<ConfigPresupuestos>(`/presupuestos/config`, {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -278,19 +300,27 @@ export function actualizarConfigPresupuestos(payload: Partial<ConfigPresupuestos
 
 /** Link público (el token es la credencial; sin sesión). */
 export function getPresupuestoPublico(token: string) {
-  return apiRequest<PresupuestoPublico>(`/presupuestos/track/${token}`, undefined, {
-    auth: false,
-  });
+  return apiRequest<PresupuestoPublico>(
+    `/presupuestos/track/${token}`,
+    undefined,
+    {
+      auth: false,
+    },
+  );
 }
 
 export function decidirPresupuestoPublico(
   token: string,
   payload: { decision: "aprobado" | "rechazado"; comentario?: string },
 ) {
-  return apiRequest<{ estado: string }>(`/presupuestos/track/${token}/decision`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  }, { auth: false });
+  return apiRequest<{ estado: string }>(
+    `/presupuestos/track/${token}/decision`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { auth: false },
+  );
 }
 
 /** El PDF sale por el proxy BFF (cookie httpOnly). */

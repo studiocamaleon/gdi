@@ -23,7 +23,7 @@ import { ClientesService } from './clientes.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
 
-@Permiso('registros.ver')
+@Permiso('crm.ver')
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
@@ -53,7 +53,7 @@ export class ClientesController {
     return this.clientesService.findOne(auth, id);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso('crm.gestionar')
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -62,7 +62,7 @@ export class ClientesController {
     return this.clientesService.create(auth, payload);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso('crm.gestionar')
   @Post('importar')
   importar(
     @CurrentSession() auth: CurrentAuth,
@@ -76,7 +76,7 @@ export class ClientesController {
    * atiende, así que va con `comercial.gestionar` además del permiso de
    * registros: quien puede cargar la venta puede identificar al cliente.
    */
-  @Permiso('registros.gestionar', 'comercial.gestionar')
+  @Permiso('crm.gestionar', 'comercial.gestionar')
   @Post('alta-por-documento')
   altaPorDocumento(
     @CurrentSession() auth: CurrentAuth,
@@ -85,7 +85,7 @@ export class ClientesController {
     return this.clientesService.altaPorDocumento(auth, payload);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso('crm.gestionar')
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -96,7 +96,7 @@ export class ClientesController {
   }
 
   /** Fijar el estado explícitamente evita el read-toggle-write concurrente. */
-  @Permiso('registros.gestionar')
+  @Permiso('crm.gestionar')
   @Patch(':id/estado')
   estado(
     @CurrentSession() auth: CurrentAuth,
@@ -106,7 +106,7 @@ export class ClientesController {
     return this.clientesService.fijarActivo(auth, id, payload.activo);
   }
 
-  @Permiso('registros.gestionar')
+  @Permiso('crm.gestionar')
   @Delete(':id')
   @HttpCode(204)
   async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {

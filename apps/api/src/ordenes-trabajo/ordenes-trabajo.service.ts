@@ -109,7 +109,43 @@ type CotizacionItemFinanciero = {
   descuentoTipo: string | null;
   descuentoValor: unknown;
   descuentoMonto: unknown;
+  costoTotal?: unknown;
+  comisionesSnapshotJson?: unknown;
 };
+
+function margenFidelizacion(
+  items: CotizacionItemFinanciero[],
+  cargosNeto: number,
+) {
+  return (
+    items.reduce((acc, item) => {
+      const neto = Number(item.precioNetoTotal ?? 0);
+      const bruto = Number(item.precioTotal ?? neto);
+      const costo = Number(item.costoTotal ?? 0);
+      const internos = Array.isArray(item.impuestosSnapshotJson)
+        ? item.impuestosSnapshotJson.reduce((s, raw) => {
+            const i = raw as { traslado?: string; porcentaje?: number };
+            return i.traslado === 'POR_FUERA'
+              ? s
+              : s + (neto * Number(i.porcentaje ?? 0)) / 100;
+          }, 0)
+        : 0;
+      const comisiones = Array.isArray(item.comisionesSnapshotJson)
+        ? item.comisionesSnapshotJson.reduce((s, raw) => {
+            const c = raw as {
+              base?: string;
+              baseCalculo?: string;
+              porcentaje?: number;
+            };
+            const base =
+              (c.base ?? c.baseCalculo) === 'BRUTO_COBRADO' ? bruto : neto;
+            return s + (base * Number(c.porcentaje ?? 0)) / 100;
+          }, 0)
+        : 0;
+      return acc + neto - internos - comisiones - costo;
+    }, 0) - cargosNeto
+  );
+}
 
 type PasoAhorroConsolidacion = {
   id: string;
@@ -326,6 +362,7 @@ import { ComprobantesService } from '../administracion/comprobantes.service';
 import { NotificacionesOrdenesService } from '../integraciones/notificaciones/notificaciones-ordenes.service';
 import { formatearMoneda, type Moneda } from '../common/moneda';
 import { regionalDelTenant } from '../common/regional';
+import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
 import {
   claveFechaEnZona,
   instanteDe,
@@ -622,6 +659,7 @@ export class OrdenesTrabajoService {
     private readonly comprobantes: ComprobantesService,
     private readonly facturacionOrdenes: FacturacionOrdenesService,
     private readonly preparacionesRecorrido: PreparacionesRecorridoService,
+    private readonly fidelizacion: FidelizacionService,
   ) {}
 
   private async prepararRecorridosDeItems(
@@ -1110,6 +1148,8 @@ export class OrdenesTrabajoService {
           descuentoTipo: true,
           descuentoValor: true,
           descuentoMonto: true,
+          costoTotal: true,
+          comisionesSnapshotJson: true,
         },
       }),
     ]);
@@ -1163,7 +1203,7 @@ export class OrdenesTrabajoService {
       );
     }
 
-    const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+    let subtotal = items.reduce((s, i) => s + i.subtotal, 0);
     const impuestosItems = items.reduce((s, i) => s + i.impuestos, 0);
     const tratamientoFiscal = payload.tratamientoFiscal ?? 'FISCAL';
     const cargos = await this.cargosAutorizados(
@@ -1172,6 +1212,7 @@ export class OrdenesTrabajoService {
       subtotal,
       decimales,
     );
+    let cargosPersistidos = cargos;
     const cargoPresupuesto =
       cargos.length === 0 &&
       cotizacion?.numero &&
@@ -1191,7 +1232,7 @@ export class OrdenesTrabajoService {
         'Los cargos de la orden deben enviarse con su catálogo e inputs de cálculo.',
       );
     }
-    const cargosDirectos = montoCargosPorTratamiento(
+    let cargosDirectos = montoCargosPorTratamiento(
       cargos,
       tratamientoFiscal,
       tratamientoFiscal === 'FISCAL'
@@ -1208,9 +1249,113 @@ export class OrdenesTrabajoService {
     );
     // Sin comprobante: el desglose oculta el IVA y `total` = neto + cargos.
     // Ver docs/margen-y-decisiones-de-precio.md §6.
-    const impuestos =
+    let impuestos =
       tratamientoFiscal === 'SIN_COMPROBANTE' ? 0 : impuestosItems;
-    const total = subtotal + impuestos + cargosDirectos;
+    let total = subtotal + impuestos + cargosDirectos;
+    const reservaFidelizacionPresupuesto =
+      payload.cotizacionId && payload.clienteId
+        ? await this.prisma.fidelizacionReserva.findFirst({
+            where: {
+              tenantId: auth.tenantId,
+              clienteId: payload.clienteId,
+              cotizacionId: payload.cotizacionId,
+              estado: 'RESERVADA',
+              ordenId: null,
+            },
+          })
+        : null;
+    const margenBase = margenFidelizacion(
+      encontrados,
+      cargos.reduce((s, cargo) => s + Number(cargo.montoNeto ?? 0), 0),
+    );
+    const fidelizacion = await this.fidelizacion.simular(
+      auth.tenantId,
+      payload.clienteId ?? null,
+      margenBase,
+      total,
+      payload.fidelizacionCanjePuntos ?? 0,
+      reservaFidelizacionPresupuesto?.puntos ?? 0,
+    );
+    if ((payload.fidelizacionCanjePuntos ?? 0) > fidelizacion.maximoCanjeable) {
+      throw new ConflictException(
+        'El cliente ya no tiene suficientes puntos para este canje.',
+      );
+    }
+    if (fidelizacion.canjeMonto > 0 && total > 0) {
+      let restante = fidelizacion.canjeMonto;
+      const totalOriginal = total;
+      items = items.map((item, indice) => {
+        const baseItem =
+          tratamientoFiscal === 'SIN_COMPROBANTE' ? item.subtotal : item.total;
+        const rebaja =
+          indice === items.length - 1
+            ? Math.min(baseItem, restante)
+            : Math.min(
+                baseItem,
+                redondearDinero(
+                  (fidelizacion.canjeMonto * baseItem) / totalOriginal,
+                  decimales,
+                ),
+              );
+        restante = redondearDinero(restante - rebaja, decimales);
+        const factor = baseItem > 0 ? (baseItem - rebaja) / baseItem : 1;
+        const nuevoTotal = redondearDinero(item.total * factor, decimales);
+        const nuevoSubtotal = redondearDinero(
+          item.subtotal * factor,
+          decimales,
+        );
+        return {
+          ...item,
+          subtotal: nuevoSubtotal,
+          impuestos: redondearDinero(nuevoTotal - nuevoSubtotal, decimales),
+          total: nuevoTotal,
+          fidelizacionDescuentoNeto: redondearDinero(
+            item.subtotal - nuevoSubtotal,
+            decimales,
+          ),
+        };
+      });
+      if (restante > 0) {
+        cargosPersistidos = cargos.map((cargo) => {
+          if (restante <= 0) return cargo;
+          const baseCargo =
+            tratamientoFiscal === 'SIN_COMPROBANTE'
+              ? Number(cargo.montoNeto)
+              : Number(cargo.total);
+          const rebaja = Math.min(baseCargo, restante);
+          restante = redondearDinero(restante - rebaja, decimales);
+          const factor = baseCargo > 0 ? (baseCargo - rebaja) / baseCargo : 1;
+          const montoNeto = redondearDinero(
+            Number(cargo.montoNeto) * factor,
+            decimales,
+          );
+          const impuestoMonto = redondearDinero(
+            Number(cargo.impuestoMonto) * factor,
+            decimales,
+          );
+          return {
+            ...cargo,
+            montoNeto,
+            impuestoMonto,
+            total: redondearDinero(montoNeto + impuestoMonto, decimales),
+          };
+        });
+        cargosDirectos = montoCargosPorTratamiento(
+          cargosPersistidos,
+          tratamientoFiscal,
+          0,
+        );
+      }
+      subtotal = items.reduce((s, item) => s + item.subtotal, 0);
+      impuestos =
+        tratamientoFiscal === 'SIN_COMPROBANTE'
+          ? 0
+          : items.reduce((s, item) => s + item.impuestos, 0);
+      total = redondearDinero(
+        totalOriginal - fidelizacion.canjeMonto,
+        decimales,
+      );
+    }
     const vendedorEmpleadoId = payload.vendedorEmpleadoId ?? emisor?.id ?? null;
     const usuarioNombre = firmaActor(
       auth,
@@ -1251,10 +1396,15 @@ export class OrdenesTrabajoService {
             subtotal,
             impuestos,
             cargosDirectos,
-            cargosDirectosJson: cargos as never,
+            cargosDirectosJson: cargosPersistidos as never,
             descuentoTotal,
             total,
             tratamientoFiscal,
+            fidelizacionMargenBase: margenBase,
+            fidelizacionPuntosEstimados: fidelizacion.puntosEstimados,
+            fidelizacionCanjePuntos: fidelizacion.canjePuntos,
+            fidelizacionCanjeMonto: fidelizacion.canjeMonto,
+            fidelizacionSnapshotJson: fidelizacion.snapshot as never,
             items: {
               create: items.map((item, indice) => ({
                 tenantId: auth.tenantId,
@@ -1273,6 +1423,10 @@ export class OrdenesTrabajoService {
                 descuentoValor: item.descuentoValor ?? null,
                 descuentoMonto: item.descuentoMonto ?? null,
                 descuentoCuponId: item.descuentoCuponId ?? null,
+                fidelizacionDescuentoNeto:
+                  'fidelizacionDescuentoNeto' in item
+                    ? Number(item.fidelizacionDescuentoNeto ?? 0)
+                    : 0,
                 // Serializado a objetos planos: los DTOs (clases) no matchean
                 // InputJsonValue de Prisma.
                 specsJson: (item.specs ?? []).map((spec) => ({
@@ -1293,6 +1447,67 @@ export class OrdenesTrabajoService {
             entidadId: orden.id,
             token: tokenSeguimiento,
           });
+        }
+
+        if (fidelizacion.canjePuntos > 0 && orden.clienteId) {
+          let reserva = payload.cotizacionId
+            ? await tx.fidelizacionReserva.findFirst({
+                where: {
+                  tenantId: auth.tenantId,
+                  cotizacionId: payload.cotizacionId,
+                  estado: 'RESERVADA',
+                  ordenId: null,
+                },
+              })
+            : null;
+          if (reserva) {
+            if (reserva.puntos > fidelizacion.canjePuntos) {
+              const montoSeleccionado = redondearDinero(
+                (Number(reserva.monto) * fidelizacion.canjePuntos) /
+                  reserva.puntos,
+                2,
+              );
+              await tx.fidelizacionReserva.update({
+                where: { id: reserva.id },
+                data: {
+                  puntos: { decrement: fidelizacion.canjePuntos },
+                  monto: { decrement: montoSeleccionado },
+                },
+              });
+              reserva = await tx.fidelizacionReserva.create({
+                data: {
+                  tenantId: reserva.tenantId,
+                  cuentaId: reserva.cuentaId,
+                  clienteId: reserva.clienteId,
+                  cotizacionId: reserva.cotizacionId,
+                  ordenId: orden.id,
+                  puntos: fidelizacion.canjePuntos,
+                  monto: montoSeleccionado,
+                  expiraEl: reserva.expiraEl,
+                },
+              });
+            } else {
+              reserva = await tx.fidelizacionReserva.update({
+                where: { id: reserva.id },
+                data: { ordenId: orden.id },
+              });
+            }
+          } else {
+            reserva = await this.fidelizacion.reservar(tx, {
+              tenantId: auth.tenantId,
+              clienteId: orden.clienteId,
+              ordenId: orden.id,
+              puntos: fidelizacion.canjePuntos,
+            });
+          }
+          if (emitida && reserva) {
+            await this.fidelizacion.consumirReserva(
+              tx,
+              auth,
+              orden.id,
+              reserva.id,
+            );
+          }
         }
 
         // Emitir al taller materializa los pasos de producción del Tablero
@@ -2490,8 +2705,7 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
-            | undefined;
+            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -3130,6 +3344,21 @@ export class OrdenesTrabajoService {
         // Cupones aplicados en el borrador: se redimen recién acá, que es
         // cuando la orden se compromete (misma transacción, F4 descuentos).
         await this.redimirCupones(tx, auth, orden.id, items);
+        const reserva = await tx.fidelizacionReserva.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            ordenId: orden.id,
+            estado: 'RESERVADA',
+          },
+        });
+        if (reserva) {
+          await this.fidelizacion.consumirReserva(
+            tx,
+            auth,
+            orden.id,
+            reserva.id,
+          );
+        }
       }
       await tx.ordenTrabajoEvento.create({
         data: {
@@ -3154,6 +3383,7 @@ export class OrdenesTrabajoService {
           },
         },
       });
+      await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, orden.id);
     });
 
     // Salir de borrador es emitir → congela la promesa; finalizar → cierra.
@@ -3343,6 +3573,19 @@ export class OrdenesTrabajoService {
       // 5. Los cupones redimidos por esta orden se liberan: un sorteo no se
       //    quema con una orden que no salió (F4 descuentos).
       await this.liberarCupones(tx, auth.tenantId, orden.id);
+      await this.fidelizacion.liberarReservas(
+        tx,
+        auth.tenantId,
+        { ordenId: orden.id },
+        'Orden cancelada',
+      );
+      await this.fidelizacion.revertirCanjeOrden(
+        tx,
+        auth.tenantId,
+        orden.id,
+        'Orden cancelada',
+      );
+      await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, orden.id);
 
       await tx.ordenTrabajoEvento.create({
         data: {
@@ -5635,6 +5878,20 @@ export class OrdenesTrabajoService {
       subtotal: Number(orden.subtotal ?? 0),
       impuestos: Number(orden.impuestos ?? 0),
       descuentoTotal: Number(orden.descuentoTotal ?? 0),
+      fidelizacion: {
+        puntosEstimados: Number(
+          (orden as { fidelizacionPuntosEstimados?: number | null })
+            .fidelizacionPuntosEstimados ?? 0,
+        ),
+        canjePuntos: Number(
+          (orden as { fidelizacionCanjePuntos?: number | null })
+            .fidelizacionCanjePuntos ?? 0,
+        ),
+        canjeMonto: Number(
+          (orden as { fidelizacionCanjeMonto?: unknown })
+            .fidelizacionCanjeMonto ?? 0,
+        ),
+      },
       cargos: Array.isArray(
         (orden as { cargosDirectosJson?: unknown }).cargosDirectosJson,
       )
@@ -5819,6 +6076,13 @@ export class OrdenesTrabajoService {
           },
         },
         tenantId: true,
+        fidelizacionPuntosEstimados: true,
+        fidelizacionCanjePuntos: true,
+        fidelizacionCanjeMonto: true,
+        movimientosFidelizacion: {
+          select: { tipo: true, reversionDeId: true },
+          orderBy: { createdAt: 'desc' as const },
+        },
         tenant: { select: { nombre: true, logoArchivoId: true } },
         // Sólo los marcados `publico`: el arte de producción y los adjuntos
         // internos NUNCA salen por acá. El filtro va en la relación, así que
@@ -5943,6 +6207,24 @@ export class OrdenesTrabajoService {
         : null,
       progresoPct:
         pasosTotal > 0 ? Math.round((pasosHechos / pasosTotal) * 100) : 0,
+      fidelizacion: {
+        puntos: orden.fidelizacionCanjePuntos
+          ? orden.fidelizacionCanjePuntos
+          : (orden.fidelizacionPuntosEstimados ?? 0),
+        tipo: orden.fidelizacionCanjePuntos ? 'CANJE' : 'GANANCIA',
+        montoCanje: Number(orden.fidelizacionCanjeMonto ?? 0),
+        estado: orden.fidelizacionCanjePuntos
+          ? orden.movimientosFidelizacion.some((m) => m.tipo === 'CANJE')
+            ? 'CANJEADOS'
+            : 'RESERVADOS'
+          : orden.movimientosFidelizacion.some(
+                (m) => m.tipo === 'REVERSO_GANANCIA',
+              )
+            ? 'REVERTIDOS'
+            : orden.movimientosFidelizacion.some((m) => m.tipo === 'GANANCIA')
+              ? 'ACREDITADOS'
+              : 'PENDIENTES',
+      },
       imprenta: {
         nombre: orden.tenant.nombre,
         iniciales: inicialesDe(orden.tenant.nombre),

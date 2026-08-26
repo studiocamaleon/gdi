@@ -32,6 +32,11 @@ export const MODULOS = [
     descripcion: 'Crear órdenes, presupuestos y órdenes de trabajo.',
   },
   {
+    clave: 'crm',
+    label: 'CRM',
+    descripcion: 'Clientes, cupones y fidelización.',
+  },
+  {
     clave: 'registros',
     label: 'Registros',
     descripcion: 'Clientes, proveedores y empleados.',
@@ -97,6 +102,12 @@ export const PERMISOS_TRANSVERSALES = [
     label: 'Aprobar presupuestos bajo el margen mínimo',
     descripcion:
       'Autorizar un presupuesto cuyo margen quedó por debajo del piso configurado. Cotizar no alcanza.',
+  },
+  {
+    clave: 'crm.configurar_fidelizacion',
+    label: 'Configurar fidelización y ajustar puntos',
+    descripcion:
+      'Cambiar las reglas del programa y registrar ajustes manuales auditados.',
   },
   {
     clave: 'administracion.anular',
@@ -275,6 +286,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'panel.ver',
       'reportes.ver',
       'comercial.ver',
+      'crm.ver',
       'registros.ver',
       'costos.ver',
       'produccion.gestionar',
@@ -292,6 +304,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'panel.ver',
       'reportes.ver',
       'comercial.gestionar',
+      'crm.gestionar',
       'registros.gestionar',
       'produccion.ver',
       // Cierra la venta con la seña en la mano: sin esto, los cobros que carga
@@ -309,6 +322,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'panel.ver',
       'reportes.ver',
       'comercial.ver',
+      'crm.ver',
       'registros.ver',
       'produccion.ver',
       'administracion.gestionar',

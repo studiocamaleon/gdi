@@ -23,6 +23,7 @@ import {
   EyeIcon,
   FolderIcon,
   HistoryIcon,
+  PackageCheckIcon,
   PackageIcon,
   PlusIcon,
   QrCodeIcon,
@@ -69,6 +70,7 @@ import { validarCupon, type ValidarCuponResultado } from "@/lib/cupones-api";
 import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
 import { parsearDniArgentino } from "@/lib/dni-argentino";
 import { esNumeroOrden } from "@/components/mostrador/entrega-escaneo-watcher";
+import { EntregaModal } from "@/components/mostrador/entrega-modal";
 import { useEscaneoCodigo } from "@/lib/use-escaneo-codigo";
 import {
   CuponAvisoModal,
@@ -147,7 +149,9 @@ import {
   sumCargosPaso,
   sumCargosYTiempoExtraPaso,
   sumMaterialesPaso,
+  consolidarCostosOrden,
 } from "@/lib/costos-orden";
+import { FidelizacionCotizador } from "@/components/comercial/fidelizacion-cotizador";
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
@@ -5673,6 +5677,8 @@ export function PropuestaFicha({
   const [tab, setTab] = React.useState<OrdenTab>("productos");
   // QR que el cliente presenta en el mostrador para retirar.
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
+  // Acceso manual al mismo circuito de mostrador cuando no se usa el QR.
+  const [entregaManualOpen, setEntregaManualOpen] = React.useState(false);
   // Cobros en staging (sólo creación): se registran todos al emitir la OT,
   // como los items. El backend rechaza cobros sobre borradores, así que
   // guardar borrador NO los persiste (se avisa con modal).
@@ -5683,6 +5689,7 @@ export function PropuestaFicha({
   // Acreditar una factura ante ARCA no es cosa de cualquiera: es el mismo
   // permiso que rige anular comprobantes.
   const puedeAnular = usePuede("administracion.anular");
+  const puedeEntregar = usePuede("produccion.gestionar");
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
   const [cancelando, setCancelando] = React.useState(false);
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
@@ -5713,12 +5720,34 @@ export function PropuestaFicha({
             ]
           : [],
   );
-  const totalPropuesta = React.useMemo(() => {
+  const [fidelizacionCanjePuntos, setFidelizacionCanjePuntos] =
+    React.useState(0);
+  const [fidelizacionCanjeMonto, setFidelizacionCanjeMonto] = React.useState(0);
+  const costosFidelizacion = React.useMemo(
+    () => consolidarCostosOrden(items, cargosOrden),
+    [items, cargosOrden],
+  );
+  const totalPropuestaAntesCanje = React.useMemo(() => {
     const r = calcularResumenOrden(items, cargosOrden);
     // Sin comprobante: el saldo a cobrar es el neto, sin IVA (§6 cuaderno de
     // margen) — así los Pagos no muestran una deuda inflada con impuestos.
     return sinComprobante ? r.total - r.impuestos : r.total;
   }, [items, cargosOrden, sinComprobante]);
+  const totalPropuesta = Math.max(
+    0,
+    totalPropuestaAntesCanje - fidelizacionCanjeMonto,
+  );
+  const actualizarSimulacionFidelizacion = React.useCallback(
+    (simulacion: { canjeMonto: number; canjePuntos: number } | null) => {
+      setFidelizacionCanjeMonto(simulacion?.canjeMonto ?? 0);
+      if (simulacion) {
+        setFidelizacionCanjePuntos((actual) =>
+          actual === simulacion.canjePuntos ? actual : simulacion.canjePuntos,
+        );
+      }
+    },
+    [],
+  );
   const [addOpen, setAddOpen] = React.useState(false);
   const [copiadoOpen, setCopiadoOpen] = React.useState(false);
   // Módulo activo (config del tenant): esconde el botón/atajo si está pausado.
@@ -6242,10 +6271,7 @@ export function PropuestaFicha({
     ): Map<string, BriefDisenoArchivoPendiente[]> => {
       const mapa = new Map<string, BriefDisenoArchivoPendiente[]>();
       for (const { item, cotizacionItemId } of itemsConSnapshot) {
-        if (
-          cotizacionItemId &&
-          item.briefDisenoArchivosPendientes?.length
-        ) {
+        if (cotizacionItemId && item.briefDisenoArchivosPendientes?.length) {
           mapa.set(cotizacionItemId, item.briefDisenoArchivosPendientes);
         }
       }
@@ -6809,6 +6835,7 @@ export function PropuestaFicha({
       const presupuesto = await emitirPresupuesto({
         cotizacionId,
         clienteId,
+        fidelizacionCanjePuntos,
         canalVenta,
         fechaEntrega: fechaEntregaOrden(),
         cargos: cargosOrden.map(cargoToOrdenInput),
@@ -6843,6 +6870,7 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    fidelizacionCanjePuntos,
     canalVenta,
     persistirSnapshotsItems,
     fechaEntregaOrden,
@@ -6879,6 +6907,7 @@ export function PropuestaFicha({
         idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
+        fidelizacionCanjePuntos,
         estado: "pendiente",
         fechaEntrega,
         canalVenta,
@@ -6955,6 +6984,7 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    fidelizacionCanjePuntos,
     canalVenta,
     cobrosStaged,
     moneda,
@@ -7001,6 +7031,7 @@ export function PropuestaFicha({
         idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
+        fidelizacionCanjePuntos,
         estado: "borrador",
         fechaEntrega: fechaEntrega || undefined,
         canalVenta,
@@ -7048,6 +7079,7 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    fidelizacionCanjePuntos,
     canalVenta,
     persistirSnapshotsItems,
     fechaEntregaOrden,
@@ -7773,6 +7805,16 @@ export function PropuestaFicha({
                   {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
                 </button>
               ) : null}
+              {orden.estado === "finalizada" && puedeEntregar ? (
+                <Button
+                  size="lg"
+                  onClick={() => setEntregaManualOpen(true)}
+                  title="Registrar la entrega al cliente"
+                >
+                  <PackageCheckIcon data-icon="inline-start" />
+                  Entregar
+                </Button>
+              ) : null}
               {publicToken ? (
                 <button
                   type="button"
@@ -8340,120 +8382,146 @@ export function PropuestaFicha({
         </div>
 
         {tab === "productos" ? (
-          <ResumenBar
-            items={items}
-            cargosOrden={cargosOrden}
-            tipo={ordenTipo}
-            onEmitir={emitirOrden}
-            onEmitirPresupuesto={emitirPresupuestoCb}
-            emitiendo={emitiendo || emitiendoPresupuesto}
-            onGuardarBorrador={() =>
-              cobrosStaged.length > 0
-                ? setConfirmBorradorConCobros(true)
-                : void guardarBorrador()
-            }
-            guardandoBorrador={guardandoBorrador}
-            onDescuentoOrden={
-              modoOrden
-                ? undefined
-                : () => setDescuentoTarget({ scope: "orden", itemId: null })
-            }
-            onCuponOrden={
-              modoOrden
-                ? undefined
-                : () =>
-                    setDescuentoTarget({
-                      scope: "orden",
-                      itemId: null,
-                      cupon: true,
-                    })
-            }
-            sinComprobante={sinComprobante}
-            onToggleTratamientoFiscal={
-              puedeToggleFiscal ? toggleTratamientoFiscal : undefined
-            }
-            togglingFiscal={togglingFiscal}
-            readOnly={modoOrden}
-            resumenPersistido={
-              orden
-                ? {
-                    subtotal: orden.subtotal,
-                    impuestos: orden.impuestos,
-                    descuentoTotal: orden.descuentoTotal,
-                    total: orden.total,
-                  }
-                : undefined
-            }
-            accionesOrden={
-              modoOrden &&
-              orden &&
-              orden.estado !== "cancelada" &&
-              (camposEditablesOrden(orden.estado).size > 0 ||
-                esCancelable(orden.estado)) ? (
-                editandoOrden ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={cancelarEdicion}
-                      disabled={guardandoEdicion}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => void guardarEdicion()}
-                      disabled={guardandoEdicion}
-                    >
-                      <CheckIcon />
-                      {guardandoEdicion
-                        ? "Guardando…"
-                        : cambiosSinGuardar > 0
-                          ? `Guardar cambios (${cambiosSinGuardar})`
-                          : "Guardar cambios"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {camposEditablesOrden(orden.estado).size > 0 ? (
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => setEditandoOrden(true)}
-                      >
-                        <Edit3Icon />
-                        Editar orden
-                      </button>
-                    ) : null}
-                    {esCancelable(orden.estado) ? (
+          <div className="space-y-4">
+            {modoOrden &&
+            orden &&
+            (orden.fidelizacion.canjePuntos > 0 ||
+              orden.fidelizacion.puntosEstimados > 0) ? (
+              <div className="rounded-xl border bg-card p-4 text-sm">
+                <div className="font-semibold">Fidelización</div>
+                <div className="mt-1 text-muted-foreground">
+                  {orden.fidelizacion.canjePuntos > 0
+                    ? `${orden.fidelizacion.canjePuntos} puntos · −${formatCurrency(orden.fidelizacion.canjeMonto, moneda)}`
+                    : `Esta orden suma ${orden.fidelizacion.puntosEstimados} puntos cuando esté entregada y pagada con fondos acreditados.`}
+                </div>
+              </div>
+            ) : null}
+            {!modoOrden ? (
+              <FidelizacionCotizador
+                clienteId={clienteId}
+                margen={costosFidelizacion.margenMonto}
+                total={totalPropuestaAntesCanje}
+                moneda={moneda}
+                value={fidelizacionCanjePuntos}
+                onChange={setFidelizacionCanjePuntos}
+                onSimulation={actualizarSimulacionFidelizacion}
+              />
+            ) : null}
+            <ResumenBar
+              items={items}
+              cargosOrden={cargosOrden}
+              tipo={ordenTipo}
+              onEmitir={emitirOrden}
+              onEmitirPresupuesto={emitirPresupuestoCb}
+              emitiendo={emitiendo || emitiendoPresupuesto}
+              onGuardarBorrador={() =>
+                cobrosStaged.length > 0
+                  ? setConfirmBorradorConCobros(true)
+                  : void guardarBorrador()
+              }
+              guardandoBorrador={guardandoBorrador}
+              onDescuentoOrden={
+                modoOrden
+                  ? undefined
+                  : () => setDescuentoTarget({ scope: "orden", itemId: null })
+              }
+              onCuponOrden={
+                modoOrden
+                  ? undefined
+                  : () =>
+                      setDescuentoTarget({
+                        scope: "orden",
+                        itemId: null,
+                        cupon: true,
+                      })
+              }
+              sinComprobante={sinComprobante}
+              onToggleTratamientoFiscal={
+                puedeToggleFiscal ? toggleTratamientoFiscal : undefined
+              }
+              togglingFiscal={togglingFiscal}
+              readOnly={modoOrden}
+              resumenPersistido={
+                orden
+                  ? {
+                      subtotal: orden.subtotal,
+                      impuestos: orden.impuestos,
+                      descuentoTotal: orden.descuentoTotal,
+                      total: orden.total,
+                    }
+                  : undefined
+              }
+              accionesOrden={
+                modoOrden &&
+                orden &&
+                orden.estado !== "cancelada" &&
+                (camposEditablesOrden(orden.estado).size > 0 ||
+                  esCancelable(orden.estado)) ? (
+                  editandoOrden ? (
+                    <>
                       <button
                         type="button"
                         className="btn"
-                        style={{
-                          background: "#ea580c",
-                          color: "#fff",
-                          borderColor: "#ea580c",
-                        }}
-                        onClick={() => setConfirmCancelar(true)}
-                        disabled={cancelando || (facturaViva && !puedeAnular)}
-                        title={
-                          facturaViva && !puedeAnular
-                            ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
-                            : acreditaYCancela
-                              ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
-                              : "Cancelar la orden: sale del taller y deja de contar como venta"
-                        }
+                        onClick={cancelarEdicion}
+                        disabled={guardandoEdicion}
                       >
-                        <XCircleIcon />
-                        Cancelar orden
+                        Cancelar
                       </button>
-                    ) : null}
-                  </>
-                )
-              ) : undefined
-            }
-          />
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => void guardarEdicion()}
+                        disabled={guardandoEdicion}
+                      >
+                        <CheckIcon />
+                        {guardandoEdicion
+                          ? "Guardando…"
+                          : cambiosSinGuardar > 0
+                            ? `Guardar cambios (${cambiosSinGuardar})`
+                            : "Guardar cambios"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {camposEditablesOrden(orden.estado).size > 0 ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => setEditandoOrden(true)}
+                        >
+                          <Edit3Icon />
+                          Editar orden
+                        </button>
+                      ) : null}
+                      {esCancelable(orden.estado) ? (
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{
+                            background: "#ea580c",
+                            color: "#fff",
+                            borderColor: "#ea580c",
+                          }}
+                          onClick={() => setConfirmCancelar(true)}
+                          disabled={cancelando || (facturaViva && !puedeAnular)}
+                          title={
+                            facturaViva && !puedeAnular
+                              ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
+                              : acreditaYCancela
+                                ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
+                                : "Cancelar la orden: sale del taller y deja de contar como venta"
+                          }
+                        >
+                          <XCircleIcon />
+                          Cancelar orden
+                        </button>
+                      ) : null}
+                    </>
+                  )
+                ) : undefined
+              }
+            />
+          </div>
         ) : null}
       </div>
 
@@ -8676,6 +8744,12 @@ export function PropuestaFicha({
           numero={orden.numero}
           cliente={orden.clienteNombre}
           onClose={() => setQrRetiroOpen(false)}
+        />
+      ) : null}
+      {entregaManualOpen && orden ? (
+        <EntregaModal
+          codigo={orden.numero}
+          onClose={() => setEntregaManualOpen(false)}
         />
       ) : null}
       {panelEditor ? (

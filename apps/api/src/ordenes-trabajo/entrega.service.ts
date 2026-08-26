@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CobrosService } from '../administracion/cobros.service';
+import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
 import type {
   EntregarItemsDto,
   RevertirEntregaDto,
@@ -53,6 +54,7 @@ export class EntregaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cobros: CobrosService,
+    private readonly fidelizacion: FidelizacionService,
   ) {}
 
   /**
@@ -286,6 +288,7 @@ export class EntregaService {
           },
         },
       });
+      await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, orden.id);
     });
 
     return {
@@ -372,6 +375,7 @@ export class EntregaService {
           },
         },
       });
+      await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, orden.id);
     });
 
     return { revertidos: entregados.length };

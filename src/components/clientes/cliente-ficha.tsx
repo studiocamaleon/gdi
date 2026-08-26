@@ -6,17 +6,21 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircleIcon,
   ArrowLeftIcon,
+  HistoryIcon,
   MapPinHouseIcon,
   PlusIcon,
   ReceiptTextIcon,
   SaveIcon,
   StarIcon,
   Trash2Icon,
+  UserRoundIcon,
   UserRoundPlusIcon,
 } from "lucide-react";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { useFecha } from "@/components/navigation/config-regional-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import { ClienteFidelizacionCard } from "@/components/crm/cliente-fidelizacion-card";
 import { createCliente, updateCliente } from "@/lib/clientes-api";
 import {
   CONDICIONES_FISCALES,
@@ -289,6 +293,7 @@ function createEmptyDireccion(countryCode: string): ClienteDireccion {
 }
 
 export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
+  const puedeAjustarPuntos = usePuede("crm.configurar_fidelizacion");
   const router = useRouter();
   const { fechaHora } = useFecha();
   const [isSaving, startSaving] = React.useTransition();
@@ -324,6 +329,9 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const [activeDireccionId, setActiveDireccionId] = React.useState(
     cliente.direcciones[0]?.id ?? "",
   );
+  const [activeSection, setActiveSection] = React.useState<
+    "ficha" | "fidelizacion" | "historial"
+  >("ficha");
   const readOnly = mode === "view";
   const snapshot = JSON.stringify({
     datosGenerales,
@@ -528,9 +536,12 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
     if (validation.message) {
       setErrorMessage(validation.message);
       toast.error(validation.message);
+      // Los campos editables viven en la primera pestaña. Si se intenta
+      // guardar desde Fidelización o Historial, volvemos a la ficha antes de
+      // enfocar el dato inválido.
+      setActiveSection("ficha");
       const firstField = Object.keys(validation.fields)[0] as
-        | keyof FieldErrors
-        | undefined;
+        keyof FieldErrors | undefined;
       const fieldIds: Record<keyof FieldErrors, string> = {
         nombre: "cliente-nombre",
         email: "cliente-email",
@@ -540,8 +551,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         plazoCuentaCorrienteDias: "cliente-condicion-pago",
         limiteCredito: "cliente-limite-credito",
       };
-      if (firstField) document.getElementById(fieldIds[firstField])?.focus();
-      else if (validation.focusId) {
+      if (validation.focusId) {
         const contacto = contactos.find((item) =>
           validation.focusId?.endsWith(item.id),
         );
@@ -550,9 +560,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         );
         if (contacto) setActiveContactoId(contacto.id);
         if (direccion) setActiveDireccionId(direccion.id);
-        window.setTimeout(() =>
-          document.getElementById(validation.focusId!)?.focus(),
-        );
+      }
+      const targetId = firstField ? fieldIds[firstField] : validation.focusId;
+      if (targetId) {
+        window.setTimeout(() => document.getElementById(targetId)?.focus());
       }
       return;
     }
@@ -570,7 +581,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
 
         if (mode === "create") {
           toast.success("Cliente creado correctamente.");
-          router.push(`/clientes/${savedCliente.id}`);
+          router.push(`/crm/clientes/${savedCliente.id}`);
           router.refresh();
           return;
         }
@@ -598,7 +609,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-3">
           <Link
-            href="/clientes"
+            href="/crm/clientes"
             onNavigate={confirmNavigation}
             className={buttonVariants({
               variant: "sidebar",
@@ -635,7 +646,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         <div className="flex flex-wrap items-center gap-2">
           {mode !== "create" ? (
             <Link
-              href={`/clientes/${cliente.id}/cuenta-corriente`}
+              href={`/crm/clientes/${cliente.id}/cuenta-corriente`}
               onNavigate={confirmNavigation}
               className={buttonVariants({ variant: "outline" })}
             >
@@ -671,972 +682,1036 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         </Alert>
       ) : null}
 
-      <fieldset disabled={readOnly} className="contents [&>*]:shrink-0">
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold tracking-tight">
-              Datos generales
-            </CardTitle>
-            <CardDescription>
-              Definí la información base del cliente y el teléfono principal en
-              formato compatible con WhatsApp.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FieldGroup className="grid lg:grid-cols-2">
-              <Field data-invalid={Boolean(fieldErrors.nombre)}>
-                <FieldLabel htmlFor="cliente-nombre">
-                  Nombre del cliente
-                </FieldLabel>
-                <Input
-                  id="cliente-nombre"
-                  aria-invalid={Boolean(fieldErrors.nombre)}
-                  value={datosGenerales.nombre}
-                  onChange={(event) =>
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      nombre: event.target.value,
-                    }))
-                  }
-                  placeholder="Ej. Cafe del Centro"
-                />
-                {fieldErrors.nombre ? (
-                  <FieldDescription>{fieldErrors.nombre}</FieldDescription>
-                ) : null}
-              </Field>
+      <Tabs
+        value={mode === "create" ? "ficha" : activeSection}
+        onValueChange={(value) => {
+          if (
+            value === "ficha" ||
+            value === "fidelizacion" ||
+            value === "historial"
+          ) {
+            setActiveSection(value);
+          }
+        }}
+        className="flex min-h-0 flex-col gap-6"
+      >
+        {mode !== "create" ? (
+          <TabsList variant="line" className="w-full justify-start">
+            <TabsTrigger value="ficha" className="flex-none px-4">
+              <UserRoundIcon />
+              Ficha de cliente
+            </TabsTrigger>
+            <TabsTrigger value="fidelizacion" className="flex-none px-4">
+              <StarIcon />
+              Fidelización
+            </TabsTrigger>
+            <TabsTrigger value="historial" className="flex-none px-4">
+              <HistoryIcon />
+              Historial
+            </TabsTrigger>
+          </TabsList>
+        ) : null}
 
-              <Field>
-                <FieldLabel htmlFor="cliente-razon-social">
-                  Razón social
-                </FieldLabel>
-                <Input
-                  id="cliente-razon-social"
-                  value={datosGenerales.razonSocial}
-                  onChange={(event) =>
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      razonSocial: event.target.value,
-                    }))
-                  }
-                  placeholder="Ej. Cafe del Centro SRL"
-                />
-              </Field>
+        <TabsContent value="ficha" keepMounted className="m-0">
+          <fieldset
+            disabled={readOnly}
+            className="flex flex-col gap-6 [&>*]:shrink-0"
+          >
+            <Card className="rounded-2xl border-border/70 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold tracking-tight">
+                  Datos generales
+                </CardTitle>
+                <CardDescription>
+                  Definí la información base del cliente y el teléfono principal
+                  en formato compatible con WhatsApp.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup className="grid lg:grid-cols-2">
+                  <Field data-invalid={Boolean(fieldErrors.nombre)}>
+                    <FieldLabel htmlFor="cliente-nombre">
+                      Nombre del cliente
+                    </FieldLabel>
+                    <Input
+                      id="cliente-nombre"
+                      aria-invalid={Boolean(fieldErrors.nombre)}
+                      value={datosGenerales.nombre}
+                      onChange={(event) =>
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          nombre: event.target.value,
+                        }))
+                      }
+                      placeholder="Ej. Cafe del Centro"
+                    />
+                    {fieldErrors.nombre ? (
+                      <FieldDescription>{fieldErrors.nombre}</FieldDescription>
+                    ) : null}
+                  </Field>
 
-              <Field>
-                <FieldLabel htmlFor="cliente-condicion-fiscal">
-                  Condición fiscal
-                </FieldLabel>
-                <Select
-                  items={condicionFiscalItems}
-                  value={datosGenerales.condicionFiscal}
-                  onValueChange={(value) => {
-                    if (!value) {
-                      return;
-                    }
+                  <Field>
+                    <FieldLabel htmlFor="cliente-razon-social">
+                      Razón social
+                    </FieldLabel>
+                    <Input
+                      id="cliente-razon-social"
+                      value={datosGenerales.razonSocial}
+                      onChange={(event) =>
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          razonSocial: event.target.value,
+                        }))
+                      }
+                      placeholder="Ej. Cafe del Centro SRL"
+                    />
+                  </Field>
 
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      condicionFiscal: value as CondicionFiscal,
-                    }));
-                  }}
-                >
-                  <SelectTrigger
-                    id="cliente-condicion-fiscal"
-                    className="w-full"
-                  >
-                    <SelectValue placeholder="Seleccioná la condición" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {condicionFiscalItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  Define la letra del comprobante al facturarle.
-                </FieldDescription>
-              </Field>
+                  <Field>
+                    <FieldLabel htmlFor="cliente-condicion-fiscal">
+                      Condición fiscal
+                    </FieldLabel>
+                    <Select
+                      items={condicionFiscalItems}
+                      value={datosGenerales.condicionFiscal}
+                      onValueChange={(value) => {
+                        if (!value) {
+                          return;
+                        }
 
-              <Field data-invalid={Boolean(fieldErrors.cuit)}>
-                <FieldLabel htmlFor="cliente-cuit">
-                  CUIT{" "}
-                  {requiereCuit(datosGenerales.condicionFiscal)
-                    ? ""
-                    : "(opcional)"}
-                </FieldLabel>
-                <Input
-                  id="cliente-cuit"
-                  aria-invalid={Boolean(fieldErrors.cuit)}
-                  inputMode="numeric"
-                  value={datosGenerales.cuit}
-                  onChange={(event) =>
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      cuit: event.target.value,
-                    }))
-                  }
-                  placeholder="30-71234567-8"
-                />
-                <FieldDescription>
-                  {fieldErrors.cuit ??
-                    (requiereCuit(datosGenerales.condicionFiscal)
-                      ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
-                      : "Con o sin guiones. Se valida el dígito verificador.")}
-                </FieldDescription>
-              </Field>
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          condicionFiscal: value as CondicionFiscal,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger
+                        id="cliente-condicion-fiscal"
+                        className="w-full"
+                      >
+                        <SelectValue placeholder="Seleccioná la condición" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {condicionFiscalItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      Define la letra del comprobante al facturarle.
+                    </FieldDescription>
+                  </Field>
 
-              {/* El DNI va aparte del CUIT y no es lo mismo: ARCA los declara
+                  <Field data-invalid={Boolean(fieldErrors.cuit)}>
+                    <FieldLabel htmlFor="cliente-cuit">
+                      CUIT{" "}
+                      {requiereCuit(datosGenerales.condicionFiscal)
+                        ? ""
+                        : "(opcional)"}
+                    </FieldLabel>
+                    <Input
+                      id="cliente-cuit"
+                      aria-invalid={Boolean(fieldErrors.cuit)}
+                      inputMode="numeric"
+                      value={datosGenerales.cuit}
+                      onChange={(event) =>
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          cuit: event.target.value,
+                        }))
+                      }
+                      placeholder="30-71234567-8"
+                    />
+                    <FieldDescription>
+                      {fieldErrors.cuit ??
+                        (requiereCuit(datosGenerales.condicionFiscal)
+                          ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
+                          : "Con o sin guiones. Se valida el dígito verificador.")}
+                    </FieldDescription>
+                  </Field>
+
+                  {/* El DNI va aparte del CUIT y no es lo mismo: ARCA los declara
                 con tipos distintos (96 vs 80). Lo llena solo el alta por
                 escaneo del documento en el mostrador. */}
-              <Field data-invalid={Boolean(fieldErrors.documentoNumero)}>
-                <FieldLabel htmlFor="cliente-documento">
-                  DNI (opcional)
-                </FieldLabel>
-                <Input
-                  id="cliente-documento"
-                  aria-invalid={Boolean(fieldErrors.documentoNumero)}
-                  inputMode="numeric"
-                  value={datosGenerales.documentoNumero}
-                  onChange={(event) =>
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      documentoNumero: event.target.value.replace(/\D/g, ""),
-                    }))
-                  }
-                  placeholder="12345678"
-                />
-                <FieldDescription>
-                  {fieldErrors.documentoNumero ??
-                    "Sirve para identificar al cliente en la factura sin CUIT."}
-                </FieldDescription>
-              </Field>
-
-              <Field
-                data-invalid={Boolean(fieldErrors.plazoCuentaCorrienteDias)}
-              >
-                <FieldLabel htmlFor="cliente-condicion-pago">
-                  Plazo de cuenta corriente (días)
-                </FieldLabel>
-                <Input
-                  id="cliente-condicion-pago"
-                  inputMode="numeric"
-                  aria-invalid={Boolean(fieldErrors.plazoCuentaCorrienteDias)}
-                  value={datosGenerales.plazoCuentaCorrienteDias}
-                  onChange={(event) =>
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      plazoCuentaCorrienteDias: event.target.value.replace(
-                        /\D/g,
-                        "",
-                      ),
-                    }))
-                  }
-                  placeholder="Venta común"
-                />
-                <FieldDescription>
-                  {fieldErrors.plazoCuentaCorrienteDias ??
-                    "Vacío = vence al finalizar la orden. Ej. 30 = cuenta corriente a 30 días."}
-                </FieldDescription>
-              </Field>
-
-              <Field
-                data-disabled={
-                  datosGenerales.plazoCuentaCorrienteDias.trim() === ""
-                }
-                data-invalid={Boolean(fieldErrors.limiteCredito)}
-              >
-                <FieldLabel htmlFor="cliente-limite-credito">
-                  Límite de crédito (opcional)
-                </FieldLabel>
-                <Input
-                  id="cliente-limite-credito"
-                  disabled={
-                    datosGenerales.plazoCuentaCorrienteDias.trim() === ""
-                  }
-                  inputMode="decimal"
-                  aria-invalid={Boolean(fieldErrors.limiteCredito)}
-                  value={datosGenerales.limiteCredito}
-                  onChange={(event) =>
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      limiteCredito: event.target.value.replace(",", "."),
-                    }))
-                  }
-                  placeholder="Sin límite"
-                />
-                <FieldDescription>
-                  {fieldErrors.limiteCredito ??
-                    (datosGenerales.plazoCuentaCorrienteDias.trim() === ""
-                      ? "Se habilita al configurar un plazo de cuenta corriente."
-                      : "Tope de deuda. Vacío = cuenta corriente sin límite.")}
-                </FieldDescription>
-              </Field>
-
-              <Field data-invalid={Boolean(fieldErrors.email)}>
-                <FieldLabel htmlFor="cliente-email">
-                  Correo electrónico principal (opcional)
-                </FieldLabel>
-                <Input
-                  id="cliente-email"
-                  type="email"
-                  aria-invalid={Boolean(fieldErrors.email)}
-                  value={datosGenerales.email}
-                  onChange={(event) =>
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                  placeholder="contacto@empresa.com"
-                />
-                {fieldErrors.email ? (
-                  <FieldDescription>{fieldErrors.email}</FieldDescription>
-                ) : null}
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="cliente-pais">País</FieldLabel>
-                <Select
-                  items={countryItems}
-                  value={datosGenerales.pais}
-                  onValueChange={(value) => {
-                    if (!value) {
-                      return;
-                    }
-
-                    setDatosGenerales((current) => ({
-                      ...current,
-                      pais: value,
-                    }));
-                  }}
-                >
-                  <SelectTrigger id="cliente-pais" className="w-full">
-                    <SelectValue placeholder="Seleccioná un país" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {countryItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              <FieldGroup className="grid md:grid-cols-[180px_1fr] lg:col-span-2">
-                <Field>
-                  <FieldLabel htmlFor="telefono-codigo">
-                    Código de país
-                  </FieldLabel>
-                  <Select
-                    items={phoneCodeItems}
-                    value={datosGenerales.telefonoCodigo}
-                    onValueChange={(value) => {
-                      if (!value) {
-                        return;
+                  <Field data-invalid={Boolean(fieldErrors.documentoNumero)}>
+                    <FieldLabel htmlFor="cliente-documento">
+                      DNI (opcional)
+                    </FieldLabel>
+                    <Input
+                      id="cliente-documento"
+                      aria-invalid={Boolean(fieldErrors.documentoNumero)}
+                      inputMode="numeric"
+                      value={datosGenerales.documentoNumero}
+                      onChange={(event) =>
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          documentoNumero: event.target.value.replace(
+                            /\D/g,
+                            "",
+                          ),
+                        }))
                       }
+                      placeholder="12345678"
+                    />
+                    <FieldDescription>
+                      {fieldErrors.documentoNumero ??
+                        "Sirve para identificar al cliente en la factura sin CUIT."}
+                    </FieldDescription>
+                  </Field>
 
-                      setDatosGenerales((current) => ({
-                        ...current,
-                        telefonoCodigo: value,
-                      }));
+                  <Field
+                    data-invalid={Boolean(fieldErrors.plazoCuentaCorrienteDias)}
+                  >
+                    <FieldLabel htmlFor="cliente-condicion-pago">
+                      Plazo de cuenta corriente (días)
+                    </FieldLabel>
+                    <Input
+                      id="cliente-condicion-pago"
+                      inputMode="numeric"
+                      aria-invalid={Boolean(
+                        fieldErrors.plazoCuentaCorrienteDias,
+                      )}
+                      value={datosGenerales.plazoCuentaCorrienteDias}
+                      onChange={(event) =>
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          plazoCuentaCorrienteDias: event.target.value.replace(
+                            /\D/g,
+                            "",
+                          ),
+                        }))
+                      }
+                      placeholder="Venta común"
+                    />
+                    <FieldDescription>
+                      {fieldErrors.plazoCuentaCorrienteDias ??
+                        "Vacío = vence al finalizar la orden. Ej. 30 = cuenta corriente a 30 días."}
+                    </FieldDescription>
+                  </Field>
+
+                  <Field
+                    data-disabled={
+                      datosGenerales.plazoCuentaCorrienteDias.trim() === ""
+                    }
+                    data-invalid={Boolean(fieldErrors.limiteCredito)}
+                  >
+                    <FieldLabel htmlFor="cliente-limite-credito">
+                      Límite de crédito (opcional)
+                    </FieldLabel>
+                    <Input
+                      id="cliente-limite-credito"
+                      disabled={
+                        datosGenerales.plazoCuentaCorrienteDias.trim() === ""
+                      }
+                      inputMode="decimal"
+                      aria-invalid={Boolean(fieldErrors.limiteCredito)}
+                      value={datosGenerales.limiteCredito}
+                      onChange={(event) =>
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          limiteCredito: event.target.value.replace(",", "."),
+                        }))
+                      }
+                      placeholder="Sin límite"
+                    />
+                    <FieldDescription>
+                      {fieldErrors.limiteCredito ??
+                        (datosGenerales.plazoCuentaCorrienteDias.trim() === ""
+                          ? "Se habilita al configurar un plazo de cuenta corriente."
+                          : "Tope de deuda. Vacío = cuenta corriente sin límite.")}
+                    </FieldDescription>
+                  </Field>
+
+                  <Field data-invalid={Boolean(fieldErrors.email)}>
+                    <FieldLabel htmlFor="cliente-email">
+                      Correo electrónico principal (opcional)
+                    </FieldLabel>
+                    <Input
+                      id="cliente-email"
+                      type="email"
+                      aria-invalid={Boolean(fieldErrors.email)}
+                      value={datosGenerales.email}
+                      onChange={(event) =>
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
+                      placeholder="contacto@empresa.com"
+                    />
+                    {fieldErrors.email ? (
+                      <FieldDescription>{fieldErrors.email}</FieldDescription>
+                    ) : null}
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="cliente-pais">País</FieldLabel>
+                    <Select
+                      items={countryItems}
+                      value={datosGenerales.pais}
+                      onValueChange={(value) => {
+                        if (!value) {
+                          return;
+                        }
+
+                        setDatosGenerales((current) => ({
+                          ...current,
+                          pais: value,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger id="cliente-pais" className="w-full">
+                        <SelectValue placeholder="Seleccioná un país" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {countryItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  <FieldGroup className="grid md:grid-cols-[180px_1fr] lg:col-span-2">
+                    <Field>
+                      <FieldLabel htmlFor="telefono-codigo">
+                        Código de país
+                      </FieldLabel>
+                      <Select
+                        items={phoneCodeItems}
+                        value={datosGenerales.telefonoCodigo}
+                        onValueChange={(value) => {
+                          if (!value) {
+                            return;
+                          }
+
+                          setDatosGenerales((current) => ({
+                            ...current,
+                            telefonoCodigo: value,
+                          }));
+                        }}
+                      >
+                        <SelectTrigger id="telefono-codigo" className="w-full">
+                          <SelectValue placeholder="Código" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {phoneCodeItems.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+
+                    <Field data-invalid={Boolean(fieldErrors.telefonoNumero)}>
+                      <FieldLabel htmlFor="telefono-numero">
+                        Teléfono principal (opcional)
+                      </FieldLabel>
+                      <Input
+                        id="telefono-numero"
+                        inputMode="tel"
+                        aria-invalid={Boolean(fieldErrors.telefonoNumero)}
+                        value={datosGenerales.telefonoNumero}
+                        onChange={(event) =>
+                          setDatosGenerales((current) => ({
+                            ...current,
+                            telefonoNumero: event.target.value,
+                          }))
+                        }
+                        placeholder="Número sin código de país"
+                      />
+                      <FieldDescription>
+                        {fieldErrors.telefonoNumero ??
+                          `Se guardará como: ${telefonoWhatsapp || "Sin definir"}`}
+                      </FieldDescription>
+                    </Field>
+                  </FieldGroup>
+
+                  <Field className="lg:col-span-2">
+                    <FieldLabel htmlFor="cliente-whatsapp-consentimiento">
+                      Consentimiento para WhatsApp
+                    </FieldLabel>
+                    <Select
+                      items={whatsappConsentItems}
+                      value={
+                        aceptaWhatsapp === null
+                          ? "sin_definir"
+                          : aceptaWhatsapp
+                            ? "si"
+                            : "no"
+                      }
+                      onValueChange={(value) =>
+                        setAceptaWhatsapp(
+                          value === "sin_definir" ? null : value === "si",
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        id="cliente-whatsapp-consentimiento"
+                        className="w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {whatsappConsentItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      Sin consentimiento explícito solo se permiten avisos
+                      transaccionales; si dice que no, no se envía ningún
+                      mensaje.
+                    </FieldDescription>
+                  </Field>
+                </FieldGroup>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-border/70 shadow-sm">
+              <CardHeader className="gap-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-bold tracking-tight">
+                      Contactos
+                    </CardTitle>
+                    <CardDescription>
+                      Podés registrar uno o más contactos y definir cuál será el
+                      principal para la relación comercial.
+                    </CardDescription>
+                  </div>
+                  {!readOnly ? (
+                    <Button
+                      type="button"
+                      variant="brand"
+                      className="w-full sm:w-auto"
+                      onClick={addContacto}
+                    >
+                      <UserRoundPlusIcon data-icon="inline-start" />
+                      Agregar contacto
+                    </Button>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                {contactos.length === 0 ? (
+                  <Empty className="min-h-48">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <UserRoundPlusIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>Sin contactos adicionales</EmptyTitle>
+                      <EmptyDescription>
+                        El teléfono y el correo principal pueden cargarse
+                        arriba. Agregá un contacto solo si necesitás identificar
+                        a una persona específica.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : (
+                  <Tabs
+                    value={activeContactoId}
+                    onValueChange={(value) => {
+                      if (value) {
+                        setActiveContactoId(value);
+                      }
                     }}
                   >
-                    <SelectTrigger id="telefono-codigo" className="w-full">
-                      <SelectValue placeholder="Código" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {phoneCodeItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-
-                <Field data-invalid={Boolean(fieldErrors.telefonoNumero)}>
-                  <FieldLabel htmlFor="telefono-numero">
-                    Teléfono principal (opcional)
-                  </FieldLabel>
-                  <Input
-                    id="telefono-numero"
-                    inputMode="tel"
-                    aria-invalid={Boolean(fieldErrors.telefonoNumero)}
-                    value={datosGenerales.telefonoNumero}
-                    onChange={(event) =>
-                      setDatosGenerales((current) => ({
-                        ...current,
-                        telefonoNumero: event.target.value,
-                      }))
-                    }
-                    placeholder="Número sin código de país"
-                  />
-                  <FieldDescription>
-                    {fieldErrors.telefonoNumero ??
-                      `Se guardará como: ${telefonoWhatsapp || "Sin definir"}`}
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
-
-              <Field className="lg:col-span-2">
-                <FieldLabel htmlFor="cliente-whatsapp-consentimiento">
-                  Consentimiento para WhatsApp
-                </FieldLabel>
-                <Select
-                  items={whatsappConsentItems}
-                  value={
-                    aceptaWhatsapp === null
-                      ? "sin_definir"
-                      : aceptaWhatsapp
-                        ? "si"
-                        : "no"
-                  }
-                  onValueChange={(value) =>
-                    setAceptaWhatsapp(
-                      value === "sin_definir" ? null : value === "si",
-                    )
-                  }
-                >
-                  <SelectTrigger
-                    id="cliente-whatsapp-consentimiento"
-                    className="w-full"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {whatsappConsentItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
+                    <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
+                      {contactos.map((contacto, index) => (
+                        <TabsTrigger
+                          key={contacto.id}
+                          value={contacto.id}
+                          className="flex-none rounded-lg px-3 py-1.5"
+                        >
+                          {contacto.nombre || `Contacto ${index + 1}`}
+                          {contacto.principal ? (
+                            <StarIcon className="fill-current text-primary" />
+                          ) : null}
+                        </TabsTrigger>
                       ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  Sin consentimiento explícito solo se permiten avisos
-                  transaccionales; si dice que no, no se envía ningún mensaje.
-                </FieldDescription>
-              </Field>
-            </FieldGroup>
-          </CardContent>
-        </Card>
+                    </TabsList>
 
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="gap-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle className="text-lg font-bold tracking-tight">
-                  Contactos
-                </CardTitle>
-                <CardDescription>
-                  Podés registrar uno o más contactos y definir cuál será el
-                  principal para la relación comercial.
-                </CardDescription>
-              </div>
-              {!readOnly ? (
-                <Button
-                  type="button"
-                  variant="brand"
-                  className="w-full sm:w-auto"
-                  onClick={addContacto}
-                >
-                  <UserRoundPlusIcon data-icon="inline-start" />
-                  Agregar contacto
-                </Button>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {contactos.length === 0 ? (
-              <Empty className="min-h-48">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <UserRoundPlusIcon />
-                  </EmptyMedia>
-                  <EmptyTitle>Sin contactos adicionales</EmptyTitle>
-                  <EmptyDescription>
-                    El teléfono y el correo principal pueden cargarse arriba.
-                    Agregá un contacto solo si necesitás identificar a una
-                    persona específica.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <Tabs
-                value={activeContactoId}
-                onValueChange={(value) => {
-                  if (value) {
-                    setActiveContactoId(value);
-                  }
-                }}
-              >
-                <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-                  {contactos.map((contacto, index) => (
-                    <TabsTrigger
-                      key={contacto.id}
-                      value={contacto.id}
-                      className="flex-none rounded-lg px-3 py-1.5"
-                    >
-                      {contacto.nombre || `Contacto ${index + 1}`}
-                      {contacto.principal ? (
-                        <StarIcon className="fill-current text-primary" />
-                      ) : null}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {contactos.map((contacto, index) => (
-                  <TabsContent key={contacto.id} value={contacto.id}>
-                    {activeContactoId === contacto.id ? (
-                      <Card className="rounded-xl border-border/70 shadow-none">
-                        <CardHeader className="gap-4 border-b border-border/70">
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="flex items-center gap-2">
-                              <CardTitle className="text-base">
-                                {contacto.nombre || `Contacto ${index + 1}`}
-                              </CardTitle>
-                              {contacto.principal ? (
-                                <Badge variant="secondary">
-                                  <StarIcon
-                                    data-icon="inline-start"
-                                    className="fill-current text-primary"
-                                  />
-                                  Principal
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                              {!contacto.principal ? (
-                                <Button
-                                  type="button"
-                                  variant="sidebar"
-                                  size="sm"
-                                  onClick={() =>
-                                    setPrimaryContacto(contacto.id)
-                                  }
-                                >
-                                  Definir principal
-                                </Button>
-                              ) : null}
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => removeContacto(contacto.id)}
-                              >
-                                <Trash2Icon data-icon="inline-start" />
-                                Quitar
-                              </Button>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <FieldGroup className="grid lg:grid-cols-2">
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`contacto-nombre-${contacto.id}`}
-                              >
-                                Nombre completo
-                              </FieldLabel>
-                              <Input
-                                id={`contacto-nombre-${contacto.id}`}
-                                value={contacto.nombre}
-                                onChange={(event) =>
-                                  updateContacto(
-                                    contacto.id,
-                                    "nombre",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="Nombre y apellido"
-                              />
-                            </Field>
-
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`contacto-cargo-${contacto.id}`}
-                              >
-                                Cargo o area
-                              </FieldLabel>
-                              <Input
-                                id={`contacto-cargo-${contacto.id}`}
-                                value={contacto.cargo}
-                                onChange={(event) =>
-                                  updateContacto(
-                                    contacto.id,
-                                    "cargo",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="Compras, administracion, marketing..."
-                              />
-                            </Field>
-
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`contacto-email-${contacto.id}`}
-                              >
-                                Correo electrónico
-                              </FieldLabel>
-                              <Input
-                                id={`contacto-email-${contacto.id}`}
-                                type="email"
-                                value={contacto.email}
-                                onChange={(event) =>
-                                  updateContacto(
-                                    contacto.id,
-                                    "email",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="mail@empresa.com"
-                              />
-                            </Field>
-
-                            <FieldGroup className="grid md:grid-cols-[180px_1fr]">
-                              <Field>
-                                <FieldLabel
-                                  htmlFor={`contacto-codigo-${contacto.id}`}
-                                >
-                                  Código de país
-                                </FieldLabel>
-                                <Select
-                                  items={phoneCodeItems}
-                                  value={contacto.telefonoCodigo}
-                                  onValueChange={(value) => {
-                                    if (!value) {
-                                      return;
-                                    }
-
-                                    updateContacto(
-                                      contacto.id,
-                                      "telefonoCodigo",
-                                      value,
-                                    );
-                                  }}
-                                >
-                                  <SelectTrigger
-                                    id={`contacto-codigo-${contacto.id}`}
-                                    className="w-full"
+                    {contactos.map((contacto, index) => (
+                      <TabsContent key={contacto.id} value={contacto.id}>
+                        {activeContactoId === contacto.id ? (
+                          <Card className="rounded-xl border-border/70 shadow-none">
+                            <CardHeader className="gap-4 border-b border-border/70">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex items-center gap-2">
+                                  <CardTitle className="text-base">
+                                    {contacto.nombre || `Contacto ${index + 1}`}
+                                  </CardTitle>
+                                  {contacto.principal ? (
+                                    <Badge variant="secondary">
+                                      <StarIcon
+                                        data-icon="inline-start"
+                                        className="fill-current text-primary"
+                                      />
+                                      Principal
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-col gap-2 sm:flex-row">
+                                  {!contacto.principal ? (
+                                    <Button
+                                      type="button"
+                                      variant="sidebar"
+                                      size="sm"
+                                      onClick={() =>
+                                        setPrimaryContacto(contacto.id)
+                                      }
+                                    >
+                                      Definir principal
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => removeContacto(contacto.id)}
                                   >
-                                    <SelectValue placeholder="Código" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectGroup>
-                                      {phoneCodeItems.map((item) => (
-                                        <SelectItem
-                                          key={item.value}
-                                          value={item.value}
-                                        >
-                                          {item.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectGroup>
-                                  </SelectContent>
-                                </Select>
-                              </Field>
+                                    <Trash2Icon data-icon="inline-start" />
+                                    Quitar
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent>
+                              <FieldGroup className="grid lg:grid-cols-2">
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`contacto-nombre-${contacto.id}`}
+                                  >
+                                    Nombre completo
+                                  </FieldLabel>
+                                  <Input
+                                    id={`contacto-nombre-${contacto.id}`}
+                                    value={contacto.nombre}
+                                    onChange={(event) =>
+                                      updateContacto(
+                                        contacto.id,
+                                        "nombre",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="Nombre y apellido"
+                                  />
+                                </Field>
 
-                              <Field>
-                                <FieldLabel
-                                  htmlFor={`contacto-telefono-${contacto.id}`}
-                                >
-                                  Teléfono
-                                </FieldLabel>
-                                <Input
-                                  id={`contacto-telefono-${contacto.id}`}
-                                  inputMode="tel"
-                                  value={contacto.telefonoNumero}
-                                  onChange={(event) =>
-                                    updateContacto(
-                                      contacto.id,
-                                      "telefonoNumero",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="Número del contacto"
-                                />
-                                <FieldDescription>
-                                  WhatsApp:{" "}
-                                  {formatWhatsappPhone(
-                                    contacto.telefonoCodigo,
-                                    contacto.telefonoNumero,
-                                  ) || "Sin definir"}
-                                </FieldDescription>
-                              </Field>
-                            </FieldGroup>
-                          </FieldGroup>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-                  </TabsContent>
-                ))}
-              </Tabs>
-            )}
-          </CardContent>
-        </Card>
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`contacto-cargo-${contacto.id}`}
+                                  >
+                                    Cargo o area
+                                  </FieldLabel>
+                                  <Input
+                                    id={`contacto-cargo-${contacto.id}`}
+                                    value={contacto.cargo}
+                                    onChange={(event) =>
+                                      updateContacto(
+                                        contacto.id,
+                                        "cargo",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="Compras, administracion, marketing..."
+                                  />
+                                </Field>
 
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="gap-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`contacto-email-${contacto.id}`}
+                                  >
+                                    Correo electrónico
+                                  </FieldLabel>
+                                  <Input
+                                    id={`contacto-email-${contacto.id}`}
+                                    type="email"
+                                    value={contacto.email}
+                                    onChange={(event) =>
+                                      updateContacto(
+                                        contacto.id,
+                                        "email",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="mail@empresa.com"
+                                  />
+                                </Field>
+
+                                <FieldGroup className="grid md:grid-cols-[180px_1fr]">
+                                  <Field>
+                                    <FieldLabel
+                                      htmlFor={`contacto-codigo-${contacto.id}`}
+                                    >
+                                      Código de país
+                                    </FieldLabel>
+                                    <Select
+                                      items={phoneCodeItems}
+                                      value={contacto.telefonoCodigo}
+                                      onValueChange={(value) => {
+                                        if (!value) {
+                                          return;
+                                        }
+
+                                        updateContacto(
+                                          contacto.id,
+                                          "telefonoCodigo",
+                                          value,
+                                        );
+                                      }}
+                                    >
+                                      <SelectTrigger
+                                        id={`contacto-codigo-${contacto.id}`}
+                                        className="w-full"
+                                      >
+                                        <SelectValue placeholder="Código" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectGroup>
+                                          {phoneCodeItems.map((item) => (
+                                            <SelectItem
+                                              key={item.value}
+                                              value={item.value}
+                                            >
+                                              {item.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectGroup>
+                                      </SelectContent>
+                                    </Select>
+                                  </Field>
+
+                                  <Field>
+                                    <FieldLabel
+                                      htmlFor={`contacto-telefono-${contacto.id}`}
+                                    >
+                                      Teléfono
+                                    </FieldLabel>
+                                    <Input
+                                      id={`contacto-telefono-${contacto.id}`}
+                                      inputMode="tel"
+                                      value={contacto.telefonoNumero}
+                                      onChange={(event) =>
+                                        updateContacto(
+                                          contacto.id,
+                                          "telefonoNumero",
+                                          event.target.value,
+                                        )
+                                      }
+                                      placeholder="Número del contacto"
+                                    />
+                                    <FieldDescription>
+                                      WhatsApp:{" "}
+                                      {formatWhatsappPhone(
+                                        contacto.telefonoCodigo,
+                                        contacto.telefonoNumero,
+                                      ) || "Sin definir"}
+                                    </FieldDescription>
+                                  </Field>
+                                </FieldGroup>
+                              </FieldGroup>
+                            </CardContent>
+                          </Card>
+                        ) : null}
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-border/70 shadow-sm">
+              <CardHeader className="gap-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-bold tracking-tight">
+                      Direcciones
+                    </CardTitle>
+                    <CardDescription>
+                      Registrá múltiples direcciones y marcá una como principal
+                      para uso operativo.
+                    </CardDescription>
+                  </div>
+                  {!readOnly ? (
+                    <Button
+                      type="button"
+                      variant="brand"
+                      className="w-full sm:w-auto"
+                      onClick={addDireccion}
+                    >
+                      <PlusIcon data-icon="inline-start" />
+                      Agregar dirección
+                    </Button>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                {direcciones.length === 0 ? (
+                  <Empty className="min-h-48">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <MapPinHouseIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>Sin direcciones cargadas</EmptyTitle>
+                      <EmptyDescription>
+                        Podés guardar el cliente sin dirección y completarla
+                        cuando la necesites para facturación o entrega.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : (
+                  <Tabs
+                    value={activeDireccionId}
+                    onValueChange={(value) => {
+                      if (value) {
+                        setActiveDireccionId(value);
+                      }
+                    }}
+                  >
+                    <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
+                      {direcciones.map((direccion, index) => (
+                        <TabsTrigger
+                          key={direccion.id}
+                          value={direccion.id}
+                          className="flex-none rounded-lg px-3 py-1.5"
+                        >
+                          {direccion.descripcion || `Dirección ${index + 1}`}
+                          {direccion.principal ? (
+                            <StarIcon className="fill-current text-primary" />
+                          ) : null}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+
+                    {direcciones.map((direccion, index) => (
+                      <TabsContent key={direccion.id} value={direccion.id}>
+                        {activeDireccionId === direccion.id ? (
+                          <Card className="rounded-xl border-border/70 shadow-none">
+                            <CardHeader className="gap-4 border-b border-border/70">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <CardTitle className="text-base">
+                                    {direccion.descripcion ||
+                                      `Dirección ${index + 1}`}
+                                  </CardTitle>
+                                  {direccion.principal ? (
+                                    <Badge variant="secondary">
+                                      <StarIcon
+                                        data-icon="inline-start"
+                                        className="fill-current text-primary"
+                                      />
+                                      Principal
+                                    </Badge>
+                                  ) : null}
+                                  <Badge variant="outline">
+                                    <MapPinHouseIcon data-icon="inline-start" />
+                                    {
+                                      addressTypeItems.find(
+                                        (item) => item.value === direccion.tipo,
+                                      )?.label
+                                    }
+                                  </Badge>
+                                </div>
+                                <div className="flex flex-col gap-2 sm:flex-row">
+                                  {!direccion.principal ? (
+                                    <Button
+                                      type="button"
+                                      variant="sidebar"
+                                      size="sm"
+                                      onClick={() =>
+                                        setPrimaryDireccion(direccion.id)
+                                      }
+                                    >
+                                      Definir principal
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() =>
+                                      removeDireccion(direccion.id)
+                                    }
+                                  >
+                                    <Trash2Icon data-icon="inline-start" />
+                                    Quitar
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent>
+                              <FieldGroup className="grid lg:grid-cols-2">
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`direccion-descripcion-${direccion.id}`}
+                                  >
+                                    Descripcion
+                                  </FieldLabel>
+                                  <Input
+                                    id={`direccion-descripcion-${direccion.id}`}
+                                    value={direccion.descripcion}
+                                    onChange={(event) =>
+                                      updateDireccion(
+                                        direccion.id,
+                                        "descripcion",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="Ej. Domicilio principal"
+                                  />
+                                </Field>
+
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`direccion-tipo-${direccion.id}`}
+                                  >
+                                    Tipo
+                                  </FieldLabel>
+                                  <Select
+                                    items={addressTypeItems}
+                                    value={direccion.tipo}
+                                    onValueChange={(value) => {
+                                      if (!value) {
+                                        return;
+                                      }
+
+                                      updateDireccion(
+                                        direccion.id,
+                                        "tipo",
+                                        value,
+                                      );
+                                    }}
+                                  >
+                                    <SelectTrigger
+                                      id={`direccion-tipo-${direccion.id}`}
+                                      className="w-full"
+                                    >
+                                      <SelectValue placeholder="Seleccioná un tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectGroup>
+                                        {addressTypeItems.map((item) => (
+                                          <SelectItem
+                                            key={item.value}
+                                            value={item.value}
+                                          >
+                                            {item.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
+
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`direccion-pais-${direccion.id}`}
+                                  >
+                                    País
+                                  </FieldLabel>
+                                  <Select
+                                    items={countryItems}
+                                    value={direccion.pais}
+                                    onValueChange={(value) => {
+                                      if (!value) {
+                                        return;
+                                      }
+
+                                      updateDireccion(
+                                        direccion.id,
+                                        "pais",
+                                        value,
+                                      );
+                                    }}
+                                  >
+                                    <SelectTrigger
+                                      id={`direccion-pais-${direccion.id}`}
+                                      className="w-full"
+                                    >
+                                      <SelectValue placeholder="Seleccioná un país" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectGroup>
+                                        {countryItems.map((item) => (
+                                          <SelectItem
+                                            key={item.value}
+                                            value={item.value}
+                                          >
+                                            {item.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
+
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`direccion-cp-${direccion.id}`}
+                                  >
+                                    Código postal
+                                  </FieldLabel>
+                                  <Input
+                                    id={`direccion-cp-${direccion.id}`}
+                                    value={direccion.codigoPostal}
+                                    onChange={(event) =>
+                                      updateDireccion(
+                                        direccion.id,
+                                        "codigoPostal",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="Código postal"
+                                  />
+                                </Field>
+
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`direccion-calle-${direccion.id}`}
+                                  >
+                                    Dirección
+                                  </FieldLabel>
+                                  <Input
+                                    id={`direccion-calle-${direccion.id}`}
+                                    value={direccion.direccion}
+                                    onChange={(event) =>
+                                      updateDireccion(
+                                        direccion.id,
+                                        "direccion",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="Calle o avenida"
+                                  />
+                                </Field>
+
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`direccion-numero-${direccion.id}`}
+                                  >
+                                    Número
+                                  </FieldLabel>
+                                  <Input
+                                    id={`direccion-numero-${direccion.id}`}
+                                    value={direccion.numero}
+                                    onChange={(event) =>
+                                      updateDireccion(
+                                        direccion.id,
+                                        "numero",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="Número o piso"
+                                  />
+                                </Field>
+
+                                <Field className="lg:col-span-2">
+                                  <FieldLabel
+                                    htmlFor={`direccion-ciudad-${direccion.id}`}
+                                  >
+                                    Ciudad
+                                  </FieldLabel>
+                                  <Input
+                                    id={`direccion-ciudad-${direccion.id}`}
+                                    value={direccion.ciudad}
+                                    onChange={(event) =>
+                                      updateDireccion(
+                                        direccion.id,
+                                        "ciudad",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="Ciudad"
+                                  />
+                                </Field>
+                              </FieldGroup>
+                            </CardContent>
+                          </Card>
+                        ) : null}
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                )}
+              </CardContent>
+            </Card>
+          </fieldset>
+        </TabsContent>
+
+        {mode !== "create" ? (
+          <TabsContent value="fidelizacion" className="m-0">
+            <ClienteFidelizacionCard
+              clienteId={cliente.id}
+              puedeAjustar={puedeAjustarPuntos}
+            />
+          </TabsContent>
+        ) : null}
+
+        {mode !== "create" ? (
+          <TabsContent value="historial" className="m-0">
+            <Card className="rounded-2xl border-border/70 shadow-sm">
+              <CardHeader>
                 <CardTitle className="text-lg font-bold tracking-tight">
-                  Direcciones
+                  Actividad de la ficha
                 </CardTitle>
                 <CardDescription>
-                  Registrá múltiples direcciones y marcá una como principal para
-                  uso operativo.
+                  Últimos cambios registrados con fecha y responsable.
                 </CardDescription>
-              </div>
-              {!readOnly ? (
-                <Button
-                  type="button"
-                  variant="brand"
-                  className="w-full sm:w-auto"
-                  onClick={addDireccion}
-                >
-                  <PlusIcon data-icon="inline-start" />
-                  Agregar dirección
-                </Button>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {direcciones.length === 0 ? (
-              <Empty className="min-h-48">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <MapPinHouseIcon />
-                  </EmptyMedia>
-                  <EmptyTitle>Sin direcciones cargadas</EmptyTitle>
-                  <EmptyDescription>
-                    Podés guardar el cliente sin dirección y completarla cuando
-                    la necesites para facturación o entrega.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <Tabs
-                value={activeDireccionId}
-                onValueChange={(value) => {
-                  if (value) {
-                    setActiveDireccionId(value);
-                  }
-                }}
-              >
-                <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-                  {direcciones.map((direccion, index) => (
-                    <TabsTrigger
-                      key={direccion.id}
-                      value={direccion.id}
-                      className="flex-none rounded-lg px-3 py-1.5"
-                    >
-                      {direccion.descripcion || `Dirección ${index + 1}`}
-                      {direccion.principal ? (
-                        <StarIcon className="fill-current text-primary" />
-                      ) : null}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {direcciones.map((direccion, index) => (
-                  <TabsContent key={direccion.id} value={direccion.id}>
-                    {activeDireccionId === direccion.id ? (
-                      <Card className="rounded-xl border-border/70 shadow-none">
-                        <CardHeader className="gap-4 border-b border-border/70">
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <CardTitle className="text-base">
-                                {direccion.descripcion ||
-                                  `Dirección ${index + 1}`}
-                              </CardTitle>
-                              {direccion.principal ? (
-                                <Badge variant="secondary">
-                                  <StarIcon
-                                    data-icon="inline-start"
-                                    className="fill-current text-primary"
-                                  />
-                                  Principal
-                                </Badge>
-                              ) : null}
-                              <Badge variant="outline">
-                                <MapPinHouseIcon data-icon="inline-start" />
-                                {
-                                  addressTypeItems.find(
-                                    (item) => item.value === direccion.tipo,
-                                  )?.label
-                                }
-                              </Badge>
-                            </div>
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                              {!direccion.principal ? (
-                                <Button
-                                  type="button"
-                                  variant="sidebar"
-                                  size="sm"
-                                  onClick={() =>
-                                    setPrimaryDireccion(direccion.id)
-                                  }
-                                >
-                                  Definir principal
-                                </Button>
-                              ) : null}
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => removeDireccion(direccion.id)}
-                              >
-                                <Trash2Icon data-icon="inline-start" />
-                                Quitar
-                              </Button>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <FieldGroup className="grid lg:grid-cols-2">
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`direccion-descripcion-${direccion.id}`}
-                              >
-                                Descripcion
-                              </FieldLabel>
-                              <Input
-                                id={`direccion-descripcion-${direccion.id}`}
-                                value={direccion.descripcion}
-                                onChange={(event) =>
-                                  updateDireccion(
-                                    direccion.id,
-                                    "descripcion",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="Ej. Domicilio principal"
-                              />
-                            </Field>
-
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`direccion-tipo-${direccion.id}`}
-                              >
-                                Tipo
-                              </FieldLabel>
-                              <Select
-                                items={addressTypeItems}
-                                value={direccion.tipo}
-                                onValueChange={(value) => {
-                                  if (!value) {
-                                    return;
-                                  }
-
-                                  updateDireccion(direccion.id, "tipo", value);
-                                }}
-                              >
-                                <SelectTrigger
-                                  id={`direccion-tipo-${direccion.id}`}
-                                  className="w-full"
-                                >
-                                  <SelectValue placeholder="Seleccioná un tipo" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectGroup>
-                                    {addressTypeItems.map((item) => (
-                                      <SelectItem
-                                        key={item.value}
-                                        value={item.value}
-                                      >
-                                        {item.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectGroup>
-                                </SelectContent>
-                              </Select>
-                            </Field>
-
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`direccion-pais-${direccion.id}`}
-                              >
-                                País
-                              </FieldLabel>
-                              <Select
-                                items={countryItems}
-                                value={direccion.pais}
-                                onValueChange={(value) => {
-                                  if (!value) {
-                                    return;
-                                  }
-
-                                  updateDireccion(direccion.id, "pais", value);
-                                }}
-                              >
-                                <SelectTrigger
-                                  id={`direccion-pais-${direccion.id}`}
-                                  className="w-full"
-                                >
-                                  <SelectValue placeholder="Seleccioná un país" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectGroup>
-                                    {countryItems.map((item) => (
-                                      <SelectItem
-                                        key={item.value}
-                                        value={item.value}
-                                      >
-                                        {item.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectGroup>
-                                </SelectContent>
-                              </Select>
-                            </Field>
-
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`direccion-cp-${direccion.id}`}
-                              >
-                                Código postal
-                              </FieldLabel>
-                              <Input
-                                id={`direccion-cp-${direccion.id}`}
-                                value={direccion.codigoPostal}
-                                onChange={(event) =>
-                                  updateDireccion(
-                                    direccion.id,
-                                    "codigoPostal",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="Código postal"
-                              />
-                            </Field>
-
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`direccion-calle-${direccion.id}`}
-                              >
-                                Dirección
-                              </FieldLabel>
-                              <Input
-                                id={`direccion-calle-${direccion.id}`}
-                                value={direccion.direccion}
-                                onChange={(event) =>
-                                  updateDireccion(
-                                    direccion.id,
-                                    "direccion",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="Calle o avenida"
-                              />
-                            </Field>
-
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`direccion-numero-${direccion.id}`}
-                              >
-                                Número
-                              </FieldLabel>
-                              <Input
-                                id={`direccion-numero-${direccion.id}`}
-                                value={direccion.numero}
-                                onChange={(event) =>
-                                  updateDireccion(
-                                    direccion.id,
-                                    "numero",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="Número o piso"
-                              />
-                            </Field>
-
-                            <Field className="lg:col-span-2">
-                              <FieldLabel
-                                htmlFor={`direccion-ciudad-${direccion.id}`}
-                              >
-                                Ciudad
-                              </FieldLabel>
-                              <Input
-                                id={`direccion-ciudad-${direccion.id}`}
-                                value={direccion.ciudad}
-                                onChange={(event) =>
-                                  updateDireccion(
-                                    direccion.id,
-                                    "ciudad",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="Ciudad"
-                              />
-                            </Field>
-                          </FieldGroup>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-                  </TabsContent>
-                ))}
-              </Tabs>
-            )}
-          </CardContent>
-        </Card>
-        {mode !== "create" ? (
-          <Card className="rounded-2xl border-border/70 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-bold tracking-tight">
-                Actividad de la ficha
-              </CardTitle>
-              <CardDescription>
-                Últimos cambios registrados con fecha y responsable.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {cliente.eventos.length === 0 ? (
-                <Empty className="min-h-32">
-                  <EmptyHeader>
-                    <EmptyTitle>Sin actividad registrada</EmptyTitle>
-                    <EmptyDescription>
-                      Los próximos cambios quedarán visibles en esta sección.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {cliente.eventos.map((evento) => (
-                    <li
-                      key={evento.id}
-                      className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <span>
-                        <strong className="font-medium capitalize">
-                          {evento.tipo}
-                        </strong>
-                        {" por "}
-                        {evento.actorNombre}
-                      </span>
-                      <time
-                        dateTime={evento.createdAt}
-                        className="text-sm text-muted-foreground"
+              </CardHeader>
+              <CardContent>
+                {cliente.eventos.length === 0 ? (
+                  <Empty className="min-h-32">
+                    <EmptyHeader>
+                      <EmptyTitle>Sin actividad registrada</EmptyTitle>
+                      <EmptyDescription>
+                        Los próximos cambios quedarán visibles en esta sección.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : (
+                  <ul className="flex flex-col gap-3">
+                    {cliente.eventos.map((evento) => (
+                      <li
+                        key={evento.id}
+                        className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
                       >
-                        {fechaHora(evento.createdAt)}
-                      </time>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+                        <span>
+                          <strong className="font-medium capitalize">
+                            {evento.tipo}
+                          </strong>
+                          {" por "}
+                          {evento.actorNombre}
+                        </span>
+                        <time
+                          dateTime={evento.createdAt}
+                          className="text-sm text-muted-foreground"
+                        >
+                          {fechaHora(evento.createdAt)}
+                        </time>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         ) : null}
-      </fieldset>
+      </Tabs>
     </form>
   );
 }

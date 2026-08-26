@@ -165,7 +165,7 @@ export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
                   style={d.clienteId ? undefined : { cursor: "default" }}
                   onClick={() =>
                     d.clienteId &&
-                    router.push(`/clientes/${d.clienteId}/cuenta-corriente`)
+                    router.push(`/crm/clientes/${d.clienteId}/cuenta-corriente`)
                   }
                 >
                   <div className="ade-mtx-cli">

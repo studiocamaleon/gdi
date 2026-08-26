@@ -31,7 +31,10 @@ import {
   type PresupuestoEstado,
 } from "@/lib/presupuestos-api";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
-import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
+import {
+  useConfigRegional,
+  useFecha,
+} from "@/components/navigation/config-regional-provider";
 import type { MembershipRole } from "@/lib/auth";
 import { CANALES_VENTA } from "@/lib/propuestas";
 import { fechaConDia } from "@/lib/fecha";
@@ -43,9 +46,16 @@ import { fechaConDia } from "@/lib/fecha";
  * barra de acción principal y tabs.
  */
 
-const ESTADO_META: Record<PresupuestoEstado, { label: string; dot: string; fg: string }> = {
+const ESTADO_META: Record<
+  PresupuestoEstado,
+  { label: string; dot: string; fg: string }
+> = {
   borrador: { label: "Borrador", dot: "#9b9ba3", fg: "#6e6e76" },
-  pendiente_aprobacion: { label: "Pendiente de aprobación", dot: "#d9642a", fg: "#b1531f" },
+  pendiente_aprobacion: {
+    label: "Pendiente de aprobación",
+    dot: "#d9642a",
+    fg: "#b1531f",
+  },
   enviado: { label: "Enviado", dot: "#1d4ed8", fg: "#1d4ed8" },
   aprobado: { label: "Aprobado", dot: "#16794a", fg: "#16794a" },
   rechazado: { label: "Rechazado", dot: "#b91c1c", fg: "#b91c1c" },
@@ -54,7 +64,12 @@ const ESTADO_META: Record<PresupuestoEstado, { label: string; dot: string; fg: s
 };
 
 /** Camino feliz del presupuesto. Rechazado/vencido se muestran aparte. */
-const FLUJO: PresupuestoEstado[] = ["borrador", "enviado", "aprobado", "convertido"];
+const FLUJO: PresupuestoEstado[] = [
+  "borrador",
+  "enviado",
+  "aprobado",
+  "convertido",
+];
 
 const MOTIVOS_PERDIDA = [
   { v: "precio", l: "Precio" },
@@ -99,7 +114,13 @@ export function PresupuestoDetalleView({
   const [notaDevolucion, setNotaDevolucion] = React.useState("");
   const [linkCopiado, setLinkCopiado] = React.useState(false);
   const [seleccion, setSeleccion] = React.useState<Set<string>>(
-    () => new Set(inicial.items.filter((i) => !i.conversion).map((i) => i.cotizacionItemId).filter((x): x is string => x != null)),
+    () =>
+      new Set(
+        inicial.items
+          .filter((i) => !i.conversion)
+          .map((i) => i.cotizacionItemId)
+          .filter((x): x is string => x != null),
+      ),
   );
 
   const puedeAprobar = rol === "administrador" || rol === "supervisor";
@@ -118,7 +139,12 @@ export function PresupuestoDetalleView({
   // para no pisar lo que el usuario está escribiendo.
   React.useEffect(() => {
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible" && !trabajando && !rechazoAbierto && !devolucionAbierta) {
+      if (
+        document.visibilityState === "visible" &&
+        !trabajando &&
+        !rechazoAbierto &&
+        !devolucionAbierta
+      ) {
         void cargar();
       }
     }, 10_000);
@@ -133,7 +159,9 @@ export function PresupuestoDetalleView({
       await cargar();
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo completar la acción.");
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo completar la acción.",
+      );
     } finally {
       setTrabajando(false);
     }
@@ -147,7 +175,9 @@ export function PresupuestoDetalleView({
     toast.success("Link copiado. El cliente puede aprobar desde ahí.");
   };
 
-  const itemsConvertibles = d.items.filter((i) => i.cotizacionItemId != null && !i.conversion);
+  const itemsConvertibles = d.items.filter(
+    (i) => i.cotizacionItemId != null && !i.conversion,
+  );
   const parcial = seleccion.size < itemsConvertibles.length;
 
   // Convertir lleva DERECHO a la orden, con ?convertida=1: allá se abre el
@@ -161,11 +191,16 @@ export function PresupuestoDetalleView({
   const convertir = async () => {
     setTrabajando(true);
     try {
-      const res = await convertirPresupuesto(id, parcial ? { itemIds: [...seleccion] } : {});
+      const res = await convertirPresupuesto(
+        id,
+        parcial ? { itemIds: [...seleccion] } : {},
+      );
       toast.success(`Presupuesto convertido en ${res.ordenNumero}.`);
       router.push(`/produccion/ordenes/${res.ordenId}?convertida=1`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo convertir el presupuesto.");
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo convertir el presupuesto.",
+      );
       setTrabajando(false);
     }
   };
@@ -190,24 +225,40 @@ export function PresupuestoDetalleView({
               Presupuestos
             </Link>
           </nav>
-          <h1 style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-mono)" }}>{d.numero ?? "Borrador"}</span>
+          <h1
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ fontFamily: "var(--font-mono)" }}>
+              {d.numero ?? "Borrador"}
+            </span>
             <span className="pp-badge" style={{ color: meta.fg }}>
               <span className="d" style={{ background: meta.dot }} />
               {meta.label}
             </span>
             {d.estado === "enviado" && d.primeraVistaEl ? (
-              <span className="pp-visto">Visto {fmtMomento(d.primeraVistaEl)}</span>
+              <span className="pp-visto">
+                Visto {fmtMomento(d.primeraVistaEl)}
+              </span>
             ) : null}
           </h1>
           <div className="sub">
-            {d.cliente?.nombre ?? "Sin cliente"} · emitido {fmtFecha(d.fechaEmision)} · válido hasta{" "}
-            {fmtFecha(d.fechaValidez)}
+            {d.cliente?.nombre ?? "Sin cliente"} · emitido{" "}
+            {fmtFecha(d.fechaEmision)} · válido hasta {fmtFecha(d.fechaValidez)}
           </div>
         </div>
 
         <div className="right">
-          <a className="btn" href={presupuestoPdfUrl(id)} target="_blank" rel="noreferrer">
+          <a
+            className="btn"
+            href={presupuestoPdfUrl(id)}
+            target="_blank"
+            rel="noreferrer"
+          >
             <FileTextIcon /> PDF
           </a>
           {d.publicToken ? (
@@ -242,16 +293,25 @@ export function PresupuestoDetalleView({
         ) : (
           FLUJO.map((k, i) => {
             const e = ESTADO_META[k];
-            const st = i < idxActual ? "past" : i === idxActual ? "cur" : "future";
+            const st =
+              i < idxActual ? "past" : i === idxActual ? "cur" : "future";
             return (
               <React.Fragment key={k}>
                 <div className={`otd-fstage ${st}`}>
-                  <span className="fs-dot" style={st !== "future" ? { background: e.dot } : {}} />
-                  <span className="fs-lbl" style={st === "cur" ? { color: e.fg } : {}}>
+                  <span
+                    className="fs-dot"
+                    style={st !== "future" ? { background: e.dot } : {}}
+                  />
+                  <span
+                    className="fs-lbl"
+                    style={st === "cur" ? { color: e.fg } : {}}
+                  >
                     {e.label}
                   </span>
                 </div>
-                {i < FLUJO.length - 1 ? <span className={`otd-fline ${i < idxActual ? "on" : ""}`} /> : null}
+                {i < FLUJO.length - 1 ? (
+                  <span className={`otd-fline ${i < idxActual ? "on" : ""}`} />
+                ) : null}
               </React.Fragment>
             );
           })
@@ -269,7 +329,15 @@ export function PresupuestoDetalleView({
         <Campo label="Canal de venta" icon={<StoreIcon />}>
           {canalLabel(d.canalVenta)}
         </Campo>
-        <Campo label="Válido hasta" icon={<CalendarIcon />} hint={d.fechaEntrega ? `Entrega estimada ${fmtFecha(d.fechaEntrega)}` : undefined}>
+        <Campo
+          label="Válido hasta"
+          icon={<CalendarIcon />}
+          hint={
+            d.fechaEntrega
+              ? `Entrega estimada ${fmtFecha(d.fechaEntrega)}`
+              : undefined
+          }
+        >
           {fmtFecha(d.fechaValidez)}
         </Campo>
       </div>
@@ -280,7 +348,10 @@ export function PresupuestoDetalleView({
         puedeAprobar={puedeAprobar}
         trabajando={trabajando}
         onEnviar={() =>
-          void accion(() => enviarPresupuesto(id), "Presupuesto enviado — copiá el link y compartilo.")
+          void accion(
+            () => enviarPresupuesto(id),
+            "Presupuesto enviado — copiá el link y compartilo.",
+          )
         }
         onAprobar={() =>
           void accion(
@@ -300,7 +371,9 @@ export function PresupuestoDetalleView({
         <div className="otd-card pp-form-card">
           <div className="otd-card-head">
             <span className="ttl">Devolver al vendedor</span>
-            <span className="sub">Se le avisa para que lo corrija y lo vuelva a mandar.</span>
+            <span className="sub">
+              Se le avisa para que lo corrija y lo vuelva a mandar.
+            </span>
           </div>
           <div className="pp-form-body">
             <textarea
@@ -310,7 +383,11 @@ export function PresupuestoDetalleView({
               onChange={(e) => setNotaDevolucion(e.target.value)}
             />
             <div className="pp-form-actions">
-              <button type="button" className="btn" onClick={() => setDevolucionAbierta(false)}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setDevolucionAbierta(false)}
+              >
                 Cancelar
               </button>
               <button
@@ -339,7 +416,9 @@ export function PresupuestoDetalleView({
         <div className="otd-card pp-form-card">
           <div className="otd-card-head">
             <span className="ttl">Registrar rechazo</span>
-            <span className="sub">Queda el motivo para los reportes de pérdida.</span>
+            <span className="sub">
+              Queda el motivo para los reportes de pérdida.
+            </span>
           </div>
           <div className="pp-form-body">
             <div className="pp-motivos">
@@ -361,7 +440,11 @@ export function PresupuestoDetalleView({
               onChange={(e) => setMotivoDetalle(e.target.value)}
             />
             <div className="pp-form-actions">
-              <button type="button" className="btn" onClick={() => setRechazoAbierto(false)}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setRechazoAbierto(false)}
+              >
                 Cancelar
               </button>
               <button
@@ -391,35 +474,49 @@ export function PresupuestoDetalleView({
           `.orden-tabs` tiene flex:1 y espera vivir dentro de `.orden-tabs-row`
           (flex en fila); suelto en una columna colapsa a 0 de alto. */}
       <div className="orden-tabs-row">
-      <div
-        className="orden-tabs"
-        role="tablist"
-        style={{ overflowY: "hidden" }}
-      >
-        {(
-          [
-            { k: "productos", l: "Productos", ic: <PackageIcon />, ct: d.items.length },
-            { k: "conversion", l: "Conversión", ic: <SendIcon />, ct: null },
-            { k: "historial", l: "Historial", ic: <HistoryIcon />, ct: d.eventos.length },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.k}
-            type="button"
-            className={`otab ${tab === t.k ? "on" : ""}`}
-            onClick={() => setTab(t.k as Tab)}
-          >
-            <span className="ic">{t.ic}</span>
-            <span>{t.l}</span>
-            {t.ct != null ? <span className="ct">{t.ct}</span> : null}
-          </button>
-        ))}
-      </div>
+        <div
+          className="orden-tabs"
+          role="tablist"
+          style={{ overflowY: "hidden" }}
+        >
+          {(
+            [
+              {
+                k: "productos",
+                l: "Productos",
+                ic: <PackageIcon />,
+                ct: d.items.length,
+              },
+              { k: "conversion", l: "Conversión", ic: <SendIcon />, ct: null },
+              {
+                k: "historial",
+                l: "Historial",
+                ic: <HistoryIcon />,
+                ct: d.eventos.length,
+              },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.k}
+              type="button"
+              className={`otab ${tab === t.k ? "on" : ""}`}
+              onClick={() => setTab(t.k as Tab)}
+            >
+              <span className="ic">{t.ic}</span>
+              <span>{t.l}</span>
+              {t.ct != null ? <span className="ct">{t.ct}</span> : null}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "productos" ? <TabProductos d={d} /> : null}
       {tab === "conversion" ? (
-        <TabConversion d={d} seleccion={seleccion} setSeleccion={setSeleccion} />
+        <TabConversion
+          d={d}
+          seleccion={seleccion}
+          setSeleccion={setSeleccion}
+        />
       ) : null}
       {tab === "historial" ? <TabHistorial d={d} /> : null}
     </section>
@@ -480,13 +577,20 @@ function AccionesEstado({
       <div className="pp-accion-bar ok">
         <div>
           <div className="t">
-            Convertido en {d.ordenesConvertidas.length || 1} orden{d.ordenesConvertidas.length === 1 ? "" : "es"}
+            Convertido en {d.ordenesConvertidas.length || 1} orden
+            {d.ordenesConvertidas.length === 1 ? "" : "es"}
           </div>
-          <div className="s">Todos los productos del presupuesto ya pasaron a producción.</div>
+          <div className="s">
+            Todos los productos del presupuesto ya pasaron a producción.
+          </div>
         </div>
         <div className="acts">
           {d.ordenesConvertidas.map((orden) => (
-            <Link key={orden.id} className="btn btn-primary" href={`/produccion/ordenes/${orden.id}`}>
+            <Link
+              key={orden.id}
+              className="btn btn-primary"
+              href={`/produccion/ordenes/${orden.id}`}
+            >
               Ver {orden.numero}
             </Link>
           ))}
@@ -500,9 +604,16 @@ function AccionesEstado({
       <div className="pp-accion-bar">
         <div>
           <div className="t">Listo para enviar</div>
-          <div className="s">Al enviarlo se genera el link para que el cliente lo apruebe.</div>
+          <div className="s">
+            Al enviarlo se genera el link para que el cliente lo apruebe.
+          </div>
         </div>
-        <button type="button" className="btn btn-primary" disabled={trabajando} onClick={onEnviar}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={trabajando}
+          onClick={onEnviar}
+        >
           <SendIcon /> Enviar al cliente
         </button>
       </div>
@@ -522,10 +633,20 @@ function AccionesEstado({
         </div>
         {puedeAprobar ? (
           <div className="acts">
-            <button type="button" className="btn" disabled={trabajando} onClick={onAbrirDevolucion}>
+            <button
+              type="button"
+              className="btn"
+              disabled={trabajando}
+              onClick={onAbrirDevolucion}
+            >
               Devolver
             </button>
-            <button type="button" className="btn btn-primary" disabled={trabajando} onClick={onAprobar}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={trabajando}
+              onClick={onAprobar}
+            >
               <CheckIcon /> Aprobar y enviar
             </button>
           </div>
@@ -547,7 +668,12 @@ function AccionesEstado({
               : "Todavía no lo abrió. Compartile el link."}
           </div>
         </div>
-        <button type="button" className="btn" disabled={trabajando} onClick={onAbrirRechazo}>
+        <button
+          type="button"
+          className="btn"
+          disabled={trabajando}
+          onClick={onAbrirRechazo}
+        >
           Registrar rechazo
         </button>
       </div>
@@ -565,7 +691,12 @@ function AccionesEstado({
               : "Se convertirán todos los productos pendientes en una orden de trabajo."}
           </div>
         </div>
-        <button type="button" className="btn btn-primary" disabled={trabajando || seleccionadas === 0} onClick={onConvertir}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={trabajando || seleccionadas === 0}
+          onClick={onConvertir}
+        >
           Convertir en orden
         </button>
       </div>
@@ -586,8 +717,12 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
               <th style={{ width: "8%" }}>#</th>
               <th style={{ width: "52%" }}>Producto</th>
               <th style={{ width: "13%" }}>Cantidad</th>
-              <th className="right" style={{ width: "13%" }}>Subtotal</th>
-              <th className="right" style={{ width: "14%" }}>Total</th>
+              <th className="right" style={{ width: "13%" }}>
+                Subtotal
+              </th>
+              <th className="right" style={{ width: "14%" }}>
+                Total
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -633,8 +768,18 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
                         {fmtMoneda(i.subtotal + i.descuentoMonto, moneda)}
                       </div>
                       {fmtMoneda(i.subtotal, moneda)}{" "}
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#b91c1c" }}>
-                        −{(i.descuentoPct ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 1 })}%
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: "#b91c1c",
+                        }}
+                      >
+                        −
+                        {(i.descuentoPct ?? 0).toLocaleString("es-AR", {
+                          maximumFractionDigits: 1,
+                        })}
+                        %
                       </span>
                     </>
                   ) : (
@@ -654,7 +799,8 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
         <div className="otd-card-head">
           <span className="ttl">Resumen financiero</span>
           <span className="sub">
-            {d.items.length} producto{d.items.length === 1 ? "" : "s"} · presupuesto
+            {d.items.length} producto{d.items.length === 1 ? "" : "s"} ·
+            presupuesto
           </span>
         </div>
         <div className="pp-resumen">
@@ -668,17 +814,40 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
             }
           />
           <span className="op">+</span>
-          <Cifra l="Impuestos" v={fmtMoneda(d.impuestos, moneda)} s={d.impuestos > 0 ? "IVA incluido" : "sin impuestos"} />
+          <Cifra
+            l="Impuestos"
+            v={fmtMoneda(d.impuestos, moneda)}
+            s={d.impuestos > 0 ? "IVA incluido" : "sin impuestos"}
+          />
           <span className="op">+</span>
-          <Cifra l="Cargos directos" v={fmtMoneda(d.cargosDirectos, moneda)} s={d.cargosDirectos > 0 ? "" : "sin cargos"} />
+          <Cifra
+            l="Cargos directos"
+            v={fmtMoneda(d.cargosDirectos, moneda)}
+            s={d.cargosDirectos > 0 ? "" : "sin cargos"}
+          />
           <span className="op">=</span>
           <div className="pp-total">
             <div className="l">Total c/ imp.</div>
             <div className="v">{fmtMoneda(d.total, moneda)}</div>
-            {d.senaSugeridaPct ? <div className="s">Seña sugerida {d.senaSugeridaPct}%</div> : null}
+            {d.senaSugeridaPct ? (
+              <div className="s">Seña sugerida {d.senaSugeridaPct}%</div>
+            ) : null}
           </div>
         </div>
       </div>
+
+      {d.fidelizacion.puntosEstimados > 0 || d.fidelizacion.canjePuntos > 0 ? (
+        <div className="otd-card">
+          <div className="otd-card-head">
+            <span className="ttl">Fidelización</span>
+          </div>
+          <div className="pp-observaciones">
+            {d.fidelizacion.canjePuntos > 0
+              ? `${d.fidelizacion.canjePuntos} puntos · −${fmtMoneda(d.fidelizacion.canjeMonto, moneda)} reservados para este presupuesto.`
+              : `Esta compra estima ${d.fidelizacion.puntosEstimados} puntos. Se acreditan al completar, pagar y retirar el trabajo.`}
+          </div>
+        </div>
+      ) : null}
 
       {d.observaciones ? (
         <div className="otd-card">
@@ -741,14 +910,19 @@ function TabConversion({
       </div>
       <div className="pp-conv">
         {convertibles.length === 0 ? (
-          <div className="pp-conv-empty">Este presupuesto no tiene items convertibles.</div>
+          <div className="pp-conv-empty">
+            Este presupuesto no tiene items convertibles.
+          </div>
         ) : (
           convertibles.map((i) => {
             const itemId = i.cotizacionItemId!;
             const yaConvertido = i.conversion != null;
             const on = yaConvertido || seleccion.has(itemId);
             return (
-              <label key={itemId} className={`pp-conv-row ${on ? "on" : ""} ${disponible ? "" : "off"}`}>
+              <label
+                key={itemId}
+                className={`pp-conv-row ${on ? "on" : ""} ${disponible ? "" : "off"}`}
+              >
                 <input
                   type="checkbox"
                   checked={on}
@@ -757,7 +931,9 @@ function TabConversion({
                 />
                 <span className="nm">
                   {i.nombre}
-                  {i.conversion ? <small className="mono"> → {i.conversion.numero}</small> : null}
+                  {i.conversion ? (
+                    <small className="mono"> → {i.conversion.numero}</small>
+                  ) : null}
                 </span>
                 <span className="qt mono">
                   {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
@@ -800,7 +976,9 @@ function TabHistorial({ d }: { d: PresupuestoDetalle }) {
               <div className="tm">{fmtMomento(e.fecha)}</div>
               <div className="tx">{e.descripcion}</div>
               {e.usuario || e.origen ? (
-                <div className="tm">{[e.usuario, e.origen].filter(Boolean).join(" · ")}</div>
+                <div className="tm">
+                  {[e.usuario, e.origen].filter(Boolean).join(" · ")}
+                </div>
               ) : null}
             </div>
           ))

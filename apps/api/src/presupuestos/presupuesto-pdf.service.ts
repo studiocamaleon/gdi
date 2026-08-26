@@ -126,6 +126,9 @@ export type PresupuestoPdfDatos = {
   total: number;
   /** Σ del descuento comercial (0 = sin descuento; no se dibuja nada). */
   descuentoTotal?: number;
+  fidelizacionPuntosEstimados?: number;
+  fidelizacionCanjePuntos?: number;
+  fidelizacionCanjeMonto?: number;
   items: Array<{
     nombre: string;
     cantidad: number;
@@ -719,6 +722,12 @@ export class PresupuestoPdfService {
         : 'Impuestos',
       d.impuestos,
     ]);
+    if ((d.fidelizacionCanjePuntos ?? 0) > 0) {
+      filas.push([
+        `Canje · ${d.fidelizacionCanjePuntos} puntos`,
+        -(d.fidelizacionCanjeMonto ?? 0),
+      ]);
+    }
 
     const altoTotal = px(26) + filas.length * px(31) + px(10) + px(56);
     let y = y0 + px(26);
@@ -758,6 +767,10 @@ export class PresupuestoPdfService {
   }
 
   private pie(pdf: jsPDF, d: PresupuestoPdfDatos, y0: number) {
+    const notaFidelizacion =
+      (d.fidelizacionPuntosEstimados ?? 0) > 0
+        ? `Esta compra suma aproximadamente ${d.fidelizacionPuntosEstimados} puntos; se acreditan al completar, pagar y retirar el trabajo.`
+        : null;
     const condiciones =
       d.condicionesTexto?.trim() ||
       [
@@ -770,13 +783,16 @@ export class PresupuestoPdfService {
       ]
         .filter(Boolean)
         .join(' ');
+    const condicionesCompletas = [condiciones, notaFidelizacion]
+      .filter(Boolean)
+      .join(' ');
 
     let y = y0 + px(28);
     this.fuente(pdf, 13);
     const xTexto = MARGEN + px(18) + px(19) + px(13);
     const util = CONTENIDO - (xTexto - MARGEN) - px(18);
-    const lineas = condiciones
-      ? (pdf.splitTextToSize(condiciones, util) as string[])
+    const lineas = condicionesCompletas
+      ? (pdf.splitTextToSize(condicionesCompletas, util) as string[])
       : [];
 
     if (lineas.length > 0) {

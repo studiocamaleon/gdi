@@ -85,20 +85,25 @@ export const NAV: NavItem[] = [
         label: "Órdenes de trabajo",
         href: "/produccion/ordenes",
       },
-      {
-        key: "cupones",
-        label: "Cupones",
-        href: "/comercial/cupones",
-      },
+    ],
+  },
+  {
+    key: "crm",
+    label: "CRM",
+    icon: "Users",
+    permiso: "crm.ver",
+    children: [
+      { key: "clientes", label: "Clientes", href: "/crm/clientes" },
+      { key: "cupones", label: "Cupones", href: "/crm/cupones" },
+      { key: "fidelizacion", label: "Fidelización", href: "/crm/fidelizacion" },
     ],
   },
   {
     key: "registros",
     label: "Registros",
-    icon: "Users",
+    icon: "Grid",
     permiso: "registros.ver",
     children: [
-      { key: "clientes", label: "Clientes", href: "/clientes" },
       { key: "proveedores", label: "Proveedores", href: "/proveedores" },
       { key: "empleados", label: "Empleados", href: "/empleados" },
     ],

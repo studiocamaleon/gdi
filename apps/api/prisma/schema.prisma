@@ -633,6 +633,10 @@ model Tenant {
   cupones                                          Cupon[]
   cuponRedenciones                                 CuponRedencion[]
   cuponEventos                                     CuponEvento[]
+  configuracionFidelizacion                        ConfiguracionFidelizacion?
+  cuentasFidelizacion                              FidelizacionCuenta[]
+  movimientosFidelizacion                          FidelizacionMovimiento[]
+  reservasFidelizacion                             FidelizacionReserva[]
   estaciones                                       Estacion[]
   estacionFamilias                                 EstacionFamilia[]
   pasosTenant                                      PasoTenant[]
@@ -1063,6 +1067,9 @@ model Cliente {
   valores                  Valor[]
   comprobantes             Comprobante[]
   archivos                 Archivo[]
+  cuentaFidelizacion       FidelizacionCuenta?
+  movimientosFidelizacion  FidelizacionMovimiento[]
+  reservasFidelizacion     FidelizacionReserva[]
 
   @@unique([tenantId, nombre])
   @@unique([tenantId, documentoNumero])
@@ -2859,60 +2866,66 @@ model ProductoCargoDirectoCotizacion {
 // === COTIZACIONES V2 ===
 
 model Cotizacion {
-  id                           String             @id @default(uuid()) @db.Uuid
-  tenantId                     String             @db.Uuid
+  id                           String                @id @default(uuid()) @db.Uuid
+  tenantId                     String                @db.Uuid
   /// PRES-AAAA-NNNN (CotizacionContador). Null = contenedor de snapshots
   /// de la ficha (venta directa); con número = PRESUPUESTO formal.
   numero                       String?
-  clienteId                    String?            @db.Uuid
+  clienteId                    String?               @db.Uuid
   /// Ciclo del presupuesto (docs/presupuestos-modulo-estudio.md §4):
   /// 'borrador' | 'enviado' | 'aprobado' | 'rechazado' | 'vencido' |
   /// 'convertido' ('pendiente_aprobacion' reservado para F2).
-  estado                       String             @default("borrador")
+  estado                       String                @default("borrador")
   fechaEmision                 DateTime?
   fechaValidez                 DateTime?
   observaciones                String?
   /// Cargos directos a nivel cotización (suma de los que apliquen).
   cargosDirectosCotizacionJson Json?
-  subtotal                     Decimal?           @db.Decimal(14, 2)
-  impuestos                    Decimal?           @db.Decimal(14, 2)
-  total                        Decimal?           @db.Decimal(14, 2)
+  subtotal                     Decimal?              @db.Decimal(14, 2)
+  impuestos                    Decimal?              @db.Decimal(14, 2)
+  total                        Decimal?              @db.Decimal(14, 2)
   /// === Ciclo comercial del presupuesto ===
-  vendedorEmpleadoId           String?            @db.Uuid
+  vendedorEmpleadoId           String?               @db.Uuid
   canalVenta                   String?
   fechaEnvio                   DateTime?
   fechaResuelto                DateTime?
   /// Picklist al perder: 'precio' | 'plazo' | 'sin_respuesta' |
   /// 'competencia' | 'otro' (+detalle libre).
   motivoPerdida                String?
-  motivoPerdidaDetalle         String?            @db.VarChar(300)
+  motivoPerdidaDetalle         String?               @db.VarChar(300)
   /// === Aprobación interna por umbrales (F2) ===
   /// Motivos que dispararon al intentar enviar: [{ regla, detalle }].
   aprobacionMotivosJson        Json?
   aprobacionSolicitadaEl       DateTime?
-  aprobacionResueltaPorId      String?            @db.Uuid
+  aprobacionResueltaPorId      String?               @db.Uuid
   aprobacionResueltaPorNombre  String?
   aprobacionResueltaEl         DateTime?
   /// Credencial del link público "ver/aprobar presupuesto" (patrón tracking).
-  publicToken                  String?            @unique
+  publicToken                  String?               @unique
   /// Primera apertura del link público — el badge "visto" (no es estado).
   primeraVistaEl               DateTime?
-  senaSugeridaPct              Decimal?           @db.Decimal(5, 2)
+  senaSugeridaPct              Decimal?              @db.Decimal(5, 2)
   /// Proyección congelada para convertir en OT sin reconstruir la ficha:
   /// { fechaEntrega, canalVenta, cargosDirectos, items: CrearOrdenTrabajoItemDto[] }.
   emisionJson                  Json?
   /// OT creada al convertir (referencia cruzada; la OT ya guarda cotizacionId).
-  convertidaOrdenId            String?            @db.Uuid
-  createdAt                    DateTime           @default(now())
-  updatedAt                    DateTime           @updatedAt
-  tenant                       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente                      Cliente?           @relation("CotizacionV2Cliente", fields: [clienteId], references: [id], onDelete: Restrict)
-  vendedor                     Empleado?          @relation("CotizacionVendedor", fields: [vendedorEmpleadoId], references: [id], onDelete: SetNull)
+  convertidaOrdenId            String?               @db.Uuid
+  fidelizacionMargenBase       Decimal?              @db.Decimal(14, 2)
+  fidelizacionPuntosEstimados  Int?
+  fidelizacionCanjePuntos      Int                   @default(0)
+  fidelizacionCanjeMonto       Decimal               @default(0) @db.Decimal(14, 2)
+  fidelizacionSnapshotJson     Json?
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
+  tenant                       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente                      Cliente?              @relation("CotizacionV2Cliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  vendedor                     Empleado?             @relation("CotizacionVendedor", fields: [vendedorEmpleadoId], references: [id], onDelete: SetNull)
   items                        CotizacionItem[]
   ordenesTrabajo               OrdenTrabajo[]
   eventos                      CotizacionEvento[]
   archivos                     Archivo[]
   cuponRedenciones             CuponRedencion[]
+  reservasFidelizacion         FidelizacionReserva[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -3030,51 +3043,51 @@ model CotizacionItem {
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
 model OrdenTrabajo {
-  id                        String                 @id @default(uuid()) @db.Uuid
-  tenantId                  String                 @db.Uuid
+  id                          String                   @id @default(uuid()) @db.Uuid
+  tenantId                    String                   @db.Uuid
   /// UUID estable del comando de creación. Permite devolver la misma OT ante
   /// reintentos luego de una respuesta perdida, sin duplicar taller ni cobros.
-  idempotencyKey            String?                @db.Uuid
+  idempotencyKey              String?                  @db.Uuid
   /// "OT-2026-0184" — asignado al crear vía OrdenTrabajoContador.
-  numero                    String
-  clienteId                 String?                @db.Uuid
-  vendedorEmpleadoId        String?                @db.Uuid
+  numero                      String
+  clienteId                   String?                  @db.Uuid
+  vendedorEmpleadoId          String?                  @db.Uuid
   /// Presupuesto de origen (si vino del cotizador).
-  cotizacionId              String?                @db.Uuid
+  cotizacionId                String?                  @db.Uuid
   /// 'borrador' | 'pendiente' | 'produccion' | 'finalizada' | 'entregada' |
   /// 'cancelada'. Las cinco primeras son una SECUENCIA que sólo avanza;
   /// 'cancelada' es una salida lateral y terminal.
-  estado                    String                 @default("borrador")
-  fechaEmision              DateTime?
-  fechaEntrega              DateTime?              @db.Date
-  observaciones             String?
+  estado                      String                   @default("borrador")
+  fechaEmision                DateTime?
+  fechaEntrega                DateTime?                @db.Date
+  observaciones               String?
   /// 'mostrador' | 'web' | 'vendedor_externo' | 'telefono'.
-  canalVenta                String?
+  canalVenta                  String?
   /// Denormalizados para el listado; la fuente de verdad es items/snapshot.
-  subtotal                  Decimal?               @db.Decimal(14, 2)
-  impuestos                 Decimal?               @db.Decimal(14, 2)
-  cargosDirectos            Decimal?               @db.Decimal(14, 2)
+  subtotal                    Decimal?                 @db.Decimal(14, 2)
+  impuestos                   Decimal?                 @db.Decimal(14, 2)
+  cargosDirectos              Decimal?                 @db.Decimal(14, 2)
   /// Snapshots de cargos a nivel orden. Null en órdenes históricas.
-  cargosDirectosJson        Json?
+  cargosDirectosJson          Json?
   /// Σ de los descuentos comerciales de los items (sobre el neto), denormalizado
   /// para el listado. El descuento ya está DENTRO de `subtotal`/`total`.
-  descuentoTotal            Decimal?               @db.Decimal(14, 2)
-  total                     Decimal?               @db.Decimal(14, 2)
+  descuentoTotal              Decimal?                 @db.Decimal(14, 2)
+  total                       Decimal?                 @db.Decimal(14, 2)
   /// Avance 0-100 informado por producción; null = sin dato.
-  progresoPct               Int?
+  progresoPct                 Int?
   /// Token aleatorio url-safe del link PÚBLICO de seguimiento del cliente
   /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
   /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
-  publicToken               String?                @unique
+  publicToken                 String?                  @unique
   /// Primera vez que la orden llegó a 'finalizada'. Ancla del aging de la
   /// deuda COMERCIAL (la deuda nace acá, no en la factura). Reabrir la
   /// orden NO la borra: si vuelve a finalizar, el aging no se resetea.
   /// Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
-  fechaFinalizada           DateTime?
+  fechaFinalizada             DateTime?
   /// Vencimiento comercial congelado al finalizar. Sin cuenta corriente es
   /// la misma fecha de finalización; con cuenta corriente suma el plazo
   /// configurado entonces en el cliente.
-  fechaVencimientoComercial DateTime?              @db.Date
+  fechaVencimientoComercial   DateTime?                @db.Date
   /// Cuándo se entregó, la PRIMERA vez. Es el ancla del pedido de reseña —"N
   /// días después de la entrega"—, y por eso no se resetea: volver a marcar
   /// entregada una orden que se había reabierto no reinicia el reloj.
@@ -3082,15 +3095,15 @@ model OrdenTrabajo {
   /// Null en todas las órdenes anteriores a este campo, a propósito: sin fecha
   /// no hay pedido de reseña, y así encender la función no dispara un WhatsApp
   /// por cada orden vieja del historial.
-  fechaEntregada            DateTime?
+  fechaEntregada              DateTime?
   /// Denormalizados del eje fiscal y de cobranza, mantenidos en la misma
   /// transacción que sus movimientos (patrón Comprobante.saldoPendiente):
   /// facturadoTotal = Σ ComprobanteOrden.monto de facturas emitidas no
   /// anuladas (las NC restan); cobradoTotal = Σ Cobro.montoBruto no
   /// anulados de la orden. Los estados derivados (sin facturar/parcial/
   /// facturada y sin cobrar/parcial/cobrada) se calculan de acá.
-  facturadoTotal            Decimal                @default(0) @db.Decimal(14, 2)
-  cobradoTotal              Decimal                @default(0) @db.Decimal(14, 2)
+  facturadoTotal              Decimal                  @default(0) @db.Decimal(14, 2)
+  cobradoTotal                Decimal                  @default(0) @db.Decimal(14, 2)
   /// Tratamiento fiscal de la orden: 'FISCAL' (default, lleva IVA y comprobante
   /// electrónico) | 'SIN_COMPROBANTE' (el desglose oculta el IVA, `total` = neto,
   /// y la orden queda FUERA de la cola de facturar — no se factura por error).
@@ -3099,46 +3112,55 @@ model OrdenTrabajo {
   /// El sistema NO modela la evasión: registra un hecho neutro ("no llevó
   /// comprobante"); declarar o no ese ingreso vive fuera del sistema.
   /// Ver docs/margen-y-decisiones-de-precio.md §6.
-  tratamientoFiscal         String                 @default("FISCAL")
+  tratamientoFiscal           String                   @default("FISCAL")
+  /// Snapshot comercial del programa de puntos. El canje ya está incorporado
+  /// en subtotal/impuestos/total; estos campos conservan su trazabilidad.
+  fidelizacionMargenBase      Decimal?                 @db.Decimal(14, 2)
+  fidelizacionPuntosEstimados Int?
+  fidelizacionCanjePuntos     Int                      @default(0)
+  fidelizacionCanjeMonto      Decimal                  @default(0) @db.Decimal(14, 2)
+  fidelizacionSnapshotJson    Json?
   /// === Cancelación ===
   /// Cuándo se canceló. Es el "está cancelada" real: `estado` lo dice también,
   /// pero esta fecha es la que ordena y la que permite contar cancelaciones
   /// por período sin adivinar mirando el timeline.
-  canceladaEl               DateTime?
+  canceladaEl                 DateTime?
   /// En qué etapa estaba cuando se canceló. Sin esto se pierde la diferencia
   /// entre una que murió en borrador y una que se cortó con el taller a mitad
   /// de camino, que es justo lo que hay que poder mirar después.
-  estadoAlCancelar          String?
+  estadoAlCancelar            String?
   /// Por qué. Obligatorio al cancelar: una orden que desaparece de las ventas
   /// sin explicación es una discusión asegurada tres meses después.
-  motivoCancelacion         String?
-  canceladaPorId            String?                @db.Uuid
+  motivoCancelacion           String?
+  canceladaPorId              String?                  @db.Uuid
   /// Nombre CONGELADO de quien canceló: el legajo puede cambiar o borrarse y
   /// el historial no puede quedar sin responsable.
-  canceladaPorNombre        String?
+  canceladaPorNombre          String?
   /// Foto del avance al momento de cancelar: cuántos pasos estaban hechos
   /// sobre el total y cuántos minutos reales se habían trabajado. Es lo que
   /// permite decidir si se le cobra algo al cliente, y queda acá porque los
   /// pasos siguen vivos pero el avance se sigue moviendo si alguien reabre.
-  pasosHechosAlCancelar     Int?
-  pasosTotalAlCancelar      Int?
-  minutosRealesAlCancelar   Int?
-  createdAt                 DateTime               @default(now())
-  updatedAt                 DateTime               @updatedAt
-  tenant                    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente                   Cliente?               @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
-  vendedor                  Empleado?              @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
-  cotizacion                Cotizacion?            @relation(fields: [cotizacionId], references: [id])
-  items                     OrdenTrabajoItem[]
-  pasos                     OrdenTrabajoItemPaso[]
-  eventos                   OrdenTrabajoEvento[]
-  cobros                    Cobro[]
-  aplicacionesCobro         CobroOrden[]
-  movimientosFondos         MovimientoFondos[]
-  comprobantes              Comprobante[]
-  comprobanteOrdenes        ComprobanteOrden[]
-  archivos                  Archivo[]
-  cuponRedenciones          CuponRedencion[]
+  pasosHechosAlCancelar       Int?
+  pasosTotalAlCancelar        Int?
+  minutosRealesAlCancelar     Int?
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
+  tenant                      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente                     Cliente?                 @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  vendedor                    Empleado?                @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
+  cotizacion                  Cotizacion?              @relation(fields: [cotizacionId], references: [id])
+  items                       OrdenTrabajoItem[]
+  pasos                       OrdenTrabajoItemPaso[]
+  eventos                     OrdenTrabajoEvento[]
+  cobros                      Cobro[]
+  aplicacionesCobro           CobroOrden[]
+  movimientosFondos           MovimientoFondos[]
+  comprobantes                Comprobante[]
+  comprobanteOrdenes          ComprobanteOrden[]
+  archivos                    Archivo[]
+  cuponRedenciones            CuponRedencion[]
+  movimientosFidelizacion     FidelizacionMovimiento[]
+  reservasFidelizacion        FidelizacionReserva[]
 
   @@unique([tenantId, numero])
   @@unique([tenantId, idempotencyKey])
@@ -3150,68 +3172,70 @@ model OrdenTrabajo {
 }
 
 model OrdenTrabajoItem {
-  id                    String                       @id @default(uuid()) @db.Uuid
-  tenantId              String                       @db.Uuid
-  ordenId               String                       @db.Uuid
+  id                        String                       @id @default(uuid()) @db.Uuid
+  tenantId                  String                       @db.Uuid
+  ordenId                   String                       @db.Uuid
   /// FK al snapshot completo (ruta + pasos + materiales + valores). Las
   /// secciones futuras de Costos/Producción por item leen de ahí.
   /// Null = OT manual/histórica sin cotización.
-  cotizacionItemId      String?                      @db.Uuid
-  codigo                String
-  nombre                String
+  cotizacionItemId          String?                      @db.Uuid
+  codigo                    String
+  nombre                    String
   /// Etiqueta corta legada (subcategoría). Preferir los dos campos de abajo.
-  familia               String
+  familia                   String
   /// Categoría/subcategoría comercial tal como se ven al crear la orden
   /// ("Gran formato flexible" / "Vinilos impresos").
-  categoriaComercial    String                       @default("")
-  subcategoriaComercial String                       @default("")
-  cantidad              Decimal                      @db.Decimal(14, 2)
-  cantidadUnidad        String
-  subtotal              Decimal                      @db.Decimal(14, 2)
-  impuestos             Decimal                      @db.Decimal(14, 2)
-  total                 Decimal                      @db.Decimal(14, 2)
+  categoriaComercial        String                       @default("")
+  subcategoriaComercial     String                       @default("")
+  cantidad                  Decimal                      @db.Decimal(14, 2)
+  cantidadUnidad            String
+  subtotal                  Decimal                      @db.Decimal(14, 2)
+  impuestos                 Decimal                      @db.Decimal(14, 2)
+  total                     Decimal                      @db.Decimal(14, 2)
   /// Descuento comercial de la línea (sobre el neto, antes del IVA). El efecto
   /// Cupón que originó el descuento (F4). Sin FK dura: el cupón puede
   /// borrarse del catálogo sin romper órdenes históricas.
-  descuentoCuponId      String?                      @db.Uuid
+  descuentoCuponId          String?                      @db.Uuid
   /// YA está dentro de subtotal/impuestos/total; estos campos son la traza:
   /// tipo + valor ingresado + monto neto efectivamente descontado.
-  descuentoTipo         String?
-  descuentoValor        Decimal?                     @db.Decimal(14, 2)
-  descuentoMonto        Decimal?                     @db.Decimal(14, 2)
+  descuentoTipo             String?
+  descuentoValor            Decimal?                     @db.Decimal(14, 2)
+  descuentoMonto            Decimal?                     @db.Decimal(14, 2)
+  /// Parte neta de la bonificación por canje asignada a esta línea.
+  fidelizacionDescuentoNeto Decimal                      @default(0) @db.Decimal(14, 2)
   /// Proyección visible: [{ etiqueta, valor }].
-  specsJson             Json?
+  specsJson                 Json?
   /// string[] de adicionales incluidos.
-  adicionalesJson       Json?
-  ordenIndice           Int                          @default(0)
+  adicionalesJson           Json?
+  ordenIndice               Int                          @default(0)
   /// ── Entrega en el mostrador (docs/entrega-por-escaneo-diseno.md).
   /// La entrega es POR ITEM: el cliente puede llevarse lo que está listo y
   /// dejar el resto en producción. La orden pasa a `entregada` recién cuando
   /// todos sus items lo están. null = todavía no se entregó.
-  entregadoEl           DateTime?
+  entregadoEl               DateTime?
   /// Quién lo despachó (firma del operador, congelada).
-  entregadoPorNombre    String?
+  entregadoPorNombre        String?
   /// Si no lo retiró el cliente sino un tercero, con qué documento.
-  retiradoPorNombre     String?
-  retiradoPorDni        String?
-  createdAt             DateTime                     @default(now())
+  retiradoPorNombre         String?
+  retiradoPorDni            String?
+  createdAt                 DateTime                     @default(now())
   /// ── Descomposición del ciclo real, calculada UNA vez al finalizar el
   /// item (docs/eta-metricas-historicas-diseno.md §4.4). null hasta el
   /// cierre; también null en items sin timestamps de pasos (OT vieja).
-  cicloTotalMin         Int?
-  trabajoRealMin        Int?
-  esperaCicloMin        Int?
-  trasladoMin           Int?
-  proveedorMin          Int?
+  cicloTotalMin             Int?
+  trabajoRealMin            Int?
+  esperaCicloMin            Int?
+  trasladoMin               Int?
+  proveedorMin              Int?
   /// trabajoRealMin / cicloTotalMin × 100 (0–100).
-  flowEfficiencyPct     Decimal?                     @db.Decimal(5, 1)
-  tenant                Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orden                 OrdenTrabajo                 @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  cotizacionItem        CotizacionItem?              @relation(fields: [cotizacionItemId], references: [id])
-  pasos                 OrdenTrabajoItemPaso[]
-  etaPromesas           EtaPromesa[]
-  archivos              Archivo[]
-  revisionesRecorrido   RecorridoVectorialRevision[]
+  flowEfficiencyPct         Decimal?                     @db.Decimal(5, 1)
+  tenant                    Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden                     OrdenTrabajo                 @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  cotizacionItem            CotizacionItem?              @relation(fields: [cotizacionItemId], references: [id])
+  pasos                     OrdenTrabajoItemPaso[]
+  etaPromesas               EtaPromesa[]
+  archivos                  Archivo[]
+  revisionesRecorrido       RecorridoVectorialRevision[]
 
   @@index([tenantId, ordenId])
   @@index([ordenId, entregadoEl])
@@ -4607,6 +4631,102 @@ model CuponEvento {
   @@index([tenantId, codigo, createdAt])
 }
 
+/// Programa de puntos opcional del tenant. La equivalencia se congela al
+/// registrar el primer movimiento; apagar `acumulacionActiva` no invalida
+/// los puntos ya prometidos.
+model ConfiguracionFidelizacion {
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @unique @db.Uuid
+  acumulacionActiva     Boolean   @default(false)
+  porcentajeMargen      Decimal   @default(1) @db.Decimal(6, 3)
+  montoBase             Decimal   @default(1000) @db.Decimal(14, 2)
+  puntosBase            Int       @default(100)
+  activadaEl            DateTime?
+  conversionBloqueadaEl DateTime?
+  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime  @default(now())
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// Saldo materializado para bloquear y validar canjes concurrentes. El libro
+/// mayor es la auditoría; estos acumulados se actualizan en la misma tx.
+model FidelizacionCuenta {
+  id               String                   @id @default(uuid()) @db.Uuid
+  tenantId         String                   @db.Uuid
+  clienteId        String                   @unique @db.Uuid
+  saldoPuntos      Int                      @default(0)
+  reservadosPuntos Int                      @default(0)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente          Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  movimientos      FidelizacionMovimiento[]
+  reservas         FidelizacionReserva[]
+
+  @@index([tenantId, saldoPuntos])
+}
+
+/// Libro mayor append-only. `deltaPuntos` es firmado; una reversión referencia
+/// el movimiento original y puede dejar saldo negativo.
+model FidelizacionMovimiento {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  tenantId           String                   @db.Uuid
+  cuentaId           String                   @db.Uuid
+  clienteId          String                   @db.Uuid
+  tipo               String
+  deltaPuntos        Int
+  montoEquivalente   Decimal                  @db.Decimal(14, 2)
+  montoBaseSnapshot  Decimal                  @db.Decimal(14, 2)
+  puntosBaseSnapshot Int
+  ordenId            String?                  @db.Uuid
+  cotizacionId       String?                  @db.Uuid
+  reversionDeId      String?                  @unique @db.Uuid
+  actorId            String?                  @db.Uuid
+  actorNombre        String
+  motivo             String?                  @db.VarChar(500)
+  idempotencyKey     String?                  @db.VarChar(120)
+  createdAt          DateTime                 @default(now())
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cuenta             FidelizacionCuenta       @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  cliente            Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  orden              OrdenTrabajo?            @relation(fields: [ordenId], references: [id], onDelete: SetNull)
+  reversionDe        FidelizacionMovimiento?  @relation("FidelizacionReversion", fields: [reversionDeId], references: [id], onDelete: Restrict)
+  reversiones        FidelizacionMovimiento[] @relation("FidelizacionReversion")
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, clienteId, createdAt])
+  @@index([tenantId, ordenId])
+}
+
+/// Apartado de puntos de un presupuesto u OT borrador. Nunca se elimina:
+/// RESERVADA pasa a CONSUMIDA o LIBERADA para conservar el historial.
+model FidelizacionReserva {
+  id             String             @id @default(uuid()) @db.Uuid
+  tenantId       String             @db.Uuid
+  cuentaId       String             @db.Uuid
+  clienteId      String             @db.Uuid
+  cotizacionId   String?            @db.Uuid
+  ordenId        String?            @db.Uuid
+  puntos         Int
+  monto          Decimal            @db.Decimal(14, 2)
+  estado         String             @default("RESERVADA")
+  expiraEl       DateTime?
+  consumidaEl    DateTime?
+  liberadaEl     DateTime?
+  liberadaMotivo String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cuenta         FidelizacionCuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  cliente        Cliente            @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cotizacion     Cotizacion?        @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
+  orden          OrdenTrabajo?      @relation(fields: [ordenId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, clienteId, estado])
+  @@index([tenantId, cotizacionId])
+  @@index([tenantId, ordenId])
+}
+
 /// Auditoría del control plane: todo lo que el staff ESCRIBE queda acá,
 /// append-only (la app nunca lo edita ni borra). Nivel plataforma: vive por
 /// encima de los tenants y está exento del tenant-guard.
@@ -4682,60 +4802,60 @@ model Plan {
 /// control plane —sin contexto— la escribe. Sin suscripción = tenant legacy:
 /// se lo trata como ilimitado (grandfathered) hasta que se le asigne plan.
 model Suscripcion {
-  id                 String    @id @default(uuid()) @db.Uuid
-  tenantId           String    @unique @db.Uuid
-  planId             String    @db.Uuid
+  id                      String    @id @default(uuid()) @db.Uuid
+  tenantId                String    @unique @db.Uuid
+  planId                  String    @db.Uuid
   /// 'activa' | 'suspendida' | 'baja' — estado NORMALIZADO nuestro, el que
   /// mira el gate por plan. No es el de Paddle: ver estadoProveedor.
-  estado             String    @default("activa")
+  estado                  String    @default("activa")
   /// Quién cobra: 'paddle' | 'mercadopago' | 'manual'. "manual" son los
   /// legacy/cortesía que no pasan por ninguna pasarela.
-  proveedor          String    @default("manual")
+  proveedor               String    @default("manual")
   /// Id de la suscripción en el proveedor (subscription_id de Paddle).
-  referenciaExterna  String?   @unique
+  referenciaExterna       String?   @unique
   /// Id del cliente en el proveedor (customer_id de Paddle), para abrir el
   /// customer portal sin volver a buscarlo.
-  clienteExternoId   String?
+  clienteExternoId        String?
   /// El estado CRUDO del proveedor (active | trialing | past_due | paused |
   /// canceled). Se guarda sin traducir para no perder información: 'past_due'
   /// mapea a estado 'activa' (hay ventana de dunning) pero enciende el banner.
-  estadoProveedor    String?
+  estadoProveedor         String?
   /// Primer rechazo de pago del episodio de mora actual. Se conserva durante
   /// los reintentos para que la ventana de gracia no vuelva a empezar.
-  moraDesde          DateTime?
+  moraDesde               DateTime?
   /// Fin de nuestra gracia operativa. Hasta esta fecha el tenant mantiene
   /// acceso normal; después queda en solo lectura hasta que Paddle confirme
   /// un estado activo.
-  graciaHasta        DateTime?
+  graciaHasta             DateTime?
   /// Última consulta exitosa a la API del proveedor. Permite detectar datos
   /// locales viejos aunque el webhook no haya llegado.
-  ultimaSyncProveedorEl DateTime?
+  ultimaSyncProveedorEl   DateTime?
   /// occurred_at del último webhook aplicado. Evita que un evento demorado
   /// pise un estado más nuevo.
   ultimoEventoProveedorEl DateTime?
   /// Próximo cobro informado por el proveedor (para la vista del tenant).
-  proximoCobro       DateTime?
+  proximoCobro            DateTime?
   /// Inicio del período de facturación en curso (current_billing_period de
   /// Paddle). Junto con `proximoCobro` da el largo REAL del ciclo, que es lo
   /// que permite mostrar "faltan X de N días" sin asumir 30 —un plan anual
   /// tiene 365. Nullable: las filas viejas se completan con el próximo evento.
-  periodoDesde       DateTime?
+  periodoDesde            DateTime?
   /// Cambio PROGRAMADO en la pasarela: 'cancel' | 'pause' | 'resume', con la
   /// fecha en que se hace efectivo. Existe porque al cancelar, Paddle deja la
   /// suscripción en `active` con un scheduled_change hasta el fin del período:
   /// sin esto la pantalla diría "Activa" y el cliente no vería que se termina.
-  cambioProgramado   String?
-  cambioProgramadoEl DateTime?
+  cambioProgramado        String?
+  cambioProgramadoEl      DateTime?
   /// Fin de la prueba gratuita. Los días restantes NO se guardan: se calculan
   /// contra esta fecha, así nunca quedan desactualizados. Al vencer, el cron
   /// pasa la suscripción a 'suspendida' — cierra los gates por plan pero el
   /// tenant sigue entrando y viendo sus datos. Ver docs/suscripciones-cobro-diseno.md
-  trialHasta         DateTime?
-  desde              DateTime  @default(now())
-  hasta              DateTime?
-  notas              String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  trialHasta              DateTime?
+  desde                   DateTime  @default(now())
+  hasta                   DateTime?
+  notas                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   plan   Plan   @relation(fields: [planId], references: [id])
