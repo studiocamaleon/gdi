@@ -8,6 +8,7 @@ import {
 import {
   getConsumableChannelFromDetail,
   getPerfilConsumableChannels,
+  isDuplicatorMasterDetail,
   PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES,
   requiredConsumableChannelsFromColorMode,
 } from './consumibles-impresion';
@@ -261,6 +262,23 @@ function addConsumableIssues(
           mensaje: `Perfil “${perfil.nombre}”: configurá el consumible ${channelLabel(channel)} con material y consumo mayor que cero.`,
         });
       }
+    }
+  }
+
+  if (payload.plantilla === PlantillaMaquinariaDto.duplicadora_digital) {
+    const masterValido = activos.some(
+      (item) =>
+        isDuplicatorMasterDetail(item.detalle ?? {}) &&
+        Boolean(item.materiaPrimaVarianteId) &&
+        Number(item.rendimientoEstimado ?? 0) > 0,
+    );
+    if (!masterValido) {
+      faltantes.push({
+        codigo: 'consumibles.master',
+        seccion: 'ajustes',
+        mensaje:
+          'Configurá el rollo máster con material y cantidad de másteres por rollo.',
+      });
     }
   }
 }

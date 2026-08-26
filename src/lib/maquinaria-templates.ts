@@ -423,6 +423,122 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
   ];
 }
 
+function buildDuplicadoraSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades físicas",
+      description: "Formato máximo de hoja admitido por la duplicadora.",
+      fields: [
+        field({
+          key: "anchoUtil",
+          label: "Ancho máximo de hoja",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          required: true,
+        }),
+        field({
+          key: "largoUtil",
+          label: "Largo máximo de hoja",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          required: true,
+        }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Parámetros técnicos",
+      description: "Sólo los límites que intervienen en el trabajo y el costo.",
+      fields: [
+        field({
+          key: "margenesNoImprimiblesMm",
+          label: "Márgenes no imprimibles",
+          scope: "maquina",
+          kind: "textarea",
+          required: true,
+          description:
+            "El motor los descuenta de la hoja para obtener el área máxima de impresión.",
+        }),
+        field({
+          key: "soporteDobleFaz",
+          label: "Soporta doble faz",
+          scope: "maquina",
+          kind: "boolean",
+          description:
+            "Doble faz se modela como dos pasadas: duplica tiempo, tinta y máster.",
+        }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description:
+        "Un perfil simple faz y otro doble faz; el motor duplica las pasadas automáticamente.",
+      fields: [
+        field({
+          key: "nombre",
+          label: "Nombre del perfil",
+          scope: "perfil_operativo",
+          kind: "text",
+          required: true,
+        }),
+        field({
+          key: "productivityValue",
+          label: "Productividad",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "ppm",
+          required: true,
+          description: "Hojas terminadas por minuto para este modo.",
+        }),
+        field({
+          key: "setupMin",
+          label: "Creación del máster",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "min",
+          description:
+            "Tiempo inicial para crear el máster. En doble faz se carga duplicado.",
+        }),
+        field({
+          key: "gramajeMaxGr",
+          label: "Gramaje (hasta)",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "g_m2",
+          required: true,
+        }),
+        field({
+          key: "caras",
+          label: "Caras",
+          scope: "perfil_operativo",
+          kind: "select",
+          required: true,
+          options: carasOptions,
+        }),
+        field({
+          key: "colores",
+          label: "Color",
+          scope: "perfil_operativo",
+          kind: "multiselect",
+          options: [option("BN", "Negro (un color)")],
+          description: "La plantilla trabaja con un único tambor/color.",
+        }),
+      ],
+    }),
+    section({
+      id: "consumibles",
+      title: "Consumibles",
+      description:
+        "Tinta negra en ml/m² y máster por original/cara, vinculados al inventario.",
+      fields: genericConsumableFields,
+    }),
+  ];
+}
+
 /** §6 — IMPRESORA_GRAN_FORMATO_POR_AREA con discriminantes tecnologia + geometria. */
 function buildGranFormatoSections(): MaquinariaTemplateSection[] {
   return [
@@ -1930,6 +2046,27 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
         "Creá perfiles separados por simple/doble faz y rangos de gramaje.",
       ],
       examples: ["Ricoh PRO C5100s para tarjetas, talonarios, folletería"],
+    },
+  }),
+  template({
+    id: "duplicadora_digital",
+    label: "Duplicadora digital",
+    family: "impresion_digital",
+    description:
+      "Duplicadora de un tambor que crea un máster y reproduce tiradas sobre hojas.",
+    geometry: "pliego",
+    defaultProductionUnit: "ppm",
+    allowedProfileTypes: ["impresion"],
+    visibleSections: commonTemplateSections,
+    sections: buildDuplicadoraSections(),
+    help: {
+      summary:
+        "Costea una tinta en ml/m² y un máster por original y cara. Doble faz equivale a dos pasadas.",
+      tips: [
+        "Configurá únicamente el color instalado en el tambor.",
+        "En doble faz mantené la velocidad por pasada y duplicá sólo la creación de máster; el motor duplica la corrida.",
+      ],
+      examples: ["Ricoh Priport DX 2430 con tambor negro"],
     },
   }),
   template({

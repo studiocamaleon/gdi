@@ -8,6 +8,7 @@ import type { ConsumoPorCobertura } from "@/lib/cobertura-toner";
 
 export type PlantillaMaquinaria =
   | "impresora_laser"
+  | "duplicadora_digital"
   | "impresora_gran_formato_por_area"
   | "guillotina"
   | "plotter_de_corte"
@@ -269,6 +270,7 @@ export const tecnologiaMaquinaItems = [
   { label: "DTF textil", value: "dtf_textil" },
   { label: "DTF UV", value: "dtf_uv" },
   { label: "Inkjet", value: "inkjet" },
+  { label: "Fotoduplicación", value: "fotoduplicacion" },
 ] as const;
 
 export type TecnologiaMaquina =
@@ -341,6 +343,7 @@ export function getMaquinaTecnologia(input: {
   }
   // 3. Default por plantilla (las únicas con tecnología fija).
   if (input.plantilla === "impresora_laser") return "laser";
+  if (input.plantilla === "duplicadora_digital") return "fotoduplicacion";
   if (input.plantilla === "plotter_cad") return "inkjet";
   return null;
 }

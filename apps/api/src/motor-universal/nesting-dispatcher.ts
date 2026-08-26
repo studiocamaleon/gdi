@@ -2523,7 +2523,9 @@ function shouldCenterPlacementsForPaso(paso: PasoCargado) {
   // (estrategia declarada) cuando la máquina es láser. [Etapa F2]
   return (
     estrategiaNestingDeFamilia(paso.familiaCodigo) === 'pliego_digital' &&
-    paso.maquina?.plantilla?.toLowerCase() === 'impresora_laser'
+    ['impresora_laser', 'duplicadora_digital'].includes(
+      paso.maquina?.plantilla?.toLowerCase() ?? '',
+    )
   );
 }
 

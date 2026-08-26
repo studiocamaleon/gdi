@@ -255,12 +255,37 @@ function getVariantesConsumiblesCompatibles(
     if (!materiaPrima.activo || !materiaPrima.esConsumible) continue;
     if (necesitaToner && materiaPrima.subfamilia !== "toner") continue;
     if (!necesitaToner && !["tinta_impresion", "toner"].includes(materiaPrima.subfamilia)) continue;
+    if (
+      plantilla === "duplicadora_digital" &&
+      materiaPrima.tipoTecnico !== "tinta_duplicadora" &&
+      String(
+        (materiaPrima.atributosTecnicos ?? {}).tecnologiaCompatible ?? "",
+      ).toLowerCase() !== "duplicadora_digital"
+    ) {
+      continue;
+    }
     for (const variante of materiaPrima.variantes) {
       if (!variante.activo) continue;
       opciones.push({ materiaPrima, variante });
     }
   }
   return opciones;
+}
+
+function getVariantesMasterCompatibles(
+  materiasPrimas: MateriaPrima[],
+): VarianteConsumibleOption[] {
+  return materiasPrimas.flatMap((materiaPrima) => {
+    const esMaster =
+      materiaPrima.activo &&
+      materiaPrima.esConsumible &&
+      (materiaPrima.tipoTecnico === "master_duplicadora" ||
+        materiaPrima.templateId === "master_duplicadora_v1");
+    if (!esMaster) return [];
+    return materiaPrima.variantes
+      .filter((variante) => variante.activo)
+      .map((variante) => ({ materiaPrima, variante }));
+  });
 }
 
 function varianteMatchesCanal(variante: MateriaPrimaVariante, canal: ConsumibleCanal) {
@@ -312,6 +337,13 @@ export function PerfilTintasModal({
     form.plantilla,
   );
   const esLaser = form.plantilla === "impresora_laser";
+  const esDuplicadora = form.plantilla === "duplicadora_digital";
+  const master = form.consumibles.find(
+    (item) =>
+      !item.perfilOperativoId &&
+      String((item.detalle ?? {}).rol ?? "").toLowerCase() === "master",
+  );
+  const mastersCompatibles = getVariantesMasterCompatibles(materiasPrimas);
 
   const upsert = (
     canal: ConsumibleCanal,
@@ -380,6 +412,40 @@ export function PerfilTintasModal({
           ),
       ),
     }));
+  };
+
+  const setMaster = (varianteId: string) => {
+    setForm((current) => {
+      const sinMaster = current.consumibles.filter(
+        (item) =>
+          !(
+            !item.perfilOperativoId &&
+            String((item.detalle ?? {}).rol ?? "").toLowerCase() === "master"
+          ),
+      );
+      if (!varianteId) return { ...current, consumibles: sinMaster };
+      const opcion = mastersCompatibles.find(
+        (item) => item.variante.id === varianteId,
+      );
+      return {
+        ...current,
+        consumibles: [
+          ...sinMaster,
+          {
+            id: master?.id,
+            materiaPrimaVarianteId: varianteId,
+            nombre: opcion
+              ? `Máster · ${opcion.materiaPrima.nombre}`
+              : "Máster de duplicadora",
+            tipo: "otro",
+            unidad: "unidad",
+            rendimientoEstimado: master?.rendimientoEstimado ?? 100,
+            activo: true,
+            detalle: { ...(master?.detalle ?? {}), rol: "master" },
+          },
+        ],
+      };
+    });
   };
 
   return (
@@ -602,6 +668,52 @@ export function PerfilTintasModal({
                   ? "El motor toma este tóner al cotizar con este perfil; en Productos no hace falta elegirlo por paso."
                   : "El motor toma estas tintas automáticamente al cotizar con este perfil; en Productos no hace falta elegirlas por paso."}
               </p>
+              {esDuplicadora ? (
+                <div className="mt-4 grid gap-3 rounded-md border p-3 md:grid-cols-2">
+                  <label className="grid gap-1 text-xs font-medium">
+                    Rollo máster
+                    <select
+                      value={master?.materiaPrimaVarianteId ?? ""}
+                      onChange={(event) => setMaster(event.target.value)}
+                    >
+                      <option value="">Sin vincular</option>
+                      {mastersCompatibles.map((item) => (
+                        <option key={item.variante.id} value={item.variante.id}>
+                          {getConsumibleVariantOptionLabel(item)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium">
+                    Másteres por rollo
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      disabled={!master}
+                      value={master?.rendimientoEstimado ?? 100}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          consumibles: current.consumibles.map((item) =>
+                            !item.perfilOperativoId &&
+                            String((item.detalle ?? {}).rol ?? "").toLowerCase() ===
+                              "master"
+                              ? {
+                                  ...item,
+                                  rendimientoEstimado: Number(event.target.value),
+                                }
+                              : item,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  <p className="text-muted-foreground text-xs md:col-span-2">
+                    Se consume un máster por original y cara, no por cada copia.
+                  </p>
+                </div>
+              ) : null}
             </>
           )}
         </div>

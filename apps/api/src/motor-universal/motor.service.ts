@@ -90,8 +90,10 @@ import {
   tiempoFijoEfectivoMin,
 } from './familia-defaults';
 import {
+  duplicatorMasterQuantity,
   getConsumableChannelFromDetail,
   getPerfilConsumableChannels,
+  isDuplicatorMasterDetail,
   PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES,
   type ConsumableChannel,
 } from '../maquinaria/consumibles-impresion';
@@ -2573,6 +2575,14 @@ export class MotorUniversalService {
     if (normalized === 'dtf_textil') return 'dtf_textil';
     if (normalized === 'dtf_uv') return 'dtf_uv';
     if (normalized === 'inkjet') return 'inkjet';
+    if (
+      normalized === 'fotoduplicacion' ||
+      normalized === 'fotoduplicadora' ||
+      normalized === 'duplicadora' ||
+      normalized === 'duplicadora_digital'
+    ) {
+      return 'fotoduplicacion';
+    }
     if (normalized === 'uv') return 'uv';
     return normalized || null;
   }
@@ -2581,6 +2591,7 @@ export class MotorUniversalService {
     const normalized = plantilla?.toLowerCase();
     if (!normalized) return null;
     if (normalized === 'impresora_laser') return 'laser';
+    if (normalized === 'duplicadora_digital') return 'fotoduplicacion';
     // Los plotters CAD son siempre inkjet (tecnología fija por plantilla).
     if (normalized === 'plotter_cad') return 'inkjet';
     return null;
@@ -6044,6 +6055,87 @@ export class MotorUniversalService {
       });
     }
 
+    if (maquina.plantilla.toLowerCase() === 'duplicadora_digital') {
+      const master = consumibles.find(
+        (item) =>
+          item.activo &&
+          isDuplicatorMasterDetail(
+            (item.detalleJson as Record<string, unknown> | null) ?? null,
+          ),
+      );
+      if (!master) {
+        errores.push({
+          codigo: 'consumible_maquina_master_faltante',
+          severidad: 'ERROR',
+          mensaje: `Falta configurar el rollo máster en la máquina ${maquina.nombre}.`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          sugerencia:
+            'Ir a Maquinaria > Consumibles y vincular el máster de la duplicadora.',
+        });
+      } else {
+        const precioReferencia = master.materialVariante.precioReferencia;
+        const rendimiento = Number(master.rendimientoEstimado ?? 0);
+        const varianteActiva =
+          master.materialVariante.activo !== false &&
+          master.materialVariante.materiaPrimaActiva !== false;
+        if (
+          !varianteActiva ||
+          !Number.isFinite(rendimiento) ||
+          rendimiento <= 0
+        ) {
+          errores.push({
+            codigo: 'consumible_maquina_master_invalido',
+            severidad: 'ERROR',
+            mensaje: `El máster de ${maquina.nombre} está inactivo o no declara cuántos másteres rinde el rollo.`,
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+          });
+        } else if (
+          precioReferencia == null ||
+          !Number.isFinite(precioReferencia) ||
+          precioReferencia <= 0
+        ) {
+          errores.push({
+            codigo: 'consumible_maquina_master_sin_precio',
+            severidad: 'ERROR',
+            mensaje: `La variante ${master.materialVariante.sku} no tiene precio de referencia.`,
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+          });
+        } else {
+          const cantidad = duplicatorMasterQuantity(caras);
+          const precioUnitario = precioReferencia / rendimiento;
+          ejecutados.push({
+            slotCodigo: 'consumible_maquina:master',
+            materialVarianteId: master.materialVariante.id,
+            materialNombre: master.materialVariante.sku,
+            materialSku: master.materialVariante.sku,
+            materialDisplayName:
+              master.materialVariante.materiaPrimaNombre ?? master.nombre,
+            materiaPrimaNombre:
+              master.materialVariante.materiaPrimaNombre ?? null,
+            materiaPrimaTemplateId:
+              master.materialVariante.materiaPrimaTemplateId ?? null,
+            materiaPrimaTipoTecnico:
+              master.materialVariante.materiaPrimaTipoTecnico ?? null,
+            atributosVarianteJson:
+              master.materialVariante.atributosVarianteJson ?? null,
+            tipoLineaCosto: 'CONSUMIBLE_MAQUINA',
+            cantidad,
+            unidad: 'unidad',
+            precioUnitario,
+            costoTotal: cantidad * precioUnitario,
+            estrategiaCosto: 'master_por_original_y_cara',
+            modoSeleccion: 'MAQUINA_CONSUMIBLE',
+          });
+        }
+      }
+    }
+
     return ejecutados;
   }
 
@@ -7473,9 +7565,12 @@ export class MotorUniversalService {
    * Prioridad:
    *  1. Override del comercial: `jobContext[\`maquinaSeleccionada_${configPasoId}\`]`
    *     o `jobContext[\`maquinaSeleccionada_${rutaPasoId}\`]` (clave alternativa).
-   *  2. Candidata `esPreferida = true` (las candidatas vienen ordenadas con
+   *     Si contradice el modo de color, manda la candidata declarada para ese
+   *     modo: no se puede cotizar B/N en una máquina habilitada sólo para CMYK.
+   *  2. Candidata compatible con el modo de color elegido.
+   *  3. Candidata `esPreferida = true` (las candidatas vienen ordenadas con
    *     preferidas primero, así que la primera de la lista cumple).
-   *  3. Si no hay candidatas: usar la M-1 default (`maquinaM1Id`).
+   *  4. Si no hay candidatas: usar la M-1 default (`maquinaM1Id`).
    *
    * Devuelve un nuevo `PasoCargado` con `maquina` (y perfilesDisponibles)
    * apuntando a la M-2 elegida, o el `paso` original si no había candidatas.
@@ -7498,7 +7593,23 @@ export class MotorUniversalService {
           ? ctx[keyByPasoId]
           : null;
 
-    const candidatasCompatibles = paso.maquinasCandidatas.filter(
+    const modoColor = this.resolverModoColorComercial(paso, jobContext);
+    const candidatasDelModo = modoColor
+      ? paso.maquinasCandidatas.filter((candidata) => {
+          const permitidos = (candidata.modoColorAllowedModes ?? [])
+            .map((modo) => normalizeModoColor(modo))
+            .filter((modo): modo is string => Boolean(modo));
+          return permitidos.length === 0 || permitidos.includes(modoColor);
+        })
+      : paso.maquinasCandidatas;
+    // Config histórica sin mapa, o modo eliminado: conservar el fallback
+    // anterior en vez de dejar el paso sin máquina.
+    const poolCandidatas =
+      candidatasDelModo.length > 0
+        ? candidatasDelModo
+        : paso.maquinasCandidatas;
+
+    const candidatasCompatibles = poolCandidatas.filter(
       (candidata) =>
         this.filtrarPerfilesCompatibles(
           paso.familiaCodigo,
@@ -7507,13 +7618,13 @@ export class MotorUniversalService {
     );
 
     const candidataElegida = eleccion
-      ? paso.maquinasCandidatas.find(
+      ? poolCandidatas.find(
           (c) => c.maquinaId === eleccion || c.id === eleccion,
         )
       : null;
     let elegida = candidataElegida ? candidataElegida : null;
     if (!elegida) {
-      elegida = candidatasCompatibles[0] ?? paso.maquinasCandidatas[0]; // ya viene ordenada (preferida primero)
+      elegida = candidatasCompatibles[0] ?? poolCandidatas[0]; // ya viene ordenada (preferida primero)
     }
     const perfilesCompatibles = this.filtrarPerfilesCompatibles(
       paso.familiaCodigo,
@@ -8739,6 +8850,7 @@ export class MotorUniversalService {
           perfilDefaultPorModo:
             (mc.perfilDefaultPorModoJson as Record<string, string> | null) ??
             null,
+          modoColorAllowedModes: mc.modoColorAllowedModes,
           esPreferida: mc.esPreferida,
           orden: mc.orden,
           maquina: {
@@ -9500,6 +9612,7 @@ export class MotorUniversalService {
             maquinaId: c.maquinaId,
             perfilDefaultId: c.perfilDefaultId ?? null,
             perfilDefaultPorModo: c.perfilDefaultPorModo ?? null,
+            modoColorAllowedModes: c.modoColorAllowedModes ?? [],
             esPreferida: c.esPreferida ?? false,
             orden: c.orden ?? i,
             maquina: {

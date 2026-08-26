@@ -89,6 +89,19 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.impresion],
   }),
 
+  [PlantillaMaquinariaDto.duplicadora_digital]: buildRule({
+    detalleKeys: ['caras', 'colores', 'gramajeMaxGr'],
+    requiredFieldKeys: [
+      'nombre',
+      'productivityValue',
+      'productivityUnit',
+      'caras',
+      'gramajeMaxGr',
+    ],
+    modeSourceKeys: ['caras'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.impresion],
+  }),
+
   // ─── §6 IMPRESORA_GRAN_FORMATO_POR_AREA ─────────────────────────
   // Compatibilidad: numeroPasadas, modoCalidad y tipoCorte se toleran en datos
   // viejos, pero el modo funcional sale de colores (impresión) / modoOperacion

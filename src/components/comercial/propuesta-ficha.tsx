@@ -130,6 +130,7 @@ import {
   calcularResumen,
   CANALES_VENTA,
   formatCurrency,
+  formatMaterialUnitPrice,
   formatUnidad,
   formatUnitPrice,
   offsetDate,
@@ -1661,8 +1662,8 @@ function formatCostoUnitarioMaterial(
 ) {
   const unidadLabel = formatUnidadCosto(unidad, 1);
   return unidadLabel
-    ? `${formatCurrency(value, moneda)} / ${unidadLabel}`
-    : formatCurrency(value, moneda);
+    ? `${formatMaterialUnitPrice(value, moneda)} / ${unidadLabel}`
+    : formatMaterialUnitPrice(value, moneda);
 }
 
 function formatUnidadCosto(unidad: string, cantidad = 1) {

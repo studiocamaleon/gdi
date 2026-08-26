@@ -152,6 +152,21 @@ export function formatUnitPrice(value: number, moneda: Moneda) {
   return formatearMoneda(value, moneda, { decimales: digits });
 }
 
+/**
+ * Costo teórico de una unidad de material/consumible. A diferencia del precio
+ * comercial, nunca se redondea a entero: un repuesto de $0,267 por click no
+ * puede verse como "$0" mientras su total sí suma. Para valores menores a un
+ * centavo aumenta la precisión hasta mostrar un dígito significativo.
+ */
+export function formatMaterialUnitPrice(value: number, moneda: Moneda) {
+  const abs = Math.abs(value);
+  const digits =
+    abs > 0 && abs < 0.01
+      ? Math.min(6, Math.max(2, Math.ceil(-Math.log10(abs)) + 1))
+      : 2;
+  return formatearMoneda(value, moneda, { decimales: digits });
+}
+
 export function formatUnidad(unidad: UnidadPropuesta) {
   if (unidad === "m2") return "m²";
   if (unidad === "metro_lineal") return "ml";

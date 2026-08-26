@@ -74,6 +74,10 @@ const CATALOGO_IMPRESORA_LASER: CatalogoFabricanteModelos[] = [
   },
 ];
 
+const CATALOGO_DUPLICADORA_DIGITAL: CatalogoFabricanteModelos[] = [
+  { fabricante: "Ricoh", modelos: ["DX 2430"] },
+];
+
 const CATALOGO_PLOTTER_DE_CORTE: CatalogoFabricanteModelos[] = [
   {
     fabricante: "Graphtec",
@@ -127,6 +131,10 @@ export function getCatalogoFabricantesPorPlantilla(
 ): CatalogoFabricanteModelos[] {
   if (plantilla === "impresora_laser") {
     return CATALOGO_IMPRESORA_LASER;
+  }
+
+  if (plantilla === "duplicadora_digital") {
+    return CATALOGO_DUPLICADORA_DIGITAL;
   }
 
   if (plantilla === "plotter_de_corte") {

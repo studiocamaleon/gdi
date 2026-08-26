@@ -115,6 +115,7 @@ enum EstadoTarifaCentroCostoPeriodo {
 ///     merchandising y los productos compuestos la trajeron de vuelta.
 enum PlantillaMaquinaria {
   IMPRESORA_LASER
+  DUPLICADORA_DIGITAL
   IMPRESORA_GRAN_FORMATO_POR_AREA
   GUILLOTINA
   PLOTTER_DE_CORTE

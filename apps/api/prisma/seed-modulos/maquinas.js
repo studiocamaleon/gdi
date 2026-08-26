@@ -611,8 +611,114 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     },
   });
 
+  // Duplicadora de un color. El motor duplica la corrida, la tinta y el máster
+  // por caras; el perfil doble sólo duplica el setup de creación de máster.
+  const duplicadora = await prisma.maquina.create({
+    data: {
+      tenantId,
+      plantaId,
+      centroCostoPrincipalId: ccImpresionId,
+      codigo: "RICOH-DX2430",
+      nombre: "Ricoh DX 2430",
+      plantilla: "DUPLICADORA_DIGITAL",
+      plantillaVersion: 1,
+      fabricante: "Ricoh",
+      modelo: "DX 2430",
+      estado: EstadoMaquina.ACTIVA,
+      estadoConfiguracion: EstadoConfiguracionMaquina.LISTA,
+      geometriaTrabajo: GeometriaTrabajoMaquina.PLIEGO,
+      unidadProduccionPrincipal: UnidadProduccionMaquina.PPM,
+      anchoUtil: "275",
+      largoUtil: "395",
+      gramajeMaxGr: "127.9",
+      activo: true,
+      parametrosTecnicosJson: {
+        tecnologia: "fotoduplicacion",
+        margenesNoImprimiblesMm: { sup: 20, inf: 20, izq: 12.5, der: 12.5 },
+        soporteDobleFaz: true,
+        coloresSoportados: ["BN"],
+        tamborInstalado: "negro",
+      },
+      observaciones:
+        "Configuración de referencia. Precios de tinta y máster revisables según proveedor.",
+    },
+  });
+
+  const duplicadoraSimple = await prisma.maquinaPerfilOperativo.create({
+    data: {
+      tenantId,
+      maquinaId: duplicadora.id,
+      nombre: "Negro simple faz",
+      tipoPerfil: TipoPerfilOperativoMaquina.IMPRESION,
+      activo: true,
+      productivityValue: "90",
+      productivityUnit: UnidadProduccionMaquina.PPM,
+      setupMin: "0.75",
+      cleanupMin: "0",
+      feedReloadMin: "0",
+      detalleJson: {
+        caras: "SIMPLE_FAZ",
+        colores: ["BN"],
+        gramajeMaxGr: 127.9,
+      },
+    },
+  });
+
+  const duplicadoraDoble = await prisma.maquinaPerfilOperativo.create({
+    data: {
+      tenantId,
+      maquinaId: duplicadora.id,
+      nombre: "Negro doble faz",
+      tipoPerfil: TipoPerfilOperativoMaquina.IMPRESION,
+      activo: true,
+      productivityValue: "90",
+      productivityUnit: UnidadProduccionMaquina.PPM,
+      setupMin: "1.5",
+      cleanupMin: "0",
+      feedReloadMin: "0",
+      detalleJson: {
+        caras: "DOBLE_FAZ",
+        colores: ["BN"],
+        gramajeMaxGr: 127.9,
+      },
+    },
+  });
+
+  await createPrinterConsumibles(
+    prisma,
+    tenantId,
+    duplicadora.id,
+    [duplicadoraSimple, duplicadoraDoble],
+    {
+      channels: ["negro"],
+      skuByChannel: { negro: "TINTA-RICOH-DX2430-K-500ML" },
+      tipo: TipoConsumibleMaquina.TINTA,
+      unidad: UnidadConsumoMaquina.ML,
+      consumoBase: "1.603",
+    },
+  );
+
+  const masterVariante = await prisma.materiaPrimaVariante.findFirst({
+    where: { tenantId, sku: "MASTER-RICOH-DX2430-280X50" },
+  });
+  if (masterVariante) {
+    await prisma.maquinaConsumible.create({
+      data: {
+        tenantId,
+        maquinaId: duplicadora.id,
+        materiaPrimaVarianteId: masterVariante.id,
+        nombre: "Máster B4 Ricoh DX 2430",
+        tipo: TipoConsumibleMaquina.OTRO,
+        unidad: UnidadConsumoMaquina.UNIDAD,
+        rendimientoEstimado: "100",
+        activo: true,
+        detalleJson: { rol: "master" },
+      },
+    });
+  }
+
   console.info(
-    `✅ Máquinas v3.0: 7 plantillas creadas (Ricoh, Roland, Mimaki, Polar, Skycut, Laminadora, Felder).`,
+    `✅ Máquinas v3.0: 8 máquinas creadas (incluye duplicadora Ricoh DX 2430).`,
   );
 
   return {
@@ -623,6 +729,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     skycut,
     laminadora,
     cnc,
+    duplicadora,
   };
 }
 

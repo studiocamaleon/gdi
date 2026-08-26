@@ -346,8 +346,7 @@ const impresion_por_hoja: DefinicionFamilia = {
     },
   ],
   permiteSlotsAdicionales: false,
-  // v3.0: solo IMPRESORA_LASER (INYECCION_TINTA descartada según doc §4).
-  plantillasCompatibles: ['IMPRESORA_LASER'],
+  plantillasCompatibles: ['IMPRESORA_LASER', 'DUPLICADORA_DIGITAL'],
   // Pinza y borde no imprimible: 5 mm alrededor si la máquina no los declara.
   // [Etapa A: era `defaultMarginForFamily`]
   margenesNestingDefault: { leftMm: 5, rightMm: 5, topMm: 5, bottomMm: 5 },

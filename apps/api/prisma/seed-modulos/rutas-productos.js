@@ -2,12 +2,13 @@
 /**
  * Seed de Rutas + Productos del modelo universal.
  *
- * Crea las 5 rutas (incluye 2 alternativas para Talonario) + 4 productos
+ * Crea 6 rutas (incluye 2 alternativas para Talonario) + 5 productos
  * validados en Fase E:
  * - Tarjetas de Visita Premium 300gr
  * - Vinilo blanco impreso
  * - Talonario duplicado A4 (con 2 rutas alternativas: emblocado y abrochado)
  * - Rígido impreso custom (señalética/letras)
+ * - Impresión en Fotoduplicadora A4
  */
 
 async function fetchVarianteId(prisma, tenantId, sku) {
@@ -61,6 +62,11 @@ async function seedRutasYProductos(
     tenantId,
     'AUTOCOP-CFB-22X34',
   );
+  const papelObraA4VarId = await fetchVarianteId(
+    prisma,
+    tenantId,
+    'OBRA-A4-75-M',
+  );
   const viniloBlanco137 = await fetchVariante(
     prisma,
     tenantId,
@@ -96,6 +102,14 @@ async function seedRutasYProductos(
         tenantId,
         maquinaId: maquinas.ricoh.id,
         nombre: 'Papel grueso doble faz',
+      },
+    });
+  const duplicadoraSimpleFazPerfil =
+    await prisma.maquinaPerfilOperativo.findFirstOrThrow({
+      where: {
+        tenantId,
+        maquinaId: maquinas.duplicadora.id,
+        nombre: 'Negro simple faz',
       },
     });
   // Polar: usa perfil de "Papel grueso 100-250gr" (rango común para tarjetas).
@@ -450,8 +464,47 @@ async function seedRutasYProductos(
     },
   });
 
+  // ============================================================================
+  // RUTA 6: "Impresión A4 en fotoduplicadora"
+  // ============================================================================
+  const rutaFotoduplicadora = await prisma.ruta.create({
+    data: {
+      tenantId,
+      codigo: 'RUTA-IMPRESION-FOTODUPLICADORA-A4',
+      nombre: 'Impresión A4 en fotoduplicadora',
+      descripcion:
+        'Impresión monocromática de hoja A4 completa en duplicadora digital',
+      versionActual: 1,
+      activo: true,
+      pasos: {
+        create: {
+          tenantId,
+          orden: 1,
+          familiaCodigo: 'impresion_por_hoja',
+          nombreVisible: 'Impresión en fotoduplicadora',
+          activo: true,
+        },
+      },
+    },
+    include: { pasos: true },
+  });
+  await prisma.rutaVersion.create({
+    data: {
+      tenantId,
+      rutaId: rutaFotoduplicadora.id,
+      version: 1,
+      snapshotJson: {
+        pasos: rutaFotoduplicadora.pasos.map((p) => ({
+          orden: p.orden,
+          familia: p.familiaCodigo,
+        })),
+      },
+      cambios: 'Versión inicial',
+    },
+  });
+
   console.info(
-    `✅ Rutas: 5 rutas creadas (Tarjetas, Vinilo, Talonario Embloc/Abroch, Rígido).`,
+    `✅ Rutas: 6 rutas creadas (incluye impresión A4 en fotoduplicadora).`,
   );
 
   // ============================================================================
@@ -1131,11 +1184,99 @@ async function seedRutasYProductos(
     }
   }
 
+  // ----------------------------------------------------------------------------
+  // PRODUCTO 5: Impresión en Fotoduplicadora
+  // ----------------------------------------------------------------------------
+  const impresionFotoduplicadora = await prisma.producto.create({
+    data: {
+      tenantId,
+      codigo: 'IMP-FOTODUP-A4-OBRA',
+      nombre: 'Impresión en Fotoduplicadora',
+      descripcion:
+        'Impresión monocromática A4 en papel obra 75gr mediante Ricoh DX 2430',
+      subcategoriaComercialId: subcategoriaId('volantes_folletos'),
+      unidadComercial: 'unidad',
+      modoMedidas: 'FIJA',
+      medidaDefaultAnchoMm: '210',
+      medidaDefaultAltoMm: '297',
+      atributosComercialesJson: {
+        medidas: 'A4 · 210 x 297 mm',
+        material: 'Papel obra 75gr',
+        caras: 'Simple o doble faz',
+        impresion: 'Negro · Fotoduplicadora',
+      },
+      precioConfigJson: {
+        metodoCalculo: 'por_margen',
+        detalle: { marginPct: 40, minimumMarginPct: 25 },
+      },
+      activo: true,
+    },
+  });
+
+  const impresionFotoduplicadoraRutaAlt =
+    await prisma.productoRutaAlternativa.create({
+      data: {
+        tenantId,
+        productoId: impresionFotoduplicadora.id,
+        rutaId: rutaFotoduplicadora.id,
+        rutaVersion: 1,
+        nombre: 'Ricoh DX 2430 · Negro',
+        esPreferida: true,
+        orden: 0,
+        activo: true,
+      },
+    });
+
+  const pasoFotoduplicadora = rutaFotoduplicadora.pasos[0];
+  const configFotoduplicadora = await prisma.productoConfigPaso.create({
+    data: {
+      tenantId,
+      productoRutaAlternativaId: impresionFotoduplicadoraRutaAlt.id,
+      rutaPasoId: pasoFotoduplicadora.id,
+      modoActivacion: 'OBLIGATORIO',
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      multiplicadoresActivos: ['caras'],
+      maquinaM1Id: maquinas.duplicadora.id,
+      perfilM1Id: duplicadoraSimpleFazPerfil.id,
+      nombreVisible: 'Impresión en fotoduplicadora',
+      paramsPasoJson: {
+        nestingConfig: {
+          allowRotation: false,
+          separationHMm: 0,
+          separationVMm: 0,
+          pieceBleedMm: 0,
+          margins: {
+            leftMm: 0,
+            rightMm: 0,
+            topMm: 0,
+            bottomMm: 0,
+            startMm: 0,
+            endMm: 0,
+          },
+        },
+      },
+      activo: true,
+    },
+  });
+
+  await prisma.productoConfigPasoSlotMaterial.create({
+    data: {
+      tenantId,
+      productoConfigPasoId: configFotoduplicadora.id,
+      slotCodigo: 'sustrato_principal',
+      modoSeleccion: 'HARDCODED',
+      materialVarianteId: papelObraA4VarId,
+      formula: 'por_unidad_productiva',
+      activo: true,
+    },
+  });
+
   console.info(
-    `✅ Productos: 4 productos creados con sus rutas y configuraciones.`,
+    `✅ Productos: 5 productos creados con sus rutas y configuraciones.`,
   );
 
-  return { tarjetas, vinilo, talonario, rigido };
+  return { tarjetas, vinilo, talonario, rigido, impresionFotoduplicadora };
 }
 
 module.exports = { seedRutasYProductos };

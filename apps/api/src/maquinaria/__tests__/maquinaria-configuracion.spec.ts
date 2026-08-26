@@ -31,6 +31,73 @@ function base(plantilla: PlantillaMaquinariaDto): UpsertMaquinaDto {
 }
 
 describe('diagnóstico de configuración de maquinaria', () => {
+  it('deja lista una duplicadora con tinta negra, máster y perfiles simple/doble faz', () => {
+    const payload = base(PlantillaMaquinariaDto.duplicadora_digital);
+    Object.assign(payload, {
+      anchoUtil: 275,
+      largoUtil: 395,
+      parametrosTecnicos: {
+        margenesNoImprimiblesMm: { sup: 20, inf: 20, izq: 12.5, der: 12.5 },
+        soporteDobleFaz: true,
+        coloresSoportados: ['BN'],
+      },
+      perfilesOperativos: [
+        {
+          id: '22222222-2222-4222-8222-222222222221',
+          nombre: 'Negro simple faz',
+          tipoPerfil: TipoPerfilOperativoMaquinaDto.impresion,
+          activo: true,
+          productivityValue: 90,
+          productivityUnit: UnidadProduccionMaquinaDto.ppm,
+          setupMin: 0.75,
+          detalle: {
+            caras: 'SIMPLE_FAZ',
+            colores: ['BN'],
+            gramajeMaxGr: 127.9,
+          },
+        },
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          nombre: 'Negro doble faz',
+          tipoPerfil: TipoPerfilOperativoMaquinaDto.impresion,
+          activo: true,
+          productivityValue: 90,
+          productivityUnit: UnidadProduccionMaquinaDto.ppm,
+          setupMin: 1.5,
+          detalle: { caras: 'DOBLE_FAZ', colores: ['BN'], gramajeMaxGr: 127.9 },
+        },
+      ],
+      consumibles: [
+        ...[
+          '22222222-2222-4222-8222-222222222221',
+          '22222222-2222-4222-8222-222222222222',
+        ].map((perfilOperativoId) => ({
+          materiaPrimaVarianteId: '33333333-3333-4333-8333-333333333333',
+          nombre: 'Tinta negra',
+          tipo: TipoConsumibleMaquinaDto.tinta,
+          unidad: UnidadConsumoMaquinaDto.ml,
+          consumoBase: 1.603,
+          perfilOperativoId,
+          activo: true,
+          detalle: { color: 'negro' },
+        })),
+        {
+          materiaPrimaVarianteId: '44444444-4444-4444-8444-444444444444',
+          nombre: 'Máster B4',
+          tipo: TipoConsumibleMaquinaDto.otro,
+          unidad: UnidadConsumoMaquinaDto.unidad,
+          rendimientoEstimado: 100,
+          activo: true,
+          detalle: { rol: 'master' },
+        },
+      ],
+    });
+
+    expect(getMaquinaDiagnosticoConfiguracion(payload)).toEqual({
+      estado: 'lista',
+      faltantes: [],
+    });
+  });
   it('no exige repuestos a una anilladora porque esa sección no existe', () => {
     const payload = base(PlantillaMaquinariaDto.anilladora);
     payload.perfilesOperativos = [
