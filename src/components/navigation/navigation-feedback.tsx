@@ -3,7 +3,13 @@
 import * as React from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 
 type NavigationFeedbackContextValue = {
   isPending: boolean;
@@ -39,8 +45,19 @@ export function NavigationFeedbackProvider({
   children: React.ReactNode;
 }) {
   const [isPending, setIsPending] = React.useState(false);
+  const [mostrarAviso, setMostrarAviso] = React.useState(false);
 
   const detener = React.useCallback(() => setIsPending(false), []);
+
+  React.useEffect(() => {
+    // Evita que el aviso parpadee cuando la navegación termina enseguida.
+    const timer = window.setTimeout(
+      () => setMostrarAviso(isPending),
+      isPending ? 180 : 0,
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [isPending]);
 
   React.useEffect(() => {
     if (!isPending) {
@@ -69,14 +86,30 @@ export function NavigationFeedbackProvider({
       <React.Suspense fallback={null}>
         <AvisoDeNavegacion onNavegacion={detener} />
       </React.Suspense>
-      <div className="pointer-events-none fixed right-4 top-4 z-[80]">
-        {isPending ? (
-          <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/92 px-3 py-2 shadow-lg backdrop-blur-sm">
-            <GdiSpinner className="size-4" />
-            <span className="text-xs font-medium text-foreground/80">Cargando...</span>
-          </div>
-        ) : null}
-      </div>
+      {mostrarAviso ? (
+        <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center bg-background/15 px-4 backdrop-blur-[2px] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+          <Card
+            role="status"
+            aria-live="polite"
+            aria-label="Cargando"
+            className="w-full max-w-xs border border-border/70 bg-card/95 py-0 shadow-2xl backdrop-blur-xl motion-safe:animate-in motion-safe:slide-in-from-bottom-2 motion-safe:zoom-in-95 motion-safe:duration-300"
+          >
+            <CardHeader className="flex flex-row items-center gap-4 px-5 py-4">
+              <div className="relative grid size-11 shrink-0 place-items-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15">
+                <span className="absolute inset-1 rounded-full bg-primary/10 motion-safe:animate-ping motion-reduce:hidden" />
+                <Spinner className="relative size-5" aria-hidden="true" />
+              </div>
+              <div className="grid gap-0.5">
+                <CardTitle>Cargando</CardTitle>
+                <CardDescription>Preparando la siguiente vista…</CardDescription>
+              </div>
+            </CardHeader>
+            <div className="h-1 overflow-hidden bg-muted">
+              <div className="h-full w-2/3 rounded-r-full bg-primary motion-safe:animate-pulse" />
+            </div>
+          </Card>
+        </div>
+      ) : null}
     </NavigationFeedbackContext.Provider>
   );
 }
