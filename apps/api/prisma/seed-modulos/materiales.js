@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
- * Seed de Materias Primas + Variantes para los 4 productos validados.
+ * Seed de Materias Primas + Variantes para los productos validados.
  *
  * Materiales mínimos:
  * - Papel Opalina 300gr (Tarjetas)
  * - Papel obra autocopiativo CB / CFB (Talonarios duplicado)
+ * - Papel obra A4 75gr (Fotoduplicadora)
  * - Vinilo blanco rollo 1.37m (Vinilo)
  * - MDF 9mm placa 1.83x2.75m (Rígidos)
  * - Film BOPP mate / brillo (laminado opcional Tarjetas)
@@ -153,6 +154,53 @@ async function seedMateriales(prisma, tenantId) {
             },
           },
         ],
+      },
+    },
+  });
+
+  // Papel obra A4 para trabajos de hoja completa en duplicadora digital.
+  const papelObraA4 = await prisma.materiaPrima.create({
+    data: {
+      tenantId,
+      codigo: "PAPEL-OBRA-A4-75",
+      nombre: "Papel obra A4 75gr",
+      descripcion: "Papel obra blanco A4 75gr para impresión y duplicación",
+      familia: FamiliaMateriaPrima.SUSTRATO,
+      subfamilia: SubfamiliaMateriaPrima.SUSTRATO_HOJA,
+      tipoTecnico: "papel_obra",
+      templateId: "sustrato_hoja_v1",
+      unidadStock: UnidadMateriaPrima.HOJA,
+      unidadCompra: UnidadMateriaPrima.RESMA,
+      esConsumible: false,
+      esRepuesto: false,
+      activo: true,
+      atributosTecnicosJson: {
+        gramajeGr: 75,
+        color: "blanco",
+        acabadoSuperficie: "mate",
+      },
+      variantes: {
+        create: {
+          tenantId,
+          sku: "OBRA-A4-75-M",
+          nombreVariante: "A4 · 75 g · Blanco · Mate",
+          activo: true,
+          precioReferencia: "11.570248",
+          moneda: "ARS",
+          atributosVarianteJson: {
+            formatoComercial: "A4",
+            ancho: 21,
+            alto: 29.7,
+            anchoMm: 210,
+            largoMm: 297,
+            altoMm: 297,
+            gramaje: 75,
+            gramajeGr: 75,
+            material: "Papel obra",
+            color: "Blanco",
+            acabado: "Mate",
+          },
+        },
       },
     },
   });
@@ -680,12 +728,102 @@ async function seedMateriales(prisma, tenantId) {
     },
   });
 
-  console.info(`✅ Materiales: 11 materias primas + variantes creadas.`);
+  const tintaDuplicadoraRicoh = await prisma.materiaPrima.create({
+    data: {
+      tenantId,
+      codigo: "TINTA-DUP-RICOH-DX2430-K",
+      nombre: "Tinta negra Ricoh DX 2430",
+      descripcion: "Tinta negra de 500 ml para duplicadora Ricoh DX 2430.",
+      familia: FamiliaMateriaPrima.TINTA_COLORANTE,
+      subfamilia: SubfamiliaMateriaPrima.TINTA_IMPRESION,
+      tipoTecnico: "tinta_duplicadora",
+      templateId: "tinta_impresion_v1",
+      unidadStock: UnidadMateriaPrima.ML,
+      unidadCompra: UnidadMateriaPrima.UNIDAD,
+      esConsumible: true,
+      activo: true,
+      atributosTecnicosJson: {
+        tecnologiaCompatible: "duplicadora_digital",
+        equipoCompatible: "Ricoh DX 2430",
+        color: "Negro",
+        canal: "negro",
+        volumenPresentacion: 500,
+        rendimientoPaginasReferencia: 5000,
+        coberturaReferenciaPct: 6,
+        formatoReferencia: "A4",
+        copiasMinPorMasterReferencia: 50,
+      },
+      variantes: {
+        create: {
+          tenantId,
+          sku: "TINTA-RICOH-DX2430-K-500ML",
+          nombreVariante: "Negro · 500 ml",
+          activo: true,
+          // Precio por ml: $39.762,60 / 500 ml (referencia 2026-08).
+          precioReferencia: "79.5252",
+          moneda: "ARS",
+          atributosVarianteJson: {
+            tecnologiaCompatible: "duplicadora_digital",
+            equipoCompatible: "Ricoh DX 2430",
+            color: "Negro",
+            canal: "negro",
+            volumenPresentacion: 500,
+            rendimientoPaginasReferencia: 5000,
+            coberturaReferenciaPct: 6,
+            formatoReferencia: "A4",
+            copiasMinPorMasterReferencia: 50,
+          },
+        },
+      },
+    },
+  });
+
+  const masterDuplicadoraRicoh = await prisma.materiaPrima.create({
+    data: {
+      tenantId,
+      codigo: "MASTER-RICOH-DX2430-B4",
+      nombre: "Máster B4 Ricoh DX 2430",
+      descripcion: "Rollo máster térmico 280 mm × 50 m; rinde 100 másteres.",
+      familia: FamiliaMateriaPrima.TINTA_COLORANTE,
+      subfamilia: SubfamiliaMateriaPrima.AUXILIAR_PROCESO,
+      tipoTecnico: "master_duplicadora",
+      templateId: "master_duplicadora_v1",
+      unidadStock: UnidadMateriaPrima.ROLLO,
+      unidadCompra: UnidadMateriaPrima.ROLLO,
+      esConsumible: true,
+      activo: true,
+      atributosTecnicosJson: {
+        ancho: 280,
+        largo: 50,
+        rendimientoMasters: 100,
+        equipoCompatible: "Ricoh DX 2430",
+      },
+      variantes: {
+        create: {
+          tenantId,
+          sku: "MASTER-RICOH-DX2430-280X50",
+          nombreVariante: "B4 · 280 mm × 50 m",
+          activo: true,
+          precioReferencia: "88604",
+          moneda: "ARS",
+          atributosVarianteJson: {
+            ancho: 280,
+            largo: 50,
+            rendimientoMasters: 100,
+            equipoCompatible: "Ricoh DX 2430",
+          },
+        },
+      },
+    },
+  });
+
+  console.info(`✅ Materiales: 14 materias primas + variantes creadas.`);
 
   return {
     opalina,
     papelCB,
     papelCFB,
+    papelObraA4,
     viniloBlanco,
     mdf,
     filmBoppMate,
@@ -694,6 +832,8 @@ async function seedMateriales(prisma, tenantId) {
     tintaCMYKRicoh,
     tintaLatexRoland,
     tintaUVMimaki,
+    tintaDuplicadoraRicoh,
+    masterDuplicadoraRicoh,
   };
 }
 

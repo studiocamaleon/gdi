@@ -43,6 +43,7 @@ export type ConsumibleCanal =
 
 export const PRINTER_TEMPLATES_WITH_CONSUMIBLES = new Set<PlantillaMaquinaria>([
   "impresora_laser",
+  "duplicadora_digital",
   "impresora_gran_formato_por_area",
   "plotter_cad",
 ]);
@@ -189,6 +190,7 @@ export function defaultConsumoBase(
   canal: ConsumibleCanal,
 ) {
   if (plantilla === "impresora_laser") return 1.73;
+  if (plantilla === "duplicadora_digital") return 1.603;
   if (canal === "blanco") return 5;
   if (canal === "barniz") return 3;
   return 8;
@@ -658,6 +660,8 @@ export function getMachineTechnologyLabel(maquina: MaquinaTecnologia) {
   }
   // Tecnologías fijas por plantilla (no se cargan en parametrosTecnicos).
   if (maquina.plantilla === "impresora_laser") return "LÁSER";
+  if (maquina.plantilla === "duplicadora_digital")
+    return "FOTODUPLICACIÓN";
   if (maquina.plantilla === "plotter_cad") return "INKJET";
   return getGeometriaTrabajoMaquinaLabel(maquina.geometriaTrabajo);
 }

@@ -23,6 +23,7 @@ import {
  */
 export enum PlantillaMaquinariaDto {
   impresora_laser = 'impresora_laser',
+  duplicadora_digital = 'duplicadora_digital',
   impresora_gran_formato_por_area = 'impresora_gran_formato_por_area',
   guillotina = 'guillotina',
   plotter_de_corte = 'plotter_de_corte',

@@ -35,6 +35,10 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
     requiredMachineKeys: ['anchoUtil', 'margenesNoImprimiblesMm'],
   },
 
+  [PlantillaMaquinariaDto.duplicadora_digital]: {
+    requiredMachineKeys: ['anchoUtil', 'largoUtil', 'margenesNoImprimiblesMm'],
+  },
+
   // ─── §6 IMPRESORA_GRAN_FORMATO_POR_AREA ─────────────────────────
   // paramsTecnicos: tecnologia, geometria, margenesNoImprimiblesMm,
   //   coloresSoportados[].

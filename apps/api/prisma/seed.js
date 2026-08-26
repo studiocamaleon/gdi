@@ -635,12 +635,12 @@ async function main() {
   console.info("Clave admin: Admin123!");
   console.info("");
   console.info("Modelo Universal V2 cargado:");
-  console.info("  • 7 máquinas + perfiles operativos");
-  console.info("  • 12 materias primas + variantes");
+  console.info("  • 8 máquinas + perfiles operativos");
+  console.info("  • 14 materias primas + variantes");
   console.info("  • 5 cargos directos catálogo");
-  console.info("  • 6 rutas de producción");
+  console.info("  • 8 rutas de producción");
   console.info(
-    "  • 6 productos validados (Tarjetas, Vinilo, Talonarios, Rígidos, Polyfan, Esmerilado)",
+    "  • 7 productos validados (incluye Impresión en Fotoduplicadora)",
   );
 }
 

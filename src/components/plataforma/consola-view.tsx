@@ -272,6 +272,7 @@ const TECNOLOGIA_LABEL: Record<string, string> = {
   ecosolvente: "Ecosolvente",
   solvente: "Solvente",
   sublimacion: "Sublimación",
+  fotoduplicacion: "Fotoduplicación",
 };
 const tecLabel = (t: string) => TECNOLOGIA_LABEL[t] ?? t;
 

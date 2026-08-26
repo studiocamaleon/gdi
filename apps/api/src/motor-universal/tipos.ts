@@ -948,6 +948,8 @@ export interface PasoCargado {
      *  hay varios modos habilitados. Claves normalizadas
      *  (modo-color-comercial.ts). */
     perfilDefaultPorModo?: Record<string, string> | null;
+    /** Modos comerciales que esta candidata atiende. Vacío = sin restricción. */
+    modoColorAllowedModes?: string[];
     esPreferida: boolean;
     orden: number;
     maquina: {

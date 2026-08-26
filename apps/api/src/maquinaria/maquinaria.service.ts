@@ -119,6 +119,10 @@ const TEMPLATE_CATALOG_RULES: Record<
     geometry: GeometriaTrabajoMaquinaDto.pliego,
     defaultProductionUnit: UnidadProduccionMaquinaDto.ppm,
   },
+  duplicadora_digital: {
+    geometry: GeometriaTrabajoMaquinaDto.pliego,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.ppm,
+  },
   // §6: una sola plantilla unifica LATEX/SOLVENTE/UV/SUBLIMACION/DTF_*.
   // La geometría real (rollo o mesa) viene del paramsTecnicos.geometria.
   // Geometría aquí: rollo por defecto (más común), el modelador puede

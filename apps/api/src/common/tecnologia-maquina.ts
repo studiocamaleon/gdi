@@ -16,6 +16,7 @@ export const TECNOLOGIAS_MAQUINA = [
   'dtf_textil',
   'dtf_uv',
   'inkjet',
+  'fotoduplicacion',
 ] as const;
 
 const DIACRITICOS = /[̀-ͯ]/g;
@@ -39,6 +40,13 @@ export function normalizarTecnologiaMaquina(value: unknown): string | null {
   if (['dtf_textil', 'dtftextil'].includes(normalized)) return 'dtf_textil';
   if (['dtf_uv', 'dtfuv'].includes(normalized)) return 'dtf_uv';
   if (normalized === 'inkjet') return 'inkjet';
+  if (
+    ['fotoduplicacion', 'fotoduplicadora', 'duplicadora', 'duplicadora_digital'].includes(
+      normalized,
+    )
+  ) {
+    return 'fotoduplicacion';
+  }
 
   return (TECNOLOGIAS_MAQUINA as readonly string[]).includes(normalized)
     ? normalized
@@ -75,6 +83,7 @@ export function resolverTecnologiaMaquina(
       ? maquina.plantilla.toLowerCase()
       : '';
   if (plantilla === 'impresora_laser') return 'laser';
+  if (plantilla === 'duplicadora_digital') return 'fotoduplicacion';
   // Los plotters CAD son siempre inkjet (tecnología fija por plantilla).
   if (plantilla === 'plotter_cad') return 'inkjet';
   return null;

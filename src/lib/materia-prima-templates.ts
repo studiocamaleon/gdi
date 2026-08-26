@@ -111,6 +111,7 @@ const REPLACEMENT_COMPONENT_OPTIONS = [
 // 11 plantillas (2026-08: sin soldadora/cabina_pintura, + plancha_termica).
 const MAQUINARIA_TEMPLATE_OPTIONS = [
   "impresora_laser",
+  "duplicadora_digital",
   "impresora_gran_formato_por_area",
   "guillotina",
   "plotter_de_corte",
@@ -187,6 +188,7 @@ const REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE: Record<
     "kit_mantenimiento",
     "otro",
   ],
+  duplicadora_digital: ["otro"],
   // §6: gran formato unificado — cabezal + lámpara UV (si aplica) + filtro.
   impresora_gran_formato_por_area: [
     "cabezal",
@@ -498,6 +500,62 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       volumenPresentacion: 500,
       baseQuimica: "uv",
       rendimientoReferencia: 1,
+    },
+  },
+  {
+    id: "master_duplicadora_v1",
+    nombre: "Máster para duplicadora",
+    descripcion:
+      "Rollo de máster térmico consumido una vez por original y cara.",
+    familia: "tinta_colorante",
+    subfamilia: "auxiliar_proceso",
+    tipoTecnico: "master_duplicadora",
+    unidadStock: "rollo",
+    unidadCompra: "rollo",
+    camposTecnicos: [
+      {
+        key: "ancho",
+        label: "Ancho",
+        type: "number",
+        unit: "mm",
+        required: true,
+      },
+      {
+        key: "largo",
+        label: "Largo",
+        type: "number",
+        unit: "m",
+        required: true,
+      },
+      {
+        key: "rendimientoMasters",
+        label: "Másteres por rollo",
+        type: "number",
+        required: true,
+      },
+      {
+        key: "equipoCompatible",
+        label: "Equipo compatible",
+        type: "text",
+        required: true,
+      },
+    ],
+    dimensionesVariante: ["ancho", "largo", "equipoCompatible"],
+    requiredAtributos: [
+      "ancho",
+      "largo",
+      "rendimientoMasters",
+      "equipoCompatible",
+    ],
+    atributosIniciales: {
+      ancho: 280,
+      largo: 50,
+      rendimientoMasters: 100,
+      equipoCompatible: "Ricoh DX 2430",
+    },
+    defaults: {
+      esConsumible: true,
+      lockEsConsumible: true,
     },
   },
   {

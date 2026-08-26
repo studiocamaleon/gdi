@@ -1,10 +1,16 @@
 import {
+  duplicatorMasterQuantity,
   getConsumableChannelFromDetail,
   getPerfilConsumableChannels,
   requiredConsumableChannelsFromColorMode,
 } from '../consumibles-impresion';
 
 describe('consumibles de impresión', () => {
+  it('consume un máster por cara y no por copia', () => {
+    expect(duplicatorMasterQuantity(1)).toBe(1);
+    expect(duplicatorMasterQuantity(2)).toBe(2);
+    expect(duplicatorMasterQuantity(500)).toBe(1);
+  });
   it('resuelve canales CMYK completos desde el modo de color del perfil', () => {
     expect(requiredConsumableChannelsFromColorMode('CMYK')).toEqual([
       'cian',

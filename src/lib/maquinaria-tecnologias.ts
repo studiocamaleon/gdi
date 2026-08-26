@@ -29,6 +29,13 @@ export function normalizeMachineTechnology(value: unknown): TecnologiaMaquina | 
   if (["dtf_textil", "dtftextil"].includes(normalized)) return "dtf_textil";
   if (["dtf_uv", "dtfuv"].includes(normalized)) return "dtf_uv";
   if (normalized === "inkjet") return "inkjet";
+  if (
+    ["fotoduplicacion", "fotoduplicadora", "duplicadora", "duplicadora_digital"].includes(
+      normalized,
+    )
+  ) {
+    return "fotoduplicacion";
+  }
 
   return tecnologiaMaquinaItems.some((item) => item.value === normalized)
     ? (normalized as TecnologiaMaquina)
@@ -45,6 +52,7 @@ export function getMachineTechnology(machine: MachineTechnologySource): Tecnolog
 
   const plantilla = typeof machine.plantilla === "string" ? machine.plantilla.toLowerCase() : "";
   if (plantilla === "impresora_laser") return "laser";
+  if (plantilla === "duplicadora_digital") return "fotoduplicacion";
   // Los plotters CAD son siempre inkjet (tecnología fija por plantilla).
   if (plantilla === "plotter_cad") return "inkjet";
   return null;

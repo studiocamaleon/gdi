@@ -418,6 +418,11 @@ const TECHNOLOGY_META: Record<
     desc: "Sublimación sobre poliéster",
   },
   inkjet: { abbr: "IJ", color: "#0ea5e9", desc: "Inyección de tinta" },
+  fotoduplicacion: {
+    abbr: "FD",
+    color: "#64748b",
+    desc: "Máster y tinta · tiradas monocromáticas",
+  },
 };
 
 function getTechnologyMeta(value: string) {
@@ -5683,6 +5688,23 @@ function ApConfigStep({
           seleccionModoColor[modo.configPasoId] = fallback;
         } else {
           delete seleccionModoColor[modo.configPasoId];
+        }
+      }
+      // En candidatas M-2, el modo puede traer la máquina implícita (p. ej.
+      // B/N → Ricoh 9003, CMYK → C8003). La selección automática inicial debe
+      // sincronizarla igual que un clic; si no, la card muestra una máquina y
+      // el payload conserva silenciosamente la candidata preferida.
+      for (const modo of modosColorComercial) {
+        const seleccionado = normalizeModoColor(
+          seleccionModoColor[modo.configPasoId],
+        );
+        if (!seleccionado) continue;
+        const opcion = modo.options.find(
+          (item) =>
+            (normalizeModoColor(item.value) ?? item.value) === seleccionado,
+        );
+        if (opcion?.maquinaId) {
+          seleccionMaquina[modo.configPasoId] = opcion.maquinaId;
         }
       }
 

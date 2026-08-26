@@ -1,8 +1,10 @@
 export const PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES = new Set<string>([
   'impresora_laser',
+  'duplicadora_digital',
   'impresora_gran_formato_por_area',
   'plotter_cad',
   'IMPRESORA_LASER',
+  'DUPLICADORA_DIGITAL',
   'IMPRESORA_GRAN_FORMATO_POR_AREA',
   'PLOTTER_CAD',
 ]);
@@ -122,6 +124,17 @@ export function getConsumableChannelFromDetail(
   detalle: Record<string, unknown> | null | undefined,
 ): ConsumableChannel | null {
   return normalizeConsumableChannel(detalle?.color ?? detalle?.canal);
+}
+
+export function isDuplicatorMasterDetail(
+  detalle: Record<string, unknown> | null | undefined,
+) {
+  const rol = typeof detalle?.rol === 'string' ? detalle.rol.toLowerCase() : '';
+  return rol === 'master' || rol === 'máster';
+}
+
+export function duplicatorMasterQuantity(caras: number) {
+  return caras === 2 ? 2 : 1;
 }
 
 export function consumableTypeForChannel(

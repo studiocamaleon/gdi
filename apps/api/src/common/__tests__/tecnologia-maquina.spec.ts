@@ -11,6 +11,12 @@ describe('tecnologia-maquina', () => {
       expect(normalizarTecnologiaMaquina('Eco-Solvente')).toBe('eco_solvente');
       expect(normalizarTecnologiaMaquina('Láser')).toBe('laser');
       expect(normalizarTecnologiaMaquina('DTF UV')).toBe('dtf_uv');
+      expect(normalizarTecnologiaMaquina('Fotoduplicación')).toBe(
+        'fotoduplicacion',
+      );
+      expect(normalizarTecnologiaMaquina('duplicadora digital')).toBe(
+        'fotoduplicacion',
+      );
     });
 
     it('devuelve null para valores desconocidos o vacíos', () => {
@@ -51,6 +57,9 @@ describe('tecnologia-maquina', () => {
       expect(resolverTecnologiaMaquina({ plantilla: 'plotter_cad' })).toBe(
         'inkjet',
       );
+      expect(
+        resolverTecnologiaMaquina({ plantilla: 'DUPLICADORA_DIGITAL' }),
+      ).toBe('fotoduplicacion');
     });
 
     it('devuelve null sin señal alguna', () => {
