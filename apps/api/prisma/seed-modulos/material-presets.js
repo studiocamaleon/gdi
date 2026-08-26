@@ -783,6 +783,45 @@ const presets = [
     variantes: brocheVariants(),
   },
   {
+    key: 'OJAL_NIQUELADO',
+    nombreCanonico: 'Ojales niquelados',
+    descripcionCorta:
+      'Ojales metálicos con terminación níquel para lona, banners, carteles y otras piezas perforables.',
+    iconKind: 'objeto',
+    aliasDisponibles: [
+      'Ojal niquelado',
+      'Ojal de níquel',
+      'Ojalillo niquelado',
+      'Ojal metálico',
+    ],
+    usosRecomendados: ['banners', 'carteleria', 'lonas', 'inmobiliaria'],
+    procesosCompatibles: ['colocacion_ojales'],
+    advertencias: [
+      'Confirmar que el diámetro indicado corresponda al diámetro interno del ojal.',
+    ],
+    familia: FamiliaMateriaPrima.HERRAJE_ACCESORIO,
+    subfamilia: SubfamiliaMateriaPrima.OJAL_OJALILLO_REMACHE,
+    tipoTecnico: 'ojal',
+    templateId: 'ojal_ojalillo_remache_v1',
+    variantes: [8, 10, 13].map((diametroInterno) => ({
+      skuSugerido: `OJAL-NIQ-${diametroInterno}MM`,
+      nombreVarianteSugerido: `Ojal niquelado Ø ${diametroInterno} mm`,
+      formato: `Ø interno ${diametroInterno} mm`,
+      espesor: null,
+      color: 'Níquel',
+      recomendada: diametroInterno === 10,
+      atributosVarianteJson: {
+        diametroInterno,
+        material: 'Metal',
+        terminacion: 'Niquelado',
+      },
+      unidadStock: UnidadMateriaPrima.UNIDAD,
+      unidadCompra: UnidadMateriaPrima.CAJA,
+      precioReferencia: null,
+      moneda: 'ARS',
+    })),
+  },
+  {
     // Biblioteca de espirales plásticos (paso 4:1) para el paso encuadernado_anillado
     // y el "Anillado" del centro de copiado. La capacidad (hojas a 80g) sale de la
     // tabla de la industria y es EDITABLE por el tenant (varía por fabricante/gramaje).

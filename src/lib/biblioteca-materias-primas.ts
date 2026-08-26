@@ -185,4 +185,9 @@ export const bibliotecaFamilias: Record<
     key: "portabanner_estructura",
     parent: "pop_exhibidor",
   },
+  ojal_ojalillo_remache: {
+    nm: "Ojales y remaches",
+    key: "ojal_ojalillo_remache",
+    parent: "herraje_accesorio",
+  },
 };
