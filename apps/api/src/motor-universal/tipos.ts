@@ -410,6 +410,7 @@ export interface PasoEjecutado {
    * porque describe el PASO, no cada pieza. Alimenta la spec de la ficha/OT.
    */
   ojalesConfig?: {
+    modoDistribucion?: 'por_separacion' | 'solo_esquinas';
     separacionMaxMm: number;
     lados: LadoPieza[];
     esquinasSiempre: boolean;

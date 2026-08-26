@@ -199,6 +199,23 @@ describe("resumenOjales / describirOjales", () => {
     ])!;
     expect(describirOjales(r)).toBe("6 ojales");
   });
+
+  it("describe explícitamente el modo sólo esquinas", () => {
+    const r = resumenOjales([
+      {
+        ojalesLayout: [{ cantidad: 2, posiciones: posiciones(4) }],
+        ojalesConfig: {
+          modoDistribucion: "solo_esquinas",
+          separacionMaxMm: 0,
+          lados: ["superior", "inferior", "izquierdo", "derecho"],
+          esquinasSiempre: true,
+        },
+      },
+    ])!;
+    expect(describirOjales(r)).toBe(
+      "8 ojales (4 por pieza) · sólo en las esquinas",
+    );
+  });
 });
 
 describe("describirModificaciones", () => {

@@ -349,6 +349,8 @@ export interface ParamsPasoDeclarado {
   requerido?: boolean;
   /** Descripción para documentación / tooltip. */
   descripcion?: string;
+  /** Oculta el campo salvo que otro parámetro tenga el valor indicado. */
+  visibleCuando?: { campo: string; valor: unknown };
   /**
    * El campo es editable por el COMERCIAL al cotizar POR DISEÑO de la
    * familia, sin que el modelador lo declare en

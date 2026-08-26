@@ -20,6 +20,7 @@ const CUATRO_LADOS: LadoPieza[] = [
 
 function params(over: Partial<Parameters<typeof calcularOjalesPorPieza>[2]> = {}) {
   return {
+    modoDistribucion: 'por_separacion' as const,
     separacionMaxMm: 500,
     lados: CUATRO_LADOS,
     esquinasSiempre: true,
@@ -46,6 +47,7 @@ describe('parsearParamsColocacionOjales', () => {
         lados: ['derecho', 'superior'],
       }),
     ).toEqual({
+      modoDistribucion: 'por_separacion',
       separacionMaxMm: 500,
       lados: ['superior', 'derecho'],
       esquinasSiempre: true,
@@ -91,6 +93,18 @@ describe('parsearParamsColocacionOjales', () => {
     ).toBeNull();
     expect(parsearParamsColocacionOjales(null)).toBeNull();
   });
+
+  it('sólo esquinas no requiere separación ni lados', () => {
+    expect(
+      parsearParamsColocacionOjales({ modoDistribucion: 'solo_esquinas' }),
+    ).toEqual({
+      modoDistribucion: 'solo_esquinas',
+      separacionMaxMm: 0,
+      lados: CUATRO_LADOS,
+      esquinasSiempre: true,
+      distanciaBordeMm: 10,
+    });
+  });
 });
 
 describe('calcularOjalesPorPieza', () => {
@@ -103,6 +117,16 @@ describe('calcularOjalesPorPieza', () => {
    */
   it('caso B del diseño: 4 lados cada 500mm = 10 ojales', () => {
     expect(calcularOjalesPorPieza(1500, 1000, params())).toBe(10);
+  });
+
+  it('modo sólo esquinas coloca exactamente cuatro ojales', () => {
+    expect(
+      calcularOjalesPorPieza(
+        1500,
+        1000,
+        params({ modoDistribucion: 'solo_esquinas' }),
+      ),
+    ).toBe(4);
   });
 
   /** Caso C del diseño: sin lados adyacentes, no hay esquina que descontar. */

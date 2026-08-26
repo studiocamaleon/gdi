@@ -27,6 +27,8 @@ export const ETIQUETAS_VALOR_PARAM: Record<string, string> = {
   inferior: "Inferior",
   izquierdo: "Izquierdo",
   derecho: "Derecho",
+  por_separacion: "Distribuidos por los lados",
+  solo_esquinas: "Sólo cuatro esquinas",
   simple: "Simple (marco plano)",
   doble: "Doble (cajón)",
   area: "Por área (grilla sobre la cara)",

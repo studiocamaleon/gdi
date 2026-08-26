@@ -172,6 +172,7 @@ const layout_ojales: Derivador = (jobContext, params) => {
     traza: {
       ojalesLayout: layout,
       ojalesConfig: {
+        modoDistribucion: parseados.modoDistribucion,
         separacionMaxMm: parseados.separacionMaxMm,
         lados: parseados.lados,
         esquinasSiempre: parseados.esquinasSiempre,

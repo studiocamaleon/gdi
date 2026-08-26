@@ -129,6 +129,7 @@ export function medidaAntesDespues(mutacion: MutacionAplicadaView) {
 }
 
 export interface OjalesConfigView {
+  modoDistribucion?: "por_separacion" | "solo_esquinas";
   separacionMaxMm: number;
   lados: string[];
   esquinasSiempre: boolean;
@@ -143,6 +144,7 @@ export interface ResumenOjales {
   piezas: number;
   separacionMaxMm: number | null;
   lados: string[];
+  modoDistribucion: "por_separacion" | "solo_esquinas";
 }
 
 /**
@@ -179,6 +181,7 @@ export function resumenOjales(
     piezas,
     separacionMaxMm: config?.separacionMaxMm ?? null,
     lados: config?.lados ?? [],
+    modoDistribucion: config?.modoDistribucion ?? "por_separacion",
   };
 }
 
@@ -190,10 +193,17 @@ export function describirOjales(resumen: ResumenOjales): string {
       ? `${resumen.total} ojales (${resumen.porPieza} por pieza)`
       : `${resumen.total} ojales`,
   );
-  if (resumen.separacionMaxMm) {
+  if (resumen.modoDistribucion === "solo_esquinas") {
+    partes.push("sólo en las esquinas");
+  } else if (resumen.separacionMaxMm) {
     partes.push(`cada ${formatMmComoCm(resumen.separacionMaxMm)} cm`);
   }
-  if (resumen.lados.length > 0) partes.push(describirLados(resumen.lados));
+  if (
+    resumen.modoDistribucion !== "solo_esquinas" &&
+    resumen.lados.length > 0
+  ) {
+    partes.push(describirLados(resumen.lados));
+  }
   return partes.join(" · ");
 }
 

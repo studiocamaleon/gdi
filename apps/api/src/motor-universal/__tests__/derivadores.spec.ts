@@ -191,6 +191,17 @@ describe('layout_ojales', () => {
   it('sin separación ni lados → null', () => {
     expect(runDerivador('layout_ojales', JOB_BACKLIGHT, {})).toBeNull();
   });
+
+  it('sólo esquinas deriva cuatro ojales sin separación ni lados', () => {
+    const r = runDerivador('layout_ojales', JOB_BACKLIGHT, {
+      modoDistribucion: 'solo_esquinas',
+    });
+    expect(r?.magnitudes.ojales).toBe(4);
+    expect(r?.traza?.ojalesConfig).toMatchObject({
+      modoDistribucion: 'solo_esquinas',
+      separacionMaxMm: 0,
+    });
+  });
 });
 
 describe('cache de derivaciones en el JobContext', () => {

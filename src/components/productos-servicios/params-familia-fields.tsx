@@ -70,9 +70,18 @@ export function ParamsFamiliaFields({
   // `modoTalonarioIncompleto` se declara en el schema pero NO se edita acá: es
   // un modo del control "Imposición del pliego" (Acomodado). Si lo dejáramos,
   // aparecería dos veces.
-  const schema = (familia.paramsPasoSchema ?? []).filter(
-    (p) => p.campo !== "modoTalonarioIncompleto",
-  );
+  const schemaCompleto = familia.paramsPasoSchema ?? [];
+  const valorEfectivo = (campo: string) => {
+    if (params[campo] !== undefined && params[campo] !== null) {
+      return params[campo];
+    }
+    return schemaCompleto.find((p) => p.campo === campo)?.default;
+  };
+  const schema = schemaCompleto.filter((p) => {
+    if (p.campo === "modoTalonarioIncompleto") return false;
+    if (!p.visibleCuando) return true;
+    return valorEfectivo(p.visibleCuando.campo) === p.visibleCuando.valor;
+  });
   if (!familiaConParamsEditables(familia) || schema.length === 0) {
     return null;
   }

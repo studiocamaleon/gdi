@@ -61,6 +61,25 @@ describe('Catálogo de familias', () => {
     ).toContain('PEGATINA_RASPADITA');
   });
 
+  it('colocación de ojales ofrece el modo sólo cuatro esquinas', () => {
+    const familia = getFamilia('colocacion_ojales');
+    const modo = familia.paramsPasoSchema.find(
+      (param) => param.campo === 'modoDistribucion',
+    );
+    const separacion = familia.paramsPasoSchema.find(
+      (param) => param.campo === 'separacionMaxMm',
+    );
+
+    expect(modo).toMatchObject({
+      default: 'por_separacion',
+      valoresPermitidos: ['por_separacion', 'solo_esquinas'],
+    });
+    expect(separacion?.visibleCuando).toEqual({
+      campo: 'modoDistribucion',
+      valor: 'por_separacion',
+    });
+  });
+
   it('corte con hilo caliente declara su cotizador y nesting vectorial', () => {
     const familia = getFamilia('corte_hilo_caliente');
 

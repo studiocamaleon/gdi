@@ -32,6 +32,7 @@ export const DISTANCIA_BORDE_OJAL_MM_DEFAULT = 10;
  * para el caño, y centrar el ojal en él lo metería innecesariamente adentro.
  */
 export interface ParamsColocacionOjales {
+  modoDistribucion: 'por_separacion' | 'solo_esquinas';
   /** Separación MÁXIMA entre ojales. Se reparte pareja sin superarla. */
   separacionMaxMm: number;
   lados: LadoPieza[];
@@ -90,11 +91,10 @@ export function parsearParamsColocacionOjales(
 ): ParamsColocacionOjales | null {
   const params = (paramsPasoJson ?? {}) as Record<string, unknown>;
 
-  const lados = parsearLados(params.lados);
-  if (lados.length === 0) return null;
-
-  const separacionMaxMm = Number(params.separacionMaxMm ?? NaN);
-  if (!Number.isFinite(separacionMaxMm) || separacionMaxMm <= 0) return null;
+  const modoDistribucion =
+    params.modoDistribucion === 'solo_esquinas'
+      ? 'solo_esquinas'
+      : 'por_separacion';
 
   const distanciaRaw = Number(params.distanciaBordeMm ?? NaN);
   const distanciaBordeMm =
@@ -102,7 +102,24 @@ export function parsearParamsColocacionOjales(
       ? distanciaRaw
       : DISTANCIA_BORDE_OJAL_MM_DEFAULT;
 
+  if (modoDistribucion === 'solo_esquinas') {
+    return {
+      modoDistribucion,
+      separacionMaxMm: 0,
+      lados: [...LADOS_PIEZA],
+      esquinasSiempre: true,
+      distanciaBordeMm,
+    };
+  }
+
+  const lados = parsearLados(params.lados);
+  if (lados.length === 0) return null;
+
+  const separacionMaxMm = Number(params.separacionMaxMm ?? NaN);
+  if (!Number.isFinite(separacionMaxMm) || separacionMaxMm <= 0) return null;
+
   return {
+    modoDistribucion,
     separacionMaxMm,
     lados,
     esquinasSiempre: params.esquinasSiempre !== false,
@@ -212,7 +229,10 @@ export function calcularPosicionesOjales(
     const largoMm = largoDelLadoMm(lado, anchoMm, altoMm);
     if (largoMm <= 0) continue;
 
-    const tramos = Math.ceil(largoMm / params.separacionMaxMm);
+    const tramos =
+      params.modoDistribucion === 'solo_esquinas'
+        ? 1
+        : Math.ceil(largoMm / params.separacionMaxMm);
     const desde = params.esquinasSiempre ? 0 : 1;
     const hasta = params.esquinasSiempre ? tramos : tramos - 1;
 

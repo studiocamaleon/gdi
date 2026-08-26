@@ -2312,6 +2312,14 @@ function validarBasico(
     const params = asRecord(cfg.paramsPasoJson);
     for (const param of familia.paramsPasoSchema ?? []) {
       if (!param.requerido || param.default !== undefined) continue;
+      if (param.visibleCuando) {
+        const controlador = familia.paramsPasoSchema?.find(
+          (candidate) => candidate.campo === param.visibleCuando?.campo,
+        );
+        const valorControlador =
+          params[param.visibleCuando.campo] ?? controlador?.default;
+        if (valorControlador !== param.visibleCuando.valor) continue;
+      }
       const valor = params[param.campo];
       const vacio =
         param.tipo === "multi-enum"

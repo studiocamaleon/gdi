@@ -2088,18 +2088,29 @@ const colocacion_ojales: DefinicionFamilia = {
       ojales_colocados: 'ojales',
     },
     mensajeSinDatos:
-      'no declara separación entre ojales ni lados, así que no puede calcular cuántos ojales entran.',
+      'no eligió sólo esquinas ni declaró separación y lados, así que no puede calcular cuántos ojales entran.',
     sugerenciaSinDatos:
-      'Configurar en el paso la separación máxima entre ojales (mm) y los lados donde van.',
+      'Elegir “Sólo cuatro esquinas” o configurar la separación máxima entre ojales (mm) y los lados donde van.',
     codigoSinDatos: 'colocacion_ojales_mal_configurada',
   },
   validaciones: [],
   paramsPasoSchema: [
     {
+      campo: 'modoDistribucion',
+      etiqueta: 'Distribución de los ojales',
+      tipo: 'enum',
+      valoresPermitidos: ['por_separacion', 'solo_esquinas'],
+      default: 'por_separacion',
+      requerido: true,
+      descripcion:
+        'Distribuidos por los lados con una separación máxima, o únicamente uno en cada una de las cuatro esquinas.',
+    },
+    {
       campo: 'separacionMaxMm',
       etiqueta: 'Separación máxima entre ojales (mm)',
       tipo: 'number',
       requerido: true,
+      visibleCuando: { campo: 'modoDistribucion', valor: 'por_separacion' },
       descripcion:
         'Es un MÁXIMO, no un valor exacto: los ojales se reparten parejos por cada lado sin superar esta distancia.',
     },
@@ -2109,6 +2120,7 @@ const colocacion_ojales: DefinicionFamilia = {
       tipo: 'multi-enum',
       valoresPermitidos: ['superior', 'inferior', 'izquierdo', 'derecho'],
       requerido: true,
+      visibleCuando: { campo: 'modoDistribucion', valor: 'por_separacion' },
     },
     {
       campo: 'distanciaBordeMm',
@@ -2125,6 +2137,7 @@ const colocacion_ojales: DefinicionFamilia = {
       tipo: 'boolean',
       default: true,
       requerido: false,
+      visibleCuando: { campo: 'modoDistribucion', valor: 'por_separacion' },
       descripcion:
         'Práctica de taller: la esquina lleva ojal sí o sí. Cuando dos lados adyacentes llevan ojales, la esquina se cuenta UNA sola vez.',
     },

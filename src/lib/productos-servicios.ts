@@ -577,6 +577,7 @@ export interface FamiliaListItem {
     default?: unknown;
     requerido?: boolean;
     descripcion?: string;
+    visibleCuando?: { campo: string; valor: unknown };
     /** Editable por el comercial POR DISEÑO de la familia (densidad LED,
      *  refuerzos del bastidor) — el sheet lo ofrece sin que el modelador lo
      *  abra. Espejo de ParamsPasoDeclarado.expuestoAlComercial del API. */

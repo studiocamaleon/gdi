@@ -1253,6 +1253,7 @@ export interface CotizarResponse {
       }> | null;
       /** Sólo `colocacion_ojales`: cómo se pidieron (describe el paso). */
       ojalesConfig?: {
+        modoDistribucion?: "por_separacion" | "solo_esquinas";
         separacionMaxMm: number;
         lados: string[];
         esquinasSiempre: boolean;
