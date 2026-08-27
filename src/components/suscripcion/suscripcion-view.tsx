@@ -148,6 +148,7 @@ function LogoTarjeta({ marca }: { marca: string }) {
 const ETIQUETA_FEATURE: Record<string, string> = {
   afip: "Facturación electrónica (ARCA)",
   whatsapp: "Notificaciones por WhatsApp",
+  centroCopiado: "Centro de copiado",
 };
 
 function precio(monto: number, moneda: string): string {
@@ -156,6 +157,14 @@ function precio(monto: number, moneda: string): string {
 }
 
 function detallesDe(features: Record<string, unknown>): string[] {
+  if (features.todo === true) {
+    return [
+      "Todas las funciones presentes y futuras",
+      "Usuarios ilimitados",
+      "Órdenes ilimitadas",
+      "Almacenamiento ilimitado",
+    ];
+  }
   const out: string[] = [];
   for (const [clave, etiqueta] of Object.entries(ETIQUETA_FEATURE)) {
     if (features[clave] === true) out.push(etiqueta);

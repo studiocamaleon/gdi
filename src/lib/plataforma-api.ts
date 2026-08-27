@@ -53,6 +53,7 @@ export type PlanCatalogo = {
   paddlePriceIdAnual: string | null;
   precioAnual: number | null;
   trialDias: number | null;
+  publico: boolean;
   tenants: number;
 };
 

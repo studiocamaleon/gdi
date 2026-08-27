@@ -3,6 +3,7 @@
 # dependencies
 /node_modules
 /apps/api/node_modules
+/apps/marketing/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -16,6 +17,7 @@
 
 # next.js
 /.next/
+/apps/marketing/.next/
 /out/
 
 # production
@@ -49,6 +51,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!/apps/marketing/next-env.d.ts
 
 # local sqlite scratch db
 dev.db

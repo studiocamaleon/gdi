@@ -843,6 +843,37 @@ describe('runNestingForPaso montaje sobre sustrato', () => {
     expect(result!.piezasAcomodadas).toBe(10);
   });
 
+  it('publica cada placa física y sus placements en un nesting uniforme multplaca', async () => {
+    const result = await runNestingForPaso(
+      buildPasoMontaje('auto') as never,
+      {
+        cantidad: 5,
+        piezas: [{ cantidad: 5, anchoMm: 600, altoMm: 400 }],
+      },
+      {
+        id: 'mdf-130x90',
+        subfamilia: 'SUSTRATO_RIGIDO',
+        atributosVarianteJson: { anchoMm: 1300, altoMm: 900 },
+      },
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.algorithm).toBe('grid-2d-single');
+    expect(result!.cantidadCalculada).toBe(2);
+    expect(result!.substrates).toEqual([
+      { kind: 'sheet', count: 1, widthMm: 1300, heightMm: 900 },
+      { kind: 'sheet', count: 1, widthMm: 1300, heightMm: 900 },
+    ]);
+    expect(result!.placements).toHaveLength(5);
+    expect(
+      result!.placements.filter((placement) => placement.substrateIndex === 0),
+    ).toHaveLength(4);
+    expect(
+      result!.placements.filter((placement) => placement.substrateIndex === 1),
+    ).toHaveLength(1);
+    expect(result!.metricasRaw.perSubstrate).toHaveLength(2);
+  });
+
   // ── Etapa A: qué piezas acomoda el paso lo declara la familia ──────
   // Laminado y montaje heredaban pliegos con dos tablas de claves gemelas
   // en el dispatcher. Ahora es una sola ruta y la diferencia entre ambos

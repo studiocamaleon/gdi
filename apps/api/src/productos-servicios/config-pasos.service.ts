@@ -835,6 +835,7 @@ export class ConfigPasosService {
       >,
     ) => {
       if (!compat) return false;
+      if (compat.sinRestricciones === true) return true;
       if (
         compat.familiasMateriaPrima?.length &&
         !compat.familiasMateriaPrima.includes(materia.familia as never)

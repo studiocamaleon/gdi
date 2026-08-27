@@ -1663,28 +1663,64 @@ function runGrid2DSingleForArea(
 
   const totalPiezas = piezas.reduce((acc, item) => acc + item.cantidad, 0);
   const pliegosNecesarios = Math.ceil(totalPiezas / piezasPorPliego);
-  const mixedLayout = buildSingleSizeMixedLayout({
-    pieceId: 'pieza_0',
-    pieceWidthMm: pieza.anchoMm,
-    pieceHeightMm: pieza.altoMm,
-    quantity: Math.min(totalPiezas, piezasPorPliego),
-    substrateWidthMm: config.sheetWidthMm,
-    substrateHeightMm: config.sheetHeightMm,
-    margins: sustrato.margins,
-    separationHMm: config.separationHMm,
-    separationVMm: config.separationVMm,
-    allowRotation: config.allowRotation,
-  });
-  const placements =
-    mixedLayout?.placements ??
-    result.placements
-      .slice(0, Math.min(totalPiezas, piezasPorPliego))
-      .map((placement) => ({
-        ...placement,
-        substrateIndex: 0,
-      }));
+  // El contrato visual/costeable representa CADA placa física. Antes se
+  // publicaba un único sustrato con `count: pliegosNecesarios` y solamente
+  // los placements de la primera placa. El visor dibujaba una sola placa y
+  // terminaba superponiéndole el escalón de costo de la última.
+  const substrates: SubstrateUsage[] = [];
+  const placements: Placement[] = [];
+  const perSubstrate: Array<{
+    areaUtilMm2: number;
+    consumedLengthMm: number;
+  }> = [];
+  let piezasRestantes = totalPiezas;
+
+  for (
+    let substrateIndex = 0;
+    substrateIndex < pliegosNecesarios;
+    substrateIndex++
+  ) {
+    const piezasEnEstaPlaca = Math.min(piezasRestantes, piezasPorPliego);
+    piezasRestantes -= piezasEnEstaPlaca;
+    const mixedLayout = buildSingleSizeMixedLayout({
+      pieceId: 'pieza_0',
+      pieceWidthMm: pieza.anchoMm,
+      pieceHeightMm: pieza.altoMm,
+      quantity: piezasEnEstaPlaca,
+      substrateWidthMm: config.sheetWidthMm,
+      substrateHeightMm: config.sheetHeightMm,
+      margins: sustrato.margins,
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+    });
+    const placementsPlaca =
+      mixedLayout?.placements ?? result.placements.slice(0, piezasEnEstaPlaca);
+    const indexedPlacements = placementsPlaca.map((placement) => ({
+      ...placement,
+      substrateIndex,
+    }));
+    placements.push(...indexedPlacements);
+    substrates.push({
+      kind: 'sheet',
+      count: 1,
+      widthMm: config.sheetWidthMm,
+      heightMm: config.sheetHeightMm,
+    });
+    perSubstrate.push({
+      areaUtilMm2: piezasEnEstaPlaca * pieza.anchoMm * pieza.altoMm,
+      consumedLengthMm:
+        mixedLayout?.consumedLengthMm ??
+        consumedLengthFromPlacements(
+          indexedPlacements,
+          config.margins.bottomMm,
+        ),
+    });
+  }
   const previewConsumedLengthMm =
-    mixedLayout?.consumedLengthMm ?? result.metrics.largoConsumidoMm ?? 0;
+    perSubstrate[perSubstrate.length - 1]?.consumedLengthMm ??
+    result.metrics.largoConsumidoMm ??
+    0;
 
   return {
     algorithm: 'grid-2d-single',
@@ -1698,20 +1734,14 @@ function runGrid2DSingleForArea(
               10000,
           ) / 100
         : result.metrics.aprovechamientoPct,
-    substrates: [
-      {
-        kind: 'sheet' as const,
-        count: pliegosNecesarios,
-        widthMm: config.sheetWidthMm,
-        heightMm: config.sheetHeightMm,
-      },
-    ],
+    substrates,
     placements,
     metricasRaw: {
       ...result.metrics,
       areaUtilMm2: totalPiezas * pieza.anchoMm * pieza.altoMm,
       areaTotalMm2: result.metrics.areaTotalMm2 * pliegosNecesarios,
       largoConsumidoMm: previewConsumedLengthMm,
+      perSubstrate,
     },
     piezasPorPliego,
     piezasAcomodadas: totalPiezas,
@@ -1727,6 +1757,19 @@ function runGrid2DSingleForArea(
       substrateLabel,
     }),
   };
+}
+
+function consumedLengthFromPlacements(
+  placements: Placement[],
+  trailingMarginMm: number,
+): number {
+  if (placements.length === 0) return 0;
+  return (
+    placements.reduce(
+      (max, placement) => Math.max(max, placement.yMm + placement.heightMm),
+      0,
+    ) + trailingMarginMm
+  );
 }
 
 function buildSingleSizeMixedLayout(input: {

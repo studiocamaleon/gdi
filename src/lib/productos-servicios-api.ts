@@ -1019,6 +1019,20 @@ export interface NestingViewerInput {
     };
     wasteAreaMm2?: number;
     segmentAppliedPct?: number | null;
+    perSubstrate?: Array<{
+      index: number;
+      chargedRatio?: number;
+      chargedLengthMm?: number;
+      chargedAreaMm2?: number;
+      chargedBounds?: {
+        xMm: number;
+        yMm: number;
+        widthMm: number;
+        heightMm: number;
+      };
+      wasteAreaMm2?: number;
+      segmentAppliedPct?: number | null;
+    }>;
   };
   pliegoImpresionSeleccionado?: {
     id: string;

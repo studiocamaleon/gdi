@@ -701,6 +701,21 @@ export interface NestingCostingPreview {
   };
   wasteAreaMm2?: number;
   segmentAppliedPct?: number | null;
+  /** Vista de costeo correspondiente a cada placa física. */
+  perSubstrate?: Array<{
+    index: number;
+    chargedRatio?: number;
+    chargedLengthMm?: number;
+    chargedAreaMm2?: number;
+    chargedBounds?: {
+      xMm: number;
+      yMm: number;
+      widthMm: number;
+      heightMm: number;
+    };
+    wasteAreaMm2?: number;
+    segmentAppliedPct?: number | null;
+  }>;
 }
 
 export interface MaterialEjecutado {

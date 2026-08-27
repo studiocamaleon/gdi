@@ -11,7 +11,7 @@ import { SuscripcionSyncService } from '../../cobro/suscripcion-sync.service';
  * la base real: lo que importa es la CADENA — cambiar un plan tiene que
  * mover el feature gate del tenant y dejar rastro en la auditoría, no sólo
  * escribir una fila. La migración seedea el catálogo (trial/taller/estudio/
- * diamante), así que los planes están.
+ * diamante y founder), así que los planes están.
  */
 
 const prisma = new PrismaClient();
@@ -66,13 +66,24 @@ describe('Control plane — escrituras y feature gates', () => {
     const planes = await plataforma.planes();
     const codigos = planes.map((p) => p.codigo);
     expect(codigos).toEqual(
-      expect.arrayContaining(['trial', 'taller', 'estudio', 'diamante']),
+      expect.arrayContaining([
+        'trial',
+        'taller',
+        'estudio',
+        'diamante',
+        'founder',
+      ]),
     );
     const estudio = planes.find((p) => p.codigo === 'estudio')!;
     expect(estudio.features.afip).toBe(true);
     expect(estudio.precioMensual).toBe(189000);
     const diamante = planes.find((p) => p.codigo === 'diamante')!;
     expect(diamante.features.centroCopiado).toBe(true);
+    const founder = planes.find((p) => p.codigo === 'founder')!;
+    expect(founder.precioMensual).toBe(1);
+    expect(founder.moneda).toBe('USD');
+    expect(founder.publico).toBe(false);
+    expect(founder.features.todo).toBe(true);
   });
 
   it('sin suscripción el tenant es legacy: todo permitido (grandfathered)', async () => {
@@ -105,6 +116,52 @@ describe('Control plane — escrituras y feature gates', () => {
     });
     expect(eventos).toHaveLength(2);
     expect(eventos[1].descripcion).toContain('Taller → Estudio');
+  });
+
+  it('Founder habilita todo, no impone límites y permanece privado', async () => {
+    const founder = await planPorCodigo('founder');
+    await plataforma.cambiarPlan(staffId, tenantId, founder.id);
+
+    await expect(suscripciones.feature(tenantId, 'afip')).resolves.toBe(true);
+    await expect(suscripciones.feature(tenantId, 'whatsapp')).resolves.toBe(
+      true,
+    );
+    await expect(
+      suscripciones.feature(tenantId, 'centroCopiado'),
+    ).resolves.toBe(true);
+    await expect(suscripciones.limites(tenantId)).resolves.toMatchObject({
+      planNombre: 'Founder',
+      usuariosMax: null,
+      ordenesMesMax: null,
+      storageGb: null,
+    });
+
+    const otroTenant = await prisma.tenant.create({
+      data: { nombre: 'Sin Founder', slug: `sin-founder-${randomUUID()}` },
+      select: { id: true },
+    });
+    tenantsCreados.push(otroTenant.id);
+    const priceIdPrueba = `pri_${randomUUID().replaceAll('-', '')}`;
+    await prisma.plan.update({
+      where: { id: founder.id },
+      data: { paddlePriceId: priceIdPrueba },
+    });
+    try {
+      const ofertaPropia = await suscripciones.estadoParaTenant(tenantId);
+      expect(ofertaPropia.planes.some((p) => p.codigo === 'founder')).toBe(
+        true,
+      );
+
+      const ofertaAjena = await suscripciones.estadoParaTenant(otroTenant.id);
+      expect(ofertaAjena.planes.some((p) => p.codigo === 'founder')).toBe(
+        false,
+      );
+    } finally {
+      await prisma.plan.update({
+        where: { id: founder.id },
+        data: { paddlePriceId: null },
+      });
+    }
   });
 
   it('suspender corta el tenant Y su suscripción; reactivar restituye', async () => {

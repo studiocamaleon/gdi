@@ -215,27 +215,6 @@ const MP = {
       'VELCRO_CIERRE_TECNICO',
     ],
   },
-  insumoManual: {
-    familiasMateriaPrima: [
-      'ADHESIVO_TECNICO',
-      'PACKING_INSTALACION',
-      'HERRAJE_ACCESORIO',
-      'TERMINACION_EDITORIAL',
-      'QUIMICO_AUXILIAR',
-    ],
-    subfamiliasMateriaPrima: [
-      'CINTA_DOBLE_FAZ_TECNICA',
-      'CONSUMIBLE_INSTALACION',
-      'SISTEMA_COLGADO_MONTAJE',
-      'VELCRO_CIERRE_TECNICO',
-      'OJAL_OJALILLO_REMACHE',
-      'FIJACION_AUXILIAR',
-      'ETIQUETADO_IDENTIFICACION',
-      'COMPONENTE_EDITORIAL',
-      'PEGATINA_RASPADITA',
-      'AUXILIAR_PROCESO',
-    ],
-  },
 } satisfies Record<string, CompatibilidadMaterialSlot>;
 
 // ============================================================================
@@ -1978,7 +1957,10 @@ const trabajo_manual: DefinicionFamilia = {
       nombre: 'Insumo manual (opcional)',
       tipo: 'INSUMO_PASO',
       requerido: false,
-      compatibilidadMaterial: MP.insumoManual,
+      // Un trabajo manual puede consumir cualquier materia prima del tenant:
+      // herrajes, raspaditas, cintas, sustratos u otras categorías futuras.
+      // No debe depender de mantener una lista cerrada de subfamilias.
+      compatibilidadMaterial: { sinRestricciones: true },
     },
   ],
   permiteSlotsAdicionales: true,

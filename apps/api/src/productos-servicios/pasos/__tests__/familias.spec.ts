@@ -50,15 +50,15 @@ describe('Catálogo de familias', () => {
     ]);
   });
 
-  it('trabajo manual permite seleccionar una pegatina raspadita', () => {
+  it('trabajo manual permite cualquier insumo, incluida una argolla para llavero', () => {
     const familia = getFamilia('trabajo_manual');
     const insumo = familia.slotsRequeridos.find(
       (slot) => slot.codigo === 'insumo_manual',
     );
 
-    expect(
-      insumo?.compatibilidadMaterial?.subfamiliasMateriaPrima,
-    ).toContain('PEGATINA_RASPADITA');
+    expect(insumo?.compatibilidadMaterial).toEqual({
+      sinRestricciones: true,
+    });
   });
 
   it('colocación de ojales ofrece el modo sólo cuatro esquinas', () => {
@@ -182,7 +182,8 @@ describe('Catálogo de familias', () => {
         expect(slot.compatibilidadMaterial).toBeDefined();
         const compat = slot.compatibilidadMaterial!;
         expect(
-          Boolean(compat.familiasMateriaPrima?.length) ||
+          compat.sinRestricciones === true ||
+            Boolean(compat.familiasMateriaPrima?.length) ||
             Boolean(compat.subfamiliasMateriaPrima?.length) ||
             Boolean(compat.templateIds?.length) ||
             Boolean(compat.tipoTecnico?.length),
@@ -193,8 +194,12 @@ describe('Catálogo de familias', () => {
 
   it('clasifica todas las subfamilias del catálogo de materias primas', () => {
     const usadas = new Set<string>();
+    let existeSlotUniversal = false;
     for (const familia of Object.values(FAMILIAS)) {
       for (const slot of familia.slotsRequeridos) {
+        if (slot.compatibilidadMaterial?.sinRestricciones === true) {
+          existeSlotUniversal = true;
+        }
         for (const subfamilia of slot.compatibilidadMaterial
           ?.subfamiliasMateriaPrima ?? []) {
           usadas.add(subfamilia);
@@ -274,7 +279,8 @@ describe('Catálogo de familias', () => {
     ];
     for (const subfamilia of todas) {
       expect(
-        usadas.has(subfamilia) ||
+        existeSlotUniversal ||
+          usadas.has(subfamilia) ||
           consumiblesMaquina.has(subfamilia) ||
           sinSlotDirecto.has(subfamilia),
       ).toBe(true);
