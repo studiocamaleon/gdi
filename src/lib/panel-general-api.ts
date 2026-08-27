@@ -28,6 +28,11 @@ export type PanelGeneralEntrega = {
   numero: string;
   cliente: string | null;
   producto: string;
+  productos: Array<{
+    id: string;
+    nombre: string;
+    progresoPct: number;
+  }>;
   fechaEntrega: string;
   progresoPct: number;
   riesgo: "atrasada" | "hoy" | "proxima";
@@ -57,7 +62,6 @@ export type PanelGeneralAccion = {
     | "presupuesto"
     | "produccion"
     | "estaciones"
-    | "cobro"
     | "egreso"
     | "facturacion";
 };

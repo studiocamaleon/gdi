@@ -81,6 +81,11 @@ type EntregaPanel = {
   numero: string;
   cliente: string | null;
   producto: string;
+  productos: Array<{
+    id: string;
+    nombre: string;
+    progresoPct: number;
+  }>;
   fechaEntrega: string;
   progresoPct: number;
   riesgo: 'atrasada' | 'hoy' | 'proxima';
@@ -110,7 +115,6 @@ type AccionRapida = {
     | 'presupuesto'
     | 'produccion'
     | 'estaciones'
-    | 'cobro'
     | 'egreso'
     | 'facturacion';
 };
@@ -178,7 +182,6 @@ export class PanelGeneralService {
     const veProduccion = permisos.has('produccion.ver');
     const gestionaProduccion = permisos.has('produccion.gestionar');
     const gestionaAdministracion = permisos.has('administracion.gestionar');
-    const cobra = permisos.has('administracion.cobrar');
     const aprueba = permisos.has('comercial.aprobar_descuento');
     const perfilSoloProductivo =
       veProduccion &&
@@ -302,7 +305,6 @@ export class PanelGeneralService {
         veProduccion,
         gestionaProduccion,
         gestionaAdministracion,
-        cobra,
         perfilSoloProductivo,
       }),
     };
@@ -416,6 +418,7 @@ export class PanelGeneralService {
         items: {
           orderBy: { ordenIndice: 'asc' },
           select: {
+            id: true,
             nombre: true,
             pasos: {
               orderBy: { indice: 'asc' },
@@ -432,6 +435,21 @@ export class PanelGeneralService {
     return filas.map((orden) => {
       const pasos = orden.items.flatMap((i) => i.pasos);
       const hechos = pasos.filter((p) => p.estado === 'hecho').length;
+      const productos = orden.items.map((item) => {
+        const pasosHechos = item.pasos.filter(
+          (paso) => paso.estado === 'hecho',
+        ).length;
+        return {
+          id: item.id,
+          nombre: item.nombre,
+          progresoPct:
+            orden.estado === 'finalizada'
+              ? 100
+              : item.pasos.length > 0
+                ? Math.round((pasosHechos / item.pasos.length) * 100)
+                : 0,
+        };
+      });
       const actual =
         pasos.find((p) =>
           ['en_curso', 'pausado', 'bloqueado'].includes(p.estado),
@@ -445,6 +463,7 @@ export class PanelGeneralService {
           orden.items.length === 1
             ? (orden.items[0]?.nombre ?? 'Sin productos')
             : `${orden.items.length} productos`,
+        productos,
         fechaEntrega: fecha,
         progresoPct:
           orden.estado === 'finalizada'
@@ -952,7 +971,6 @@ export class PanelGeneralService {
     veProduccion: boolean;
     gestionaProduccion: boolean;
     gestionaAdministracion: boolean;
-    cobra: boolean;
     perfilSoloProductivo: boolean;
   }): AccionRapida[] {
     const acciones: AccionRapida[] = [];
@@ -980,12 +998,6 @@ export class PanelGeneralService {
         etiqueta: 'Abrir producción',
         href: '/produccion/tablero',
         icono: 'produccion',
-      });
-      agregar({
-        id: 'cobro',
-        etiqueta: 'Registrar cobro',
-        href: '/administracion/cobros/nuevo',
-        icono: 'cobro',
       });
       agregar({
         id: 'egreso',
@@ -1022,13 +1034,6 @@ export class PanelGeneralService {
         etiqueta: 'Ver estaciones',
         href: '/produccion/estaciones',
         icono: 'estaciones',
-      });
-    if (p.cobra || p.gestionaAdministracion)
-      agregar({
-        id: 'cobro',
-        etiqueta: 'Registrar cobro',
-        href: '/administracion/cobros/nuevo',
-        icono: 'cobro',
       });
     if (p.gestionaAdministracion) {
       agregar({

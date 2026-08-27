@@ -61,9 +61,9 @@ export const ORDEN_TRABAJO_ESTADOS: Record<
   borrador: { label: "Borrador", fg: "#6e6e76", bg: "#f0efec", dot: "#92929b" },
   pendiente: {
     label: "Pendiente",
-    fg: "#c2410c",
-    bg: "#fef3ed",
-    dot: "#e8802a",
+    fg: "#9a3412",
+    bg: "#ffedd5",
+    dot: "#f97316",
   },
   produccion: {
     label: "En producción",
@@ -79,17 +79,17 @@ export const ORDEN_TRABAJO_ESTADOS: Record<
   },
   entregada: {
     label: "Entregada",
-    fg: "#2c2c33",
-    bg: "#e8e6e1",
-    dot: "#4a4a52",
+    fg: "#16794a",
+    bg: "#e9f4ee",
+    dot: "#1f9d6b",
   },
-  // Apagada a propósito: no es un error (rojo) ni un logro (verde), es un
-  // trabajo que no va a pasar. Tiene que leerse como cerrado, no como alarma.
+  // El gris queda reservado al borrador. Una cancelación usa rojo sólido para
+  // distinguir claramente un cierre anormal de una orden pendiente.
   cancelada: {
     label: "Cancelada",
-    fg: "#7a7a82",
-    bg: "#f4f3f1",
-    dot: "#a8a8b0",
+    fg: "#ffffff",
+    bg: "#c81e1e",
+    dot: "#ffffff",
   },
 };
 

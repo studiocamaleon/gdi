@@ -84,10 +84,10 @@ describe("PanelGeneralView", () => {
       },
       accionesRapidas: [
         {
-          id: "cobro",
-          etiqueta: "Registrar cobro",
-          href: "/administracion/cobros/nuevo",
-          icono: "cobro",
+          id: "egreso",
+          etiqueta: "Registrar egreso",
+          href: "/administracion/egresos?accion=nuevo",
+          icono: "egreso",
         },
       ],
     };
@@ -102,7 +102,11 @@ describe("PanelGeneralView", () => {
     expect(html).toContain("Pendientes administrativos");
     expect(html).toContain('href="/administracion/deudores"');
     expect(html).toContain('href="/administracion/cuentas-por-pagar"');
-    expect(html).toContain('href="/administracion/cobros/nuevo"');
+    expect(html).toContain('href="/administracion/egresos?accion=nuevo"');
+    expect(html).not.toContain("Registrar cobro");
+    expect(html.indexOf("Próximas entregas")).toBeLessThan(
+      html.indexOf("Requieren atención"),
+    );
     expect(html).not.toMatch(/margen|punto de equilibrio|ventas del período/i);
   });
 
@@ -198,5 +202,36 @@ describe("PanelGeneralView", () => {
     expect(html).toContain("Tu mesa está libre");
     expect(html).toContain("Sin entregas próximas");
     expect(html).toContain("Actualizar");
+  });
+
+  it("identifica como interactivo el resumen de una entrega con varios productos", () => {
+    const data: PanelGeneralData = {
+      ...base,
+      proximasEntregasTotal: 1,
+      proximasEntregas: [
+        {
+          id: "ot-1",
+          numero: "OT-001",
+          cliente: "Cliente",
+          producto: "2 productos",
+          productos: [
+            { id: "item-1", nombre: "Tarjetas", progresoPct: 50 },
+            { id: "item-2", nombre: "Sobres", progresoPct: 100 },
+          ],
+          fechaEntrega: "2026-08-20",
+          progresoPct: 75,
+          riesgo: "proxima",
+          pasoActual: "Corte",
+          estacionActual: "Terminación",
+          href: "/produccion/ordenes/ot-1",
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <PanelGeneralView initialData={data} nombreUsuario="Lucas" />,
+    );
+
+    expect(html).toContain("2 productos. Ver avance de cada producto");
   });
 });

@@ -192,11 +192,72 @@ describe('Panel General', () => {
     expect(respuesta.administracion).toBeNull();
   });
 
+  it('incluye el avance individual de los productos en próximas entregas', async () => {
+    const { servicio, prisma } = dependencias();
+    prisma.ordenTrabajo.findMany.mockResolvedValue([
+      {
+        id: 'ot-1',
+        numero: 'OT-001',
+        estado: 'produccion',
+        fechaEntrega: new Date('2026-08-20T00:00:00.000Z'),
+        cliente: { nombre: 'Cliente' },
+        items: [
+          {
+            id: 'item-1',
+            nombre: 'Tarjetas',
+            pasos: [
+              {
+                estado: 'hecho',
+                nombre: 'Impresión',
+                centroCostoNombre: 'Impresión',
+              },
+              {
+                estado: 'pendiente',
+                nombre: 'Corte',
+                centroCostoNombre: 'Terminación',
+              },
+            ],
+          },
+          {
+            id: 'item-2',
+            nombre: 'Sobres',
+            pasos: [
+              {
+                estado: 'hecho',
+                nombre: 'Impresión',
+                centroCostoNombre: 'Impresión',
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const proximas = await (
+      servicio as unknown as {
+        ordenesProximas(
+          tenantId: string,
+          hoy: string,
+          enSiete: string,
+          filtroVendedor: Record<string, unknown>,
+        ): Promise<Array<{ producto: string; productos: unknown[] }>>;
+      }
+    ).ordenesProximas('tenant-a', '2026-08-19', '2026-08-26', {});
+
+    expect(proximas[0]).toMatchObject({
+      producto: '2 productos',
+      productos: [
+        { id: 'item-1', nombre: 'Tarjetas', progresoPct: 50 },
+        { id: 'item-2', nombre: 'Sobres', progresoPct: 100 },
+      ],
+    });
+  });
+
   it.each([
-    ['administrador', ['crear-orden', 'tablero', 'cobro', 'egreso']],
+    ['administrador', ['crear-orden', 'tablero', 'egreso']],
     ['producción', ['tablero', 'estaciones']],
     ['vendedor', ['crear-orden', 'presupuestos', 'tablero']],
-    ['administrativo', ['cobro', 'egreso', 'facturacion']],
+    ['administrativo', ['egreso', 'facturacion']],
     ['operario', ['mi-mesa']],
   ])('compone acciones para el perfil %s', (_perfil, esperadas) => {
     const { servicio } = dependencias();
@@ -215,7 +276,6 @@ describe('Panel General', () => {
       gestionaAdministracion: ['administrador', 'administrativo'].includes(
         _perfil,
       ),
-      cobra: ['administrador', 'administrativo'].includes(_perfil),
       perfilSoloProductivo: _perfil === 'operario',
     });
     expect(acciones.map((a) => a.id)).toEqual(esperadas);

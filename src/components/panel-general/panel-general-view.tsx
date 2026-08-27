@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRightIcon,
-  BadgeDollarSignIcon,
   BanknoteArrowDownIcon,
   BoxesIcon,
   CheckCircle2Icon,
@@ -21,6 +20,11 @@ import {
 } from "lucide-react";
 
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { formatearMoneda } from "@/lib/moneda";
 import {
   getPanelGeneral,
@@ -40,7 +44,6 @@ const ICONOS: Record<
   presupuesto: ClipboardListIcon,
   produccion: FactoryIcon,
   estaciones: BoxesIcon,
-  cobro: BadgeDollarSignIcon,
   egreso: BanknoteArrowDownIcon,
   facturacion: ReceiptTextIcon,
 };
@@ -86,6 +89,157 @@ function formatoPaso(estado: string) {
   if (estado === "pausado") return "Pausado";
   if (estado === "bloqueado") return "Bloqueado";
   return "Por iniciar";
+}
+
+function TrabajoEntrega({
+  entrega,
+}: {
+  entrega: PanelGeneralData["proximasEntregas"][number];
+}) {
+  if (entrega.productos.length <= 1) {
+    return <span className={s.product}>{entrega.producto}</span>;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={(props) => (
+          <span
+            {...props}
+            className={s.productTrigger}
+            tabIndex={0}
+            aria-label={`${entrega.producto}. Ver avance de cada producto`}
+          >
+            {entrega.producto}
+          </span>
+        )}
+      />
+      <TooltipContent
+        side="bottom"
+        align="start"
+        className="block w-80 max-w-[calc(100vw-2rem)] p-3"
+      >
+        <p className="mb-2 font-medium">Productos de la orden</p>
+        <ol className="grid gap-2">
+          {entrega.productos.map((producto, index) => (
+            <li key={producto.id} className="flex min-w-0 items-center gap-2">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background/15 text-[10px] font-semibold">
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1 truncate">
+                    {producto.nombre}
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] opacity-75">
+                    {producto.progresoPct}%
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-background/20">
+                  <div
+                    className="h-full rounded-full bg-background"
+                    style={{ width: `${producto.progresoPct}%` }}
+                  />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ProximasEntregas({
+  data,
+  onAbrir,
+}: {
+  data: PanelGeneralData;
+  onAbrir: (href: string) => void;
+}) {
+  return (
+    <section className={s.card} aria-labelledby="entregas-title">
+      <div className={s.cardHead}>
+        <WalletCardsIcon size={16} />
+        <div>
+          <h2 id="entregas-title">Próximas entregas</h2>
+          <p>Atrasadas primero · próximos siete días</p>
+        </div>
+        <span className={s.grow} />
+        <span className={s.count}>{data.proximasEntregasTotal}</span>
+      </div>
+      {data.proximasEntregas.length === 0 ? (
+        <div className={s.empty} style={{ minHeight: 130 }}>
+          <div>
+            <strong>Sin entregas próximas</strong>No hay órdenes comprometidas
+            para los próximos siete días.
+          </div>
+        </div>
+      ) : (
+        <div className={s.tableWrap}>
+          <table className={s.deliveries}>
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Trabajo</th>
+                <th>Etapa actual</th>
+                <th>Entrega</th>
+                <th>Avance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.proximasEntregas.map((entrega) => (
+                <tr
+                  key={entrega.id}
+                  tabIndex={0}
+                  onClick={() => onAbrir(entrega.href)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      onAbrir(entrega.href);
+                    }
+                  }}
+                >
+                  <td>
+                    <span className={s.order}>{entrega.numero}</span>
+                    <div className={s.secondary}>{entrega.cliente}</div>
+                  </td>
+                  <td>
+                    <TrabajoEntrega entrega={entrega} />
+                  </td>
+                  <td>
+                    {entrega.pasoActual ?? "Lista para retirar"}
+                    <div className={s.secondary}>
+                      {entrega.estacionActual ?? "—"}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={s.risk} data-risk={entrega.riesgo}>
+                      {entrega.riesgo === "atrasada"
+                        ? "Atrasada"
+                        : entrega.riesgo === "hoy"
+                          ? "Hoy"
+                          : fechaHumana(entrega.fechaEntrega)}
+                    </span>
+                  </td>
+                  <td>
+                    <div className={s.progress}>
+                      <div className={s.track}>
+                        <div
+                          className={s.fill}
+                          style={{ width: `${entrega.progresoPct}%` }}
+                        />
+                      </div>
+                      <span>{entrega.progresoPct}%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function PanelGeneralView({
@@ -168,7 +322,8 @@ export function PanelGeneralView({
         <div>
           <p className={s.eyebrow}>{fecha}</p>
           <h1>
-            {saludo}{nombreUsuario ? `, ${primeraPalabra(nombreUsuario)}` : ""}
+            {saludo}
+            {nombreUsuario ? `, ${primeraPalabra(nombreUsuario)}` : ""}
           </h1>
           <p className={s.sub}>Lo que necesita atención en tu taller, ahora.</p>
         </div>
@@ -283,6 +438,8 @@ export function PanelGeneralView({
               })}
             </nav>
           ) : null}
+
+          <ProximasEntregas data={data} onAbrir={router.push} />
 
           <div className={s.layout}>
             <section className={s.card} aria-labelledby="atencion-title">
@@ -472,87 +629,6 @@ export function PanelGeneralView({
               </section>
             ) : null}
           </div>
-
-          <section className={s.card} aria-labelledby="entregas-title">
-            <div className={s.cardHead}>
-              <WalletCardsIcon size={16} />
-              <div>
-                <h2 id="entregas-title">Próximas entregas</h2>
-                <p>Atrasadas primero · próximos siete días</p>
-              </div>
-              <span className={s.grow} />
-              <span className={s.count}>{data.proximasEntregasTotal}</span>
-            </div>
-            {data.proximasEntregas.length === 0 ? (
-              <div className={s.empty} style={{ minHeight: 130 }}>
-                <div>
-                  <strong>Sin entregas próximas</strong>No hay órdenes
-                  comprometidas para los próximos siete días.
-                </div>
-              </div>
-            ) : (
-              <div className={s.tableWrap}>
-                <table className={s.deliveries}>
-                  <thead>
-                    <tr>
-                      <th>Orden</th>
-                      <th>Trabajo</th>
-                      <th>Etapa actual</th>
-                      <th>Entrega</th>
-                      <th>Avance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.proximasEntregas.map((entrega) => (
-                      <tr
-                        key={entrega.id}
-                        tabIndex={0}
-                        onClick={() => router.push(entrega.href)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ")
-                            router.push(entrega.href);
-                        }}
-                      >
-                        <td>
-                          <span className={s.order}>{entrega.numero}</span>
-                          <div className={s.secondary}>{entrega.cliente}</div>
-                        </td>
-                        <td>
-                          <span className={s.product}>{entrega.producto}</span>
-                        </td>
-                        <td>
-                          {entrega.pasoActual ?? "Lista para retirar"}
-                          <div className={s.secondary}>
-                            {entrega.estacionActual ?? "—"}
-                          </div>
-                        </td>
-                        <td>
-                          <span className={s.risk} data-risk={entrega.riesgo}>
-                            {entrega.riesgo === "atrasada"
-                              ? "Atrasada"
-                              : entrega.riesgo === "hoy"
-                                ? "Hoy"
-                                : fechaHumana(entrega.fechaEntrega)}
-                          </span>
-                        </td>
-                        <td>
-                          <div className={s.progress}>
-                            <div className={s.track}>
-                              <div
-                                className={s.fill}
-                                style={{ width: `${entrega.progresoPct}%` }}
-                              />
-                            </div>
-                            <span>{entrega.progresoPct}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
         </>
       )}
     </div>
