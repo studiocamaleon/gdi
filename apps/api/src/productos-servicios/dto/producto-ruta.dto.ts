@@ -304,6 +304,15 @@ export class UpsertSlotMaterialDto {
   modoSeleccion!: string;
 
   @IsOptional()
+  @IsUUID()
+  heredaDeRutaPasoId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  heredaDeSlotCodigo?: string | null;
+
+  @IsOptional()
   @IsString()
   criterioMotorAuto?: string | null;
 

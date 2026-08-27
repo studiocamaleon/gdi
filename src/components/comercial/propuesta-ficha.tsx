@@ -199,6 +199,7 @@ import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-pan
 import { PlantillaInstalacionPanel } from "@/components/produccion/plantilla-instalacion-panel";
 import {
   crearSvgDePlaca,
+  crearDxfDePlaca,
   descargarTexto,
   nombreBaseSvg,
   obtenerFuenteVectorial,
@@ -332,6 +333,13 @@ export function getCotizacionPasos(cotizacion: CotizacionExitosa) {
       minutos: paso.tiempo?.totalMin ?? 0,
       origen: "base" as const,
     }));
+}
+
+function requierePreparacionPolyfan(item: PropuestaItem) {
+  return item.cotizacion.pasos.some(
+    (paso) =>
+      paso.activado && paso.familiaCodigo === "corte_hilo_caliente",
+  );
 }
 
 function getModoColorChannels(value: string) {
@@ -1723,6 +1731,10 @@ function nestingPasoKey(paso: PasoCosteo) {
 }
 
 function nestingTabLabel(result: NestingViewerInput | undefined) {
+  const maquina = result?.maquina?.nombre?.trim();
+  if (maquina) return maquina;
+  const sustrato = result?.sustrato?.nombre?.trim();
+  if (sustrato) return sustrato;
   const algorithm = result?.algorithm;
   const kind = result?.substrates[0]?.kind;
   if (algorithm === "grid-2d-single") return "Acomodado en pliego";
@@ -2252,24 +2264,51 @@ function ProduccionItemView({
                       </Button>
                     ) : null}
                     {activeNestingTab.paso.nestingResult.substrates.map(
-                      (_, substrateIndex) => (
-                        <Button
-                          key={substrateIndex}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const result = activeNestingTab.paso.nestingResult!;
-                            descargarTexto(
-                              crearSvgDePlaca(result, substrateIndex),
-                              `${nombreBaseSvg(fuenteVectorial?.nombreArchivo ?? item.productoNombre)}-placa-${substrateIndex + 1}.svg`,
-                            );
-                          }}
-                        >
-                          <DownloadIcon />
-                          Placa {substrateIndex + 1} SVG
-                        </Button>
-                      ),
+                      (_, substrateIndex) => {
+                        const base = `${nombreBaseSvg(fuenteVectorial?.nombreArchivo ?? item.productoNombre)}-placa-${substrateIndex + 1}`;
+                        const preparaSvgDxf =
+                          activeNestingTab.paso.familiaCodigo === "cnc" ||
+                          activeNestingTab.paso.familiaCodigo === "corte_laser";
+                        return (
+                          <React.Fragment key={substrateIndex}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const result =
+                                  activeNestingTab.paso.nestingResult!;
+                                descargarTexto(
+                                  crearSvgDePlaca(result, substrateIndex),
+                                  `${base}.svg`,
+                                );
+                              }}
+                            >
+                              <DownloadIcon />
+                              Placa {substrateIndex + 1} SVG
+                            </Button>
+                            {preparaSvgDxf ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const result =
+                                    activeNestingTab.paso.nestingResult!;
+                                  descargarTexto(
+                                    crearDxfDePlaca(result, substrateIndex),
+                                    `${base}.dxf`,
+                                    "application/dxf;charset=utf-8",
+                                  );
+                                }}
+                              >
+                                <DownloadIcon />
+                                Placa {substrateIndex + 1} DXF
+                              </Button>
+                            ) : null}
+                          </React.Fragment>
+                        );
+                      },
                     )}
                   </div>
                 ) : null}
@@ -3279,6 +3318,7 @@ export function ProductRow({
   onChangeFechaEntrega,
   fechaEstimada,
   readOnly = false,
+  prepararCorte = false,
   sinComprobante = false,
 }: {
   item: PropuestaItem;
@@ -3301,6 +3341,8 @@ export function ProductRow({
   onChangeFechaEntrega?: (fechaEntrega: string) => void;
   fechaEstimada: string;
   readOnly?: boolean;
+  /** El ítem ya existe en la OT y puede consultarse para preparar TAP/plantillas. */
+  prepararCorte?: boolean;
   /** Orden sin comprobante fiscal: la fila oculta Imp. y muestra Total neto. */
   sinComprobante?: boolean;
 }) {
@@ -3737,7 +3779,7 @@ export function ProductRow({
             <ProduccionItemView
               item={item}
               calculoPendiente={calculoPendiente}
-              prepararCorte={readOnly}
+              prepararCorte={prepararCorte}
               onExpand={() => setProduccionAmpliada(true)}
               onOpenBrief={() => setBriefAbierto(true)}
               onEditPanels={
@@ -3763,7 +3805,7 @@ export function ProductRow({
                 item={item}
                 calculoPendiente={calculoPendiente}
                 ampliada
-                prepararCorte={readOnly}
+                prepararCorte={prepararCorte}
                 onOpenBrief={() => setBriefAbierto(true)}
                 onEditPanels={
                   readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
@@ -4246,9 +4288,7 @@ export function ResumenBar({
         : totalConCargos;
   // En una OT persistida `resumenPersistido.total` ya incluye el canje. En el
   // cotizador todavía hay que reflejar la simulación en esta barra.
-  const canjeMostrado = readOnly
-    ? 0
-    : Math.max(0, fidelizacionCanjeMonto);
+  const canjeMostrado = readOnly ? 0 : Math.max(0, fidelizacionCanjeMonto);
   const totalMostrado = Math.max(0, totalAntesCanje - canjeMostrado);
   const descuentoMostrado =
     readOnly && resumenPersistido
@@ -4274,9 +4314,7 @@ export function ResumenBar({
     ...(cargosOrdenMostrados > 0
       ? [{ k: "Cargos de la orden", v: cargosOrdenMostrados }]
       : []),
-    ...(canjeMostrado > 0
-      ? [{ k: "Canje de puntos", v: -canjeMostrado }]
-      : []),
+    ...(canjeMostrado > 0 ? [{ k: "Canje de puntos", v: -canjeMostrado }] : []),
   ];
 
   // Toggle "sin comprobante fiscal" (FileX). Estado, no acción de una vez:
@@ -6051,6 +6089,14 @@ export function PropuestaFicha({
       total: agregados.length + editados.length + quitados.length,
     };
   }, [orden, editandoOrden, items, persistedItemIds, editadosIds]);
+
+  const polyfanPendientesDeGuardar = React.useMemo(
+    () =>
+      [...cambiosItems.agregados, ...cambiosItems.editados].filter(
+        requierePreparacionPolyfan,
+      ),
+    [cambiosItems],
+  );
 
   /** Cambios de datos comerciales (field-cards) sin guardar. */
   const cambiosFields = React.useMemo(() => {
@@ -8187,6 +8233,9 @@ export function PropuestaFicha({
                           }}
                           fechaEstimada={fechaEstimada}
                           readOnly={modoOrden}
+                          prepararCorte={
+                            modoOrden && persistedItemIds.has(item.id)
+                          }
                         />
                       </div>
                     </React.Fragment>
@@ -8418,6 +8467,31 @@ export function PropuestaFicha({
                 onChange={setFidelizacionCanjePuntos}
                 onSimulation={actualizarSimulacionFidelizacion}
               />
+            ) : null}
+            {modoOrden &&
+            editandoOrden &&
+            polyfanPendientesDeGuardar.length > 0 ? (
+              <div
+                role="status"
+                className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-950"
+              >
+                <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-white text-emerald-700">
+                  <SaveIcon className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold">
+                    Preparación de corte pendiente de guardar
+                  </div>
+                  <div className="mt-0.5 text-xs leading-relaxed text-emerald-800">
+                    Al guardar la orden se prepararán automáticamente los
+                    recorridos y archivos TAP de{" "}
+                    {polyfanPendientesDeGuardar.length === 1
+                      ? `“${polyfanPendientesDeGuardar[0].productoNombre}”`
+                      : `${polyfanPendientesDeGuardar.length} productos de Polyfan`}
+                    . Luego quedarán disponibles en Producción.
+                  </div>
+                </div>
+              </div>
             ) : null}
             <ResumenBar
               items={items}

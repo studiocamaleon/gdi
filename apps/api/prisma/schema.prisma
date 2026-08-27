@@ -2639,8 +2639,13 @@ model ProductoConfigPasoSlotMaterial {
   slotNombre            String?
   /// Rol semántico del material: SUSTRATO | COMPONENTE | CONSUMIBLE | PACKAGING.
   slotRol               String?
-  /// 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO'.
+  /// 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO' | 'HEREDA_DE_PASO'.
   modoSeleccion         String
+  /// Para HEREDA_DE_PASO: referencia estable al paso y slot anteriores de la
+  /// misma ruta. El destino usa ese material para geometría/operación, pero no
+  /// vuelve a costearlo.
+  heredaDeRutaPasoId     String?                                   @db.Uuid
+  heredaDeSlotCodigo     String?
   /// 'MENOR_COSTO' | 'MAYOR_APROVECHAMIENTO' | 'MENOR_CAPACIDAD_QUE_CUMPLA'.
   criterioMotorAuto     String?
   criterioInputCampo    String?
@@ -2672,6 +2677,7 @@ model ProductoConfigPasoSlotMaterial {
 
   @@unique([tenantId, productoConfigPasoId, slotCodigo])
   @@index([tenantId, productoConfigPasoId])
+  @@index([tenantId, heredaDeRutaPasoId])
 }
 
 model ProductoConfigPasoSlotMaterialCandidato {

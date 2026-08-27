@@ -79,13 +79,14 @@ type Props = {
   margenMm?: number;
   separacionMm?: number;
   permitirRotacion?: boolean;
+  permitirSegmentacion?: boolean;
+  habilitarCapas?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
   configuracionEncastres: ConfiguracionEncastresVectoriales;
   onChange: (
     value: FuenteDisenoVectorial | null,
     analisis: AnalisisSvgFabricacion | null,
   ) => void;
-  onModoCotizacionChange: (modo: "svg" | "placas") => void;
   onCotizacionManualChange: (value: CotizacionVectorialManual) => void;
 };
 
@@ -99,10 +100,11 @@ export function DisenoVectorialCotizador({
   margenMm = 5,
   separacionMm = 5,
   permitirRotacion = true,
+  permitirSegmentacion = true,
+  habilitarCapas = true,
   preservarComposicionOriginalSiEntra = false,
   configuracionEncastres,
   onChange,
-  onModoCotizacionChange,
   onCotizacionManualChange,
 }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -146,6 +148,7 @@ export function DisenoVectorialCotizador({
           margenMm,
           separacionMm,
           permitirRotacion,
+          permitirSegmentacion,
           preservarComposicionOriginalSiEntra,
           configuracionEncastres,
           configuracionCapas: fuente.configuracionCapas,
@@ -191,6 +194,7 @@ export function DisenoVectorialCotizador({
       margenMm,
       onChange,
       permitirRotacion,
+      permitirSegmentacion,
       placa,
       preservarComposicionOriginalSiEntra,
       separacionMm,
@@ -216,7 +220,8 @@ export function DisenoVectorialCotizador({
     setAnalisisEditor(null);
     setError(null);
     onChange(fuente, null);
-    void prepararEditorCapas(fuente);
+    if (habilitarCapas) void prepararEditorCapas(fuente);
+    else void analizar(fuente);
   };
 
   const anchoFinalMm = Math.max(10, anchoCm * 10);
@@ -320,6 +325,7 @@ export function DisenoVectorialCotizador({
           margenMm,
           separacionMm,
           permitirRotacion,
+          permitirSegmentacion,
           preservarComposicionOriginalSiEntra,
           configuracionEncastres,
           configuracionCapas: fuente.configuracionCapas,
@@ -355,6 +361,7 @@ export function DisenoVectorialCotizador({
       margenMm,
       onChange,
       permitirRotacion,
+      permitirSegmentacion,
       placa,
       preparandoCapas,
       preservarComposicionOriginalSiEntra,
@@ -363,7 +370,9 @@ export function DisenoVectorialCotizador({
   );
 
   const tipoCartel =
-    (value?.configuracionCapas?.niveles.length ?? 1) > 1 ? "capas" : "una_capa";
+    habilitarCapas && (value?.configuracionCapas?.niveles.length ?? 1) > 1
+      ? "capas"
+      : "una_capa";
 
   const cambiarTipoCartel = (tipo: "una_capa" | "capas") => {
     if (!value) return;
@@ -455,22 +464,6 @@ export function DisenoVectorialCotizador({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <ToggleGroup
-          multiple={false}
-          variant="outline"
-          value={[modoCotizacion]}
-          onValueChange={(values) => {
-            const next = values.at(-1);
-            if (next === "svg" || next === "placas")
-              onModoCotizacionChange(next);
-          }}
-          aria-label="Modo de cotización del cartel"
-          className="grid w-full grid-cols-2"
-        >
-          <ToggleGroupItem value="svg">Con SVG</ToggleGroupItem>
-          <ToggleGroupItem value="placas">Por placas</ToggleGroupItem>
-        </ToggleGroup>
-
         {modoCotizacion === "placas" ? (
           <>
             <FieldGroup className="grid [grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-4">
@@ -540,7 +533,8 @@ export function DisenoVectorialCotizador({
             <FieldGroup className="grid [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
               <Field>
                 <FieldLabel htmlFor="vector-final-size">
-                  Medida final del cartel (cm)
+                  Medida final {habilitarCapas ? "del cartel" : "del diseño"}{" "}
+                  (cm)
                 </FieldLabel>
                 <ToggleGroup
                   multiple={false}
@@ -624,9 +618,11 @@ export function DisenoVectorialCotizador({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Layers3Icon />
-                    {tipoCartel === "capas"
-                      ? "Con relieve por capas"
-                      : "Un solo nivel"}
+                    {habilitarCapas
+                      ? tipoCartel === "capas"
+                        ? "Con relieve por capas"
+                        : "Un solo nivel"
+                      : "Archivo vectorial"}
                   </CardTitle>
                   <CardAction>
                     <Badge
@@ -636,9 +632,11 @@ export function DisenoVectorialCotizador({
                     </Badge>
                   </CardAction>
                   <CardDescription>
-                    {tipoCartel === "capas"
-                      ? `${value.configuracionCapas?.niveles.length ?? 2} niveles de montaje configurados.`
-                      : "Los interiores se obtienen del mismo corte y quedan al ras."}
+                    {habilitarCapas
+                      ? tipoCartel === "capas"
+                        ? `${value.configuracionCapas?.niveles.length ?? 2} niveles de montaje configurados.`
+                        : "Los interiores se obtienen del mismo corte y quedan al ras."
+                      : "Listo para calcular el nesting sobre la placa seleccionada."}
                   </CardDescription>
                 </CardHeader>
                 {analisis && nestingActualizado ? (
@@ -659,14 +657,36 @@ export function DisenoVectorialCotizador({
                   </CardContent>
                 ) : null}
                 <CardFooter className="flex items-center justify-between gap-3 bg-card">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setEditorAbierto(true)}
-                  >
-                    <PencilIcon data-icon="inline-start" />
-                    Editar capas
-                  </Button>
+                  {habilitarCapas ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEditorAbierto(true)}
+                    >
+                      <PencilIcon data-icon="inline-start" />
+                      Editar capas
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      disabled={!placa || procesando || anchoCm <= 0}
+                      onClick={calcularNesting}
+                    >
+                      {procesando ? (
+                        <LoaderCircleIcon
+                          data-icon="inline-start"
+                          className="animate-spin"
+                        />
+                      ) : (
+                        <PlayIcon data-icon="inline-start" />
+                      )}
+                      {procesando
+                        ? "Calculando…"
+                        : nestingActualizado
+                          ? "Recalcular nesting"
+                          : "Calcular nesting"}
+                    </Button>
+                  )}
                   {analisis && nestingActualizado && unionesFisicas > 0 ? (
                     <span className="text-right text-xs text-muted-foreground">
                       {analisis.nesting.segmentos} partes · {unionesFisicas}{" "}
@@ -685,7 +705,7 @@ export function DisenoVectorialCotizador({
               </Alert>
             ) : null}
 
-            {value ? (
+            {value && habilitarCapas ? (
               <Sheet open={editorAbierto} onOpenChange={setEditorAbierto}>
                 <SheetContent
                   className="z-[1003] w-full gap-0 sm:!max-w-[720px]"

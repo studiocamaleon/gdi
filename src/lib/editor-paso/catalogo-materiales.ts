@@ -33,6 +33,7 @@ export const MODOS_SELECCION = [
   "HARDCODED",
   "COMERCIAL_ELIGE",
   "MOTOR_ELIGE_AUTO",
+  "HEREDA_DE_PASO",
 ];
 export const CRITERIOS_AUTO = [
   "MENOR_COSTO",

@@ -85,6 +85,7 @@ const CENSO: Record<string, string[]> = {
     "materiales.criterio",
     "materiales.consumo",
     "materiales.base",
+    "materiales.herencia",
     "materiales.fuente_medida",
     "materiales.caras",
   ],

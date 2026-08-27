@@ -94,3 +94,55 @@ describe('calcularOutputsCanonicos - cortes_calculados', () => {
     expect(outputs.cortes_calculados).toBeNull();
   });
 });
+
+describe('calcularOutputsCanonicos - layout de producción', () => {
+  it('publica las placas y posiciones de impresión para los pasos de corte', () => {
+    const outputs = calcularOutputsCanonicos(
+      { outputsCanonicos: ['layout_produccion'] } as never,
+      {
+        paso: {
+          rutaPasoId: 'rp-impresion',
+          configPasoId: 'cp-impresion',
+          familiaCodigo: 'impresion_por_area',
+        } as never,
+        jobContext: { cantidad: 1 },
+        nestingDispatch: {
+          algorithm: 'grid-2d-multi',
+          cantidadCalculada: 1,
+          unidad: 'pliegos',
+          aprovechamientoPct: 20,
+          substrates: [
+            { kind: 'sheet', count: 1, widthMm: 1_300, heightMm: 900 },
+          ],
+          placements: [
+            {
+              pieceId: 'pieza-svg',
+              substrateIndex: 0,
+              xMm: 10,
+              yMm: 20,
+              widthMm: 200,
+              heightMm: 100,
+              rotated: false,
+            },
+          ],
+          metricasRaw: {
+            aprovechamientoPct: 20,
+            areaUtilMm2: 20_000,
+            areaTotalMm2: 1_170_000,
+          },
+          piezasAcomodadas: 1,
+        },
+        cantidadEfectiva: 1,
+      },
+    );
+
+    expect(outputs.layout_produccion).toMatchObject({
+      schemaVersion: 1,
+      sourceRutaPasoId: 'rp-impresion',
+      sourceConfigPasoId: 'cp-impresion',
+      sourceFamiliaCodigo: 'impresion_por_area',
+      substrates: [{ kind: 'sheet', count: 1, widthMm: 1_300, heightMm: 900 }],
+      placements: [expect.objectContaining({ pieceId: 'pieza-svg' })],
+    });
+  });
+});

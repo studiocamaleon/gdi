@@ -388,7 +388,10 @@ export interface UpsertSlotMaterialPayload {
   slotCodigo: string;
   slotNombre?: string | null;
   slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
-  modoSeleccion: "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO";
+  modoSeleccion:
+    "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO" | "HEREDA_DE_PASO";
+  heredaDeRutaPasoId?: string | null;
+  heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
@@ -932,6 +935,8 @@ export interface NestingViewerInput {
   cantidadCalculada: number;
   unidad: "m_lineales" | "pliegos" | "pouches" | "m2" | "piezas";
   aprovechamientoPct: number;
+  maquina?: { id: string; nombre: string };
+  sustrato?: { materialVarianteId: string; nombre: string };
   substrates: Array<
     | { kind: "sheet"; count: number; widthMm: number; heightMm: number }
     | { kind: "roll"; lengthMm: number; widthMm: number }
@@ -1622,6 +1627,7 @@ export async function analizarSvgFabricacion(req: {
   margenMm?: number;
   separacionMm?: number;
   permitirRotacion?: boolean;
+  permitirSegmentacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
   configuracionEncastres?: ConfiguracionEncastresVectoriales;
   configuracionCapas?: ConfiguracionCapasVectoriales;

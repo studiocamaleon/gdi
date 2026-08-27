@@ -68,6 +68,7 @@ export function nestearGeometriaIrregular(input: {
   margenMm?: number;
   separacionMm?: number;
   permitirRotacion?: boolean;
+  permitirSegmentacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
   configuracionEncastres?: ConfiguracionEncastresVectoriales;
 }): NestingIrregularResult {
@@ -112,20 +113,24 @@ export function nestearGeometriaIrregular(input: {
   }
 
   let segmentacion: ReturnType<typeof segmentarPiezasConEncastres>;
-  try {
-    segmentacion = segmentarPiezasConEncastres({
-      piezas: input.geometria.piezas,
-      anchoUtilMm: usableWidth,
-      altoUtilMm: usableHeight,
-      permitirRotacion: input.permitirRotacion !== false,
-      configuracionEncastres: input.configuracionEncastres,
-    });
-  } catch (error) {
-    throw new NestingIrregularError(
-      error instanceof Error
-        ? error.message
-        : 'No se pudo dividir el vector para las placas seleccionadas.',
-    );
+  if (input.permitirSegmentacion === false) {
+    segmentacion = { piezas: input.geometria.piezas, uniones: [] };
+  } else {
+    try {
+      segmentacion = segmentarPiezasConEncastres({
+        piezas: input.geometria.piezas,
+        anchoUtilMm: usableWidth,
+        altoUtilMm: usableHeight,
+        permitirRotacion: input.permitirRotacion !== false,
+        configuracionEncastres: input.configuracionEncastres,
+      });
+    } catch (error) {
+      throw new NestingIrregularError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo dividir el vector para las placas seleccionadas.',
+      );
+    }
   }
   const instances: Array<{ piece: PiezaVectorial; copyIndex: number }> = [];
   const totalPuntosGeometria = input.geometria.piezas.reduce(

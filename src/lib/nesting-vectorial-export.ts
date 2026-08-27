@@ -65,6 +65,61 @@ export function crearSvgDePlaca(
   ].join("\n");
 }
 
+/** DXF ASCII por placa para intercambio con LightBurn y software CAM.
+ * Mantiene los contornos sin compensación de kerf/herramienta: esa decisión
+ * pertenece al perfil y al software de la máquina, no al nesting comercial. */
+export function crearDxfDePlaca(
+  result: NestingViewerInput,
+  substrateIndex: number,
+): string {
+  const substrate = result.substrates[substrateIndex];
+  if (!substrate || substrate.kind !== "sheet")
+    throw new Error("La placa seleccionada no existe.");
+
+  const polilineas = result.placements
+    .filter((placement) => (placement.substrateIndex ?? 0) === substrateIndex)
+    .flatMap((placement) => {
+      const meta = placement.meta as
+        { contornos?: Contorno[]; cortesInternos?: Contorno[] } | undefined;
+      return [...(meta?.contornos ?? []), ...(meta?.cortesInternos ?? [])];
+    })
+    .filter(
+      (contorno) =>
+        Array.isArray(contorno.puntos) && contorno.puntos.length >= 3,
+    )
+    .map((contorno) => dxfPolyline(contorno.puntos, substrate.heightMm));
+
+  if (polilineas.length === 0)
+    throw new Error("El nesting no contiene geometría vectorial exportable.");
+
+  return [
+    "0",
+    "SECTION",
+    "2",
+    "HEADER",
+    "9",
+    "$ACADVER",
+    "1",
+    "AC1015",
+    "9",
+    "$INSUNITS",
+    "70",
+    "4",
+    "0",
+    "ENDSEC",
+    "0",
+    "SECTION",
+    "2",
+    "ENTITIES",
+    ...polilineas.flat(),
+    "0",
+    "ENDSEC",
+    "0",
+    "EOF",
+    "",
+  ].join("\n");
+}
+
 export function descargarTexto(
   contenido: string,
   nombreArchivo: string,
@@ -96,6 +151,30 @@ function puntosAPath(points: Punto[]): string {
         `${index === 0 ? "M" : "L"}${numero(point.x)} ${numero(point.y)}`,
     )
     .join(" ")} Z`;
+}
+
+function dxfPolyline(points: Punto[], plateHeightMm: number): string[] {
+  return [
+    "0",
+    "LWPOLYLINE",
+    "100",
+    "AcDbEntity",
+    "8",
+    "CORTE",
+    "100",
+    "AcDbPolyline",
+    "90",
+    String(points.length),
+    "70",
+    "1",
+    ...points.flatMap((point) => [
+      "10",
+      numero(point.x),
+      // SVG usa origen superior izquierdo; DXF usa inferior izquierdo.
+      "20",
+      numero(plateHeightMm - point.y),
+    ]),
+  ];
 }
 
 function numero(value: number): string {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
 import {
+  crearDxfDePlaca,
   crearSvgDePlaca,
   obtenerFuenteVectorial,
 } from "@/lib/nesting-vectorial-export";
@@ -105,5 +106,10 @@ describe("exportación de nesting vectorial", () => {
     expect(svg).toContain('id="P-01-1-1"');
     expect(svg).toContain('id="P-01-1-2"');
     expect(svg).not.toContain("P-02");
+
+    const dxf = crearDxfDePlaca(result, 0);
+    expect(dxf).toContain("$INSUNITS\n70\n4");
+    expect(dxf.match(/LWPOLYLINE/g)).toHaveLength(2);
+    expect(dxf).toContain("8\nCORTE");
   });
 });

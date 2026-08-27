@@ -2425,6 +2425,14 @@ function validarMateriales(
       );
     }
     if (
+      slot.modoSeleccion === "HEREDA_DE_PASO" &&
+      (!slot.heredaDeRutaPasoId || !slot.heredaDeSlotCodigo)
+    ) {
+      errores.push(
+        `${slotDisplayName(slot, familia)}: sin paso/material de origen`,
+      );
+    }
+    if (
       slot.modoSeleccion === "MOTOR_ELIGE_AUTO" &&
       !slot.criterioMotorAuto &&
       // La familia puede traer el criterio DE FÁBRICA (selección por
@@ -3048,7 +3056,12 @@ export function ConfigPasosEditorView({
             slotNombre: s.slotNombre ?? null,
             slotRol: (s.slotRol as UpsertSlotMaterialPayload["slotRol"]) ?? null,
             modoSeleccion: s.modoSeleccion as
-              "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO",
+              | "HARDCODED"
+              | "COMERCIAL_ELIGE"
+              | "MOTOR_ELIGE_AUTO"
+              | "HEREDA_DE_PASO",
+            heredaDeRutaPasoId: s.heredaDeRutaPasoId ?? null,
+            heredaDeSlotCodigo: s.heredaDeSlotCodigo ?? null,
             criterioMotorAuto: s.criterioMotorAuto ?? null,
             materialVarianteId: s.materialVariante?.id ?? null,
             candidatos: s.candidatos.map((candidate) => ({
@@ -5417,8 +5430,9 @@ export function ConfigPasosEditorView({
                                 esExtra,
                                 orden: paso.orden,
                               }}
-                              cfg={cfg}
-                              familia={familia}
+                                cfg={cfg}
+                                configs={configs}
+                                familia={familia}
                               pasos={pasosAsistente}
                               familiasMap={familiasMap}
                               lookups={lookups}
@@ -6579,6 +6593,44 @@ export function ConfigPasosEditorView({
                                                 storedSlot.slotCodigo ===
                                                 slot.slotCodigo,
                                             );
+                                          const opcionesHerencia =
+                                            rutaAlternativa.ruta.pasos
+                                              .filter(
+                                                (origen) =>
+                                                  (rutaAlternativa.configPasos.find(
+                                                    (candidate) =>
+                                                      candidate.rutaPasoId ===
+                                                      origen.id,
+                                                  )?.ordenFlujo ??
+                                                    origen.orden) <
+                                                  (configExistente?.ordenFlujo ??
+                                                    paso.orden),
+                                              )
+                                              .flatMap((origen) => {
+                                                const cfgOrigen =
+                                                  configs[origen.id];
+                                                const nombreOrigen =
+                                                  cfgOrigen?.nombreVisible?.trim() ||
+                                                  familiasMap.get(
+                                                    origen.familiaCodigo,
+                                                  )?.nombre ||
+                                                  humanizeCode(
+                                                    origen.familiaCodigo,
+                                                  );
+                                                return (
+                                                  cfgOrigen?.slotsMateriales ??
+                                                  []
+                                                )
+                                                  .filter(
+                                                    (sourceSlot) =>
+                                                      sourceSlot.modoSeleccion !==
+                                                      "HEREDA_DE_PASO",
+                                                  )
+                                                  .map((sourceSlot) => ({
+                                                    value: `${origen.id}::${sourceSlot.slotCodigo}`,
+                                                    label: `Hereda de: ${nombreOrigen} · ${sourceSlot.slotNombre || sourceSlot.slotCodigo}`,
+                                                  }));
+                                              });
                                           return (
                                             <div
                                               key={slotIdx}
@@ -6670,10 +6722,15 @@ export function ConfigPasosEditorView({
                                                         slotIdx,
                                                         {
                                                           modoSeleccion: (v ||
-                                                            "HARDCODED") as
-                                                            | "HARDCODED"
-                                                            | "COMERCIAL_ELIGE"
-                                                            | "MOTOR_ELIGE_AUTO",
+                                                            "HARDCODED") as UpsertSlotMaterialPayload["modoSeleccion"],
+                                                          heredaDeRutaPasoId:
+                                                            v === "HEREDA_DE_PASO"
+                                                              ? slot.heredaDeRutaPasoId ?? null
+                                                              : null,
+                                                          heredaDeSlotCodigo:
+                                                            v === "HEREDA_DE_PASO"
+                                                              ? slot.heredaDeSlotCodigo ?? null
+                                                              : null,
                                                         },
                                                       )
                                                     }
@@ -6683,7 +6740,7 @@ export function ConfigPasosEditorView({
                                                     triggerClassName="min-h-9 text-xs"
                                                   />
                                                 </div>
-                                                <div className="space-y-1">
+                                                {slot.modoSeleccion !== "HEREDA_DE_PASO" && <div className="space-y-1">
                                                   <LabelConTooltip
                                                     label="¿Cómo se calcula el consumo?"
                                                     tooltip="Fórmula que el motor usa para calcular cuánto material se consume (por pieza, por m², por metro lineal, etc.)."
@@ -6707,7 +6764,7 @@ export function ConfigPasosEditorView({
                                                     options={FORMULA_OPTIONS}
                                                     triggerClassName="min-h-9 text-xs"
                                                   />
-                                                </div>
+                                                </div>}
                                                 {/* [Costeo del sustrato → nesting]
                                                     El control de "Costeo" por slot
                                                     se removió: el costeo lo posee el
@@ -6717,9 +6774,36 @@ export function ConfigPasosEditorView({
                                                     no cómo se cobra el desperdicio.
                                                     Ver docs/editor-pasos-preguntas-orden.md §10.5. */}
                                               </div>
-                                              {esSlotAdicional ||
+                                              {slot.modoSeleccion === "HEREDA_DE_PASO" && (
+                                                <div className="space-y-1">
+                                                  <LabelConTooltip
+                                                    label="Material de origen"
+                                                    tooltip="Usa el material ya resuelto en un paso anterior, sin volver a sumarlo al costo."
+                                                  />
+                                                  <HumanSelect
+                                                    value={
+                                                      slot.heredaDeRutaPasoId &&
+                                                      slot.heredaDeSlotCodigo
+                                                        ? `${slot.heredaDeRutaPasoId}::${slot.heredaDeSlotCodigo}`
+                                                        : ""
+                                                    }
+                                                    onValueChange={(value) => {
+                                                      const [rutaPasoId, slotCodigo] =
+                                                        value.split("::");
+                                                      updateSlot(paso.id, slotIdx, {
+                                                        heredaDeRutaPasoId: rutaPasoId || null,
+                                                        heredaDeSlotCodigo: slotCodigo || null,
+                                                      });
+                                                    }}
+                                                    options={opcionesHerencia}
+                                                    placeholder="Elegí un material de un paso anterior"
+                                                    triggerClassName="min-h-9 text-xs"
+                                                  />
+                                                </div>
+                                              )}
+                                              {slot.modoSeleccion !== "HEREDA_DE_PASO" && (esSlotAdicional ||
                                               slotDecl?.tipo ===
-                                                "INSUMO_PASO" ? (
+                                                "INSUMO_PASO") ? (
                                                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                                                   <div className="space-y-1">
                                                     <LabelConTooltip
@@ -6809,7 +6893,7 @@ export function ConfigPasosEditorView({
                                                   updateSlot={updateSlot}
                                                 />
                                               )}
-                                              {slot.modoSeleccion !== "HARDCODED" && (
+                                              {slot.modoSeleccion !== "HARDCODED" && slot.modoSeleccion !== "HEREDA_DE_PASO" && (
                                                 <CandidatosSlotDetalladoEditor
                                                   pasoId={paso.id}
                                                   slotIdx={slotIdx}
@@ -6851,7 +6935,7 @@ export function ConfigPasosEditorView({
                                                   />
                                                 </div>
                                               )}
-                                              <label
+                                              {slot.modoSeleccion !== "HEREDA_DE_PASO" && <label
                                                 className={`ps-multi ${
                                                   slot.aplicaMultiCaras
                                                     ? "on"
@@ -6883,7 +6967,7 @@ export function ConfigPasosEditorView({
                                                     (doble faz)
                                                   </span>
                                                 </span>
-                                              </label>
+                                              </label>}
                                               </div>
                                             </div>
                                           );
@@ -13194,6 +13278,7 @@ function SeccionesEsquemaPaso({
   configuracionBase = false,
   pasoActual,
   cfg,
+  configs,
   familia,
   pasos,
   familiasMap,
@@ -13222,6 +13307,7 @@ function SeccionesEsquemaPaso({
   configuracionBase?: boolean;
   pasoActual: PasoAsistente;
   cfg: UpsertConfigPasoPayload;
+  configs: Record<string, UpsertConfigPasoPayload>;
   familia: FamiliaListItem | undefined;
   pasos: PasoAsistente[];
   familiasMap: Map<string, FamiliaListItem>;
@@ -14183,6 +14269,54 @@ function SeccionesEsquemaPaso({
                   const renderComponenteSlot = (
                     id: string,
                   ): React.ReactNode => {
+                    if (id === "material-heredado-detallado") {
+                      const indiceActual = pasos.findIndex(
+                        (candidate) => candidate.id === pasoActual.id,
+                      );
+                      const opciones = pasos
+                        .filter((_, sourceIndex) => sourceIndex < indiceActual)
+                        .flatMap((origen) => {
+                          const cfgOrigen = configs[origen.id];
+                          return (cfgOrigen?.slotsMateriales ?? [])
+                            .filter(
+                              (sourceSlot) =>
+                                sourceSlot.modoSeleccion !== "HEREDA_DE_PASO",
+                            )
+                            .map((sourceSlot) => ({
+                              value: `${origen.id}::${sourceSlot.slotCodigo}`,
+                              label: `Hereda de: ${origen.nombre} · ${sourceSlot.slotNombre || sourceSlot.slotCodigo}`,
+                            }));
+                        });
+                      return (
+                        <div className="space-y-2">
+                          <HumanSelect
+                            value={
+                              slot.heredaDeRutaPasoId &&
+                              slot.heredaDeSlotCodigo
+                                ? `${slot.heredaDeRutaPasoId}::${slot.heredaDeSlotCodigo}`
+                                : ""
+                            }
+                            onValueChange={(value) => {
+                              const [rutaPasoId, slotCodigo] = value.split("::");
+                              materialesApi.updateSlot(
+                                pasoActual.id,
+                                slotIdx,
+                                {
+                                  heredaDeRutaPasoId: rutaPasoId || null,
+                                  heredaDeSlotCodigo: slotCodigo || null,
+                                },
+                              );
+                            }}
+                            options={opciones}
+                            placeholder="Elegí un material de un paso anterior"
+                          />
+                          <p className="text-muted-foreground text-xs">
+                            Se usa para formato, nesting y operación; el costo
+                            permanece únicamente en el paso de origen.
+                          </p>
+                        </div>
+                      );
+                    }
                     if (id === "material-fijo-detallado") {
                       return (
                         <div className="pasos-sections">
@@ -14643,6 +14777,7 @@ function AsistenteGuiado({
           <SeccionesEsquemaPaso
             pasoActual={pasoActual}
             cfg={cfg}
+            configs={configs}
             familia={familia}
             pasos={pasos}
             familiasMap={familiasMap}

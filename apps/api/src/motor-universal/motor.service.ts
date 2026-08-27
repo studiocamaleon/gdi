@@ -12,6 +12,7 @@ import {
   estrategiaNestingDeFamilia,
   fallbackSinLayoutDeFamilia,
   guardSinLayoutDeFamilia,
+  herramientasCotizacionEfectivas,
   primitivasDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
@@ -206,6 +207,8 @@ interface PasoExtraSlotJson {
   slotNombre?: string | null;
   slotRol?: string | null;
   modoSeleccion: string;
+  heredaDeRutaPasoId?: string | null;
+  heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
@@ -710,6 +713,9 @@ export class MotorUniversalService {
       caras: 1, // simple faz por defecto (se sobrescribe con input)
       ...input.jobContext,
     };
+    // Es un output interno entre pasos, nunca un input confiable del cliente.
+    // La impresión lo volverá a publicar durante esta misma ejecución.
+    delete jobContext.layout_produccion;
     if (
       Number(jobContext.placasVectorialesManuales) > 0 &&
       Number(jobContext.metrosCortePorPlacaVectorial) > 0
@@ -1076,8 +1082,7 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            | PasoEjecutado['ojalesLayout']
-            | undefined;
+            PasoEjecutado['ojalesLayout'] | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -3070,6 +3075,11 @@ export class MotorUniversalService {
     let nestingDispatch: NestingDispatchResult | null = null;
     const debeCalcularNestingProductivo =
       paso.mecanismoCantidad === 'CALCULADO_POR_PASO' ||
+      (herramientasCotizacionEfectivas(
+        paso.familiaCodigo,
+        paso.paramsPasoJson,
+      ).includes('diseno_vectorial') &&
+        jobContext.modoCotizacionVectorial !== 'medidas') ||
       this.debeAutocalcularNestingSiNoHayOutput(paso, jobContext) ||
       this.debeCalcularNestingLaminado(paso);
     if (debeCalcularNestingProductivo) {
@@ -3426,6 +3436,18 @@ export class MotorUniversalService {
           cantidadCalculada: nestingDispatch.cantidadCalculada,
           unidad: nestingDispatch.unidad,
           aprovechamientoPct: nestingDispatch.aprovechamientoPct,
+          maquina: paso.maquina
+            ? { id: paso.maquina.id, nombre: paso.maquina.nombre }
+            : undefined,
+          sustrato: materialPreliminar
+            ? {
+                materialVarianteId: materialPreliminar.id,
+                nombre:
+                  materialPreliminar.materiaPrimaNombre ??
+                  materialPreliminar.nombreVariante ??
+                  materialPreliminar.sku,
+              }
+            : undefined,
           substrates: nestingDispatch.substrates,
           placements: nestingDispatch.placements,
           piezasPorPliego: nestingDispatch.piezasPorPliego,
@@ -3535,9 +3557,7 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          | 'MONTO_FIJO_PLANO'
-          | 'PORCENTAJE_SOBRE_BASE'
-          | 'POR_UNIDAD_INPUT',
+          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -4015,8 +4035,7 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        | { tarifa: unknown }
-        | undefined;
+        { tarifa: unknown } | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -4148,8 +4167,7 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          | { tarifa: unknown; nombre?: string | null }
-          | undefined;
+          { tarifa: unknown; nombre?: string | null } | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -4547,6 +4565,18 @@ export class MotorUniversalService {
     const tieneSustratoRollo = (anchoUtilRolloMm ?? 0) > 0;
     const tieneSustratoPliego =
       (nestConfig.sheetWidthMm ?? 0) > 0 && (nestConfig.sheetHeightMm ?? 0) > 0;
+
+    // El nesting vectorial de CNC/láser trabaja sobre una placa comprada, no
+    // sobre un rollo. Si la herencia del material no pudo resolverse,
+    // `rollWidthMm` puede contener como fallback el ancho útil de la máquina;
+    // tratarlo como sustrato producía el mensaje absurdo de que una pieza de
+    // 254 mm no entraba en 1.000 mm. En ese caso dejamos que la validación de
+    // materiales informe la placa faltante con el diagnóstico correcto.
+    if (
+      estrategiaNestingDeFamilia(paso.familiaCodigo) === 'irregular_placa'
+    ) {
+      return material != null && tieneSustratoPliego;
+    }
     return tieneSustratoRollo || tieneSustratoPliego;
   }
 
@@ -4563,7 +4593,15 @@ export class MotorUniversalService {
             config.rollWidthMm - config.margins.leftMm - config.margins.rightMm,
           )
         : null;
-    const esRollo = anchoUtilRolloMm != null && anchoUtilRolloMm > 0;
+    // Una placa resuelta tiene prioridad sobre el fallback genérico de ancho.
+    // Esto evita describir MDF/PVC como rollo cuando la máquina también declara
+    // `anchoUtil`.
+    const tieneSustratoPliego =
+      (config.sheetWidthMm ?? 0) > 0 && (config.sheetHeightMm ?? 0) > 0;
+    const esRollo =
+      !tieneSustratoPliego &&
+      anchoUtilRolloMm != null &&
+      anchoUtilRolloMm > 0;
     const limiteAnchoMm = esRollo
       ? anchoUtilRolloMm
       : (config.sheetWidthMm ?? 0);
@@ -5063,7 +5101,7 @@ export class MotorUniversalService {
     };
   }
 
-  /** D.5 — Calcular materiales consumidos. F.2.5: soporta los 3 modos de selección. */
+  /** D.5 — Calcula materiales consumidos; los heredados aportan contexto sin duplicar costo. */
   private async calcularMateriales(
     tenantId: string,
     paso: PasoCargado,
@@ -5105,6 +5143,11 @@ export class MotorUniversalService {
         if (!slotsOpcionales.has(slot.slotCodigo)) {
           errores.push(this.errorMaterialRequerido(slot, paso, jobContext));
         }
+        continue;
+      }
+      // El material heredado ya fue consumido y costeado por su paso de
+      // origen. Acá sólo aporta identidad, formato y atributos operativos.
+      if (slot.modoSeleccion === 'HEREDA_DE_PASO') {
         continue;
       }
       // Origen de costo 'por_candidato': si el pliego automático eligió un
@@ -5378,9 +5421,7 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          | 'HARDCODED'
-          | 'COMERCIAL_ELIGE'
-          | 'MOTOR_ELIGE_AUTO',
+          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -6401,6 +6442,16 @@ export class MotorUniversalService {
     subfamilia?: string | null;
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
+    if (slot.modoSeleccion === 'HEREDA_DE_PASO') {
+      return slot.materialHeredado
+        ? this.resolverMaterialSlot(
+            tenantId,
+            slot.materialHeredado.slot,
+            jobContext,
+            slot.materialHeredado.paso,
+          )
+        : null;
+    }
     if (slot.modoSeleccion === 'HARDCODED') {
       const variante = slot.materialVariante;
       if (
@@ -6879,19 +6930,16 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -6994,16 +7042,14 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              | Record<string, unknown>
-              | undefined;
+              Record<string, unknown> | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -8200,9 +8246,7 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          | 'MONTO_FIJO_PLANO'
-          | 'PORCENTAJE_SOBRE_BASE'
-          | 'POR_UNIDAD_INPUT',
+          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -8262,8 +8306,7 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        | Array<{ codigo: string; monto: number }>
-        | undefined;
+        Array<{ codigo: string; monto: number }> | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');
@@ -8827,6 +8870,9 @@ export class MotorUniversalService {
               anchoUtil: cp.maquinaM1.anchoUtil
                 ? Number(cp.maquinaM1.anchoUtil)
                 : null,
+              largoUtil: cp.maquinaM1.largoUtil
+                ? Number(cp.maquinaM1.largoUtil)
+                : null,
               centroCostoPrincipalId: cp.maquinaM1.centroCostoPrincipalId,
               centroCostoPrincipalNombre:
                 cp.maquinaM1.centroCostoPrincipal?.nombre ?? null,
@@ -8902,6 +8948,9 @@ export class MotorUniversalService {
             anchoUtil: mc.maquina.anchoUtil
               ? Number(mc.maquina.anchoUtil)
               : null,
+            largoUtil: mc.maquina.largoUtil
+              ? Number(mc.maquina.largoUtil)
+              : null,
             centroCostoPrincipalId: mc.maquina.centroCostoPrincipalId,
             centroCostoPrincipalNombre:
               mc.maquina.centroCostoPrincipal?.nombre ?? null,
@@ -8959,6 +9008,8 @@ export class MotorUniversalService {
           slotNombre: s.slotNombre,
           slotRol: s.slotRol,
           modoSeleccion: s.modoSeleccion,
+          heredaDeRutaPasoId: s.heredaDeRutaPasoId,
+          heredaDeSlotCodigo: s.heredaDeSlotCodigo,
           criterioMotorAuto: s.criterioMotorAuto,
           criterioInputCampo: s.criterioInputCampo,
           criterioMaterialCampo: s.criterioMaterialCampo,
@@ -9039,6 +9090,28 @@ export class MotorUniversalService {
       });
     });
 
+    const pasoByRutaPasoId = new Map(
+      pasos.map((paso) => [paso.rutaPasoId, paso] as const),
+    );
+    for (const paso of pasos) {
+      for (const slot of paso.slots) {
+        if (
+          slot.modoSeleccion !== 'HEREDA_DE_PASO' ||
+          !slot.heredaDeRutaPasoId ||
+          !slot.heredaDeSlotCodigo
+        ) {
+          continue;
+        }
+        const pasoOrigen = pasoByRutaPasoId.get(slot.heredaDeRutaPasoId);
+        const slotOrigen = pasoOrigen?.slots.find(
+          (candidate) => candidate.slotCodigo === slot.heredaDeSlotCodigo,
+        );
+        if (pasoOrigen && slotOrigen) {
+          slot.materialHeredado = { paso: pasoOrigen, slot: slotOrigen };
+        }
+      }
+    }
+
     // G-F3 — Pasos extras inline: pasos puntuales de ESTA ruta alternativa del
     // producto (no de la ruta base reusable). Se cargan aparte y se insertan en
     // la secuencia según `insertarDespuesDeRutaPasoId` + `ordenInterno`.
@@ -9054,6 +9127,29 @@ export class MotorUniversalService {
         configPasosVersionados.map((cp) => [cp.rutaPasoId, cp.ordenFlujo]),
       ),
     );
+    // Los pasos extra también pueden heredar el sustrato de un paso base. La
+    // referencia vive en su JSON, pero se resuelve contra la secuencia final.
+    const pasoFinalByRutaPasoId = new Map(
+      pasosConExtras.map((paso) => [paso.rutaPasoId, paso] as const),
+    );
+    for (const paso of pasosConExtras) {
+      for (const slot of paso.slots) {
+        if (
+          slot.modoSeleccion !== 'HEREDA_DE_PASO' ||
+          !slot.heredaDeRutaPasoId ||
+          !slot.heredaDeSlotCodigo
+        ) {
+          continue;
+        }
+        const pasoOrigen = pasoFinalByRutaPasoId.get(slot.heredaDeRutaPasoId);
+        const slotOrigen = pasoOrigen?.slots.find(
+          (candidate) => candidate.slotCodigo === slot.heredaDeSlotCodigo,
+        );
+        if (pasoOrigen && slotOrigen) {
+          slot.materialHeredado = { paso: pasoOrigen, slot: slotOrigen };
+        }
+      }
+    }
 
     return {
       productoId: producto.id,
@@ -9469,6 +9565,7 @@ export class MotorUniversalService {
             nombre: maquina.nombre,
             plantilla: maquina.plantilla,
             anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
+            largoUtil: maquina.largoUtil ? Number(maquina.largoUtil) : null,
             centroCostoPrincipalId: maquina.centroCostoPrincipalId,
             centroCostoPrincipalNombre:
               maquina.centroCostoPrincipal?.nombre ?? null,
@@ -9662,6 +9759,7 @@ export class MotorUniversalService {
               nombre: maquina.nombre,
               plantilla: maquina.plantilla,
               anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
+              largoUtil: maquina.largoUtil ? Number(maquina.largoUtil) : null,
               centroCostoPrincipalId: maquina.centroCostoPrincipalId,
               centroCostoPrincipalNombre:
                 maquina.centroCostoPrincipal?.nombre ?? null,
@@ -9728,6 +9826,8 @@ export class MotorUniversalService {
           slotNombre: s.slotNombre ?? null,
           slotRol: s.slotRol ?? null,
           modoSeleccion: s.modoSeleccion,
+          heredaDeRutaPasoId: s.heredaDeRutaPasoId ?? null,
+          heredaDeSlotCodigo: s.heredaDeSlotCodigo ?? null,
           criterioMotorAuto: s.criterioMotorAuto ?? null,
           criterioInputCampo: s.criterioInputCampo ?? null,
           criterioMaterialCampo: s.criterioMaterialCampo ?? null,

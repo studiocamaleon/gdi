@@ -85,6 +85,19 @@ describe('nestearGeometriaIrregular', () => {
     hashFuente: 'composicion-separada',
   };
 
+  it('rechaza una pieza sobredimensionada cuando la tecnología no permite segmentarla', () => {
+    expect(() =>
+      nestearGeometriaIrregular({
+        geometria: triangle,
+        cantidad: 1,
+        anchoPlacaMm: 50,
+        altoPlacaMm: 50,
+        permitirRotacion: true,
+        permitirSegmentacion: false,
+      }),
+    ).toThrow(/no entra completa/i);
+  });
+
   it('conserva posiciones y orientación cuando el SVG completo entra', () => {
     const result = nestearGeometriaIrregular({
       geometria: composicionSeparada,

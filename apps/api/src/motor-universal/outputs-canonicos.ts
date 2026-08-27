@@ -102,9 +102,36 @@ function computeOutput(
     if (magnitudMapeada === familia.derivador?.magnitudPrincipal) {
       return cantidadEfectiva || null;
     }
-    const derivacion =
-      derivacionesDelJobContext(jobContext)[paso.configPasoId];
+    const derivacion = derivacionesDelJobContext(jobContext)[paso.configPasoId];
     return derivacion?.magnitudes[magnitudMapeada] || null;
+  }
+
+  // El nesting no es sólo una ayuda visual: en una cadena impresión + corte
+  // representa la posición física del arte sobre cada placa. Publicarlo como
+  // output permite que el láser genere su recorrido con el mismo registro.
+  if (key === 'layout_produccion') {
+    const todosSonPlacas =
+      nestingDispatch != null &&
+      nestingDispatch.substrates.length > 0 &&
+      nestingDispatch.substrates.every(
+        (substrate) => substrate.kind === 'sheet',
+      );
+    if (!nestingDispatch || !todosSonPlacas) return null;
+    return {
+      schemaVersion: 1,
+      sourceRutaPasoId: paso.rutaPasoId,
+      sourceConfigPasoId: paso.configPasoId,
+      sourceFamiliaCodigo: paso.familiaCodigo,
+      materialVarianteId: materiales?.find(
+        (material) =>
+          material.slotRol === 'SUSTRATO' ||
+          material.slotCodigo === 'sustrato_principal',
+      )?.materialVarianteId,
+      algorithm: nestingDispatch.algorithm,
+      substrates: nestingDispatch.substrates,
+      placements: nestingDispatch.placements,
+      visualConfig: nestingDispatch.visualConfig,
+    };
   }
 
   // ─── Outputs estructurados del nesting de imposición ──────────────

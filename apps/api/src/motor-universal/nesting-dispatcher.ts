@@ -42,6 +42,7 @@ import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid
 import {
   estrategiaNestingDeFamilia,
   fuentePiezasNestingDeFamilia,
+  herramientasCotizacionEfectivas,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
@@ -67,7 +68,12 @@ import {
   type PrintSheetCandidateConfig,
   type PrintSheetCandidateMaterial,
 } from './nesting-config';
-import type { PasoCargado, JobContext, NestingVisualConfig } from './tipos';
+import type {
+  PasoCargado,
+  JobContext,
+  LayoutProduccionCompartido,
+  NestingVisualConfig,
+} from './tipos';
 import {
   nestearGeometriaIrregular,
   NestingIrregularError,
@@ -493,8 +499,13 @@ type EstrategiaNestingFn = (
  */
 const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
   /** Contornos SVG normalizados por el servidor sobre una placa finita. */
-  irregular_placa: (_paso, jobContext, materialResuelto, config) =>
-    runIrregularPlaca(jobContext, materialResuelto, config),
+  irregular_placa: (paso, jobContext, materialResuelto, config) =>
+    herramientasCotizacionEfectivas(
+      paso.familiaCodigo,
+      paso.paramsPasoJson,
+    ).includes('diseno_vectorial')
+      ? runIrregularPlaca(jobContext, materialResuelto, config)
+      : null,
 
   /** Corte sobre rollo: shelf sin panelizado. Si el material cargado es hoja/
    *  placa (no rollo) no acomoda en rollo — el formato lo dice el material. */
@@ -546,6 +557,267 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
 // Implementaciones
 // ────────────────────────────────────────────────────────────────────
 
+function leerLayoutProduccionCompartido(
+  jobContext: JobContext,
+): LayoutProduccionCompartido | null {
+  const layout = jobContext.layout_produccion;
+  if (
+    !layout ||
+    layout.schemaVersion !== 1 ||
+    layout.sourceFamiliaCodigo !== 'impresion_por_area' ||
+    !Array.isArray(layout.substrates) ||
+    layout.substrates.length === 0 ||
+    !layout.substrates.every((substrate) => substrate.kind === 'sheet') ||
+    !Array.isArray(layout.placements) ||
+    layout.placements.length === 0
+  ) {
+    return null;
+  }
+  return layout;
+}
+
+/** Aplica los contornos del SVG sobre las cajas que ya imprimió el paso
+ * anterior. No vuelve a empacar: la coincidencia física tiene prioridad sobre
+ * cualquier mejora de aprovechamiento del láser. */
+function aplicarGeometriaVectorialAlLayoutCompartido(
+  jobContext: JobContext,
+  layout: LayoutProduccionCompartido,
+  config: NestingConfigResolved,
+  materialResuelto: MaterialResueltoParaNesting,
+): NestingDispatchResult {
+  const geometria = jobContext.geometriaVectorial!;
+  const substratesOriginales = layout.substrates.filter(
+    (substrate): substrate is Extract<SubstrateUsage, { kind: 'sheet' }> =>
+      substrate.kind === 'sheet',
+  );
+  const primeraPlaca = substratesOriginales[0];
+  const todasIguales = substratesOriginales.every(
+    (substrate) =>
+      casiIgual(substrate.widthMm, primeraPlaca.widthMm) &&
+      casiIgual(substrate.heightMm, primeraPlaca.heightMm),
+  );
+  if (!todasIguales) {
+    throw new NestingIrregularError(
+      'La impresión publicó placas de medidas diferentes; el corte láser no puede conservar un único sistema de registro.',
+    );
+  }
+
+  const coincideMaterial =
+    (casiIgual(primeraPlaca.widthMm, config.sheetWidthMm ?? 0) &&
+      casiIgual(primeraPlaca.heightMm, config.sheetHeightMm ?? 0)) ||
+    (casiIgual(primeraPlaca.widthMm, config.sheetHeightMm ?? 0) &&
+      casiIgual(primeraPlaca.heightMm, config.sheetWidthMm ?? 0));
+  if (
+    layout.materialVarianteId &&
+    layout.materialVarianteId !== materialResuelto.id
+  ) {
+    throw new NestingIrregularError(
+      'El corte láser resolvió un material distinto del que se utilizó para imprimir el layout.',
+    );
+  }
+  if (!coincideMaterial) {
+    throw new NestingIrregularError(
+      `El layout impreso usa placas de ${primeraPlaca.widthMm} × ${primeraPlaca.heightMm} mm, pero el corte resolvió una placa diferente (${config.sheetWidthMm ?? '?'} × ${config.sheetHeightMm ?? '?'} mm).`,
+    );
+  }
+
+  const camaAncho = config.machineBedWidthMm;
+  const camaAlto = config.machineBedHeightMm;
+  const entraDirecta =
+    camaAncho == null ||
+    camaAlto == null ||
+    (primeraPlaca.widthMm <= camaAncho + 0.01 &&
+      primeraPlaca.heightMm <= camaAlto + 0.01);
+  const entraRotada =
+    camaAncho != null &&
+    camaAlto != null &&
+    primeraPlaca.heightMm <= camaAncho + 0.01 &&
+    primeraPlaca.widthMm <= camaAlto + 0.01;
+  if (!entraDirecta && !entraRotada) {
+    throw new NestingIrregularError(
+      `La placa impresa de ${primeraPlaca.widthMm} × ${primeraPlaca.heightMm} mm no entra en el área útil del láser (${camaAncho} × ${camaAlto} mm), ni siquiera rotada.`,
+    );
+  }
+  // La placa puede necesitar girarse físicamente para entrar en la cama, pero
+  // el archivo y el visor conservan SIEMPRE las coordenadas de impresión. Si
+  // rotáramos el sistema de coordenadas acá, ambos procesos registrarían en
+  // producción pero se verían orientados distinto y los archivos dejarían de
+  // compartir el mismo origen visual.
+  const requiereRotacionFisicaEnMaquina = !entraDirecta && entraRotada;
+
+  const piezasPorId = new Map(
+    geometria.piezas.map((pieza) => [pieza.id, pieza] as const),
+  );
+  const copiasPorPieza = new Map<string, number>();
+  const areaPorPlaca = Array.from(
+    { length: substratesOriginales.length },
+    () => 0,
+  );
+  let perimetroCorteMm = 0;
+
+  const placements: Placement[] = layout.placements.map((placement) => {
+    const pieza =
+      piezasPorId.get(placement.pieceId) ??
+      resolverPiezaPorIdGrid(placement.pieceId, geometria.piezas);
+    if (!pieza) {
+      throw new NestingIrregularError(
+        `El layout de impresión contiene la pieza "${placement.pieceId}", pero no existe en el SVG de corte.`,
+      );
+    }
+    const dimensionesCoinciden = placement.rotated
+      ? casiIgual(placement.widthMm, pieza.altoMm) &&
+        casiIgual(placement.heightMm, pieza.anchoMm)
+      : casiIgual(placement.widthMm, pieza.anchoMm) &&
+        casiIgual(placement.heightMm, pieza.altoMm);
+    if (!dimensionesCoinciden) {
+      throw new NestingIrregularError(
+        `La pieza "${pieza.id}" no tiene la misma escala en impresión y corte.`,
+      );
+    }
+
+    const transformarPunto = (punto: { x: number; y: number }) => {
+      const sobrePlaca = placement.rotated
+        ? {
+            x: placement.xMm + pieza.altoMm - punto.y,
+            y: placement.yMm + punto.x,
+          }
+        : {
+            x: placement.xMm + punto.x,
+            y: placement.yMm + punto.y,
+          };
+      return sobrePlaca;
+    };
+    const transformarContornos = (
+      contornos: typeof pieza.contornos,
+    ): typeof pieza.contornos =>
+      contornos.map((contorno) => ({
+        ...contorno,
+        puntos: contorno.puntos.map(transformarPunto),
+      }));
+    const contornos = transformarContornos(pieza.contornos);
+    const cortesInternos = transformarContornos(pieza.cortesInternos ?? []);
+    const puntos = [...contornos, ...cortesInternos].flatMap(
+      (contorno) => contorno.puntos,
+    );
+    const minX = Math.min(...puntos.map((punto) => punto.x));
+    const minY = Math.min(...puntos.map((punto) => punto.y));
+    const maxX = Math.max(...puntos.map((punto) => punto.x));
+    const maxY = Math.max(...puntos.map((punto) => punto.y));
+    const substrateIndex = placement.substrateIndex ?? 0;
+    if (areaPorPlaca[substrateIndex] === undefined) {
+      throw new NestingIrregularError(
+        'El layout de impresión referencia una placa inexistente.',
+      );
+    }
+    areaPorPlaca[substrateIndex] += pieza.areaMm2;
+    perimetroCorteMm += pieza.perimetroMm;
+    const copyIndex = copiasPorPieza.get(pieza.id) ?? 0;
+    copiasPorPieza.set(pieza.id, copyIndex + 1);
+    return {
+      pieceId: pieza.id,
+      substrateIndex,
+      xMm: redondearCoordenada(minX),
+      yMm: redondearCoordenada(minY),
+      widthMm: redondearCoordenada(maxX - minX),
+      heightMm: redondearCoordenada(maxY - minY),
+      rotated: placement.rotated,
+      meta: {
+        contornos,
+        cortesInternos,
+        copyIndex,
+        rotacionGrados:
+          (placement.rotated ? 90 : 0) % 360,
+        layoutHeredadoDe: layout.sourceRutaPasoId,
+        requiereRotacionFisicaEnMaquina,
+        label: pieza.id,
+      },
+    };
+  });
+
+  const substrates: SubstrateUsage[] = substratesOriginales.map(
+    (substrate) => ({
+      kind: 'sheet',
+      count: substrate.count,
+      widthMm: substrate.widthMm,
+      heightMm: substrate.heightMm,
+    }),
+  );
+  const areaCompradaMm2 = substrates.reduce(
+    (total, substrate) =>
+      total +
+      (substrate.kind === 'sheet'
+        ? substrate.widthMm * substrate.heightMm * substrate.count
+        : 0),
+    0,
+  );
+  const areaPiezasMm2 = areaPorPlaca.reduce((total, area) => total + area, 0);
+  jobContext.piezaPerimetroTotalM = perimetroCorteMm / 1_000;
+  const aprovechamientoPct =
+    areaCompradaMm2 > 0 ? (areaPiezasMm2 / areaCompradaMm2) * 100 : 0;
+
+  return {
+    algorithm: 'irregular-2d-bottom-left-v1',
+    cantidadCalculada: substrates.length,
+    unidad: 'pliegos',
+    aprovechamientoPct,
+    substrates,
+    placements,
+    metricasRaw: {
+      aprovechamientoPct,
+      areaUtilMm2: areaPiezasMm2,
+      areaTotalMm2: areaCompradaMm2,
+      perSubstrate: areaPorPlaca.map((areaUtilMm2) => ({
+        areaUtilMm2,
+        consumedLengthMm: primeraPlaca.heightMm,
+      })),
+      perimetroCorteMm,
+      piezasOriginales: placements.length,
+      segmentos: placements.length,
+      unionesFisicas: 0,
+      layoutHeredadoDeImpresion: true,
+      placaRequiereRotacionEnMaquina: requiereRotacionFisicaEnMaquina,
+      sourceRutaPasoId: layout.sourceRutaPasoId,
+    },
+    piezasAcomodadas: placements.length,
+    estrategiaDisposicion: 'nesting_optimizado',
+    visualConfig: transformarVisualConfigCompartida(
+      layout.visualConfig,
+      requiereRotacionFisicaEnMaquina,
+    ),
+  };
+}
+
+function resolverPiezaPorIdGrid(
+  pieceId: string,
+  piezas: NonNullable<JobContext['geometriaVectorial']>['piezas'],
+) {
+  const match = /^pieza_(\d+)$/.exec(pieceId);
+  return match ? (piezas[Number(match[1])] ?? null) : null;
+}
+
+function casiIgual(a: number, b: number, toleranciaMm = 0.05) {
+  return Math.abs(a - b) <= toleranciaMm;
+}
+
+function redondearCoordenada(value: number) {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+function transformarVisualConfigCompartida(
+  visual: NestingVisualConfig | undefined,
+  requiereRotacionFisicaEnMaquina: boolean,
+): NestingVisualConfig | undefined {
+  if (!visual) return undefined;
+  return {
+    ...visual,
+    allowRotation: false,
+    substrateLabel: requiereRotacionFisicaEnMaquina
+      ? 'Placa impresa · girar 90° al cargar en el láser'
+      : 'Placa impresa',
+    maquina: undefined,
+  };
+}
+
 function runIrregularPlaca(
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
@@ -553,6 +825,28 @@ function runIrregularPlaca(
 ): NestingDispatchResult | null {
   if (!materialResuelto || !config.sheetWidthMm || !config.sheetHeightMm) {
     return null;
+  }
+  if (config.machineBedWidthMm && config.machineBedHeightMm) {
+    const entraSinRotar =
+      config.sheetWidthMm <= config.machineBedWidthMm &&
+      config.sheetHeightMm <= config.machineBedHeightMm;
+    const entraRotada =
+      config.sheetWidthMm <= config.machineBedHeightMm &&
+      config.sheetHeightMm <= config.machineBedWidthMm;
+    if (!entraSinRotar && !entraRotada) {
+      throw new NestingIrregularError(
+        `La placa de ${config.sheetWidthMm} × ${config.sheetHeightMm} mm supera el área útil de la máquina (${config.machineBedWidthMm} × ${config.machineBedHeightMm} mm).`,
+      );
+    }
+  }
+  const layoutCompartido = leerLayoutProduccionCompartido(jobContext);
+  if (layoutCompartido && jobContext.geometriaVectorial) {
+    return aplicarGeometriaVectorialAlLayoutCompartido(
+      jobContext,
+      layoutCompartido,
+      config,
+      materialResuelto,
+    );
   }
   const placasManuales = Number(jobContext.placasVectorialesManuales ?? 0);
   const metrosCortePorPlaca = Number(
@@ -615,6 +909,8 @@ function runIrregularPlaca(
       cached.parametros.margenMm === margenUniforme &&
       cached.parametros.separacionMm === separacionUniforme &&
       cached.parametros.permitirRotacion === config.allowRotation &&
+      cached.parametros.permitirSegmentacion ===
+        config.permitirSegmentacionVectorial &&
       cached.parametros.preservarComposicionOriginalSiEntra ===
         config.preservarComposicionOriginalSiEntra &&
       JSON.stringify(cached.parametros.configuracionEncastres) ===
@@ -631,6 +927,7 @@ function runIrregularPlaca(
             margenMm: margenUniforme,
             separacionMm: separacionUniforme,
             permitirRotacion: config.allowRotation,
+            permitirSegmentacion: config.permitirSegmentacionVectorial,
             preservarComposicionOriginalSiEntra:
               config.preservarComposicionOriginalSiEntra,
             configuracionEncastres: config.configuracionEncastres,
@@ -1521,7 +1818,18 @@ function runGrid2DMultiForArea(
     piezas.map((p) => `${p.anchoMm}x${p.altoMm}`),
   );
   const contienePaneles = piezas.some((pieza) => pieza.panelIndex != null);
-  if (medidasDistintas.size <= 1 && !contienePaneles) {
+  // Una geometría SVG necesita conservar la identidad de cada contorno para
+  // que el corte posterior pueda aplicarlo sobre SU caja impresa. El grid
+  // single colapsa todas las piezas iguales en una pose anónima; por eso los
+  // vectores siempre pasan por multi aunque compartan ancho y alto.
+  const contieneIdentidadesVectoriales = piezas.some(
+    (pieza) => typeof pieza.sourcePieceId === 'string',
+  );
+  if (
+    medidasDistintas.size <= 1 &&
+    !contienePaneles &&
+    !contieneIdentidadesVectoriales
+  ) {
     return runGrid2DSingleForArea(jobContext, config);
   }
 
@@ -1584,7 +1892,7 @@ function runGrid2DMultiForArea(
 function metadataPanelDePieza(
   pieza: NonNullable<JobContext['piezas']>[number],
 ): Record<string, unknown> | undefined {
-  if (pieza.panelIndex == null) return undefined;
+  if (pieza.panelIndex == null && !pieza.sourcePieceId) return undefined;
   return {
     sourcePieceId: pieza.sourcePieceId,
     panelIndex: pieza.panelIndex,

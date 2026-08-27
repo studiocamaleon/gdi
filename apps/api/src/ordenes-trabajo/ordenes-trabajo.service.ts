@@ -1768,8 +1768,13 @@ export class OrdenesTrabajoService {
             id?: string;
             archivosOrigenItemIds?: string[];
           }
-        >
+      >
       | undefined;
+    // El editor de la OT guarda el conjunto completo en una sola operación.
+    // Conservamos los ids materializados para preparar los archivos recién
+    // DESPUÉS del commit: antes todavía no existe una fuente estable a la que
+    // vincular revisiones, recorridos y TAP.
+    let itemIdsParaPreparar: string[] = [];
     if (payload.items) {
       const idsExistentes = payload.items
         .map((item) => item.id)
@@ -1987,6 +1992,7 @@ export class OrdenesTrabajoService {
             { reemplazar: true },
           );
         }
+        itemIdsParaPreparar = materializables.map((item) => item.id);
         if (estado === 'pendiente') {
           await this.reconciliarCupones(tx, auth, orden.id, itemsAutorizados);
         }
@@ -2014,6 +2020,12 @@ export class OrdenesTrabajoService {
         },
       });
     });
+
+    // Mismo contrato que crear/agregar/editar un item individual: al volver
+    // del guardado, cualquier producto vectorial ya tiene sus revisiones por
+    // placa listas. `asegurarParaItem` compara hashes, por lo que recorrer el
+    // conjunto completo es idempotente y no crea revisiones duplicadas.
+    await this.prepararRecorridosDeItems(auth, itemIdsParaPreparar);
 
     return this.findOne(auth, orden.id);
   }

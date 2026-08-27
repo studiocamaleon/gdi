@@ -167,4 +167,9 @@ export interface NestingMetrics {
   uniones?: unknown[];
   configuracionEncastres?: unknown;
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
+  /** Trazabilidad de registro para cadenas impresión + corte. */
+  layoutHeredadoDeImpresion?: boolean;
+  /** La orientación documental se conserva; indica sólo cómo cargar la placa. */
+  placaRequiereRotacionEnMaquina?: boolean;
+  sourceRutaPasoId?: string;
 }

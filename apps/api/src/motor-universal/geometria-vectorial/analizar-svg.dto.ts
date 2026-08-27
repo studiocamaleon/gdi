@@ -161,6 +161,10 @@ export class AnalizarSvgFabricacionDto {
 
   @IsOptional()
   @IsBoolean()
+  permitirSegmentacion?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   preservarComposicionOriginalSiEntra?: boolean;
 
   @IsOptional()

@@ -329,6 +329,8 @@ export class ProductoRutasService {
               slotNombre: slot.slotNombre,
               slotRol: slot.slotRol,
               modoSeleccion: slot.modoSeleccion,
+              heredaDeRutaPasoId: slot.heredaDeRutaPasoId,
+              heredaDeSlotCodigo: slot.heredaDeSlotCodigo,
               criterioMotorAuto: slot.criterioMotorAuto,
               criterioInputCampo: slot.criterioInputCampo,
               criterioMaterialCampo: slot.criterioMaterialCampo,
