@@ -61,6 +61,15 @@ export class ConfigPasosService {
         'Una configuración base reutilizable no puede fijar un paso origen de una ruta concreta.',
       );
     }
+    if (
+      dto.slotsMateriales?.some(
+        (slot) => slot.modoSeleccion === 'HEREDA_DE_PASO',
+      )
+    ) {
+      throw new BadRequestException(
+        'Una configuración base reutilizable no puede heredar material de un paso de una ruta concreta.',
+      );
+    }
     await this.validarSlotsMaterialesCompatibles(tenantId, familiaCodigo, dto);
     await this.validarMaquinasCandidatasCompatibles(
       tenantId,
@@ -177,6 +186,7 @@ export class ConfigPasosService {
       rutaPaso,
       dto,
     );
+    await this.validarHerenciaMateriales(tenantId, rutaAlt.id, rutaPaso, dto);
     await this.validarSlotsMaterialesCompatibles(
       tenantId,
       rutaPaso.familiaCodigo,
@@ -393,6 +403,14 @@ export class ConfigPasosService {
               slotNombre: s.slotNombre ?? null,
               slotRol: s.slotRol ?? null,
               modoSeleccion: s.modoSeleccion,
+              heredaDeRutaPasoId:
+                s.modoSeleccion === 'HEREDA_DE_PASO'
+                  ? (s.heredaDeRutaPasoId ?? null)
+                  : null,
+              heredaDeSlotCodigo:
+                s.modoSeleccion === 'HEREDA_DE_PASO'
+                  ? (s.heredaDeSlotCodigo?.trim() ?? null)
+                  : null,
               criterioMotorAuto: s.criterioMotorAuto ?? null,
               criterioInputCampo: s.criterioInputCampo ?? null,
               criterioMaterialCampo: s.criterioMaterialCampo ?? null,
@@ -921,6 +939,68 @@ export class ConfigPasosService {
             );
           }
         }
+      }
+    }
+  }
+
+  private async validarHerenciaMateriales(
+    tenantId: string,
+    rutaAlternativaId: string,
+    rutaPasoDestino: { id: string; orden: number },
+    dto: UpsertProductoConfigPasoDto,
+  ) {
+    const heredados = (dto.slotsMateriales ?? []).filter(
+      (slot) => slot.modoSeleccion === 'HEREDA_DE_PASO',
+    );
+    if (heredados.length === 0) return;
+    const configDestino = await this.prisma.productoConfigPaso.findFirst({
+      where: {
+        tenantId,
+        productoRutaAlternativaId: rutaAlternativaId,
+        rutaPasoId: rutaPasoDestino.id,
+      },
+      select: { ordenFlujo: true },
+    });
+    const ordenDestino = configDestino?.ordenFlujo ?? rutaPasoDestino.orden;
+
+    for (const slot of heredados) {
+      if (!slot.heredaDeRutaPasoId || !slot.heredaDeSlotCodigo?.trim()) {
+        throw new BadRequestException(
+          `El slot ${slot.slotCodigo} debe indicar el paso y el material de origen.`,
+        );
+      }
+      const origen = await this.prisma.productoConfigPaso.findFirst({
+        where: {
+          tenantId,
+          productoRutaAlternativaId: rutaAlternativaId,
+          rutaPasoId: slot.heredaDeRutaPasoId,
+          activo: true,
+        },
+        include: {
+          rutaPaso: { select: { orden: true } },
+          slotsMateriales: {
+            where: { slotCodigo: slot.heredaDeSlotCodigo.trim(), activo: true },
+            select: { id: true, modoSeleccion: true },
+          },
+        },
+      });
+      if (!origen || origen.slotsMateriales.length === 0) {
+        throw new BadRequestException(
+          `El material de origen configurado para ${slot.slotCodigo} no existe en esta ruta.`,
+        );
+      }
+      if (
+        (origen.ordenFlujo ?? origen.rutaPaso.orden) >= ordenDestino ||
+        origen.rutaPasoId === rutaPasoDestino.id
+      ) {
+        throw new BadRequestException(
+          `El material de ${slot.slotCodigo} sólo puede heredarse de un paso anterior.`,
+        );
+      }
+      if (origen.slotsMateriales[0].modoSeleccion === 'HEREDA_DE_PASO') {
+        throw new BadRequestException(
+          `El material de origen de ${slot.slotCodigo} ya es heredado. Elegí el paso que resuelve el material originalmente.`,
+        );
       }
     }
   }

@@ -9,7 +9,10 @@ import { buildModoColorOptionsFromProfiles } from './modo-color-comercial';
 import { PrismaService } from '../prisma/prisma.service';
 import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
 import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
-import { resolverFamilia } from './pasos/familias';
+import {
+  herramientasCotizacionEfectivas,
+  resolverFamilia,
+} from './pasos/familias';
 import { OrdenProductosDto } from './dto/list-productos-query.dto';
 import type {
   ActualizarProductoDto,
@@ -63,8 +66,10 @@ export class ProductosService {
       ...(subcategoriaCodigo
         ? { subcategoriaComercial: { codigo: subcategoriaCodigo } }
         : categoriaCodigo
-          ? { subcategoriaComercial: { categoria: { codigo: categoriaCodigo } } }
-        : {}),
+          ? {
+              subcategoriaComercial: { categoria: { codigo: categoriaCodigo } },
+            }
+          : {}),
       // Búsqueda por título (nombre) y código, no por la descripción.
       ...(search
         ? {
@@ -525,6 +530,8 @@ export class ProductosService {
                     slotNombre: slot.slotNombre,
                     slotRol: slot.slotRol,
                     modoSeleccion: slot.modoSeleccion,
+                    heredaDeRutaPasoId: slot.heredaDeRutaPasoId,
+                    heredaDeSlotCodigo: slot.heredaDeSlotCodigo,
                     criterioMotorAuto: slot.criterioMotorAuto,
                     criterioInputCampo: slot.criterioInputCampo,
                     criterioMaterialCampo: slot.criterioMaterialCampo,
@@ -1157,9 +1164,9 @@ export class ProductosService {
               ...paso,
               familiaNombre:
                 resolverFamilia(paso.familiaCodigo)?.nombre ?? null,
-              herramientasCotizacion:
-                resolverFamilia(paso.familiaCodigo)
-                  ?.herramientasCotizacion ?? [],
+              herramientasCotizacion: herramientasCotizacionEfectivas(
+                paso.familiaCodigo,
+              ),
             })),
         },
         // G-F3: extras de ESTA ruta alternativa (scope por ruta).
@@ -1167,8 +1174,10 @@ export class ProductosService {
           .filter((pe) => pe.rutaAlternativaId === rutaAlt.id)
           .map((pe) => ({
             ...pe,
-            herramientasCotizacion:
-              resolverFamilia(pe.familiaCodigo)?.herramientasCotizacion ?? [],
+            herramientasCotizacion: herramientasCotizacionEfectivas(
+              pe.familiaCodigo,
+              pe.paramsPasoJson,
+            ),
             maquinasCandidatas: pasoExtraCandidatas.get(pe.id) ?? [],
             slotsMateriales: pasoExtraSlots.get(pe.id) ?? [],
             cargosDirectosPaso: pasoExtraCargos.get(pe.id) ?? [],
@@ -1181,9 +1190,10 @@ export class ProductosService {
                 familiaNombre:
                   resolverFamilia(configPaso.rutaPaso.familiaCodigo)?.nombre ??
                   null,
-                herramientasCotizacion:
-                  resolverFamilia(configPaso.rutaPaso.familiaCodigo)
-                    ?.herramientasCotizacion ?? [],
+                herramientasCotizacion: herramientasCotizacionEfectivas(
+                  configPaso.rutaPaso.familiaCodigo,
+                  configPaso.paramsPasoJson,
+                ),
               }
             : configPaso.rutaPaso,
           modoColorOptions: this.buildModoColorOptions(configPaso),
@@ -1390,6 +1400,8 @@ export class ProductosService {
       slotNombre?: string | null;
       slotRol?: string | null;
       modoSeleccion?: string;
+      heredaDeRutaPasoId?: string | null;
+      heredaDeSlotCodigo?: string | null;
       criterioMotorAuto?: string | null;
       formula?: string;
       cantidadFactor?: string | number | null;
@@ -1481,6 +1493,8 @@ export class ProductosService {
             slotNombre: s.slotNombre ?? null,
             slotRol: s.slotRol ?? null,
             modoSeleccion: s.modoSeleccion ?? 'HARDCODED',
+            heredaDeRutaPasoId: s.heredaDeRutaPasoId ?? null,
+            heredaDeSlotCodigo: s.heredaDeSlotCodigo ?? null,
             criterioMotorAuto: s.criterioMotorAuto ?? null,
             formula: s.formula ?? '',
             cantidadFactor: s.cantidadFactor ?? null,

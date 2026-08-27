@@ -13,6 +13,7 @@ import {
   estrategiaNestingDeFamilia,
   margenesNestingDefaultDeFamilia,
   origenMargenesNestingDeFamilia,
+  resolverFamilia,
   separacionEsLiteral,
   separacionNestingDefaultDeFamilia,
 } from '../productos-servicios/pasos/familias';
@@ -72,6 +73,7 @@ export interface NestingConfigResolved {
   algorithm: NestingAlgorithmPolicy;
   allowRotation: boolean;
   preservarComposicionOriginalSiEntra: boolean;
+  permitirSegmentacionVectorial: boolean;
   configuracionEncastres: ConfiguracionEncastresVectoriales;
   pieceBleedMm: number;
   separationHMm: number;
@@ -87,6 +89,8 @@ export interface NestingConfigResolved {
   rollWidthMm: number | null;
   sheetWidthMm: number | null;
   sheetHeightMm: number | null;
+  machineBedWidthMm: number | null;
+  machineBedHeightMm: number | null;
   printSheetMode: 'fixed' | 'automatic';
   /**
    * Origen del costo al comparar candidatos de pliego:
@@ -148,7 +152,10 @@ export function resolveNestingConfig(
     asRecord(runtimeNestingConfig.margins),
     {},
   );
-  const extraMargins = normalizeMargins(asRecord(nestingConfig.extraMargins), {});
+  const extraMargins = normalizeMargins(
+    asRecord(nestingConfig.extraMargins),
+    {},
+  );
   const runtimeExtraMargins = normalizeMargins(
     asRecord(runtimeNestingConfig.extraMargins),
     {},
@@ -213,48 +220,54 @@ export function resolveNestingConfig(
     ? Math.max(0, legacySeparationVMm)
     : pieceBleedMm * 2;
   const baseMargins = {
-    leftMm: readNumber(
-      runtimeMargins.leftMm,
-      overrideMargins.leftMm,
-      legacyMargins.leftMm,
-      machineMargins.leftMm,
-      0,
-    ) ?? 0,
-    rightMm: readNumber(
-      runtimeMargins.rightMm,
-      overrideMargins.rightMm,
-      legacyMargins.rightMm,
-      machineMargins.rightMm,
-      0,
-    ) ?? 0,
-    topMm: readNumber(
-      runtimeMargins.topMm,
-      overrideMargins.topMm,
-      legacyMargins.topMm,
-      machineMargins.topMm,
-      0,
-    ) ?? 0,
-    bottomMm: readNumber(
-      runtimeMargins.bottomMm,
-      overrideMargins.bottomMm,
-      legacyMargins.bottomMm,
-      machineMargins.bottomMm,
-      0,
-    ) ?? 0,
-    startMm: readNumber(
-      runtimeMargins.startMm,
-      overrideMargins.startMm,
-      legacyMargins.startMm,
-      machineMargins.startMm,
-      10,
-    ) ?? 10,
-    endMm: readNumber(
-      runtimeMargins.endMm,
-      overrideMargins.endMm,
-      legacyMargins.endMm,
-      machineMargins.endMm,
-      10,
-    ) ?? 10,
+    leftMm:
+      readNumber(
+        runtimeMargins.leftMm,
+        overrideMargins.leftMm,
+        legacyMargins.leftMm,
+        machineMargins.leftMm,
+        0,
+      ) ?? 0,
+    rightMm:
+      readNumber(
+        runtimeMargins.rightMm,
+        overrideMargins.rightMm,
+        legacyMargins.rightMm,
+        machineMargins.rightMm,
+        0,
+      ) ?? 0,
+    topMm:
+      readNumber(
+        runtimeMargins.topMm,
+        overrideMargins.topMm,
+        legacyMargins.topMm,
+        machineMargins.topMm,
+        0,
+      ) ?? 0,
+    bottomMm:
+      readNumber(
+        runtimeMargins.bottomMm,
+        overrideMargins.bottomMm,
+        legacyMargins.bottomMm,
+        machineMargins.bottomMm,
+        0,
+      ) ?? 0,
+    startMm:
+      readNumber(
+        runtimeMargins.startMm,
+        overrideMargins.startMm,
+        legacyMargins.startMm,
+        machineMargins.startMm,
+        10,
+      ) ?? 10,
+    endMm:
+      readNumber(
+        runtimeMargins.endMm,
+        overrideMargins.endMm,
+        legacyMargins.endMm,
+        machineMargins.endMm,
+        10,
+      ) ?? 10,
   };
   const margins = {
     leftMm:
@@ -271,7 +284,8 @@ export function resolveNestingConfig(
       pieceBleedMm,
     bottomMm:
       baseMargins.bottomMm +
-      (readNumber(runtimeExtraMargins.bottomMm, extraMargins.bottomMm, 0) ?? 0) +
+      (readNumber(runtimeExtraMargins.bottomMm, extraMargins.bottomMm, 0) ??
+        0) +
       pieceBleedMm,
     startMm:
       baseMargins.startMm +
@@ -306,7 +320,9 @@ export function resolveNestingConfig(
     maqParams.anchoMaxMm,
   );
   const shouldValidateRollWidthAgainstMachine =
-    geometry === 'ROLLO' && algorithm !== 'shelf-rollo' && algorithm !== 'maxrects-rollo';
+    geometry === 'ROLLO' &&
+    algorithm !== 'shelf-rollo' &&
+    algorithm !== 'maxrects-rollo';
   const rollWidthMm =
     materialRollWidthMm != null
       ? shouldValidateRollWidthAgainstMachine &&
@@ -316,7 +332,9 @@ export function resolveNestingConfig(
         : materialRollWidthMm
       : machineMaxRollWidthMm;
   const printableWidthMm =
-    rollWidthMm != null ? Math.max(0, rollWidthMm - margins.leftMm - margins.rightMm) : null;
+    rollWidthMm != null
+      ? Math.max(0, rollWidthMm - margins.leftMm - margins.rightMm)
+      : null;
   const runtimePanelizadoConfig = asRecord(runtimeNestingConfig.panelizado);
   const panelizadoConfig = asRecord(nestingConfig.panelizado);
   const pliegoImpresionConfig = asRecord(
@@ -327,7 +345,10 @@ export function resolveNestingConfig(
     ),
   );
   const purchaseSheetWidthMm = readNumber(materialAttrs.anchoMm);
-  const purchaseSheetHeightMm = readNumber(materialAttrs.altoMm, materialAttrs.largoMm);
+  const purchaseSheetHeightMm = readNumber(
+    materialAttrs.altoMm,
+    materialAttrs.largoMm,
+  );
   // El pliego de impresión configurable es propio de la estrategia
   // `pliego_digital` declarada por la familia. [Etapa F2: era un
   // `familiaCodigo === 'impresion_por_hoja'` repetido 5 veces]
@@ -335,8 +356,10 @@ export function resolveNestingConfig(
     estrategiaNestingDeFamilia(paso.familiaCodigo) === 'pliego_digital';
   const printSheetMode =
     soportaPliegoImpresion &&
-    normalizePrintSheetMode(pliegoImpresionConfig.modo, pliegoImpresionConfig.mode) ===
-      'automatic'
+    normalizePrintSheetMode(
+      pliegoImpresionConfig.modo,
+      pliegoImpresionConfig.mode,
+    ) === 'automatic'
       ? 'automatic'
       : 'fixed';
   const printSheetCostSource = soportaPliegoImpresion
@@ -346,10 +369,7 @@ export function resolveNestingConfig(
     ? normalizePrintSheetCandidates(pliegoImpresionConfig.candidatos)
     : [];
   const configuredPrintSheetWidthMm = soportaPliegoImpresion
-    ? readNumber(
-        pliegoImpresionConfig.anchoMm,
-        pliegoImpresionConfig.widthMm,
-      )
+    ? readNumber(pliegoImpresionConfig.anchoMm, pliegoImpresionConfig.widthMm)
     : null;
   const configuredPrintSheetHeightMm = soportaPliegoImpresion
     ? readNumber(
@@ -368,8 +388,10 @@ export function resolveNestingConfig(
       true,
     ),
     preservarComposicionOriginalSiEntra:
-      maqParams.estrategiaNestingVectorial ===
-      'preserve-original-if-fits',
+      maqParams.estrategiaNestingVectorial === 'preserve-original-if-fits',
+    permitirSegmentacionVectorial:
+      resolverFamilia(paso.familiaCodigo)?.permiteSegmentacionVectorial ===
+      true,
     configuracionEncastres:
       resolverConfiguracionEncastresVectoriales(maqParams),
     pieceBleedMm,
@@ -385,6 +407,16 @@ export function resolveNestingConfig(
       configuredPrintSheetHeightMm ??
       purchaseSheetHeightMm ??
       readNumber(maqParams.largoMesaMm),
+    machineBedWidthMm: readNumber(
+      paso.maquina?.anchoUtil,
+      maqParams.anchoUtil,
+      maqParams.anchoMesaMm,
+    ),
+    machineBedHeightMm: readNumber(
+      paso.maquina?.largoUtil,
+      maqParams.largoUtil,
+      maqParams.largoMesaMm,
+    ),
     printSheetMode,
     printSheetCostSource,
     printSheetCandidates,
@@ -404,7 +436,6 @@ export function resolveNestingConfig(
     ),
   };
 }
-
 
 function uniformMargins(value: number) {
   const margin = Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -455,7 +486,10 @@ function normalizePanelizado(
 ): NestingPanelizadoConfig {
   const modeRaw = readFirst(runtimeConfig.mode, config.mode);
   const axisRaw = readFirst(runtimeConfig.axis, config.axis);
-  const distributionRaw = readFirst(runtimeConfig.distribution, config.distribution);
+  const distributionRaw = readFirst(
+    runtimeConfig.distribution,
+    config.distribution,
+  );
   const widthInterpretationRaw = readFirst(
     runtimeConfig.widthInterpretation,
     config.widthInterpretation,
@@ -465,10 +499,9 @@ function normalizePanelizado(
     config.maxPanelWidthMm,
   );
   const maxPanelWidthMm =
-    rawMaxPanelWidthMm != null &&
-    rawMaxPanelWidthMm >= MIN_PANEL_MAX_WIDTH_MM
+    rawMaxPanelWidthMm != null && rawMaxPanelWidthMm >= MIN_PANEL_MAX_WIDTH_MM
       ? rawMaxPanelWidthMm
-      : printableWidthMm ?? 0;
+      : (printableWidthMm ?? 0);
 
   return {
     enabled: readBoolean(runtimeConfig.enabled, config.enabled, false),
@@ -491,8 +524,7 @@ function normalizePanelizado(
       ) ?? 20,
     maxPanelWidthMm,
     distribution: distributionRaw === 'libre' ? 'libre' : 'equilibrada',
-    widthInterpretation:
-      widthInterpretationRaw === 'util' ? 'util' : 'total',
+    widthInterpretation: widthInterpretationRaw === 'util' ? 'util' : 'total',
     manualLayout: asRecord(runtimeConfig.manualLayout).items
       ? asRecord(runtimeConfig.manualLayout)
       : asRecord(config.manualLayout).items
@@ -506,11 +538,26 @@ function normalizeMargins(
   defaults: Record<string, number | undefined>,
 ) {
   return {
-    leftMm: readNumber(value.leftMm, value.izq, value.izquierdo, defaults.leftMm),
-    rightMm: readNumber(value.rightMm, value.der, value.derecho, defaults.rightMm),
+    leftMm: readNumber(
+      value.leftMm,
+      value.izq,
+      value.izquierdo,
+      defaults.leftMm,
+    ),
+    rightMm: readNumber(
+      value.rightMm,
+      value.der,
+      value.derecho,
+      defaults.rightMm,
+    ),
     topMm: readNumber(value.topMm, value.sup, defaults.topMm),
     bottomMm: readNumber(value.bottomMm, value.inf, defaults.bottomMm),
-    startMm: readNumber(value.startMm, value.inicio, value.sup, defaults.startMm),
+    startMm: readNumber(
+      value.startMm,
+      value.inicio,
+      value.sup,
+      defaults.startMm,
+    ),
     endMm: readNumber(value.endMm, value.fin, value.inf, defaults.endMm),
   };
 }
@@ -537,7 +584,9 @@ function normalizePrintSheetCostSource(
     : 'derivado';
 }
 
-function normalizePrintSheetCandidates(value: unknown): PrintSheetCandidateConfig[] {
+function normalizePrintSheetCandidates(
+  value: unknown,
+): PrintSheetCandidateConfig[] {
   if (!Array.isArray(value)) return [];
   return value
     .map((item, index) => {

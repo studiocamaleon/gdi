@@ -64,6 +64,7 @@ export class MotorUniversalController {
           margenMm: dto.margenMm ?? 0,
           separacionMm: dto.separacionMm ?? 0,
           permitirRotacion: dto.permitirRotacion !== false,
+          permitirSegmentacion: dto.permitirSegmentacion !== false,
           preservarComposicionOriginalSiEntra:
             dto.preservarComposicionOriginalSiEntra === true,
           configuracionEncastres: resolverConfiguracionEncastresVectoriales(

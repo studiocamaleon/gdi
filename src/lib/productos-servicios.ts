@@ -158,6 +158,8 @@ export interface RutaPaso {
   familiaNombre?: string | null;
   /** Herramientas exigidas por la familia para cotizar este paso. */
   herramientasCotizacion?: string[];
+  herramientasCotizacionDisponibles?: string[];
+  permiteSegmentacionVectorial?: boolean;
   /** Nombre operativo definido en la ruta; precede al nombre de familia. */
   nombreVisible?: string | null;
   icono?: string | null;
@@ -289,6 +291,8 @@ export interface SlotMaterialDetalle {
   slotNombre: string | null;
   slotRol: string | null;
   modoSeleccion: string;
+  heredaDeRutaPasoId?: string | null;
+  heredaDeSlotCodigo?: string | null;
   criterioMotorAuto: string | null;
   formula: string;
   cantidadFactor: string | number | null;
@@ -460,6 +464,8 @@ export interface FamiliaListItem {
   origen?: "sistema" | "tenant";
   visibleEnSelector?: boolean;
   herramientasCotizacion?: string[];
+  herramientasCotizacionDisponibles?: string[];
+  permiteSegmentacionVectorial?: boolean;
   relacionMaquinaSoportada: string[];
   modoActivacionDefault: string;
   modosTiempoSoportados: string[];
@@ -524,6 +530,7 @@ export interface FamiliaListItem {
   tiposPerfilCompatibles?: string[] | null;
   /** [Tanda B] Separación entre piezas por defecto (mm) del acomodado. */
   separacionNestingDefaultMm?: number;
+  semanticaSeparacion?: "literal" | "demasia";
   /** [Tanda B] Fuentes de piezas heredadas declaradas (códigos). La pregunta
    *  "¿qué monta?" aparece cuando hay fuentes y el default es el implícito. */
   fuentesPiezasNesting?: string[];

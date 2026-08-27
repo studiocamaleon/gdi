@@ -248,6 +248,21 @@ export class ProductoValidacionService {
               },
             });
           }
+          if (
+            slotConfig.modoSeleccion === 'HEREDA_DE_PASO' &&
+            (!slotConfig.heredaDeRutaPasoId || !slotConfig.heredaDeSlotCodigo)
+          ) {
+            errores.push({
+              severidad: 'ERROR',
+              codigo: 'slot_heredado_sin_origen',
+              mensaje: `Paso ${paso.orden}: slot "${slotDecl.nombre}" sin paso/material de origen`,
+              ubicacion: {
+                rutaAltId: ra.id,
+                rutaPasoId: paso.id,
+                slotCodigo: slotDecl.codigo,
+              },
+            });
+          }
         }
 
         if (familia.modosTiempoSoportados.length === 1 && !config.modoTiempo) {

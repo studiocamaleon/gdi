@@ -229,6 +229,7 @@ export type ControlOpcion =
         | "modo-color-detallado"
         | "agregar-slot"
         | "material-fijo-detallado"
+        | "material-heredado-detallado"
         | "candidatos-slot-detallado"
         | "base-consumo"
         | "consumo-formula"
@@ -2098,7 +2099,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
           modoSeleccion: (v || "HARDCODED") as
             | "HARDCODED"
             | "COMERCIAL_ELIGE"
-            | "MOTOR_ELIGE_AUTO",
+            | "MOTOR_ELIGE_AUTO"
+            | "HEREDA_DE_PASO",
         },
       }),
     },
@@ -2132,7 +2134,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // Sin ayuda: el componente ("Materiales candidatos") ya trae su hint.
     visible: (ctx) =>
       Boolean(ctx.slot) &&
-      ctx.slot?.payload.modoSeleccion !== "HARDCODED",
+      ctx.slot?.payload.modoSeleccion !== "HARDCODED" &&
+      ctx.slot?.payload.modoSeleccion !== "HEREDA_DE_PASO",
     resumen: (ctx) => {
       const candidatos = ctx.slot?.payload.candidatos ?? [];
       if (candidatos.length === 0) return "Sin candidatos elegidos";
@@ -2156,6 +2159,27 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "sin-definir",
     pendiente: "material_slot",
     control: { tipo: "componente", id: "candidatos-slot-detallado" },
+  },
+  {
+    clave: "materiales.herencia",
+    seccion: "materiales",
+    grupo: "cual",
+    etiqueta: " ",
+    anchoCompleto: true,
+    pregunta: "¿De qué paso hereda el material?",
+    visible: (ctx) => ctx.slot?.payload.modoSeleccion === "HEREDA_DE_PASO",
+    resumen: (ctx) => {
+      const origenId = ctx.slot?.payload.heredaDeRutaPasoId;
+      if (!origenId || !ctx.slot?.payload.heredaDeSlotCodigo) {
+        return "Sin origen configurado";
+      }
+      const origen = ctx.otrosPasos.find((paso) => paso.id === origenId);
+      return `Hereda de: ${origen?.nombre ?? "paso anterior"}`;
+    },
+    origenValor: (ctx) =>
+      ctx.slot?.payload.heredaDeRutaPasoId ? "config" : "sin-definir",
+    pendiente: "material_slot",
+    control: { tipo: "componente", id: "material-heredado-detallado" },
   },
   {
     clave: "materiales.criterio",

@@ -447,6 +447,9 @@ const impresion_por_area: DefinicionFamilia = {
   outputsCanonicos: [
     'm2_calculados',
     'aprovechamiento_pct',
+    // Layout físico compartido: un corte vectorial posterior sobre la misma
+    // placa debe respetar exactamente lo que se imprimió.
+    'layout_produccion',
     'tiempo_real_impresion',
   ],
   validaciones: [
@@ -846,6 +849,7 @@ const corte_laser: DefinicionFamilia = {
   categoria: 'corte_y_formado',
   descripcion:
     'Corte de placas (acrílico, madera, MDF, etc.) con láser. Atraviesa el material (distinto a grabado).',
+  herramientasCotizacionDisponibles: ['diseno_vectorial'],
   relacionMaquinaSoportada: ['M-1'],
   // Siempre calcula el recorrido con la velocidad del perfil operativo de la
   // máquina. No admite tiempo fijo/manual como modo del paso.
@@ -884,7 +888,25 @@ const corte_laser: DefinicionFamilia = {
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_cortadas', 'tiempo_real_corte'],
   validaciones: [],
-  paramsPasoSchema: [],
+  editorParamsGenerico: true,
+  paramsPasoSchema: [
+    {
+      campo: 'usarDisenoVectorial',
+      etiqueta: 'Archivo vectorial para cotizar y preparar',
+      tipo: 'boolean',
+      default: false,
+      descripcion:
+        'Permite cargar un SVG, hacer nesting irregular y generar SVG/DXF por placa para producción.',
+    },
+    {
+      campo: 'permitirIngresoPorMedidas',
+      etiqueta: 'Permitir también cotizar por medidas',
+      tipo: 'boolean',
+      default: true,
+      descripcion:
+        'El vendedor podrá elegir entre medidas rectangulares, SVG o una estimación manual por placas.',
+    },
+  ],
   productosTipicos: ['Letras de acrílico', 'Cortes complejos en MDF/madera'],
 };
 
@@ -920,6 +942,7 @@ const cnc: DefinicionFamilia = {
   categoria: 'corte_y_formado',
   descripcion:
     'Router CNC para piezas planas (3D fuera de scope hoy). Cortes complejos en MDF, PVC, foam.',
+  herramientasCotizacionDisponibles: ['diseno_vectorial'],
   relacionMaquinaSoportada: ['M-1'],
   modosTiempoSoportados: ['T-3', 'T-4'],
   mecanismosCantidadSoportados: [
@@ -957,7 +980,25 @@ const cnc: DefinicionFamilia = {
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_cortadas'],
   validaciones: [],
-  paramsPasoSchema: [],
+  editorParamsGenerico: true,
+  paramsPasoSchema: [
+    {
+      campo: 'usarDisenoVectorial',
+      etiqueta: 'Archivo vectorial para cotizar y preparar',
+      tipo: 'boolean',
+      default: false,
+      descripcion:
+        'Permite cargar un SVG, hacer nesting irregular y generar SVG/DXF por placa para producción. El CAM/G-code continúa en el software de la CNC.',
+    },
+    {
+      campo: 'permitirIngresoPorMedidas',
+      etiqueta: 'Permitir también cotizar por medidas',
+      tipo: 'boolean',
+      default: true,
+      descripcion:
+        'El vendedor podrá elegir entre medidas rectangulares, SVG o una estimación manual por placas.',
+    },
+  ],
   productosTipicos: ['Letras corpóreas MDF', 'Carteles rígidos con forma'],
 };
 
@@ -1052,6 +1093,7 @@ const corte_hilo_caliente: DefinicionFamilia = {
   descripcion:
     'Corte de Polyfan y espumas rígidas desde geometría vectorial, con nesting irregular sobre placas.',
   herramientasCotizacion: ['diseno_vectorial'],
+  permiteSegmentacionVectorial: true,
   relacionMaquinaSoportada: ['M-1'],
   modosTiempoSoportados: ['T-3'],
   mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
@@ -2555,6 +2597,34 @@ export function separacionNestingDefaultDeFamilia(codigo: string): number {
  */
 export function separacionEsLiteral(codigo: string): boolean {
   return resolverFamilia(codigo)?.semanticaSeparacion === 'literal';
+}
+
+/** Herramientas que realmente monta un paso. Las obligatorias de la familia
+ * siempre están; las disponibles se activan explícitamente en el producto. */
+export function herramientasCotizacionEfectivas(
+  codigo: string,
+  paramsPasoJson?: unknown,
+): Array<'diseno_vectorial'> {
+  const familia = resolverFamilia(codigo);
+  if (!familia) return [];
+  const herramientas = new Set(familia.herramientasCotizacion ?? []);
+  const params =
+    paramsPasoJson &&
+    typeof paramsPasoJson === 'object' &&
+    !Array.isArray(paramsPasoJson)
+      ? (paramsPasoJson as Record<string, unknown>)
+      : {};
+  if (
+    params.usarDisenoVectorial === true &&
+    familia.herramientasCotizacionDisponibles?.includes('diseno_vectorial')
+  ) {
+    herramientas.add('diseno_vectorial');
+  }
+  return [...herramientas];
+}
+
+export function familiaPermiteSegmentacionVectorial(codigo: string): boolean {
+  return resolverFamilia(codigo)?.permiteSegmentacionVectorial === true;
 }
 
 /** Magnitud que alimenta la productividad cuando el modelador no eligió una.

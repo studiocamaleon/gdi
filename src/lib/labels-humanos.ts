@@ -163,6 +163,12 @@ export const modoSeleccionMaterialLabels: DiccionarioLabels = {
     descripcion: "Se resuelve solo con un criterio y la geometría del ítem.",
     ejemplo: "Vinilo: el sistema elige el rollo que aproveche mejor.",
   },
+  HEREDA_DE_PASO: {
+    label: "Hereda de otro paso",
+    descripcion:
+      "Usa el material ya resuelto en un paso anterior de la misma ruta, sin volver a cobrarlo.",
+    ejemplo: "El corte láser usa la placa de MDF elegida en el paso de impresión.",
+  },
 };
 
 /** Criterio del motor para elegir material cuando es MOTOR_ELIGE_AUTO. */

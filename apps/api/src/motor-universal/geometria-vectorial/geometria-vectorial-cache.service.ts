@@ -26,6 +26,7 @@ export interface ParametrosNestingVectorialCache {
   margenMm: number;
   separacionMm: number;
   permitirRotacion: boolean;
+  permitirSegmentacion?: boolean;
   preservarComposicionOriginalSiEntra: boolean;
   configuracionEncastres: ConfiguracionEncastresVectoriales;
 }
@@ -125,8 +126,8 @@ export class GeometriaVectorialCacheService {
     if (
       entry.sourceHash !== hash(input.svg) ||
       entry.anchoFinalMm !== input.anchoFinalMm ||
-      entry.altoFinalMm !== input.altoFinalMm
-      || JSON.stringify(entry.configuracionCapas) !==
+      entry.altoFinalMm !== input.altoFinalMm ||
+      JSON.stringify(entry.configuracionCapas) !==
         JSON.stringify(input.configuracionCapas)
     )
       return null;

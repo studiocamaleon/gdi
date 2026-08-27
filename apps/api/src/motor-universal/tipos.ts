@@ -75,6 +75,8 @@ export interface MutacionAplicada {
 export interface JobContext {
   /** Cantidad pedida (talonarios, tarjetas, etc.). */
   cantidad: number;
+  /** Fuente geométrica elegida en familias que admiten vector opcional. */
+  modoCotizacionVectorial?: 'medidas' | 'svg' | 'placas';
   /** Fuente vectorial. El motor vuelve a analizar el SVG y no
    * confía en métricas calculadas por el navegador. */
   disenoVectorialFuente?: {
@@ -92,6 +94,10 @@ export interface JobContext {
   metrosCortePorPlacaVectorial?: number;
   /** Geometría normalizada por el servidor para la ejecución actual. */
   geometriaVectorial?: import('./geometria-vectorial/tipos').GeometriaVectorialCanonica;
+  /** Disposición física publicada por un paso anterior. En trabajos
+   * impresos y luego cortados, el corte consume este layout en vez de volver
+   * a acomodar las piezas y perder el registro con la impresión. */
+  layout_produccion?: LayoutProduccionCompartido;
   /** Lista de piezas para nesting (gap H7 — multi-medida). */
   piezas?: Array<{
     cantidad: number;
@@ -218,6 +224,18 @@ export interface JobContext {
    * este trabajo, neto — fuente `manual` de tercerizado).
    */
   [key: string]: unknown;
+}
+
+export interface LayoutProduccionCompartido {
+  schemaVersion: 1;
+  sourceRutaPasoId: string;
+  sourceConfigPasoId: string;
+  sourceFamiliaCodigo: string;
+  materialVarianteId?: string;
+  algorithm: NestingEjecutado['algorithm'];
+  substrates: NestingEjecutado['substrates'];
+  placements: NestingEjecutado['placements'];
+  visualConfig?: NestingVisualConfig;
 }
 
 /**
@@ -548,6 +566,10 @@ export interface NestingEjecutado {
   cantidadCalculada: number;
   unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';
   aprovechamientoPct: number;
+  /** Identidad operativa para nombrar el visor sin exponer el algoritmo. */
+  maquina?: { id: string; nombre: string };
+  /** Fallback cuando el acomodo no pertenece a una máquina. */
+  sustrato?: { materialVarianteId: string; nombre: string };
   /** Sustratos consumidos. Para visualizar el "envase" (rollo o pliego). */
   substrates: Array<
     | { kind: 'sheet'; count: number; widthMm: number; heightMm: number }
@@ -789,9 +811,7 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    | 'MONTO_FIJO_PLANO'
-    | 'PORCENTAJE_SOBRE_BASE'
-    | 'POR_UNIDAD_INPUT';
+    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;
@@ -921,6 +941,7 @@ export interface PasoCargado {
     nombre: string;
     plantilla: string;
     anchoUtil?: number | null;
+    largoUtil?: number | null;
     centroCostoPrincipalId?: string | null;
     centroCostoPrincipalNombre?: string | null;
     parametrosTecnicosJson?: Record<string, unknown> | null;
@@ -973,6 +994,7 @@ export interface PasoCargado {
       nombre: string;
       plantilla: string;
       anchoUtil?: number | null;
+      largoUtil?: number | null;
       centroCostoPrincipalId?: string | null;
       centroCostoPrincipalNombre?: string | null;
       parametrosTecnicosJson?: Record<string, unknown> | null;
@@ -1080,6 +1102,10 @@ export interface SlotCargado {
   slotNombre?: string | null;
   slotRol?: string | null;
   modoSeleccion: string;
+  heredaDeRutaPasoId?: string | null;
+  heredaDeSlotCodigo?: string | null;
+  /** Referencia hidratada en runtime; nunca se persiste ni se expone. */
+  materialHeredado?: { slot: SlotCargado; paso: PasoCargado };
   criterioMotorAuto?: string | null;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;

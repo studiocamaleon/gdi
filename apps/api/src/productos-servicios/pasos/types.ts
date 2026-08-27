@@ -473,6 +473,13 @@ export interface DefinicionFamilia {
   /** Herramientas que el cotizador debe montar por requerimiento del proceso,
    *  no por una bandera particular del producto. */
   herramientasCotizacion?: Array<'diseno_vectorial'>;
+  /** Herramientas que esta familia PUEDE habilitar desde la configuración del
+   * paso. A diferencia de `herramientasCotizacion`, no se fuerzan en todos los
+   * productos que usen la familia. */
+  herramientasCotizacionDisponibles?: Array<'diseno_vectorial'>;
+  /** Una pieza que supera la placa puede dividirse y recibir uniones físicas.
+   * Es propio del hilo caliente; láser y CNC deben rechazarla y enviarla a CAM. */
+  permiteSegmentacionVectorial?: boolean;
 
   // --- Comportamiento ---
   /** Tipos de relación máquina soportados. La mayoría tiene una sola, algunas pueden ser ['M-1', 'M-2'] o ['M-0', 'M-1']. */

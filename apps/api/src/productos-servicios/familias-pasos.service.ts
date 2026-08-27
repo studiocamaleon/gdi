@@ -74,11 +74,7 @@ export class FamiliasPasosService {
       // null del lado tenant.
       familias: [
         ...listarFamiliasCatalogo().map((codigo) => ({
-          ...serializarFamilia(
-            FAMILIAS[codigo],
-            'sistema',
-            defaultsPorFamilia,
-          ),
+          ...serializarFamilia(FAMILIAS[codigo], 'sistema', defaultsPorFamilia),
           configBase: configuracionBasePorFamilia.get(codigo) ?? null,
         })),
         ...familiasTenant
@@ -124,11 +120,11 @@ export class FamiliasPasosService {
               id: true,
               nombre: true,
               tipoPerfil: true,
-	              productivityValue: true,
-	              productivityUnit: true,
-	              detalleJson: true,
-	            },
-	          },
+              productivityValue: true,
+              productivityUnit: true,
+              detalleJson: true,
+            },
+          },
         },
         orderBy: { nombre: 'asc' },
       }),
@@ -172,10 +168,18 @@ export class FamiliasPasosService {
         ...(query.varianteIds?.length
           ? { variantes: { some: { id: { in: query.varianteIds } } } }
           : {}),
-        ...(query.familias?.length ? { familia: { in: query.familias as never[] } } : {}),
-        ...(query.subfamilias?.length ? { subfamilia: { in: query.subfamilias as never[] } } : {}),
-        ...(query.templateIds?.length ? { templateId: { in: query.templateIds } } : {}),
-        ...(query.tipoTecnico?.length ? { tipoTecnico: { in: query.tipoTecnico } } : {}),
+        ...(query.familias?.length
+          ? { familia: { in: query.familias as never[] } }
+          : {}),
+        ...(query.subfamilias?.length
+          ? { subfamilia: { in: query.subfamilias as never[] } }
+          : {}),
+        ...(query.templateIds?.length
+          ? { templateId: { in: query.templateIds } }
+          : {}),
+        ...(query.tipoTecnico?.length
+          ? { tipoTecnico: { in: query.tipoTecnico } }
+          : {}),
         ...(text
           ? {
               OR: [
@@ -313,7 +317,10 @@ export class FamiliasPasosService {
     // output canónico, porque daría falso y el efecto no se aplicaría en
     // silencio. La regla dejó de ser de la familia y pasó a ser del PASO:
     // ahora cualquiera puede llevar el efecto. docs/efectos-de-paso-diseno.md
-    if (declaraEfectoDemasia(dto.paramsPasoJson) && dto.condicionActivacionJson) {
+    if (
+      declaraEfectoDemasia(dto.paramsPasoJson) &&
+      dto.condicionActivacionJson
+    ) {
       const outputs = outputsReferenciadosPorRegla(dto.condicionActivacionJson);
       if (outputs.length > 0) {
         throw new BadRequestException(
@@ -369,6 +376,9 @@ function serializarFamilia(
     descripcion: f.descripcion,
     visibleEnSelector: f.visibleEnSelector ?? true,
     herramientasCotizacion: f.herramientasCotizacion ?? [],
+    herramientasCotizacionDisponibles:
+      f.herramientasCotizacionDisponibles ?? [],
+    permiteSegmentacionVectorial: f.permiteSegmentacionVectorial === true,
     relacionMaquinaSoportada: f.relacionMaquinaSoportada,
     modoActivacionDefault: f.modoActivacionDefault as string,
     modosTiempoSoportados: f.modosTiempoSoportados,
@@ -381,6 +391,7 @@ function serializarFamilia(
     esImpresion: f.esImpresion ?? false,
     tiposPerfilCompatibles: f.tiposPerfilCompatibles ?? null,
     separacionNestingDefaultMm: f.separacionNestingDefaultMm ?? 0,
+    semanticaSeparacion: f.semanticaSeparacion ?? 'demasia',
     fuentesPiezasNesting: Object.keys(f.fuentesPiezasNesting ?? {}),
     fuentePiezasDefault: f.fuentePiezasDefault ?? null,
     outputHeredadoDefault: f.outputHeredadoDefault ?? null,

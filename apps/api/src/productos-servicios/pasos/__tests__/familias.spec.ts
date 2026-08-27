@@ -10,6 +10,7 @@ import {
   FAMILIAS,
   FAMILIAS_TOTAL,
   getFamilia,
+  herramientasCotizacionEfectivas,
   listarFamilias,
   listarFamiliasPorCategoria,
 } from '../familias';
@@ -91,6 +92,39 @@ describe('Catálogo de familias', () => {
       expect.arrayContaining([
         expect.objectContaining({ codigo: 'sustrato_corte', requerido: true }),
       ]),
+    );
+  });
+
+  it.each(['cnc', 'corte_laser'] as const)(
+    '%s ofrece diseño vectorial sin imponerlo a todos sus productos',
+    (codigo) => {
+      const familia = getFamilia(codigo);
+      expect(familia.herramientasCotizacion ?? []).not.toContain(
+        'diseno_vectorial',
+      );
+      expect(familia.herramientasCotizacionDisponibles).toContain(
+        'diseno_vectorial',
+      );
+      expect(herramientasCotizacionEfectivas(codigo, null)).toEqual([]);
+      expect(
+        herramientasCotizacionEfectivas(codigo, {
+          usarDisenoVectorial: true,
+        }),
+      ).toContain('diseno_vectorial');
+      expect(familia.permiteSegmentacionVectorial).not.toBe(true);
+      expect(familia.paramsPasoSchema).toContainEqual(
+        expect.objectContaining({
+          campo: 'permitirIngresoPorMedidas',
+          default: true,
+        }),
+      );
+    },
+  );
+
+  it('Polyfan conserva exclusivamente SVG o placas por defecto', () => {
+    const familia = getFamilia('corte_hilo_caliente');
+    expect(familia.paramsPasoSchema).not.toContainEqual(
+      expect.objectContaining({ campo: 'permitirIngresoPorMedidas' }),
     );
   });
 
