@@ -473,6 +473,8 @@ export interface FamiliaListItem {
     tipo: string;
     requerido: boolean;
     compatibilidadMaterial?: {
+      /** El slot admite cualquier materia prima activa de la empresa. */
+      sinRestricciones?: boolean;
       familiasMateriaPrima?: string[];
       subfamiliasMateriaPrima?: string[];
       templateIds?: string[];

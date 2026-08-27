@@ -86,6 +86,8 @@ export type PlanCatalogo = {
   precioAnual: number | null;
   /** Días de prueba que otorga el plan al asignarse. */
   trialDias: number | null;
+  /** False = visible sólo en Plataforma, nunca en la oferta al tenant. */
+  publico: boolean;
   /** Cuántos tenants están hoy en este plan (para no cambiar a ciegas). */
   tenants: number;
 };
@@ -428,6 +430,7 @@ export class PlataformaService {
       paddlePriceIdAnual: p.paddlePriceIdAnual,
       precioAnual: p.precioAnual === null ? null : Number(p.precioAnual),
       trialDias: p.trialDias,
+      publico: p.publico,
       tenants: p._count.suscripciones,
     }));
   }

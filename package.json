@@ -13,6 +13,8 @@
     "test:watch": "vitest",
     "api:dev": "npm --prefix apps/api run start:dev",
     "api:build": "npm --prefix apps/api run build",
+    "marketing:dev": "npm --prefix apps/marketing run dev",
+    "marketing:build": "npm --prefix apps/marketing run build",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down"
   },

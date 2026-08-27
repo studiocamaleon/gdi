@@ -4159,6 +4159,7 @@ export function ResumenBar({
   onDescuentoOrden,
   onCuponOrden,
   sinComprobante = false,
+  fidelizacionCanjeMonto = 0,
   onToggleTratamientoFiscal,
   togglingFiscal = false,
   readOnly = false,
@@ -4182,6 +4183,8 @@ export function ResumenBar({
   /** Orden marcada SIN comprobante fiscal: el desglose oculta el IVA y el
    *  total baja al neto. §6 del cuaderno de margen. */
   sinComprobante?: boolean;
+  /** Bonificación comercial aplicada mediante el canje de puntos. */
+  fidelizacionCanjeMonto?: number;
   /** Alterna el tratamiento fiscal (FISCAL ↔ SIN_COMPROBANTE). Ausente cuando
    *  la orden ya no admite el cambio (facturada / no editable). */
   onToggleTratamientoFiscal?: () => void;
@@ -4235,12 +4238,18 @@ export function ResumenBar({
   // LA ORDEN; no se usa `total − IVA`, porque arrastra redondeos.
   const impuestosMostrados = sinComprobante ? 0 : impuestosVisibles;
   const totalSinComprobante = subtotal + resumen.cargosSubtotal;
-  const totalMostrado =
+  const totalAntesCanje =
     readOnly && resumenPersistido
       ? resumenPersistido.total
       : sinComprobante
         ? totalSinComprobante
         : totalConCargos;
+  // En una OT persistida `resumenPersistido.total` ya incluye el canje. En el
+  // cotizador todavía hay que reflejar la simulación en esta barra.
+  const canjeMostrado = readOnly
+    ? 0
+    : Math.max(0, fidelizacionCanjeMonto);
+  const totalMostrado = Math.max(0, totalAntesCanje - canjeMostrado);
   const descuentoMostrado =
     readOnly && resumenPersistido
       ? resumenPersistido.descuentoTotal
@@ -4264,6 +4273,9 @@ export function ResumenBar({
     },
     ...(cargosOrdenMostrados > 0
       ? [{ k: "Cargos de la orden", v: cargosOrdenMostrados }]
+      : []),
+    ...(canjeMostrado > 0
+      ? [{ k: "Canje de puntos", v: -canjeMostrado }]
       : []),
   ];
 
@@ -8436,6 +8448,7 @@ export function PropuestaFicha({
                       })
               }
               sinComprobante={sinComprobante}
+              fidelizacionCanjeMonto={fidelizacionCanjeMonto}
               onToggleTratamientoFiscal={
                 puedeToggleFiscal ? toggleTratamientoFiscal : undefined
               }

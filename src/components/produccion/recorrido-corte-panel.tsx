@@ -18,8 +18,11 @@ import {
   getPreparacionesRecorridoCorte,
   regenerarPreparacionesRecorridoCorte,
   type PreparacionRecorridoCorte,
-  type PuntoRecorridoCorte,
 } from "@/lib/recorridos-vectoriales-api";
+import {
+  distanciasAcumuladasRecorrido,
+  tramoVisibleRecorrido,
+} from "@/lib/recorrido-simulacion";
 
 export function RecorridoCortePanel({ itemId }: { itemId: string }) {
   const [items, setItems] = React.useState<PreparacionRecorridoCorte[]>([]);
@@ -216,8 +219,11 @@ function SimuladorRecorrido({
 }: {
   preparation: PreparacionRecorridoCorte;
 }) {
-  const route = preparation.route.svg ?? [];
-  const cumulative = React.useMemo(() => cumulativeDistances(route), [route]);
+  const route = preparation.route.svg;
+  const cumulative = React.useMemo(
+    () => distanciasAcumuladasRecorrido(route),
+    [route],
+  );
   const total = cumulative.at(-1) ?? 0;
   const [distance, setDistance] = React.useState(0);
   const [playing, setPlaying] = React.useState(false);
@@ -258,9 +264,13 @@ function SimuladorRecorrido({
   }, [playing, preparation.perfilMaquina.velocidadMmMin, speed, total]);
 
   const progress = total > 0 ? Math.min(1, distance / total) : 0;
+  const visibleRoute = React.useMemo(
+    () => tramoVisibleRecorrido(route, cumulative, distance),
+    [cumulative, distance, route],
+  );
   const routePoints = React.useMemo(
-    () => route.map((point) => `${point.x},${point.y}`).join(" "),
-    [route],
+    () => visibleRoute.map((point) => `${point.x},${point.y}`).join(" "),
+    [visibleRoute],
   );
   const workArea = preparation.report.svgWorkArea ?? {};
   const width =
@@ -283,9 +293,6 @@ function SimuladorRecorrido({
             <polyline
               points={routePoints}
               fill="none"
-              pathLength={1}
-              strokeDasharray={1}
-              strokeDashoffset={1 - progress}
               strokeLinecap="round"
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
@@ -355,20 +362,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div className="mt-0.5 font-semibold tabular-nums">{value}</div>
     </div>
   );
-}
-
-function cumulativeDistances(route: PuntoRecorridoCorte[]) {
-  const values = [0];
-  for (let index = 1; index < route.length; index += 1) {
-    values.push(
-      values[index - 1] +
-        Math.hypot(
-          route[index].x - route[index - 1].x,
-          route[index].y - route[index - 1].y,
-        ),
-    );
-  }
-  return values;
 }
 
 function duration(seconds: number) {

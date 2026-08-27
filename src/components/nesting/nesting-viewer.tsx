@@ -2075,6 +2075,17 @@ function getCostingPreviewForSubstrate(
   widthMm: number,
   heightMm: number,
 ): NestingViewerInput["costingPreview"] | undefined {
+  const substratePreview = costingPreview?.perSubstrate?.find(
+    (item) => item.index === substrateIndex,
+  );
+  if (costingPreview && substratePreview) {
+    return {
+      ...costingPreview,
+      ...substratePreview,
+      perSubstrate: undefined,
+    };
+  }
+
   if (
     !costingPreview ||
     costingPreview.strategy !== "plate-segments" ||

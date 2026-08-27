@@ -37,6 +37,8 @@ export type LimitesPlan = {
 };
 
 type Features = {
+  /** Acceso irrestricto a las capacidades actuales y futuras del sistema. */
+  todo?: boolean;
   afip?: boolean;
   whatsapp?: boolean;
   /** Módulo Centro de copiado (TPV de impresión por hoja). Actualmente
@@ -145,10 +147,7 @@ export class SuscripcionesService {
       where: { tenantId },
       select: { referenciaExterna: true, proveedor: true },
     });
-    if (
-      suscripcion?.proveedor === 'paddle' &&
-      suscripcion.referenciaExterna
-    ) {
+    if (suscripcion?.proveedor === 'paddle' && suscripcion.referenciaExterna) {
       await this.reconciliacion.sincronizarReferencia(
         suscripcion.referenciaExterna,
       );
@@ -185,7 +184,7 @@ export class SuscripcionesService {
     if (!s) return true;
     if (s.estado !== 'activa') return false;
     const features = (s.plan.featuresJson ?? {}) as Features;
-    return features[clave] === true;
+    return features.todo === true || features[clave] === true;
   }
 
   /** Los topes del plan, o todos null (legacy / sin límite). */
@@ -195,11 +194,12 @@ export class SuscripcionesService {
       include: { plan: { select: { nombre: true, featuresJson: true } } },
     });
     const f = (s?.plan.featuresJson ?? {}) as Features;
+    const sinLimites = f.todo === true;
     return {
       planNombre: s?.plan.nombre ?? null,
-      usuariosMax: f.usuariosMax ?? null,
-      ordenesMesMax: f.ordenesMesMax ?? null,
-      storageGb: f.storageGb ?? null,
+      usuariosMax: sinLimites ? null : (f.usuariosMax ?? null),
+      ordenesMesMax: sinLimites ? null : (f.ordenesMesMax ?? null),
+      storageGb: sinLimites ? null : (f.storageGb ?? null),
     };
   }
 
@@ -222,7 +222,12 @@ export class SuscripcionesService {
         include: { plan: true },
       }),
       this.prisma.plan.findMany({
-        where: { activo: true },
+        // Un plan interno sólo se devuelve a quien ya lo tiene asignado. De
+        // este modo ni su nombre ni su priceId se filtran al catálogo público.
+        where: {
+          activo: true,
+          OR: [{ publico: true }, { suscripciones: { some: { tenantId } } }],
+        },
         orderBy: { orden: 'asc' },
       }),
     ]);
@@ -349,7 +354,9 @@ export class SuscripcionesService {
         select: { referenciaExterna: true, proveedor: true },
       }),
       this.prisma.plan.findFirst({
-        where: { codigo: planCodigo, activo: true },
+        // Los planes internos se asignan exclusivamente desde Plataforma. No
+        // alcanza con conocer el código para contratarlos por autogestión.
+        where: { codigo: planCodigo, activo: true, publico: true },
       }),
     ]);
     if (!plan) throw new NotFoundException('El plan no existe.');
@@ -392,7 +399,9 @@ export class SuscripcionesService {
         select: { referenciaExterna: true },
       }),
       this.prisma.plan.findFirst({
-        where: { codigo: planCodigo, activo: true },
+        // La previsualización comparte la misma frontera que el cambio: un
+        // código interno conocido no debe revelar ni permitir su priceId.
+        where: { codigo: planCodigo, activo: true, publico: true },
       }),
     ]);
     const priceId =

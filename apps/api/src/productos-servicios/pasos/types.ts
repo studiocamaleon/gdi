@@ -207,6 +207,10 @@ export type SubfamiliaMateriaPrimaCompat =
   | 'ALMOHADILLA_TINTA';
 
 export interface CompatibilidadMaterialSlot {
+  /** Permite cualquier materia prima activa del tenant. Debe declararse de
+   * forma explícita para distinguir un slot universal de una compatibilidad
+   * técnica incompleta. */
+  sinRestricciones?: boolean;
   familiasMateriaPrima?: FamiliaMateriaPrimaCompat[];
   subfamiliasMateriaPrima?: SubfamiliaMateriaPrimaCompat[];
   templateIds?: string[];

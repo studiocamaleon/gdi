@@ -2032,7 +2032,7 @@ function PlanFila({
     <tr>
       <td>
         <b>{plan.nombre}</b>
-        <div className="cpl-sub">{plan.codigo}</div>
+        <div className="cpl-sub">{plan.codigo}{plan.publico ? "" : " · interno"}</div>
       </td>
       <td>
         <BajadaPlan plan={plan} esAdmin={esAdmin} onGuardado={onGuardado} />

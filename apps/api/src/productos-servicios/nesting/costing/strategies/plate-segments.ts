@@ -51,10 +51,13 @@ export function costingPlateSegments<T = unknown>(
     const piezasEnEsteSustrato = Math.min(piezasRestantes, piezasPorSustrato);
     piezasRestantes -= piezasEnEsteSustrato;
 
-    const placementsDeEstaUnidad = input.nesting.placements.slice(
-      0,
-      piezasEnEsteSustrato,
+    const placementsIndexadas = input.nesting.placements.filter(
+      (placement) => placement.substrateIndex === i,
     );
+    const placementsDeEstaUnidad =
+      placementsIndexadas.length > 0
+        ? placementsIndexadas
+        : input.nesting.placements.slice(0, piezasEnEsteSustrato);
     const largoConsumido = placementsDeEstaUnidad.length
       ? consumedLengthFromPlacements(
           placementsDeEstaUnidad,

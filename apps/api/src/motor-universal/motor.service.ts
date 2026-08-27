@@ -4349,24 +4349,65 @@ export class MotorUniversalService {
     }
 
     if (strategy === 'plate-segments') {
+      const perSubstrate = (detail?.units ?? []).map((unit) => {
+        const unitSubstrate =
+          nestingDispatch.substrates[unit.index] ?? substrate;
+        const unitHeightMm =
+          unitSubstrate.kind === 'roll'
+            ? unitSubstrate.lengthMm
+            : unitSubstrate.heightMm;
+        const unitAreaMm2 = unitSubstrate.widthMm * unitHeightMm;
+        const segmentAppliedPct = unit.segmentApplied ?? 100;
+        const chargedRatio = segmentAppliedPct / 100;
+        const chargedAreaMm2 = unitAreaMm2 * chargedRatio;
+        const placedAreaUnitMm2 = nestingDispatch.placements
+          .filter((placement) => (placement.substrateIndex ?? 0) === unit.index)
+          .reduce(
+            (acc, placement) => acc + placement.widthMm * placement.heightMm,
+            0,
+          );
+        return {
+          index: unit.index,
+          chargedRatio,
+          chargedAreaMm2,
+          chargedBounds: {
+            xMm: 0,
+            yMm: 0,
+            widthMm: unitSubstrate.widthMm,
+            heightMm: unitHeightMm * chargedRatio,
+          },
+          wasteAreaMm2: Math.max(0, chargedAreaMm2 - placedAreaUnitMm2),
+          segmentAppliedPct,
+        };
+      });
+      const lastPreview = perSubstrate[perSubstrate.length - 1];
       const segmentAppliedPct =
+        lastPreview?.segmentAppliedPct ??
         detail?.lastUnit?.segmentApplied ??
         (detail && detail.fullUnits > 0 && !detail.lastUnit ? 100 : null);
-      const chargedRatio = (segmentAppliedPct ?? 100) / 100;
-      const chargedAreaMm2 = totalAreaMm2 * chargedRatio;
+      const chargedRatio = lastPreview?.chargedRatio ?? 1;
+      const chargedAreaMm2 = perSubstrate.length
+        ? perSubstrate.reduce((total, unit) => total + unit.chargedAreaMm2, 0)
+        : totalAreaMm2 * chargedRatio;
       return {
         strategy,
         label: 'segmentos de placa',
         chargedRatio,
         chargedAreaMm2,
-        chargedBounds: {
+        chargedBounds: lastPreview?.chargedBounds ?? {
           xMm: 0,
           yMm: 0,
           widthMm,
           heightMm: heightMm * chargedRatio,
         },
-        wasteAreaMm2: Math.max(0, chargedAreaMm2 - placedAreaMm2),
+        wasteAreaMm2: perSubstrate.length
+          ? perSubstrate.reduce(
+              (total, unit) => total + (unit.wasteAreaMm2 ?? 0),
+              0,
+            )
+          : Math.max(0, chargedAreaMm2 - placedAreaMm2),
         segmentAppliedPct,
+        perSubstrate,
       };
     }
 

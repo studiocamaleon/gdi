@@ -4760,7 +4760,7 @@ model PlataformaEvento {
 /// Ver docs/control-plane-diseno.md
 model Plan {
   id                 String        @id @default(uuid()) @db.Uuid
-  /// "trial" | "taller" | "estudio" | "diamante" — estable, es la clave.
+  /// "trial" | "taller" | "estudio" | "diamante" | "founder" — estable.
   codigo             String        @unique
   nombre             String
   /// La bajada comercial que ve el tenant en la tarjeta del plan ("Para
@@ -4792,6 +4792,9 @@ model Plan {
   /// Días de prueba que otorga este plan al asignarse. Null = sin prueba.
   /// Vive en el plan (no hardcodeado) para poder cambiarlo sin deploy.
   trialDias          Int?
+  /// False = plan interno: la Plataforma puede asignarlo y gestionarlo, pero
+  /// nunca aparece en la oferta de autogestión de otros tenants.
+  publico            Boolean       @default(true)
   activo             Boolean       @default(true)
   orden              Int           @default(0)
   suscripciones      Suscripcion[]
