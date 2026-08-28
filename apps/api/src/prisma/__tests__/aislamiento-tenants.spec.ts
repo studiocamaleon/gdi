@@ -61,6 +61,9 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   // Catálogo compartido: mismos datos para todos los tenants.
   'MaterialPreset',
   'Plan',
+  'PlanPrecioLegacy',
+  // Solicitud de alta pública: todavía no existe tenant al que pertenecer.
+  'RegistroTenant',
   'MaterialPresetVariante',
   'ProductoCategoriaComercial',
   'ProductoSubcategoriaComercial',
@@ -95,6 +98,9 @@ const EXENTOS_CON_TENANT_ID = new Set(['Membership', 'Invitation']);
 const ARCHIVOS_AUTORIZADOS = new Set([
   'auth/auth.service.ts',
   'plataforma/plataforma.service.ts',
+  // Alta pública: crea una única membership ADMINISTRADOR, dentro de la misma
+  // transacción que crea su tenant y siempre con ese tenantId explícito.
+  'registro/registro.service.ts',
   'usuarios/usuarios.service.ts',
 ]);
 
@@ -105,6 +111,8 @@ const MODELOS_EXENTOS = new Set([
   'PlataformaEvento',
   'EventoCobro',
   'Plan',
+  'PlanPrecioLegacy',
+  'RegistroTenant',
   'User',
   'AuthSession',
   'Membership',

@@ -9,6 +9,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaddleService } from '../cobro/paddle.service';
 import { finDePrueba } from '../suscripciones/trial';
+import { TenantProvisioningService } from '../provisionamiento/tenant-provisioning.service';
 
 /**
  * Lecturas del control plane: la consola de la Plataforma (etapa A).
@@ -88,6 +89,9 @@ export type PlanCatalogo = {
   trialDias: number | null;
   /** False = visible sólo en Plataforma, nunca en la oferta al tenant. */
   publico: boolean;
+  registroPublico: boolean;
+  recomendado: boolean;
+  precioAConsultar: boolean;
   /** Cuántos tenants están hoy en este plan (para no cambiar a ciegas). */
   tenants: number;
 };
@@ -153,6 +157,7 @@ export class PlataformaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paddle: PaddleService,
+    private readonly provisionamiento: TenantProvisioningService,
   ) {}
 
   async consola(
@@ -431,6 +436,9 @@ export class PlataformaService {
       precioAnual: p.precioAnual === null ? null : Number(p.precioAnual),
       trialDias: p.trialDias,
       publico: p.publico,
+      registroPublico: p.registroPublico,
+      recomendado: p.recomendado,
+      precioAConsultar: p.precioAConsultar,
       tenants: p._count.suscripciones,
     }));
   }
@@ -701,18 +709,23 @@ export class PlataformaService {
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
 
     const tenant = await this.prisma.$transaction(async (tx) => {
-      const creado = await tx.tenant.create({
-        data: { nombre: dto.nombre.trim(), slug },
-        select: { id: true, nombre: true },
+      const provisionado = await this.provisionamiento.provisionarBase(tx, {
+        nombre: dto.nombre,
+        slug,
+        plan: { id: plan.id, trialDias: plan.trialDias },
+        origen: 'plataforma',
+        emailEmpresa: email,
       });
-      await tx.suscripcion.create({
-        data: { tenantId: creado.id, planId: plan.id, estado: 'activa' },
-      });
+      const creado = {
+        id: provisionado.tenantId,
+        nombre: provisionado.tenantNombre,
+      };
       await tx.invitation.create({
         data: {
           tenantId: creado.id,
           email,
           rol: RolSistema.ADMINISTRADOR,
+          rolId: provisionado.administradorRolId,
           tokenHash,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },

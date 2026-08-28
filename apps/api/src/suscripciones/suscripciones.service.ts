@@ -232,7 +232,9 @@ export class SuscripcionesService {
       }),
     ]);
 
-    const contratables = planes.filter((p) => p.paddlePriceId !== null);
+    const contratables = planes.filter(
+      (p) => p.paddlePriceId !== null && !p.precioAConsultar,
+    );
 
     // Las facturas se piden sólo si el tenant ya es cliente en la pasarela.
     // Si Paddle no responde, la lista viene vacía y la vista lo dice — nunca
@@ -422,12 +424,59 @@ export class SuscripcionesService {
     transaccionId: string,
     email = '',
   ): Promise<EstadoSuscripcion> {
-    const sub = await this.paddle.suscripcionDeTransaccion(transaccionId);
-    if (sub) {
-      const externa = this.sync.extraer(sub);
-      if (externa) await this.sync.aplicar(externa);
+    // `checkout.completed` puede llegar unos instantes antes de que la
+    // suscripción recién creada sea visible en la API de Paddle. Consultar una
+    // sola vez dejaba el tenant en su trial manual y, peor, la respuesta se
+    // interpretaba en el front como un alta exitosa. Esperamos esa breve
+    // consistencia eventual dentro de esta acción explícita del usuario.
+    const esperasMs = [0, 400, 800, 1_200, 2_000, 3_000];
+    let sub: unknown = null;
+    for (const esperaMs of esperasMs) {
+      if (esperaMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, esperaMs));
+      }
+      sub = await this.paddle.suscripcionDeTransaccion(transaccionId);
+      if (sub) break;
     }
-    return this.estadoParaTenant(tenantId, email);
+
+    if (!sub) {
+      throw new BadRequestException(
+        'Paddle todavía está terminando de crear la suscripción. Esperá unos segundos y volvé a verificarla.',
+      );
+    }
+
+    const externa = this.sync.extraer(sub);
+    if (!externa) {
+      throw new BadRequestException(
+        'Paddle devolvió una suscripción que no se pudo interpretar.',
+      );
+    }
+
+    // El id llega desde el navegador. Aunque `aplicar` sabe resolver el tenant
+    // por custom_data, acá además exigimos que coincida con la sesión: nadie
+    // puede vincular a su cuenta una transacción ajena adivinando su id.
+    if (externa.tenantId !== tenantId) {
+      throw new BadRequestException(
+        'La transacción no corresponde a esta empresa.',
+      );
+    }
+
+    const resultado = await this.sync.aplicar(externa, { origen: 'accion' });
+    if (!resultado.aplicado || resultado.tenantId !== tenantId) {
+      throw new BadRequestException(
+        resultado.aplicado
+          ? 'La suscripción se vinculó a otra empresa.'
+          : `No se pudo vincular la suscripción: ${resultado.motivo}`,
+      );
+    }
+
+    const estado = await this.estadoParaTenant(tenantId, email);
+    if (estado.actual?.proveedor !== 'paddle' || !estado.puedeCambiarSinPago) {
+      throw new BadRequestException(
+        'La suscripción todavía no quedó vinculada con Paddle.',
+      );
+    }
+    return estado;
   }
 
   /**

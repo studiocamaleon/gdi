@@ -103,9 +103,7 @@ export class SuscripcionSyncService {
       .filter((id): id is string => id !== null);
 
     const custom = campo('customData', 'custom_data') as
-      | Record<string, unknown>
-      | null
-      | undefined;
+      Record<string, unknown> | null | undefined;
     const tenantIdCrudo = custom?.tenantId ?? custom?.tenant_id;
     const tenantId =
       typeof tenantIdCrudo === 'string' && tenantIdCrudo ? tenantIdCrudo : null;
@@ -115,18 +113,14 @@ export class SuscripcionSyncService {
       proximo && !Number.isNaN(Date.parse(proximo)) ? new Date(proximo) : null;
 
     const periodo = campo('currentBillingPeriod', 'current_billing_period') as
-      | Record<string, unknown>
-      | null
-      | undefined;
+      Record<string, unknown> | null | undefined;
     const inicio =
       periodo && typeof (periodo.startsAt ?? periodo.starts_at) === 'string'
         ? String(periodo.startsAt ?? periodo.starts_at)
         : null;
 
     const programado = campo('scheduledChange', 'scheduled_change') as
-      | Record<string, unknown>
-      | null
-      | undefined;
+      Record<string, unknown> | null | undefined;
     const accion =
       programado && typeof programado.action === 'string'
         ? programado.action
@@ -208,11 +202,46 @@ export class SuscripcionSyncService {
       };
     }
 
+    const suscripcionDelTenant = await this.prisma.suscripcion.findFirst({
+      where: { tenantId },
+      select: {
+        id: true,
+        referenciaExterna: true,
+        estado: true,
+      },
+    });
+
+    // Un doble click, un reintento mientras Paddle terminaba el alta o un
+    // webhook demorado no pueden reemplazar silenciosamente una suscripción
+    // viva por otra distinta. Eso ocultaría un segundo cobro recurrente. Una
+    // referencia nueva sólo es válida si la anterior ya está dada de baja.
+    if (
+      !existente &&
+      suscripcionDelTenant?.referenciaExterna &&
+      suscripcionDelTenant.referenciaExterna !== externa.referencia &&
+      suscripcionDelTenant.estado !== 'baja'
+    ) {
+      return {
+        aplicado: false,
+        motivo: `El tenant ya tiene otra suscripción activa (${suscripcionDelTenant.referenciaExterna}).`,
+      };
+    }
+
     // El plan sale del price_id: si el tenant hizo un upgrade en Paddle, el
     // cambio de plan se refleja solo, sin que nadie lo toque a mano acá.
     const plan = externa.precios.length
       ? await this.prisma.plan.findFirst({
-          where: { paddlePriceId: { in: externa.precios } },
+          where: {
+            OR: [
+              { paddlePriceId: { in: externa.precios } },
+              { paddlePriceIdAnual: { in: externa.precios } },
+              {
+                preciosLegacy: {
+                  some: { priceId: { in: externa.precios } },
+                },
+              },
+            ],
+          },
           select: { id: true, codigo: true },
         })
       : null;
@@ -239,6 +268,9 @@ export class SuscripcionSyncService {
     const datos = {
       estado,
       proveedor: 'paddle',
+      // El Trial es local y termina en cuanto Paddle confirma una suscripción.
+      // Dejar la fecha viva haría que el cron pudiera suspender un plan pago.
+      trialHasta: null,
       referenciaExterna: externa.referencia,
       clienteExternoId: externa.clienteExterno,
       estadoProveedor: externa.estadoProveedor,
@@ -258,10 +290,7 @@ export class SuscripcionSyncService {
       ...(estado === 'baja' ? { hasta: new Date() } : { hasta: null }),
     };
 
-    const suscripcion = await this.prisma.suscripcion.findFirst({
-      where: { tenantId },
-      select: { id: true },
-    });
+    const suscripcion = suscripcionDelTenant;
 
     if (suscripcion) {
       await this.prisma.suscripcion.update({

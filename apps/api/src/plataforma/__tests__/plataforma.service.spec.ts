@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { PlataformaService } from '../plataforma.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { PaddleService } from '../../cobro/paddle.service';
+import { TenantProvisioningService } from '../../provisionamiento/tenant-provisioning.service';
 
 /**
  * La consola lee A TRAVÉS de los tenants — contra la base real
@@ -21,6 +22,7 @@ describe('PlataformaService.consola', () => {
   const servicio = new PlataformaService(
     prisma as unknown as PrismaService,
     new PaddleService(),
+    new TenantProvisioningService(),
   );
   let tenantVivoId: string;
   let tenantDormidoId: string;

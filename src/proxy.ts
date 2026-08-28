@@ -13,6 +13,7 @@ import { SESSION_COOKIE_NAME } from "@/lib/session";
 // Páginas de autenticación: accesibles sin sesión y, si ya hay sesión, se
 // rebota al home (no tiene sentido re-loguearse).
 const AUTH_PATHS = ["/login", "/aceptar-invitacion"];
+const PUBLIC_PATHS = ["/registro", "/terminos", "/privacidad"];
 // La salida de emergencia: borra la cookie y manda al login. Tiene que pasar
 // SIEMPRE, con cookie o sin ella, o el bucle que viene a cortar se la come.
 const SALIDA_PATH = "/salir";
@@ -83,11 +84,12 @@ export function proxy(request: NextRequest) {
   const cookieInservible = Boolean(cookie) && !token;
   const { pathname } = request.nextUrl;
   const isAuthPath = AUTH_PATHS.some((path) => pathname.startsWith(path));
+  const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
   const isOpenPath = OPEN_PATH_RE.test(pathname);
   const esBackoffice =
     pathname === "/backoffice" || pathname.startsWith("/backoffice/");
 
-  if (isOpenPath || pathname === SALIDA_PATH) {
+  if (isOpenPath || isPublicPath || pathname === SALIDA_PATH) {
     return NextResponse.next();
   }
 
