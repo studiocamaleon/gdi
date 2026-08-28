@@ -2,13 +2,85 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRightIcon, CheckIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ArrowRight,
+  Boxes,
+  Building2,
+  Check,
+  Factory,
+  LoaderCircle,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { completarOnboarding } from "@/lib/registro-api";
+import s from "./registro.module.css";
 
-export function Bienvenida() {
-  const router = useRouter(); const [cargando, setCargando] = useState(false);
-  async function entrar() { setCargando(true); await completarOnboarding(); router.replace("/"); router.refresh(); }
-  return <Card className="w-full max-w-2xl py-8"><CardHeader><div className="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-primary">Tu espacio está listo</div><CardTitle className="text-3xl">Bienvenido a Grafoprint</CardTitle><CardDescription>Tu Trial ya está corriendo. Empezá por estas tres decisiones y el sistema se va a adaptar a tu imprenta.</CardDescription></CardHeader><CardContent className="space-y-6"><ol className="grid gap-3 sm:grid-cols-3">{["Completá los datos de tu empresa", "Cargá máquinas y materiales", "Creá tu primer producto"].map((t, i) => <li key={t} className="rounded-xl border bg-muted/30 p-4"><span className="mb-3 grid size-7 place-items-center rounded-full bg-primary text-xs text-primary-foreground">{i + 1}</span><span className="font-medium">{t}</span></li>)}</ol><div className="flex items-center gap-2 text-sm text-muted-foreground"><CheckIcon className="size-4 text-emerald-600" /> No necesitás tarjeta durante la prueba.</div><Button size="lg" className="w-full" loading={cargando} loadingText="Preparando el panel…" onClick={entrar}>Entrar a mi empresa <ArrowRightIcon /></Button></CardContent></Card>;
+const PRIMEROS_PASOS = [
+  { titulo: "Datos de tu empresa", detalle: "Completá la información fiscal y las preferencias del negocio.", icono: Building2 },
+  { titulo: "Máquinas y materiales", detalle: "Cargá los recursos reales con los que trabaja tu imprenta.", icono: Factory },
+  { titulo: "Tu primer producto", detalle: "Configurá su ruta productiva y empezá a cotizar.", icono: Boxes },
+];
+
+export function Bienvenida({ nombre, empresa, plan, diasTrial }: { nombre?: string | null; empresa: string; plan: string; diasTrial: number }) {
+  const router = useRouter();
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const primerNombre = nombre?.trim().split(/\s+/)[0];
+
+  async function entrar() {
+    setCargando(true);
+    setError(null);
+    try {
+      await completarOnboarding();
+      router.replace("/");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No pudimos abrir el panel.");
+      setCargando(false);
+    }
+  }
+
+  return (
+    <section className={s.welcomeCard}>
+      <div className={s.welcomeAccent} />
+      <div className={s.welcomeIntro}>
+        <div className={s.welcomeIcon}><Sparkles aria-hidden="true" /></div>
+        <div className={s.welcomeEyebrow}><i /> Espacio activo</div>
+        <h1>Bienvenido a Grafoprint{primerNombre ? `, ${primerNombre}` : ""}.</h1>
+        <p><strong>{empresa}</strong> ya está lista. Desde ahora tenés un único lugar para ordenar, cotizar y conectar toda tu operación.</p>
+
+        <div className={s.welcomeFacts}>
+          <div><span>Plan Trial</span><strong>{plan}</strong></div>
+          <div><span>Período inicial</span><strong>{diasTrial} días</strong></div>
+          <div><span>Activación</span><strong><Check /> Sin tarjeta</strong></div>
+        </div>
+
+        {error ? <div className={s.welcomeError} role="alert">{error}</div> : null}
+        <button className={s.welcomeButton} type="button" disabled={cargando} onClick={entrar}>
+          {cargando ? <><LoaderCircle className={s.welcomeSpinner} /> Preparando el panel…</> : <>Entrar al panel de {empresa} <ArrowRight /></>}
+        </button>
+        <div className={s.welcomeTrust}><ShieldCheck /> Tu espacio y tus datos están separados de los demás negocios.</div>
+      </div>
+
+      <aside className={s.welcomeSteps}>
+        <div className={s.welcomeStepsHead}>
+          <span>Tu primera recorrida</span>
+          <h2>Empezá por lo esencial.</h2>
+          <p>No hace falta configurar todo hoy. Estos tres pasos te permiten llegar rápidamente a una cotización real.</p>
+        </div>
+        <ol>
+          {PRIMEROS_PASOS.map((paso, indice) => {
+            const Icono = paso.icono;
+            return (
+              <li key={paso.titulo}>
+                <div className={s.welcomeStepIcon}><Icono aria-hidden="true" /><small>0{indice + 1}</small></div>
+                <div><strong>{paso.titulo}</strong><span>{paso.detalle}</span></div>
+              </li>
+            );
+          })}
+        </ol>
+        <div className={s.welcomeTip}><Sparkles /><span>El sistema te irá guiando y podés volver a configurar cada sección cuando quieras.</span></div>
+      </aside>
+    </section>
+  );
 }

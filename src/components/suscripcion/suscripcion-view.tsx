@@ -3,9 +3,19 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { CheckIcon, LockKeyholeIcon, XIcon } from "lucide-react";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { Paddle } from "@paddle/paddle-js";
+import checkoutStyles from "./suscripcion-checkout.module.css";
 
 import {
   abrirPortalSuscripcion,
@@ -225,16 +235,28 @@ const LogoPaddle = ({ s = 26 }: { s?: number }) => (
   </svg>
 );
 
+type CheckoutInline = {
+  plan: PlanContratable;
+  ciclo: "mensual" | "anual";
+  priceId: string;
+};
+
 export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   const router = useRouter();
   const { fechaCorta } = useFecha();
   const fechaLarga = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
   const [datos, setDatos] = React.useState(inicial);
   const [paddle, setPaddle] = React.useState<Paddle | null>(null);
+  const paddleRef = React.useRef<Paddle | null>(null);
   const [confirmando, setConfirmando] = React.useState(false);
   const [abriendo, setAbriendo] = React.useState<string | null>(null);
   const [yendoAlPortal, setYendoAlPortal] = React.useState(false);
   const [errorPaddle, setErrorPaddle] = React.useState<string | null>(null);
+  const [checkoutInline, setCheckoutInline] =
+    React.useState<CheckoutInline | null>(null);
+  const [checkoutCargando, setCheckoutCargando] = React.useState(false);
+  const [checkoutError, setCheckoutError] = React.useState<string | null>(null);
+  const [checkoutIntento, setCheckoutIntento] = React.useState(0);
   const [confirmarCambio, setConfirmarCambio] =
     React.useState<PlanContratable | null>(null);
   const [previo, setPrevio] = React.useState<{
@@ -257,6 +279,31 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       : "sandbox";
 
   /**
+   * Refresca mientras haya facturas en estado provisorio.
+   *
+   * Paddle crea la transacción al instante en `billed` y la cobra unos
+   * segundos después. Sin esto, el cliente ve "Procesando" hasta que recarga
+   * la página a mano. Se reintenta poco y con corte: es un ajuste cosmético,
+   * no puede quedar consultando para siempre.
+   */
+  const seguirFacturasProvisorias = React.useCallback(() => {
+    let intentos = 0;
+    const tick = async () => {
+      intentos += 1;
+      await new Promise((r) => setTimeout(r, intentos === 1 ? 3000 : 6000));
+      try {
+        const fresco = await getSuscripcion();
+        setDatos(fresco);
+        const sigue = fresco.facturas.some((f) => PROVISORIOS.has(f.estado));
+        if (sigue && intentos < 3) void tick();
+      } catch {
+        // Si falla, queda lo que ya se ve: recargar lo resuelve.
+      }
+    };
+    void tick();
+  }, []);
+
+  /**
    * Cierra el checkout → vamos a BUSCAR el resultado a la pasarela.
    *
    * Antes esto esperaba a que llegara el webhook, consultando cada 2s hasta 40.
@@ -269,29 +316,39 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   const traerResultado = React.useCallback(async (transaccionId?: string) => {
     setConfirmando(true);
     try {
-      const fresco = transaccionId
-        ? await sincronizarSuscripcion(transaccionId)
-        : await getSuscripcion();
+      if (!transaccionId) {
+        throw new Error(
+          "Paddle no informó el identificador de la transacción.",
+        );
+      }
+      const fresco = await sincronizarSuscripcion(transaccionId);
+      if (
+        fresco.actual?.proveedor !== "paddle" ||
+        !fresco.puedeCambiarSinPago
+      ) {
+        throw new Error(
+          "La suscripción todavía no quedó vinculada con Paddle.",
+        );
+      }
       setDatos(fresco);
       if (fresco.actual) setElegido(fresco.actual.planCodigo);
-      toast.success(
-        fresco.actual
-          ? `Tu plan ${fresco.actual.planNombre} está activo.`
-          : "Pago registrado.",
-      );
+      router.refresh();
+      toast.success(`Tu plan ${fresco.actual.planNombre} está activo.`);
       if (fresco.facturas.some((f) => PROVISORIOS.has(f.estado))) {
         seguirFacturasProvisorias();
       }
-    } catch {
-      // Si la lectura falla, el pago igual se hizo y el webhook lo va a
-      // aplicar: se lo decimos en vez de dejarlo con una pantalla colgada.
+    } catch (error) {
+      // El pago puede estar bien aunque la lectura inmediata falle. No lo
+      // llamamos "activo" hasta comprobar la vinculación real con Paddle.
       toast.info(
-        "El pago se registró. Si no ves el cambio en un minuto, recargá la página.",
+        error instanceof Error
+          ? `${error.message} El pago no se perdió; esperá unos segundos y recargá la página.`
+          : "Paddle está terminando de confirmar la suscripción. Esperá unos segundos y recargá la página.",
       );
     } finally {
       setConfirmando(false);
     }
-  }, []);
+  }, [router, seguirFacturasProvisorias]);
 
   React.useEffect(() => {
     if (!token) return;
@@ -303,18 +360,41 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
           environment: entorno,
           token,
           eventCallback: (evento) => {
+            if (evento.name === "checkout.loaded") {
+              setCheckoutCargando(false);
+              setAbriendo(null);
+            }
+            if (
+              evento.name === "checkout.error" ||
+              evento.name === "checkout.failed" ||
+              evento.name === "checkout.payment.error" ||
+              evento.name === "checkout.payment.failed"
+            ) {
+              setCheckoutCargando(false);
+              setAbriendo(null);
+              setCheckoutError(
+                evento.detail ||
+                  "Paddle no pudo preparar el formulario de pago. Probá nuevamente.",
+              );
+            }
             if (evento.name === "checkout.completed") {
               // El id de la transacción viene en el evento: con eso resolvemos
               // la suscripción en Paddle sin depender del webhook.
               const tx = (evento.data as { transaction_id?: string } | undefined)
                 ?.transaction_id;
+              setCheckoutCargando(false);
+              setCheckoutInline(null);
+              paddleRef.current?.Checkout.close();
               void traerResultado(tx);
             }
           },
         }),
       )
       .then((p) => {
-        if (vivo && p) setPaddle(p);
+        if (vivo && p) {
+          paddleRef.current = p;
+          setPaddle(p);
+        }
       })
       // Sin esto el fallo es MUDO: el botón queda inerte y nadie sabe por qué.
       .catch((err: unknown) => {
@@ -326,6 +406,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       });
     return () => {
       vivo = false;
+      paddleRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, entorno]);
@@ -383,16 +464,65 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     // del mismo plan, no un descuento aplicado sobre el mensual.
     const priceId =
       ciclo === "anual" && plan.anual ? plan.anual.priceId : plan.priceId;
-    paddle.Checkout.open({
-      items: [{ priceId, quantity: 1 }],
-      // El tenantId sale de la SESIÓN (lo puso el backend): es lo que el
-      // webhook usa para saber a qué imprenta corresponde el pago.
-      customData: { tenantId: datos.checkout.tenantId },
-      customer: { email: datos.checkout.email },
-      settings: { displayMode: "overlay", theme: "light" },
-    });
-    setTimeout(() => setAbriendo(null), 1500);
+    setCheckoutError(null);
+    setCheckoutCargando(true);
+    setCheckoutInline({ plan, ciclo, priceId });
   };
+
+  const cerrarCheckout = React.useCallback(() => {
+    paddleRef.current?.Checkout.close();
+    setCheckoutInline(null);
+    setCheckoutCargando(false);
+    setCheckoutError(null);
+    setAbriendo(null);
+  }, []);
+
+  const reintentarCheckout = React.useCallback(() => {
+    paddleRef.current?.Checkout.close();
+    setCheckoutError(null);
+    setCheckoutCargando(true);
+    setCheckoutIntento((actual) => actual + 1);
+  }, []);
+
+  React.useEffect(() => {
+    if (!checkoutInline || !paddle) return;
+
+    // El frameTarget tiene que existir en el DOM antes de llamar a Paddle.
+    // El siguiente frame garantiza que el Dialog ya montó su contenido.
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        paddle.Checkout.open({
+          items: [{ priceId: checkoutInline.priceId, quantity: 1 }],
+          // El tenantId sale de la SESIÓN (lo puso el backend): es lo que el
+          // webhook usa para saber a qué imprenta corresponde el pago.
+          customData: { tenantId: datos.checkout.tenantId },
+          customer: { email: datos.checkout.email },
+          settings: {
+            displayMode: "inline",
+            frameTarget: checkoutStyles.paddleFrame,
+            frameInitialHeight: 560,
+            frameStyle:
+              "width:100%;min-width:286px;background-color:transparent;border:none;",
+            variant: "one-page",
+            theme: "light",
+            locale: "es",
+            allowLogout: false,
+            showAddDiscounts: false,
+          },
+        });
+      } catch (error) {
+        setCheckoutCargando(false);
+        setAbriendo(null);
+        setCheckoutError(
+          error instanceof Error
+            ? error.message
+            : "No se pudo abrir el formulario de pago.",
+        );
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [checkoutInline, checkoutIntento, paddle, datos.checkout]);
 
   const reactivar = async () => {
     if (reactivando) return;
@@ -423,31 +553,6 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       setBajando(null);
     }
   };
-
-  /**
-   * Refresca mientras haya facturas en estado provisorio.
-   *
-   * Paddle crea la transacción al instante en `billed` y la cobra unos
-   * segundos después. Sin esto, el cliente ve "Procesando" hasta que recarga
-   * la página a mano. Se reintenta poco y con corte: es un ajuste cosmético,
-   * no puede quedar consultando para siempre.
-   */
-  const seguirFacturasProvisorias = React.useCallback(() => {
-    let intentos = 0;
-    const tick = async () => {
-      intentos += 1;
-      await new Promise((r) => setTimeout(r, intentos === 1 ? 3000 : 6000));
-      try {
-        const fresco = await getSuscripcion();
-        setDatos(fresco);
-        const sigue = fresco.facturas.some((f) => PROVISORIOS.has(f.estado));
-        if (sigue && intentos < 3) void tick();
-      } catch {
-        // Si falla, queda lo que ya se ve: recargar lo resuelve.
-      }
-    };
-    void tick();
-  }, []);
 
   const irAlPortal = async () => {
     if (yendoAlPortal) return;
@@ -490,6 +595,8 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
   const actual = datos.actual;
   const enMora = actual?.estadoProveedor === "past_due";
+  const activadaEnPaddle =
+    actual?.proveedor === "paddle" && actual.estado !== "baja";
   // Paddle deja la suscripción en `active` con un cambio programado hasta el
   // fin del período: sin esto la pantalla diría "Activa" y el cliente no
   // sabría que se termina.
@@ -579,7 +686,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
         </div>
       ) : null}
 
-      {datos.prueba.enPrueba && actual ? (
+      {datos.prueba.enPrueba && actual && !activadaEnPaddle ? (
         <div className="sub-trial">
           <div className="sub-trial-info">
             <div className="sub-trial-badge">
@@ -615,6 +722,31 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               Sin cargo hasta el {fechaLarga(datos.prueba.hasta)}
             </span>
           </div>
+        </div>
+      ) : null}
+
+      {activadaEnPaddle && actual?.estadoProveedor === "trialing" ? (
+        <div className="sub-trial sub-trial-active">
+          <div className="sub-trial-info">
+            <div className="sub-trial-badge">
+              <CheckIcon size={20} strokeWidth={2} aria-hidden="true" />
+            </div>
+            <div>
+              <div className="sub-trial-title">
+                Tu suscripción al <strong>plan {actual.planNombre}</strong> está
+                activada
+              </div>
+              <div className="sub-trial-sub">
+                El medio de pago quedó registrado. Tu primer cobro será el{" "}
+                <strong>
+                  {actual.proximoCobro
+                    ? fechaLarga(actual.proximoCobro)
+                    : "finalizar la prueba"}
+                </strong>.
+              </div>
+            </div>
+          </div>
+          <div className="sub-trial-confirmed">Pago configurado</div>
         </div>
       ) : null}
 
@@ -673,6 +805,169 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
           onConfirmar={aplicarCambio}
         />
       ) : null}
+
+      <Dialog
+        open={checkoutInline !== null}
+        onOpenChange={(open) => {
+          if (!open) cerrarCheckout();
+        }}
+      >
+        <DialogContent
+          className={`${checkoutStyles.dialog} max-h-[calc(100dvh-2rem)] max-w-[1180px] gap-0 overflow-hidden p-0 sm:max-w-[1180px]`}
+          showCloseButton={false}
+        >
+          {checkoutInline ? (
+            <>
+              <div className={checkoutStyles.topbar}>
+                <div className={checkoutStyles.brand} aria-label="Grafoprint">
+                  <span className={checkoutStyles.brandmark} aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M5.5 6.5 L18 6.5"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M5.5 6.5 L12 17.5"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M18 6.5 L12 17.5"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                      <circle cx="5.5" cy="6.5" r="2.2" fill="currentColor" />
+                      <circle cx="18" cy="6.5" r="2.2" fill="currentColor" />
+                      <circle cx="12" cy="17.5" r="2.2" fill="currentColor" />
+                    </svg>
+                  </span>
+                  <strong>grafoprint</strong>
+                </div>
+                <div className={checkoutStyles.secure}>
+                  <LockKeyholeIcon aria-hidden="true" />
+                  Pago protegido
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={cerrarCheckout}
+                  aria-label="Cerrar checkout"
+                >
+                  <XIcon />
+                </Button>
+              </div>
+
+              <div className={checkoutStyles.layout}>
+                <aside className={checkoutStyles.summary}>
+                  <div>
+                    <span className={checkoutStyles.kicker}>Tu suscripción</span>
+                    <h3>Plan {checkoutInline.plan.nombre}</h3>
+                    <p>
+                      Todo listo para que tu equipo siga trabajando sin
+                      interrupciones.
+                    </p>
+                  </div>
+
+                  <div className={checkoutStyles.price}>
+                    <strong>
+                      {precio(
+                        checkoutInline.ciclo === "anual" &&
+                          checkoutInline.plan.anual
+                          ? checkoutInline.plan.anual.precio
+                          : checkoutInline.plan.precioMensual,
+                        checkoutInline.plan.moneda,
+                      )}
+                    </strong>
+                    <span>
+                      /{checkoutInline.ciclo === "anual" ? "año" : "mes"}
+                    </span>
+                  </div>
+
+                  <div className={checkoutStyles.trialNote}>
+                    <span className={checkoutStyles.trialIcon}>
+                      <CheckIcon aria-hidden="true" />
+                    </span>
+                    <div>
+                      <strong>14 días sin cargo</strong>
+                      <span>
+                        Paddle te mostrará la fecha exacta del primer cobro.
+                      </span>
+                    </div>
+                  </div>
+
+                  <ul className={checkoutStyles.features}>
+                    {detallesDe(checkoutInline.plan.features)
+                      .slice(0, 5)
+                      .map((detalle) => (
+                        <li key={detalle}>
+                          <CheckIcon aria-hidden="true" />
+                          <span>{detalle}</span>
+                        </li>
+                      ))}
+                  </ul>
+
+                  <div className={checkoutStyles.provider}>
+                    <LogoPaddle s={24} />
+                    <span>
+                      Paddle procesa el pago y emite el comprobante fiscal.
+                    </span>
+                  </div>
+                </aside>
+
+                <section className={checkoutStyles.payment}>
+                  <DialogHeader className={checkoutStyles.heading}>
+                    <DialogTitle>Activá tu suscripción</DialogTitle>
+                    <DialogDescription>
+                      Completá los datos de facturación y elegí tu medio de
+                      pago. No se realizará ningún cargo hoy.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className={checkoutStyles.frameShell}>
+                    {checkoutCargando ? (
+                      <div className={checkoutStyles.loading} role="status">
+                        <span className={checkoutStyles.loader} aria-hidden="true">
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                        <strong>Preparando el pago seguro</strong>
+                        <span>Estamos conectando con Paddle…</span>
+                      </div>
+                    ) : null}
+
+                    <div className={checkoutStyles.paddleFrame} />
+
+                    {checkoutError ? (
+                      <div className={checkoutStyles.error} role="alert">
+                        <strong>No pudimos cargar el formulario</strong>
+                        <span>{checkoutError}</span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={reintentarCheckout}
+                        >
+                          Reintentar
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className={checkoutStyles.legal}>
+                    <LockKeyholeIcon aria-hidden="true" />
+                    Grafoprint no almacena los datos de tu tarjeta.
+                  </div>
+                </section>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <div className="sub-grid">
         {/* ── Columna principal ── */}

@@ -29,7 +29,11 @@ import {
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { CentroCostoFicha } from "@/components/costos/centro-costo-ficha";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 
 type CostosPanelProps = {
   initialCentros: CentroCosto[];
@@ -201,16 +205,18 @@ export function CostosPanel({
       </div>
 
       <div className="ccosto-toolbar">
-        <div className="ccosto-buscador">
-          <SearchIcon />
-          <Input
+        <InputGroup className="max-w-[360px] flex-[1_1_260px]">
+          <InputGroupInput
             type="search"
             placeholder="Búsqueda"
             value={busquedaCentros}
             onChange={(event) => setBusquedaCentros(event.target.value)}
             aria-label="Buscar centro de costo"
           />
-        </div>
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+        </InputGroup>
         <label className="ccosto-periodo">
           <span>Período</span>
           <input
