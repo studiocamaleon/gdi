@@ -660,8 +660,7 @@ export function getMachineTechnologyLabel(maquina: MaquinaTecnologia) {
   }
   // Tecnologías fijas por plantilla (no se cargan en parametrosTecnicos).
   if (maquina.plantilla === "impresora_laser") return "LÁSER";
-  if (maquina.plantilla === "duplicadora_digital")
-    return "FOTODUPLICACIÓN";
+  if (maquina.plantilla === "duplicadora_digital") return "FOTODUPLICACIÓN";
   if (maquina.plantilla === "plotter_cad") return "INKJET";
   return getGeometriaTrabajoMaquinaLabel(maquina.geometriaTrabajo);
 }
@@ -794,6 +793,15 @@ export function setPerfilFieldValueForTemplate(
   value: unknown,
 ): LocalPerfil {
   const next = setPerfilFieldValue(perfil, key, value);
+  if (form.plantilla === "impresora_laser" && key === "productivityValue") {
+    return {
+      ...next,
+      detalle: {
+        ...(next.detalle ?? {}),
+        origenProductividad: "CALIBRADO_TALLER",
+      },
+    };
+  }
   // El plotter de corte cotiza siempre en m²/h.
   if (form.plantilla === "plotter_de_corte" && key === "productivityValue") {
     return { ...next, productivityUnit: "m2_h" };
@@ -1048,6 +1056,7 @@ export interface FieldInputProps {
   onChange: (value: unknown) => void;
   max?: number;
   renderColorModeCards?: boolean;
+  compactColorModeLabels?: boolean;
 }
 
 export function FieldInput({
@@ -1056,6 +1065,7 @@ export function FieldInput({
   onChange,
   max,
   renderColorModeCards = false,
+  compactColorModeLabels = false,
 }: FieldInputProps) {
   const id = `field-${field.scope}-${field.key}`;
 
@@ -1229,6 +1239,8 @@ export function FieldInput({
                   key={opt.value}
                   type="button"
                   aria-pressed={selected}
+                  aria-label={`${selected ? "Quitar" : "Agregar"} ${opt.label}`}
+                  title={opt.label}
                   onClick={() => {
                     const next = selected
                       ? current.filter((v) => v !== opt.value)
@@ -1246,7 +1258,9 @@ export function FieldInput({
                       />
                     ))}
                   </span>
-                  <span className="maq-color-etiqueta">{opt.label}</span>
+                  {compactColorModeLabels ? null : (
+                    <span className="maq-color-etiqueta">{opt.label}</span>
+                  )}
                 </button>
               );
             })}

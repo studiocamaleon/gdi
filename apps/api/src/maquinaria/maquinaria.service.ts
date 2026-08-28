@@ -344,6 +344,18 @@ const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set([
 ]);
 const ALLOWED_WEAR_DETAIL_KEYS = new Set<string>();
 
+export function componenteDesgasteSinCosto(
+  componente: Pick<
+    MaquinaComponenteDesgasteItemDto,
+    'materiaPrimaVarianteId' | 'precioUnitario'
+  >,
+) {
+  return (
+    !componente.materiaPrimaVarianteId &&
+    !Number.isFinite(Number(componente.precioUnitario))
+  );
+}
+
 function isValidTechnicalValue(value: unknown): boolean {
   if (value === null || value === undefined) {
     return true;
@@ -1483,7 +1495,10 @@ export class MaquinariaService {
       // inventario. Lo que no puede es no tener ninguno de los dos: sin precio
       // el motor no sabría cuánto vale el click.
       if (!componente.materiaPrimaVarianteId) {
-        if (!Number.isFinite(Number(componente.precioUnitario))) {
+        if (
+          componenteDesgasteSinCosto(componente) &&
+          payload.estadoConfiguracion !== EstadoConfiguracionMaquinaDto.borrador
+        ) {
           throw new BadRequestException(
             `El componente ${componenteName} necesita un precio, o un repuesto de inventario que lo tenga.`,
           );
@@ -1651,6 +1666,32 @@ export class MaquinariaService {
     return maquina;
   }
 
+  private ordenarPerfilesPorGramaje<
+    T extends { nombre: string; detalleJson: unknown },
+  >(perfiles: T[]): T[] {
+    const obtenerDetalle = (perfil: T) =>
+      perfil.detalleJson &&
+      typeof perfil.detalleJson === 'object' &&
+      !Array.isArray(perfil.detalleJson)
+        ? (perfil.detalleJson as Record<string, unknown>)
+        : {};
+    const gramajeMaximo = (perfil: T) =>
+      this.toNumeric(obtenerDetalle(perfil).gramajeMaxGr) ??
+      Number.POSITIVE_INFINITY;
+    const ordenCaras = (perfil: T) =>
+      obtenerDetalle(perfil).caras === 'DOBLE_FAZ' ? 1 : 0;
+
+    return perfiles
+      .map((perfil, posicionOriginal) => ({ perfil, posicionOriginal }))
+      .sort(
+        (a, b) =>
+          gramajeMaximo(a.perfil) - gramajeMaximo(b.perfil) ||
+          ordenCaras(a.perfil) - ordenCaras(b.perfil) ||
+          a.posicionOriginal - b.posicionOriginal,
+      )
+      .map(({ perfil }) => perfil);
+  }
+
   private getDiagnosticoConfiguracion(maquina: MaquinaDiagnosticoSource) {
     return getMaquinaDiagnosticoConfiguracion({
       codigo: maquina.codigo,
@@ -1687,7 +1728,9 @@ export class MaquinariaService {
       capacidadesAvanzadas:
         (maquina.capacidadesAvanzadasJson as Record<string, unknown> | null) ??
         undefined,
-      perfilesOperativos: maquina.perfilesOperativos.map((perfil) => ({
+      perfilesOperativos: this.ordenarPerfilesPorGramaje(
+        maquina.perfilesOperativos,
+      ).map((perfil) => ({
         id: perfil.id,
         nombre: perfil.nombre,
         tipoPerfil: this.toApiEnum(
@@ -1815,7 +1858,9 @@ export class MaquinariaService {
       capacidadesAvanzadas:
         (maquina.capacidadesAvanzadasJson as Record<string, unknown> | null) ??
         null,
-      perfilesOperativos: maquina.perfilesOperativos.map((perfil) => ({
+      perfilesOperativos: this.ordenarPerfilesPorGramaje(
+        maquina.perfilesOperativos,
+      ).map((perfil) => ({
         id: perfil.id,
         nombre: perfil.nombre,
         tipoPerfil: this.toApiEnum(

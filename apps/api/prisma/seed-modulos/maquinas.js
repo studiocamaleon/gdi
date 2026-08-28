@@ -140,7 +140,8 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       nombre: "Papel grueso doble faz",
       tipoPerfil: TipoPerfilOperativoMaquina.IMPRESION,
       activo: true,
-      productivityValue: "20",
+      // PPM son caras A4 equivalentes/min; el paso ya multiplica por caras.
+      productivityValue: "40",
       productivityUnit: UnidadProduccionMaquina.PPM,
       setupMin: "8",
       cleanupMin: "2",

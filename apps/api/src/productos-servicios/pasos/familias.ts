@@ -278,7 +278,7 @@ const impresion_por_hoja: DefinicionFamilia = {
     desgaste: 'clicks_a4',
     compraSustrato: 'pliegos_a_hojas',
     seleccionPerfil: 'cadena_caras_gramaje',
-    avisos: ['perfil_doble_faz'],
+    avisos: ['perfil_doble_faz', 'gramaje_perfil_fuera_rango'],
   },
   // [Tanda C] Antes: defaults cableados por nombre en el editor.
   // La imposición vive en este paso, por lo que su cantidad efectiva sale de

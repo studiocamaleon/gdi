@@ -147,8 +147,9 @@ const clicks_a4: PrimitivaDesgaste = (
  * Cadena de impresión por hoja: caras → escalón de gramaje, sobre los
  * candidatos ya filtrados por modo de color. Los tres discriminantes se
  * ENCADENAN como filtros en vez de competir: antes ganaba el primer perfil
- * que matcheara el color y el gramaje no se miraba nunca. Siempre decide
- * si hay candidatos (el fallback es el primero).
+ * que matcheara el color y el gramaje no se miraba nunca. Si faltan las
+ * señales necesarias, conserva el perfil default del paso en vez de depender
+ * del orden de carga.
  * [P3: era el bloque 1 de resolverPerfilAutomatico]
  */
 const cadena_caras_gramaje: PrimitivaSeleccionPerfil = (
@@ -176,13 +177,15 @@ const cadena_caras_gramaje: PrimitivaSeleccionPerfil = (
   }
 
   // Filtro gramaje: gana el "hasta" más chico que todavía cubre el papel.
-  // Sin gramaje en el contexto o sin escalones, queda el orden anterior.
+  // Sin gramaje en el contexto o sin escalones, conserva el default compatible
+  // en vez de elegir candidatos[0] (el orden de carga no es una regla).
   const gramaje = deps.numeroPositivo(
     ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje,
   );
+  const perfilDefault = cands.find((perfil) => perfil.id === paso.perfilM1Id);
   const candidato = gramaje
-    ? (deps.elegirPorEscalonDeGramaje(cands, gramaje) ?? cands[0])
-    : cands[0];
+    ? (deps.elegirPorEscalonDeGramaje(cands, gramaje) ?? perfilDefault)
+    : perfilDefault;
   return candidato ?? null;
 };
 
@@ -287,12 +290,13 @@ const pliegos_a_hojas: PrimitivaCompraSustrato = (
 
 /**
  * El trabajo pide doble faz y la máquina no tiene ningún perfil de doble
- * faz: el motor cae en un perfil de simple faz y el tiempo sale a la mitad
- * del real. Antes pasaba en silencio; ahora la cotización lo dice.
+ * faz: el motor cae en un perfil de simple faz. Como PPM expresa caras A4
+ * equivalentes, la cantidad de caras sigue calculándose correctamente, pero
+ * puede faltar una velocidad dúplex específica documentada por el fabricante.
  *
  * Es WARNING y no ERROR a propósito: la cotización sale igual —la imprenta
  * puede querer cotizar mientras termina de cargar la máquina—, pero queda
- * escrito que ese tiempo está subestimado.
+ * escrito que se reutilizó la productividad simple faz.
  * [P4: era `avisarFaltaPerfilDobleFaz` en el motor]
  */
 const perfil_doble_faz: PrimitivaAviso = (
@@ -323,15 +327,62 @@ const perfil_doble_faz: PrimitivaAviso = (
   errores.push({
     codigo: 'perfil_doble_faz_faltante',
     severidad: 'WARNING',
-    mensaje: `El paso ${paso.rutaPasoOrden} se cotiza a doble faz, pero ${paso.maquina?.nombre ?? 'la máquina'} no tiene ningún perfil de doble faz: el tiempo sale calculado con uno de simple faz y queda subestimado.`,
+    mensaje: `El paso ${paso.rutaPasoOrden} se cotiza a doble faz, pero ${paso.maquina?.nombre ?? 'la máquina'} no tiene ningún perfil de doble faz: se reutilizó la productividad A4 equivalente del perfil simple faz.`,
     rutaPasoId: paso.rutaPasoId,
     rutaPasoOrden: paso.rutaPasoOrden,
     familiaCodigo: paso.familiaCodigo,
     sugerencia:
-      'Agregar un perfil de doble faz a la máquina con su productividad real.',
+      'Agregar un perfil de doble faz si el fabricante documenta una productividad dúplex diferente o si requiere otros parámetros operativos.',
     contexto: {
       maquinaId: paso.maquina?.id,
       perfilId: perfilEnUso?.id ?? null,
+    },
+  });
+};
+
+/**
+ * El sustrato supera el escalón máximo del perfil elegido. El motor conserva
+ * el perfil más grueso para poder devolver la cotización, pero hace visible
+ * que la combinación puede quedar fuera de la capacidad documentada.
+ */
+const gramaje_perfil_fuera_rango: PrimitivaAviso = (
+  paso,
+  jobContext,
+  perfilResuelto,
+  errores,
+) => {
+  const ctx = jobContext as Record<string, unknown>;
+  const gramaje = Number(
+    ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje ?? null,
+  );
+  if (!Number.isFinite(gramaje) || gramaje <= 0) return;
+
+  const perfilEnUso =
+    perfilResuelto ??
+    paso.perfilesDisponibles?.find((p) => p.id === paso.perfilM1Id) ??
+    paso.perfil;
+  if (!perfilEnUso) return;
+  const detalle =
+    perfilEnUso.detalleJson && typeof perfilEnUso.detalleJson === 'object'
+      ? (perfilEnUso.detalleJson as Record<string, unknown>)
+      : {};
+  const maximo = Number(detalle.gramajeMaxGr);
+  if (!Number.isFinite(maximo) || maximo <= 0 || gramaje <= maximo) return;
+
+  errores.push({
+    codigo: 'gramaje_perfil_fuera_rango',
+    severidad: 'WARNING',
+    mensaje: `El sustrato de ${gramaje} g/m² supera el máximo de ${maximo} g/m² del perfil "${perfilEnUso.nombre}".`,
+    rutaPasoId: paso.rutaPasoId,
+    rutaPasoOrden: paso.rutaPasoOrden,
+    familiaCodigo: paso.familiaCodigo,
+    sugerencia:
+      'Verificar que la máquina admita ese gramaje o agregar un perfil respaldado por la documentación del fabricante.',
+    contexto: {
+      maquinaId: paso.maquina?.id,
+      perfilId: perfilEnUso.id,
+      gramajeMaterialGr: gramaje,
+      gramajeMaxGr: maximo,
     },
   });
 };
@@ -374,4 +425,5 @@ export const REGISTRO_SELECCION_PERFIL: Record<
 
 export const REGISTRO_AVISOS: Record<string, PrimitivaAviso> = {
   perfil_doble_faz,
+  gramaje_perfil_fuera_rango,
 };

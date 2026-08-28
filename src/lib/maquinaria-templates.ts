@@ -61,6 +61,18 @@ const carasOptions = [
   option("DOBLE_FAZ", "Doble faz"),
 ];
 
+const modoDobleFazOptions = [
+  option("NO_APLICA", "No aplica"),
+  option("AUTOMATICO", "Automático"),
+  option("MANUAL_DOS_PASADAS", "Manual (dos pasadas)"),
+];
+
+const origenProductividadOptions = [
+  option("FABRICANTE", "Fabricante"),
+  option("ESTIMACION_GRAFOPRINT", "Estimación Grafoprint"),
+  option("CALIBRADO_TALLER", "Calibrado por el taller"),
+];
+
 const tecnologiaGranFormatoOptions = [
   option("LATEX", "Látex"),
   option("SOLVENTE", "Solvente"),
@@ -346,12 +358,21 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
         }),
         field({
           key: "productivityValue",
-          label: "Productividad",
+          label: "PPM",
           scope: "perfil_operativo",
           kind: "number",
-          unit: "ppm",
           required: true,
-          description: "Pliegos por minuto.",
+          description:
+            "Caras impresas por minuto equivalentes a una página A4. Usá la velocidad A4 publicada por el fabricante.",
+        }),
+        field({
+          key: "origenProductividad",
+          label: "Origen PPM",
+          scope: "perfil_operativo",
+          kind: "select",
+          options: origenProductividadOptions,
+          description:
+            "Distingue un dato publicado, una estimación inicial de Grafoprint o una calibración del taller.",
         }),
         field({
           key: "setupMin",
@@ -360,22 +381,6 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
           kind: "number",
           unit: "min",
           description: "Tiempo de preparación inicial.",
-        }),
-        field({
-          key: "cleanupMin",
-          label: "Cleanup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo de limpieza al terminar.",
-        }),
-        field({
-          key: "feedReloadMin",
-          label: "Recarga papel",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo de recarga entre tandas.",
         }),
         // Escalón, igual que en guillotina: el papel más grueso baja la
         // velocidad de la máquina y ese perfil es el que hay que elegir.
@@ -398,8 +403,17 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
           description: "Discriminante: simple o doble faz.",
         }),
         field({
+          key: "modoDobleFaz",
+          label: "Modo doble faz",
+          scope: "perfil_operativo",
+          kind: "select",
+          options: modoDobleFazOptions,
+          description:
+            "Indica si el pliego se gira automáticamente o se reinserta para imprimir la segunda cara.",
+        }),
+        field({
           key: "colores",
-          label: "Modos de color admitidos",
+          label: "Color",
           scope: "perfil_operativo",
           kind: "multiselect",
           options: coloresImpresorLaserOptions,
@@ -2040,7 +2054,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     sections: buildLaserSections(),
     help: {
       summary:
-        "Plantilla unificada para impresoras láser (Ricoh, Konica, Xerox). Productividad medida en pliegos por minuto (PPM).",
+        "Plantilla unificada para impresoras láser (Ricoh, Konica, Xerox). Productividad medida en caras A4 equivalentes por minuto (PPM).",
       tips: [
         "Cargá márgenes no imprimibles para que el motor calcule área útil correcta.",
         "Creá perfiles separados por simple/doble faz y rangos de gramaje.",

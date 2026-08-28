@@ -130,7 +130,7 @@ const LASER_PRESETS: MaquinariaTechnicalPreset[] = [
   ),
   ...createLaserPresets(
     "Ricoh",
-    ["Pro C7200x", "Pro C7200sx", "Pro C7500", "Pro C9200", "Pro C9210", "Pro C9003", "Pro C901", "Pro C901S"],
+    ["Pro C7200x", "Pro C7200sx", "Pro C7500", "Pro C8003", "C8003", "Pro C9200", "Pro C9210", "Pro C9003", "Pro C901", "Pro C901S"],
     {
       anchoMaxHoja: 33,
       altoMaxHoja: 70,

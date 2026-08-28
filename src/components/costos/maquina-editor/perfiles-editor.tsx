@@ -7,7 +7,7 @@
  */
 
 import * as React from "react";
-import { CopyIcon, PlusIcon, XIcon } from "lucide-react";
+import { CopyIcon, PlusIcon, Settings2Icon, XIcon } from "lucide-react";
 
 import {
   tipoPerfilOperativoMaquinaItems,
@@ -16,6 +16,12 @@ import {
 } from "@/lib/maquinaria";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   SelectBuscable,
   type OpcionSelect,
@@ -217,7 +223,9 @@ export function PerfilesOperativosEditor({
         <p className="maq-perfiles-vacio">Sin perfiles. Agregá al menos uno.</p>
       ) : (
         <div className="maq-perfiles-scroll">
-          <table className="maq-perfiles-tabla">
+          <table
+            className={`maq-perfiles-tabla ${form.plantilla === "impresora_laser" ? "laser" : ""}`}
+          >
             <thead>
               <tr>
                 {conColumnaTipo ? (
@@ -227,7 +235,7 @@ export function PerfilesOperativosEditor({
                   <th
                     key={field.key}
                     title={field.description}
-                    className={field.kind === "number" ? "num" : undefined}
+                    className={`${field.kind === "number" ? "num " : ""}campo-${field.key}`}
                   >
                     {field.label}
                     {field.unit ? (
@@ -320,7 +328,7 @@ export function PerfilesOperativosEditor({
                       return (
                         <td
                           key={field.key}
-                          className={esNum ? "num" : undefined}
+                          className={`${esNum ? "num " : ""}campo-${field.key}`}
                         >
                           {form.plantilla === "corte_laser" &&
                           field.key === "material" ? (
@@ -346,6 +354,10 @@ export function PerfilesOperativosEditor({
                               // Los modos de color van como pills, no como una
                               // pila de checkboxes dentro de la celda.
                               renderColorModeCards={field.key === "colores"}
+                              compactColorModeLabels={
+                                form.plantilla === "impresora_laser" &&
+                                field.key === "colores"
+                              }
                               onChange={(v) => {
                                 const next = setPerfilFieldValueForTemplate(
                                   perfil,
@@ -379,21 +391,29 @@ export function PerfilesOperativosEditor({
                         {perfil.tipoPerfil === "corte" ? (
                           <span className="na">—</span>
                         ) : (
-                          <button
-                            type="button"
-                            className={`maq-perfiles-tinta-btn ${cantidadTintas > 0 ? "ok" : ""}`}
-                            title={
-                              cantidadTintas > 0
-                                ? `${cantidadTintas} tinta${cantidadTintas === 1 ? "" : "s"} vinculada${cantidadTintas === 1 ? "" : "s"}`
-                                : "Todavía sin tintas vinculadas"
-                            }
-                            onClick={() => setTintasDeUiKey(perfil.uiKey)}
-                          >
-                            {/* El punto dice si ya tiene tintas; el texto dice
-                                qué hace el botón. El número vive en el title. */}
-                            <span className="punto" />
-                            Configurar
-                          </button>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={(props) => (
+                                <Button
+                                  {...props}
+                                  type="button"
+                                  variant="outline"
+                                  size="icon-sm"
+                                  className={`maq-perfiles-tinta-btn ${cantidadTintas > 0 ? "ok" : ""}`}
+                                  aria-label={`Configurar tintas de ${perfil.nombre || `perfil ${idx + 1}`}`}
+                                  onClick={() => setTintasDeUiKey(perfil.uiKey)}
+                                >
+                                  <Settings2Icon aria-hidden />
+                                  <span className="punto" aria-hidden />
+                                </Button>
+                              )}
+                            />
+                            <TooltipContent>
+                              {cantidadTintas > 0
+                                ? `Configurar tintas · ${cantidadTintas} vinculada${cantidadTintas === 1 ? "" : "s"}`
+                                : "Configurar tintas"}
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </td>
                     ) : null}

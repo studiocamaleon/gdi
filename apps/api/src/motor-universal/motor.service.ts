@@ -8000,6 +8000,33 @@ export class MotorUniversalService {
       // sigue la resolución automática.
     }
 
+    // ─── 1. Regla declarativa por perfil ────────────────────────────
+    // Una regla explícita expresa una decisión técnica más específica que las
+    // heurísticas de familia. Se evalúa antes de caras/color/gramaje, tal como
+    // declara el contrato de selección G-M8.
+    for (const perfil of perfilesDisponibles) {
+      if (!perfil.activo) continue;
+      const detalle = (perfil.detalleJson ?? {}) as Record<string, unknown>;
+      const regla = detalle.reglaSeleccion ?? detalle.condicion ?? null;
+      if (regla === null || regla === undefined) continue;
+      const evaluacion = evaluarRegla(regla, ctx);
+      if (evaluacion.error) continue;
+      if (evaluacion.resultado === true) {
+        if (perfil.id === paso.perfilM1Id) return null;
+        return {
+          id: perfil.id,
+          nombre: perfil.nombre,
+          tipoPerfil: perfil.tipoPerfil,
+          productivityValue: perfil.productivityValue,
+          productivityUnit: perfil.productivityUnit ?? null,
+          setupMin: perfil.setupMin,
+          cleanupMin: perfil.cleanupMin,
+          feedReloadMin: perfil.feedReloadMin,
+          detalleJson: perfil.detalleJson,
+        };
+      }
+    }
+
     // ─── Láser: auto-selección por OPERACIÓN + MATERIAL + ESPESOR ───
     // El paso define CORTE/GRABADO y el sustrato preliminar aporta la materia
     // prima y el espesor. Los perfiles legados con códigos canónicos también
@@ -8025,7 +8052,7 @@ export class MotorUniversalService {
       };
     }
 
-    // ─── 1. Modo de color (genérico) + primitiva de selección ────────
+    // ─── 2. Modo de color (genérico) + primitiva de selección ────────
     //
     // El filtro por modo de color es del MOTOR: aplica a cualquier familia
     // que lo declare al cotizar. La selección FINA es oficio de la familia
@@ -8107,33 +8134,6 @@ export class MotorUniversalService {
       }
       // Sin decisión → sigue el pipeline.
     }
-
-    // ─── 3. G-M8 — Regla declarativa por perfil ──────────────────────
-    for (const perfil of perfilesDisponibles) {
-      if (!perfil.activo) continue;
-      const detalle = (perfil.detalleJson ?? {}) as Record<string, unknown>;
-      const regla = detalle.reglaSeleccion ?? detalle.condicion ?? null;
-      if (regla === null || regla === undefined) continue;
-      const evaluacion = evaluarRegla(regla, ctx);
-      if (evaluacion.error) continue; // regla mal formada → ignorar perfil
-      if (evaluacion.resultado === true && perfil.id !== paso.perfilM1Id) {
-        return {
-          id: perfil.id,
-          nombre: perfil.nombre,
-          tipoPerfil: perfil.tipoPerfil,
-          productivityValue: perfil.productivityValue,
-          productivityUnit: perfil.productivityUnit ?? null,
-          setupMin: perfil.setupMin,
-          cleanupMin: perfil.cleanupMin,
-          feedReloadMin: perfil.feedReloadMin,
-          detalleJson: perfil.detalleJson,
-        };
-      }
-    }
-
-    // (La heurística legacy "impresión por hoja según caras" se retiró:
-    // el filtro encadenado del punto 1 corre para toda la familia y ya
-    // contempla las caras, así que nunca se llegaba hasta acá.)
 
     // No hubo cambio
     return null;
