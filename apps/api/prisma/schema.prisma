@@ -570,10 +570,16 @@ model Tenant {
   enlacesPublicos                                  EnlacePublico[]
   reciboContadores                                 ReciboContador[]
   suscripcion                                      Suscripcion?
+  registroAlta                                     RegistroTenant?
   id                                               String                                            @id @default(uuid()) @db.Uuid
   nombre                                           String
   slug                                             String                                            @unique
   activo                                           Boolean                                           @default(true)
+  /// De dónde nació la empresa: 'plataforma' (alta asistida) o
+  /// 'registro_publico'. Sirve para medir adquisición sin inferirla de otras
+  /// tablas y para que el onboarding sólo aparezca a quien corresponde.
+  origenAlta                                       String                                            @default("plataforma")
+  onboardingCompletadoEl                           DateTime?
   /// El tenant de Grupo Idea: desde acá se facturan las suscripciones del
   /// SaaS (docs/control-plane-diseno.md, etapa B2). UNO solo — lo refuerza
   /// un índice único parcial en la migración (Prisma no los expresa).
@@ -2644,8 +2650,8 @@ model ProductoConfigPasoSlotMaterial {
   /// Para HEREDA_DE_PASO: referencia estable al paso y slot anteriores de la
   /// misma ruta. El destino usa ese material para geometría/operación, pero no
   /// vuelve a costearlo.
-  heredaDeRutaPasoId     String?                                   @db.Uuid
-  heredaDeSlotCodigo     String?
+  heredaDeRutaPasoId    String?                                   @db.Uuid
+  heredaDeSlotCodigo    String?
   /// 'MENOR_COSTO' | 'MAYOR_APROVECHAMIENTO' | 'MENOR_CAPACIDAD_QUE_CUMPLA'.
   criterioMotorAuto     String?
   criterioInputCampo    String?
@@ -4765,9 +4771,9 @@ model PlataformaEvento {
 /// MaterialPreset: los mismos planes para todos los tenants.
 /// Ver docs/control-plane-diseno.md
 model Plan {
-  id                 String        @id @default(uuid()) @db.Uuid
+  id                 String             @id @default(uuid()) @db.Uuid
   /// "trial" | "taller" | "estudio" | "diamante" | "founder" — estable.
-  codigo             String        @unique
+  codigo             String             @unique
   nombre             String
   /// La bajada comercial que ve el tenant en la tarjeta del plan ("Para
   /// imprentas que arrancan a ordenar su producción"). Editable desde la
@@ -4776,10 +4782,10 @@ model Plan {
   /// ESPEJO del precio que vive en Paddle, cacheado para mostrarlo (consola,
   /// MRR, vista del tenant) sin pegarle a la API. La fuente de verdad del
   /// monto es el catálogo de Paddle: esto se sincroniza, no se edita a mano.
-  precioMensual      Decimal       @db.Decimal(14, 2)
+  precioMensual      Decimal            @db.Decimal(14, 2)
   /// Moneda del precio. Paddle cobra en USD; el riel argentino (MercadoPago)
   /// llegará con ARS. Ver docs/suscripciones-cobro-diseno.md
-  moneda             String        @default("USD")
+  moneda             String             @default("USD")
   /// Qué habilita y hasta dónde: { afip, whatsapp, usuariosMax,
   /// ordenesMesMax, storageGb }. JSON a propósito: los features cambian más
   /// rápido que el schema. NADIE lo lee directo salvo SuscripcionesService.
@@ -4788,22 +4794,82 @@ model Plan {
   featuresJson       Json
   /// Precio y producto en el catálogo de Paddle. Null = plan no vendible por
   /// Paddle todavía (p. ej. "trial", o los planes legacy).
-  paddlePriceId      String?       @unique
+  paddlePriceId      String?            @unique
   paddleProductId    String?
   /// Variante ANUAL del mismo plan: otro precio en Paddle, mismo producto.
   /// Null = el plan sólo se vende mensual. El ahorro contra 12 meses lo
   /// calcula el front con estos dos números.
-  paddlePriceIdAnual String?       @unique
-  precioAnual        Decimal?      @db.Decimal(14, 2)
+  paddlePriceIdAnual String?            @unique
+  precioAnual        Decimal?           @db.Decimal(14, 2)
   /// Días de prueba que otorga este plan al asignarse. Null = sin prueba.
   /// Vive en el plan (no hardcodeado) para poder cambiarlo sin deploy.
   trialDias          Int?
+  /// Puede ofrecerse en el alta pública. Es más estricto que `publico`: un
+  /// Enterprise a medida puede verse comercialmente sin crear Trials solo.
+  registroPublico    Boolean            @default(false)
+  /// La tarjeta destacada de la oferta. Sólo uno debería estar activo.
+  recomendado        Boolean            @default(false)
+  /// Sin precio fijo ni checkout: la CTA deriva a contacto comercial.
+  precioAConsultar   Boolean            @default(false)
   /// False = plan interno: la Plataforma puede asignarlo y gestionarlo, pero
   /// nunca aparece en la oferta de autogestión de otros tenants.
-  publico            Boolean       @default(true)
-  activo             Boolean       @default(true)
-  orden              Int           @default(0)
+  publico            Boolean            @default(true)
+  activo             Boolean            @default(true)
+  orden              Int                @default(0)
   suscripciones      Suscripcion[]
+  registrosTenant    RegistroTenant[]
+  preciosLegacy      PlanPrecioLegacy[]
+}
+
+/// Precio histórico: reconoce webhooks de suscripciones anteriores sin volver
+/// a ofrecer ese importe en un checkout nuevo.
+model PlanPrecioLegacy {
+  id        String   @id @default(uuid()) @db.Uuid
+  planId    String   @db.Uuid
+  priceId   String   @unique
+  ciclo     String
+  createdAt DateTime @default(now())
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+}
+
+/// Solicitud de alta anterior al tenant. Vive en el plano de Plataforma y no
+/// lleva tenantId porque justamente todavía no existe una empresa a la cual
+/// aislarla. El token se guarda hasheado y la contraseña sólo como bcrypt.
+model RegistroTenant {
+  id                  String    @id @default(uuid()) @db.Uuid
+  email               String
+  nombreCompleto      String
+  empresaNombre       String
+  passwordHash        String?
+  planId              String    @db.Uuid
+  paisCodigo          String    @db.VarChar(2)
+  zonaHoraria         String
+  tokenHash           String?   @unique
+  tokenExpiraEl       DateTime?
+  tokenVersion        Int       @default(1)
+  ultimoEnvioEl       DateTime?
+  proveedorMensajeId  String?
+  emailVerificadoEl   DateTime?
+  completadoEl        DateTime?
+  revocadoEl          DateTime?
+  tenantCreadoId      String?   @unique @db.Uuid
+  terminosVersion     String
+  terminosAceptadosEl DateTime
+  marketingAceptadoEl DateTime?
+  origen              String?
+  atribucionJson      Json?
+  intentos            Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  plan                Plan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  tenantCreado        Tenant?   @relation(fields: [tenantCreadoId], references: [id], onDelete: SetNull)
+
+  @@index([planId, createdAt])
+  @@index([email, createdAt])
+  @@index([tokenExpiraEl])
+  @@index([completadoEl])
 }
 
 /// La suscripción del tenant: una por tenant. CON tenantId y SIN eximir del

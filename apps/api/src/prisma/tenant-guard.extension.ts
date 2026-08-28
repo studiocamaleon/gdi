@@ -26,6 +26,10 @@ const MODELOS_EXENTOS = new Set<string>([
   'MaterialPreset',
   // Catálogo del SaaS: mismos planes para todos los tenants.
   'Plan',
+  'PlanPrecioLegacy',
+  // Alta pública anterior a que exista un tenant. El token es global y el
+  // tenant nace recién al consumirlo.
+  'RegistroTenant',
   'MaterialPresetVariante',
   'ProductoCategoriaComercial',
   'ProductoSubcategoriaComercial',

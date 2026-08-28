@@ -5,6 +5,7 @@ import { SuscripcionesService } from '../../suscripciones/suscripciones.service'
 import type { PrismaService } from '../../prisma/prisma.service';
 import { PaddleService } from '../../cobro/paddle.service';
 import { SuscripcionSyncService } from '../../cobro/suscripcion-sync.service';
+import { TenantProvisioningService } from '../../provisionamiento/tenant-provisioning.service';
 
 /**
  * Las escrituras del control plane (etapa B1) y el lector de features, contra
@@ -20,6 +21,7 @@ describe('Control plane — escrituras y feature gates', () => {
   const plataforma = new PlataformaService(
     prisma as unknown as PrismaService,
     new PaddleService(),
+    new TenantProvisioningService(),
   );
   const suscripciones = new SuscripcionesService(
     prisma as unknown as PrismaService,
@@ -76,7 +78,9 @@ describe('Control plane — escrituras y feature gates', () => {
     );
     const estudio = planes.find((p) => p.codigo === 'estudio')!;
     expect(estudio.features.afip).toBe(true);
-    expect(estudio.precioMensual).toBe(189000);
+    expect(estudio.precioMensual).toBe(290);
+    expect(estudio.nombre).toBe('Producción');
+    expect(estudio.recomendado).toBe(true);
     const diamante = planes.find((p) => p.codigo === 'diamante')!;
     expect(diamante.features.centroCopiado).toBe(true);
     const founder = planes.find((p) => p.codigo === 'founder')!;
@@ -115,7 +119,7 @@ describe('Control plane — escrituras y feature gates', () => {
       where: { staffUserId: staffId, tipo: 'plan_cambiado' },
     });
     expect(eventos).toHaveLength(2);
-    expect(eventos[1].descripcion).toContain('Taller → Estudio');
+    expect(eventos[1].descripcion).toContain('Taller → Producción');
   });
 
   it('Founder habilita todo, no impone límites y permanece privado', async () => {

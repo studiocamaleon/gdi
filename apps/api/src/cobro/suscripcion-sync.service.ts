@@ -212,7 +212,17 @@ export class SuscripcionSyncService {
     // cambio de plan se refleja solo, sin que nadie lo toque a mano acá.
     const plan = externa.precios.length
       ? await this.prisma.plan.findFirst({
-          where: { paddlePriceId: { in: externa.precios } },
+          where: {
+            OR: [
+              { paddlePriceId: { in: externa.precios } },
+              { paddlePriceIdAnual: { in: externa.precios } },
+              {
+                preciosLegacy: {
+                  some: { priceId: { in: externa.precios } },
+                },
+              },
+            ],
+          },
           select: { id: true, codigo: true },
         })
       : null;
@@ -239,6 +249,9 @@ export class SuscripcionSyncService {
     const datos = {
       estado,
       proveedor: 'paddle',
+      // El Trial es local y termina en cuanto Paddle confirma una suscripción.
+      // Dejar la fecha viva haría que el cron pudiera suspender un plan pago.
+      trialHasta: null,
       referenciaExterna: externa.referencia,
       clienteExternoId: externa.clienteExterno,
       estadoProveedor: externa.estadoProveedor,

@@ -8,13 +8,14 @@ import { PlataformaController } from './plataforma.controller';
 import { PlataformaAdminGuard } from './plataforma-admin.guard';
 import { PlataformaGuard } from './plataforma.guard';
 import { PlataformaService } from './plataforma.service';
+import { ProvisionamientoModule } from '../provisionamiento/provisionamiento.module';
 
 /**
  * Control plane (etapa A): la consola de la Plataforma, sólo lectura.
  * Ver docs/control-plane-diseno.md
  */
 @Module({
-  imports: [PrismaModule, AuthModule, CobroModule],
+  imports: [PrismaModule, AuthModule, CobroModule, ProvisionamientoModule],
   controllers: [PlataformaController],
   providers: [
     PlataformaService,

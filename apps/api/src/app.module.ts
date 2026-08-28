@@ -48,6 +48,8 @@ import { PanelGeneralModule } from './panel-general/panel-general.module';
 import { FidelizacionModule } from './fidelizacion/fidelizacion.module';
 import { RecorridosVectorialesModule } from './recorridos-vectoriales/recorridos-vectoriales.module';
 import { SuscripcionAccesoGuard } from './suscripciones/suscripcion-acceso.guard';
+import { ProvisionamientoModule } from './provisionamiento/provisionamiento.module';
+import { RegistroModule } from './registro/registro.module';
 
 @Module({
   imports: [
@@ -119,6 +121,8 @@ import { SuscripcionAccesoGuard } from './suscripciones/suscripcion-acceso.guard
     PanelGeneralModule,
     FidelizacionModule,
     RecorridosVectorialesModule,
+    ProvisionamientoModule,
+    RegistroModule,
   ],
   controllers: [AppController],
   providers: [

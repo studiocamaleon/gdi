@@ -232,7 +232,9 @@ export class SuscripcionesService {
       }),
     ]);
 
-    const contratables = planes.filter((p) => p.paddlePriceId !== null);
+    const contratables = planes.filter(
+      (p) => p.paddlePriceId !== null && !p.precioAConsultar,
+    );
 
     // Las facturas se piden sólo si el tenant ya es cliente en la pasarela.
     // Si Paddle no responde, la lista viene vacía y la vista lo dice — nunca

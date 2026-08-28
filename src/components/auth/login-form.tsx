@@ -28,6 +28,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const motivo = MOTIVOS[searchParams.get("motivo") ?? ""] ?? null;
+  const registroToken = searchParams.get("registro");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
@@ -57,7 +58,11 @@ export function LoginForm() {
       await wait(220);
       document.querySelector(".gp-login")?.classList.add("ingressing");
       await wait(2730);
-      router.replace("/");
+      router.replace(
+        registroToken
+          ? `/registro/verificar?token=${encodeURIComponent(registroToken)}`
+          : "/",
+      );
       router.refresh();
     } catch (error) {
       document.querySelector(".gp-login")?.classList.remove("ingressing");

@@ -33,13 +33,14 @@ export async function GET() {
     process.env.MARKETING_LOGIN_URL,
     `${appUrl}/login`,
   );
-  // Hasta que exista el alta pública, el fallback seguro es el login actual.
-  // En producción MARKETING_SIGNUP_URL debe apuntar al onboarding real.
   const signupUrl = absoluteUrl(
     process.env.MARKETING_SIGNUP_URL,
-    `${appUrl}/login`,
+    `${appUrl}/registro`,
   );
-  const demoUrl = absoluteUrl(process.env.MARKETING_DEMO_URL, signupUrl);
+  const demoUrl = absoluteUrl(
+    process.env.MARKETING_DEMO_URL,
+    "mailto:soporte@grafoprint.com.ar?subject=Plan%20Enterprise",
+  );
 
   const template = await readFile(templatePath, "utf8");
   const html = template
@@ -49,8 +50,10 @@ export async function GET() {
     .replaceAll("__SIGNUP_TALLER_URL__", conPlan(signupUrl, "taller"))
     .replaceAll(
       "__SIGNUP_PRODUCCION_URL__",
-      conPlan(signupUrl, "produccion"),
+      conPlan(signupUrl, "estudio"),
     )
+    .replaceAll("__TERMS_URL__", `${appUrl}/terminos`)
+    .replaceAll("__PRIVACY_URL__", `${appUrl}/privacidad`)
     .replaceAll("__DEMO_URL__", demoUrl);
 
   return new Response(html, {

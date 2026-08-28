@@ -772,7 +772,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                       ))}
                     </ul>
                     <div className="sub-plan-cta">
-                      {p.esActual ? (
+                      {p.esActual && !(datos.prueba.enPrueba && datos.actual?.proveedor === "manual") ? (
                         <span className="sub-current-lbl">Plan actual</span>
                       ) : (
                         <button
@@ -786,7 +786,9 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                         >
                           {abriendo === p.codigo
                             ? "Abriendo…"
-                            : `Elegir ${p.nombre}`}
+                            : p.esActual
+                              ? `Contratar ${p.nombre}`
+                              : `Elegir ${p.nombre}`}
                         </button>
                       )}
                     </div>

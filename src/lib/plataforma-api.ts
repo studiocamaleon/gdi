@@ -54,6 +54,9 @@ export type PlanCatalogo = {
   precioAnual: number | null;
   trialDias: number | null;
   publico: boolean;
+  registroPublico: boolean;
+  recomendado: boolean;
+  precioAConsultar: boolean;
   tenants: number;
 };
 

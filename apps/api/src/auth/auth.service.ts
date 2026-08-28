@@ -817,6 +817,24 @@ export class AuthService {
     });
   }
 
+  async crearSesionParaMembership(
+    userId: string,
+    email: string,
+    membership: MembershipWithTenant,
+    db: PrismaService | Prisma.TransactionClient = this.prisma,
+    nombreCompleto: string | null = null,
+    rolPlataforma: RolPlataforma | null = null,
+  ) {
+    return this.createSessionResponse(
+      userId,
+      email,
+      membership,
+      db,
+      nombreCompleto,
+      rolPlataforma,
+    );
+  }
+
   private async createSessionResponse(
     userId: string,
     email: string,
