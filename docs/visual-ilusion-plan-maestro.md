@@ -1136,7 +1136,7 @@ Esta tabla se actualizará al integrar cada fase.
 
 | Fase | Estado | Rama | Documento técnico | Evidencia/commit | Observaciones |
 |---:|---|---|---|---|---|
-| 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | Pendiente de commit inicial | Backup verificado |
+| 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
 | 1 | PENDIENTE | `visual-ilusion/fase-1-campanas` | A crear en la fase | — | Próxima |
 | 2 | PENDIENTE | — | — | — | — |
 | 3 | PENDIENTE | — | — | — | — |
