@@ -39,6 +39,9 @@ interface HumanSelectProps {
   contentClassName?: string;
   itemClassName?: string;
   includeSelectedFallback?: boolean;
+  /** Los identificadores técnicos permanecen ocultos salvo que el código sea
+   *  información comercial útil para la persona usuaria. */
+  showCode?: boolean;
 }
 
 export function optionFromLabel(
@@ -56,7 +59,10 @@ export function optionFromLabel(
   };
 }
 
-export function optionsFromLabels(values: readonly string[], dict: DiccionarioLabels) {
+export function optionsFromLabels(
+  values: readonly string[],
+  dict: DiccionarioLabels,
+) {
   return values.map((value) => optionFromLabel(value, dict));
 }
 
@@ -75,7 +81,8 @@ export function ensureSelectedOption(
   value?: string | null,
   fallback?: HumanSelectOption,
 ) {
-  if (!value || options.some((option) => option.value === value)) return options;
+  if (!value || options.some((option) => option.value === value))
+    return options;
   return [...options, fallback ?? unknownHumanOption(value)];
 }
 
@@ -90,6 +97,7 @@ export function HumanSelect({
   contentClassName,
   itemClassName,
   includeSelectedFallback = true,
+  showCode = false,
 }: HumanSelectProps) {
   const normalizedValue = value ?? "";
   const normalizedOptions = React.useMemo(
@@ -99,8 +107,13 @@ export function HumanSelect({
         : options,
     [includeSelectedFallback, normalizedValue, options],
   );
-  const selected = normalizedOptions.find((option) => option.value === normalizedValue);
-  const groupedOptions = React.useMemo(() => groupOptions(normalizedOptions), [normalizedOptions]);
+  const selected = normalizedOptions.find(
+    (option) => option.value === normalizedValue,
+  );
+  const groupedOptions = React.useMemo(
+    () => groupOptions(normalizedOptions),
+    [normalizedOptions],
+  );
 
   // Cuando el valor elegido se pinta como chips (variantes de material), el
   // trigger deja de ser una sola línea fija: afloja el line-clamp, el alto y
@@ -142,10 +155,10 @@ export function HumanSelect({
                 key={option.value}
                 value={option.value}
                 disabled={option.disabled}
-                title={option.description ?? option.code ?? option.label}
+                title={option.description ?? option.label}
                 className={cn("py-2", itemClassName)}
               >
-                <HumanSelectItem option={option} />
+                <HumanSelectItem option={option} showCode={showCode} />
               </SelectItem>
             ))}
           </SelectGroup>
@@ -214,10 +227,18 @@ function HumanSelectTriggerValue({
   );
 }
 
-function HumanSelectItem({ option }: { option: HumanSelectOption }) {
+function HumanSelectItem({
+  option,
+  showCode,
+}: {
+  option: HumanSelectOption;
+  showCode: boolean;
+}) {
   return (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
-      {option.hideLabelInItem && option.details && option.details.length > 0 ? null : (
+      {option.hideLabelInItem &&
+      option.details &&
+      option.details.length > 0 ? null : (
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate font-medium">{option.label}</span>
           {option.badge && (
@@ -227,7 +248,7 @@ function HumanSelectItem({ option }: { option: HumanSelectOption }) {
           )}
         </span>
       )}
-      {option.code && (
+      {showCode && option.code && (
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate font-mono text-[10px] text-muted-foreground">
             {option.code}
@@ -246,7 +267,9 @@ function HumanSelectItem({ option }: { option: HumanSelectOption }) {
               key={`${detail.label}:${detail.value}`}
               className="rounded border bg-muted px-2 py-1 text-[11.5px] leading-none text-muted-foreground"
             >
-              <span className="font-medium text-foreground">{detail.label}:</span>{" "}
+              <span className="font-medium text-foreground">
+                {detail.label}:
+              </span>{" "}
               {detail.value}
             </span>
           ))}
@@ -257,7 +280,11 @@ function HumanSelectItem({ option }: { option: HumanSelectOption }) {
 }
 
 function groupOptions(options: HumanSelectOption[]) {
-  const groups: Array<{ key: string; label: string | null; options: HumanSelectOption[] }> = [];
+  const groups: Array<{
+    key: string;
+    label: string | null;
+    options: HumanSelectOption[];
+  }> = [];
   for (const option of options) {
     const key = option.group ?? "__ungrouped";
     let group = groups.find((item) => item.key === key);

@@ -15,7 +15,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { esFechaCalendario } from "@/lib/panel-periodo";
 
@@ -55,8 +60,10 @@ export function RangoReporteDialog({
   const [abierto, setAbierto] = React.useState(false);
   const [desde, setDesde] = React.useState(inicial.desde);
   const [hasta, setHasta] = React.useState(inicial.hasta);
-  const invalido = !esFechaCalendario(desde) || !esFechaCalendario(hasta) || desde > hasta;
-  const personalizado = esFechaCalendario(desdeActual) && esFechaCalendario(hastaActual);
+  const invalido =
+    !esFechaCalendario(desde) || !esFechaCalendario(hasta) || desde > hasta;
+  const personalizado =
+    esFechaCalendario(desdeActual) && esFechaCalendario(hastaActual);
 
   const cambiarApertura = (proximo: boolean) => {
     if (proximo) {
@@ -70,7 +77,9 @@ export function RangoReporteDialog({
   const aplicar = (evento: React.FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
     if (invalido) return;
-    router.push(`${pathname}?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+    router.push(
+      `${pathname}?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+    );
     setAbierto(false);
   };
 
@@ -82,12 +91,16 @@ export function RangoReporteDialog({
           ? `${fechaBreve(desdeActual)} – ${fechaBreve(hastaActual)}`
           : "Personalizado"}
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent
+        className="gp-modal gp-modal-compact"
+        overlayClassName="gp-modal-overlay"
+      >
         <form onSubmit={aplicar} className="contents">
           <DialogHeader>
             <DialogTitle>Elegir rango de fechas</DialogTitle>
             <DialogDescription>
-              Incluye ambos días. El reporte se recalcula usando la zona horaria de la empresa.
+              Incluye ambos días. El reporte se recalcula usando la zona horaria
+              de la empresa.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -114,10 +127,18 @@ export function RangoReporteDialog({
               />
             </Field>
           </FieldGroup>
-          {invalido ? <FieldError>La fecha final debe ser igual o posterior a la inicial.</FieldError> : null}
+          {invalido ? (
+            <FieldError>
+              La fecha final debe ser igual o posterior a la inicial.
+            </FieldError>
+          ) : null}
           <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
-            <Button type="submit" disabled={invalido}>Aplicar rango</Button>
+            <DialogClose render={<Button type="button" variant="outline" />}>
+              Cancelar
+            </DialogClose>
+            <Button type="submit" disabled={invalido}>
+              Aplicar rango
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

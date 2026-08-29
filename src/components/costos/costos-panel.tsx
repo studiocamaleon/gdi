@@ -412,7 +412,7 @@ export function CostosPanel({
               .map((centro) => (
                 <div key={centro.id} className="ccosto-inactivo-item">
                   <span>
-                    <strong>{centro.nombre}</strong> · {centro.codigo}
+                    <strong>{centro.nombre}</strong>
                   </span>
                   <Button
                     variant="outline"

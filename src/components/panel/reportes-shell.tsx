@@ -34,6 +34,8 @@ import {
   reportesVisibles,
 } from "@/lib/reportes-config";
 
+import styles from "./reportes-shell.module.css";
+
 export { REPORTES, reportesVisibles } from "@/lib/reportes-config";
 
 export function ReportesShell({ children }: { children: React.ReactNode }) {
@@ -62,7 +64,7 @@ export function ReportesShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="dash-scroll" style={{ padding: "26px 30px 44px" }}>
       <div className="dash">
-        <div className="dash-head">
+        <div className={`dash-head ${esIndice ? styles.indiceHead : ""}`}>
           <div className="title-block">
             {!esIndice ? (
               <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
@@ -70,6 +72,9 @@ export function ReportesShell({ children }: { children: React.ReactNode }) {
                 <ChevronRightIcon className="size-3" aria-hidden="true" />
                 <span>{activo?.categoria}</span>
               </div>
+            ) : null}
+            {esIndice ? (
+              <span className={styles.modulo}>Inteligencia de negocio</span>
             ) : null}
             <h1>{esIndice ? "Reportes" : activo?.label ?? "Reporte"}</h1>
             <div className="sub">

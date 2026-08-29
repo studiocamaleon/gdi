@@ -2,20 +2,21 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { CoinsIcon, SaveIcon } from "lucide-react";
+import {
+  AwardIcon,
+  CoinsIcon,
+  GiftIcon,
+  HistoryIcon,
+  SaveIcon,
+  SlidersHorizontalIcon,
+  TrendingUpIcon,
+  UsersRoundIcon,
+} from "lucide-react";
 import {
   actualizarFidelizacion,
   type FidelizacionResumen,
 } from "@/lib/fidelizacion-api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Field,
   FieldDescription,
@@ -33,6 +34,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import styles from "./fidelizacion-view.module.css";
+
 const fmt = (n: number) => new Intl.NumberFormat("es-AR").format(n);
 const money = (n: number) =>
   new Intl.NumberFormat("es-AR", {
@@ -40,6 +43,12 @@ const money = (n: number) =>
     currency: "ARS",
     maximumFractionDigits: 2,
   }).format(n);
+
+const etiquetaMovimiento = (tipo: string) =>
+  tipo
+    .replaceAll("_", " ")
+    .toLocaleLowerCase("es-AR")
+    .replace(/^./, (letra) => letra.toLocaleUpperCase("es-AR"));
 
 export function FidelizacionView({
   initial,
@@ -71,62 +80,107 @@ export function FidelizacionView({
     });
   const m = initial.metricas;
   return (
-    <main className="mx-auto flex w-full max-w-[1440px] flex-1 self-start flex-col gap-6 p-4 pb-20 sm:p-6 lg:p-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <CoinsIcon />
-            <h1 className="text-2xl font-semibold">Fidelización</h1>
-            <Badge variant={config.acumulacionActiva ? "default" : "secondary"}>
+    <main className={styles.pagina}>
+      <header className={styles.encabezado}>
+        <div className={styles.tituloGrupo}>
+          <span className={styles.iconoModulo} aria-hidden="true">
+            <AwardIcon />
+          </span>
+          <div>
+            <span className={styles.eyebrow}>Relaciones que vuelven</span>
+            <div className={styles.tituloLinea}>
+              <h1>Fidelización</h1>
+              <span
+                className={styles.estadoPrograma}
+                data-activa={config.acumulacionActiva}
+              >
+                <i aria-hidden="true" />
               {config.acumulacionActiva ? "Acumulando" : "Acumulación pausada"}
-            </Badge>
+              </span>
+            </div>
+            <p>
+              Convertí una parte del margen real en puntos auditables para tus
+              clientes.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Convertí una parte del margen real en puntos auditables para tus
-            clientes.
-          </p>
         </div>
         {puedeConfigurar ? (
-          <Button onClick={guardar} disabled={saving}>
+          <Button
+            className={styles.guardar}
+            onClick={guardar}
+            disabled={saving}
+          >
             <SaveIcon data-icon="inline-start" />
             {saving ? "Guardando…" : "Guardar"}
           </Button>
         ) : null}
       </header>
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className={styles.kpis} aria-label="Indicadores de fidelización">
         <Kpi
           title="Puntos vigentes"
           value={fmt(m.saldoPuntos)}
           description={`${fmt(m.reservadosPuntos)} reservados`}
+          Icon={CoinsIcon}
+          principal
         />
         <Kpi
           title="Equivalente pendiente"
           value={money(m.equivalenteMonetario)}
           description="Bonificaciones comprometidas"
+          Icon={GiftIcon}
         />
         <Kpi
           title="Puntos emitidos"
           value={fmt(m.emitidos)}
           description="Mes actual"
+          Icon={TrendingUpIcon}
         />
         <Kpi
           title="Puntos canjeados"
           value={fmt(m.canjeados)}
           description={`Mes actual · ${fmt(m.clientes)} clientes con cuenta`}
+          Icon={UsersRoundIcon}
         />
       </section>
-      <Card>
-        <CardHeader>
-          <CardTitle>Reglas del programa</CardTitle>
-          <CardDescription>
+
+      <section className={styles.reglas}>
+        <header className={styles.reglasIntro}>
+          <span className={styles.reglasIcono} aria-hidden="true">
+            <SlidersHorizontalIcon />
+          </span>
+          <span className={styles.reglasKicker}>Reglas del programa</span>
+          <h2>Una recompensa respaldada por margen real.</h2>
+          <p>
             La equivalencia queda bloqueada después del primer movimiento.
             Pausar sólo detiene nuevas ganancias; los saldos existentes siguen
             siendo canjeables.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup className="grid md:grid-cols-2 xl:grid-cols-4">
-            <Field orientation="horizontal">
+          </p>
+          <div className={styles.reglaResumen}>
+            <div>
+              <span>Acumulación</span>
+              <strong>{config.porcentajeMargen}% del margen</strong>
+            </div>
+            <div>
+              <span>Equivalencia</span>
+              <strong>
+                {fmt(config.puntosBase)} pts = {money(config.montoBase)}
+              </strong>
+            </div>
+          </div>
+        </header>
+
+        <div className={styles.reglasFormulario}>
+          <div className={styles.formularioTitulo}>
+            <div>
+              <span>Configuración</span>
+              <h2>Economía de puntos</h2>
+            </div>
+            {config.conversionBloqueada ? (
+              <span className={styles.bloqueada}>Equivalencia protegida</span>
+            ) : null}
+          </div>
+          <FieldGroup className={styles.campos}>
+            <Field orientation="horizontal" className={styles.campoSwitch}>
               <div className="flex flex-col gap-1">
                 <FieldLabel htmlFor="fidelizacion-activa">
                   Acumular puntos
@@ -142,7 +196,7 @@ export function FidelizacionView({
                 }
               />
             </Field>
-            <Field>
+            <Field className={styles.campo}>
               <FieldLabel htmlFor="fidelizacion-pct">% del margen</FieldLabel>
               <Input
                 id="fidelizacion-pct"
@@ -160,7 +214,7 @@ export function FidelizacionView({
                 }
               />
             </Field>
-            <Field>
+            <Field className={styles.campo}>
               <FieldLabel htmlFor="fidelizacion-monto">
                 Monto de referencia
               </FieldLabel>
@@ -175,7 +229,7 @@ export function FidelizacionView({
                 }
               />
             </Field>
-            <Field>
+            <Field className={styles.campo}>
               <FieldLabel htmlFor="fidelizacion-puntos">
                 Puntos equivalentes
               </FieldLabel>
@@ -191,17 +245,26 @@ export function FidelizacionView({
               />
             </Field>
           </FieldGroup>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Movimientos recientes</CardTitle>
-          <CardDescription>
+        </div>
+      </section>
+
+      <section className={styles.movimientos}>
+        <header className={styles.movimientosHeader}>
+          <span className={styles.movimientosIcono} aria-hidden="true">
+            <HistoryIcon />
+          </span>
+          <div>
+            <h2>Movimientos recientes</h2>
+            <p>
             Libro mayor de ganancias, canjes, ajustes y reversiones.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
+            </p>
+          </div>
+          <span className={styles.movimientosCantidad}>
+            {initial.recientes.length} registros
+          </span>
+        </header>
+        <div className={styles.tablaWrap}>
+          <Table className={styles.tabla}>
             <TableHeader>
               <TableRow>
                 <TableHead>Fecha</TableHead>
@@ -219,11 +282,14 @@ export function FidelizacionView({
                     </TableCell>
                     <TableCell>{mov.cliente?.nombre ?? "—"}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">
-                        {mov.tipo.replaceAll("_", " ")}
-                      </Badge>
+                      <span className={styles.tipoMovimiento}>
+                        {etiquetaMovimiento(mov.tipo)}
+                      </span>
                     </TableCell>
-                    <TableCell className="text-right font-medium">
+                    <TableCell
+                      className={styles.puntosMovimiento}
+                      data-positivo={mov.deltaPuntos > 0}
+                    >
                       {mov.deltaPuntos > 0 ? "+" : ""}
                       {fmt(mov.deltaPuntos)}
                     </TableCell>
@@ -241,8 +307,8 @@ export function FidelizacionView({
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </main>
   );
 }
@@ -251,20 +317,25 @@ function Kpi({
   title,
   value,
   description,
+  Icon,
+  principal = false,
 }: {
   title: string;
   value: string;
   description: string;
+  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  principal?: boolean;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
+    <article className={`${styles.kpi} ${principal ? styles.kpiPrincipal : ""}`}>
+      <span className={styles.kpiIcono} aria-hidden="true">
+        <Icon />
+      </span>
+      <div className={styles.kpiTexto}>
+        <span>{title}</span>
+        <strong>{value}</strong>
+        <small>{description}</small>
+      </div>
+    </article>
   );
 }

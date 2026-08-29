@@ -29,7 +29,7 @@ import {
 } from "@/components/navigation/config-regional-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
@@ -100,6 +100,8 @@ import { formatearMoneda, monedaDe } from "@/lib/moneda";
 import { monedas } from "@/lib/monedas";
 import { cn } from "@/lib/utils";
 
+import styles from "./tesoreria-view.module.css";
+
 type Modal =
   | { tipo: "transferir"; desde?: string }
   | { tipo: "arqueo"; cuenta: CuentaFondos }
@@ -154,10 +156,10 @@ function hoyEnZona(zonaHoraria: string) {
   }).format(new Date());
 }
 
-function iconoCuenta(tipo: string) {
-  if (tipo === "caja") return BanknoteIcon;
-  if (tipo === "billetera") return WalletIcon;
-  return LandmarkIcon;
+function IconoCuenta({ tipo }: { tipo: string }) {
+  if (tipo === "caja") return <BanknoteIcon />;
+  if (tipo === "billetera") return <WalletIcon />;
+  return <LandmarkIcon />;
 }
 
 function selector(
@@ -223,7 +225,10 @@ function CuentaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="gp-modal sm:max-w-lg"
+        overlayClassName="gp-modal-overlay"
+      >
         <DialogHeader>
           <DialogTitle>{cuenta ? "Editar cuenta" : "Nueva cuenta"}</DialogTitle>
           <DialogDescription>
@@ -399,7 +404,10 @@ function TransferenciaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="gp-modal sm:max-w-lg"
+        overlayClassName="gp-modal-overlay"
+      >
         <DialogHeader>
           <DialogTitle>Transferencia entre cuentas</DialogTitle>
           <DialogDescription>
@@ -551,7 +559,10 @@ function AjusteDialog({
   const invalido = Number(monto) <= 0 || concepto.trim().length < 3 || excede;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="gp-modal sm:max-w-lg"
+        overlayClassName="gp-modal-overlay"
+      >
         <DialogHeader>
           <DialogTitle>Ajuste de fondos</DialogTitle>
           <DialogDescription>
@@ -675,7 +686,10 @@ function ArqueoDialog({
     formatearMoneda(valor, monedaDe(cuenta.moneda), { decimales: 0 });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        className="gp-modal gp-modal-compact"
+        overlayClassName="gp-modal-overlay"
+      >
         <DialogHeader>
           <DialogTitle>Arqueo de caja</DialogTitle>
           <DialogDescription>
@@ -762,6 +776,9 @@ export function TesoreriaView({
       null,
   );
   const [movimientos, setMovimientos] = React.useState(PAGINA_VACIA);
+  const [cuentaMovimientosId, setCuentaMovimientosId] = React.useState<
+    string | null
+  >(seleccionId);
   const [cargando, setCargando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pagina, setPagina] = React.useState(1);
@@ -778,6 +795,10 @@ export function TesoreriaView({
   const busqueda = React.useDeferredValue(filtros.q);
   const seleccion =
     initialCuentas.find((cuenta) => cuenta.id === seleccionId) ?? null;
+  const cuentaMovimientos =
+    initialCuentas.find((cuenta) => cuenta.id === cuentaMovimientosId) ??
+    seleccion;
+  const monedaMovimientos = cuentaMovimientos?.moneda ?? monedaLocal;
   const activas = initialCuentas.filter((cuenta) => cuenta.activo);
   const fmtLocal = (valor: number) =>
     formatearMoneda(valor, moneda, { decimales: 0 });
@@ -787,6 +808,7 @@ export function TesoreriaView({
   React.useEffect(() => {
     if (!seleccionId) {
       setMovimientos(PAGINA_VACIA);
+      setCuentaMovimientosId(null);
       return;
     }
     let cancelado = false;
@@ -806,7 +828,10 @@ export function TesoreriaView({
       hasta: filtros.hasta || undefined,
     })
       .then((data) => {
-        if (!cancelado) setMovimientos(data);
+        if (!cancelado) {
+          setMovimientos(data);
+          setCuentaMovimientosId(seleccionId);
+        }
       })
       .catch((reason) => {
         if (!cancelado) {
@@ -931,18 +956,18 @@ export function TesoreriaView({
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-[1440px] flex-1 self-start flex-col gap-6 p-4 pb-20 sm:p-6 lg:p-8">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <main className={styles.pagina}>
+      <header className={styles.encabezado}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Tesorería</h1>
-          <p className="text-muted-foreground">
-            Posición real, cuentas, valores y conciliación de fondos.
-          </p>
+          <span className={styles.eyebrow}>Administración financiera</span>
+          <h1>Tesorería</h1>
+          <p>Posición real, cuentas, valores y conciliación de fondos.</p>
         </div>
         {puedeGestionar ? (
-          <div className="flex flex-wrap gap-2">
+          <div className={styles.acciones}>
             <Button
               variant="outline"
+              className={styles.accionSecundaria}
               disabled={activas.length < 2}
               onClick={() =>
                 setModal({
@@ -954,7 +979,10 @@ export function TesoreriaView({
               <ArrowLeftRightIcon data-icon="inline-start" />
               Transferir
             </Button>
-            <Button onClick={() => setModal({ tipo: "cuenta" })}>
+            <Button
+              className={styles.accionPrincipal}
+              onClick={() => setModal({ tipo: "cuenta" })}
+            >
               <PlusIcon data-icon="inline-start" />
               Nueva cuenta
             </Button>
@@ -962,68 +990,66 @@ export function TesoreriaView({
         ) : null}
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardDescription>Posición total · {monedaLocal}</CardDescription>
-            <CardTitle className="text-2xl">
-              {fmtLocal(initialKpis.posicionLocal)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
+      <section className={styles.kpis} aria-label="Posición financiera">
+        <article className={`${styles.kpi} ${styles.kpiPrincipal}`}>
+          <span className={styles.kpiIcono} aria-hidden="true">
+            <WalletIcon />
+          </span>
+          <div className={styles.kpiTexto}>
+            <span>Posición total · {monedaLocal}</span>
+            <strong>{fmtLocal(initialKpis.posicionLocal)}</strong>
+          </div>
+          <div className={styles.monedasAlternativas}>
             {Object.entries(initialKpis.posiciones)
               .filter(([codigo]) => codigo !== monedaLocal)
               .map(([codigo, valor]) => (
-                <Badge key={codigo} variant="outline">
+                <span key={codigo}>
                   {codigo} {fmtCuenta(valor, codigo)}
-                </Badge>
+                </span>
               ))}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Efectivo en cajas</CardDescription>
-            <CardTitle className="text-2xl">
-              {fmtLocal(initialKpis.efectivo)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {initialKpis.cajasActivas} cajas activas
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Bancos y billeteras</CardDescription>
-            <CardTitle className="text-2xl">
-              {fmtLocal(initialKpis.bancos)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {initialKpis.cuentasLocales} cuentas en {monedaLocal}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>A acreditar / en cartera</CardDescription>
-            <CardTitle className="text-2xl">
-              {fmtLocal(initialKpis.aAcreditar)}
-            </CardTitle>
-            <CardAction>
-              <Link
-                href="/administracion/tesoreria/acreditaciones"
-                className={buttonVariants({
-                  variant: "ghost",
-                  size: "icon-sm",
-                })}
-              >
-                <ArrowLeftRightIcon />
-                <span className="sr-only">Abrir acreditaciones y valores</span>
-              </Link>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">
-            <span>Valores: {fmtLocal(initialKpis.valoresEnCartera)}</span>
-            <div className="flex flex-wrap gap-1">
+          </div>
+        </article>
+
+        <article className={styles.kpi}>
+          <span className={styles.kpiIcono} aria-hidden="true">
+            <BanknoteIcon />
+          </span>
+          <div className={styles.kpiTexto}>
+            <span>Efectivo en cajas</span>
+            <strong>{fmtLocal(initialKpis.efectivo)}</strong>
+            <small>{initialKpis.cajasActivas} cajas activas</small>
+          </div>
+        </article>
+
+        <article className={styles.kpi}>
+          <span className={styles.kpiIcono} aria-hidden="true">
+            <LandmarkIcon />
+          </span>
+          <div className={styles.kpiTexto}>
+            <span>Bancos y billeteras</span>
+            <strong>{fmtLocal(initialKpis.bancos)}</strong>
+            <small>
+              {initialKpis.cuentasLocales} cuentas en {monedaLocal}
+            </small>
+          </div>
+        </article>
+
+        <article className={`${styles.kpi} ${styles.kpiAcreditar}`}>
+          <span className={styles.kpiIcono} aria-hidden="true">
+            <ArrowDownIcon />
+          </span>
+          <Link
+            href="/administracion/tesoreria/acreditaciones"
+            className={styles.accesoAcreditaciones}
+          >
+            <ArrowLeftRightIcon />
+            <span className="sr-only">Abrir acreditaciones y valores</span>
+          </Link>
+          <div className={styles.kpiTexto}>
+            <span>A acreditar / en cartera</span>
+            <strong>{fmtLocal(initialKpis.aAcreditar)}</strong>
+            <small>Valores: {fmtLocal(initialKpis.valoresEnCartera)}</small>
+            <div className={styles.detalleMonedas}>
               {[
                 ...new Set([
                   ...Object.keys(initialKpis.aAcreditarPorMoneda),
@@ -1032,7 +1058,7 @@ export function TesoreriaView({
               ]
                 .filter((codigo) => codigo !== monedaLocal)
                 .map((codigo) => (
-                  <Badge key={codigo} variant="outline">
+                  <span key={codigo}>
                     {codigo}: a acreditar{" "}
                     {fmtCuenta(
                       initialKpis.aAcreditarPorMoneda[codigo] ?? 0,
@@ -1043,52 +1069,48 @@ export function TesoreriaView({
                       initialKpis.valoresPorMoneda[codigo] ?? 0,
                       codigo,
                     )}
-                  </Badge>
+                  </span>
                 ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </article>
       </section>
 
-      <section className="grid min-w-0 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="min-w-0">
-          <CardHeader>
+      <section className={styles.contenidoPrincipal}>
+        <Card className={styles.panelCuentas}>
+          <CardHeader className={styles.panelHeader}>
             <CardTitle>Cuentas</CardTitle>
             <CardDescription>Activas e históricas</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-2">
+          <CardContent className={styles.listaCuentas}>
             {initialCuentas.map((cuenta) => {
-              const Icono = iconoCuenta(cuenta.tipo);
               return (
                 <button
                   key={cuenta.id}
                   type="button"
                   className={cn(
-                    "flex min-w-0 items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/60",
-                    seleccionId === cuenta.id &&
-                      "border-foreground/30 bg-muted",
-                    !cuenta.activo && "opacity-60",
+                    styles.cuenta,
+                    seleccionId === cuenta.id && styles.cuentaSeleccionada,
+                    !cuenta.activo && styles.cuentaInactiva,
                   )}
                   onClick={() => {
                     setSeleccionId(cuenta.id);
                     setPagina(1);
                   }}
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <Icono />
+                  <span className={styles.cuentaIcono}>
+                    <IconoCuenta tipo={cuenta.tipo} />
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">
-                      {cuenta.nombre}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                  <span className={styles.cuentaNombre}>
+                    <span>{cuenta.nombre}</span>
+                    <small>
                       {TIPOS_CUENTA[cuenta.tipo] ?? "Otra cuenta"} ·{" "}
                       {cuenta.moneda}
-                    </span>
+                    </small>
                   </span>
-                  <span className="shrink-0 text-sm font-medium">
+                  <strong className={styles.cuentaSaldo}>
                     {fmtCuenta(cuenta.saldo, cuenta.moneda)}
-                  </span>
+                  </strong>
                 </button>
               );
             })}
@@ -1109,22 +1131,37 @@ export function TesoreriaView({
         </Card>
 
         {seleccion ? (
-          <Card className="min-w-0">
-            <CardHeader className="border-b">
-              <CardTitle>{seleccion.nombre}</CardTitle>
-              <CardDescription>
-                {seleccion.banco ||
-                  TIPOS_CUENTA[seleccion.tipo] ||
-                  "Otra cuenta"}{" "}
-                · {seleccion.moneda}
-                {!seleccion.activo ? " · Inactiva" : ""}
-              </CardDescription>
-              <CardAction className="flex flex-wrap justify-end gap-1">
+          <Card className={styles.panelDetalle}>
+            <header className={styles.detalleHeader}>
+              <div className={styles.detalleIdentidad}>
+                <span className={styles.detalleIcono} aria-hidden="true">
+                  <IconoCuenta tipo={seleccion.tipo} />
+                </span>
+                <div>
+                  <span className={styles.detalleKicker}>
+                    Cuenta seleccionada
+                  </span>
+                  <h2>{seleccion.nombre}</h2>
+                  <p>
+                    {seleccion.banco ||
+                      TIPOS_CUENTA[seleccion.tipo] ||
+                      "Otra cuenta"}{" "}
+                    · {seleccion.moneda}
+                    {!seleccion.activo ? " · Inactiva" : ""}
+                  </p>
+                </div>
+              </div>
+              <div className={styles.saldoActual}>
+                <span>Saldo actual</span>
+                <strong>{fmtCuenta(seleccion.saldo, seleccion.moneda)}</strong>
+              </div>
+              <div className={styles.detalleAcciones}>
                 {puedeGestionar ? (
                   <>
                     <Button
                       variant="ghost"
                       size="sm"
+                      className={styles.detalleAccion}
                       onClick={() =>
                         setModal({ tipo: "cuenta", cuenta: seleccion })
                       }
@@ -1136,6 +1173,7 @@ export function TesoreriaView({
                       <Button
                         variant="ghost"
                         size="sm"
+                        className={styles.detalleAccion}
                         onClick={() =>
                           setModal({ tipo: "ajuste", cuenta: seleccion })
                         }
@@ -1147,6 +1185,7 @@ export function TesoreriaView({
                     <Button
                       variant="ghost"
                       size="sm"
+                      className={styles.detalleAccion}
                       onClick={() =>
                         void ejecutar(
                           () =>
@@ -1166,6 +1205,7 @@ export function TesoreriaView({
                       <Button
                         variant="ghost"
                         size="sm"
+                        className={styles.detalleAccion}
                         onClick={() =>
                           setModal({ tipo: "arqueo", cuenta: seleccion })
                         }
@@ -1176,11 +1216,21 @@ export function TesoreriaView({
                     ) : null}
                   </>
                 ) : null}
-              </CardAction>
-            </CardHeader>
+              </div>
+            </header>
 
-            <CardContent className="flex min-w-0 flex-col gap-4">
-              <div className="flex flex-wrap items-end gap-3 rounded-lg bg-muted/40 p-3">
+            <CardContent className={styles.detalleContenido}>
+              <div className={styles.filtros}>
+                <div className={styles.filtrosHeader}>
+                  <div>
+                    <SearchIcon aria-hidden="true" />
+                    <span>Explorar movimientos</span>
+                  </div>
+                  <small>
+                    {movimientos.total}{" "}
+                    {movimientos.total === 1 ? "registro" : "registros"}
+                  </small>
+                </div>
                 <Field className="min-w-56 flex-[1_1_20rem]">
                   <FieldLabel htmlFor="tes-buscar">Buscar</FieldLabel>
                   <div className="relative">
@@ -1283,208 +1333,219 @@ export function TesoreriaView({
                 </Alert>
               ) : null}
 
-              {cargando ? (
-                <div className="flex flex-col gap-2">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <Skeleton key={index} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : movimientos.items.length > 0 ? (
-                <>
-                  <div className="hidden lg:block">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Movimiento</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead className="text-right">Importe</TableHead>
-                          <TableHead className="text-right">Saldo</TableHead>
-                          {puedeGestionar ? <TableHead /> : null}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {movimientos.items.map((movimiento) => (
-                          <TableRow key={movimiento.id}>
-                            <TableCell>
-                              <div>{fechaNumerica(movimiento.fecha)}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {fechaHora(movimiento.createdAt).split(", ")[1]}
-                              </div>
-                            </TableCell>
-                            <TableCell className="max-w-[360px] whitespace-normal">
-                              <div className="font-medium">
-                                {movimiento.concepto}
-                              </div>
-                              <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
-                                <span>{ORIGENES[movimiento.origenTipo]}</span>
-                                {movimiento.referencia ? (
-                                  <span>· {movimiento.referencia}</span>
-                                ) : null}
-                                {movimiento.actorNombre ? (
-                                  <span>· {movimiento.actorNombre}</span>
-                                ) : null}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  movimiento.estadoConciliacion === "conciliado"
-                                    ? "secondary"
-                                    : movimiento.estadoConciliacion ===
-                                        "diferencia"
-                                      ? "destructive"
-                                      : "outline"
-                                }
-                              >
-                                {ESTADOS_CONCILIACION[
-                                  movimiento.estadoConciliacion
-                                ] ?? movimiento.estadoConciliacion}
-                              </Badge>
-                            </TableCell>
-                            <TableCell
-                              className={cn(
-                                "text-right font-medium",
-                                movimiento.tipo === "salida" &&
-                                  "text-destructive",
-                              )}
-                            >
-                              {movimiento.tipo === "entrada" ? "+" : "−"}
-                              {fmtCuenta(movimiento.monto, seleccion.moneda)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {fmtCuenta(
-                                movimiento.saldoPosterior,
-                                seleccion.moneda,
-                              )}
-                            </TableCell>
-                            {puedeGestionar ? (
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  className={cn(
-                                    movimiento.estadoConciliacion ===
-                                      "conciliado" &&
-                                      "text-[var(--ok)] disabled:opacity-100",
-                                  )}
-                                  disabled={
-                                    movimiento.estadoConciliacion ===
-                                    "conciliado"
-                                  }
-                                  onClick={() =>
-                                    void ejecutar(
-                                      () =>
-                                        conciliarMovimientoFondos(
-                                          seleccion.id,
-                                          movimiento.id,
-                                          { estado: "conciliado" },
-                                        ),
-                                      "Movimiento conciliado.",
-                                    )
-                                  }
-                                >
-                                  <CheckCircle2Icon />
-                                  <span className="sr-only">
-                                    {movimiento.estadoConciliacion ===
-                                    "conciliado"
-                                      ? "Movimiento conciliado"
-                                      : "Marcar conciliado"}
-                                  </span>
-                                </Button>
-                              </TableCell>
-                            ) : null}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <div className="flex flex-col gap-2 lg:hidden">
-                    {movimientos.items.map((movimiento) => (
-                      <Card key={movimiento.id} size="sm">
-                        <CardHeader>
-                          <CardTitle>{movimiento.concepto}</CardTitle>
-                          <CardDescription>
-                            {fechaHora(movimiento.createdAt)}
-                          </CardDescription>
-                          <CardAction>
-                            <span className="font-medium">
-                              {movimiento.tipo === "entrada" ? "+" : "−"}
-                              {fmtCuenta(movimiento.monto, seleccion.moneda)}
-                            </span>
-                          </CardAction>
-                        </CardHeader>
-                        <CardContent className="flex items-center justify-between gap-2">
-                          <Badge variant="outline">
-                            {ESTADOS_CONCILIACION[
-                              movimiento.estadoConciliacion
-                            ] ?? movimiento.estadoConciliacion}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            Saldo{" "}
-                            {fmtCuenta(
-                              movimiento.saldoPosterior,
-                              seleccion.moneda,
-                            )}
-                          </span>
-                        </CardContent>
-                      </Card>
+              <div
+                className={styles.extractoArea}
+                data-cargando={cargando}
+                aria-busy={cargando}
+              >
+                {cargando && movimientos.items.length === 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <Skeleton key={index} className="h-12 w-full" />
                     ))}
                   </div>
-                  <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      {movimientos.total} movimientos · página{" "}
-                      {movimientos.page} de {movimientos.pages}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={pagina <= 1}
-                        onClick={() =>
-                          setPagina((actual) => Math.max(1, actual - 1))
-                        }
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={pagina >= movimientos.pages}
-                        onClick={() => setPagina((actual) => actual + 1)}
-                      >
-                        Siguiente
-                      </Button>
+                ) : movimientos.items.length > 0 ? (
+                  <>
+                    <div className={`${styles.tablaMarco} hidden lg:block`}>
+                      <Table className={styles.tabla}>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Fecha</TableHead>
+                            <TableHead>Movimiento</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead className="text-right">
+                              Importe
+                            </TableHead>
+                            <TableHead className="text-right">Saldo</TableHead>
+                            {puedeGestionar ? <TableHead /> : null}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {movimientos.items.map((movimiento) => (
+                            <TableRow key={movimiento.id}>
+                              <TableCell className={styles.fechaMovimiento}>
+                                <div>{fechaNumerica(movimiento.fecha)}</div>
+                                <small>
+                                  {
+                                    fechaHora(movimiento.createdAt).split(
+                                      ", ",
+                                    )[1]
+                                  }
+                                </small>
+                              </TableCell>
+                              <TableCell className={styles.conceptoMovimiento}>
+                                <div>{movimiento.concepto}</div>
+                                <small>
+                                  <span>{ORIGENES[movimiento.origenTipo]}</span>
+                                  {movimiento.referencia ? (
+                                    <span>· {movimiento.referencia}</span>
+                                  ) : null}
+                                  {movimiento.actorNombre ? (
+                                    <span>· {movimiento.actorNombre}</span>
+                                  ) : null}
+                                </small>
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className={styles.estadoMovimiento}
+                                  data-estado={movimiento.estadoConciliacion}
+                                >
+                                  {ESTADOS_CONCILIACION[
+                                    movimiento.estadoConciliacion
+                                  ] ?? movimiento.estadoConciliacion}
+                                </span>
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  styles.importeMovimiento,
+                                  movimiento.tipo === "salida" &&
+                                    styles.importeSalida,
+                                )}
+                              >
+                                {movimiento.tipo === "entrada" ? "+" : "−"}
+                                {fmtCuenta(movimiento.monto, monedaMovimientos)}
+                              </TableCell>
+                              <TableCell className={styles.saldoMovimiento}>
+                                {fmtCuenta(
+                                  movimiento.saldoPosterior,
+                                  monedaMovimientos,
+                                )}
+                              </TableCell>
+                              {puedeGestionar ? (
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className={cn(
+                                      styles.conciliar,
+                                      movimiento.estadoConciliacion ===
+                                        "conciliado" &&
+                                        "text-[var(--ok)] disabled:opacity-100",
+                                    )}
+                                    disabled={
+                                      movimiento.estadoConciliacion ===
+                                      "conciliado"
+                                    }
+                                    onClick={() =>
+                                      void ejecutar(
+                                        () =>
+                                          conciliarMovimientoFondos(
+                                            seleccion.id,
+                                            movimiento.id,
+                                            { estado: "conciliado" },
+                                          ),
+                                        "Movimiento conciliado.",
+                                      )
+                                    }
+                                  >
+                                    <CheckCircle2Icon />
+                                    <span className="sr-only">
+                                      {movimiento.estadoConciliacion ===
+                                      "conciliado"
+                                        ? "Movimiento conciliado"
+                                        : "Marcar conciliado"}
+                                    </span>
+                                  </Button>
+                                </TableCell>
+                              ) : null}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
-                  </div>
-                </>
-              ) : !error ? (
-                <Empty className="border">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <FileTextIcon />
-                    </EmptyMedia>
-                    <EmptyTitle>Sin movimientos para mostrar</EmptyTitle>
-                    <EmptyDescription>
-                      Cambiá los filtros o registrá el primer movimiento de la
-                      cuenta.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  <EmptyContent>
-                    {puedeGestionar && seleccion.activo ? (
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          setModal({ tipo: "ajuste", cuenta: seleccion })
-                        }
-                      >
-                        <PlusIcon data-icon="inline-start" />
-                        Registrar ajuste
-                      </Button>
-                    ) : null}
-                  </EmptyContent>
-                </Empty>
-              ) : null}
+                    <div
+                      className={`${styles.movimientosMobileLista} flex flex-col gap-2 lg:hidden`}
+                    >
+                      {movimientos.items.map((movimiento) => (
+                        <Card
+                          key={movimiento.id}
+                          size="sm"
+                          className={styles.movimientoMobile}
+                        >
+                          <CardHeader>
+                            <CardTitle>{movimiento.concepto}</CardTitle>
+                            <CardDescription>
+                              {fechaHora(movimiento.createdAt)}
+                            </CardDescription>
+                            <CardAction>
+                              <span className="font-medium">
+                                {movimiento.tipo === "entrada" ? "+" : "−"}
+                                {fmtCuenta(movimiento.monto, monedaMovimientos)}
+                              </span>
+                            </CardAction>
+                          </CardHeader>
+                          <CardContent className="flex items-center justify-between gap-2">
+                            <Badge variant="outline">
+                              {ESTADOS_CONCILIACION[
+                                movimiento.estadoConciliacion
+                              ] ?? movimiento.estadoConciliacion}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              Saldo{" "}
+                              {fmtCuenta(
+                                movimiento.saldoPosterior,
+                                monedaMovimientos,
+                              )}
+                            </span>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                    <div className={styles.paginacion}>
+                      <p className="text-sm text-muted-foreground">
+                        {movimientos.total} movimientos · página{" "}
+                        {movimientos.page} de {movimientos.pages}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={cargando || pagina <= 1}
+                          onClick={() =>
+                            setPagina((actual) => Math.max(1, actual - 1))
+                          }
+                        >
+                          Anterior
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={cargando || pagina >= movimientos.pages}
+                          onClick={() => setPagina((actual) => actual + 1)}
+                        >
+                          Siguiente
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                ) : !error ? (
+                  <Empty className="border">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <FileTextIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>Sin movimientos para mostrar</EmptyTitle>
+                      <EmptyDescription>
+                        Cambiá los filtros o registrá el primer movimiento de la
+                        cuenta.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                      {puedeGestionar && seleccion.activo ? (
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            setModal({ tipo: "ajuste", cuenta: seleccion })
+                          }
+                        >
+                          <PlusIcon data-icon="inline-start" />
+                          Registrar ajuste
+                        </Button>
+                      ) : null}
+                    </EmptyContent>
+                  </Empty>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
         ) : null}

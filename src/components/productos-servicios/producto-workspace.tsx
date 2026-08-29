@@ -23,7 +23,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { HumanSelect } from "@/components/ui/human-select";
@@ -78,14 +84,10 @@ import {
   modoActivacionLabels,
   modoCalculoCargoLabels,
 } from "@/lib/labels-humanos";
+import styles from "./producto-workspace.module.css";
 
 export type ProductoWorkspaceTab =
-  | "identidad"
-  | "rutas"
-  | "pasos"
-  | "cargos"
-  | "herramientas"
-  | "pricing";
+  "identidad" | "rutas" | "pasos" | "cargos" | "herramientas" | "pricing";
 
 interface Props {
   producto: ProductoDetalle;
@@ -138,7 +140,8 @@ function normalizarMedidasPorModo(
   if (!modoMedidasUsaPredefinidas(modo)) return [];
   const normalizadas = normalizeMedidasDraft(medidas);
   if (modo !== "FIJA") return normalizadas;
-  const defaultMedida = normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
+  const defaultMedida =
+    normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
   return defaultMedida ? [{ ...defaultMedida, esDefault: true }] : [];
 }
 
@@ -153,10 +156,16 @@ function MedidasPredefinidasEditor({
     id: string,
     patch: Partial<MedidaPredefinidaProducto>,
   ) => {
-    onChange(medidas.map((medida) => (medida.id === id ? { ...medida, ...patch } : medida)));
+    onChange(
+      medidas.map((medida) =>
+        medida.id === id ? { ...medida, ...patch } : medida,
+      ),
+    );
   };
   const setDefault = (id: string) => {
-    onChange(medidas.map((medida) => ({ ...medida, esDefault: medida.id === id })));
+    onChange(
+      medidas.map((medida) => ({ ...medida, esDefault: medida.id === id })),
+    );
   };
   const removeMedida = (id: string) => {
     const next = medidas.filter((medida) => medida.id !== id);
@@ -168,13 +177,22 @@ function MedidasPredefinidasEditor({
   };
   return (
     <div className="field">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
         <label>Medidas disponibles</label>
         <div style={{ display: "flex", gap: 4 }}>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])}
+            onClick={() =>
+              onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])
+            }
           >
             <PlusIcon />
             Agregar medida
@@ -182,7 +200,9 @@ function MedidasPredefinidasEditor({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => onChange([...medidas, nuevaMedidaPlancha(medidas.length)])}
+            onClick={() =>
+              onChange([...medidas, nuevaMedidaPlancha(medidas.length)])
+            }
             disabled={medidas.some((medida) => medida.tipo === "pliego_util")}
             title="La pieza es toda el área útil del pliego: se calcula al cotizar con el papel y la máquina del paso de impresión"
           >
@@ -205,7 +225,9 @@ function MedidasPredefinidasEditor({
             <input
               type="text"
               value={medida.nombre}
-              onChange={(event) => updateMedida(medida.id, { nombre: event.target.value })}
+              onChange={(event) =>
+                updateMedida(medida.id, { nombre: event.target.value })
+              }
               placeholder={medidaLabel({ ...medida, nombre: "" })}
               aria-label={`Nombre de medida ${index + 1}`}
             />
@@ -226,7 +248,9 @@ function MedidasPredefinidasEditor({
                   min="0"
                   value={medida.anchoMm || ""}
                   onChange={(event) =>
-                    updateMedida(medida.id, { anchoMm: Number(event.target.value) || 0 })
+                    updateMedida(medida.id, {
+                      anchoMm: Number(event.target.value) || 0,
+                    })
                   }
                   placeholder="Ancho mm"
                   aria-label={`Ancho de medida ${index + 1}`}
@@ -236,7 +260,9 @@ function MedidasPredefinidasEditor({
                   min="0"
                   value={medida.altoMm || ""}
                   onChange={(event) =>
-                    updateMedida(medida.id, { altoMm: Number(event.target.value) || 0 })
+                    updateMedida(medida.id, {
+                      altoMm: Number(event.target.value) || 0,
+                    })
                   }
                   placeholder="Alto mm"
                   aria-label={`Alto de medida ${index + 1}`}
@@ -254,7 +280,10 @@ function MedidasPredefinidasEditor({
                   : "Marcar como predeterminada"
               }
             >
-              <StarIcon size={13} fill={medida.esDefault ? "currentColor" : "none"} />
+              <StarIcon
+                size={13}
+                fill={medida.esDefault ? "currentColor" : "none"}
+              />
             </button>
             <button
               type="button"
@@ -269,8 +298,8 @@ function MedidasPredefinidasEditor({
         ))}
       </div>
       <span className="help">
-        La medida con estrella se usa por defecto al cotizar y mantiene la compatibilidad
-        con el motor.
+        La medida con estrella se usa por defecto al cotizar y mantiene la
+        compatibilidad con el motor.
       </span>
     </div>
   );
@@ -349,7 +378,9 @@ function PersonalizacionesEditor({
               </button>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}
+          >
             <div className="field">
               <label>
                 {p.modoMedida === "FIJA" ? "Ancho (mm)" : "Ancho sugerido (mm)"}
@@ -434,17 +465,22 @@ const TABS: Array<{
   { id: "pricing", label: "Pricing", icon: BanknoteIcon },
 ];
 
-function tabValidaciones(producto: ProductoDetalle): Record<ProductoWorkspaceTab, ValidacionTab> {
+function tabValidaciones(
+  producto: ProductoDetalle,
+): Record<ProductoWorkspaceTab, ValidacionTab> {
   const rutas = producto.rutasAlternativas;
   const sinRutas = rutas.length === 0;
   const sinPreferida = rutas.length > 0 && !rutas.some((r) => r.esPreferida);
-  const pasosIncompletos = rutas.some((r) => r.configPasos.length < r.ruta.pasos.length);
+  const pasosIncompletos = rutas.some(
+    (r) => r.configPasos.length < r.ruta.pasos.length,
+  );
   const precioConfig = producto.precioConfigJson as TabPrecioConfig | null;
 
   return {
-    identidad: producto.codigo && producto.nombre
-      ? { estado: "ok", label: "Completo" }
-      : { estado: "error", label: "Faltan datos" },
+    identidad:
+      producto.codigo && producto.nombre
+        ? { estado: "ok", label: "Completo" }
+        : { estado: "error", label: "Faltan datos" },
     rutas: sinRutas
       ? { estado: "error", label: "Sin rutas" }
       : sinPreferida
@@ -470,22 +506,12 @@ function EstadoBadge({ estado, label }: ValidacionTab) {
       : estado === "warning"
         ? CircleAlertIcon
         : CircleAlertIcon;
-  const color =
-    estado === "ok"
-      ? "var(--ok)"
-      : estado === "warning"
-        ? "var(--warning, #d97706)"
-        : "var(--danger, #dc2626)";
   return (
     <span
-      className="status"
+      className={styles.tabStatus}
+      data-state={estado}
       title={label}
       aria-label={label}
-      style={{
-        background: "transparent",
-        padding: 0,
-        color,
-      }}
     >
       <Icon className="size-4" />
     </span>
@@ -502,7 +528,10 @@ export function ProductoWorkspace({
   canManage,
 }: Props) {
   const router = useRouter();
-  const validaciones = React.useMemo(() => tabValidaciones(producto), [producto]);
+  const validaciones = React.useMemo(
+    () => tabValidaciones(producto),
+    [producto],
+  );
 
   const irATab = (tab: ProductoWorkspaceTab) => {
     router.push(tabHref(tab));
@@ -522,47 +551,69 @@ export function ProductoWorkspace({
   };
 
   return (
-    <div className="content">
-      <div className="wizard-page">
-        <Link href="/productos-servicios" className="back-link">
+    <main className={styles.page}>
+      <div className={styles.shell}>
+        <Link href="/productos-servicios" className={styles.back}>
           <ArrowLeftIcon className="size-4" />
           Volver al catálogo
         </Link>
-        <div className="detail-head">
-          <div className="title-block">
-            <h1 style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-              {producto.nombre}
-              <span className={producto.activo ? "tag ok" : "tag muted"}>
-                <span className="d" />
+        <header className={styles.header}>
+          <span className={styles.headerIcon} aria-hidden="true">
+            <TagIcon />
+          </span>
+          <div className={styles.headerBody}>
+            <span className={styles.eyebrow}>Ficha de producto</span>
+            <div className={styles.titleRow}>
+              <h1>{producto.nombre}</h1>
+              <span
+                className={styles.productStatus}
+                data-active={producto.activo || undefined}
+              >
+                <span />
                 {producto.activo ? "Publicado" : "Borrador"}
               </span>
-            </h1>
+            </div>
             {producto.descripcion ? (
-              <div style={{ fontSize: 13, color: "var(--muted-text)", marginTop: 6 }}>
-                {producto.descripcion}
-              </div>
-            ) : null}
+              <p className={styles.description}>{producto.descripcion}</p>
+            ) : (
+              <p className={styles.description}>
+                Configurá su identidad, producción y precio antes de publicarlo.
+              </p>
+            )}
+            <div className={styles.meta}>
+              {producto.subcategoriaComercial?.nombre ? (
+                <span>{producto.subcategoriaComercial.nombre}</span>
+              ) : null}
+              <span>
+                {producto.unidadComercial === "m2"
+                  ? "Venta por metro cuadrado"
+                  : producto.unidadComercial === "metro_lineal"
+                    ? "Venta por metro lineal"
+                    : "Venta por unidad"}
+              </span>
+            </div>
           </div>
-        </div>
+        </header>
 
-        <ProductoValidacionPanel productoId={producto.id} />
+        <div className={styles.validation}>
+          <ProductoValidacionPanel productoId={producto.id} />
+        </div>
         {!canManage ? (
           <Alert className="mb-4">
             <CircleAlertIcon />
             <AlertTitle>Modo de solo lectura</AlertTitle>
-            <AlertDescription>Podés consultar toda la configuración, pero necesitás el permiso de gestión de costos para modificarla.</AlertDescription>
+            <AlertDescription>
+              Podés consultar toda la configuración, pero necesitás el permiso
+              de gestión de costos para modificarla.
+            </AlertDescription>
           </Alert>
         ) : null}
 
-        <Tabs value={activeTab} onValueChange={(value) => irATab(value as ProductoWorkspaceTab)}>
-          <div
-            className="wiz-tabs"
-            style={{
-              gridTemplateColumns: "none",
-              gridAutoFlow: "column",
-              gridAutoColumns: "minmax(0, 1fr)",
-            }}
-          >
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => irATab(value as ProductoWorkspaceTab)}
+        >
+          <nav className={styles.tabs} aria-label="Secciones del producto">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -570,46 +621,53 @@ export function ProductoWorkspace({
                   key={tab.id}
                   role="tab"
                   aria-selected={activeTab === tab.id}
-                  className={`wiz-tab ${activeTab === tab.id ? "active" : ""} ${tab.id === "cargos" ? "optional" : ""}`}
+                  className={styles.tab}
+                  data-active={activeTab === tab.id || undefined}
                   href={tabHref(tab.id)}
                 >
-                  <span className="ico"><Icon className="size-4" /></span>
-                  <span className="lbl">{tab.label}</span>
+                  <span className={styles.tabIcon}>
+                    <Icon className="size-4" />
+                  </span>
+                  <span className={styles.tabLabel}>{tab.label}</span>
                   <EstadoBadge {...validaciones[tab.id]} />
                 </Link>
               );
             })}
-          </div>
+          </nav>
 
-        <TabsContent value={activeTab}>
-          <fieldset disabled={!canManage} className="contents">
-          {activeTab === "identidad" && <IdentidadTab producto={producto} />}
-          {activeTab === "rutas" && (
-            <RutasTab
-              producto={producto}
-              rutasDisponibles={rutasDisponibles}
-            />
-          )}
-          {activeTab === "pasos" && (
-            <PasosTab
-              producto={producto}
-              rutaAltId={rutaAltId}
-              catalogoFamilias={catalogoFamilias}
-            />
-          )}
-          {activeTab === "cargos" && (
-            <CargosTab
-              producto={producto}
-              catalogoCargos={catalogoCargos}
-            />
-          )}
-          {activeTab === "herramientas" && <HerramientasTab producto={producto} />}
-          {activeTab === "pricing" && <PricingTab producto={producto} />}
-          </fieldset>
-        </TabsContent>
-      </Tabs>
+          <TabsContent value={activeTab}>
+            <fieldset disabled={!canManage} className="contents">
+              {activeTab === "identidad" && (
+                <IdentidadTab producto={producto} />
+              )}
+              {activeTab === "rutas" && (
+                <RutasTab
+                  producto={producto}
+                  rutasDisponibles={rutasDisponibles}
+                />
+              )}
+              {activeTab === "pasos" && (
+                <PasosTab
+                  producto={producto}
+                  rutaAltId={rutaAltId}
+                  catalogoFamilias={catalogoFamilias}
+                />
+              )}
+              {activeTab === "cargos" && (
+                <CargosTab
+                  producto={producto}
+                  catalogoCargos={catalogoCargos}
+                />
+              )}
+              {activeTab === "herramientas" && (
+                <HerramientasTab producto={producto} />
+              )}
+              {activeTab === "pricing" && <PricingTab producto={producto} />}
+            </fieldset>
+          </TabsContent>
+        </Tabs>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -635,15 +693,25 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     }),
     [producto],
   );
-  const [identidadPersistida, setIdentidadPersistida] = React.useState(identidadInicial);
+  const [identidadPersistida, setIdentidadPersistida] =
+    React.useState(identidadInicial);
   const [nombre, setNombre] = React.useState(producto.nombre);
-  const [descripcion, setDescripcion] = React.useState(producto.descripcion ?? "");
-  const [catalogoComercial, setCatalogoComercial] = React.useState<ProductoCategoriaComercial[]>([]);
-  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] = React.useState(
-    producto.subcategoriaComercial?.codigo ?? "producto_a_medida",
+  const [descripcion, setDescripcion] = React.useState(
+    producto.descripcion ?? "",
   );
-  const [unidadComercial, setUnidadComercial] = React.useState(producto.unidadComercial);
-  const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(producto.modoMedidas);
+  const [catalogoComercial, setCatalogoComercial] = React.useState<
+    ProductoCategoriaComercial[]
+  >([]);
+  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] =
+    React.useState(
+      producto.subcategoriaComercial?.codigo ?? "producto_a_medida",
+    );
+  const [unidadComercial, setUnidadComercial] = React.useState(
+    producto.unidadComercial,
+  );
+  const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(
+    producto.modoMedidas,
+  );
   const [minimoComercialPolitica, setMinimoComercialPolitica] =
     React.useState<MinimoComercialPolitica>(
       producto.minimoComercialPolitica ?? "NONE",
@@ -655,8 +723,8 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     React.useState<MinimoComercialBase>(
       producto.minimoComercialBase ?? "cantidad_comercial",
     );
-  const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(() =>
-    getMedidasPredefinidas(producto),
+  const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(
+    () => getMedidasPredefinidas(producto),
   );
   const [personalizaciones, setPersonalizaciones] = React.useState<
     PersonalizacionProducto[]
@@ -711,8 +779,10 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   const identidadPersistidaNormalizada = React.useMemo(
     () => ({
       ...identidadPersistida,
-      medidas:
-        normalizarMedidasPorModo(identidadPersistida.modoMedidas, identidadPersistida.medidas),
+      medidas: normalizarMedidasPorModo(
+        identidadPersistida.modoMedidas,
+        identidadPersistida.medidas,
+      ),
       personalizaciones: normalizePersonalizaciones(
         identidadPersistida.personalizaciones,
       ),
@@ -720,7 +790,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     [identidadPersistida],
   );
   const dirty = React.useMemo(
-    () => JSON.stringify(identidadActual) !== JSON.stringify(identidadPersistidaNormalizada),
+    () =>
+      JSON.stringify(identidadActual) !==
+      JSON.stringify(identidadPersistidaNormalizada),
     [identidadActual, identidadPersistidaNormalizada],
   );
 
@@ -730,7 +802,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         setCatalogoComercial(catalogo);
         setSubcategoriaComercialCodigo((current) =>
           catalogo.some((categoria) =>
-            categoria.subcategorias.some((subcategoria) => subcategoria.codigo === current),
+            categoria.subcategorias.some(
+              (subcategoria) => subcategoria.codigo === current,
+            ),
           )
             ? current
             : (catalogo[0]?.subcategorias[0]?.codigo ?? "producto_a_medida"),
@@ -749,10 +823,10 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     minimoComercialBase === "pliegos_impresos"
       ? "pliegos"
       : unidadComercial === "m2"
-      ? "m²"
-      : unidadComercial === "metro_lineal"
-        ? "ml"
-        : "u.";
+        ? "m²"
+        : unidadComercial === "metro_lineal"
+          ? "ml"
+          : "u.";
 
   const guardar = async () => {
     if (!nombre.trim()) {
@@ -763,12 +837,15 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     const medidasNormalizadas = sinMedida
       ? []
       : normalizarMedidasPorModo(modoMedidas, medidas);
-    const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
+    const medidaDefault = medidasNormalizadas.find(
+      (medida) => medida.esDefault,
+    );
     if (!sinMedida && modoMedidas === "FIJA" && !medidaDefault) {
       toast.error("Agregá al menos una medida predefinida.");
       return;
     }
-    const personalizacionesNormalizadas = normalizePersonalizaciones(personalizaciones);
+    const personalizacionesNormalizadas =
+      normalizePersonalizaciones(personalizaciones);
     setGuardando(true);
     try {
       await actualizarProducto(producto.id, {
@@ -827,18 +904,21 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         <div className="wiz-section-head">
           <div className="body">
             <h2>Identidad</h2>
-            <div className="helptext">Cómo se llama y se reconoce el producto en el catálogo.</div>
+            <div className="helptext">
+              Cómo se llama y se reconoce el producto en el catálogo.
+            </div>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="field">
-            <label>Código</label>
-            <input type="text" className="locked" value={producto.codigo} readOnly />
-            <span className="help">El código no se puede modificar.</span>
-          </div>
-          <div className="field">
-            <label>Nombre <span className="req">*</span></label>
-            <input type="text" value={nombre} onChange={(event) => setNombre(event.target.value)} />
+            <label>
+              Nombre <span className="req">*</span>
+            </label>
+            <input
+              type="text"
+              value={nombre}
+              onChange={(event) => setNombre(event.target.value)}
+            />
           </div>
           <div className="field">
             <label>Descripción</label>
@@ -856,9 +936,19 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
               }
               options={subcategoriaOptions}
             />
-            <span className="help">Agrupa reportes y define specs visibles en propuestas.</span>
+            <span className="help">
+              Agrupa reportes y define specs visibles en propuestas.
+            </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingTop: 6,
+              borderTop: "1px solid var(--hairline)",
+            }}
+          >
             <div>
               <div style={{ fontWeight: 500, fontSize: 13 }}>Publicado</div>
               <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
@@ -881,41 +971,112 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         <div className="wiz-section-head">
           <div className="body">
             <h2>Comercial y medidas</h2>
-            <div className="helptext">Cómo se cobra y cómo se manejan las medidas al cotizar.</div>
+            <div className="helptext">
+              Cómo se cobra y cómo se manejan las medidas al cotizar.
+            </div>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="field">
             <label>¿Cómo se cobra?</label>
             <div className="segmented" style={{ width: "100%" }}>
-              <button type="button" className={unidadComercial === "unidad" ? "on" : ""} onClick={() => setUnidadComercial("unidad")} style={{ flex: 1 }}>Por unidad</button>
-              <button type="button" className={unidadComercial === "m2" ? "on" : ""} onClick={() => setUnidadComercial("m2")} style={{ flex: 1 }}>Por m²</button>
-              <button type="button" className={unidadComercial === "metro_lineal" ? "on" : ""} onClick={() => setUnidadComercial("metro_lineal")} style={{ flex: 1 }}>Por metro lineal</button>
+              <button
+                type="button"
+                className={unidadComercial === "unidad" ? "on" : ""}
+                onClick={() => setUnidadComercial("unidad")}
+                style={{ flex: 1 }}
+              >
+                Por unidad
+              </button>
+              <button
+                type="button"
+                className={unidadComercial === "m2" ? "on" : ""}
+                onClick={() => setUnidadComercial("m2")}
+                style={{ flex: 1 }}
+              >
+                Por m²
+              </button>
+              <button
+                type="button"
+                className={unidadComercial === "metro_lineal" ? "on" : ""}
+                onClick={() => setUnidadComercial("metro_lineal")}
+                style={{ flex: 1 }}
+              >
+                Por metro lineal
+              </button>
             </div>
           </div>
           {unidadComercial === "unidad" && (
             <div className="field">
               <label>¿El producto tiene medida?</label>
               <div className="segmented" style={{ width: "100%" }}>
-                <button type="button" className={!sinMedida ? "on" : ""} onClick={() => setSinMedida(false)} style={{ flex: 1 }}>Con medida</button>
-                <button type="button" className={sinMedida ? "on" : ""} onClick={() => setSinMedida(true)} style={{ flex: 1 }}>Sin medida (por unidad)</button>
+                <button
+                  type="button"
+                  className={!sinMedida ? "on" : ""}
+                  onClick={() => setSinMedida(false)}
+                  style={{ flex: 1 }}
+                >
+                  Con medida
+                </button>
+                <button
+                  type="button"
+                  className={sinMedida ? "on" : ""}
+                  onClick={() => setSinMedida(true)}
+                  style={{ flex: 1 }}
+                >
+                  Sin medida (por unidad)
+                </button>
               </div>
-              <div className="helptext">Merchandising comprado (taza, remera, lapicera) va «sin medida»: se cotiza por unidad y la estampa la maneja la personalización.</div>
+              <div className="helptext">
+                Merchandising comprado (taza, remera, lapicera) va «sin medida»:
+                se cotiza por unidad y la estampa la maneja la personalización.
+              </div>
             </div>
           )}
           {!sinMedida && (
             <div className="field">
               <label>Manejo de medidas</label>
               <div className="segmented" style={{ width: "100%" }}>
-                <button type="button" className={modoMedidas === "FIJA" ? "on" : ""} onClick={() => setModoMedidas("FIJA")} style={{ flex: 1 }}>Fija</button>
-                <button type="button" className={modoMedidas === "LIBRE" ? "on" : ""} onClick={() => setModoMedidas("LIBRE")} style={{ flex: 1 }}>Libre</button>
-                <button type="button" className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""} onClick={() => setModoMedidas("COMERCIAL_ELIGE")} style={{ flex: 1 }}>Comercial elige</button>
-                <button type="button" className={modoMedidas === "MIXTA" ? "on" : ""} onClick={() => setModoMedidas("MIXTA")} style={{ flex: 1 }}>Mixta</button>
+                <button
+                  type="button"
+                  className={modoMedidas === "FIJA" ? "on" : ""}
+                  onClick={() => setModoMedidas("FIJA")}
+                  style={{ flex: 1 }}
+                >
+                  Fija
+                </button>
+                <button
+                  type="button"
+                  className={modoMedidas === "LIBRE" ? "on" : ""}
+                  onClick={() => setModoMedidas("LIBRE")}
+                  style={{ flex: 1 }}
+                >
+                  Libre
+                </button>
+                <button
+                  type="button"
+                  className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""}
+                  onClick={() => setModoMedidas("COMERCIAL_ELIGE")}
+                  style={{ flex: 1 }}
+                >
+                  Comercial elige
+                </button>
+                <button
+                  type="button"
+                  className={modoMedidas === "MIXTA" ? "on" : ""}
+                  onClick={() => setModoMedidas("MIXTA")}
+                  style={{ flex: 1 }}
+                >
+                  Mixta
+                </button>
               </div>
             </div>
           )}
           {!sinMedida && modoMedidasUsaPredefinidas(modoMedidas) && (
-            <MedidasPredefinidasEditor medidas={medidas} onChange={setMedidas} />
+            <MedidasPredefinidasEditor
+              medidas={medidas}
+              onChange={setMedidas}
+            />
           )}
           <div className="field">
             <label>Mínimo comercial</label>
@@ -931,9 +1092,13 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
               <button
                 type="button"
                 className={
-                  minimoComercialPolitica === "ADVERTIR_FACTURAR_MINIMO" ? "on" : ""
+                  minimoComercialPolitica === "ADVERTIR_FACTURAR_MINIMO"
+                    ? "on"
+                    : ""
                 }
-                onClick={() => setMinimoComercialPolitica("ADVERTIR_FACTURAR_MINIMO")}
+                onClick={() =>
+                  setMinimoComercialPolitica("ADVERTIR_FACTURAR_MINIMO")
+                }
                 style={{ flex: 1 }}
               >
                 Advertir
@@ -948,7 +1113,8 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
               </button>
             </div>
             <span className="help">
-              Advertir cobra el mínimo solo en precio; la producción conserva la cantidad real.
+              Advertir cobra el mínimo solo en precio; la producción conserva la
+              cantidad real.
             </span>
           </div>
           {minimoComercialPolitica !== "NONE" && (
@@ -958,7 +1124,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
                 <div className="segmented" style={{ width: "100%" }}>
                   <button
                     type="button"
-                    className={minimoComercialBase === "cantidad_comercial" ? "on" : ""}
+                    className={
+                      minimoComercialBase === "cantidad_comercial" ? "on" : ""
+                    }
                     onClick={() => setMinimoComercialBase("cantidad_comercial")}
                     style={{ flex: 1 }}
                   >
@@ -966,7 +1134,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
                   </button>
                   <button
                     type="button"
-                    className={minimoComercialBase === "pliegos_impresos" ? "on" : ""}
+                    className={
+                      minimoComercialBase === "pliegos_impresos" ? "on" : ""
+                    }
                     onClick={() => setMinimoComercialBase("pliegos_impresos")}
                     style={{ flex: 1 }}
                   >
@@ -974,7 +1144,8 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
                   </button>
                 </div>
                 <span className="help">
-                  Pliegos impresos se calcula después del nesting de impresión por hoja.
+                  Pliegos impresos se calcula después del nesting de impresión
+                  por hoja.
                 </span>
               </div>
               <div className="field">
@@ -985,8 +1156,16 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
                     min="0"
                     step="0.0001"
                     value={minimoComercialCantidad}
-                    onChange={(event) => setMinimoComercialCantidad(event.target.value)}
-                    placeholder={minimoComercialBase === "pliegos_impresos" ? "3" : unidadComercial === "unidad" ? "100" : "1"}
+                    onChange={(event) =>
+                      setMinimoComercialCantidad(event.target.value)
+                    }
+                    placeholder={
+                      minimoComercialBase === "pliegos_impresos"
+                        ? "3"
+                        : unidadComercial === "unidad"
+                          ? "100"
+                          : "1"
+                    }
                   />
                   <span>{minimoUnidadLabel}</span>
                 </div>
@@ -1002,9 +1181,10 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
             <h2>Personalizaciones</h2>
             <div className="helptext">
               Áreas de decoración con medida propia (ej. la impresión DTF de una
-              taza o remera). La medida de cada personalización maneja el costo de
-              su material y proceso, aparte de la medida del producto base. Luego,
-              en <em>Pasos</em>, indicás qué paso alimenta cada personalización.
+              taza o remera). La medida de cada personalización maneja el costo
+              de su material y proceso, aparte de la medida del producto base.
+              Luego, en <em>Pasos</em>, indicás qué paso alimenta cada
+              personalización.
             </div>
           </div>
         </div>
@@ -1016,8 +1196,15 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
 
       {(dirty || guardando) && (
         <div className="save-sticky-footer">
-          <div className="pricing-sticky-footer-copy">Hay cambios sin guardar en identidad.</div>
-          <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando}>
+          <div className="pricing-sticky-footer-copy">
+            Hay cambios sin guardar en identidad.
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={guardar}
+            disabled={guardando}
+          >
             <SaveIcon className="mr-2 size-4" />
             {guardando ? "Guardando..." : "Guardar cambios"}
           </button>
@@ -1036,15 +1223,26 @@ function RutasTab({
 }) {
   const router = useRouter();
   const [agregando, setAgregando] = React.useState(false);
-  const [rutaEditandoId, setRutaEditandoId] = React.useState<string | null>(null);
+  const [rutaEditandoId, setRutaEditandoId] = React.useState<string | null>(
+    null,
+  );
   const [nombreEditado, setNombreEditado] = React.useState("");
-  const [guardandoNombreId, setGuardandoNombreId] = React.useState<string | null>(null);
-  const [duplicandoRutaId, setDuplicandoRutaId] = React.useState<string | null>(null);
+  const [guardandoNombreId, setGuardandoNombreId] = React.useState<
+    string | null
+  >(null);
+  const [duplicandoRutaId, setDuplicandoRutaId] = React.useState<string | null>(
+    null,
+  );
   const [nuevaRutaId, setNuevaRutaId] = React.useState("");
   const [nuevoNombre, setNuevoNombre] = React.useState("");
-  const [rutaAQuitar, setRutaAQuitar] = React.useState<{ id: string; nombre: string } | null>(null);
+  const [rutaAQuitar, setRutaAQuitar] = React.useState<{
+    id: string;
+    nombre: string;
+  } | null>(null);
   const yaUsadas = new Set(producto.rutasAlternativas.map((ra) => ra.ruta.id));
-  const rutasParaAgregar = rutasDisponibles.filter((ruta) => !yaUsadas.has(ruta.id));
+  const rutasParaAgregar = rutasDisponibles.filter(
+    (ruta) => !yaUsadas.has(ruta.id),
+  );
 
   const agregarRuta = async () => {
     if (!nuevaRutaId || !nuevoNombre.trim()) {
@@ -1101,7 +1299,9 @@ function RutasTab({
       setNombreEditado("");
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error actualizando ruta");
+      toast.error(
+        err instanceof Error ? err.message : "Error actualizando ruta",
+      );
     } finally {
       setGuardandoNombreId(null);
     }
@@ -1131,10 +1331,16 @@ function RutasTab({
           <div className="body">
             <h2>Rutas alternativas</h2>
             <div className="helptext">
-              Asociá/quitá rutas reusables a este producto. La ruta preferida es la default al cotizar.
+              Asociá/quitá rutas reusables a este producto. La ruta preferida es
+              la default al cotizar.
             </div>
           </div>
-          <button className="btn btn-primary" type="button" onClick={agregarRuta} disabled={agregando || !nuevaRutaId || !nuevoNombre.trim()}>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={agregarRuta}
+            disabled={agregando || !nuevaRutaId || !nuevoNombre.trim()}
+          >
             <PlusIcon className="size-4" />
             Agregar ruta
           </button>
@@ -1196,20 +1402,33 @@ function RutasTab({
                     </button>
                   </>
                 )}
-                {ra.esPreferida ? <span className="tag ok"><span className="d" />Preferida</span> : null}
-              </div>
-              <div className="sub" style={{ fontFamily: "var(--font-mono)", fontSize: 11, marginTop: 2 }}>
-                {ra.ruta.codigo}
+                {ra.esPreferida ? (
+                  <span className="tag ok">
+                    <span className="d" />
+                    Preferida
+                  </span>
+                ) : null}
               </div>
               <div className="sub" style={{ marginTop: 8 }}>
-                <strong style={{ color: "var(--ink)", fontWeight: 500 }}>Ruta:</strong> {ra.ruta.nombre} · v{ra.rutaVersion}
+                <strong style={{ color: "var(--ink)", fontWeight: 500 }}>
+                  Ruta:
+                </strong>{" "}
+                {ra.ruta.nombre} · v{ra.rutaVersion}
                 <span style={{ margin: "0 6px" }}>·</span>
-                <strong style={{ color: "var(--ink)", fontWeight: 500 }}>Pasos:</strong> {ra.ruta.pasos.length} ·{" "}
-                <span style={{ color: "var(--ok)" }}>Configurados {ra.configPasos.length}/{ra.ruta.pasos.length}</span>
+                <strong style={{ color: "var(--ink)", fontWeight: 500 }}>
+                  Pasos:
+                </strong>{" "}
+                {ra.ruta.pasos.length} ·{" "}
+                <span style={{ color: "var(--ok)" }}>
+                  Configurados {ra.configPasos.length}/{ra.ruta.pasos.length}
+                </span>
               </div>
             </div>
             <div className="route-tab-actions">
-              <Link className="btn btn-primary" href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}>
+              <Link
+                className="btn btn-primary"
+                href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}
+              >
                 <CogIcon className="size-4" />
                 Configurar pasos
               </Link>
@@ -1223,11 +1442,21 @@ function RutasTab({
                 <CopyIcon className="size-4" />
               </button>
               {!ra.esPreferida ? (
-                <button className="icon-btn" type="button" title="Marcar preferida" onClick={() => marcarPreferida(ra.id)}>
+                <button
+                  className="icon-btn"
+                  type="button"
+                  title="Marcar preferida"
+                  onClick={() => marcarPreferida(ra.id)}
+                >
                   <StarIcon className="size-4" />
                 </button>
               ) : null}
-              <button className="icon-btn" type="button" title="Quitar ruta" onClick={() => quitarRuta(ra.id, ra.nombre)}>
+              <button
+                className="icon-btn"
+                type="button"
+                title="Quitar ruta"
+                onClick={() => quitarRuta(ra.id, ra.nombre)}
+              >
                 <Trash2Icon className="size-4" />
               </button>
             </div>
@@ -1237,14 +1466,33 @@ function RutasTab({
         {producto.rutasAlternativas.length === 0 ? (
           <div className="section-empty">
             <div className="ttl">Sin rutas asociadas</div>
-            <div className="sub">Agregá una ruta reusable para poder configurar pasos y cotizar este producto.</div>
+            <div className="sub">
+              Agregá una ruta reusable para poder configurar pasos y cotizar
+              este producto.
+            </div>
           </div>
         ) : null}
 
         {rutasParaAgregar.length > 0 ? (
-          <div style={{ marginTop: 16, padding: 16, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r-2)" }}>
-            <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 12 }}>Agregar nueva ruta alternativa</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div
+            style={{
+              marginTop: 16,
+              padding: 16,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--r-2)",
+            }}
+          >
+            <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 12 }}>
+              Agregar nueva ruta alternativa
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
               <div className="field">
                 <label>Ruta del catálogo</label>
                 <HumanSelect
@@ -1276,13 +1524,14 @@ function RutasTab({
       <div className="wiz-section">
         <div className="wiz-section-head">
           <div className="body">
-            <h2>Pasos extras inline <span style={{ color: "var(--muted-text)", fontWeight: 400, fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap" }}>(G-F3)</span></h2>
+            <h2>Pasos extras</h2>
             <div className="helptext">
-              Pasos puntuales que solo este producto necesita, sin crear una ruta
-              nueva. Ahora se configuran <strong>por ruta</strong>, desde el editor de
-              pasos: abrí <em>Configurar pasos</em> de una ruta y usá “＋ Agregar paso
-              extra” para posicionarlo en el flujo, elegir cuándo se aplica
-              (condicional con regla), su máquina o centro de costo y el tiempo.
+              Pasos puntuales que solo este producto necesita, sin crear una
+              ruta nueva. Ahora se configuran <strong>por ruta</strong>, desde
+              el editor de pasos: abrí <em>Configurar pasos</em> de una ruta y
+              usá “＋ Agregar paso extra” para posicionarlo en el flujo, elegir
+              cuándo se aplica (condicional con regla), su máquina o centro de
+              costo y el tiempo.
             </div>
           </div>
         </div>
@@ -1354,7 +1603,9 @@ function PasosTab({
       <div className="ruta-selector">
         <div style={{ flex: 1 }}>
           <div className="lbl">Ruta a configurar</div>
-          <div className="help">Cada alternativa mantiene su propia configuración de pasos.</div>
+          <div className="help">
+            Cada alternativa mantiene su propia configuración de pasos.
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <HumanSelect
@@ -1377,7 +1628,9 @@ function PasosTab({
             <div className="body">
               <h2>{rutaSeleccionada.nombre}</h2>
               <div className="helptext">
-                Para cada paso configurás la máquina, perfil, modos y slots de materiales. Los pasos OPCIONALES no se ejecutan a menos que el comercial los active.
+                Para cada paso configurás la máquina, perfil, modos y slots de
+                materiales. Los pasos OPCIONALES no se ejecutan a menos que el
+                comercial los active.
               </div>
             </div>
             <Link
@@ -1389,14 +1642,32 @@ function PasosTab({
             </Link>
           </div>
 
-          <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r-2)", padding: "16px 18px" }}>
-            <div style={{ fontSize: 12.5, color: "var(--muted-text)", marginBottom: 12 }}>
-              {rutaSeleccionada.ruta.pasos.length} pasos · click en cualquiera para editarlo
+          <div
+            style={{
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--r-2)",
+              padding: "16px 18px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12.5,
+                color: "var(--muted-text)",
+                marginBottom: 12,
+              }}
+            >
+              {rutaSeleccionada.ruta.pasos.length} pasos · click en cualquiera
+              para editarlo
             </div>
             <div className="graph">
               {rutaSeleccionada.ruta.pasos.map((paso, index) => {
-                const config = rutaSeleccionada.configPasos.find((item) => item.rutaPasoId === paso.id);
-                const familia = catalogoFamilias?.familias.find((item) => item.codigo === paso.familiaCodigo);
+                const config = rutaSeleccionada.configPasos.find(
+                  (item) => item.rutaPasoId === paso.id,
+                );
+                const familia = catalogoFamilias?.familias.find(
+                  (item) => item.codigo === paso.familiaCodigo,
+                );
                 const machine =
                   config?.maquinaM1?.nombre ??
                   config?.centroCosto?.nombre ??
@@ -1420,10 +1691,35 @@ function PasosTab({
                 );
               })}
             </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 12, color: "var(--muted-text)", display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)" }} />
-                {rutaSeleccionada.configPasos.length}/{rutaSeleccionada.ruta.pasos.length} pasos configurados
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 14,
+                paddingTop: 14,
+                borderTop: "1px solid var(--border)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--muted-text)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "var(--ok)",
+                  }}
+                />
+                {rutaSeleccionada.configPasos.length}/
+                {rutaSeleccionada.ruta.pasos.length} pasos configurados
               </div>
             </div>
           </div>
@@ -1446,14 +1742,22 @@ function CargosTab({
 }) {
   const router = useRouter();
   const [cargoSeleccionado, setCargoSeleccionado] = React.useState("");
-  const [modoActivacion, setModoActivacion] = React.useState<(typeof MODOS_CARGO)[number]>("OPCIONAL");
+  const [modoActivacion, setModoActivacion] =
+    React.useState<(typeof MODOS_CARGO)[number]>("OPCIONAL");
   const [guardando, setGuardando] = React.useState(false);
-  const [cargoAQuitar, setCargoAQuitar] = React.useState<{ id: string; nombre: string } | null>(null);
+  const [cargoAQuitar, setCargoAQuitar] = React.useState<{
+    id: string;
+    nombre: string;
+  } | null>(null);
 
   const yaAsociados = new Set(
-    producto.cargosDirectosCotizacion.map((cargo) => cargo.cargoDirectoCatalogo.codigo),
+    producto.cargosDirectosCotizacion.map(
+      (cargo) => cargo.cargoDirectoCatalogo.codigo,
+    ),
   );
-  const disponibles = catalogoCargos.filter((cargo) => cargo.activo && !yaAsociados.has(cargo.codigo));
+  const disponibles = catalogoCargos.filter(
+    (cargo) => cargo.activo && !yaAsociados.has(cargo.codigo),
+  );
 
   const asociar = async () => {
     if (!cargoSeleccionado) {
@@ -1507,25 +1811,39 @@ function CargosTab({
         <div className="section-empty">
           <div className="ttl">Sin cargos asociados</div>
           <div className="sub">
-            Este producto no tiene cargos directos a nivel cotización. Asociá uno del catálogo si necesitás ofrecer extras al comercial.
+            Este producto no tiene cargos directos a nivel cotización. Asociá
+            uno del catálogo si necesitás ofrecer extras al comercial.
           </div>
         </div>
       ) : (
         <div className="cargo-grid">
           {producto.cargosDirectosCotizacion.map((cargo) => {
-            const calc = getLabel(modoCalculoCargoLabels, cargo.cargoDirectoCatalogo.modoCalculo);
-            const activacion = getLabel(modoActivacionLabels, cargo.modoActivacion);
+            const calc = getLabel(
+              modoCalculoCargoLabels,
+              cargo.cargoDirectoCatalogo.modoCalculo,
+            );
+            const activacion = getLabel(
+              modoActivacionLabels,
+              cargo.modoActivacion,
+            );
             return (
               <div className="cargo-card" key={cargo.id}>
                 <div className="cargo-card-main">
                   <div className="ttl">{cargo.cargoDirectoCatalogo.nombre}</div>
-                  <div className="sub">{cargo.cargoDirectoCatalogo.codigo}</div>
                   {cargo.cargoDirectoCatalogo.descripcion ? (
-                    <div className="desc">{cargo.cargoDirectoCatalogo.descripcion}</div>
+                    <div className="desc">
+                      {cargo.cargoDirectoCatalogo.descripcion}
+                    </div>
                   ) : null}
                   <div className="chips">
                     <span className="tag muted">{calc.label}</span>
-                    <span className={cargo.modoActivacion === "OBLIGATORIO" ? "tag ok" : "tag muted"}>
+                    <span
+                      className={
+                        cargo.modoActivacion === "OBLIGATORIO"
+                          ? "tag ok"
+                          : "tag muted"
+                      }
+                    >
                       <span className="d" />
                       {activacion.label}
                     </span>
@@ -1535,7 +1853,9 @@ function CargosTab({
                   className="icon-btn"
                   type="button"
                   title="Quitar cargo"
-                  onClick={() => quitar(cargo.id, cargo.cargoDirectoCatalogo.nombre)}
+                  onClick={() =>
+                    quitar(cargo.id, cargo.cargoDirectoCatalogo.nombre)
+                  }
                 >
                   <Trash2Icon className="size-4" />
                 </button>
@@ -1551,7 +1871,8 @@ function CargosTab({
           <div className="section-empty small">
             <div className="ttl">No hay cargos disponibles</div>
             <div className="sub">
-              Todos los cargos activos ya están asociados o todavía no hay cargos creados en el catálogo.
+              Todos los cargos activos ya están asociados o todavía no hay
+              cargos creados en el catálogo.
             </div>
             <Link href="/productos-servicios/cargos-directos" className="btn">
               Administrar catálogo <span aria-hidden="true">→</span>
@@ -1565,7 +1886,10 @@ function CargosTab({
                 value={cargoSeleccionado}
                 onValueChange={(value) => setCargoSeleccionado(value ?? "")}
                 options={disponibles.map((cargo) => {
-                  const calc = getLabel(modoCalculoCargoLabels, cargo.modoCalculo);
+                  const calc = getLabel(
+                    modoCalculoCargoLabels,
+                    cargo.modoCalculo,
+                  );
                   return {
                     value: cargo.id,
                     label: cargo.nombre,
@@ -1595,7 +1919,9 @@ function CargosTab({
                   );
                 })}
               </div>
-              <span className="help">{getLabel(modoActivacionLabels, modoActivacion).descripcion}</span>
+              <span className="help">
+                {getLabel(modoActivacionLabels, modoActivacion).descripcion}
+              </span>
             </div>
           </div>
         )}
@@ -1651,7 +1977,9 @@ function HerramientaToggle({
     >
       <div style={{ maxWidth: 620 }}>
         <div style={{ fontWeight: 500, fontSize: 13 }}>{titulo}</div>
-        <div style={{ fontSize: 11.5, color: "var(--muted-text)", marginTop: 2 }}>
+        <div
+          style={{ fontSize: 11.5, color: "var(--muted-text)", marginTop: 2 }}
+        >
           {descripcion}
         </div>
       </div>
@@ -1695,10 +2023,7 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
       await actualizarProducto(producto.id, {
         atributosComercialesJson: setHerramientaEditorSello(
           setHerramientaMedidasArchivo(
-            producto.atributosComercialesJson as Record<
-              string,
-              unknown
-            > | null,
+            producto.atributosComercialesJson as Record<string, unknown> | null,
             medidasDesdeArchivo,
           ),
           editorSello,
@@ -1763,13 +2088,14 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
 
 function PricingTab({ producto }: { producto: ProductoDetalle }) {
   const router = useRouter();
-  const [precioPersistido, setPrecioPersistido] = React.useState<TabPrecioConfig>(
-    () =>
-      (producto.precioConfigJson as TabPrecioConfig | null) ?? {
-        metodoCalculo: "por_margen",
-        detalle: { marginPct: 40, minimumMarginPct: 25 },
-      },
-  );
+  const [precioPersistido, setPrecioPersistido] =
+    React.useState<TabPrecioConfig>(
+      () =>
+        (producto.precioConfigJson as TabPrecioConfig | null) ?? {
+          metodoCalculo: "por_margen",
+          detalle: { marginPct: 40, minimumMarginPct: 25 },
+        },
+    );
   const [precioConfig, setPrecioConfig] = React.useState<TabPrecioConfig>(
     () =>
       (producto.precioConfigJson as TabPrecioConfig | null) ?? {

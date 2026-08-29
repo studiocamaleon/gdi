@@ -3,11 +3,24 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeftIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  BadgeDollarSignIcon,
+  PackageIcon,
+  RulerIcon,
+  SaveIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
@@ -37,6 +50,8 @@ import {
   type TabPrecioConfig,
 } from "@/components/productos-servicios/tab-precio-editor";
 
+import styles from "./producto-form-view.module.css";
+
 type Modo = "crear" | "editar";
 
 interface Props {
@@ -58,11 +73,16 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
 
   const [nombre, setNombre] = React.useState(productoExistente?.nombre ?? "");
-  const [descripcion, setDescripcion] = React.useState(productoExistente?.descripcion ?? "");
-  const [catalogoComercial, setCatalogoComercial] = React.useState<ProductoCategoriaComercial[]>([]);
-  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] = React.useState(
-    productoExistente?.subcategoriaComercial?.codigo ?? "producto_a_medida",
+  const [descripcion, setDescripcion] = React.useState(
+    productoExistente?.descripcion ?? "",
   );
+  const [catalogoComercial, setCatalogoComercial] = React.useState<
+    ProductoCategoriaComercial[]
+  >([]);
+  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] =
+    React.useState(
+      productoExistente?.subcategoriaComercial?.codigo ?? "producto_a_medida",
+    );
   const [unidadComercial, setUnidadComercial] = React.useState(
     productoExistente?.unidadComercial ?? "unidad",
   );
@@ -78,13 +98,13 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   const [activo, setActivo] = React.useState(productoExistente?.activo ?? true);
 
   // Tab Precio: editor completo con tramos (F.3.8)
-  const precioConfigInicial: TabPrecioConfig = (productoExistente?.precioConfigJson as
-    | TabPrecioConfig
-    | null) ?? {
-    metodoCalculo: "por_margen",
-    detalle: { marginPct: 40, minimumMarginPct: 25 },
-  };
-  const [precioConfig, setPrecioConfig] = React.useState<TabPrecioConfig>(precioConfigInicial);
+  const precioConfigInicial: TabPrecioConfig =
+    (productoExistente?.precioConfigJson as TabPrecioConfig | null) ?? {
+      metodoCalculo: "por_margen",
+      detalle: { marginPct: 40, minimumMarginPct: 25 },
+    };
+  const [precioConfig, setPrecioConfig] =
+    React.useState<TabPrecioConfig>(precioConfigInicial);
 
   React.useEffect(() => {
     getCatalogoComercial()
@@ -92,7 +112,9 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
         setCatalogoComercial(catalogo);
         setSubcategoriaComercialCodigo((current) =>
           catalogo.some((categoria) =>
-            categoria.subcategorias.some((subcategoria) => subcategoria.codigo === current),
+            categoria.subcategorias.some(
+              (subcategoria) => subcategoria.codigo === current,
+            ),
           )
             ? current
             : (catalogo[0]?.subcategorias[0]?.codigo ?? "producto_a_medida"),
@@ -111,14 +133,20 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   const handleGuardar = async () => {
     setGuardando(true);
     try {
-      const precioConfigJson = precioConfig as unknown as Record<string, unknown>;
+      const precioConfigJson = precioConfig as unknown as Record<
+        string,
+        unknown
+      >;
 
       const payload = {
         nombre,
         descripcion: descripcion || undefined,
         subcategoriaComercialCodigo,
         atributosComercialesJson:
-          (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
+          (productoExistente?.atributosComercialesJson as Record<
+            string,
+            unknown
+          > | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas,
         medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : undefined,
@@ -164,48 +192,64 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   };
 
   return (
-    <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-6">
-      <div className="flex flex-col gap-2">
+    <main className={styles.page}>
+      <header className={styles.header}>
         <Link
-          href={modo === "editar" ? `/productos-servicios/${productoExistente!.id}` : "/productos-servicios"}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
+          href={
+            modo === "editar"
+              ? `/productos-servicios/${productoExistente!.id}`
+              : "/productos-servicios"
+          }
+          className={styles.back}
         >
           <ArrowLeftIcon className="mr-1 size-4" />
           Volver
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {modo === "crear" ? "Nuevo producto" : `Editar producto: ${productoExistente?.nombre}`}
+        <span className={styles.eyebrow}>Catálogo de productos</span>
+        <h1>
+          {modo === "crear"
+            ? "Nuevo producto"
+            : `Editar producto: ${productoExistente?.nombre}`}
         </h1>
-        <p className="text-muted-foreground text-sm">
+        <p>
           {modo === "crear"
             ? "Atributos comerciales del producto. La configuración de pasos / rutas se edita después."
             : "Editás los atributos comerciales. Las rutas y configuración por paso se manejan en otra pantalla."}
         </p>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Identidad</CardTitle>
-            <CardDescription>Código y nombre del producto en el catálogo.</CardDescription>
+      <nav className={styles.steps} aria-label="Secciones del producto">
+        <div>
+          <span>01</span>
+          <strong>Identidad</strong>
+          <small>Nombre y categoría</small>
+        </div>
+        <div>
+          <span>02</span>
+          <strong>Comercial y medidas</strong>
+          <small>Cobro y dimensiones</small>
+        </div>
+        <div>
+          <span>03</span>
+          <strong>Precio</strong>
+          <small>Método y margen</small>
+        </div>
+      </nav>
+
+      <div className={styles.formGrid}>
+        <Card className={styles.formCard}>
+          <CardHeader className={styles.cardHeader}>
+            <span className={styles.cardIcon} aria-hidden="true">
+              <PackageIcon />
+            </span>
+            <div>
+              <CardTitle>Identidad</CardTitle>
+              <CardDescription>
+                Nombre y categoría del producto en el catálogo.
+              </CardDescription>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {modo === "editar" ? (
-              <div className="space-y-2">
-                <Label htmlFor="codigo">Código</Label>
-                <Input
-                  id="codigo"
-                  value={productoExistente?.codigo ?? ""}
-                  disabled
-                  placeholder="Generado por el sistema"
-                />
-                <p className="text-muted-foreground text-xs">El código no se puede modificar.</p>
-              </div>
-            ) : (
-              <p className="rounded-md border bg-muted/35 px-3 py-2 text-muted-foreground text-xs">
-                El código se genera automáticamente al guardar el producto.
-              </p>
-            )}
+          <CardContent className={`${styles.cardBody} space-y-4`}>
             <div className="space-y-2">
               <Label htmlFor="nombre">Nombre *</Label>
               <Input
@@ -225,7 +269,9 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="subcategoriaComercial">Categoría comercial *</Label>
+              <Label htmlFor="subcategoriaComercial">
+                Categoría comercial *
+              </Label>
               <HumanSelect
                 id="subcategoriaComercial"
                 value={subcategoriaComercialCodigo}
@@ -239,28 +285,43 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
               </p>
             </div>
             {modo === "editar" && (
-              <div className="flex items-center justify-between">
+              <div className={styles.activeRow}>
                 <div>
                   <Label htmlFor="activo">Activo</Label>
-                  <p className="text-muted-foreground text-xs">Si está inactivo no aparece en el cotizador.</p>
+                  <p className="text-muted-foreground text-xs">
+                    Si está inactivo no aparece en el cotizador.
+                  </p>
                 </div>
-                <Switch id="activo" checked={activo} onCheckedChange={setActivo} />
+                <Switch
+                  id="activo"
+                  checked={activo}
+                  onCheckedChange={setActivo}
+                />
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Comercial y medidas</CardTitle>
-            <CardDescription>Cómo se cobra y cómo se manejan las medidas al cotizar.</CardDescription>
+        <Card className={styles.formCard}>
+          <CardHeader className={styles.cardHeader}>
+            <span className={styles.cardIcon} aria-hidden="true">
+              <RulerIcon />
+            </span>
+            <div>
+              <CardTitle>Comercial y medidas</CardTitle>
+              <CardDescription>
+                Cómo se cobra y cómo se manejan las medidas al cotizar.
+              </CardDescription>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className={`${styles.cardBody} space-y-4`}>
             <div className="space-y-2">
               <LabelConTooltip
                 label="¿Cómo se cobra?"
                 htmlFor="unidad"
-                tooltip={getLabel(unidadComercialLabels, unidadComercial).descripcion}
+                tooltip={
+                  getLabel(unidadComercialLabels, unidadComercial).descripcion
+                }
               />
               <HumanSelect
                 id="unidad"
@@ -281,8 +342,12 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
               <HumanSelect
                 id="modoMedidas"
                 value={modoMedidas}
-                onValueChange={(v) => setModoMedidas((v || "FIJA") as ModoMedidasProducto)}
-                options={MODOS_MEDIDAS.map((it) => optionFromLabel(it.value, modoMedidasLabels))}
+                onValueChange={(v) =>
+                  setModoMedidas((v || "FIJA") as ModoMedidasProducto)
+                }
+                options={MODOS_MEDIDAS.map((it) =>
+                  optionFromLabel(it.value, modoMedidasLabels),
+                )}
               />
             </div>
             {modoMedidas !== "LIBRE" && (
@@ -312,14 +377,19 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Tab Precio</CardTitle>
-            <CardDescription>
-              Cómo se calcula el precio de venta a partir del costo del motor.
-            </CardDescription>
+        <Card className={`${styles.formCard} ${styles.priceCard}`}>
+          <CardHeader className={styles.cardHeader}>
+            <span className={styles.cardIcon} aria-hidden="true">
+              <BadgeDollarSignIcon />
+            </span>
+            <div>
+              <CardTitle>Precio de venta</CardTitle>
+              <CardDescription>
+                Cómo se calcula el precio de venta a partir del costo del motor.
+              </CardDescription>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className={styles.priceBody}>
             <TabPrecioEditor
               value={precioConfig}
               onChange={setPrecioConfig}
@@ -329,10 +399,11 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
         </Card>
       </div>
 
-      <div className="flex items-center justify-between">
+      <footer className={styles.actions}>
         {modo === "editar" ? (
           <Button
             variant="destructive"
+            className={styles.deleteAction}
             onClick={handleEliminar}
             disabled={guardando || eliminando}
           >
@@ -342,11 +413,20 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
         ) : (
           <div />
         )}
-        <Button onClick={handleGuardar} disabled={guardando || !nombre.trim()} size="lg">
+        <Button
+          className={styles.saveAction}
+          onClick={handleGuardar}
+          disabled={guardando || !nombre.trim()}
+          size="lg"
+        >
           <SaveIcon className="mr-2 size-4" />
-          {guardando ? "Guardando..." : modo === "crear" ? "Crear producto" : "Guardar cambios"}
+          {guardando
+            ? "Guardando..."
+            : modo === "crear"
+              ? "Crear producto"
+              : "Guardar cambios"}
         </Button>
-      </div>
+      </footer>
 
       <ConfirmacionDestructiva
         open={confirmandoEliminar}
@@ -355,12 +435,14 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
         }}
         titulo="Eliminar producto"
         descripcion={`¿Eliminar "${productoExistente?.nombre ?? ""}"?`}
-        impacto={["Si tiene cotizaciones se marcará como inactivo en vez de borrar."]}
+        impacto={[
+          "Si tiene cotizaciones se marcará como inactivo en vez de borrar.",
+        ]}
         nombreItem={productoExistente?.nombre}
         requiereTipear={false}
         accionLabel="Eliminar"
         onConfirmar={confirmarEliminar}
       />
-    </div>
+    </main>
   );
 }

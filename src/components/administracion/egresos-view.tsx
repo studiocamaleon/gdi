@@ -17,7 +17,17 @@
  */
 
 import * as React from "react";
-import { FileIcon, HandCoinsIcon, UploadCloudIcon, XIcon } from "lucide-react";
+import {
+  CalendarClockIcon,
+  CircleDollarSignIcon,
+  FileIcon,
+  HandCoinsIcon,
+  PlusIcon,
+  SearchIcon,
+  UploadCloudIcon,
+  WalletCardsIcon,
+  XIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
@@ -554,6 +564,7 @@ export function EgresosView({
       <div className="egr-wrap">
         <div className="egr-head">
           <div>
+            <span className="egr-eyebrow">Administración financiera</span>
             <h1>{ENCABEZADO[modo].titulo}</h1>
             <div className="sub">{ENCABEZADO[modo].sub}</div>
           </div>
@@ -563,6 +574,7 @@ export function EgresosView({
               className="btn btn-primary"
               onClick={() => setAltaAbierta(true)}
             >
+              <PlusIcon aria-hidden="true" />
               Registrar egreso
             </button>
           ) : null}
@@ -571,17 +583,32 @@ export function EgresosView({
         {resumen ? (
           <div className="egr-kpis">
             <div className={`egr-kpi ${resumen.vencido > 0 ? "mal" : ""}`}>
-              <span className="l">Vencido</span>
+              <div className="egr-kpi-top">
+                <span className="egr-kpi-icon" aria-hidden="true">
+                  <CalendarClockIcon />
+                </span>
+                <span className="l">Vencido</span>
+              </div>
               <span className="v">{fmt(resumen.vencido)}</span>
               <span className="h">ya se pasó la fecha</span>
             </div>
             <div className="egr-kpi">
-              <span className="l">Vence esta semana</span>
+              <div className="egr-kpi-top">
+                <span className="egr-kpi-icon" aria-hidden="true">
+                  <CalendarClockIcon />
+                </span>
+                <span className="l">Vence esta semana</span>
+              </div>
               <span className="v">{fmt(resumen.estaSemana)}</span>
               <span className="h">próximos 7 días</span>
             </div>
             <div className="egr-kpi">
-              <span className="l">Total a pagar</span>
+              <div className="egr-kpi-top">
+                <span className="egr-kpi-icon" aria-hidden="true">
+                  <CircleDollarSignIcon />
+                </span>
+                <span className="l">Total a pagar</span>
+              </div>
               <span className="v">{fmt(resumen.aPagar)}</span>
               <span className="h">
                 {resumen.egresosPendientes} egreso
@@ -593,7 +620,12 @@ export function EgresosView({
             <div
               className={`egr-kpi ${resumen.cuentas < resumen.aPagar ? "alerta" : "bien"}`}
             >
-              <span className="l">En las cuentas</span>
+              <div className="egr-kpi-top">
+                <span className="egr-kpi-icon" aria-hidden="true">
+                  <WalletCardsIcon />
+                </span>
+                <span className="l">En las cuentas</span>
+              </div>
               <span className="v">{fmt(resumen.cuentas)}</span>
               <span className="h">
                 {resumen.cuentas < resumen.aPagar
@@ -619,12 +651,15 @@ export function EgresosView({
               </button>
             ))}
           </div>
-          <input
-            className="egr-search"
-            placeholder="Buscar por descripción, beneficiario o número…"
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-          />
+          <label className="egr-search">
+            <SearchIcon aria-hidden="true" />
+            <span className="sr-only">Buscar egresos</span>
+            <input
+              placeholder="Buscar por descripción, beneficiario o número…"
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+            />
+          </label>
           {seleccionados.length > 0 && puedeGestionar ? (
             <button
               type="button"
@@ -1238,7 +1273,9 @@ function Recurrentes({
                     min={desde}
                     onChange={(e) => setHasta(e.target.value)}
                   />
-                  <small className="egr-hint">Vacío significa sin fecha de fin.</small>
+                  <small className="egr-hint">
+                    Vacío significa sin fecha de fin.
+                  </small>
                 </label>
                 <label className="egr-f egr-f-wide">
                   <span>Gasto fijo presupuestado</span>
@@ -1251,17 +1288,14 @@ function Recurrentes({
                     vacio="Ningún gasto fijo coincide."
                   />
                   <small className="egr-hint">
-                    Vincularlo habilita la comparación entre lo presupuestado y lo realmente registrado.
+                    Vincularlo habilita la comparación entre lo presupuestado y
+                    lo realmente registrado.
                   </small>
                 </label>
               </div>
             </div>
             <div className="mod-foot">
-              <button
-                type="button"
-                className="btn"
-                onClick={cerrarFormulario}
-              >
+              <button type="button" className="btn" onClick={cerrarFormulario}>
                 Cancelar
               </button>
               <button

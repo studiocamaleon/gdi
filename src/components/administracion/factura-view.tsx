@@ -42,12 +42,21 @@ function Qr({ url }: { url: string }) {
   return <div dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) {
+export function FacturaView({
+  doc,
+  id,
+}: {
+  doc: FacturaDocumento;
+  id: string;
+}) {
   const d = doc;
   // Los importes van en la moneda DEL comprobante (una E puede ser USD) y
   // con 2 decimales siempre: lo fija la normativa, no la preferencia visual.
-  const fmt = (n: number) => formatearMoneda(n, monedaDe(d.moneda), { decimales: 2 });
-  const ivaOrdenado = [...d.ivaPorAlicuota].sort((a, b) => b.alicuota - a.alicuota);
+  const fmt = (n: number) =>
+    formatearMoneda(n, monedaDe(d.moneda), { decimales: 2 });
+  const ivaOrdenado = [...d.ivaPorAlicuota].sort(
+    (a, b) => b.alicuota - a.alicuota,
+  );
 
   return (
     <div
@@ -61,7 +70,10 @@ export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) 
     >
       <div className="fx-wrap">
         <div className="fx-toolbar">
-          <Link className="fx-crumb" href={`/administracion/comprobantes/${id}`}>
+          <Link
+            className="fx-crumb"
+            href={`/administracion/comprobantes/${id}`}
+          >
             <ArrowLeftIcon />
             Volver al comprobante
           </Link>
@@ -202,7 +214,7 @@ export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) 
             <table className="fx-items">
               <thead>
                 <tr>
-                  <th>Código / Descripción</th>
+                  <th>Descripción</th>
                   <th className="c">Cant.</th>
                   <th className="r">Precio unit.</th>
                   {d.discriminaIva ? <th className="c">Alíc. IVA</th> : null}
@@ -212,10 +224,7 @@ export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) 
               <tbody>
                 {d.items.map((it, i) => (
                   <tr key={i}>
-                    <td className="desc">
-                      {it.descripcion}
-                      {it.codigo ? <div className="code">{it.codigo}</div> : null}
-                    </td>
+                    <td className="desc">{it.descripcion}</td>
                     <td className="c mono">{it.cantidad}</td>
                     <td className="r mono">{fmt(it.precioUnitario)}</td>
                     {d.discriminaIva ? (
@@ -262,7 +271,9 @@ export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) 
                       <span className="v">{fmt(d.ivaContenido ?? 0)}</span>
                     </div>
                     <div className="r">
-                      <span className="k">Otros Impuestos Nacionales Indirectos</span>
+                      <span className="k">
+                        Otros Impuestos Nacionales Indirectos
+                      </span>
                       <span className="v">
                         {fmt(d.otrosImpuestosIndirectos ?? 0)}
                       </span>
@@ -301,7 +312,11 @@ export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) 
             <div className="fx-auth-sec">
               <div className="fx-auth">
                 <div className="fx-qr-box">
-                  {d.qrUrl ? <Qr url={d.qrUrl} /> : <div className="fx-qr-vacio" />}
+                  {d.qrUrl ? (
+                    <Qr url={d.qrUrl} />
+                  ) : (
+                    <div className="fx-qr-vacio" />
+                  )}
                 </div>
                 <div className="fx-cae-block">
                   <div className="arca">
@@ -329,7 +344,9 @@ export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) 
                       </div>
                       {d.leyendas.map((l, i) => (
                         <div key={i} className="fx-ley-item">
-                          {l.codigo ? <span className="cd">{l.codigo}</span> : null}
+                          {l.codigo ? (
+                            <span className="cd">{l.codigo}</span>
+                          ) : null}
                           <span>{l.texto}</span>
                         </div>
                       ))}

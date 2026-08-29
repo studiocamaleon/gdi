@@ -149,11 +149,10 @@ function ProductoRow({ p }: { p: OrdenTrabajoProducto }) {
             }}
           />
         </span>
-        <span className="otd-prod-id">
-          <span className="code">{p.codigo}</span>
-          <span className="fam">{p.familia}</span>
+        <span className="otd-prod-nm">
+          {p.nombre}
+          <small>{p.familia}</small>
         </span>
-        <span className="otd-prod-nm">{p.nombre}</span>
         <span className="otd-prod-qty">
           {p.cantidad.toLocaleString("es-AR")} {p.cantidadUnidad}
         </span>
@@ -1022,7 +1021,6 @@ export function OrdenTrabajoDetalleView({
                   <div className="otd-prods">
                     <div className="otd-prod-th">
                       <span />
-                      <span>Código</span>
                       <span>Producto</span>
                       <span className="r">Cantidad</span>
                       <span className="r">Total</span>

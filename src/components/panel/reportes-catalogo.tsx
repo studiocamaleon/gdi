@@ -1,72 +1,112 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRightIcon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  ChartNoAxesCombinedIcon,
+  CircleIcon,
+} from "lucide-react";
 
 import { usePuedeFn } from "@/components/navigation/permisos-provider";
 import {
-  Card,
-  CardAction,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   CATEGORIAS_REPORTES,
+  type ReporteCategoria,
   reportesVisibles,
 } from "@/lib/reportes-config";
+
+import styles from "./reportes-catalogo.module.css";
+
+const DESCRIPCIONES: Record<ReporteCategoria, string> = {
+  Ejecutivo: "La lectura general del negocio.",
+  Comercial: "Qué vendemos, a quién y cuánto convierte.",
+  Operaciones: "Cómo está funcionando el taller y su equipo.",
+  Finanzas: "Rentabilidad, caja y cobranza.",
+  Producto: "Qué productos, materiales y medidas explican la venta.",
+};
 
 export function ReportesCatalogo() {
   const puede = usePuedeFn();
   const visibles = reportesVisibles(puede);
 
   return (
-    <div className="flex flex-col gap-8">
-      {CATEGORIAS_REPORTES.map((categoria) => {
-        const reportes = visibles.filter((reporte) => reporte.categoria === categoria);
-        if (reportes.length === 0) return null;
+    <div className={styles.catalogo}>
+      <div className={styles.intro}>
+        <div className={styles.introIcon} aria-hidden="true">
+          <ChartNoAxesCombinedIcon />
+        </div>
+        <div>
+          <span className={styles.kicker}>Centro de análisis</span>
+          <p>
+            Una lectura ordenada de tu negocio, desde las ventas hasta la
+            operación diaria.
+          </p>
+        </div>
+        <div className={styles.introMeta}>
+          <strong>{visibles.length}</strong>
+          <span>vistas disponibles</span>
+        </div>
+      </div>
 
-        return (
-          <section key={categoria} aria-labelledby={`reportes-${categoria}`} className="flex flex-col gap-3">
-            <div>
-              <h2 id={`reportes-${categoria}`} className="text-sm font-semibold text-foreground">
-                {categoria}
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                {categoria === "Ejecutivo"
-                  ? "La lectura general del negocio."
-                  : categoria === "Comercial"
-                    ? "Qué vendemos, a quién y cuánto convierte."
-                    : categoria === "Operaciones"
-                      ? "Cómo está funcionando el taller y su equipo."
-                      : categoria === "Finanzas"
-                        ? "Rentabilidad, caja y cobranza."
-                        : "Qué productos, materiales y medidas explican la venta."}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {reportes.map((reporte) => (
-                <Link
-                  key={reporte.href}
-                  href={reporte.href}
-                  className="group block h-full rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <Card className="h-full transition-colors group-hover:bg-muted/40 group-focus-visible:bg-muted/40">
-                    <CardHeader>
-                      <CardTitle>{reporte.label}</CardTitle>
-                      <CardDescription>{reporte.descripcion}</CardDescription>
-                      <CardAction className="flex items-center gap-2 text-muted-foreground transition-colors group-hover:text-foreground">
-                        <reporte.Icon className="size-5" aria-hidden="true" />
-                        <ArrowRightIcon className="size-4" aria-hidden="true" />
-                      </CardAction>
-                    </CardHeader>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      <div className={styles.categorias}>
+        {CATEGORIAS_REPORTES.map((categoria, indice) => {
+          const reportes = visibles.filter(
+            (reporte) => reporte.categoria === categoria,
+          );
+          if (reportes.length === 0) return null;
+
+          const destacada = categoria === "Ejecutivo";
+          const compacta = reportes.length === 1 && !destacada;
+
+          return (
+            <section
+              key={categoria}
+              aria-labelledby={`reportes-${categoria}`}
+              className={`${styles.categoria} ${
+                compacta ? styles.categoriaCompacta : ""
+              } ${destacada ? styles.categoriaDestacada : ""}`}
+            >
+              <header className={styles.categoriaHeader}>
+                <span className={styles.indice} aria-hidden="true">
+                  {String(indice + 1).padStart(2, "0")}
+                </span>
+                <div>
+                  <h2 id={`reportes-${categoria}`}>{categoria}</h2>
+                  <p>{DESCRIPCIONES[categoria]}</p>
+                </div>
+              </header>
+
+              <div className={styles.grilla}>
+                {reportes.map((reporte) => (
+                  <Link
+                    key={reporte.href}
+                    href={reporte.href}
+                    className={`${styles.reporte} ${
+                      destacada ? styles.reporteDestacado : ""
+                    }`}
+                  >
+                    <span className={styles.icono} aria-hidden="true">
+                      <reporte.Icon />
+                    </span>
+                    <span className={styles.flecha} aria-hidden="true">
+                      <ArrowUpRightIcon />
+                    </span>
+
+                    <span className={styles.contenido}>
+                      {destacada ? (
+                        <span className={styles.recomendado}>
+                          <CircleIcon aria-hidden="true" /> Vista general
+                        </span>
+                      ) : null}
+                      <strong>{reporte.label}</strong>
+                      <span>{reporte.descripcion}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

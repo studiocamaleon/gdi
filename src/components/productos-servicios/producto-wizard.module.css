@@ -1,0 +1,477 @@
+.page {
+  --pw-orange: #ff6a2b;
+  --pw-orange-soft: #fff2eb;
+  --pw-ink: #14141a;
+  --pw-border: #e7e4df;
+  display: flex;
+  width: 100%;
+  max-width: 1500px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-self: flex-start;
+  gap: 24px;
+  margin: 0 auto;
+  padding: 24px 30px 80px;
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.back {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  margin: 0 0 15px -7px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  color: #716b65;
+  font-size: 12px;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.back:hover {
+  color: var(--pw-orange);
+  background: var(--pw-orange-soft);
+}
+
+.back svg {
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--pw-orange);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--pw-ink);
+  font-size: 29px;
+  font-weight: 640;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.header p {
+  margin: 6px 0 0;
+  color: var(--muted-text, #6e6e76);
+  font-size: 13px;
+}
+
+.header > :global([data-slot="badge"]) {
+  padding: 5px 9px;
+  border: 1px solid rgb(31 137 91 / 20%);
+  border-radius: 999px;
+  color: #18734b;
+  background: #edf8f2;
+  font-size: 12px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.sidebar {
+  min-width: 0;
+}
+
+.progressCard {
+  position: sticky;
+  top: 16px;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #242329;
+  border-radius: 17px;
+  color: #fff;
+  background:
+    radial-gradient(
+      circle at 110% 110%,
+      rgb(255 106 43 / 24%),
+      transparent 48%
+    ),
+    linear-gradient(145deg, #15151b, #211f23);
+  box-shadow: 0 16px 38px rgb(20 20 26 / 15%);
+}
+
+.progressCard::before {
+  height: 3px;
+  background: linear-gradient(90deg, #ff8a4b, #ff5e1f 52%, transparent);
+  content: "";
+}
+
+.progressHeader {
+  padding: 20px 19px 15px;
+  border-bottom: 1px solid rgb(255 255 255 / 9%);
+}
+
+.progressHeader :global([data-slot="card-title"]) {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+}
+
+.progressHeader :global([data-slot="card-description"]) {
+  margin-top: 4px;
+  color: rgb(255 255 255 / 48%);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.progressBody {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+}
+
+.stepButton {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: rgb(255 255 255 / 69%);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.stepButton:hover:not(:disabled) {
+  color: #fff;
+  background: rgb(255 255 255 / 6%);
+}
+
+.stepButton[data-active="true"] {
+  border-color: rgb(255 106 43 / 32%);
+  color: #fff;
+  background: rgb(255 106 43 / 12%);
+  box-shadow: 0 7px 20px rgb(0 0 0 / 12%);
+}
+
+.stepButton[data-disabled="true"] {
+  opacity: 0.43;
+  cursor: not-allowed;
+}
+
+.stepRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.stepNumber {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  color: #ffb08a;
+  background: rgb(255 106 43 / 13%);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stepNumber[data-complete="true"] {
+  color: #6ed6a8;
+  background: rgb(55 195 133 / 13%);
+}
+
+.stepNumber[data-error="true"] {
+  color: #ff958d;
+  background: rgb(218 66 54 / 14%);
+}
+
+.stepNumber svg {
+  width: 12px;
+  height: 12px;
+}
+
+.stepText {
+  min-width: 0;
+  flex: 1;
+}
+
+.stepText > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.stepText svg {
+  width: 12px;
+  height: 12px;
+  color: var(--pw-orange);
+}
+
+.stepText small {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  color: rgb(255 255 255 / 42%);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepButton :global([data-slot="badge"]) {
+  height: 17px;
+  min-width: 17px;
+  justify-content: center;
+  padding: 0 4px;
+  border-color: rgb(255 255 255 / 12%);
+  color: #ffada6;
+  background: rgb(204 57 45 / 15%);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.content :global([data-slot="card"]) {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--pw-border);
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 10px 34px rgb(23 21 18 / 5%);
+}
+
+.content :global([data-slot="card-header"]) {
+  position: relative;
+  padding: 18px 19px 16px;
+  border-bottom: 1px solid #eeeae5;
+  background:
+    radial-gradient(circle at 100% -80%, rgb(255 106 43 / 9%), transparent 30%),
+    linear-gradient(135deg, #fff 0%, #fcfaf7 100%);
+}
+
+.content :global([data-slot="card-header"])::before {
+  color: var(--pw-orange);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  content: "CONFIGURACIÓN";
+}
+
+.content .identityCard :global([data-slot="card-header"])::before {
+  content: "FICHA DEL PRODUCTO";
+}
+
+.content .commercialCard :global([data-slot="card-header"])::before {
+  content: "REGLAS COMERCIALES";
+}
+
+.content :global([data-slot="card-title"]) {
+  margin-top: 5px;
+  color: var(--pw-ink);
+  font-size: 15px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+}
+
+.content :global([data-slot="card-description"]) {
+  margin-top: 3px;
+  color: var(--muted-text, #6e6e76);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.content :global([data-slot="card-content"]) {
+  padding: 19px 20px 22px;
+}
+
+.content label,
+.content :global([data-slot="label"]) {
+  color: #55514c;
+  font-size: 11.5px;
+  font-weight: 680;
+  letter-spacing: 0.035em;
+}
+
+.content :global([data-slot="input"]),
+.content textarea,
+.content button[role="combobox"] {
+  border-color: #e4dfd9;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.content :global([data-slot="input"]):focus-visible,
+.content textarea:focus-visible,
+.content button[role="combobox"]:focus-visible {
+  border-color: rgb(255 106 43 / 55%);
+  box-shadow: 0 0 0 3px rgb(255 106 43 / 8%);
+}
+
+.content :global([data-slot="input"])[aria-invalid="true"] {
+  border-color: #d74438;
+  background: #fffafa;
+  box-shadow: 0 0 0 1px rgb(215 68 56 / 8%);
+}
+
+.content :global([data-slot="input"])[aria-invalid="true"]:focus-visible {
+  border-color: #c9362b;
+  box-shadow: 0 0 0 3px rgb(201 54 43 / 12%);
+}
+
+.fieldError {
+  margin: -2px 0 0;
+  color: #b92f27;
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.content p {
+  line-height: 1.45;
+}
+
+.blockedCard {
+  border-style: dashed;
+}
+
+.content .validationCard {
+  border-radius: 13px;
+  box-shadow: none;
+}
+
+.content .validationCard[data-level="error"] {
+  border-color: rgb(195 60 47 / 24%);
+  background: #fff2f0;
+}
+
+.content .validationCard[data-level="warning"] {
+  border-color: rgb(190 126 34 / 24%);
+  background: #fff8e9;
+}
+
+.content .validationCard :global([data-slot="card-content"]) {
+  padding: 14px 16px;
+}
+
+.navigation {
+  position: sticky;
+  z-index: 10;
+  bottom: 12px;
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid rgb(226 221 214 / 92%);
+  border-radius: 15px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 14px 38px rgb(23 20 18 / 12%);
+  backdrop-filter: blur(10px);
+}
+
+.navigation > div {
+  display: flex;
+  gap: 8px;
+}
+
+.navigation button {
+  min-height: 37px;
+  border-radius: 10px;
+}
+
+.primaryAction {
+  border-color: #df541d;
+  color: #fff;
+  background: linear-gradient(135deg, #ff742f 0%, #f2551c 100%);
+  box-shadow: 0 8px 20px rgb(242 85 28 / 18%);
+}
+
+.primaryAction:hover {
+  background: linear-gradient(135deg, #ff7e3f 0%, #ee4e16 100%);
+}
+
+@media (max-width: 1000px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .progressCard {
+    position: static;
+  }
+
+  .progressBody {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .page {
+    gap: 20px;
+    padding: 18px 16px 60px;
+  }
+
+  .header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .progressBody {
+    grid-template-columns: 1fr;
+  }
+
+  .content :global([data-slot="card-content"]) {
+    padding: 17px 16px 19px;
+  }
+
+  .navigation {
+    bottom: 8px;
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .navigation > div,
+  .navigation button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .back,
+  .stepButton {
+    transition: none;
+  }
+}

@@ -42,7 +42,13 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
@@ -83,6 +89,8 @@ import {
   modoMedidasLabels,
   unidadComercialLabels,
 } from "@/lib/labels-humanos";
+
+import styles from "./producto-wizard.module.css";
 
 // ─── Configuración de steps ────────────────────────────────────────
 
@@ -133,7 +141,8 @@ function normalizarMedidasPorModo(
   if (!modoMedidasUsaPredefinidas(modo)) return [];
   const normalizadas = normalizeMedidasDraft(medidas);
   if (modo !== "FIJA") return normalizadas;
-  const defaultMedida = normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
+  const defaultMedida =
+    normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
   return defaultMedida ? [{ ...defaultMedida, esDefault: true }] : [];
 }
 
@@ -158,10 +167,16 @@ function MedidasPredefinidasWizard({
     id: string,
     patch: Partial<MedidaPredefinidaProducto>,
   ) => {
-    onChange(medidas.map((medida) => (medida.id === id ? { ...medida, ...patch } : medida)));
+    onChange(
+      medidas.map((medida) =>
+        medida.id === id ? { ...medida, ...patch } : medida,
+      ),
+    );
   };
   const setDefault = (id: string) => {
-    onChange(medidas.map((medida) => ({ ...medida, esDefault: medida.id === id })));
+    onChange(
+      medidas.map((medida) => ({ ...medida, esDefault: medida.id === id })),
+    );
   };
   const removeMedida = (id: string) => {
     const next = medidas.filter((medida) => medida.id !== id);
@@ -179,7 +194,9 @@ function MedidasPredefinidasWizard({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])}
+          onClick={() =>
+            onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])
+          }
         >
           Agregar medida
         </Button>
@@ -192,7 +209,9 @@ function MedidasPredefinidasWizard({
           >
             <Input
               value={medida.nombre}
-              onChange={(event) => updateMedida(medida.id, { nombre: event.target.value })}
+              onChange={(event) =>
+                updateMedida(medida.id, { nombre: event.target.value })
+              }
               placeholder={medidaLabel({ ...medida, nombre: "" })}
               aria-label={`Nombre de medida ${index + 1}`}
             />
@@ -201,7 +220,9 @@ function MedidasPredefinidasWizard({
               min="0"
               value={medida.anchoMm || ""}
               onChange={(event) =>
-                updateMedida(medida.id, { anchoMm: Number(event.target.value) || 0 })
+                updateMedida(medida.id, {
+                  anchoMm: Number(event.target.value) || 0,
+                })
               }
               placeholder="Ancho"
               aria-label={`Ancho de medida ${index + 1}`}
@@ -211,7 +232,9 @@ function MedidasPredefinidasWizard({
               min="0"
               value={medida.altoMm || ""}
               onChange={(event) =>
-                updateMedida(medida.id, { altoMm: Number(event.target.value) || 0 })
+                updateMedida(medida.id, {
+                  altoMm: Number(event.target.value) || 0,
+                })
               }
               placeholder="Alto"
               aria-label={`Alto de medida ${index + 1}`}
@@ -228,7 +251,10 @@ function MedidasPredefinidasWizard({
                   : "Marcar como predeterminada"
               }
             >
-              <StarIcon className="size-4" fill={medida.esDefault ? "currentColor" : "none"} />
+              <StarIcon
+                className="size-4"
+                fill={medida.esDefault ? "currentColor" : "none"}
+              />
             </Button>
             <Button
               type="button"
@@ -271,7 +297,8 @@ function validarIdentidad(state: { nombre: string }): ValidacionStep {
 }
 
 function validarRutas(producto: ProductoDetalle | undefined): ValidacionStep {
-  if (!producto) return { errores: ["Falta crear el producto en el step 1"], warnings: [] };
+  if (!producto)
+    return { errores: ["Falta crear el producto en el step 1"], warnings: [] };
   const errores: string[] = [];
   const warnings: string[] = [];
   if (producto.rutasAlternativas.length === 0) {
@@ -284,7 +311,9 @@ function validarRutas(producto: ProductoDetalle | undefined): ValidacionStep {
   return { errores, warnings };
 }
 
-function validarConfigPasos(producto: ProductoDetalle | undefined): ValidacionStep {
+function validarConfigPasos(
+  producto: ProductoDetalle | undefined,
+): ValidacionStep {
   if (!producto) return { errores: ["Falta crear el producto"], warnings: [] };
   const errores: string[] = [];
   const warnings: string[] = [];
@@ -292,7 +321,9 @@ function validarConfigPasos(producto: ProductoDetalle | undefined): ValidacionSt
     const totalPasos = ra.ruta.pasos.length;
     const configurados = ra.configPasos.length;
     if (configurados < totalPasos) {
-      warnings.push(`${ra.nombre}: ${configurados}/${totalPasos} pasos configurados`);
+      warnings.push(
+        `${ra.nombre}: ${configurados}/${totalPasos} pasos configurados`,
+      );
     }
   }
   return { errores, warnings };
@@ -300,7 +331,8 @@ function validarConfigPasos(producto: ProductoDetalle | undefined): ValidacionSt
 
 function validarPrecio(precioConfig: TabPrecioConfig | null): ValidacionStep {
   const errores: string[] = [];
-  if (!precioConfig?.metodoCalculo) errores.push("Falta método de cálculo de precio");
+  if (!precioConfig?.metodoCalculo)
+    errores.push("Falta método de cálculo de precio");
   return { errores, warnings: [] };
 }
 
@@ -318,18 +350,23 @@ export function ProductoWizard({
   // Si modo editar, default a step desde URL o "identidad"; si crear, siempre "identidad"
   const [stepActivo, setStepActivo] = React.useState<StepId>(() => {
     if (modo === "crear") return "identidad";
-    if (stepFromUrl && STEPS.some((s) => s.id === stepFromUrl)) return stepFromUrl;
+    if (stepFromUrl && STEPS.some((s) => s.id === stepFromUrl))
+      return stepFromUrl;
     return "identidad";
   });
 
   // Estado de step 1 — Identidad
-  const [codigo, setCodigo] = React.useState(productoExistente?.codigo ?? "");
   const [nombre, setNombre] = React.useState(productoExistente?.nombre ?? "");
-  const [descripcion, setDescripcion] = React.useState(productoExistente?.descripcion ?? "");
-  const [catalogoComercial, setCatalogoComercial] = React.useState<ProductoCategoriaComercial[]>([]);
-  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] = React.useState(
-    productoExistente?.subcategoriaComercial?.codigo ?? "producto_a_medida",
+  const [descripcion, setDescripcion] = React.useState(
+    productoExistente?.descripcion ?? "",
   );
+  const [catalogoComercial, setCatalogoComercial] = React.useState<
+    ProductoCategoriaComercial[]
+  >([]);
+  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] =
+    React.useState(
+      productoExistente?.subcategoriaComercial?.codigo ?? "producto_a_medida",
+    );
   const [unidadComercial, setUnidadComercial] = React.useState(
     productoExistente?.unidadComercial ?? "unidad",
   );
@@ -350,7 +387,9 @@ export function ProductoWizard({
             },
           ],
   );
-  const [activo, setActivo] = React.useState(productoExistente?.activo ?? false);
+  const [activo, setActivo] = React.useState(
+    productoExistente?.activo ?? false,
+  );
   // Producto por unidad sin medida (merchandising comprado: taza, remera). Se
   // persiste como modoMedidas FIJA + medidas vacías; el motor cotiza por unidad
   // y la estampa la maneja la personalización.
@@ -368,13 +407,14 @@ export function ProductoWizard({
   }, [unidadComercial, sinMedida]);
 
   // Estado de step 5 — Precio
-  const [precioPersistido, setPrecioPersistido] = React.useState<TabPrecioConfig>(
-    () =>
-      (productoExistente?.precioConfigJson as TabPrecioConfig | null) ?? {
-        metodoCalculo: "por_margen",
-        detalle: { marginPct: 40, minimumMarginPct: 25 },
-      },
-  );
+  const [precioPersistido, setPrecioPersistido] =
+    React.useState<TabPrecioConfig>(
+      () =>
+        (productoExistente?.precioConfigJson as TabPrecioConfig | null) ?? {
+          metodoCalculo: "por_margen",
+          detalle: { marginPct: 40, minimumMarginPct: 25 },
+        },
+    );
   const [precioConfig, setPrecioConfig] = React.useState<TabPrecioConfig>(
     () =>
       (productoExistente?.precioConfigJson as TabPrecioConfig | null) ?? {
@@ -395,7 +435,9 @@ export function ProductoWizard({
         setCatalogoComercial(catalogo);
         setSubcategoriaComercialCodigo((current) =>
           catalogo.some((categoria) =>
-            categoria.subcategorias.some((subcategoria) => subcategoria.codigo === current),
+            categoria.subcategorias.some(
+              (subcategoria) => subcategoria.codigo === current,
+            ),
           )
             ? current
             : (catalogo[0]?.subcategorias[0]?.codigo ?? "producto_a_medida"),
@@ -421,15 +463,19 @@ export function ProductoWizard({
   const irAStep = (id: StepId) => {
     setStepActivo(id);
     if (productoExistente) {
-      router.replace(`/productos-servicios/${productoExistente.id}/wizard?step=${id}`, {
-        scroll: false,
-      });
+      router.replace(
+        `/productos-servicios/${productoExistente.id}/wizard?step=${id}`,
+        {
+          scroll: false,
+        },
+      );
     }
   };
 
   const indiceActual = STEPS.findIndex((s) => s.id === stepActivo);
   const stepAnterior = indiceActual > 0 ? STEPS[indiceActual - 1] : null;
-  const stepSiguiente = indiceActual < STEPS.length - 1 ? STEPS[indiceActual + 1] : null;
+  const stepSiguiente =
+    indiceActual < STEPS.length - 1 ? STEPS[indiceActual + 1] : null;
 
   // ── Step 1: guardar identidad (crea o actualiza) ──────────────────
   const guardarIdentidad = async (avanzar: boolean) => {
@@ -441,7 +487,9 @@ export function ProductoWizard({
     const medidasNormalizadas = sinMedida
       ? []
       : normalizarMedidasPorModo(modoMedidas, medidas);
-    const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
+    const medidaDefault = medidasNormalizadas.find(
+      (medida) => medida.esDefault,
+    );
     if (!sinMedida && modoMedidas === "FIJA" && !medidaDefault) {
       toast.error("Agregá al menos una medida predefinida.");
       return;
@@ -453,7 +501,10 @@ export function ProductoWizard({
         descripcion: descripcion || undefined,
         subcategoriaComercialCodigo,
         atributosComercialesJson:
-          (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
+          (productoExistente?.atributosComercialesJson as Record<
+            string,
+            unknown
+          > | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidasEfectivo,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
@@ -463,8 +514,12 @@ export function ProductoWizard({
       };
       if (modo === "crear") {
         const creado = (await crearProducto(payload)) as { id: string };
-        toast.success("Borrador creado · completá las rutas antes de publicarlo");
-        router.push(`/productos-servicios/${creado.id}?tab=${avanzar ? "rutas" : "identidad"}`);
+        toast.success(
+          "Borrador creado · completá las rutas antes de publicarlo",
+        );
+        router.push(
+          `/productos-servicios/${creado.id}?tab=${avanzar ? "rutas" : "identidad"}`,
+        );
         router.refresh();
       } else if (productoExistente) {
         await actualizarProducto(productoExistente.id, {
@@ -490,7 +545,9 @@ export function ProductoWizard({
     const medidasNormalizadas = sinMedida
       ? []
       : normalizarMedidasPorModo(modoMedidas, medidas);
-    const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
+    const medidaDefault = medidasNormalizadas.find(
+      (medida) => medida.esDefault,
+    );
     setGuardandoStep(true);
     try {
       await actualizarProducto(productoExistente.id, {
@@ -498,7 +555,10 @@ export function ProductoWizard({
         descripcion: descripcion || undefined,
         subcategoriaComercialCodigo,
         atributosComercialesJson:
-          (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
+          (productoExistente?.atributosComercialesJson as Record<
+            string,
+            unknown
+          > | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidasEfectivo,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
@@ -518,8 +578,8 @@ export function ProductoWizard({
   };
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-6">
-      <div className="mb-6 flex items-center justify-between">
+    <main className={styles.page}>
+      <header className={styles.header}>
         <div>
           <Link
             href={
@@ -527,35 +587,41 @@ export function ProductoWizard({
                 ? `/productos-servicios/${productoExistente.id}`
                 : "/productos-servicios"
             }
-            className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
+            className={styles.back}
           >
             <ArrowLeftIcon className="mr-1 size-4" />
             {productoExistente ? "Salir del wizard" : "Volver al catálogo"}
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            {modo === "crear" ? "Nuevo producto" : `Editar: ${productoExistente?.nombre}`}
+          <span className={styles.eyebrow}>Catálogo de productos</span>
+          <h1>
+            {modo === "crear"
+              ? "Nuevo producto"
+              : `Editar: ${productoExistente?.nombre}`}
           </h1>
+          <p>
+            Construí la ficha comercial y productiva en un recorrido guiado.
+          </p>
         </div>
         {productoExistente && (
           <Badge variant={productoExistente.activo ? "default" : "secondary"}>
             {productoExistente.activo ? "Activo" : "Inactivo"}
           </Badge>
         )}
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+      <div className={styles.workspace}>
         {/* Sidebar de progreso */}
-        <aside className="lg:col-span-1">
-          <Card className="lg:sticky lg:top-4">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Progreso</CardTitle>
-              <CardDescription className="text-xs">
+        <aside className={styles.sidebar}>
+          <Card className={styles.progressCard}>
+            <CardHeader className={styles.progressHeader}>
+              <CardTitle>Progreso</CardTitle>
+              <CardDescription>
                 {modo === "crear"
                   ? "Empezá creando el producto en el step 1."
                   : "Tocá un step para saltar."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-1">
+            <CardContent className={styles.progressBody}>
               {STEPS.map((step, idx) => {
                 const val = validaciones[step.id];
                 const Icon = step.icon;
@@ -567,38 +633,31 @@ export function ProductoWizard({
                     key={step.id}
                     onClick={() => disponible && irAStep(step.id)}
                     disabled={!disponible}
-                    className={[
-                      "w-full rounded-md border px-3 py-2 text-left transition-all",
-                      isActive
-                        ? "border-primary bg-primary/5"
-                        : "border-transparent hover:bg-muted",
-                      !disponible ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-                    ].join(" ")}
+                    className={styles.stepButton}
+                    data-active={isActive || undefined}
+                    data-complete={ok || undefined}
+                    data-disabled={!disponible || undefined}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className={styles.stepRow}>
                       <div
-                        className={[
-                          "flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
-                          ok
-                            ? "bg-green-100 text-green-700"
-                            : val.errores.length > 0
-                              ? "bg-red-100 text-red-700"
-                              : "bg-muted text-muted-foreground",
-                        ].join(" ")}
+                        className={styles.stepNumber}
+                        data-complete={ok || undefined}
+                        data-error={val.errores.length > 0 || undefined}
                       >
                         {ok ? <CheckIcon className="size-3" /> : idx + 1}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 text-sm font-medium">
-                          <Icon className="size-3" />
+                      <div className={styles.stepText}>
+                        <div>
+                          <Icon />
                           {step.nombre}
                         </div>
-                        <div className="text-muted-foreground truncate text-xs">
-                          {step.descripcion}
-                        </div>
+                        <small>{step.descripcion}</small>
                       </div>
                       {val.errores.length > 0 && (
-                        <Badge variant="destructive" className="h-4 px-1 text-[10px]">
+                        <Badge
+                          variant="destructive"
+                          className="h-4 px-1 text-[10px]"
+                        >
                           {val.errores.length}
                         </Badge>
                       )}
@@ -619,12 +678,10 @@ export function ProductoWizard({
         </aside>
 
         {/* Contenido del step */}
-        <div className="space-y-4 lg:col-span-3">
+        <div className={styles.content}>
           {stepActivo === "identidad" && (
             <StepIdentidad
               modo={modo}
-              codigo={codigo}
-              setCodigo={setCodigo}
               nombre={nombre}
               setNombre={setNombre}
               descripcion={descripcion}
@@ -643,7 +700,6 @@ export function ProductoWizard({
               activo={activo}
               setActivo={setActivo}
               productoExistente={productoExistente}
-              validacion={valIdentidad}
             />
           )}
 
@@ -656,7 +712,10 @@ export function ProductoWizard({
           )}
 
           {stepActivo === "config-pasos" && productoExistente && (
-            <StepConfigPasos producto={productoExistente} validacion={valConfigPasos} />
+            <StepConfigPasos
+              producto={productoExistente}
+              validacion={valConfigPasos}
+            />
           )}
 
           {stepActivo === "precio" && (
@@ -674,15 +733,16 @@ export function ProductoWizard({
 
           {/* Bloqueo si modo crear y producto no existe pero el step requiere producto */}
           {stepActivo !== "identidad" && !productoExistente && (
-            <Card>
+            <Card className={styles.blockedCard}>
               <CardContent className="pt-6 text-center text-sm text-muted-foreground">
-                Necesitás crear primero el producto en el step &quot;Identidad&quot;.
+                Necesitás crear primero el producto en el step
+                &quot;Identidad&quot;.
               </CardContent>
             </Card>
           )}
 
           {/* Navegación inferior */}
-          <div className="flex items-center justify-between gap-2">
+          <footer className={styles.navigation}>
             <Button
               variant="outline"
               onClick={() => stepAnterior && irAStep(stepAnterior.id)}
@@ -702,15 +762,21 @@ export function ProductoWizard({
                   Guardar borrador
                 </Button>
                 <Button
+                  className={styles.primaryAction}
                   onClick={() => guardarIdentidad(true)}
                   disabled={guardandoStep || valIdentidad.errores.length > 0}
                 >
-                  {guardandoStep ? "Guardando..." : modo === "crear" ? "Crear borrador y continuar" : "Continuar"}
+                  {guardandoStep
+                    ? "Guardando..."
+                    : modo === "crear"
+                      ? "Crear borrador y continuar"
+                      : "Continuar"}
                   <ArrowRightIcon className="ml-2 size-4" />
                 </Button>
               </div>
             ) : (
               <Button
+                className={styles.primaryAction}
                 onClick={() => stepSiguiente && irAStep(stepSiguiente.id)}
                 disabled={!stepSiguiente}
               >
@@ -718,10 +784,10 @@ export function ProductoWizard({
                 <ArrowRightIcon className="ml-2 size-4" />
               </Button>
             )}
-          </div>
+          </footer>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -729,8 +795,6 @@ export function ProductoWizard({
 
 interface StepIdentidadProps {
   modo: "crear" | "editar";
-  codigo: string;
-  setCodigo: (v: string) => void;
   nombre: string;
   setNombre: (v: string) => void;
   descripcion: string;
@@ -749,7 +813,6 @@ interface StepIdentidadProps {
   activo: boolean;
   setActivo: (v: boolean) => void;
   productoExistente?: ProductoDetalle;
-  validacion: ValidacionStep;
 }
 
 function StepIdentidad(props: StepIdentidadProps) {
@@ -762,28 +825,14 @@ function StepIdentidad(props: StepIdentidadProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card>
+      <Card className={styles.identityCard}>
         <CardHeader>
           <CardTitle>Identidad</CardTitle>
-          <CardDescription>Cómo se llama el producto en el catálogo.</CardDescription>
+          <CardDescription>
+            Cómo se llama el producto en el catálogo.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {props.modo === "editar" ? (
-            <div className="space-y-2">
-              <Label htmlFor="codigo">Código</Label>
-              <Input
-                id="codigo"
-                value={props.codigo}
-                disabled
-                placeholder="Generado por el sistema"
-              />
-              <p className="text-muted-foreground text-xs">El código no se puede modificar.</p>
-            </div>
-          ) : (
-            <p className="rounded-md border bg-muted/35 px-3 py-2 text-muted-foreground text-xs">
-              El código se genera automáticamente al guardar el producto.
-            </p>
-          )}
           <div className="space-y-2">
             <Label htmlFor="nombre">
               Nombre <span className="text-destructive">*</span>
@@ -793,7 +842,16 @@ function StepIdentidad(props: StepIdentidadProps) {
               value={props.nombre}
               onChange={(e) => props.setNombre(e.target.value)}
               placeholder="Tarjetas de Visita Premium 300gr"
+              aria-invalid={!props.nombre.trim()}
+              aria-describedby={
+                !props.nombre.trim() ? "nombre-error" : undefined
+              }
             />
+            {!props.nombre.trim() && (
+              <p id="nombre-error" className={styles.fieldError}>
+                Ingresá el nombre del producto.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="descripcion">Descripción</Label>
@@ -810,12 +868,15 @@ function StepIdentidad(props: StepIdentidadProps) {
               id="subcategoriaComercial"
               value={props.subcategoriaComercialCodigo}
               onValueChange={(value) =>
-                props.setSubcategoriaComercialCodigo(value || "producto_a_medida")
+                props.setSubcategoriaComercialCodigo(
+                  value || "producto_a_medida",
+                )
               }
               options={subcategoriaOptions}
             />
             <p className="text-muted-foreground text-xs">
-              Se usa para reportes y para definir las especificaciones visibles en propuestas.
+              Se usa para reportes y para definir las especificaciones visibles
+              en propuestas.
             </p>
           </div>
           {props.modo === "editar" && (
@@ -823,26 +884,36 @@ function StepIdentidad(props: StepIdentidadProps) {
               <div>
                 <Label htmlFor="activo">Publicado</Label>
                 <p className="text-muted-foreground text-xs">
-                  Al publicar, el backend verificará que el producto esté listo para cotizar.
+                  Al publicar, el backend verificará que el producto esté listo
+                  para cotizar.
                 </p>
               </div>
-              <Switch id="activo" checked={props.activo} onCheckedChange={props.setActivo} />
+              <Switch
+                id="activo"
+                checked={props.activo}
+                onCheckedChange={props.setActivo}
+              />
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={styles.commercialCard}>
         <CardHeader>
           <CardTitle>Comercial y medidas</CardTitle>
-          <CardDescription>Cómo se cobra y cómo se manejan las medidas al cotizar.</CardDescription>
+          <CardDescription>
+            Cómo se cobra y cómo se manejan las medidas al cotizar.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <LabelConTooltip
               label="¿Cómo se cobra?"
               htmlFor="unidad"
-              tooltip={getLabel(unidadComercialLabels, props.unidadComercial).descripcion}
+              tooltip={
+                getLabel(unidadComercialLabels, props.unidadComercial)
+                  .descripcion
+              }
             />
             <HumanSelect
               value={props.unidadComercial}
@@ -867,12 +938,14 @@ function StepIdentidad(props: StepIdentidadProps) {
                   {
                     value: "con",
                     label: "Con medida",
-                    description: "El producto tiene una medida física (ej. tarjeta 90×50 mm).",
+                    description:
+                      "El producto tiene una medida física (ej. tarjeta 90×50 mm).",
                   },
                   {
                     value: "sin",
                     label: "Sin medida (por unidad)",
-                    description: "Merchandising comprado: taza, remera, lapicera. Se cotiza por unidad.",
+                    description:
+                      "Merchandising comprado: taza, remera, lapicera. Se cotiza por unidad.",
                   },
                 ]}
                 id="sinMedida"
@@ -884,31 +957,32 @@ function StepIdentidad(props: StepIdentidadProps) {
               <LabelConTooltip
                 label="Manejo de medidas"
                 htmlFor="modoMedidas"
-                tooltip={getLabel(modoMedidasLabels, props.modoMedidas).descripcion}
+                tooltip={
+                  getLabel(modoMedidasLabels, props.modoMedidas).descripcion
+                }
                 ejemplo={getLabel(modoMedidasLabels, props.modoMedidas).ejemplo}
               />
               <HumanSelect
                 value={props.modoMedidas}
-                onValueChange={(v) => props.setModoMedidas((v || "FIJA") as ModoMedidasProducto)}
-                options={MODOS_MEDIDAS.map((it) => optionFromLabel(it.value, modoMedidasLabels))}
+                onValueChange={(v) =>
+                  props.setModoMedidas((v || "FIJA") as ModoMedidasProducto)
+                }
+                options={MODOS_MEDIDAS.map((it) =>
+                  optionFromLabel(it.value, modoMedidasLabels),
+                )}
                 id="modoMedidas"
               />
             </div>
           )}
-          {!props.sinMedida && modoMedidasUsaPredefinidas(props.modoMedidas) && (
-            <MedidasPredefinidasWizard
-              medidas={props.medidas}
-              onChange={props.setMedidas}
-            />
-          )}
+          {!props.sinMedida &&
+            modoMedidasUsaPredefinidas(props.modoMedidas) && (
+              <MedidasPredefinidasWizard
+                medidas={props.medidas}
+                onChange={props.setMedidas}
+              />
+            )}
         </CardContent>
       </Card>
-
-      {props.validacion.errores.length > 0 && (
-        <div className="lg:col-span-2">
-          <ListaValidacion validacion={props.validacion} />
-        </div>
-      )}
     </div>
   );
 }
@@ -926,7 +1000,10 @@ function StepRutas({ producto, rutasDisponibles, validacion }: StepRutasProps) {
   const [agregando, setAgregando] = React.useState(false);
   const [nuevaRutaId, setNuevaRutaId] = React.useState("");
   const [nuevoNombre, setNuevoNombre] = React.useState("");
-  const [rutaAQuitar, setRutaAQuitar] = React.useState<{ id: string; nombre: string } | null>(null);
+  const [rutaAQuitar, setRutaAQuitar] = React.useState<{
+    id: string;
+    nombre: string;
+  } | null>(null);
 
   const yaUsadas = new Set(producto.rutasAlternativas.map((ra) => ra.ruta.id));
   const disponibles = rutasDisponibles.filter((r) => !yaUsadas.has(r.id));
@@ -977,8 +1054,8 @@ function StepRutas({ producto, rutasDisponibles, validacion }: StepRutasProps) {
         <CardHeader>
           <CardTitle>Rutas alternativas</CardTitle>
           <CardDescription>
-            Cada ruta es un camino de producción reusable. La preferida es el default al cotizar;
-            el comercial puede elegir otra alternativa.
+            Cada ruta es un camino de producción reusable. La preferida es el
+            default al cotizar; el comercial puede elegir otra alternativa.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -993,16 +1070,21 @@ function StepRutas({ producto, rutasDisponibles, validacion }: StepRutasProps) {
                   key={ra.id}
                   className={[
                     "flex items-center justify-between rounded border p-2",
-                    ra.esPreferida ? "border-primary bg-primary/5" : "bg-muted/30",
+                    ra.esPreferida
+                      ? "border-primary bg-primary/5"
+                      : "bg-muted/30",
                   ].join(" ")}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1 text-sm font-medium">
-                      {ra.esPreferida && <StarIcon className="text-primary size-3" />}
+                      {ra.esPreferida && (
+                        <StarIcon className="text-primary size-3" />
+                      )}
                       {ra.nombre}
                     </div>
                     <div className="text-muted-foreground text-xs">
-                      {ra.ruta.nombre} · v{ra.rutaVersion} · {ra.ruta.pasos.length} pasos
+                      {ra.ruta.nombre} · v{ra.rutaVersion} ·{" "}
+                      {ra.ruta.pasos.length} pasos
                     </div>
                   </div>
                   <div className="flex gap-1">
@@ -1032,7 +1114,9 @@ function StepRutas({ producto, rutasDisponibles, validacion }: StepRutasProps) {
 
           {disponibles.length > 0 && (
             <div className="space-y-2 rounded border p-3">
-              <div className="text-sm font-medium">Agregar ruta del catálogo</div>
+              <div className="text-sm font-medium">
+                Agregar ruta del catálogo
+              </div>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 <HumanSelect
                   value={nuevaRutaId}
@@ -1061,15 +1145,19 @@ function StepRutas({ producto, rutasDisponibles, validacion }: StepRutasProps) {
             </div>
           )}
 
-          {disponibles.length === 0 && producto.rutasAlternativas.length === 0 && (
-            <div className="rounded border border-dashed p-3 text-sm text-muted-foreground">
-              No hay rutas en el catálogo todavía.{" "}
-              <Link href="/productos-servicios/rutas/nueva" className="text-primary underline">
-                Creá una ruta
-              </Link>{" "}
-              primero.
-            </div>
-          )}
+          {disponibles.length === 0 &&
+            producto.rutasAlternativas.length === 0 && (
+              <div className="rounded border border-dashed p-3 text-sm text-muted-foreground">
+                No hay rutas en el catálogo todavía.{" "}
+                <Link
+                  href="/productos-servicios/rutas/nueva"
+                  className="text-primary underline"
+                >
+                  Creá una ruta
+                </Link>{" "}
+                primero.
+              </div>
+            )}
         </CardContent>
       </Card>
 
@@ -1118,8 +1206,9 @@ function StepConfigPasos({
         <CardHeader>
           <CardTitle>Configurar pasos por ruta</CardTitle>
           <CardDescription>
-            Para cada ruta alternativa, configurá la máquina, perfil y materiales de cada paso.
-            El editor se abre en pantalla completa para no perder espacio.
+            Para cada ruta alternativa, configurá la máquina, perfil y
+            materiales de cada paso. El editor se abre en pantalla completa para
+            no perder espacio.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -1145,16 +1234,23 @@ function StepConfigPasos({
                     )}
                     <div>
                       <div className="flex items-center gap-1 text-sm font-medium">
-                        {ra.esPreferida && <StarIcon className="text-primary size-3" />}
+                        {ra.esPreferida && (
+                          <StarIcon className="text-primary size-3" />
+                        )}
                         {ra.nombre}
                       </div>
                       <div className="text-muted-foreground text-xs">
-                        {ra.ruta.nombre} · {configurados}/{totalPasos} pasos configurados
+                        {ra.ruta.nombre} · {configurados}/{totalPasos} pasos
+                        configurados
                       </div>
                     </div>
                   </div>
-                  <Link href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}
-                    className={buttonVariants({ variant: completo ? "outline" : "default", size: "sm" })}
+                  <Link
+                    href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}
+                    className={buttonVariants({
+                      variant: completo ? "outline" : "default",
+                      size: "sm",
+                    })}
                   >
                     <CogIcon className="mr-2 size-3" />
                     {completo ? "Revisar" : "Configurar"}
@@ -1230,14 +1326,12 @@ function StepPrecio({
 // ─── Lista de validación reusable ──────────────────────────────────
 
 function ListaValidacion({ validacion }: { validacion: ValidacionStep }) {
-  if (validacion.errores.length === 0 && validacion.warnings.length === 0) return null;
+  if (validacion.errores.length === 0 && validacion.warnings.length === 0)
+    return null;
   return (
     <Card
-      className={
-        validacion.errores.length > 0
-          ? "border-red-200 bg-red-50"
-          : "border-amber-200 bg-amber-50"
-      }
+      className={styles.validationCard}
+      data-level={validacion.errores.length > 0 ? "error" : "warning"}
     >
       <CardContent className="pt-4 text-xs">
         {validacion.errores.map((e, idx) => (
@@ -1247,7 +1341,10 @@ function ListaValidacion({ validacion }: { validacion: ValidacionStep }) {
           </div>
         ))}
         {validacion.warnings.map((w, idx) => (
-          <div key={`w-${idx}`} className="flex items-start gap-1 text-amber-700">
+          <div
+            key={`w-${idx}`}
+            className="flex items-start gap-1 text-amber-700"
+          >
             <AlertCircleIcon className="mt-0.5 size-3 shrink-0" />
             <span>{w}</span>
           </div>

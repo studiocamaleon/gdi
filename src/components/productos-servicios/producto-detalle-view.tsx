@@ -17,10 +17,20 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
-import type { FamiliaListItem, ProductoDetalle, RutaAlternativaDetalle } from "@/lib/productos-servicios";
+import type {
+  FamiliaListItem,
+  ProductoDetalle,
+  RutaAlternativaDetalle,
+} from "@/lib/productos-servicios";
 import { getCatalogoFamilias } from "@/lib/productos-servicios-api";
 import {
   getLabel,
@@ -40,9 +50,15 @@ function humanizeCode(code: string) {
     .join(" ");
 }
 
-export function ProductoDetalleView({ producto }: { producto: ProductoDetalle }) {
+export function ProductoDetalleView({
+  producto,
+}: {
+  producto: ProductoDetalle;
+}) {
   const [rutaActiva, setRutaActiva] = React.useState<string>(
-    producto.rutasAlternativas.find((r) => r.esPreferida)?.id ?? producto.rutasAlternativas[0]?.id ?? "",
+    producto.rutasAlternativas.find((r) => r.esPreferida)?.id ??
+      producto.rutasAlternativas[0]?.id ??
+      "",
   );
   const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
 
@@ -62,7 +78,9 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
   const slotLabel = React.useCallback(
     (familiaCodigo: string, slotCodigo: string): string => {
       const familia = familias.find((x) => x.codigo === familiaCodigo);
-      const slot = familia?.slotsRequeridos.find((s) => s.codigo === slotCodigo);
+      const slot = familia?.slotsRequeridos.find(
+        (s) => s.codigo === slotCodigo,
+      );
       return slot?.nombre ?? humanizeCode(slotCodigo);
     },
     [familias],
@@ -84,23 +102,28 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
         </Link>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{producto.nombre}</h1>
-            <p className="text-muted-foreground font-mono text-xs">{producto.codigo}</p>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {producto.nombre}
+            </h1>
             {producto.descripcion && (
-              <p className="text-muted-foreground mt-2 max-w-2xl text-sm">{producto.descripcion}</p>
+              <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
+                {producto.descripcion}
+              </p>
             )}
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={producto.activo ? "default" : "secondary"}>
               {producto.activo ? "Activo" : "Inactivo"}
             </Badge>
-            <Link href={`/productos-servicios/${producto.id}/rutas`}
+            <Link
+              href={`/productos-servicios/${producto.id}/rutas`}
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               <GitBranchIcon className="mr-2 size-3" />
               Configurar rutas
             </Link>
-            <Link href={`/productos-servicios/${producto.id}/wizard`}
+            <Link
+              href={`/productos-servicios/${producto.id}/wizard`}
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               <PencilIcon className="mr-2 size-3" />
@@ -143,11 +166,13 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
             </CardDescription>
             <CardTitle className="text-base">
               {modoMedidasLbl.label}
-              {producto.modoMedidas === "FIJA" && producto.medidaDefaultAnchoMm && (
-                <span className="text-muted-foreground ml-2 text-sm font-normal">
-                  ({producto.medidaDefaultAnchoMm} × {producto.medidaDefaultAltoMm} mm)
-                </span>
-              )}
+              {producto.modoMedidas === "FIJA" &&
+                producto.medidaDefaultAnchoMm && (
+                  <span className="text-muted-foreground ml-2 text-sm font-normal">
+                    ({producto.medidaDefaultAnchoMm} ×{" "}
+                    {producto.medidaDefaultAltoMm} mm)
+                  </span>
+                )}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -156,7 +181,9 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
             <CardDescription className="flex items-center gap-1 text-xs">
               <GitBranchIcon className="size-3" /> Rutas alternativas
             </CardDescription>
-            <CardTitle className="text-base">{producto.rutasAlternativas.length}</CardTitle>
+            <CardTitle className="text-base">
+              {producto.rutasAlternativas.length}
+            </CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -165,7 +192,9 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
       {producto.cargosDirectosCotizacion.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Costos globales heredados</CardTitle>
+            <CardTitle className="text-base">
+              Costos globales heredados
+            </CardTitle>
             <CardDescription>
               Configuración anterior conservada por compatibilidad. Los costos
               nuevos se modelan dentro de cada paso.
@@ -176,9 +205,15 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
               {producto.cargosDirectosCotizacion.map((c) => {
                 const lblAct = getLabel(modoActivacionLabels, c.modoActivacion);
                 return (
-                  <Badge key={c.id} variant="outline" title={lblAct.descripcion}>
+                  <Badge
+                    key={c.id}
+                    variant="outline"
+                    title={lblAct.descripcion}
+                  >
                     {c.cargoDirectoCatalogo.nombre}
-                    <span className="text-muted-foreground ml-1 text-xs">({lblAct.label})</span>
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      ({lblAct.label})
+                    </span>
                   </Badge>
                 );
               })}
@@ -192,8 +227,9 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
         <CardHeader>
           <CardTitle>Configuración por ruta</CardTitle>
           <CardDescription>
-            Cada ruta alternativa tiene su propia configuración de pasos. La ruta preferida es la
-            default al cotizar; el comercial puede elegir otra.
+            Cada ruta alternativa tiene su propia configuración de pasos. La
+            ruta preferida es la default al cotizar; el comercial puede elegir
+            otra.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -203,7 +239,10 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
                 <TabsTrigger key={r.id} value={r.id}>
                   {r.nombre}
                   {r.esPreferida && (
-                    <Badge variant="default" className="ml-2 px-1 py-0 text-[10px]">
+                    <Badge
+                      variant="default"
+                      className="ml-2 px-1 py-0 text-[10px]"
+                    >
                       preferida
                     </Badge>
                   )}
@@ -212,7 +251,11 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
             </TabsList>
             {producto.rutasAlternativas.map((r) => (
               <TabsContent key={r.id} value={r.id} className="mt-4">
-                <RutaAlternativaContent ruta={r} familiaLabel={familiaLabel} slotLabel={slotLabel} />
+                <RutaAlternativaContent
+                  ruta={r}
+                  familiaLabel={familiaLabel}
+                  slotLabel={slotLabel}
+                />
               </TabsContent>
             ))}
           </Tabs>
@@ -232,14 +275,14 @@ function RutaAlternativaContent({
   slotLabel: (familiaCodigo: string, slotCodigo: string) => string;
 }) {
   const pasosOrdenados = ruta.ruta.pasos;
-  const configByPasoId = new Map(ruta.configPasos.map((c) => [c.rutaPasoId, c]));
+  const configByPasoId = new Map(
+    ruta.configPasos.map((c) => [c.rutaPasoId, c]),
+  );
 
   return (
     <div className="space-y-4">
       <div className="text-muted-foreground text-sm">
         <span className="font-medium">{ruta.ruta.nombre}</span>
-        <span className="mx-2">·</span>
-        <span className="font-mono text-xs">{ruta.ruta.codigo}</span>
         <span className="mx-2">·</span>
         <span>v{ruta.rutaVersion}</span>
       </div>
@@ -257,27 +300,45 @@ function RutaAlternativaContent({
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div
-                          className="font-medium"
-                          title={`Código familia: ${paso.familiaCodigo}`}
-                        >
+                        <div className="font-medium">
                           {familiaLabel(paso.familiaCodigo)}
                         </div>
                         {config?.modoActivacion && (
                           <div className="text-muted-foreground text-xs">
                             <Badge
-                              variant={config.modoActivacion === "OBLIGATORIO" ? "default" : "outline"}
+                              variant={
+                                config.modoActivacion === "OBLIGATORIO"
+                                  ? "default"
+                                  : "outline"
+                              }
                               className="mr-1 text-[10px]"
-                              title={getLabel(modoActivacionLabels, config.modoActivacion).descripcion}
+                              title={
+                                getLabel(
+                                  modoActivacionLabels,
+                                  config.modoActivacion,
+                                ).descripcion
+                              }
                             >
-                              {getLabel(modoActivacionLabels, config.modoActivacion).label}
+                              {
+                                getLabel(
+                                  modoActivacionLabels,
+                                  config.modoActivacion,
+                                ).label
+                              }
                             </Badge>
                             {config.modoTiempo && (
                               <span
                                 className="text-muted-foreground"
-                                title={getLabel(modoTiempoLabels, config.modoTiempo).descripcion}
+                                title={
+                                  getLabel(modoTiempoLabels, config.modoTiempo)
+                                    .descripcion
+                                }
                               >
-                                tiempo: {getLabel(modoTiempoLabels, config.modoTiempo).label}
+                                tiempo:{" "}
+                                {
+                                  getLabel(modoTiempoLabels, config.modoTiempo)
+                                    .label
+                                }
                               </span>
                             )}
                           </div>
@@ -290,7 +351,9 @@ function RutaAlternativaContent({
                             {config.maquinaM1.nombre}
                           </div>
                           {config.perfilM1 && (
-                            <div className="text-muted-foreground">{config.perfilM1.nombre}</div>
+                            <div className="text-muted-foreground">
+                              {config.perfilM1.nombre}
+                            </div>
                           )}
                         </div>
                       )}
@@ -299,7 +362,10 @@ function RutaAlternativaContent({
                     {config && config.slotsMateriales.length > 0 && (
                       <div className="ml-0 grid grid-cols-1 gap-2 md:grid-cols-2">
                         {config.slotsMateriales.map((slot) => {
-                          const lblSel = getLabel(modoSeleccionMaterialLabels, slot.modoSeleccion);
+                          const lblSel = getLabel(
+                            modoSeleccionMaterialLabels,
+                            slot.modoSeleccion,
+                          );
                           return (
                             <div
                               key={slot.id}
@@ -308,15 +374,22 @@ function RutaAlternativaContent({
                             >
                               <PackageIcon className="text-muted-foreground size-3" />
                               <div className="flex-1">
-                                <div className="font-medium" title={slot.slotCodigo}>
-                                  {slotLabel(paso.familiaCodigo, slot.slotCodigo)}
+                                <div
+                                  className="font-medium"
+                                  title={slot.slotCodigo}
+                                >
+                                  {slotLabel(
+                                    paso.familiaCodigo,
+                                    slot.slotCodigo,
+                                  )}
                                 </div>
                                 <div className="text-muted-foreground">
                                   {lblSel.label}
                                   {slot.materialVariante && (
                                     <>
                                       {" · "}
-                                      {slot.materialVariante.nombreVariante ?? slot.materialVariante.sku}
+                                      {slot.materialVariante.nombreVariante ??
+                                        slot.materialVariante.sku}
                                     </>
                                   )}
                                 </div>
@@ -330,7 +403,11 @@ function RutaAlternativaContent({
                     {config && config.cargosDirectosPaso.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {config.cargosDirectosPaso.map((c) => (
-                          <Badge key={c.id} variant="outline" className="text-[10px]">
+                          <Badge
+                            key={c.id}
+                            variant="outline"
+                            className="text-[10px]"
+                          >
                             <WrenchIcon className="mr-1 size-2.5" />
                             {c.cargoDirectoCatalogo.nombre}
                           </Badge>
@@ -341,20 +418,26 @@ function RutaAlternativaContent({
                     {!config && (
                       <div className="text-muted-foreground text-xs italic">
                         <CircleIcon className="mr-1 inline size-3" />
-                        Sin configuración (paso de la ruta sin config en este producto)
+                        Sin configuración (paso de la ruta sin config en este
+                        producto)
                       </div>
                     )}
 
-                    {config?.multiplicadoresActivos && config.multiplicadoresActivos.length > 0 && (
-                      <div className="text-muted-foreground text-xs">
-                        Multiplicadores:{" "}
-                        {config.multiplicadoresActivos.map((m) => (
-                          <Badge key={m} variant="secondary" className="mr-1 text-[10px]">
-                            {m}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+                    {config?.multiplicadoresActivos &&
+                      config.multiplicadoresActivos.length > 0 && (
+                        <div className="text-muted-foreground text-xs">
+                          Multiplicadores:{" "}
+                          {config.multiplicadoresActivos.map((m) => (
+                            <Badge
+                              key={m}
+                              variant="secondary"
+                              className="mr-1 text-[10px]"
+                            >
+                              {m}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                   </div>
                   <CheckCircle2Icon
                     className={
