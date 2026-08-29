@@ -300,7 +300,7 @@ La Fase 1 puede empezar sin decisiones estructurales pendientes.
 
 ## Fase 1 — Proyecto / Campaña como capa de coordinación
 
-**Estado:** VALIDACIÓN
+**Estado:** COMPLETA
 **Rama:** `visual-ilusion/fase-1-campanas`  
 **Dependencias:** Fase 0.
 
@@ -977,8 +977,8 @@ Esta tabla es el control maestro contra pérdida de alcance.
 | Req. | Capacidad | Fase primaria | Fases relacionadas | Estado inicial |
 |---:|---|---|---|---|
 | 1 | No cambiar el corazón de Grafo | Todas | F0, F16 | Gobernado |
-| 2 | Proyecto/Campaña | F1 | F16 | En validación |
-| 3 | Múltiples órdenes y ampliaciones | F1 | F12 | En validación |
+| 2 | Proyecto/Campaña | F1 | F16 | Implementado; consolidación en F16 |
+| 3 | Múltiples órdenes y ampliaciones | F1 | F12 | Implementado; se extiende en F12 |
 | 4 | BOM/receta avanzada | F3 | F4, F9 | Pendiente |
 | 5 | Rutas dinámicas/condicionales | F3–F4 | F2 | Parcial hoy |
 | 6 | Rutas paralelas y convergencia | F4 | F11 | Pendiente |
@@ -1159,7 +1159,7 @@ Esta tabla se actualizará al integrar cada fase.
 | Fase | Estado | Rama | Documento técnico | Evidencia/commit | Observaciones |
 |---:|---|---|---|---|---|
 | 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
-| 1 | VALIDACIÓN | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a` | Journey y pruebas reforzadas completos; pendiente sólo confirmación visual móvil manual |
+| 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
 | 2 | PENDIENTE | — | — | — | — |
 | 3 | PENDIENTE | — | — | — | — |
 | 4 | PENDIENTE | — | — | — | — |

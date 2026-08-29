@@ -1,6 +1,6 @@
 # Fase 1 — Diseño técnico de Proyecto / Campaña
 
-**Estado:** validación final; pendiente únicamente QA visual móvil manual
+**Estado:** COMPLETA
 **Rama:** `visual-ilusion/fase-1-campanas`
 **Plan rector:** `docs/visual-ilusion-plan-maestro.md`
 **Contrato visual:** `docs/visual-ilusion-lenguaje-visual.md`
@@ -205,11 +205,15 @@ Evidencia automatizada final:
 - Prisma válido y 203 migraciones al día;
 - QA visual desktop autenticado y consola del listado/ficha sin errores.
 
-Pendiente para declarar la fase `COMPLETA`:
+### Cierre visual móvil
 
-- inspección visual manual a ancho móvil. El entorno de navegador automatizado no
-  permite modificar su viewport; las reglas responsive fueron revisadas y se
-  corrigió el desborde horizontal, pero falta la confirmación visual real.
+La inspección manual a ancho móvil fue confirmada por el usuario el 2026-08-29.
+Durante esa revisión se detectó que el ancho mínimo de las tablas expandía toda
+la columna operativa desde “Ruta de hitos”. El commit `4290c512` contuvo cada
+nivel del grid y dejó el desplazamiento horizontal exclusivamente dentro de las
+tablas. La segunda inspección manual confirmó el comportamiento correcto.
+
+Con esta evidencia se cumplen todos los criterios de salida de la Fase 1.
 
 El guard global de CSS continúa informando diez reglas históricas en
 `src/app/globals.css`. Campañas usa exclusivamente CSS Modules y no modificó ese
