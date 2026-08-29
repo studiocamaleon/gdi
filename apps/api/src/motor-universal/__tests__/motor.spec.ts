@@ -1216,7 +1216,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(caja!.cantidad).toBe(10);
   });
 
-  it('F.2.4: Tarjetas doble faz → motor selecciona automáticamente perfil "Papel grueso doble faz" (20 ppm vs 40 simple)', async () => {
+  it('F.2.4: Tarjetas doble faz → selecciona su perfil sin volver a dividir las PPM', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -1242,9 +1242,8 @@ describe('MotorUniversalService — smoke tests', () => {
       (p) => p.familiaCodigo === 'impresion_por_hoja',
     )!;
 
-    // El perfil simple faz produce a 40 ppm → 2400 pliegos en ~60min
-    // El perfil doble faz produce a 20 ppm + multiplicador caras=2 → 4800 piezas/20ppm = 240min
-    // Aunque ambos usan multiplicadores también, el run debe ser distinto
+    // Ambos perfiles expresan 40 caras A4-eq/min. Doble faz tarda más porque
+    // el paso multiplica la cantidad por caras, no porque vuelva a dividir PPM.
     expect(impDoble.tiempo!.totalMin).toBeGreaterThan(
       impSimple.tiempo!.totalMin,
     );

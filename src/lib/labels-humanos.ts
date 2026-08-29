@@ -603,7 +603,10 @@ export const tipoPerfilOperativoLabels: DiccionarioLabels = {
 
 export const unidadProduccionLabels: DiccionarioLabels = {
   hora: { label: "Hora", descripcion: "Productividad medida en trabajos por hora." },
-  ppm: { label: "Pliegos/min (PPM)", descripcion: "Pliegos por minuto. Típico de impresoras láser." },
+  ppm: {
+    label: "Páginas A4-eq/min (PPM)",
+    descripcion: "Caras impresas por minuto equivalentes a una página A4. Típico de impresoras láser.",
+  },
   m2_h: { label: "m²/hora", descripcion: "Metros cuadrados por hora. Típico de gran formato." },
   m_min: { label: "Metros/min", descripcion: "Metros lineales por minuto. Típico de laminadoras." },
   cortes_min: { label: "Cortes/min", descripcion: "Cortes por minuto. Típico de guillotina." },

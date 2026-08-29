@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { calcularConsumoTonerGm2 } from "@/lib/calculadora-toner";
 import {
   NIVELES_COBERTURA,
   NIVEL_COBERTURA_LABELS,
@@ -36,9 +37,6 @@ import {
 } from "./helpers";
 
 // ─── Sub-componente: editor de consumibles de impresión ────────────
-
-// Área de una hoja A4 en m² (0,210 × 0,297).
-const A4_AREA_M2 = 0.21 * 0.297;
 
 /**
  * Calculadora de consumo de tóner: convierte el rendimiento del fabricante
@@ -65,20 +63,15 @@ function CalculadoraTonerGm2({
   const covIso = Number(coberturaIso);
   const covTarget = modo === "iso" ? covIso : Number(coberturaFull);
 
-  const valido =
-    Number.isFinite(g) &&
-    g > 0 &&
-    Number.isFinite(rend) &&
-    rend > 0 &&
-    Number.isFinite(covIso) &&
-    covIso > 0 &&
-    Number.isFinite(covTarget) &&
-    covTarget > 0;
-
-  // Rendimiento y consumo son lineales con la cobertura (aprox. de industria).
-  const rendEsperado = valido ? rend * (covIso / covTarget) : 0;
-  const consumoGm2 = valido ? (g / rend) * (covTarget / covIso) / A4_AREA_M2 : 0;
-  const consumoRedondeado = Number(consumoGm2.toFixed(2));
+  const calculo = calcularConsumoTonerGm2({
+    gramosNetos: g,
+    rendimientoPaginasA4: rend,
+    coberturaIsoPorcentaje: covIso,
+    coberturaObjetivoPorcentaje: covTarget,
+  });
+  const valido = calculo !== null;
+  const rendEsperado = calculo?.rendimientoEsperadoPaginasA4 ?? 0;
+  const consumoRedondeado = calculo?.consumoGm2Redondeado ?? 0;
 
   return (
     <div className="rounded-md border bg-muted/20">

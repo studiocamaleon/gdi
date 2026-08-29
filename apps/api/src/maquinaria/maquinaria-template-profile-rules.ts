@@ -75,9 +75,15 @@ function buildRule(params: {
 
 const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
-  // Discriminantes (detalle): caras, colores y gramajeMaxGr (escalón).
+  // Discriminantes (detalle): caras, modo dúplex, colores y gramajeMaxGr.
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
-    detalleKeys: ['caras', 'colores', 'gramajeMaxGr'],
+    detalleKeys: [
+      'caras',
+      'modoDobleFaz',
+      'origenProductividad',
+      'colores',
+      'gramajeMaxGr',
+    ],
     requiredFieldKeys: [
       'nombre',
       'productivityValue',

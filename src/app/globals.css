@@ -7315,25 +7315,81 @@ body {
     font-size: 13px;
   }
 
+  /* La láser concentra muchos discriminantes. Conserva una fila completa y
+     reserva el espacio principal para el nombre y las PPM; en viewports más
+     angostos la tabla desplaza horizontalmente en vez de comprimirlos. */
+  .maq-perfiles-tabla.laser {
+    min-width: 1120px;
+    table-layout: fixed;
+  }
+
+  .maq-perfiles-tabla.laser th,
+  .maq-perfiles-tabla.laser td {
+    white-space: nowrap;
+  }
+
+  .maq-perfiles-tabla.laser .campo-nombre {
+    width: 230px;
+  }
+
+  .maq-perfiles-tabla.laser .campo-productivityValue {
+    width: 58px;
+  }
+
+  .maq-perfiles-tabla.laser .campo-origenProductividad {
+    width: 172px;
+  }
+
+  .maq-perfiles-tabla.laser .campo-setupMin {
+    width: 66px;
+  }
+
+  .maq-perfiles-tabla.laser .campo-gramajeMaxGr {
+    width: 112px;
+  }
+
+  .maq-perfiles-tabla.laser .campo-caras {
+    width: 104px;
+  }
+
+  .maq-perfiles-tabla.laser .campo-modoDobleFaz {
+    width: 154px;
+  }
+
+  .maq-perfiles-tabla.laser .campo-colores {
+    width: 76px;
+  }
+
+  .maq-perfiles-tabla.laser th.tinta,
+  .maq-perfiles-tabla.laser td.tinta {
+    width: 44px;
+    text-align: center;
+  }
+
+  .maq-perfiles-tabla.laser th.acciones,
+  .maq-perfiles-tabla.laser td.acciones {
+    width: 56px;
+  }
+
+  .maq-perfiles-tabla.laser td input[type="number"],
+  .maq-perfiles-tabla.laser td input[type="text"],
+  .maq-perfiles-tabla.laser td select {
+    min-width: 0;
+  }
+
+  .maq-perfiles-tabla.laser .campo-nombre input,
+  .maq-perfiles-tabla.laser .campo-productivityValue input {
+    width: 100%;
+  }
+
   /* Botón, no etiqueta: fondo propio para que se lea como clickeable. El
      punto distingue "ya tiene tintas" de "todavía no", y el número exacto
      vive en el title. */
   .maq-perfiles-tinta-btn {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 13px;
-    border: 1px solid var(--border-strong);
-    border-radius: 7px;
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 12.5px;
-    font-weight: 500;
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-      background 0.12s,
-      border-color 0.12s;
+    justify-content: center;
   }
 
   .maq-perfiles-tinta-btn:hover {
@@ -7342,10 +7398,14 @@ body {
   }
 
   .maq-perfiles-tinta-btn .punto {
-    width: 7px;
-    height: 7px;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--signal);
+    box-shadow: 0 0 0 1.5px var(--surface);
   }
 
   .maq-perfiles-tinta-btn.ok .punto {
@@ -7562,6 +7622,12 @@ body {
 
   .maq-perfiles-tabla .maq-color-etiqueta {
     font-size: 12px;
+  }
+
+  .maq-perfiles-tabla.laser .maq-color-pill {
+    justify-content: center;
+    min-width: 30px;
+    padding: 5px 7px;
   }
 
   /* Selector múltiple de materiales del perfil láser. El buscador conserva
