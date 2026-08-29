@@ -33,7 +33,10 @@ import {
   modoActivacionLabels,
   modoTiempoLabels,
 } from "@/lib/labels-humanos";
-import type { CatalogoFamilias, FamiliaListItem } from "@/lib/productos-servicios";
+import type {
+  CatalogoFamilias,
+  FamiliaListItem,
+} from "@/lib/productos-servicios";
 import { cn } from "@/lib/utils";
 
 interface FamiliasCapacidadesSheetProps {
@@ -68,29 +71,50 @@ function labelFromMap(map: Record<string, { label: string }>, value: string) {
 }
 
 function categoriaNombre(catalogo: CatalogoFamilias, codigo: string) {
-  return catalogo.categorias.find((categoria) => categoria.codigo === codigo)?.nombre ?? codigo;
+  return (
+    catalogo.categorias.find((categoria) => categoria.codigo === codigo)
+      ?.nombre ?? codigo
+  );
 }
 
 function hasItems(items?: unknown[]) {
   return Array.isArray(items) && items.length > 0;
 }
 
-function CapabilityMark({ enabled, label }: { enabled: boolean; label: string }) {
+function CapabilityMark({
+  enabled,
+  label,
+}: {
+  enabled: boolean;
+  label: string;
+}) {
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium",
-        enabled ? "bg-secondary text-secondary-foreground" : "text-muted-foreground",
+        enabled
+          ? "bg-secondary text-secondary-foreground"
+          : "text-muted-foreground",
       )}
       title={label}
     >
-      {enabled ? <CheckIcon className="size-3.5" /> : <CircleDashedIcon className="size-3.5" />}
+      {enabled ? (
+        <CheckIcon className="size-3.5" />
+      ) : (
+        <CircleDashedIcon className="size-3.5" />
+      )}
       <span>{enabled ? "Sí" : "No"}</span>
     </span>
   );
 }
 
-function CompactBadges({ values, max = 2 }: { values: string[]; max?: number }) {
+function CompactBadges({
+  values,
+  max = 2,
+}: {
+  values: string[];
+  max?: number;
+}) {
   if (values.length === 0) {
     return <span className="text-xs text-muted-foreground">No aplica</span>;
   }
@@ -139,15 +163,20 @@ function FamiliaDetalle({
   familia: FamiliaListItem;
   catalogoFamilias: CatalogoFamilias;
 }) {
-  const materialesRequeridos = familia.slotsRequeridos.filter((slot) => slot.requerido);
-  const materialesOpcionales = familia.slotsRequeridos.filter((slot) => !slot.requerido);
+  const materialesRequeridos = familia.slotsRequeridos.filter(
+    (slot) => slot.requerido,
+  );
+  const materialesOpcionales = familia.slotsRequeridos.filter(
+    (slot) => !slot.requerido,
+  );
 
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-0">
       <div className="flex flex-col gap-2 rounded-md border bg-muted/20 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{categoriaNombre(catalogoFamilias, familia.categoria)}</Badge>
-          <Badge variant="outline">{familia.codigo}</Badge>
+          <Badge variant="secondary">
+            {categoriaNombre(catalogoFamilias, familia.categoria)}
+          </Badge>
         </div>
         <div>
           <h3 className="text-lg font-semibold">{familia.nombre}</h3>
@@ -197,7 +226,9 @@ function FamiliaDetalle({
           <div className="flex flex-col gap-2 text-sm">
             {materialesRequeridos.length > 0 ? (
               <div>
-                <div className="mb-1 text-xs font-medium text-muted-foreground">Requeridos</div>
+                <div className="mb-1 text-xs font-medium text-muted-foreground">
+                  Requeridos
+                </div>
                 <div className="flex flex-wrap gap-1">
                   {materialesRequeridos.map((slot) => (
                     <Badge key={slot.codigo} variant="outline">
@@ -209,7 +240,9 @@ function FamiliaDetalle({
             ) : null}
             {materialesOpcionales.length > 0 ? (
               <div>
-                <div className="mb-1 text-xs font-medium text-muted-foreground">Opcionales</div>
+                <div className="mb-1 text-xs font-medium text-muted-foreground">
+                  Opcionales
+                </div>
                 <div className="flex flex-wrap gap-1">
                   {materialesOpcionales.map((slot) => (
                     <Badge key={slot.codigo} variant="secondary">
@@ -229,14 +262,23 @@ function FamiliaDetalle({
         ) : (
           <div className="flex flex-col gap-2">
             {familia.paramsPasoSchema.map((param) => (
-              <div key={param.campo} className="rounded-md bg-muted/40 p-2 text-sm">
+              <div
+                key={param.campo}
+                className="rounded-md bg-muted/40 p-2 text-sm"
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{param.etiqueta}</span>
-                  <Badge variant="outline">{tipoParamLabels[param.tipo] ?? param.tipo}</Badge>
-                  {param.requerido ? <Badge variant="secondary">Requerido</Badge> : null}
+                  <Badge variant="outline">
+                    {tipoParamLabels[param.tipo] ?? param.tipo}
+                  </Badge>
+                  {param.requerido ? (
+                    <Badge variant="secondary">Requerido</Badge>
+                  ) : null}
                 </div>
                 {param.descripcion ? (
-                  <p className="mt-1 text-xs text-muted-foreground">{param.descripcion}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {param.descripcion}
+                  </p>
                 ) : null}
               </div>
             ))}
@@ -247,22 +289,30 @@ function FamiliaDetalle({
       <DetailSection title="Motor" icon={DatabaseIcon}>
         <div className="flex flex-col gap-2">
           <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">Inputs</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              Inputs
+            </div>
             <CompactBadges values={familia.inputsRequeridos} max={4} />
           </div>
           <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">Outputs</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              Outputs
+            </div>
             <CompactBadges values={familia.outputsCanonicos} max={4} />
           </div>
           <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">Validaciones</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              Validaciones
+            </div>
             {!hasItems(familia.validaciones) ? (
               <EmptyDetail>Sin validaciones declaradas.</EmptyDetail>
             ) : (
               <div className="flex flex-col gap-1">
                 {familia.validaciones.map((validacion) => (
-                  <div key={validacion.codigo} className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">{validacion.codigo}</span>:{" "}
+                  <div
+                    key={validacion.codigo}
+                    className="text-xs text-muted-foreground"
+                  >
                     {validacion.mensaje}
                   </div>
                 ))}
@@ -289,7 +339,9 @@ export function FamiliasCapacidadesSheet({
   onOpenChange,
 }: FamiliasCapacidadesSheetProps) {
   const familias = catalogoFamilias.familias;
-  const [selectedCodigo, setSelectedCodigo] = React.useState(familias[0]?.codigo ?? "");
+  const [selectedCodigo, setSelectedCodigo] = React.useState(
+    familias[0]?.codigo ?? "",
+  );
 
   React.useEffect(() => {
     if (!familias.some((familia) => familia.codigo === selectedCodigo)) {
@@ -298,7 +350,9 @@ export function FamiliasCapacidadesSheet({
   }, [familias, selectedCodigo]);
 
   const selectedFamilia =
-    familias.find((familia) => familia.codigo === selectedCodigo) ?? familias[0] ?? null;
+    familias.find((familia) => familia.codigo === selectedCodigo) ??
+    familias[0] ??
+    null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -306,7 +360,8 @@ export function FamiliasCapacidadesSheet({
         <SheetHeader className="border-b">
           <SheetTitle>Matriz de familias de paso</SheetTitle>
           <SheetDescription>
-            Compará qué permite cada familia antes de armar la ruta de producción.
+            Compará qué permite cada familia antes de armar la ruta de
+            producción.
           </SheetDescription>
         </SheetHeader>
 
@@ -339,7 +394,10 @@ export function FamiliasCapacidadesSheet({
                         <div className="flex flex-col gap-1">
                           <span className="font-medium">{familia.nombre}</span>
                           <span className="text-xs text-muted-foreground">
-                            {categoriaNombre(catalogoFamilias, familia.categoria)}
+                            {categoriaNombre(
+                              catalogoFamilias,
+                              familia.categoria,
+                            )}
                           </span>
                         </div>
                       </TableCell>
@@ -359,8 +417,9 @@ export function FamiliasCapacidadesSheet({
                       </TableCell>
                       <TableCell>
                         <CompactBadges
-                          values={familia.mecanismosCantidadSoportados.map((modo) =>
-                            labelFromMap(mecanismoCantidadLabels, modo),
+                          values={familia.mecanismosCantidadSoportados.map(
+                            (modo) =>
+                              labelFromMap(mecanismoCantidadLabels, modo),
                           )}
                         />
                       </TableCell>
@@ -396,7 +455,10 @@ export function FamiliasCapacidadesSheet({
           </div>
 
           {selectedFamilia ? (
-            <FamiliaDetalle familia={selectedFamilia} catalogoFamilias={catalogoFamilias} />
+            <FamiliaDetalle
+              familia={selectedFamilia}
+              catalogoFamilias={catalogoFamilias}
+            />
           ) : (
             <div className="rounded-md border p-4 text-sm text-muted-foreground">
               No hay familias disponibles.

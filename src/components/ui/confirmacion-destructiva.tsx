@@ -92,8 +92,7 @@ export function ConfirmacionDestructiva({
     }
   }, [open]);
 
-  const motivoOk =
-    !motivo || texto.trim().length >= (motivo.minimo ?? 3);
+  const motivoOk = !motivo || texto.trim().length >= (motivo.minimo ?? 3);
   const habilitado =
     !ejecutando &&
     motivoOk &&
@@ -115,7 +114,10 @@ export function ConfirmacionDestructiva({
       {/* Puede abrirse desde un modal propio (`.mod-bg`, z-index 60). La
           confirmación tiene que quedar por encima o la acción se ve en el DOM
           pero resulta invisible e imposible de confirmar. */}
-      <AlertDialogContent className="z-[80]" overlayClassName="z-[80]">
+      <AlertDialogContent
+        className="gp-alert-modal gp-alert-modal-danger z-[80]"
+        overlayClassName="gp-alert-overlay z-[80]"
+      >
         <AlertDialogHeader>
           <div className="flex items-start gap-3">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-100">
@@ -182,10 +184,18 @@ export function ConfirmacionDestructiva({
         )}
 
         <AlertDialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={ejecutando}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={ejecutando}
+          >
             Cancelar
           </Button>
-          <Button variant="destructive" onClick={handleConfirmar} disabled={!habilitado}>
+          <Button
+            variant="destructive"
+            onClick={handleConfirmar}
+            disabled={!habilitado}
+          >
             {ejecutando ? "Procesando..." : accionLabel}
           </Button>
         </AlertDialogFooter>

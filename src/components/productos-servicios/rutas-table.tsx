@@ -188,17 +188,6 @@ export function RutasTable({
     router.push(`/productos-servicios/rutas/${id}`);
   };
 
-  const codigoPreview = React.useMemo(() => {
-    const codigo = nombreCopia
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^A-Za-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .replace(/-{2,}/g, "-")
-      .toUpperCase();
-    return codigo || "RUTA-COPIA";
-  }, [nombreCopia]);
-
   const abrirDuplicarRuta = (
     event: React.MouseEvent<HTMLButtonElement>,
     ruta: RutaListItem,
@@ -445,7 +434,7 @@ export function RutasTable({
               <AlertDialogTitle>Duplicar ruta de producción</AlertDialogTitle>
               <AlertDialogDescription>
                 Definí el nombre de la copia. Se copiarán los pasos de la
-                versión actual y el sistema generará el código automáticamente.
+                versión actual para que puedas revisarla antes de usarla.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="mt-4 grid gap-3">
@@ -459,12 +448,6 @@ export function RutasTable({
                   placeholder="Nombre de la nueva ruta"
                   disabled={Boolean(duplicandoId)}
                 />
-              </div>
-              <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                Código sugerido:{" "}
-                <span className="font-mono text-foreground">
-                  {codigoPreview}
-                </span>
               </div>
             </div>
             <AlertDialogFooter>

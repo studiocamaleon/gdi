@@ -6214,7 +6214,7 @@ function ApConfigStep({
     const hint =
       !alerta && options?.showHint !== false && totalOpciones <= 1
         ? selectedVariant?.isFallbackLabel
-          ? `Sin atributos descriptivos. Código interno: ${selectedVariant.sku}`
+          ? "Sin atributos descriptivos disponibles."
           : (selectedVariant?.description ?? null)
         : null;
 

@@ -1,0 +1,385 @@
+.page {
+  --pf-orange: #ff6a2b;
+  --pf-orange-soft: #fff2eb;
+  --pf-ink: #14141a;
+  --pf-border: #e7e4df;
+  display: flex;
+  width: 100%;
+  max-width: 1320px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-self: flex-start;
+  gap: 24px;
+  margin: 0 auto;
+  padding: 24px 30px 80px;
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+}
+
+.back {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  margin: 0 0 17px -7px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  color: #716b65;
+  font-size: 12px;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.back:hover {
+  color: var(--pf-orange);
+  background: var(--pf-orange-soft);
+}
+
+.back svg {
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--pf-orange);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--pf-ink);
+  font-size: 29px;
+  font-weight: 640;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.header p {
+  max-width: 78ch;
+  margin: 6px 0 0;
+  color: var(--muted-text, #6e6e76);
+  font-size: 13px;
+}
+
+.steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--pf-border);
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 7px 26px rgb(23 21 18 / 4%);
+}
+
+.steps > div {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
+  padding: 14px 17px;
+  border-left: 1px solid #eeeae5;
+}
+
+.steps > div:first-child {
+  border-left: 0;
+}
+
+.steps > div::after {
+  position: absolute;
+  inset: 0 18px auto;
+  height: 2px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 106 43 / 48%),
+    transparent
+  );
+  content: "";
+}
+
+.steps span {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  grid-row: 1 / 3;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--pf-orange);
+  background: var(--pf-orange-soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.steps strong {
+  align-self: end;
+  color: #302d29;
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.steps small {
+  color: #8b857e;
+  font-size: 12px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.formCard {
+  min-width: 0;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--pf-border);
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 10px 34px rgb(23 21 18 / 5%);
+}
+
+.cardHeader {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 19px;
+  border-bottom: 1px solid #eeeae5;
+  background:
+    radial-gradient(circle at 100% -80%, rgb(255 106 43 / 9%), transparent 30%),
+    linear-gradient(135deg, #fff 0%, #fcfaf7 100%);
+}
+
+.cardIcon {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  flex: none;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--pf-orange);
+  background: var(--pf-ink);
+  box-shadow: 0 7px 18px rgb(20 20 26 / 13%);
+}
+
+.cardIcon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.cardHeader > div {
+  min-width: 0;
+}
+
+.cardHeader :global([data-slot="card-title"]) {
+  color: var(--pf-ink);
+  font-size: 15px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+}
+
+.cardHeader :global([data-slot="card-description"]) {
+  margin-top: 3px;
+  color: var(--muted-text, #6e6e76);
+  font-size: 12px;
+}
+
+.cardBody,
+.priceBody {
+  padding: 19px 20px 22px;
+}
+
+.cardBody label,
+.cardBody :global([data-slot="label"]),
+.priceBody label,
+.priceBody :global([data-slot="label"]) {
+  color: #55514c;
+  font-size: 11.5px;
+  font-weight: 680;
+  letter-spacing: 0.035em;
+}
+
+.cardBody :global([data-slot="input"]),
+.cardBody textarea,
+.cardBody button[role="combobox"],
+.priceBody :global([data-slot="input"]),
+.priceBody button[role="combobox"] {
+  border-color: #e4dfd9;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.cardBody :global([data-slot="input"]):focus-visible,
+.cardBody textarea:focus-visible,
+.cardBody button[role="combobox"]:focus-visible,
+.priceBody :global([data-slot="input"]):focus-visible,
+.priceBody button[role="combobox"]:focus-visible {
+  border-color: rgb(255 106 43 / 55%);
+  box-shadow: 0 0 0 3px rgb(255 106 43 / 8%);
+}
+
+.cardBody p,
+.priceBody p {
+  line-height: 1.45;
+}
+
+.systemNotice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgb(255 106 43 / 17%);
+  border-radius: 10px;
+  color: #80543e;
+  background: #fff7f2;
+  font-size: 12px;
+}
+
+.activeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid #e7e2dc;
+  border-radius: 11px;
+  background: #faf8f5;
+}
+
+.priceCard {
+  grid-column: 1 / -1;
+}
+
+.priceBody > div {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.priceBody > div > :first-child {
+  padding: 15px;
+  border: 1px solid #e7e2dc;
+  border-radius: 12px;
+  background: #faf8f5;
+}
+
+.priceBody :global([data-slot="card"]) {
+  border-color: #e7e2dc;
+  border-radius: 12px;
+  background: #faf8f5;
+  box-shadow: none;
+}
+
+.priceBody :global([data-slot="card-content"]) {
+  padding: 15px;
+}
+
+.actions {
+  position: sticky;
+  z-index: 10;
+  bottom: 12px;
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid rgb(226 221 214 / 92%);
+  border-radius: 15px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 14px 38px rgb(23 20 18 / 12%);
+  backdrop-filter: blur(10px);
+}
+
+.actions > div:empty {
+  display: block;
+}
+
+.actions button {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+.saveAction {
+  min-width: 158px;
+  border-color: #df541d;
+  color: #fff;
+  background: linear-gradient(135deg, #ff742f 0%, #f2551c 100%);
+  box-shadow: 0 8px 20px rgb(242 85 28 / 20%);
+}
+
+.saveAction:hover {
+  background: linear-gradient(135deg, #ff7e3f 0%, #ee4e16 100%);
+  box-shadow: 0 10px 24px rgb(242 85 28 / 27%);
+}
+
+.deleteAction {
+  border-color: rgb(190 54 45 / 18%);
+  color: #b6342c;
+  background: #fff0ef;
+}
+
+@media (max-width: 900px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .priceCard {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .page {
+    gap: 20px;
+    padding: 18px 16px 60px;
+  }
+
+  .steps {
+    grid-template-columns: 1fr;
+  }
+
+  .steps > div {
+    border-top: 1px solid #eeeae5;
+    border-left: 0;
+  }
+
+  .steps > div:first-child {
+    border-top: 0;
+  }
+
+  .cardBody,
+  .priceBody {
+    padding: 17px 16px 19px;
+  }
+
+  .actions {
+    bottom: 8px;
+  }
+
+  .saveAction {
+    min-width: 0;
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .back {
+    transition: none;
+  }
+}

@@ -572,7 +572,6 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                 <span className="tag version">
                   v{rutaExistente?.versionActual}
                 </span>
-                <span className="code">{rutaExistente?.codigo}</span>
                 {(rutaExistente?.productosAlternativas?.length ?? 0) > 0 && (
                   <span>
                     usado por {rutaExistente?.productosAlternativas?.length}{" "}
@@ -944,8 +943,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           titulo="Eliminar ruta"
           descripcion={
             <>
-              Vas a eliminar la ruta <strong>{rutaExistente.nombre}</strong> (
-              <code className="text-xs">{rutaExistente.codigo}</code>).
+              Vas a eliminar la ruta <strong>{rutaExistente.nombre}</strong>.
             </>
           }
           impacto={

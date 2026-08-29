@@ -2,15 +2,20 @@
 
 import * as React from "react";
 import {
+  BadgeDollarSignIcon,
   CalendarClockIcon,
+  CircleCheckBigIcon,
+  CircleOffIcon,
   CopyIcon,
   Edit3Icon,
   HistoryIcon,
   PlusIcon,
   PowerIcon,
+  ScanLineIcon,
   SearchIcon,
   TagIcon,
   TicketPercentIcon,
+  TimerIcon,
   Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -110,7 +115,7 @@ async function opcionesDeAlcance(
     const productos = await getProductos(true);
     return productos.map((producto) => ({
       ref: producto.id,
-      nombre: `${producto.codigo} · ${producto.nombre}`,
+      nombre: producto.nombre,
     }));
   }
   if (tipo === "CLIENTE") {
@@ -147,13 +152,6 @@ function fechaCalendario(fecha: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(Date.UTC(year, month - 1, day, 12)));
-}
-
-function badgeDeEstado(estado: Cupon["estado"]) {
-  if (estado === "VIGENTE") return "default" as const;
-  if (estado === "VENCIDO" || estado === "AGOTADO")
-    return "destructive" as const;
-  return "secondary" as const;
 }
 
 export function CuponesView({
@@ -317,34 +315,62 @@ export function CuponesView({
   return (
     <section className={s.wrap}>
       <div className={s.inner}>
-        <div className="page-head">
-          <div className="title-block">
-            <h1>Cupones</h1>
-            <div className="sub">
-              Reglas de descuento con vigencia, alcance, reservas e historial
-              trazable.
+        <header className={s.encabezado}>
+          <div className={s.tituloGrupo}>
+            <span className={s.iconoModulo} aria-hidden="true">
+              <TicketPercentIcon />
+            </span>
+            <div>
+              <span className={s.eyebrow}>Promociones medibles</span>
+              <h1>Cupones</h1>
+              <p>
+                Reglas de descuento con vigencia, alcance, reservas e historial
+                trazable.
+              </p>
             </div>
           </div>
           {puedeEditar ? (
-            <Button onClick={() => setEditor("nuevo")}>
+            <Button
+              className={s.accionPrincipal}
+              onClick={() => setEditor("nuevo")}
+            >
               <PlusIcon data-icon="inline-start" />
               Nuevo cupón
             </Button>
           ) : null}
-        </div>
+        </header>
 
         <div className={s.metricas} aria-label="Resumen de cupones">
-          <Metrica label="Vigentes" valor={metricas.vigentes} />
-          <Metrica label="Por vencer" valor={metricas.porVencer} />
-          <Metrica label="Agotados" valor={metricas.agotados} />
-          <Metrica label="Usos este mes" valor={metricas.redencionesMes} />
+          <Metrica
+            label="Vigentes"
+            valor={metricas.vigentes}
+            Icon={CircleCheckBigIcon}
+            principal
+          />
+          <Metrica
+            label="Por vencer"
+            valor={metricas.porVencer}
+            Icon={TimerIcon}
+          />
+          <Metrica
+            label="Agotados"
+            valor={metricas.agotados}
+            Icon={CircleOffIcon}
+          />
+          <Metrica
+            label="Usos este mes"
+            valor={metricas.redencionesMes}
+            Icon={ScanLineIcon}
+          />
           <Metrica
             label="Descontado este mes"
             valor={formatearMoneda(metricas.descontadoMes, moneda)}
+            Icon={BadgeDollarSignIcon}
           />
         </div>
 
         <div className={s.filtros}>
+          <span className={s.filtrosLabel}>Explorar cupones</span>
           <label className={s.buscar}>
             <span className="sr-only">Buscar cupones</span>
             <SearchIcon aria-hidden="true" />
@@ -372,6 +398,9 @@ export function CuponesView({
               Limpiar estado
             </Button>
           ) : null}
+          <span className={s.resultados}>
+            {listado.total} {listado.total === 1 ? "cupón" : "cupones"}
+          </span>
         </div>
 
         {error ? (
@@ -435,9 +464,12 @@ export function CuponesView({
                             <CopyIcon />
                           </button>
                           <span className={s.spacer} />
-                          <Badge variant={badgeDeEstado(cupon.estado)}>
+                          <span
+                            className={s.estado}
+                            data-estado={cupon.estado ?? ""}
+                          >
                             {cupon.estado ? ESTADO_LABEL[cupon.estado] : "—"}
-                          </Badge>
+                          </span>
                         </div>
 
                         <div className={s.valor}>
@@ -611,7 +643,10 @@ export function CuponesView({
         />
 
         <Dialog open={qr != null} onOpenChange={(open) => !open && setQr(null)}>
-          <DialogContent>
+          <DialogContent
+            className="gp-modal gp-modal-compact"
+            overlayClassName="gp-modal-overlay"
+          >
             <DialogHeader>
               <DialogTitle>QR del cupón {qr?.codigo}</DialogTitle>
               <DialogDescription>
@@ -650,7 +685,10 @@ export function CuponesView({
             }
           }}
         >
-          <DialogContent className={s.historialModal}>
+          <DialogContent
+            className={`${s.historialModal} gp-modal gp-modal-wide`}
+            overlayClassName="gp-modal-overlay"
+          >
             <DialogHeader>
               <DialogTitle>
                 Historial de {historial?.cupon.codigo ?? "cupón"}
@@ -725,11 +763,26 @@ export function CuponesView({
   );
 }
 
-function Metrica({ label, valor }: { label: string; valor: React.ReactNode }) {
+function Metrica({
+  label,
+  valor,
+  Icon,
+  principal = false,
+}: {
+  label: string;
+  valor: React.ReactNode;
+  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  principal?: boolean;
+}) {
   return (
-    <article className={s.metrica}>
-      <span>{label}</span>
-      <strong>{valor}</strong>
+    <article className={`${s.metrica} ${principal ? s.metricaPrincipal : ""}`}>
+      <span className={s.metricaIcono} aria-hidden="true">
+        <Icon />
+      </span>
+      <div>
+        <span>{label}</span>
+        <strong>{valor}</strong>
+      </div>
     </article>
   );
 }
@@ -880,7 +933,10 @@ function CuponModal({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={s.editorModal}>
+      <DialogContent
+        className={`${s.editorModal} gp-modal gp-modal-wide`}
+        overlayClassName="gp-modal-overlay"
+      >
         <DialogHeader>
           <DialogTitle>
             {editando ? `Editar ${codigo}` : "Nuevo cupón"}

@@ -299,7 +299,16 @@ export class ProductosService {
         connect: { codigo: dto.subcategoriaComercialCodigo },
       };
     }
-    if (dto.nombre !== undefined) data.nombre = dto.nombre;
+    if (dto.nombre !== undefined) {
+      data.nombre = dto.nombre;
+      if (dto.nombre.trim() !== existente.nombre.trim()) {
+        data.codigo = await this.nextCopyCode(
+          tenantId,
+          this.codigoFromNombre(dto.nombre, 'PRODUCTO'),
+          existente.id,
+        );
+      }
+    }
     if (dto.descripcion !== undefined) data.descripcion = dto.descripcion;
     if (dto.unidadComercial !== undefined) {
       data.unidadComercial = dto.unidadComercial;
@@ -730,14 +739,22 @@ export class ProductosService {
     }
   }
 
-  private async nextCopyCode(tenantId: string, codigoBase: string) {
+  private async nextCopyCode(
+    tenantId: string,
+    codigoBase: string,
+    excludeId?: string,
+  ) {
     const base = codigoBase.slice(0, 50);
     for (let index = 1; index < 1000; index += 1) {
       const suffix = `-${index}`;
       const candidate =
         index === 1 ? base : `${base.slice(0, 50 - suffix.length)}${suffix}`;
       const exists = await this.prisma.producto.findFirst({
-        where: { tenantId, codigo: candidate },
+        where: {
+          tenantId,
+          codigo: candidate,
+          ...(excludeId ? { id: { not: excludeId } } : {}),
+        },
         select: { id: true },
       });
       if (!exists) return candidate;

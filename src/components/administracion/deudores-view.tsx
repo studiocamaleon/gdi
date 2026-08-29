@@ -62,18 +62,11 @@ export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
   const vencidoTot = totalCol.d61_90 + totalCol.d90_mas;
 
   return (
-    <div
-      className="ade-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        padding: "32px 28px 90px",
-      }}
-    >
+    <div className="ade-page">
       <div className="ade-wrap">
         <div className="ade-head">
           <div>
+            <span className="ade-eyebrow">Administración financiera</span>
             <h1>Cuentas por cobrar</h1>
             <div className="sub">
               Antigüedad de la deuda por cliente. Cuanto más intenso el color,
@@ -95,9 +88,9 @@ export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
             </div>
             <h3>Ningún cliente te debe plata</h3>
             <p>
-              Acá vas a ver la deuda de cada cliente repartida por
-              antigüedad: cada orden finalizada suma lo que falta cobrar,
-              esté facturada o no.
+              Acá vas a ver la deuda de cada cliente repartida por antigüedad:
+              cada orden finalizada suma lo que falta cobrar, esté facturada o
+              no.
             </p>
           </div>
         ) : (
@@ -124,6 +117,7 @@ export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
               <div className="ade-search">
                 <SearchIcon />
                 <input
+                  aria-label="Buscar cliente o CUIT"
                   placeholder="Buscar cliente o CUIT…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}

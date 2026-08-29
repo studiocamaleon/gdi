@@ -8,7 +8,13 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import {
   Sheet,
@@ -24,7 +30,10 @@ import {
   desasociarCargoCotizacion,
 } from "@/lib/productos-servicios-api";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import type { CargoDirectoCatalogo, ProductoDetalle } from "@/lib/productos-servicios";
+import type {
+  CargoDirectoCatalogo,
+  ProductoDetalle,
+} from "@/lib/productos-servicios";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
   getLabel,
@@ -40,7 +49,11 @@ interface Props {
 
 const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"] as const;
 
-export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = false }: Props) {
+export function ProductoCargosEditorView({
+  producto,
+  catalogoCargos,
+  embedded = false,
+}: Props) {
   const router = useRouter();
   const [openSheet, setOpenSheet] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
@@ -61,7 +74,8 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
     try {
       await asociarCargoCotizacion(producto.id, {
         cargoDirectoCatalogoId: cargoSeleccionado,
-        modoActivacion: modoActivacion as "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL",
+        modoActivacion: modoActivacion as
+          "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL",
       });
       toast.success("Cargo asociado al producto");
       setOpenSheet(false);
@@ -75,9 +89,10 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
     }
   };
 
-  const [aDesasociar, setADesasociar] = React.useState<{ id: string; nombre: string } | null>(
-    null,
-  );
+  const [aDesasociar, setADesasociar] = React.useState<{
+    id: string;
+    nombre: string;
+  } | null>(null);
 
   const ejecutarDesasociar = async () => {
     if (!aDesasociar) return;
@@ -105,12 +120,18 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
         )}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className={embedded ? "text-lg font-semibold tracking-tight" : "text-2xl font-semibold tracking-tight"}>
+            <h1
+              className={
+                embedded
+                  ? "text-lg font-semibold tracking-tight"
+                  : "text-2xl font-semibold tracking-tight"
+              }
+            >
               Cargos directos del producto
             </h1>
             <p className="text-muted-foreground text-sm">
-              Cargos a nivel cotización (ej: viático, recargo urgencia). Se ofrecen al
-              comercial al cotizar este producto.
+              Cargos a nivel cotización (ej: viático, recargo urgencia). Se
+              ofrecen al comercial al cotizar este producto.
             </p>
           </div>
           <Sheet open={openSheet} onOpenChange={setOpenSheet}>
@@ -126,8 +147,8 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
               <SheetHeader>
                 <SheetTitle>Asociar cargo directo al producto</SheetTitle>
                 <SheetDescription>
-                  Elegí del catálogo del tenant un cargo a nivel cotización. Si no aparece el que
-                  necesitás, primero creá el cargo en{" "}
+                  Elegí del catálogo del tenant un cargo a nivel cotización. Si
+                  no aparece el que necesitás, primero creá el cargo en{" "}
                   <Link
                     href="/productos-servicios/cargos-directos"
                     className="text-primary underline"
@@ -147,7 +168,10 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
                     value={cargoSeleccionado}
                     onValueChange={(v) => setCargoSeleccionado(v ?? "")}
                     options={disponibles.map((c) => {
-                      const lblCalc = getLabel(modoCalculoCargoLabels, c.modoCalculo);
+                      const lblCalc = getLabel(
+                        modoCalculoCargoLabels,
+                        c.modoCalculo,
+                      );
                       return {
                         value: c.id,
                         label: c.nombre,
@@ -161,12 +185,16 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
                 <div className="space-y-2">
                   <LabelConTooltip
                     label="¿Cuándo se aplica?"
-                    tooltip={getLabel(modoActivacionLabels, modoActivacion).descripcion}
+                    tooltip={
+                      getLabel(modoActivacionLabels, modoActivacion).descripcion
+                    }
                   />
                   <HumanSelect
                     value={modoActivacion}
                     onValueChange={(v) => setModoActivacion(v ?? "OPCIONAL")}
-                    options={MODOS_ACTIVACION.map((m) => optionFromLabel(m, modoActivacionLabels))}
+                    options={MODOS_ACTIVACION.map((m) =>
+                      optionFromLabel(m, modoActivacionLabels),
+                    )}
                   />
                   <p className="text-muted-foreground text-xs">
                     {getLabel(modoActivacionLabels, modoActivacion).descripcion}
@@ -177,7 +205,10 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
                 <Button variant="outline" onClick={() => setOpenSheet(false)}>
                   Cancelar
                 </Button>
-                <Button onClick={asociar} disabled={guardando || !cargoSeleccionado}>
+                <Button
+                  onClick={asociar}
+                  disabled={guardando || !cargoSeleccionado}
+                >
                   {guardando ? "Asociando..." : "Asociar"}
                 </Button>
               </SheetFooter>
@@ -219,15 +250,15 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
                       <WrenchIcon className="size-4" />
                       {cd.cargoDirectoCatalogo.nombre}
                     </CardTitle>
-                    <CardDescription className="font-mono text-xs">
-                      {cd.cargoDirectoCatalogo.codigo}
-                    </CardDescription>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() =>
-                      setADesasociar({ id: cd.id, nombre: cd.cargoDirectoCatalogo.nombre })
+                      setADesasociar({
+                        id: cd.id,
+                        nombre: cd.cargoDirectoCatalogo.nombre,
+                      })
                     }
                     className="h-7 w-7 p-0 text-red-600"
                   >
@@ -240,14 +271,31 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
                   <Badge
                     variant="outline"
                     className="text-[10px]"
-                    title={getLabel(modoCalculoCargoLabels, cd.cargoDirectoCatalogo.modoCalculo).descripcion}
+                    title={
+                      getLabel(
+                        modoCalculoCargoLabels,
+                        cd.cargoDirectoCatalogo.modoCalculo,
+                      ).descripcion
+                    }
                   >
-                    {getLabel(modoCalculoCargoLabels, cd.cargoDirectoCatalogo.modoCalculo).label}
+                    {
+                      getLabel(
+                        modoCalculoCargoLabels,
+                        cd.cargoDirectoCatalogo.modoCalculo,
+                      ).label
+                    }
                   </Badge>
                   <Badge
-                    variant={cd.modoActivacion === "OBLIGATORIO" ? "default" : "secondary"}
+                    variant={
+                      cd.modoActivacion === "OBLIGATORIO"
+                        ? "default"
+                        : "secondary"
+                    }
                     className="text-[10px]"
-                    title={getLabel(modoActivacionLabels, cd.modoActivacion).descripcion}
+                    title={
+                      getLabel(modoActivacionLabels, cd.modoActivacion)
+                        .descripcion
+                    }
                   >
                     {getLabel(modoActivacionLabels, cd.modoActivacion).label}
                   </Badge>
@@ -265,7 +313,8 @@ export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = 
         descripcion={
           aDesasociar ? (
             <>
-              Vas a desasociar el cargo <strong>{aDesasociar.nombre}</strong> de este producto.
+              Vas a desasociar el cargo <strong>{aDesasociar.nombre}</strong> de
+              este producto.
             </>
           ) : null
         }

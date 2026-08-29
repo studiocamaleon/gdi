@@ -4,18 +4,20 @@ import * as React from "react";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { useRouter } from "next/navigation";
-import { PencilIcon, PlusIcon, Trash2Icon, WrenchIcon } from "lucide-react";
+import {
+  BadgeCheckIcon,
+  CircleDollarSignIcon,
+  Layers3Icon,
+  PencilIcon,
+  PlusIcon,
+  SearchIcon,
+  SparklesIcon,
+  Trash2Icon,
+  WrenchIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -53,6 +55,8 @@ import {
   modoActivacionLabels,
   modoCalculoCargoLabels,
 } from "@/lib/labels-humanos";
+
+import styles from "./cargos-directos-manager.module.css";
 
 type CargoModoUi =
   | "MONTO_FIJO_PLANO"
@@ -235,6 +239,7 @@ export function CargosDirectosManager({
   );
   const [openSheet, setOpenSheet] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
+  const [busqueda, setBusqueda] = React.useState("");
 
   // Form state
   const [codigo, setCodigo] = React.useState("");
@@ -450,14 +455,32 @@ export function CargosDirectosManager({
     setZonas((current) => current.filter((zona) => zona.id !== id));
   };
 
+  const cargosVisibles = React.useMemo(() => {
+    const query = busqueda.trim().toLocaleLowerCase("es-AR");
+    if (!query) return initialCargos;
+    return initialCargos.filter((cargo) => {
+      const modo = getLabel(modoCalculoCargoLabels, cargo.modoCalculo).label;
+      return `${cargo.nombre} ${cargo.descripcion ?? ""} ${cargo.codigo} ${modo}`
+        .toLocaleLowerCase("es-AR")
+        .includes(query);
+    });
+  }, [busqueda, initialCargos]);
+
+  const activos = initialCargos.filter((cargo) => cargo.activo).length;
+  const conMargen = initialCargos.filter(
+    (cargo) => cargo.activo && cargo.aplicaMargen,
+  ).length;
+  const modosConfigurados = new Set(
+    initialCargos.map((cargo) => modoUiFromCargo(cargo)),
+  ).size;
+
   return (
-    <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-6">
-      <div className="flex items-center justify-between">
+    <main className={styles.page}>
+      <header className={styles.header}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Costos directos
-          </h1>
-          <p className="text-muted-foreground text-sm">
+          <span className={styles.eyebrow}>Estructura de costos</span>
+          <h1>Costos directos</h1>
+          <p>
             Desembolsos reutilizables que pueden asociarse a un paso o agregarse
             a una orden.
           </p>
@@ -465,14 +488,21 @@ export function CargosDirectosManager({
         <Sheet open={openSheet} onOpenChange={setOpenSheet}>
           <SheetTrigger
             render={(props) => (
-              <Button {...props} onClick={abrirNuevo}>
+              <Button
+                {...props}
+                className={styles.primaryAction}
+                onClick={abrirNuevo}
+              >
                 <PlusIcon className="mr-2 size-4" />
                 Nuevo costo
               </Button>
             )}
           />
-          <SheetContent className="overflow-y-auto sm:max-w-xl">
-            <SheetHeader>
+          <SheetContent
+            className={`${styles.sheet} overflow-y-auto sm:max-w-xl`}
+            overlayClassName={styles.sheetOverlay}
+          >
+            <SheetHeader className={styles.sheetHeader}>
               <SheetTitle>
                 {editando ? "Editar costo" : "Nuevo costo directo"}
               </SheetTitle>
@@ -482,23 +512,14 @@ export function CargosDirectosManager({
                   : "Creá una plantilla de costo para asociar a pasos u órdenes de trabajo."}
               </SheetDescription>
             </SheetHeader>
-            <div className="space-y-4 px-4">
-              <Alert>
+            <div className={`${styles.sheetBody} space-y-4 px-4`}>
+              <Alert className={styles.scopeNotice}>
                 <AlertTitle>El alcance se elige al asociarlo</AlertTitle>
                 <AlertDescription>
                   Acá definís cómo se calcula. Después decidís si corresponde a
                   toda la cotización, a un paso o a un nivel del paso.
                 </AlertDescription>
               </Alert>
-              {editando ? (
-                <div className="space-y-2">
-                  <Label htmlFor="codigo">Código del sistema</Label>
-                  <Input id="codigo" value={codigo} disabled />
-                  <p className="text-muted-foreground text-xs">
-                    Se generó automáticamente al crear el cargo.
-                  </p>
-                </div>
-              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="nombre">Nombre *</Label>
                 <Input
@@ -749,7 +770,7 @@ export function CargosDirectosManager({
                 </div>
               ) : null}
             </div>
-            <SheetFooter>
+            <SheetFooter className={styles.sheetFooter}>
               <Button variant="outline" onClick={() => setOpenSheet(false)}>
                 Cancelar
               </Button>
@@ -763,19 +784,79 @@ export function CargosDirectosManager({
             </SheetFooter>
           </SheetContent>
         </Sheet>
-      </div>
+      </header>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <WrenchIcon className="size-5" />
-            <CardTitle>Catálogo</CardTitle>
+      <section className={styles.metrics} aria-label="Resumen del catálogo">
+        <article className={`${styles.metric} ${styles.metricPrimary}`}>
+          <span className={styles.metricIcon} aria-hidden="true">
+            <CircleDollarSignIcon />
+          </span>
+          <div>
+            <span>Catálogo total</span>
+            <strong>{initialCargos.length}</strong>
+            <small>costos reutilizables</small>
           </div>
-          <CardDescription>
-            {initialCargos.length} costos directos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        </article>
+        <article className={styles.metric}>
+          <span className={styles.metricIcon} aria-hidden="true">
+            <BadgeCheckIcon />
+          </span>
+          <div>
+            <span>Activos</span>
+            <strong>{activos}</strong>
+            <small>disponibles para asociar</small>
+          </div>
+        </article>
+        <article className={styles.metric}>
+          <span className={styles.metricIcon} aria-hidden="true">
+            <SparklesIcon />
+          </span>
+          <div>
+            <span>Con margen</span>
+            <strong>{conMargen}</strong>
+            <small>generan utilidad comercial</small>
+          </div>
+        </article>
+        <article className={styles.metric}>
+          <span className={styles.metricIcon} aria-hidden="true">
+            <Layers3Icon />
+          </span>
+          <div>
+            <span>Formas de cálculo</span>
+            <strong>{modosConfigurados}</strong>
+            <small>modalidades configuradas</small>
+          </div>
+        </article>
+      </section>
+
+      <section className={styles.catalogPanel}>
+        <header className={styles.catalogHeader}>
+          <div className={styles.catalogIdentity}>
+            <span className={styles.catalogIcon} aria-hidden="true">
+              <WrenchIcon />
+            </span>
+            <div>
+              <h2>Catálogo de costos</h2>
+              <p>
+                Definí una vez cómo se calcula cada desembolso y reutilizalo en
+                productos y órdenes.
+              </p>
+            </div>
+          </div>
+          {initialCargos.length > 0 ? (
+            <label className={styles.search}>
+              <SearchIcon aria-hidden="true" />
+              <span className="sr-only">Buscar costos directos</span>
+              <input
+                value={busqueda}
+                onChange={(event) => setBusqueda(event.target.value)}
+                placeholder="Buscar por nombre, código o cálculo…"
+              />
+            </label>
+          ) : null}
+        </header>
+
+        <div className={styles.catalogBody}>
           {initialCargos.length === 0 ? (
             <EstadoVacio
               variant="compacto"
@@ -788,79 +869,104 @@ export function CargosDirectosManager({
                 icon: PlusIcon,
               }}
             />
+          ) : cargosVisibles.length === 0 ? (
+            <div className={styles.noResults}>
+              <SearchIcon aria-hidden="true" />
+              <strong>No encontramos costos</strong>
+              <span>Probá con otro nombre, código o modo de cálculo.</span>
+            </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Modo cálculo</TableHead>
-                  <TableHead>Valor sugerido</TableHead>
-                  <TableHead>Margen</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {initialCargos.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell>
-                      <div className="font-medium">{c.nombre}</div>
-                      {c.descripcion && (
-                        <div className="text-muted-foreground text-xs">
-                          {c.descripcion}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        title={
-                          getLabel(modoCalculoCargoLabels, c.modoCalculo)
-                            .descripcion
-                        }
-                      >
-                        {getLabel(modoCalculoCargoLabels, c.modoCalculo).label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">
-                        {formatConfigResumen(c, moneda)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={c.aplicaMargen ? "secondary" : "outline"}>
-                        {c.aplicaMargen ? "Con margen" : "Sin margen"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={c.activo ? "default" : "secondary"}>
-                        {c.activo ? "Activo" : "Inactivo"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => abrirEditar(c)}
-                      >
-                        <PencilIcon className="size-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setABorrar(c)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2Icon className="size-3" />
-                      </Button>
-                    </TableCell>
+            <div className={styles.tableFrame}>
+              <Table className={styles.table}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Modo cálculo</TableHead>
+                    <TableHead>Valor sugerido</TableHead>
+                    <TableHead>Margen</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {cargosVisibles.map((c) => (
+                    <TableRow key={c.id} data-inactive={!c.activo || undefined}>
+                      <TableCell className={styles.nameCell}>
+                        <div className={styles.costIdentity}>
+                          <span aria-hidden="true">
+                            <CircleDollarSignIcon />
+                          </span>
+                          <strong>{c.nombre}</strong>
+                        </div>
+                        {c.descripcion && (
+                          <div className={styles.description}>
+                            {c.descripcion}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={styles.modePill}
+                          title={
+                            getLabel(modoCalculoCargoLabels, c.modoCalculo)
+                              .descripcion
+                          }
+                        >
+                          {
+                            getLabel(modoCalculoCargoLabels, c.modoCalculo)
+                              .label
+                          }
+                        </span>
+                      </TableCell>
+                      <TableCell className={styles.valueCell}>
+                        {formatConfigResumen(c, moneda)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={styles.marginPill}
+                          data-margin={c.aplicaMargen ? "si" : "no"}
+                        >
+                          {c.aplicaMargen ? "Con margen" : "Sin margen"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={styles.statusPill}
+                          data-active={c.activo}
+                        >
+                          {c.activo ? "Activo" : "Inactivo"}
+                        </span>
+                      </TableCell>
+                      <TableCell className={styles.actionsCell}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className={styles.rowAction}
+                          onClick={() => abrirEditar(c)}
+                          aria-label={`Editar ${c.nombre}`}
+                          title="Editar costo"
+                        >
+                          <PencilIcon />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setABorrar(c)}
+                          className={`${styles.rowAction} ${styles.deleteAction}`}
+                          aria-label={`Eliminar ${c.nombre}`}
+                          title="Eliminar costo"
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <ConfirmacionDestructiva
         open={!!aBorrar}
@@ -869,9 +975,8 @@ export function CargosDirectosManager({
         descripcion={
           aBorrar ? (
             <>
-              Vas a eliminar el cargo <strong>{aBorrar.nombre}</strong> (
-              <code className="text-xs">{aBorrar.codigo}</code>) del catálogo
-              del tenant.
+              Vas a eliminar el cargo <strong>{aBorrar.nombre}</strong> del
+              catálogo.
             </>
           ) : null
         }
@@ -883,6 +988,6 @@ export function CargosDirectosManager({
         accionLabel="Eliminar cargo"
         onConfirmar={ejecutarBorrado}
       />
-    </div>
+    </main>
   );
 }

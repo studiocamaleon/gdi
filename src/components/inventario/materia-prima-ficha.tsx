@@ -760,13 +760,7 @@ export function MateriaPrimaFicha({
     [proveedores],
   );
   const maquinaLabelById = React.useMemo(
-    () =>
-      new Map(
-        maquinas.map((maquina) => [
-          maquina.id,
-          `${maquina.nombre}${maquina.codigo ? ` (${maquina.codigo})` : ""}`,
-        ]),
-      ),
+    () => new Map(maquinas.map((maquina) => [maquina.id, maquina.nombre])),
     [maquinas],
   );
 
@@ -1648,9 +1642,6 @@ export function MateriaPrimaFicha({
                                           }}
                                         >
                                           {maquina.nombre}
-                                          {maquina.codigo
-                                            ? ` (${maquina.codigo})`
-                                            : ""}
                                         </DropdownMenuCheckboxItem>
                                       );
                                     })}

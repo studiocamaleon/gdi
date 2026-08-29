@@ -53,15 +53,18 @@ export function ConfirmacionSalida({
       {/* Por encima de los modales propios (.mod-bg va en z-index 60): el
           aviso de que estás por perder lo cargado tiene que verse SIEMPRE
           sobre aquello de lo que estás saliendo. */}
-      <AlertDialogContent className="z-[80]" overlayClassName="z-[80]">
+      <AlertDialogContent
+        className="gp-alert-modal gp-alert-modal-warning z-[80]"
+        overlayClassName="gp-alert-overlay z-[80]"
+      >
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <TriangleAlertIcon className="size-4 text-amber-600" />
             Cambios sin guardar
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Tenés {cambios} cambio{plural} sin guardar en {donde}. Si salís
-            sin guardar, se descarta{plural ? "n" : ""}.
+            Tenés {cambios} cambio{plural} sin guardar en {donde}. Si salís sin
+            guardar, se descarta{plural ? "n" : ""}.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

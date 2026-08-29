@@ -22,7 +22,6 @@ import {
   useConfigRegional,
   useFecha,
 } from "@/components/navigation/config-regional-provider";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -71,7 +70,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import type {
   CobroPendienteAcreditacion,
   CuentaFondos,
@@ -91,6 +89,8 @@ import {
   rechazarValorPropio,
 } from "@/lib/egresos-api";
 import { formatearMoneda, monedaDe } from "@/lib/moneda";
+
+import styles from "./tesoreria-view.module.css";
 
 type OperacionValor =
   | { tipo: "depositar"; valor: ValorTesoreria }
@@ -250,7 +250,7 @@ function ValorOperacionDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent className="gp-modal" overlayClassName="gp-modal-overlay">
         <DialogHeader>
           <DialogTitle>{titulo}</DialogTitle>
           <DialogDescription>
@@ -582,68 +582,72 @@ export function AcreditacionesView({
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-[1320px] flex-1 self-start flex-col gap-6 p-4 pb-20 sm:p-6 lg:p-8">
-      <header className="flex flex-col gap-3">
+    <main className={styles.pagina}>
+      <header className={styles.subEncabezado}>
         <Link
           href="/administracion/tesoreria"
-          className={buttonVariants({ variant: "ghost", className: "w-fit" })}
+          className={`${buttonVariants({ variant: "ghost" })} ${styles.volver}`}
         >
           <ArrowLeftIcon data-icon="inline-start" />
           Volver a Tesorería
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Acreditaciones y valores
-          </h1>
-          <p className="text-muted-foreground">
+          <span className={styles.eyebrow}>Tesorería · operaciones</span>
+          <h1>Acreditaciones y valores</h1>
+          <p>
             Confirmá fondos electrónicos y administrá el ciclo completo de
             cheques.
           </p>
         </div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardDescription>Cobros electrónicos pendientes</CardDescription>
-            <CardTitle className="flex flex-wrap gap-x-4 gap-y-1 text-2xl">
+      <section className={styles.kpisDos}>
+        <article className={`${styles.kpi} ${styles.kpiPrincipal}`}>
+          <span className={styles.kpiIcono} aria-hidden="true">
+            <HandCoinsIcon />
+          </span>
+          <div className={styles.kpiTexto}>
+            <span>Cobros electrónicos pendientes</span>
+            <strong className={styles.valorMultiple}>
               {totalElectronico.length
                 ? totalElectronico.map(([codigo, total]) => (
                     <span key={codigo}>{fmt(total, codigo)}</span>
                   ))
                 : "Sin pendientes"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {filas.length} operaciones
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Cheques en cartera o depositados</CardDescription>
-            <CardTitle className="flex flex-wrap gap-x-4 gap-y-1 text-2xl">
+            </strong>
+            <small>{filas.length} operaciones</small>
+          </div>
+        </article>
+
+        <article className={styles.kpi}>
+          <span className={styles.kpiIcono} aria-hidden="true">
+            <BanknoteIcon />
+          </span>
+          <div className={styles.kpiTexto}>
+            <span>Cheques en cartera o depositados</span>
+            <strong className={styles.valorMultiple}>
               {totalValores.length
                 ? totalValores.map(([codigo, total]) => (
                     <span key={codigo}>{fmt(total, codigo)}</span>
                   ))
                 : "Sin valores"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {valoresRecibidosActivos.length} recibidos ·{" "}
-            {
-              valores.filter(
-                (valor) =>
-                  valor.origen === "propio" && valor.estado === "emitido",
-              ).length
-            }{" "}
-            propios por debitar
-          </CardContent>
-        </Card>
+            </strong>
+            <small>
+              {valoresRecibidosActivos.length} recibidos ·{" "}
+              {
+                valores.filter(
+                  (valor) =>
+                    valor.origen === "propio" && valor.estado === "emitido",
+                ).length
+              }{" "}
+              propios por debitar
+            </small>
+          </div>
+        </article>
       </section>
 
-      <Card>
-        <CardHeader className="border-b">
+      <Card className={styles.operacionesPanel}>
+        <CardHeader className={styles.operacionesHeader}>
           <CardTitle>Cobros electrónicos</CardTitle>
           <CardDescription>
             El importe disponible ya descuenta comisiones y retenciones.
@@ -651,7 +655,7 @@ export function AcreditacionesView({
         </CardHeader>
         <CardContent>
           {filas.length ? (
-            <Table>
+            <Table className={styles.tabla}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha estimada</TableHead>
@@ -722,8 +726,8 @@ export function AcreditacionesView({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="border-b">
+      <Card className={styles.operacionesPanel}>
+        <CardHeader className={styles.operacionesHeader}>
           <CardTitle>Cartera de valores</CardTitle>
           <CardDescription>
             Depósito, acreditación, rechazo e historial de cheques y eCheq.
@@ -765,7 +769,7 @@ export function AcreditacionesView({
             </Select>
           </CardAction>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className={styles.carteraContenido}>
           <div className="relative sm:hidden">
             <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -776,242 +780,270 @@ export function AcreditacionesView({
             />
           </div>
           {valoresFiltrados.length ? (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className={styles.chequesGrid}>
               {valoresFiltrados.map((valor) => (
-                <Card key={valor.id} size="sm">
-                  <CardHeader>
-                    <CardTitle>
-                      {valor.origen === "propio" ? "Cheque propio" : "Cheque"}{" "}
-                      {valor.numero}
-                    </CardTitle>
-                    <CardDescription className="flex flex-col gap-0.5">
-                      <span>
-                        {valor.banco} ·{" "}
-                        {valor.formato === "echeq" ? "eCheq" : "Cheque físico"}
+                <article
+                  key={valor.id}
+                  className={styles.cheque}
+                  data-estado={valor.estado}
+                >
+                  <span className={styles.marcaAgua} aria-hidden="true">
+                    G
+                  </span>
+
+                  <header className={styles.chequeHeader}>
+                    <div className={styles.chequeIdentidad}>
+                      <span className={styles.chequeClase}>
+                        {valor.formato === "echeq"
+                          ? "Cheque electrónico"
+                          : "Documento de valor"}
                       </span>
-                      <span>
-                        {valor.origen === "propio"
-                          ? `Emitido a ${valor.proveedorNombre ?? "proveedor sin identificar"}`
-                          : valor.estado === "endosado"
-                            ? `Recibido de ${valor.clienteNombre ?? "cliente sin identificar"} · endosado a ${valor.proveedorNombre ?? "proveedor sin identificar"}`
-                            : `Recibido de ${valor.clienteNombre ?? "cliente sin identificar"}`}
-                      </span>
-                    </CardDescription>
-                    <CardAction>
-                      <Badge
-                        variant={
-                          valor.estado === "rechazado"
-                            ? "destructive"
-                            : valor.estado === "acreditado"
-                              ? "secondary"
-                              : "outline"
+                      <h3>
+                        {valor.origen === "propio" ? "Cheque propio" : "Cheque"}
+                        <span>Nº {valor.numero}</span>
+                      </h3>
+                    </div>
+                    <span
+                      className={styles.chequeEstado}
+                      data-estado={valor.estado}
+                    >
+                      {ESTADOS[valor.estado] ?? valor.estado}
+                    </span>
+                  </header>
+
+                  <div className={styles.chequeBanco}>
+                    <span className={styles.bancoIcono} aria-hidden="true">
+                      <LandmarkIcon />
+                    </span>
+                    <div>
+                      <span>Entidad emisora</span>
+                      <strong>{valor.banco}</strong>
+                    </div>
+                    <small>
+                      {valor.formato === "echeq" ? "eCheq" : "Cheque físico"}
+                    </small>
+                  </div>
+
+                  <div className={styles.chequeBeneficiario}>
+                    <span>
+                      {valor.origen === "propio" ? "Emitido a" : "Recibido de"}
+                    </span>
+                    <strong>
+                      {valor.origen === "propio"
+                        ? (valor.proveedorNombre ?? "Proveedor sin identificar")
+                        : (valor.clienteNombre ?? "Cliente sin identificar")}
+                    </strong>
+                    {valor.estado === "endosado" ? (
+                      <small>
+                        Endosado a{" "}
+                        {valor.proveedorNombre ?? "proveedor sin identificar"}
+                      </small>
+                    ) : null}
+                  </div>
+
+                  <div className={styles.chequeImporte}>
+                    <div>
+                      <span>Importe</span>
+                      <strong>{fmt(valor.importe, valor.moneda)}</strong>
+                    </div>
+                    <div className={styles.chequeFecha}>
+                      <span>Fecha de pago</span>
+                      <strong>
+                        {valor.fechaPago
+                          ? fechaNumerica(valor.fechaPago)
+                          : "A la vista"}
+                      </strong>
+                      {valor.cuentaDeposito ? (
+                        <small>{valor.cuentaDeposito.nombre}</small>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {valor.identificadorBancario ? (
+                    <div className={styles.identificador}>
+                      ID bancario · {valor.identificadorBancario}
+                    </div>
+                  ) : null}
+
+                  <div className={styles.chequeAcciones}>
+                    {puedeGestionar &&
+                    valor.origen === "tercero" &&
+                    valor.estado === "cartera" ? (
+                      <Button
+                        size="sm"
+                        className={styles.accionChequePrincipal}
+                        onClick={() =>
+                          setOperacion({ tipo: "depositar", valor })
                         }
                       >
-                        {ESTADOS[valor.estado] ?? valor.estado}
-                      </Badge>
-                    </CardAction>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Importe
-                        </div>
-                        <div className="text-xl font-semibold">
-                          {fmt(valor.importe, valor.moneda)}
-                        </div>
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        {valor.fechaPago
-                          ? `Pago ${fechaNumerica(valor.fechaPago)}`
-                          : "Cheque común"}
-                        {valor.cuentaDeposito ? (
-                          <div>{valor.cuentaDeposito.nombre}</div>
-                        ) : null}
-                        {valor.identificadorBancario ? (
-                          <div>ID banco: {valor.identificadorBancario}</div>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {puedeGestionar &&
-                      valor.origen === "tercero" &&
-                      valor.estado === "cartera" ? (
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            setOperacion({ tipo: "depositar", valor })
-                          }
-                        >
-                          <LandmarkIcon data-icon="inline-start" />
-                          Depositar
-                        </Button>
-                      ) : null}
-                      {puedeGestionar &&
-                      valor.origen === "tercero" &&
-                      valor.estado === "cartera" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            router.push(
-                              `/administracion/cuentas-por-pagar?endosarValorId=${valor.id}`,
-                            )
-                          }
-                        >
-                          <HandCoinsIcon data-icon="inline-start" />
-                          Endosar
-                        </Button>
-                      ) : null}
-                      {puedeGestionar &&
-                      valor.origen === "tercero" &&
-                      valor.estado === "depositado" ? (
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            setOperacion({ tipo: "acreditar", valor })
-                          }
-                        >
-                          <BanknoteIcon data-icon="inline-start" />
-                          Acreditar
-                        </Button>
-                      ) : null}
-                      {puedeAnular &&
-                      valor.origen === "tercero" &&
-                      valor.estado === "depositado" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setOperacion({ tipo: "revertir_deposito", valor })
-                          }
-                        >
-                          <Undo2Icon data-icon="inline-start" />
-                          Deshacer depósito
-                        </Button>
-                      ) : null}
-                      {puedeAnular &&
-                      valor.origen === "tercero" &&
-                      valor.estado === "acreditado" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setOperacion({
-                              tipo: "revertir_acreditacion",
-                              valor,
-                            })
-                          }
-                        >
-                          <Undo2Icon data-icon="inline-start" />
-                          Deshacer acreditación
-                        </Button>
-                      ) : null}
-                      {puedeGestionar &&
-                      valor.origen === "propio" &&
-                      valor.estado === "emitido" ? (
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            setOperacion({ tipo: "debitar", valor })
-                          }
-                        >
-                          <BanknoteIcon data-icon="inline-start" />
-                          Confirmar débito
-                        </Button>
-                      ) : null}
-                      {puedeAnular &&
-                      valor.origen === "propio" &&
-                      ["emitido", "debitado"].includes(valor.estado) ? (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() =>
-                            setOperacion({ tipo: "rechazar_propio", valor })
-                          }
-                        >
-                          <ShieldAlertIcon data-icon="inline-start" />
-                          Informar rechazo
-                        </Button>
-                      ) : null}
-                      {puedeAnular &&
-                      ((valor.origen === "tercero" &&
-                        ["cartera", "depositado", "acreditado"].includes(
-                          valor.estado,
-                        )) ||
-                        (valor.origen === "propio" &&
-                          valor.estado === "emitido" &&
-                          valor.pagoId)) ? (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() =>
-                            setOperacion({
-                              tipo:
-                                valor.origen === "propio"
-                                  ? "anular_propio"
-                                  : "rechazar",
-                              valor,
-                            })
-                          }
-                        >
-                          <ShieldAlertIcon data-icon="inline-start" />
-                          {valor.origen === "propio"
-                            ? "Anular emisión"
-                            : "Rechazar"}
-                        </Button>
-                      ) : null}
-                    </div>
-                    {valor.motivoRechazo ? (
-                      <p className="text-sm text-destructive">
-                        {valor.motivoRechazo}
-                      </p>
+                        <LandmarkIcon data-icon="inline-start" />
+                        Depositar
+                      </Button>
                     ) : null}
-                    {valor.eventos.length ? (
-                      <Collapsible>
-                        <Separator />
-                        <CollapsibleTrigger
-                          className={buttonVariants({
-                            variant: "ghost",
-                            size: "sm",
-                            className: "mt-2 w-fit",
+                    {puedeGestionar &&
+                    valor.origen === "tercero" &&
+                    valor.estado === "cartera" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={styles.accionCheque}
+                        onClick={() =>
+                          router.push(
+                            `/administracion/cuentas-por-pagar?endosarValorId=${valor.id}`,
+                          )
+                        }
+                      >
+                        <HandCoinsIcon data-icon="inline-start" />
+                        Endosar
+                      </Button>
+                    ) : null}
+                    {puedeGestionar &&
+                    valor.origen === "tercero" &&
+                    valor.estado === "depositado" ? (
+                      <Button
+                        size="sm"
+                        className={styles.accionChequePrincipal}
+                        onClick={() =>
+                          setOperacion({ tipo: "acreditar", valor })
+                        }
+                      >
+                        <BanknoteIcon data-icon="inline-start" />
+                        Acreditar
+                      </Button>
+                    ) : null}
+                    {puedeAnular &&
+                    valor.origen === "tercero" &&
+                    valor.estado === "depositado" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={styles.accionCheque}
+                        onClick={() =>
+                          setOperacion({ tipo: "revertir_deposito", valor })
+                        }
+                      >
+                        <Undo2Icon data-icon="inline-start" />
+                        Deshacer depósito
+                      </Button>
+                    ) : null}
+                    {puedeAnular &&
+                    valor.origen === "tercero" &&
+                    valor.estado === "acreditado" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={styles.accionCheque}
+                        onClick={() =>
+                          setOperacion({
+                            tipo: "revertir_acreditacion",
+                            valor,
+                          })
+                        }
+                      >
+                        <Undo2Icon data-icon="inline-start" />
+                        Deshacer acreditación
+                      </Button>
+                    ) : null}
+                    {puedeGestionar &&
+                    valor.origen === "propio" &&
+                    valor.estado === "emitido" ? (
+                      <Button
+                        size="sm"
+                        className={styles.accionChequePrincipal}
+                        onClick={() => setOperacion({ tipo: "debitar", valor })}
+                      >
+                        <BanknoteIcon data-icon="inline-start" />
+                        Confirmar débito
+                      </Button>
+                    ) : null}
+                    {puedeAnular &&
+                    valor.origen === "propio" &&
+                    ["emitido", "debitado"].includes(valor.estado) ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className={styles.accionChequePeligro}
+                        onClick={() =>
+                          setOperacion({ tipo: "rechazar_propio", valor })
+                        }
+                      >
+                        <ShieldAlertIcon data-icon="inline-start" />
+                        Informar rechazo
+                      </Button>
+                    ) : null}
+                    {puedeAnular &&
+                    ((valor.origen === "tercero" &&
+                      ["cartera", "depositado", "acreditado"].includes(
+                        valor.estado,
+                      )) ||
+                      (valor.origen === "propio" &&
+                        valor.estado === "emitido" &&
+                        valor.pagoId)) ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className={styles.accionChequePeligro}
+                        onClick={() =>
+                          setOperacion({
+                            tipo:
+                              valor.origen === "propio"
+                                ? "anular_propio"
+                                : "rechazar",
+                            valor,
+                          })
+                        }
+                      >
+                        <ShieldAlertIcon data-icon="inline-start" />
+                        {valor.origen === "propio"
+                          ? "Anular emisión"
+                          : "Rechazar"}
+                      </Button>
+                    ) : null}
+                  </div>
+                  {valor.motivoRechazo ? (
+                    <p className={styles.motivoRechazo}>
+                      {valor.motivoRechazo}
+                    </p>
+                  ) : null}
+                  {valor.eventos.length ? (
+                    <Collapsible className={styles.chequeHistorial}>
+                      <CollapsibleTrigger
+                        className={buttonVariants({
+                          variant: "ghost",
+                          size: "sm",
+                          className: styles.historialTrigger,
+                        })}
+                      >
+                        <ChevronDownIcon data-icon="inline-start" />
+                        Historial ({valor.eventos.length})
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <ol className={styles.historialLista}>
+                          {valor.eventos.map((evento) => {
+                            const detalle = detalleEvento(evento.detalle);
+                            return (
+                              <li
+                                key={evento.id}
+                                className={styles.historialEvento}
+                              >
+                                <span>
+                                  {ESTADOS[evento.tipo] ?? evento.tipo}
+                                </span>
+                                <small>
+                                  {evento.actorNombre
+                                    ? `${evento.actorNombre} · `
+                                    : ""}
+                                  {fechaNumerica(evento.createdAt)}
+                                </small>
+                                {detalle ? <small>{detalle}</small> : null}
+                              </li>
+                            );
                           })}
-                        >
-                          <ChevronDownIcon data-icon="inline-start" />
-                          Historial ({valor.eventos.length})
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <ol className="mt-2 flex flex-col gap-3">
-                            {valor.eventos.map((evento) => {
-                              const detalle = detalleEvento(evento.detalle);
-                              return (
-                                <li
-                                  key={evento.id}
-                                  className="flex flex-col gap-0.5 text-xs"
-                                >
-                                  <span className="font-medium">
-                                    {ESTADOS[evento.tipo] ?? evento.tipo}
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    {evento.actorNombre
-                                      ? `${evento.actorNombre} · `
-                                      : ""}
-                                    {fechaNumerica(evento.createdAt)}
-                                  </span>
-                                  {detalle ? (
-                                    <span className="text-muted-foreground">
-                                      {detalle}
-                                    </span>
-                                  ) : null}
-                                </li>
-                              );
-                            })}
-                          </ol>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    ) : null}
-                  </CardContent>
-                </Card>
+                        </ol>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ) : null}
+                </article>
               ))}
             </div>
           ) : (

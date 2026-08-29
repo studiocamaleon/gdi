@@ -83,6 +83,49 @@ describe('Catálogo de productos', () => {
     });
   });
 
+  it('actualiza internamente el código cuando cambia el nombre del producto', async () => {
+    const existente = {
+      id: 'p1',
+      tenantId: 'tenant-1',
+      codigo: 'NOMBRE-ANTERIOR',
+      nombre: 'Nombre anterior',
+      sistemaCodigo: null,
+      updatedAt: new Date('2026-08-28T20:00:00.000Z'),
+    };
+    const update = jest
+      .fn()
+      .mockImplementation(({ data }) => ({ ...existente, ...data }));
+    const findFirst = jest.fn().mockImplementation(({ where }) => {
+      if (where.id === 'p1') return existente;
+      return null;
+    });
+    const prisma = { producto: { findFirst, update } };
+    const service = new ProductosService(prisma as never);
+
+    await service.actualizarProducto('tenant-1', 'p1', {
+      nombre: 'Nuevo nombre del producto',
+    });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'p1' },
+        data: expect.objectContaining({
+          nombre: 'Nuevo nombre del producto',
+          codigo: 'NUEVO-NOMBRE-DEL-PRODUCTO',
+        }),
+      }),
+    );
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId: 'tenant-1',
+          codigo: 'NUEVO-NOMBRE-DEL-PRODUCTO',
+          id: { not: 'p1' },
+        },
+      }),
+    );
+  });
+
   it('filtra productos por categoría comercial', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const prisma = {
