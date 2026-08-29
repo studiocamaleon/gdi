@@ -367,7 +367,10 @@ Permitir que una operación como “Carrefour — Vuelta a Clases 2027” se ges
 
 ## Fase 2 — Desarrollo, archivos versionados y aprobaciones
 
-**Estado inicial:** PENDIENTE  
+**Estado:** DISEÑO
+
+**Rama:** `visual-ilusion/fase-2-desarrollo-aprobaciones`
+
 **Dependencias:** Fase 1.
 
 ### Objetivo de negocio
@@ -1160,7 +1163,7 @@ Esta tabla se actualizará al integrar cada fase.
 |---:|---|---|---|---|---|
 | 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
 | 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
-| 2 | PENDIENTE | — | — | — | — |
+| 2 | DISEÑO | `visual-ilusion/fase-2-desarrollo-aprobaciones` | Diseño técnico en preparación | — | Activa |
 | 3 | PENDIENTE | — | — | — | — |
 | 4 | PENDIENTE | — | — | — | — |
 | 5 | PENDIENTE | — | — | — | — |
