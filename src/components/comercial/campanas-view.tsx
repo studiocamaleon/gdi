@@ -316,6 +316,7 @@ export function CampanasView({
                     <Button
                       variant="ghost"
                       size="icon-sm"
+                      nativeButton={false}
                       render={
                         <Link href={`/comercial/campanas/${campana.id}`} />
                       }

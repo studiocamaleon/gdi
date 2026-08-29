@@ -141,7 +141,9 @@
 }
 
 .surface {
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--camp-line);
   border-radius: 15px;
   background: #fff;
@@ -574,6 +576,8 @@
 }
 .tabContent {
   padding-top: 14px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 1000px) {

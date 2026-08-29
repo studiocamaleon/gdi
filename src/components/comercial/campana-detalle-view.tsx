@@ -89,6 +89,21 @@ function fecha(value: string | null, larga = false) {
   }).format(new Date(`${value.slice(0, 10)}T00:00:00Z`));
 }
 
+function fechaHora(value: string) {
+  const partes = new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "America/Argentina/Buenos_Aires",
+  }).formatToParts(new Date(value));
+  const valor = (tipo: Intl.DateTimeFormatPartTypes) =>
+    partes.find((parte) => parte.type === tipo)?.value ?? "";
+  return `${valor("day")}/${valor("month")}/${valor("year")} · ${valor("hour")}:${valor("minute")}`;
+}
+
 export function CampanaDetalleView({
   initial,
   initialArchivos,
@@ -488,7 +503,7 @@ export function CampanaDetalleView({
                           loading={working === hito.id}
                           onClick={() => void avanzarHito(hito)}
                         >
-                          Avanzar
+                          {hito.estado === "completado" ? "Reabrir" : "Avanzar"}
                         </Button>
                       ) : null}
                     </div>
@@ -762,11 +777,7 @@ export function CampanaDetalleView({
                   <div className={styles.event} key={evento.id}>
                     <p className={styles.eventText}>{evento.descripcion}</p>
                     <div className={styles.eventMeta}>
-                      {evento.actor} ·{" "}
-                      {new Intl.DateTimeFormat("es-AR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      }).format(new Date(evento.fecha))}
+                      {evento.actor} · {fechaHora(evento.fecha)}
                     </div>
                   </div>
                 ))}
