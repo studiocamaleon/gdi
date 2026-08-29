@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircleIcon,
   ArrowLeftIcon,
+  FolderIcon,
   HistoryIcon,
   MapPinHouseIcon,
   PlusIcon,
@@ -644,6 +645,16 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {mode !== "create" ? (
+            <Link
+              href={`/comercial/campanas?clienteId=${cliente.id}`}
+              onNavigate={confirmNavigation}
+              className={buttonVariants({ variant: "outline" })}
+            >
+              <FolderIcon data-icon="inline-start" />
+              Campañas
+            </Link>
+          ) : null}
           {mode !== "create" ? (
             <Link
               href={`/crm/clientes/${cliente.id}/cuenta-corriente`}

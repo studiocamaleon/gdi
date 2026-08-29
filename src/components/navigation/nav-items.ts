@@ -78,6 +78,11 @@ export const NAV: NavItem[] = [
         label: "Presupuestos",
         href: "/comercial/presupuestos",
       },
+      {
+        key: "campanas",
+        label: "Campañas",
+        href: "/comercial/campanas",
+      },
       // Vive en Comercial (sigue el flujo propuesta → presupuesto → OT) aunque
       // la ruta siga bajo /produccion/ordenes.
       {

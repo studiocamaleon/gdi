@@ -106,6 +106,7 @@ export type OrdenTrabajoListItem = {
   clienteNombre: string;
   vendedorEmpleadoId: string | null;
   vendedorNombre: string;
+  proyectoCampana: { id: string; codigo: string; nombre: string } | null;
   estado: OrdenTrabajoEstado;
   /** Fecha de creación (ISO). */
   creadaEl: string;
@@ -532,10 +533,13 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
 }
 
 function completarMockOrdenes(
-  ordenes: Array<Omit<OrdenTrabajoListItem, "fechaEmision" | "version">>,
+  ordenes: Array<
+    Omit<OrdenTrabajoListItem, "fechaEmision" | "version" | "proyectoCampana">
+  >,
 ): OrdenTrabajoListItem[] {
   return ordenes.map((orden) => ({
     ...orden,
+    proyectoCampana: null,
     fechaEmision: orden.estado === "borrador" ? null : orden.creadaEl,
     version: `${orden.creadaEl}T12:00:00.000Z`,
   }));

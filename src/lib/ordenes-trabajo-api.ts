@@ -49,6 +49,7 @@ export type CrearOrdenTrabajoPayload = {
   clienteId?: string;
   vendedorEmpleadoId?: string;
   cotizacionId?: string;
+  proyectoCampanaId?: string;
   /** borrador (guardar) o pendiente (emitir al taller). */
   estado?: "borrador" | "pendiente";
   /** ISO date (YYYY-MM-DD). */
@@ -88,6 +89,8 @@ export async function getOrdenesTrabajo(params?: {
   estado?: string;
   urgencia?: "atrasadas";
   q?: string;
+  clienteId?: string;
+  proyectoCampanaId?: string;
   page?: number;
   limit?: number;
 }): Promise<OrdenesTrabajoListado> {
@@ -95,6 +98,9 @@ export async function getOrdenesTrabajo(params?: {
   if (params?.estado) search.set("estado", params.estado);
   if (params?.urgencia) search.set("urgencia", params.urgencia);
   if (params?.q) search.set("q", params.q);
+  if (params?.clienteId) search.set("clienteId", params.clienteId);
+  if (params?.proyectoCampanaId)
+    search.set("proyectoCampanaId", params.proyectoCampanaId);
   if (params?.page) search.set("page", String(params.page));
   if (params?.limit) search.set("limit", String(params.limit));
   const query = search.toString();

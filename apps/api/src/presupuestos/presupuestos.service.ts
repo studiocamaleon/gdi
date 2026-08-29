@@ -174,6 +174,22 @@ export class PresupuestosService {
         'El cliente no existe o está inhabilitado.',
       );
     }
+    if (dto.proyectoCampanaId) {
+      const campana = await this.prisma.proyectoCampana.findFirst({
+        where: {
+          id: dto.proyectoCampanaId,
+          tenantId: auth.tenantId,
+          clienteId: dto.clienteId,
+          estado: { not: 'cancelado' },
+        },
+        select: { id: true },
+      });
+      if (!campana) {
+        throw new BadRequestException(
+          'La campaña no existe, está cancelada o pertenece a otro cliente.',
+        );
+      }
+    }
 
     // Vendedor: el indicado, o el empleado ligado al usuario que emite
     // (mismo default que la OT).
@@ -264,6 +280,7 @@ export class PresupuestosService {
         data: {
           numero: nro,
           clienteId: dto.clienteId,
+          proyectoCampanaId: dto.proyectoCampanaId ?? null,
           vendedorEmpleadoId,
           canalVenta: dto.canalVenta,
           estado: 'borrador',
@@ -299,6 +316,23 @@ export class PresupuestosService {
           usuarioNombre: await this.nombreDe(auth),
         },
       });
+      if (dto.proyectoCampanaId) {
+        await tx.proyectoCampanaEvento.create({
+          data: {
+            tenantId: auth.tenantId,
+            proyectoCampanaId: dto.proyectoCampanaId,
+            tipo: 'vinculo',
+            descripcion: `Se vinculó el presupuesto ${nro}.`,
+            actorUserId: auth.impersonacion?.actorUserId ?? auth.userId,
+            actorNombre: await this.nombreDe(auth),
+            datosJson: {
+              tipo: 'cotizacion',
+              documentoId: dto.cotizacionId,
+            },
+            origen: auth.impersonacion ? 'soporte' : auth.mcp ? 'api' : 'usuario',
+          },
+        });
+      }
       return nro;
     });
 
@@ -441,6 +475,9 @@ export class PresupuestosService {
       numero: { not: null },
       ...(filtros.estado ? { estado: filtros.estado } : {}),
       ...(filtros.clienteId ? { clienteId: filtros.clienteId } : {}),
+      ...(filtros.proyectoCampanaId
+        ? { proyectoCampanaId: filtros.proyectoCampanaId }
+        : {}),
       ...(filtros.busqueda
         ? {
             OR: [
@@ -476,6 +513,7 @@ export class PresupuestosService {
           publicToken: true,
           convertidaOrdenId: true,
           cliente: { select: { id: true, nombre: true } },
+          proyectoCampana: { select: { id: true, codigo: true, nombre: true } },
           vendedor: { select: { id: true, nombreCompleto: true } },
           _count: { select: { items: true } },
         },
@@ -517,6 +555,7 @@ export class PresupuestosService {
         items: rw._count.items,
         cliente: rw.cliente?.nombre ?? 'Sin cliente',
         clienteId: rw.cliente?.id ?? null,
+        proyectoCampana: rw.proyectoCampana,
         vendedor: rw.vendedor?.nombreCompleto ?? null,
         publicToken: rw.publicToken,
         ordenConvertida: rw.convertidaOrdenId
@@ -545,6 +584,7 @@ export class PresupuestosService {
       where: { id, numero: { not: null } },
       include: {
         cliente: { select: { id: true, nombre: true } },
+        proyectoCampana: { select: { id: true, codigo: true, nombre: true } },
         vendedor: { select: { id: true, nombreCompleto: true } },
         eventos: { orderBy: { fecha: 'desc' }, take: 50 },
         items: {
@@ -590,6 +630,7 @@ export class PresupuestosService {
       cliente: c.cliente
         ? { id: c.cliente.id, nombre: c.cliente.nombre }
         : null,
+      proyectoCampana: c.proyectoCampana,
       vendedor: c.vendedor
         ? { id: c.vendedor.id, nombre: c.vendedor.nombreCompleto }
         : null,
@@ -1074,6 +1115,7 @@ export class PresupuestosService {
       clienteId: c.clienteId ?? undefined,
       vendedorEmpleadoId: c.vendedorEmpleadoId ?? undefined,
       cotizacionId: id,
+      proyectoCampanaId: c.proyectoCampanaId ?? undefined,
       estado: 'borrador',
       fechaEntrega,
       canalVenta: emision.canalVenta,

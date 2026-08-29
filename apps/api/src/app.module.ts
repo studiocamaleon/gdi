@@ -50,6 +50,7 @@ import { RecorridosVectorialesModule } from './recorridos-vectoriales/recorridos
 import { SuscripcionAccesoGuard } from './suscripciones/suscripcion-acceso.guard';
 import { ProvisionamientoModule } from './provisionamiento/provisionamiento.module';
 import { RegistroModule } from './registro/registro.module';
+import { CampanasModule } from './campanas/campanas.module';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { RegistroModule } from './registro/registro.module';
     CobroModule,
     SuscripcionesModule,
     ClientesModule,
+    CampanasModule,
     EmpleadosModule,
     UsuariosModule,
     ProveedoresModule,

@@ -378,6 +378,7 @@ enum OrigenMovimientoStockMateriaPrima {
 /// cuelga de nada: es del tenant). Ver docs/archivos-r2-diseno.md §D3.
 enum ArchivoScope {
   TENANT_BRANDING
+  CAMPANA
   CLIENTE
   ORDEN
   ORDEN_ITEM
@@ -605,6 +606,11 @@ model Tenant {
   invitations                                      Invitation[]
   credencialesMcp                                  CredencialMcp[]
   clientes                                         Cliente[]
+  proyectosCampana                                 ProyectoCampana[]
+  proyectoCampanaMiembros                          ProyectoCampanaMiembro[]
+  proyectoCampanaHitos                             ProyectoCampanaHito[]
+  proyectoCampanaEventos                           ProyectoCampanaEvento[]
+  proyectoCampanaContadores                        ProyectoCampanaContador[]
   proveedores                                      Proveedor[]
   empleados                                        Empleado[]
   plantas                                          Planta[]
@@ -816,6 +822,7 @@ model User {
   empleados               Empleado[]
   ordenTrabajoEventos     OrdenTrabajoEvento[]
   archivosSubidos         Archivo[]               @relation("ArchivosSubidos")
+  proyectoCampanaEventos  ProyectoCampanaEvento[] @relation("ProyectoCampanaEventoActor")
   integracionesConectadas IntegracionTenant[]     @relation("IntegracionesConectadas")
   pasosEnMesa             OrdenTrabajoItemPaso[]  @relation("PasosEnMesa")
   pasosIniciados          OrdenTrabajoItemPaso[]  @relation("PasosIniciados")
@@ -1069,6 +1076,7 @@ model Cliente {
   cotizacionesV2           Cotizacion[]                      @relation("CotizacionV2Cliente")
   preciosEspecialesV2      ProductoPrecioEspecialClienteV2[] @relation("ProductoPrecioEspecialClienteV2Cliente")
   ordenesTrabajo           OrdenTrabajo[]                    @relation("OrdenTrabajoCliente")
+  proyectosCampana         ProyectoCampana[]                 @relation("ProyectoCampanaCliente")
   cobros                   Cobro[]
   valores                  Valor[]
   comprobantes             Comprobante[]
@@ -1134,9 +1142,9 @@ model Proveedor {
 }
 
 model Empleado {
-  id                     String              @id @default(uuid()) @db.Uuid
-  tenantId               String              @db.Uuid
-  userId                 String?             @db.Uuid
+  id                     String                   @id @default(uuid()) @db.Uuid
+  tenantId               String                   @db.Uuid
+  userId                 String?                  @db.Uuid
   nombreCompleto         String
   emailPrincipal         String
   telefonoCodigo         String
@@ -1144,22 +1152,25 @@ model Empleado {
   sector                 String
   ocupacion              String?
   sexo                   SexoEmpleado?
-  fechaIngreso           DateTime            @db.Date
-  fechaNacimiento        DateTime?           @db.Date
-  comisionesHabilitadas  Boolean             @default(false)
-  activo                 Boolean             @default(true)
-  fechaBaja              DateTime?           @db.Date
-  motivoBaja             String?             @db.VarChar(300)
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
-  tenant                 Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user                   User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fechaIngreso           DateTime                 @db.Date
+  fechaNacimiento        DateTime?                @db.Date
+  comisionesHabilitadas  Boolean                  @default(false)
+  activo                 Boolean                  @default(true)
+  fechaBaja              DateTime?                @db.Date
+  motivoBaja             String?                  @db.VarChar(300)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  tenant                 Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                   User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
   direcciones            EmpleadoDireccion[]
   comisiones             EmpleadoComision[]
   eventos                EmpleadoEvento[]
   invitations            Invitation[]
-  ordenesTrabajoVendidas OrdenTrabajo[]      @relation("OrdenTrabajoVendedor")
-  cotizacionesVendidas   Cotizacion[]        @relation("CotizacionVendedor")
+  ordenesTrabajoVendidas OrdenTrabajo[]           @relation("OrdenTrabajoVendedor")
+  cotizacionesVendidas   Cotizacion[]             @relation("CotizacionVendedor")
+  campanasResponsable    ProyectoCampana[]        @relation("ProyectoCampanaResponsable")
+  campanasEquipo         ProyectoCampanaMiembro[]
+  campanasHitos          ProyectoCampanaHito[]    @relation("ProyectoCampanaHitoResponsable")
   estaciones             EstacionEmpleado[]
   egresos                Egreso[]
 
@@ -2875,6 +2886,121 @@ model ProductoCargoDirectoCotizacion {
   @@index([tenantId, productoId])
 }
 
+// === PROYECTOS / CAMPAÑAS ===
+// Capa opcional de coordinación comercial y operativa. No reemplaza a la
+// cotización ni a la OT: sólo las agrupa y agrega hitos, equipo y trazabilidad.
+
+model ProyectoCampana {
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @db.Uuid
+  clienteId             String    @db.Uuid
+  /// CAM-AAAA-NNNN, asignado de forma atómica al crear.
+  codigo                String
+  nombre                String    @db.VarChar(180)
+  descripcion           String?   @db.VarChar(2000)
+  /// Clasificación libre y breve hasta conocer el catálogo real del tenant.
+  tipo                  String?   @db.VarChar(80)
+  /// borrador | activo | pausado | completado | cancelado.
+  estado                String    @default("borrador") @db.VarChar(20)
+  /// baja | normal | alta | critica.
+  prioridad             String    @default("normal") @db.VarChar(20)
+  fechaInicio           DateTime? @db.Date
+  fechaObjetivo         DateTime? @db.Date
+  fechaCompletada       DateTime? @db.Date
+  responsableEmpleadoId String?   @db.Uuid
+  observaciones         String?   @db.VarChar(3000)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  tenant       Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente      Cliente                  @relation("ProyectoCampanaCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  responsable  Empleado?                @relation("ProyectoCampanaResponsable", fields: [responsableEmpleadoId], references: [id], onDelete: SetNull)
+  equipo       ProyectoCampanaMiembro[]
+  hitos        ProyectoCampanaHito[]
+  eventos      ProyectoCampanaEvento[]
+  cotizaciones Cotizacion[]
+  ordenes      OrdenTrabajo[]
+  archivos     Archivo[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, estado, fechaObjetivo])
+  @@index([tenantId, clienteId, estado])
+  @@index([tenantId, responsableEmpleadoId, estado])
+  @@index([tenantId, createdAt])
+}
+
+model ProyectoCampanaMiembro {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @db.Uuid
+  proyectoCampanaId String   @db.Uuid
+  empleadoId        String   @db.Uuid
+  funcion           String?  @db.VarChar(100)
+  createdAt         DateTime @default(now())
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campana  ProyectoCampana @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  empleado Empleado        @relation(fields: [empleadoId], references: [id], onDelete: Restrict)
+
+  @@unique([proyectoCampanaId, empleadoId])
+  @@index([tenantId, empleadoId])
+}
+
+model ProyectoCampanaHito {
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @db.Uuid
+  proyectoCampanaId     String    @db.Uuid
+  titulo                String    @db.VarChar(180)
+  descripcion           String?   @db.VarChar(1000)
+  responsableEmpleadoId String?   @db.Uuid
+  fechaObjetivo         DateTime? @db.Date
+  /// pendiente | en_curso | completado | cancelado.
+  estado                String    @default("pendiente") @db.VarChar(20)
+  notas                 String?   @db.VarChar(1500)
+  orden                 Int       @default(0)
+  completadoEl          DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campana     ProyectoCampana @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  responsable Empleado?       @relation("ProyectoCampanaHitoResponsable", fields: [responsableEmpleadoId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, proyectoCampanaId, orden])
+  @@index([tenantId, responsableEmpleadoId, estado])
+  @@index([tenantId, fechaObjetivo, estado])
+}
+
+/// Timeline append-only. El nombre del actor queda congelado para que el
+/// historial siga siendo legible si cambia o se elimina su cuenta.
+model ProyectoCampanaEvento {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @db.Uuid
+  proyectoCampanaId String   @db.Uuid
+  fecha             DateTime @default(now())
+  tipo              String   @db.VarChar(50)
+  descripcion       String   @db.VarChar(500)
+  actorUserId       String?  @db.Uuid
+  actorNombre       String   @db.VarChar(200)
+  datosJson         Json?
+  origen            String   @default("usuario") @db.VarChar(20)
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campana ProyectoCampana @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  actor   User?           @relation("ProyectoCampanaEventoActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, proyectoCampanaId, fecha])
+  @@index([tenantId, fecha])
+}
+
+model ProyectoCampanaContador {
+  tenantId String @db.Uuid
+  anio     Int
+  ultimo   Int    @default(0)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, anio])
+}
+
 // === COTIZACIONES V2 ===
 
 model Cotizacion {
@@ -2884,6 +3010,7 @@ model Cotizacion {
   /// de la ficha (venta directa); con número = PRESUPUESTO formal.
   numero                       String?
   clienteId                    String?               @db.Uuid
+  proyectoCampanaId            String?               @db.Uuid
   /// Ciclo del presupuesto (docs/presupuestos-modulo-estudio.md §4):
   /// 'borrador' | 'enviado' | 'aprobado' | 'rechazado' | 'vencido' |
   /// 'convertido' ('pendiente_aprobacion' reservado para F2).
@@ -2931,6 +3058,7 @@ model Cotizacion {
   updatedAt                    DateTime              @updatedAt
   tenant                       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cliente                      Cliente?              @relation("CotizacionV2Cliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  proyectoCampana              ProyectoCampana?      @relation(fields: [proyectoCampanaId], references: [id], onDelete: SetNull)
   vendedor                     Empleado?             @relation("CotizacionVendedor", fields: [vendedorEmpleadoId], references: [id], onDelete: SetNull)
   items                        CotizacionItem[]
   ordenesTrabajo               OrdenTrabajo[]
@@ -2943,6 +3071,7 @@ model Cotizacion {
   @@index([tenantId, estado])
   @@index([tenantId, createdAt])
   @@index([tenantId, clienteId])
+  @@index([tenantId, proyectoCampanaId])
   @@index([tenantId, fechaEnvio])
 }
 
@@ -3063,6 +3192,7 @@ model OrdenTrabajo {
   /// "OT-2026-0184" — asignado al crear vía OrdenTrabajoContador.
   numero                      String
   clienteId                   String?                  @db.Uuid
+  proyectoCampanaId           String?                  @db.Uuid
   vendedorEmpleadoId          String?                  @db.Uuid
   /// Presupuesto de origen (si vino del cotizador).
   cotizacionId                String?                  @db.Uuid
@@ -3159,6 +3289,7 @@ model OrdenTrabajo {
   updatedAt                   DateTime                 @updatedAt
   tenant                      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cliente                     Cliente?                 @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  proyectoCampana             ProyectoCampana?         @relation(fields: [proyectoCampanaId], references: [id], onDelete: SetNull)
   vendedor                    Empleado?                @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
   cotizacion                  Cotizacion?              @relation(fields: [cotizacionId], references: [id])
   items                       OrdenTrabajoItem[]
@@ -3179,6 +3310,7 @@ model OrdenTrabajo {
   @@index([tenantId, estado])
   @@index([tenantId, createdAt])
   @@index([tenantId, clienteId])
+  @@index([tenantId, proyectoCampanaId])
   @@index([tenantId, estado, fechaEmision])
   @@index([tenantId, estado, fechaFinalizada])
 }
@@ -4410,27 +4542,29 @@ model Archivo {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  clienteId     String? @db.Uuid
-  ordenId       String? @db.Uuid
-  ordenItemId   String? @db.Uuid
-  cotizacionId  String? @db.Uuid
-  comprobanteId String? @db.Uuid
-  cobroId       String? @db.Uuid
-  egresoId      String? @db.Uuid
-  productoId    String? @db.Uuid
-  proveedorId   String? @db.Uuid
+  clienteId         String? @db.Uuid
+  proyectoCampanaId String? @db.Uuid
+  ordenId           String? @db.Uuid
+  ordenItemId       String? @db.Uuid
+  cotizacionId      String? @db.Uuid
+  comprobanteId     String? @db.Uuid
+  cobroId           String? @db.Uuid
+  egresoId          String? @db.Uuid
+  productoId        String? @db.Uuid
+  proveedorId       String? @db.Uuid
 
-  tenant      Tenant            @relation("ArchivosDelTenant", fields: [tenantId], references: [id], onDelete: Cascade)
-  subidoPor   User?             @relation("ArchivosSubidos", fields: [subidoPorId], references: [id], onDelete: SetNull)
-  cliente     Cliente?          @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  orden       OrdenTrabajo?     @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  ordenItem   OrdenTrabajoItem? @relation(fields: [ordenItemId], references: [id], onDelete: Cascade)
-  cotizacion  Cotizacion?       @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-  comprobante Comprobante?      @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
-  cobro       Cobro?            @relation(fields: [cobroId], references: [id], onDelete: Cascade)
-  egreso      Egreso?           @relation(fields: [egresoId], references: [id], onDelete: Cascade)
-  producto    Producto?         @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  proveedor   Proveedor?        @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+  tenant          Tenant            @relation("ArchivosDelTenant", fields: [tenantId], references: [id], onDelete: Cascade)
+  subidoPor       User?             @relation("ArchivosSubidos", fields: [subidoPorId], references: [id], onDelete: SetNull)
+  cliente         Cliente?          @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  proyectoCampana ProyectoCampana?  @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  orden           OrdenTrabajo?     @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  ordenItem       OrdenTrabajoItem? @relation(fields: [ordenItemId], references: [id], onDelete: Cascade)
+  cotizacion      Cotizacion?       @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  comprobante     Comprobante?      @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  cobro           Cobro?            @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  egreso          Egreso?           @relation(fields: [egresoId], references: [id], onDelete: Cascade)
+  producto        Producto?         @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  proveedor       Proveedor?        @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
 
   tenantsConEsteLogo Tenant[] @relation("TenantLogo")
 
@@ -4439,6 +4573,7 @@ model Archivo {
   @@index([tenantId, ordenItemId])
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])
+  @@index([tenantId, proyectoCampanaId])
   @@index([tenantId, cotizacionId])
   @@index([tenantId, egresoId])
   @@index([estado, createdAt])

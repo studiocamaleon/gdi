@@ -62,6 +62,7 @@ export type PresupuestoResumen = {
   items: number;
   cliente: string;
   clienteId: string | null;
+  proyectoCampana: { id: string; codigo: string; nombre: string } | null;
   vendedor: string | null;
   publicToken: string | null;
   ordenConvertida: string | null;
@@ -81,6 +82,7 @@ export type PresupuestoDetalle = {
   numero: string | null;
   estado: PresupuestoEstado;
   cliente: { id: string; nombre: string } | null;
+  proyectoCampana: { id: string; codigo: string; nombre: string } | null;
   vendedor: { id: string; nombre: string } | null;
   canalVenta: string | null;
   fechaEmision: string | null;
@@ -201,6 +203,7 @@ export type ConfigPresupuestos = {
 export function listarPresupuestos(filtros?: {
   estado?: string;
   clienteId?: string;
+  proyectoCampanaId?: string;
   busqueda?: string;
   skip?: number;
   limit?: number;
@@ -208,6 +211,8 @@ export function listarPresupuestos(filtros?: {
   const params = new URLSearchParams();
   if (filtros?.estado) params.set("estado", filtros.estado);
   if (filtros?.clienteId) params.set("clienteId", filtros.clienteId);
+  if (filtros?.proyectoCampanaId)
+    params.set("proyectoCampanaId", filtros.proyectoCampanaId);
   if (filtros?.busqueda) params.set("busqueda", filtros.busqueda);
   if (filtros?.skip != null) params.set("skip", String(filtros.skip));
   if (filtros?.limit != null) params.set("limit", String(filtros.limit));
@@ -222,6 +227,7 @@ export function getPresupuesto(id: string) {
 export function emitirPresupuesto(payload: {
   cotizacionId: string;
   clienteId: string;
+  proyectoCampanaId?: string;
   vendedorEmpleadoId?: string;
   canalVenta?: string;
   fechaEntrega?: string;
