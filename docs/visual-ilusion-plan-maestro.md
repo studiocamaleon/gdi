@@ -5,6 +5,7 @@
 **Versión inicial:** 1.0 — 29 de agosto de 2026  
 **Rama integradora:** `visual-ilusion/analisis`  
 **Documento de diagnóstico:** `docs/visual-ilusion-analisis-readiness.md`  
+**Contrato visual obligatorio:** `docs/visual-ilusion-lenguaje-visual.md`
 **Punto de restauración previo:** `/Users/lucasgomez/gdi-saas-backups/visual-ilusion-pre-plan-20260829-181912--03`
 
 ---
@@ -122,6 +123,10 @@ Las pantallas y navegación avanzadas se mostrarán sólo cuando apliquen. No se
 ### P10. Ninguna fase se cierra sólo porque “se ve bien”
 
 Cada fase requiere persistencia, reglas de negocio, permisos, auditoría, API, UI operativa, migración, pruebas y documentación.
+
+### P11. Una sola identidad visual Grafoprint
+
+Toda interfaz nueva debe aplicar el contrato `docs/visual-ilusion-lenguaje-visual.md`. Las superficies ejecutivas y de gestión toman como referencia Tesorería; las superficies densas, productivas o de piso toman como referencia la Orden de Trabajo. Los componentes shadcn pueden utilizarse como infraestructura de interacción y accesibilidad, pero nunca como estética predeterminada: cada módulo tendrá composición, jerarquía y estilos propios de Grafoprint mediante CSS Modules. La revisión visual contra esas referencias forma parte del criterio de cierre de cada fase.
 
 ---
 
@@ -295,13 +300,21 @@ La Fase 1 puede empezar sin decisiones estructurales pendientes.
 
 ## Fase 1 — Proyecto / Campaña como capa de coordinación
 
-**Estado inicial:** PENDIENTE  
+**Estado:** DISEÑO
 **Rama:** `visual-ilusion/fase-1-campanas`  
 **Dependencias:** Fase 0.
 
 ### Objetivo de negocio
 
 Permitir que una operación como “Carrefour — Vuelta a Clases 2027” se gestione como una unidad, sin perder la autonomía de presupuestos, OTs, facturas y entregas.
+
+### Lenguaje visual de la fase
+
+- Familia primaria: **Gestión ejecutiva**, basada en Tesorería, para el listado, filtros, KPIs, ficha de campaña y lectura comercial.
+- Familia secundaria: **Operación técnica**, basada en la Orden de Trabajo, para hitos, avance productivo, alertas y trazabilidad operativa.
+- El listado será una tabla operacional con jerarquía y densidad controladas, no una cuadrícula genérica de tarjetas.
+- La ficha combinará una cabecera ejecutiva, una banda de indicadores y bloques operativos trazables a sus fuentes.
+- Formularios, estados, responsive y criterios de aceptación visual se rigen por la sección 8 del contrato visual obligatorio.
 
 ### Alcance obligatorio
 
@@ -1053,6 +1066,15 @@ Estos trabajos no forman una fase aislada; acompañan toda implementación.
 - confirmaciones resistentes a uso con guantes/ritmo operativo;
 - degradación clara sin conexión sólo si una fase la diseña explícitamente.
 
+### Lenguaje visual y control de calidad de interfaz
+
+- cada fase declara qué familia visual usa: Gestión ejecutiva, Operación técnica o una combinación jerarquizada;
+- Tesorería y la Orden de Trabajo son las referencias canónicas, no la apariencia por defecto de una librería de componentes;
+- shadcn se limita a primitivas de comportamiento, accesibilidad y composición; el acabado visual pertenece a Grafoprint;
+- los estilos específicos viven en CSS Modules y reutilizan tokens existentes antes de introducir variantes nuevas;
+- desktop, tablet, mobile, estados vacíos, carga, error, permisos restringidos y alto volumen deben verificarse;
+- ninguna interfaz se acepta sin comparación visual documentada contra las referencias del contrato.
+
 ### Reportes
 
 - cada métrica debe indicar fuente y denominador;
@@ -1137,7 +1159,7 @@ Esta tabla se actualizará al integrar cada fase.
 | Fase | Estado | Rama | Documento técnico | Evidencia/commit | Observaciones |
 |---:|---|---|---|---|---|
 | 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
-| 1 | PENDIENTE | `visual-ilusion/fase-1-campanas` | A crear en la fase | — | Próxima |
+| 1 | DISEÑO | `visual-ilusion/fase-1-campanas` | Contrato visual creado; diseño técnico en preparación | — | Activa |
 | 2 | PENDIENTE | — | — | — | — |
 | 3 | PENDIENTE | — | — | — | — |
 | 4 | PENDIENTE | — | — | — | — |
@@ -1161,6 +1183,7 @@ Esta tabla se actualizará al integrar cada fase.
 - [ ] Rama integradora actualizada y sin cambios accidentales.
 - [ ] Fase anterior integrada y gate acumulado aprobado.
 - [ ] Alcance de esta fase releído en este Plan Maestro.
+- [ ] Familia y criterios del contrato visual asignados a cada superficie de la fase.
 - [ ] Requerimientos de la matriz identificados.
 - [ ] Casos reales/fixtures disponibles.
 - [ ] Modelos y estados diseñados antes de migrar.
