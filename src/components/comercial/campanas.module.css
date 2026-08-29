@@ -49,9 +49,29 @@
 .primaryButton {
   min-height: 38px;
   padding-inline: 15px;
+  border-color: #e95619 !important;
   border-radius: 9px;
-  background: var(--camp-orange) !important;
+  background: var(--camp-orange, #ff6a2b) !important;
+  color: #fff !important;
   box-shadow: 0 8px 22px rgba(255, 106, 43, 0.2);
+}
+
+.primaryButton:hover:not(:disabled) {
+  border-color: #d94d13 !important;
+  background: #eb5b20 !important;
+}
+
+.primaryButton:focus-visible {
+  border-color: #c8460f !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 106, 43, 0.22),
+    0 8px 22px rgba(255, 106, 43, 0.2);
+}
+
+.primaryButton:disabled {
+  border-color: #f0a584 !important;
+  background: #f0a584 !important;
+  color: #fff !important;
 }
 
 .kpis {
@@ -271,6 +291,11 @@
 }
 
 .dialog {
+  --camp-ink: #151419;
+  --camp-muted: #716e6a;
+  --camp-line: #e7e3dd;
+  --camp-soft: #f6f3ee;
+  --camp-orange: #ff6a2b;
   width: min(680px, calc(100vw - 28px));
   max-width: none;
   padding: 0;
