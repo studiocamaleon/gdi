@@ -442,7 +442,14 @@
   grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.75fr);
   gap: 16px;
 }
+
+.detailGrid > * {
+  min-width: 0;
+}
+
 .panel {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--camp-line);
   border-radius: 15px;
   background: #fff;
@@ -568,6 +575,12 @@
 }
 .tabs {
   margin-top: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+.tabs > * {
+  min-width: 0;
+  max-width: 100%;
 }
 .tabsList {
   border-bottom: 1px solid var(--camp-line);
@@ -575,6 +588,8 @@
   justify-content: flex-start;
 }
 .tabContent {
+  width: 100%;
+  max-width: 100%;
   padding-top: 14px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -614,6 +629,12 @@
   }
   .actions {
     justify-content: flex-start;
+  }
+  .detailGrid,
+  .detailGrid > div,
+  .detailGrid > aside {
+    width: 100%;
+    max-width: 100%;
   }
   .kpis,
   .moneyBand,
