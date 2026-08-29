@@ -1,6 +1,6 @@
 # Fase 1 — Diseño técnico de Proyecto / Campaña
 
-**Estado:** aprobado para implementación
+**Estado:** implementación base completada; validación funcional en curso
 **Rama:** `visual-ilusion/fase-1-campanas`
 **Plan rector:** `docs/visual-ilusion-plan-maestro.md`
 **Contrato visual:** `docs/visual-ilusion-lenguaje-visual.md`
@@ -149,3 +149,31 @@ Familia primaria Gestión ejecutiva, con bloque secundario de Operación técnic
 - optimistic locking;
 - flujos legacy con FKs null;
 - API build, frontend type/lint, CSS guard y QA visual responsive.
+
+## 10. Evidencia de implementación — 2026-08-29
+
+La implementación base quedó registrada en el commit `41ead4c3` e incluye modelo,
+migración expand-only, API, navegación, listado, ficha, edición, equipo, hitos,
+archivos, timeline e integración opcional con presupuestos y órdenes de trabajo.
+
+Validaciones ejecutadas:
+
+- `prisma validate`: esquema válido;
+- `prisma migrate status`: 203 migraciones aplicadas y base local al día;
+- migración ensayada previamente sobre una copia restaurada: cinco tablas nuevas,
+  tres FKs documentales y documentos legacy conservados en `null`;
+- build de NestJS y build de producción de Next.js: correctos;
+- 44 pruebas focalizadas de campañas, archivos y presupuestos: correctas;
+- 105 pruebas de órdenes de trabajo y seguridad de tablero: correctas;
+- 12 pruebas de permisos/navegación: correctas;
+- lint focalizado de los módulos nuevos de Campañas: correcto;
+- `git diff --check`: correcto.
+
+Pendiente para declarar la fase `COMPLETA`:
+
+- ejecutar el journey autenticado de aceptación con dos presupuestos y dos OTs;
+- QA visual desktop/móvil en una sesión autenticada;
+- completar pruebas de servicio sobre aislamiento tenant, conflicto optimista,
+  vínculos cruzados y poda de márgenes;
+- revisar el guard global de CSS. Hoy falla por diez reglas globales preexistentes;
+  esta fase no modificó `src/app/globals.css`.
