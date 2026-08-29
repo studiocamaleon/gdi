@@ -374,6 +374,7 @@ type OrdenConRelaciones = Prisma.OrdenTrabajoGetPayload<{
   include: {
     cliente: { select: { nombre: true } };
     vendedor: { select: { nombreCompleto: true } };
+    proyectoCampana: { select: { id: true; codigo: true; nombre: true } };
     _count: { select: { items: true } };
     items: true;
   };
@@ -382,6 +383,7 @@ type OrdenConRelaciones = Prisma.OrdenTrabajoGetPayload<{
 const LIST_INCLUDE = {
   cliente: { select: { nombre: true } },
   vendedor: { select: { nombreCompleto: true } },
+  proyectoCampana: { select: { id: true, codigo: true, nombre: true } },
   _count: { select: { items: true } },
   items: {
     select: { nombre: true, ordenIndice: true },
@@ -834,6 +836,10 @@ export class OrdenesTrabajoService {
     const en8diasDate = new Date(`${en8diasClave}T00:00:00.000Z`);
     const where: Prisma.OrdenTrabajoWhereInput = {
       tenantId: auth.tenantId,
+      ...(query.clienteId ? { clienteId: query.clienteId } : {}),
+      ...(query.proyectoCampanaId
+        ? { proyectoCampanaId: query.proyectoCampanaId }
+        : {}),
       ...(query.estado ? { estado: query.estado } : {}),
       ...(query.urgencia === 'atrasadas'
         ? {
@@ -1130,6 +1136,8 @@ export class OrdenesTrabajoService {
               id: true,
               numero: true,
               total: true,
+              clienteId: true,
+              proyectoCampanaId: true,
               _count: { select: { items: true } },
             },
           })
@@ -1155,6 +1163,38 @@ export class OrdenesTrabajoService {
     ]);
     if (payload.cotizacionId && !cotizacion)
       throw new NotFoundException('No se encontró la cotización.');
+    if (
+      payload.proyectoCampanaId &&
+      cotizacion?.proyectoCampanaId &&
+      payload.proyectoCampanaId !== cotizacion.proyectoCampanaId
+    ) {
+      throw new BadRequestException(
+        'La campaña indicada no coincide con la del presupuesto.',
+      );
+    }
+    const proyectoCampanaId =
+      payload.proyectoCampanaId ?? cotizacion?.proyectoCampanaId ?? null;
+    if (proyectoCampanaId) {
+      if (!payload.clienteId) {
+        throw new BadRequestException(
+          'Para asignar una campaña, la orden debe tener cliente.',
+        );
+      }
+      const campana = await this.prisma.proyectoCampana.findFirst({
+        where: {
+          id: proyectoCampanaId,
+          tenantId: auth.tenantId,
+          clienteId: payload.clienteId,
+          estado: { not: 'cancelado' },
+        },
+        select: { id: true },
+      });
+      if (!campana) {
+        throw new BadRequestException(
+          'La campaña no existe, está cancelada o pertenece a otro cliente.',
+        );
+      }
+    }
     if (encontrados.length !== idsSnapshot.length) {
       throw new NotFoundException(
         'Algún item de cotización referenciado no existe.',
@@ -1385,6 +1425,7 @@ export class OrdenesTrabajoService {
             clienteId: payload.clienteId ?? null,
             vendedorEmpleadoId,
             cotizacionId: payload.cotizacionId ?? null,
+            proyectoCampanaId,
             estado: estadoInicial,
             fechaEmision: emitida ? ahora : null,
             publicToken: tokenSeguimiento,
@@ -1557,6 +1598,24 @@ export class OrdenesTrabajoService {
             };
           }),
         });
+        if (proyectoCampanaId) {
+          await tx.proyectoCampanaEvento.create({
+            data: {
+              tenantId: auth.tenantId,
+              proyectoCampanaId,
+              tipo: 'vinculo',
+              descripcion: `Se vinculó la orden ${numero}.`,
+              actorUserId: auth.impersonacion?.actorUserId ?? auth.userId,
+              actorNombre: usuarioNombre,
+              datosJson: { tipo: 'orden', documentoId: orden.id },
+              origen: auth.impersonacion
+                ? 'soporte'
+                : auth.mcp
+                  ? 'api'
+                  : 'usuario',
+            },
+          });
+        }
 
         return orden;
       });
@@ -5867,6 +5926,7 @@ export class OrdenesTrabajoService {
       total: Number(orden.total ?? 0),
       progresoPct: progresoEfectivo(estado, orden.progresoPct),
       resumen: orden.items.map((item) => item.nombre).join(' · '),
+      proyectoCampana: orden.proyectoCampana,
     };
   }
 

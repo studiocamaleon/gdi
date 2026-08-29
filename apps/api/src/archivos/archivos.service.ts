@@ -51,6 +51,7 @@ const DIAS_DE_PAPELERA = 30;
 /** Campo FK de `Archivo` que corresponde a cada scope. */
 const CAMPO_POR_SCOPE: Record<ArchivoScope, keyof Archivo | null> = {
   TENANT_BRANDING: null,
+  CAMPANA: 'proyectoCampanaId',
   CLIENTE: 'clienteId',
   ORDEN: 'ordenId',
   ORDEN_ITEM: 'ordenItemId',
@@ -998,6 +999,8 @@ export class ArchivosService {
     const where = { where: { id: entidadId }, select: { id: true } };
     const existe = await (async () => {
       switch (scope) {
+        case ArchivoScope.CAMPANA:
+          return this.prisma.proyectoCampana.findFirst(where);
         case ArchivoScope.CLIENTE:
           return this.prisma.cliente.findFirst(where);
         case ArchivoScope.ORDEN:

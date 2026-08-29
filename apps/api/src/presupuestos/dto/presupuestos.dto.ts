@@ -56,6 +56,11 @@ export class EmitirPresupuestoDto {
   @IsUUID()
   clienteId: string;
 
+  /** Capa opcional de coordinación; no cambia el ciclo del presupuesto. */
+  @IsOptional()
+  @IsUUID()
+  proyectoCampanaId?: string;
+
   @IsOptional()
   @IsUUID()
   vendedorEmpleadoId?: string;
@@ -151,6 +156,10 @@ export class ListarPresupuestosDto {
   @IsOptional()
   @IsUUID()
   clienteId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  proyectoCampanaId?: string;
 
   @IsOptional()
   @IsString()

@@ -162,6 +162,11 @@ export class CrearOrdenTrabajoDto {
   @IsUUID()
   cotizacionId?: string;
 
+  /** Campaña opcional; si hay presupuesto y se omite, se hereda de él. */
+  @IsOptional()
+  @IsUUID()
+  proyectoCampanaId?: string;
+
   @IsOptional()
   @IsInt()
   @Min(0)

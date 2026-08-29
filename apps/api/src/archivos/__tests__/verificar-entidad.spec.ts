@@ -22,6 +22,7 @@ import type { SuscripcionesService } from '../../suscripciones/suscripciones.ser
 
 /** Cada scope con el modelo de Prisma donde tiene que ir a buscar. */
 const SCOPE_A_MODELO: Array<[ArchivoScope, string]> = [
+  [ArchivoScope.CAMPANA, 'proyectoCampana'],
   [ArchivoScope.CLIENTE, 'cliente'],
   [ArchivoScope.ORDEN, 'ordenTrabajo'],
   [ArchivoScope.ORDEN_ITEM, 'ordenTrabajoItem'],

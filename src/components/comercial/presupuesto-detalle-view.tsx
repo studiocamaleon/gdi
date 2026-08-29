@@ -11,6 +11,7 @@ import {
   CheckIcon,
   ExternalLinkIcon,
   FileTextIcon,
+  FolderIcon,
   HistoryIcon,
   PackageIcon,
   SendIcon,
@@ -322,6 +323,15 @@ export function PresupuestoDetalleView({
       <div className="orden-form">
         <Campo label="Cliente" icon={<UserIcon />}>
           {d.cliente?.nombre ?? "Sin cliente"}
+        </Campo>
+        <Campo label="Campaña" icon={<FolderIcon />}>
+          {d.proyectoCampana ? (
+            <Link href={`/comercial/campanas/${d.proyectoCampana.id}`}>
+              {d.proyectoCampana.codigo} · {d.proyectoCampana.nombre}
+            </Link>
+          ) : (
+            "Sin campaña"
+          )}
         </Campo>
         <Campo label="Vendedor" icon={<UserIcon />}>
           {d.vendedor?.nombre ?? "—"}

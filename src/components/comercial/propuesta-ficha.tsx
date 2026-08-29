@@ -68,6 +68,10 @@ import {
 } from "@/lib/presupuestos-api";
 import { validarCupon, type ValidarCuponResultado } from "@/lib/cupones-api";
 import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
+import {
+  getCampanasOpciones,
+  type CampanaReferencia,
+} from "@/lib/campanas-api";
 import { parsearDniArgentino } from "@/lib/dni-argentino";
 import { esNumeroOrden } from "@/components/mostrador/entrega-escaneo-watcher";
 import { EntregaModal } from "@/components/mostrador/entrega-modal";
@@ -5838,6 +5842,34 @@ export function PropuestaFicha({
   } | null>(null);
   const [panelSaving, setPanelSaving] = React.useState(false);
   const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? "");
+  const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
+    orden?.proyectoCampana?.id ?? "",
+  );
+  const [campanasCliente, setCampanasCliente] = React.useState<
+    CampanaReferencia[]
+  >([]);
+  React.useEffect(() => {
+    let vigente = true;
+    if (!clienteId) {
+      setCampanasCliente([]);
+      setProyectoCampanaId("");
+      return;
+    }
+    void getCampanasOpciones(clienteId)
+      .then((rows) => {
+        if (!vigente) return;
+        setCampanasCliente(rows);
+        setProyectoCampanaId((actual) =>
+          actual && rows.some((c) => c.id === actual) ? actual : "",
+        );
+      })
+      .catch(() => {
+        if (vigente) setCampanasCliente([]);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [clienteId]);
   // Clientes dados de alta escaneando el DNI durante ESTA sesión: no vienen
   // en `initialClientes` (se cargó en el server) y sin esto el combobox no
   // tendría cómo mostrar al recién creado.
@@ -6893,6 +6925,7 @@ export function PropuestaFicha({
       const presupuesto = await emitirPresupuesto({
         cotizacionId,
         clienteId,
+        proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         canalVenta,
         fechaEntrega: fechaEntregaOrden(),
@@ -6928,6 +6961,7 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    proyectoCampanaId,
     fidelizacionCanjePuntos,
     canalVenta,
     persistirSnapshotsItems,
@@ -6965,6 +6999,7 @@ export function PropuestaFicha({
         idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
+        proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         estado: "pendiente",
         fechaEntrega,
@@ -7042,6 +7077,7 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    proyectoCampanaId,
     fidelizacionCanjePuntos,
     canalVenta,
     cobrosStaged,
@@ -7089,6 +7125,7 @@ export function PropuestaFicha({
         idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
+        proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         estado: "borrador",
         fechaEntrega: fechaEntrega || undefined,
@@ -7137,6 +7174,7 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    proyectoCampanaId,
     fidelizacionCanjePuntos,
     canalVenta,
     persistirSnapshotsItems,
@@ -7947,6 +7985,37 @@ export function PropuestaFicha({
             <div className="ctrl-input">
               <span>{orden?.clienteNombre}</span>
             </div>
+          )}
+        </FieldCard>
+
+        <FieldCard label="Campaña" icon={<FolderIcon />}>
+          {!orden ? (
+            <div className="ctrl-input">
+              <select
+                value={proyectoCampanaId}
+                onChange={(event) => setProyectoCampanaId(event.target.value)}
+                disabled={!clienteId}
+                aria-label="Campaña opcional"
+              >
+                <option value="">
+                  {clienteId ? "Sin campaña" : "Primero elegí un cliente"}
+                </option>
+                {campanasCliente.map((campana) => (
+                  <option key={campana.id} value={campana.id}>
+                    {campana.codigo} · {campana.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : orden.proyectoCampana ? (
+            <div className="ctrl-input">
+              <Link href={`/comercial/campanas/${orden.proyectoCampana.id}`}>
+                <span className="mono">{orden.proyectoCampana.codigo}</span>
+                {" · "}{orden.proyectoCampana.nombre}
+              </Link>
+            </div>
+          ) : (
+            <div className="ctrl-input"><span>Sin campaña</span></div>
           )}
         </FieldCard>
 
