@@ -1159,7 +1159,7 @@ Esta tabla se actualizará al integrar cada fase.
 | Fase | Estado | Rama | Documento técnico | Evidencia/commit | Observaciones |
 |---:|---|---|---|---|---|
 | 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
-| 1 | VALIDACIÓN | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3` | Implementación base completa; pendientes journey autenticado, QA visual y pruebas de servicio reforzadas |
+| 1 | VALIDACIÓN | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a` | Journey y pruebas reforzadas completos; pendiente sólo confirmación visual móvil manual |
 | 2 | PENDIENTE | — | — | — | — |
 | 3 | PENDIENTE | — | — | — | — |
 | 4 | PENDIENTE | — | — | — | — |

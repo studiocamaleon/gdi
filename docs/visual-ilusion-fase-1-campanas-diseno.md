@@ -1,6 +1,6 @@
 # Fase 1 — Diseño técnico de Proyecto / Campaña
 
-**Estado:** implementación base completada; validación funcional en curso
+**Estado:** validación final; pendiente únicamente QA visual móvil manual
 **Rama:** `visual-ilusion/fase-1-campanas`
 **Plan rector:** `docs/visual-ilusion-plan-maestro.md`
 **Contrato visual:** `docs/visual-ilusion-lenguaje-visual.md`
@@ -169,11 +169,48 @@ Validaciones ejecutadas:
 - lint focalizado de los módulos nuevos de Campañas: correcto;
 - `git diff --check`: correcto.
 
+## 11. Ejecución de cierre — 2026-08-29
+
+Journey autenticado ejecutado sobre `CAM-2026-0001`:
+
+- edición de prioridad y observaciones;
+- equipo de dos personas con función;
+- alta de hito y transiciones pendiente → en curso → completado;
+- ciclo de campaña borrador → activo → pausado → activo;
+- dos presupuestos y dos OTs vinculados como ampliaciones independientes;
+- desvinculación y revinculación de presupuesto sin eliminar el documento;
+- navegación cliente → campañas, presupuesto → campaña y OT → campaña;
+- timeline auditado después de cada mutación;
+- dashboard contrastado con la base: vendido `$ 247.661,32`, presupuestado `$ 0`
+  porque ambos presupuestos están vencidos;
+- compatibilidad legacy comprobada: 38 presupuestos y 35 OTs permanecen sin
+  campaña y siguen siendo válidos.
+
+La validación encontró y corrigió:
+
+- etiqueta ambigua `Avanzar` en hitos completos, reemplazada por `Reabrir`;
+- semántica accesible incorrecta en el botón-enlace de la tabla;
+- hidratación no determinista de las horas del timeline;
+- falta de scroll horizontal táctil en tablas responsive.
+
+Evidencia automatizada final:
+
+- commit de refuerzo `8077992a`;
+- 156 pruebas API focalizadas aprobadas, incluidas siete nuevas sobre aislamiento
+  tenant, coherencia de cliente, apropiación cruzada, auditoría transaccional,
+  optimistic locking, equipos duplicados e hitos;
+- 12 pruebas de permisos/navegación aprobadas;
+- builds de NestJS y Next.js aprobados;
+- lint focalizado de Campañas aprobado;
+- Prisma válido y 203 migraciones al día;
+- QA visual desktop autenticado y consola del listado/ficha sin errores.
+
 Pendiente para declarar la fase `COMPLETA`:
 
-- ejecutar el journey autenticado de aceptación con dos presupuestos y dos OTs;
-- QA visual desktop/móvil en una sesión autenticada;
-- completar pruebas de servicio sobre aislamiento tenant, conflicto optimista,
-  vínculos cruzados y poda de márgenes;
-- revisar el guard global de CSS. Hoy falla por diez reglas globales preexistentes;
-  esta fase no modificó `src/app/globals.css`.
+- inspección visual manual a ancho móvil. El entorno de navegador automatizado no
+  permite modificar su viewport; las reglas responsive fueron revisadas y se
+  corrigió el desborde horizontal, pero falta la confirmación visual real.
+
+El guard global de CSS continúa informando diez reglas históricas en
+`src/app/globals.css`. Campañas usa exclusivamente CSS Modules y no modificó ese
+archivo; este hallazgo no pertenece al alcance de la fase.
