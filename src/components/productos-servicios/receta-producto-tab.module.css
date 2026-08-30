@@ -463,6 +463,20 @@
   grid-row: 2;
 }
 
+.definitionRow .configureUsage {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  height: 32px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 0 10px;
+  color: #ffb08d;
+  grid-column: 1 / 4;
+  grid-row: 3;
+}
+
 .definitionSubrow {
   display: grid;
   grid-column: 1 / -1;
@@ -940,6 +954,11 @@
   .definitionRow select[aria-label^="Nodo de incorporación"] {
     grid-row: auto;
     grid-column: 1;
+  }
+
+  .definitionRow .configureUsage {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .flowRow {

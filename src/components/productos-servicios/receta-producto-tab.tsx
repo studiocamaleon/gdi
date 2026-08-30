@@ -16,6 +16,7 @@ import {
   PlusIcon,
   RefreshCwIcon,
   RocketIcon,
+  Settings2Icon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -40,6 +41,7 @@ import {
   type ProductoReceta,
   type ProductoRecetaRevision,
 } from "@/lib/productos-servicios-api";
+import { ConfigurarComponenteWorkspace } from "./configurar-componente-workspace";
 import styles from "./receta-producto-tab.module.css";
 
 function fecha(value?: string | null) {
@@ -89,12 +91,14 @@ function nombreHumano(value?: string | null) {
 
 function EditorDefiniciones({
   productoId,
+  productoNombre,
   rutaAlternativaId,
   ruta,
   revision,
   onClose,
 }: {
   productoId: string;
+  productoNombre: string;
   rutaAlternativaId: string;
   ruta: ProductoDetalle["rutasAlternativas"][number];
   revision: ProductoRecetaRevision;
@@ -133,10 +137,14 @@ function EditorDefiniciones({
       cantidad: Number(item.cantidad),
       unidad: item.unidad,
       requerido: item.requerido,
+      configuracionJson: item.configuracionJson,
       nodoIncorporacionClave: item.nodoIncorporacionClave,
       orden: item.orden,
     })),
   );
+  const [componenteConfigurando, setComponenteConfigurando] = React.useState<
+    number | null
+  >(null);
   const pasosDocumento = React.useMemo(
     () => [
       ...ruta.ruta.pasos
@@ -664,6 +672,16 @@ function EditorDefiniciones({
                 </select>
                 <button
                   type="button"
+                  className={styles.configureUsage}
+                  onClick={() => setComponenteConfigurando(index)}
+                >
+                  <Settings2Icon />
+                  {item.configuracionJson?.bindings?.length
+                    ? `${item.configuracionJson.bindings.length} parámetros configurados`
+                    : "Configurar uso"}
+                </button>
+                <button
+                  type="button"
                   aria-label={`Quitar componente ${index + 1}`}
                   onClick={() =>
                     setComponentes((prev) => prev.filter((_, i) => i !== index))
@@ -684,6 +702,24 @@ function EditorDefiniciones({
           {saving ? "Guardando…" : "Guardar definiciones"}
         </button>
       </footer>
+      {componenteConfigurando !== null &&
+      componentes[componenteConfigurando] ? (
+        <ConfigurarComponenteWorkspace
+          componente={componentes[componenteConfigurando]}
+          productoPadreNombre={productoNombre}
+          onCancel={() => setComponenteConfigurando(null)}
+          onSave={(configuracionJson, unidad) => {
+            setComponentes((current) =>
+              current.map((item, index) =>
+                index === componenteConfigurando
+                  ? { ...item, configuracionJson, unidad }
+                  : item,
+              ),
+            );
+            setComponenteConfigurando(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1195,6 +1231,7 @@ export function RecetaProductoTab({
                     {draft && editing === draft.id ? (
                       <EditorDefiniciones
                         productoId={producto.id}
+                        productoNombre={producto.nombre}
                         rutaAlternativaId={ruta.id}
                         ruta={ruta}
                         revision={draft}

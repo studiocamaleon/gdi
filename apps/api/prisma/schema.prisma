@@ -2849,6 +2849,9 @@ model ProductoRecetaComponente {
   cantidad               Decimal                           @default(1) @db.Decimal(14, 6)
   unidad                 String                            @default("unidad") @db.VarChar(40)
   requerido              Boolean                           @default(true)
+  /// Contrato versionado de parámetros del hijo y origen de cada valor
+  /// (default, fijo, padre, fórmula o solicitado al cotizar).
+  configuracionJson      Json?
   /// Nodo del producto padre al que esta ejecución debe entregar su salida.
   nodoIncorporacionClave String?                           @db.VarChar(160)
   orden                  Int                               @default(0)
@@ -3689,6 +3692,9 @@ model OrdenTrabajoItem {
   recetaVersion               Int?
   recetaHuella                String?                      @db.VarChar(64)
   recetaSnapshotJson          Json?
+  /// JobContext exacto con el que se costeó y debe ejecutarse este ítem.
+  /// En componentes fabricados evita reevaluar bindings contra datos vivos.
+  jobContextSnapshotJson      Json?
   /// Copia ejecutable de la topología publicada. Null en órdenes históricas;
   /// sus pasos continúan interpretándose como secuencia por `indice`.
   topologiaProduccion         TopologiaProduccion          @default(LINEAL)

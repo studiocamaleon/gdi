@@ -97,6 +97,7 @@ import {
 } from "@/components/comercial/diseno-vectorial-cotizador";
 import { ModoIngresoSelector } from "@/components/comercial/modo-ingreso-selector";
 import { BriefDisenoForm } from "@/components/comercial/brief-diseno-form";
+import { ComponentesFabricadosCotizacion } from "@/components/comercial/componentes-fabricados-cotizacion";
 import {
   BRIEF_DISENO_VACIO,
   errorBriefDiseno,
@@ -353,6 +354,8 @@ type MotorConfigState = {
     string,
     { activa: boolean; anchoMm: number; altoMm: number }
   >;
+  /** Respuestas solicitadas por las instancias de componentes fabricados. */
+  componentesConfiguracion: Record<string, Record<string, unknown>>;
 };
 
 type CotizacionExitosa = CotizacionPropuestaSnapshot;
@@ -600,6 +603,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   zonaInstalacion: "CABA",
   m2Instalados: 0,
   personalizaciones: {},
+  componentesConfiguracion: {},
 };
 
 const CUSTOM_MEASURE_ID = "__custom_measure__";
@@ -3816,6 +3820,10 @@ function buildJobContext(
     if (detalles.length > 0) ctx.personalizaciones = detalles;
   }
 
+  if (Object.keys(config.componentesConfiguracion).length > 0) {
+    ctx.componentesConfiguracion = config.componentesConfiguracion;
+  }
+
   return ctx;
 }
 
@@ -4769,6 +4777,15 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       typeof ctx.cargoInputs === "object" &&
       !Array.isArray(ctx.cargoInputs)
         ? (ctx.cargoInputs as Record<string, string | number>)
+        : {},
+    componentesConfiguracion:
+      ctx.componentesConfiguracion &&
+      typeof ctx.componentesConfiguracion === "object" &&
+      !Array.isArray(ctx.componentesConfiguracion)
+        ? (ctx.componentesConfiguracion as Record<
+            string,
+            Record<string, unknown>
+          >)
         : {},
   };
 }
@@ -7601,12 +7618,27 @@ function ApConfigStep({
                         seleccionMaquina: {},
                         seleccionModoColor: {},
                         seleccionNivel: {},
+                        componentesConfiguracion: {},
                         modoCotizacionVectorial:
                           modoVectorialInicial(pasoVectorial),
                       };
                     }),
                 )}
               </div>
+            ) : null}
+
+            {product.id && motorConfig.rutaAlternativaId ? (
+              <ComponentesFabricadosCotizacion
+                productoId={product.id}
+                rutaAlternativaId={motorConfig.rutaAlternativaId}
+                values={motorConfig.componentesConfiguracion}
+                onChange={(componentesConfiguracion) =>
+                  setMotorConfig((current) => ({
+                    ...current,
+                    componentesConfiguracion,
+                  }))
+                }
+              />
             ) : null}
 
             {rutaSel ? (

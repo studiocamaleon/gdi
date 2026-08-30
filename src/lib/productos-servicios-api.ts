@@ -171,6 +171,7 @@ export interface ProductoRecetaRevision {
     cantidad: number;
     unidad: string;
     requerido: boolean;
+    configuracionJson?: ConfiguracionComponenteFabricado | null;
     nodoIncorporacionClave?: string | null;
     orden: number;
   }>;
@@ -215,8 +216,60 @@ export type ProductoRecetaComponenteInput = {
   cantidad: number;
   unidad?: string;
   requerido?: boolean;
+  configuracionJson?: ConfiguracionComponenteFabricado | null;
   nodoIncorporacionClave?: string | null;
   orden?: number;
+};
+
+export type OrigenParametroComponente =
+  "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
+
+export type BindingParametroComponente = {
+  clave: string;
+  etiqueta: string;
+  tipoDato: string;
+  unidad?: string | null;
+  requerido?: boolean;
+  origen: OrigenParametroComponente;
+  valor?: unknown;
+  padreClave?: string | null;
+  expresion?: string | null;
+  opciones?: Array<{ valor: string; etiqueta: string }>;
+};
+
+export type ConfiguracionComponenteFabricado = {
+  version: 1;
+  bindings: BindingParametroComponente[];
+};
+
+export type FormularioCotizacionProducto = {
+  producto: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    unidadComercial: string;
+  };
+  cantidad: {
+    jobContextKey: "cantidad";
+    unidad: string;
+    minimo: Record<string, unknown> | null;
+  };
+  medidas: {
+    modo: string;
+    instruccion: string;
+    unidadEntrada: "mm";
+    predefinidas: Array<{
+      id: string;
+      nombre: string;
+      anchoMm: number;
+      altoMm: number;
+      esDefault: boolean;
+    }>;
+    default: { anchoMm: number; altoMm: number } | null;
+  };
+  preguntas: Array<
+    Record<string, unknown> & { tipo: string; jobContextKey: string }
+  >;
 };
 
 export interface ProductoReceta {
@@ -238,6 +291,18 @@ export interface ProductoReceta {
 export function getRecetasProducto(id: string): Promise<ProductoReceta[]> {
   return apiRequest<ProductoReceta[]>(
     `/productos-servicios/productos/${id}/receta`,
+  );
+}
+
+export function getFormularioCotizacionProducto(
+  id: string,
+  rutaAlternativaId?: string,
+): Promise<FormularioCotizacionProducto> {
+  const query = rutaAlternativaId
+    ? `?rutaAlternativaId=${encodeURIComponent(rutaAlternativaId)}`
+    : "";
+  return apiRequest<FormularioCotizacionProducto>(
+    `/productos-servicios/productos/${id}/formulario-cotizacion${query}`,
   );
 }
 
@@ -1395,6 +1460,7 @@ export interface CotizarResponse {
       politicaEjecucion: "INLINE" | "INDEPENDIENTE";
       cantidad: number;
       unidad: string;
+      jobContext?: Record<string, unknown>;
       recetaRevisionId: string;
       recetaVersion: number;
       recetaHuella: string;

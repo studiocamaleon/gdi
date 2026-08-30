@@ -1,0 +1,101 @@
+.section {
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid #dedad4;
+  border-radius: 14px;
+  background: #fff;
+}
+.section > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 15px;
+  border-bottom: 1px solid #ebe7e2;
+  background: #faf8f5;
+}
+.section > header svg {
+  width: 18px;
+  color: #f2692f;
+}
+.section > header div {
+  display: grid;
+  gap: 2px;
+}
+.section > header strong {
+  font-size: 13px;
+}
+.section > header span {
+  color: #7f7975;
+  font-size: 11px;
+}
+.cards {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+.card {
+  overflow: hidden;
+  border: 1px solid #e6e1db;
+  border-radius: 10px;
+}
+.card summary {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  list-style: none;
+}
+.card summary::-webkit-details-marker {
+  display: none;
+}
+.card summary div {
+  display: grid;
+  gap: 2px;
+}
+.card summary strong {
+  font-size: 12px;
+}
+.card summary span {
+  color: #837c78;
+  font-size: 10.5px;
+}
+.card summary svg {
+  width: 15px;
+  transition: transform 0.15s ease;
+}
+.card[open] summary svg {
+  transform: rotate(180deg);
+}
+.fields {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border-top: 1px solid #ebe7e2;
+  background: #fcfbf9;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.fields label {
+  display: grid;
+  gap: 5px;
+}
+.fields label span {
+  color: #5f5956;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+.fields input,
+.fields select {
+  width: 100%;
+  height: 37px;
+  padding: 0 10px;
+  border: 1px solid #dcd6d0;
+  border-radius: 8px;
+  background: #fff;
+}
+@media (max-width: 640px) {
+  .fields {
+    grid-template-columns: 1fr;
+  }
+}

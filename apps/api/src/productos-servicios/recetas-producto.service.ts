@@ -29,6 +29,7 @@ import {
   validarYOrdenarGrafo,
   type GrafoProduccion,
 } from '../ordenes-trabajo/grafo-produccion';
+import { validarConfiguracionComponente } from './componentes-configuracion';
 
 type ProductoDetalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaDetalle = ProductoDetalle['rutasAlternativas'][number];
@@ -212,6 +213,10 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad,
         requerido: item.requerido,
+        configuracionJson:
+          item.configuracionJson == null
+            ? null
+            : jsonSeguro(item.configuracionJson),
         nodoIncorporacionClave: item.nodoIncorporacionClave,
         orden: item.orden,
       })),
@@ -285,6 +290,10 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad,
         requerido: item.requerido,
+        configuracionJson:
+          item.configuracionJson == null
+            ? null
+            : jsonSeguro(item.configuracionJson),
         nodoIncorporacionClave: item.nodoIncorporacionClave,
         orden: item.orden,
       })) ??
@@ -315,9 +324,7 @@ export class RecetasProductoService {
         : undefined;
     const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
       existente?.revisionPublicada?.grafoProduccionJson) as
-      | (GrafoProduccion & Prisma.JsonObject)
-      | null
-      | undefined;
+      (GrafoProduccion & Prisma.JsonObject) | null | undefined;
     const gatesFuente = dto.gates
       ? dto.gates
       : (grafoAnterior?.nodos ?? []).flatMap((nodo) =>
@@ -470,6 +477,9 @@ export class RecetasProductoService {
             cantidad: item.cantidad,
             unidad: item.unidad ?? 'unidad',
             requerido: item.requerido ?? true,
+            configuracionJson:
+              (item.configuracionJson as Prisma.InputJsonValue | undefined) ??
+              undefined,
             nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
             orden: item.orden ?? index,
           })),
@@ -991,6 +1001,10 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad ?? 'unidad',
         requerido: item.requerido ?? true,
+        configuracionJson:
+          item.configuracionJson == null
+            ? null
+            : jsonSeguro(item.configuracionJson),
         nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
         orden: item.orden ?? index,
       }))
@@ -1296,16 +1310,7 @@ export class RecetasProductoService {
     }
     const codigosComponentes = new Set<string>();
     for (const item of componentes) {
-      if ((item.formula ?? 'por_unidad') !== 'por_unidad') {
-        throw new BadRequestException(
-          `El componente ${item.nombre} debe usar la fórmula por_unidad.`,
-        );
-      }
-      if ((item.unidad ?? 'unidad').trim().toLowerCase() !== 'unidad') {
-        throw new BadRequestException(
-          `El componente ${item.nombre} debe expresarse en unidad.`,
-        );
-      }
+      validarConfiguracionComponente(item.configuracionJson, item.nombre);
       if (item.productoComponenteId === productoId) {
         throw new BadRequestException(
           'Un producto no puede ser componente de sí mismo.',

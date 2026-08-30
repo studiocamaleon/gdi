@@ -73,6 +73,7 @@ import {
   reducirGrafoAClaves,
   type GrafoProduccion,
 } from './grafo-produccion';
+import { resolverJobContextComponente } from '../productos-servicios/componentes-configuracion';
 import {
   aplicarFallbackConfigLaser,
   claveCompatibilidadLoteLaser,
@@ -2902,8 +2903,7 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
-            | undefined;
+            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -4609,6 +4609,9 @@ export class OrdenesTrabajoService {
       const padre = await tx.ordenTrabajoItem.findFirst({
         where: { id: padreId, tenantId },
         include: {
+          cotizacionItem: {
+            select: { jobContextJson: true, trazabilidadJson: true },
+          },
           recetaRevision: {
             include: { componentes: { orderBy: { orden: 'asc' } } },
           },
@@ -4639,6 +4642,47 @@ export class OrdenesTrabajoService {
           );
         }
 
+        const contextoPadreCrudo =
+          padre.jobContextSnapshotJson ?? padre.cotizacionItem?.jobContextJson;
+        const contextoPadreLeido =
+          contextoPadreCrudo &&
+          typeof contextoPadreCrudo === 'object' &&
+          !Array.isArray(contextoPadreCrudo)
+            ? (contextoPadreCrudo as Record<string, unknown>)
+            : {};
+        const contextoPadre = {
+          cantidad: Number(padre.cantidad),
+          ...contextoPadreLeido,
+        };
+        const traza =
+          padre.cotizacionItem?.trazabilidadJson &&
+          typeof padre.cotizacionItem.trazabilidadJson === 'object' &&
+          !Array.isArray(padre.cotizacionItem.trazabilidadJson)
+            ? (padre.cotizacionItem.trazabilidadJson as Record<string, unknown>)
+            : null;
+        const costeados = Array.isArray(traza?.componentesFabricados)
+          ? traza.componentesFabricados
+          : [];
+        const costeado = costeados.find(
+          (item) =>
+            item &&
+            typeof item === 'object' &&
+            !Array.isArray(item) &&
+            (item as Record<string, unknown>).codigo === componente.codigo,
+        ) as Record<string, unknown> | undefined;
+        const jobContextHijoCrudo = costeado?.jobContext;
+        const jobContextHijo =
+          jobContextHijoCrudo &&
+          typeof jobContextHijoCrudo === 'object' &&
+          !Array.isArray(jobContextHijoCrudo)
+            ? (jobContextHijoCrudo as Record<string, unknown>)
+            : resolverJobContextComponente({
+                configuracion: componente.configuracionJson,
+                contextoPadre,
+                codigoComponente: componente.codigo,
+                cantidadLegacy: Number(componente.cantidad),
+              });
+
         let hijo = await tx.ordenTrabajoItem.findFirst({
           where: {
             tenantId,
@@ -4659,6 +4703,7 @@ export class OrdenesTrabajoService {
               recetaHuella: revisionHija.huellaConfiguracion,
               recetaSnapshotJson:
                 revisionHija.snapshotJson as Prisma.InputJsonValue,
+              jobContextSnapshotJson: jobContextHijo as Prisma.InputJsonValue,
               topologiaProduccion: revisionHija.topologiaProduccion,
               grafoProduccionSnapshotJson:
                 (revisionHija.grafoProduccionJson as Prisma.InputJsonValue) ??
@@ -4668,7 +4713,7 @@ export class OrdenesTrabajoService {
               familia: 'Componente fabricado',
               categoriaComercial: 'Producción interna',
               subcategoriaComercial: 'Componente fabricado',
-              cantidad: Number(padre.cantidad) * Number(componente.cantidad),
+              cantidad: Number(jobContextHijo.cantidad),
               cantidadUnidad: componente.unidad,
               subtotal: 0,
               impuestos: 0,
@@ -4693,8 +4738,7 @@ export class OrdenesTrabajoService {
           ? snapshot.pasos
           : [];
         const grafoGuardado = revisionHija.grafoProduccionJson as
-          | (GrafoProduccion & Prisma.JsonObject)
-          | null;
+          (GrafoProduccion & Prisma.JsonObject) | null;
         const grafoHijo = grafoGuardado
           ? (grafoGuardado as unknown as GrafoProduccion)
           : compilarRutaLineal(

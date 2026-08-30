@@ -93,7 +93,7 @@ describe('validaciones industriales de receta', () => {
     ).rejects.toThrow('ciclo de componentes');
   });
 
-  it('rechaza fórmulas y unidades no fabricables en componentes', async () => {
+  it('rechaza configuraciones de parámetros con formato inválido', async () => {
     const servicio = servicioConPrisma({});
 
     await expect(
@@ -106,12 +106,13 @@ describe('validaciones industriales de receta', () => {
             productoComponenteId: 'componente-1',
             codigo: 'COMP-1',
             nombre: 'Componente',
-            formula: 'por_m2',
+            formula: 'por_unidad',
             cantidad: 1,
-            unidad: 'm2',
+            unidad: 'unidad',
+            configuracionJson: { version: 9, bindings: [] },
           },
         ],
       ),
-    ).rejects.toThrow('fórmula por_unidad');
+    ).rejects.toThrow('no tiene un formato válido');
   });
 });

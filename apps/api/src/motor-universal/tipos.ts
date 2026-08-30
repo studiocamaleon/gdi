@@ -404,6 +404,8 @@ export interface ComponenteFabricadoCosteado {
   politicaEjecucion: 'INLINE' | 'INDEPENDIENTE';
   cantidad: number;
   unidad: string;
+  /** Contexto normalizado y congelable con el que se costeó el hijo. */
+  jobContext: Record<string, unknown>;
   recetaRevisionId: string;
   recetaVersion: number;
   recetaHuella: string;

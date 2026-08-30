@@ -570,7 +570,7 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 
 ## Fase 4 — Rutas DAG, paralelismo, convergencia y gates
 
-**Estado actual:** EN DESARROLLO · AMPLIACIÓN DE COMPONENTES CONFIGURABLES
+**Estado actual:** IMPLEMENTADA · PENDIENTE DE VALIDACIÓN FUNCIONAL DE COMPONENTES CONFIGURABLES
 
 **Rama:** `visual-ilusion/fase-4-rutas-dag`
 

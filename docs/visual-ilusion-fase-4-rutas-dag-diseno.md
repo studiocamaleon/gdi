@@ -319,3 +319,22 @@ Al cotizar 30 exhibidores de 80 × 180 cm, el sistema debe obtener 30 vinilos
 de 76 × 174 cm, pedir únicamente el laminado, costear ambos sin duplicación,
 congelar ambos contextos y ejecutar la ruta del vinilo en paralelo antes de
 habilitar el armado.
+
+### 12.10 Implementación realizada
+
+- La relación padre–componente versiona `configuracionJson` con bindings por
+  parámetro y los cinco orígenes definidos en 12.1.
+- El workspace `Configurar uso` deriva el contrato público del configurador
+  real del hijo; incluye cantidad, medidas, materiales y parámetros de pasos.
+- El sheet comercial muestra únicamente los bindings `COTIZACION`, con sus
+  opciones válidas cuando el parámetro proviene de un catálogo.
+- El motor resuelve herencias y fórmulas mediante un parser aritmético
+  restringido, genera el JobContext normal del hijo y lo costea recursivamente.
+- La cotización congela ese contexto en su trazabilidad y la OT lo copia a
+  `jobContextSnapshotJson` del ítem hijo antes de desplegar su ruta y conectar
+  la convergencia.
+- Las recetas anteriores sin bindings conservan `cantidad padre × cantidad`
+  como compatibilidad histórica.
+
+La ampliación queda implementada y pendiente de validación funcional final en
+un producto rector antes de cambiar el estado global de la fase a `COMPLETA`.

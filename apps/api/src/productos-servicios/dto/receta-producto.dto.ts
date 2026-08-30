@@ -8,6 +8,7 @@ import {
   IsIn,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -99,6 +100,10 @@ export class RecetaComponenteDto {
   @IsOptional()
   @IsBoolean()
   requerido?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  configuracionJson?: unknown;
 
   /** Nodo del producto padre que queda bloqueado hasta recibir el componente. */
   @IsOptional()

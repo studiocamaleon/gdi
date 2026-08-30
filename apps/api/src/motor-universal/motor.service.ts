@@ -160,6 +160,7 @@ import { MotorCotizacionError } from './motor-error';
 import { jobContextCotizacionValido } from './cotizar.dto';
 import { RecorridosVectorialesService } from '../recorridos-vectoriales/recorridos-vectoriales.service';
 import { crearSvgPlacaDesdeNesting } from '../recorridos-vectoriales/nesting-svg';
+import { resolverJobContextComponente } from '../productos-servicios/componentes-configuracion';
 
 const MOTOR_CONTRACT_VERSION = 'motor-universal-v4';
 
@@ -1206,16 +1207,6 @@ export class MotorUniversalService {
       const camino = opciones?.componentesCamino ?? [input.productoId];
       for (const componente of recetaPublicada.componentes) {
         if (!componente.requerido) continue;
-        if (componente.formula !== 'por_unidad') {
-          return fallar([
-            {
-              codigo: 'formula_componente_no_soportada',
-              severidad: 'ERROR',
-              mensaje: `El componente fabricado "${componente.nombre}" usa la fórmula "${componente.formula}", que todavía no es calculable.`,
-              sugerencia: 'Usar por_unidad para componentes fabricados.',
-            },
-          ]);
-        }
         if (camino.includes(componente.productoComponenteId)) {
           return fallar([
             {
@@ -1227,8 +1218,29 @@ export class MotorUniversalService {
             },
           ]);
         }
-        const cantidadComponente =
-          Number(jobContext.cantidad ?? 1) * componente.cantidad;
+        let jobContextComponente: Record<string, unknown>;
+        try {
+          jobContextComponente = resolverJobContextComponente({
+            configuracion: componente.configuracionJson,
+            contextoPadre: jobContext as unknown as Record<string, unknown>,
+            codigoComponente: componente.codigo,
+            cantidadLegacy: componente.cantidad,
+          });
+        } catch (error) {
+          return fallar([
+            {
+              codigo: 'configuracion_componente_incompleta',
+              severidad: 'ERROR',
+              mensaje:
+                error instanceof Error
+                  ? error.message
+                  : `No se pudo configurar el componente "${componente.nombre}".`,
+              sugerencia:
+                'Completá los parámetros solicitados del componente antes de cotizar.',
+            },
+          ]);
+        }
+        const cantidadComponente = Number(jobContextComponente.cantidad);
         if (
           !Number.isFinite(cantidadComponente) ||
           cantidadComponente <= 0 ||
@@ -1250,7 +1262,7 @@ export class MotorUniversalService {
           {
             tenantId: input.tenantId,
             productoId: componente.productoComponenteId,
-            jobContext: { cantidad: cantidadComponente },
+            jobContext: jobContextComponente as never,
             periodo,
           },
           {
@@ -1290,6 +1302,7 @@ export class MotorUniversalService {
           politicaEjecucion: componente.politicaEjecucion,
           cantidad: cantidadComponente,
           unidad: componente.unidad,
+          jobContext: jobContextComponente,
           recetaRevisionId: hija.receta.revisionId,
           recetaVersion: hija.receta.version,
           recetaHuella: hija.receta.huella,
