@@ -366,13 +366,12 @@ export function ConfigurarComponenteWorkspace({
                   <div className={styles.binding} key={binding.clave}>
                     <div>
                       <strong>{binding.etiqueta}</strong>
-                      <small>
-                        {binding.clave}
-                        {unidadVisibleParametro(binding.clave, binding.unidad)
-                          ? ` · ${unidadVisibleParametro(binding.clave, binding.unidad)}`
-                          : ""}
-                        {binding.requerido ? " · requerido" : ""}
-                      </small>
+                      {binding.requerido ? (
+                        <small className={styles.requiredMark}>
+                          <span aria-hidden="true" />
+                          Requerido
+                        </small>
+                      ) : null}
                     </div>
                     <select
                       value={binding.origen}

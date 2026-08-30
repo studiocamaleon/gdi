@@ -143,6 +143,21 @@
   color: #88817f;
   font: 10px var(--font-mono);
 }
+.binding .requiredMark {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  color: #8c5a43;
+  font: 650 10px var(--font-sans);
+  letter-spacing: 0.02em;
+}
+.requiredMark span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f2692f;
+}
 .binding select,
 .binding input {
   width: 100%;
