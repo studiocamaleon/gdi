@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
+import { useCambiosSistema } from "@/components/notificaciones/notificaciones-provider";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,7 @@ import {
   editarHitoCampana,
   reemplazarEquipoCampana,
   vincularDocumentoCampana,
+  getCampana,
   type CampanaDetalle,
   type CampanaEstado,
 } from "@/lib/campanas-api";
@@ -61,6 +63,8 @@ import type { OrdenTrabajoListItem } from "@/lib/ordenes-trabajo";
 import styles from "./campanas.module.css";
 import { DesarrolloDocumentalPanel } from "./desarrollo-documental-panel";
 import type { DesarrolloDocumental } from "@/lib/desarrollo-documental-api";
+import { getDesarrolloCampana } from "@/lib/desarrollo-documental-api";
+import { listarArchivos } from "@/lib/archivos-api";
 
 const SIGUIENTES: Record<CampanaEstado, CampanaEstado[]> = {
   borrador: ["activo", "cancelado"],
@@ -122,6 +126,7 @@ export function CampanaDetalleView({
   const { moneda } = useConfigRegional();
   const [campana, setCampana] = React.useState(initial);
   const [archivos, setArchivos] = React.useState(initialArchivos);
+  const [desarrollo, setDesarrollo] = React.useState(initialDesarrollo);
   const [hitoOpen, setHitoOpen] = React.useState(false);
   const [editarOpen, setEditarOpen] = React.useState(false);
   const [equipoOpen, setEquipoOpen] = React.useState(false);
@@ -144,6 +149,50 @@ export function CampanaDetalleView({
   >([]);
   const [working, setWorking] = React.useState<string | null>(null);
   const [hitoError, setHitoError] = React.useState<string | null>(null);
+  const actualizacionPendiente = React.useRef(false);
+  const refrescandoEnVivo = React.useRef(false);
+  const edicionActiva = Boolean(
+    working || hitoOpen || editarOpen || equipoOpen || vincularOpen,
+  );
+
+  const refrescarEnVivo = React.useCallback(async () => {
+    if (edicionActiva || refrescandoEnVivo.current) {
+      actualizacionPendiente.current = true;
+      return;
+    }
+    refrescandoEnVivo.current = true;
+    try {
+      const [siguiente, siguienteDesarrollo, siguientesArchivos] =
+        await Promise.all([
+          getCampana(initial.id),
+          getDesarrolloCampana(initial.id),
+          listarArchivos("CAMPANA", initial.id),
+        ]);
+      setCampana(siguiente);
+      setDesarrollo(siguienteDesarrollo);
+      setArchivos(siguientesArchivos);
+      actualizacionPendiente.current = false;
+    } catch {
+      actualizacionPendiente.current = true;
+    } finally {
+      refrescandoEnVivo.current = false;
+    }
+  }, [edicionActiva, initial.id]);
+
+  useCambiosSistema(
+    (cambio) => {
+      if (cambio.topicos.includes(`campana:${initial.id}`)) {
+        void refrescarEnVivo();
+      }
+    },
+    [initial.id, refrescarEnVivo],
+  );
+
+  React.useEffect(() => {
+    if (!edicionActiva && actualizacionPendiente.current) {
+      void refrescarEnVivo();
+    }
+  }, [edicionActiva, refrescarEnVivo]);
 
   async function cambiarEstado(estado: CampanaEstado) {
     if (
@@ -535,7 +584,7 @@ export function CampanaDetalleView({
                   Archivos ({archivos.length})
                 </TabsTrigger>
                 <TabsTrigger value="desarrollo">
-                  Desarrollo ({initialDesarrollo.maestros.length})
+                  Desarrollo ({desarrollo.maestros.length})
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="ordenes" className={styles.tabContent}>
@@ -693,7 +742,7 @@ export function CampanaDetalleView({
               <TabsContent value="desarrollo" className={styles.tabContent}>
                 <DesarrolloDocumentalPanel
                   campanaId={campana.id}
-                  initial={initialDesarrollo}
+                  initial={desarrollo}
                   archivos={archivos}
                   ordenes={campana.ordenes}
                   canManage={canManage}

@@ -41,6 +41,7 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useCambiosSistema } from "@/components/notificaciones/notificaciones-provider";
 
 import type { ClienteDetalle } from "@/lib/clientes";
 import type { CurrentUser } from "@/lib/auth";
@@ -346,8 +347,7 @@ export function getCotizacionPasos(cotizacion: CotizacionExitosa) {
 
 function requierePreparacionPolyfan(item: PropuestaItem) {
   return item.cotizacion.pasos.some(
-    (paso) =>
-      paso.activado && paso.familiaCodigo === "corte_hilo_caliente",
+    (paso) => paso.activado && paso.familiaCodigo === "corte_hilo_caliente",
   );
 }
 
@@ -912,7 +912,14 @@ function OrdenTabs({
       icon: <FolderIcon />,
     },
     ...(documentosCount !== undefined
-      ? [{ key: "documentos" as const, label: "Documentos", count: documentosCount, icon: <FileCheck2Icon /> }]
+      ? [
+          {
+            key: "documentos" as const,
+            label: "Documentos",
+            count: documentosCount,
+            icon: <FileCheck2Icon />,
+          },
+        ]
       : []),
     // El tab Costos es el desglose de lo que le sale a la imprenta: material,
     // máquina, mano de obra. Quien no puede ver márgenes tampoco lo ve — y el
@@ -6049,6 +6056,40 @@ export function PropuestaFicha({
   const tomosIdempotencyRef = React.useRef<Map<string, string>>(new Map());
   const [editandoOrden, setEditandoOrden] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  const cambioRemotoPendiente = React.useRef(false);
+  const bloqueaCambioRemoto =
+    editandoOrden ||
+    guardandoEdicion ||
+    panelSaving ||
+    emitiendo ||
+    cancelando ||
+    togglingFiscal;
+
+  const aplicarCambioRemoto = React.useCallback(() => {
+    if (!ordenProp?.id) return;
+    if (bloqueaCambioRemoto) {
+      cambioRemotoPendiente.current = true;
+      return;
+    }
+    cambioRemotoPendiente.current = false;
+    recargarOrden();
+    router.refresh();
+  }, [bloqueaCambioRemoto, ordenProp?.id, recargarOrden, router]);
+
+  useCambiosSistema(
+    (cambio) => {
+      if (ordenProp?.id && cambio.topicos.includes(`orden:${ordenProp.id}`)) {
+        aplicarCambioRemoto();
+      }
+    },
+    [aplicarCambioRemoto, ordenProp?.id],
+  );
+
+  React.useEffect(() => {
+    if (!bloqueaCambioRemoto && cambioRemotoPendiente.current) {
+      aplicarCambioRemoto();
+    }
+  }, [aplicarCambioRemoto, bloqueaCambioRemoto]);
   const [trackCopiado, setTrackCopiado] = React.useState(false);
 
   // Copia el link público de seguimiento del cliente (/t/<token>).
@@ -8022,11 +8063,14 @@ export function PropuestaFicha({
             <div className="ctrl-input">
               <Link href={`/comercial/campanas/${orden.proyectoCampana.id}`}>
                 <span className="mono">{orden.proyectoCampana.codigo}</span>
-                {" · "}{orden.proyectoCampana.nombre}
+                {" · "}
+                {orden.proyectoCampana.nombre}
               </Link>
             </div>
           ) : (
-            <div className="ctrl-input"><span>Sin campaña</span></div>
+            <div className="ctrl-input">
+              <span>Sin campaña</span>
+            </div>
           )}
         </FieldCard>
 
@@ -8148,7 +8192,9 @@ export function PropuestaFicha({
             historialCount={orden ? orden.eventosTotal : undefined}
             comprobantesCount={orden ? 0 : undefined}
             archivosCount={archivosCount}
-            documentosCount={orden ? (initialDocumentos?.gates.length ?? 0) : undefined}
+            documentosCount={
+              orden ? (initialDocumentos?.gates.length ?? 0) : undefined
+            }
           />
           {!modoOrden || itemsEnEdicion ? (
             <div className="orden-actions">

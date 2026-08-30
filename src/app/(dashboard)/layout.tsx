@@ -12,6 +12,8 @@ import { EntregaEscaneoWatcher } from "@/components/mostrador/entrega-escaneo-wa
 import { LogoutButton } from "@/components/logout-button";
 import { ImpersonacionBanner } from "@/components/plataforma/impersonacion-banner";
 import { SuscripcionGlobalBanner } from "@/components/suscripcion/suscripcion-global-banner";
+import { NotificacionesBell } from "@/components/notificaciones/notificaciones-bell";
+import { NotificacionesProvider } from "@/components/notificaciones/notificaciones-provider";
 import {
   SidebarInset,
   SidebarProvider,
@@ -57,41 +59,44 @@ export default async function DashboardLayout({
     <PermisosProvider permisos={currentUser.tenantActual?.permisos}>
       <ConfigRegionalProvider regional={currentUser.tenantActual?.regional}>
         <NavigationFeedbackProvider>
-          <ImpersonacionBanner currentUser={currentUser} />
-          <SidebarProvider
-            defaultOpen
-            style={
-              {
-                height: "100dvh",
-                overflow: "hidden",
-                "--sidebar-width": "262px",
-                "--sidebar-width-icon": "66px",
-              } as React.CSSProperties
-            }
-          >
-            <AppSidebar currentUser={currentUser} />
-            <SidebarInset className="main" style={{ minHeight: 0 }}>
-              <header className="topbar">
-                <SidebarTrigger className="icon-btn" />
-                <div className="ml-auto">
-                  <LogoutButton />
-                </div>
-              </header>
+          <NotificacionesProvider>
+            <ImpersonacionBanner currentUser={currentUser} />
+            <SidebarProvider
+              defaultOpen
+              style={
+                {
+                  height: "100dvh",
+                  overflow: "hidden",
+                  "--sidebar-width": "262px",
+                  "--sidebar-width-icon": "66px",
+                } as React.CSSProperties
+              }
+            >
+              <AppSidebar currentUser={currentUser} />
+              <SidebarInset className="main" style={{ minHeight: 0 }}>
+                <header className="topbar">
+                  <SidebarTrigger className="icon-btn" />
+                  <div className="ml-auto flex items-center gap-1">
+                    <NotificacionesBell />
+                    <LogoutButton />
+                  </div>
+                </header>
 
-              <SuscripcionGlobalBanner currentUser={currentUser} />
+                <SuscripcionGlobalBanner currentUser={currentUser} />
 
-              <main
-                className="gp-main flex flex-1"
-                style={{ minHeight: 0, overflowY: "auto" }}
-              >
-                {children}
-              </main>
-            </SidebarInset>
-            <PasosEnCursoWidget />
-            {/* Escanear el QR del cliente abre la entrega desde cualquier
+                <main
+                  className="gp-main flex flex-1"
+                  style={{ minHeight: 0, overflowY: "auto" }}
+                >
+                  {children}
+                </main>
+              </SidebarInset>
+              <PasosEnCursoWidget />
+              {/* Escanear el QR del cliente abre la entrega desde cualquier
               pantalla. */}
-            <EntregaEscaneoWatcher />
-          </SidebarProvider>
+              <EntregaEscaneoWatcher />
+            </SidebarProvider>
+          </NotificacionesProvider>
         </NavigationFeedbackProvider>
       </ConfigRegionalProvider>
     </PermisosProvider>

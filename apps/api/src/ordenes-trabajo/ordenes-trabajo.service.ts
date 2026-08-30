@@ -5,11 +5,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   ArchivoEstado,
   Prisma,
   RolSistema,
+  SeveridadNotificacionInterna,
   TipoEnlacePublico,
 } from '@prisma/client';
 import QRCode from 'qrcode';
@@ -72,6 +74,7 @@ import {
   faltantesCompatibilidadLaser,
 } from '../produccion/simulador-laser-compatibilidad';
 import { resolverEstacionDePaso } from '../eta/motor/tablero-tipos';
+import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
@@ -664,6 +667,7 @@ export class OrdenesTrabajoService {
     private readonly preparacionesRecorrido: PreparacionesRecorridoService,
     private readonly fidelizacion: FidelizacionService,
     private readonly desarrolloDocumental: DesarrolloDocumentalService,
+    @Optional() private readonly eventosSistema?: EventosSistemaService,
   ) {}
 
   private async prepararRecorridosDeItems(
@@ -1829,7 +1833,7 @@ export class OrdenesTrabajoService {
             id?: string;
             archivosOrigenItemIds?: string[];
           }
-      >
+        >
       | undefined;
     // El editor de la OT guarda el conjunto completo en una sola operación.
     // Conservamos los ids materializados para preparar los archivos recién
@@ -2778,7 +2782,8 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
+            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
+            | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -4797,7 +4802,13 @@ export class OrdenesTrabajoService {
       this.prisma.ordenTrabajoItemPaso.findFirst({
         where: { id: pasoId, tenantId: auth.tenantId, ordenId, itemId },
         include: {
-          orden: { select: { estado: true, progresoPct: true } },
+          orden: {
+            select: {
+              estado: true,
+              progresoPct: true,
+              proyectoCampanaId: true,
+            },
+          },
           item: { select: { nombre: true, ordenIndice: true } },
           tramos: {
             select: { id: true, usuarioId: true, inicioEl: true, finEl: true },
@@ -5177,6 +5188,42 @@ export class OrdenesTrabajoService {
           },
         });
       }
+      await this.eventosSistema?.publicar(
+        {
+          tenantId: auth.tenantId,
+          actorUserId: interno?.autoPausa
+            ? null
+            : (auth.impersonacion?.actorUserId ?? auth.userId),
+          actorNombre: interno?.autoPausa ? 'Sistema' : usuarioNombre,
+          tipo: `produccion.paso_${payload.accion}`,
+          entidadTipo: 'orden_trabajo',
+          entidadId: ordenId,
+          titulo:
+            nuevoEstadoOrden === 'finalizada'
+              ? 'Orden finalizada'
+              : payload.accion === 'bloquear'
+                ? 'Producción bloqueada'
+                : 'Avance de producción',
+          mensaje: `“${paso.nombre}” ${transicion.verbo} en ${paso.item.nombre}.`,
+          href: `/produccion/ordenes/${ordenId}`,
+          severidad:
+            payload.accion === 'bloquear'
+              ? SeveridadNotificacionInterna.ADVERTENCIA
+              : nuevoEstadoOrden === 'finalizada' ||
+                  payload.accion === 'completar'
+                ? SeveridadNotificacionInterna.EXITO
+                : SeveridadNotificacionInterna.INFO,
+          topicos: [
+            `orden:${ordenId}`,
+            'tablero-produccion',
+            ...(paso.orden.proyectoCampanaId
+              ? [`campana:${paso.orden.proyectoCampanaId}`]
+              : []),
+          ],
+          proyectoCampanaId: paso.orden.proyectoCampanaId ?? undefined,
+        },
+        tx,
+      );
       return nuevoEstadoOrden === 'finalizada';
     });
 
