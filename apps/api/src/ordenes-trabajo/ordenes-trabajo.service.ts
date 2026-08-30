@@ -112,8 +112,18 @@ type CotizacionItemFinanciero = {
   descuentoTipo: string | null;
   descuentoValor: unknown;
   descuentoMonto: unknown;
+  recetaRevisionId?: string | null;
+  recetaVersion?: number | null;
+  recetaHuella?: string | null;
   costoTotal?: unknown;
   comisionesSnapshotJson?: unknown;
+};
+
+type ItemAutorizado = CrearOrdenTrabajoItemDto & {
+  recetaRevisionId?: string | null;
+  recetaVersion?: number | null;
+  recetaHuella?: string | null;
+  recetaSnapshotJson?: Prisma.InputJsonValue | null;
 };
 
 function margenFidelizacion(
@@ -1162,6 +1172,9 @@ export class OrdenesTrabajoService {
           descuentoTipo: true,
           descuentoValor: true,
           descuentoMonto: true,
+          recetaRevisionId: true,
+          recetaVersion: true,
+          recetaHuella: true,
           costoTotal: true,
           comisionesSnapshotJson: true,
         },
@@ -1456,6 +1469,12 @@ export class OrdenesTrabajoService {
               create: items.map((item, indice) => ({
                 tenantId: auth.tenantId,
                 cotizacionItemId: item.cotizacionItemId ?? null,
+                recetaRevisionId:
+                  (item as ItemAutorizado).recetaRevisionId ?? null,
+                recetaVersion: (item as ItemAutorizado).recetaVersion ?? null,
+                recetaHuella: (item as ItemAutorizado).recetaHuella ?? null,
+                recetaSnapshotJson:
+                  (item as ItemAutorizado).recetaSnapshotJson ?? undefined,
                 codigo: item.codigo,
                 nombre: item.nombre,
                 familia: item.familia,
@@ -1701,6 +1720,9 @@ export class OrdenesTrabajoService {
           descuentoTipo: true,
           descuentoValor: true,
           descuentoMonto: true,
+          recetaRevisionId: true,
+          recetaVersion: true,
+          recetaHuella: true,
         },
       }),
       regionalDelTenant(this.prisma, auth.tenantId),
@@ -1898,6 +1920,9 @@ export class OrdenesTrabajoService {
           descuentoTipo: true,
           descuentoValor: true,
           descuentoMonto: true,
+          recetaRevisionId: true,
+          recetaVersion: true,
+          recetaHuella: true,
         },
       });
       if (snapshots.length !== cotizacionIds.length) {
@@ -2542,7 +2567,7 @@ export class OrdenesTrabajoService {
     item: CrearOrdenTrabajoItemDto,
     snapshot: CotizacionItemFinanciero,
     decimales: number,
-  ): CrearOrdenTrabajoItemDto {
+  ): ItemAutorizado {
     const montos = montosCotizacionItem(snapshot, decimales);
     if (!montos) {
       throw new BadRequestException(
@@ -2560,6 +2585,12 @@ export class OrdenesTrabajoService {
       typeof raiz.producto === 'object' &&
       !Array.isArray(raiz.producto)
         ? (raiz.producto as Record<string, unknown>)
+        : {};
+    const receta =
+      raiz.receta &&
+      typeof raiz.receta === 'object' &&
+      !Array.isArray(raiz.receta)
+        ? (raiz.receta as Record<string, unknown>)
         : {};
     return {
       ...item,
@@ -2583,6 +2614,13 @@ export class OrdenesTrabajoService {
           ? Number(snapshot.descuentoMonto)
           : null,
       descuentoCuponId: item.descuentoCuponId ?? null,
+      recetaRevisionId: snapshot.recetaRevisionId ?? null,
+      recetaVersion: snapshot.recetaVersion ?? null,
+      recetaHuella: snapshot.recetaHuella ?? null,
+      recetaSnapshotJson:
+        receta.bom && typeof receta.bom === 'object'
+          ? (receta.bom as Prisma.InputJsonValue)
+          : null,
     };
   }
 
@@ -2878,9 +2916,14 @@ export class OrdenesTrabajoService {
     });
   }
 
-  private buildItemData(item: CrearOrdenTrabajoItemDto) {
+  private buildItemData(item: CrearOrdenTrabajoItemDto | ItemAutorizado) {
+    const autorizado = item as ItemAutorizado;
     return {
       cotizacionItemId: item.cotizacionItemId ?? null,
+      recetaRevisionId: autorizado.recetaRevisionId ?? null,
+      recetaVersion: autorizado.recetaVersion ?? null,
+      recetaHuella: autorizado.recetaHuella ?? null,
+      recetaSnapshotJson: autorizado.recetaSnapshotJson ?? undefined,
       codigo: item.codigo,
       nombre: item.nombre,
       familia: item.familia,
@@ -2927,6 +2970,9 @@ export class OrdenesTrabajoService {
         descuentoTipo: true,
         descuentoValor: true,
         descuentoMonto: true,
+        recetaRevisionId: true,
+        recetaVersion: true,
+        recetaHuella: true,
       },
     });
     if (!snapshot) {

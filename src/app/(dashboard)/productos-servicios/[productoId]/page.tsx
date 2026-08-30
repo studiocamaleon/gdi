@@ -13,6 +13,7 @@ import {
   getCatalogoFamilias,
   getLookupsConfigPaso,
   getProductoById,
+  getRecetasProducto,
   getRutas,
 } from "@/lib/productos-servicios-api";
 
@@ -55,11 +56,12 @@ async function ProductoDetalleContent({
       redirect(`/productos-servicios/${productoId}?tab=pasos&rutaAltId=${rutaDefault}`);
     }
 
-    const [rutasDisponibles, catalogoFamilias, lookups, catalogoCargos, canManage] = await Promise.all([
+    const [rutasDisponibles, catalogoFamilias, lookups, catalogoCargos, recetas, canManage] = await Promise.all([
       tab === "rutas" ? getRutas() : Promise.resolve(undefined),
       tab === "rutas" || tab === "pasos" ? getCatalogoFamilias() : Promise.resolve(undefined),
       tab === "pasos" ? getLookupsConfigPaso() : Promise.resolve(undefined),
       tab === "cargos" ? getCargosDirectosCatalogo(true) : Promise.resolve(undefined),
+      tab === "receta" ? getRecetasProducto(productoId) : Promise.resolve(undefined),
       tienePermiso("costos.gestionar"),
     ]);
 
@@ -72,6 +74,7 @@ async function ProductoDetalleContent({
         catalogoFamilias={catalogoFamilias}
         lookups={lookups}
         catalogoCargos={catalogoCargos}
+        recetas={recetas}
         canManage={canManage}
       />
     );
@@ -92,6 +95,7 @@ function normalizarTab(value: string | undefined): ProductoWorkspaceTab {
     value === "identidad" ||
     value === "rutas" ||
     value === "pasos" ||
+    value === "receta" ||
     value === "cargos" ||
     value === "herramientas" ||
     value === "pricing"

@@ -547,6 +547,7 @@ export class ProductosService {
                     materialVarianteId: slot.materialVarianteId,
                     formula: slot.formula,
                     cantidadFactor: slot.cantidadFactor,
+                    mermaAdicionalPct: slot.mermaAdicionalPct,
                     cantidadBase: slot.cantidadBase,
                     fuenteMedida: slot.fuenteMedida,
                     aplicaMultiCaras: slot.aplicaMultiCaras,
@@ -1422,6 +1423,7 @@ export class ProductosService {
       criterioMotorAuto?: string | null;
       formula?: string;
       cantidadFactor?: string | number | null;
+      mermaAdicionalPct?: string | number | null;
       cantidadBase?: string | null;
       fuenteMedida?: string | null;
       aplicaMultiCaras?: boolean;
@@ -1515,6 +1517,7 @@ export class ProductosService {
             criterioMotorAuto: s.criterioMotorAuto ?? null,
             formula: s.formula ?? '',
             cantidadFactor: s.cantidadFactor ?? null,
+            mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),
             cantidadBase: s.cantidadBase ?? null,
             fuenteMedida: s.fuenteMedida ?? null,
             aplicaMultiCaras: s.aplicaMultiCaras ?? false,

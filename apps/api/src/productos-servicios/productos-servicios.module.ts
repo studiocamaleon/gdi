@@ -12,6 +12,7 @@ import { FormularioCotizacionService } from './formulario-cotizacion.service';
 import { ProductosServiciosService } from './productos-servicios.service';
 import { RutasProduccionService } from './rutas-produccion.service';
 import { PrecioModule } from './precio/precio.module';
+import { RecetasProductoService } from './recetas-producto.service';
 
 /**
  * Módulo productos-servicios — modelo universal por pasos.
@@ -40,7 +41,8 @@ import { PrecioModule } from './precio/precio.module';
     CargosDirectosProductoService,
     ProductoValidacionService,
     FormularioCotizacionService,
+    RecetasProductoService,
   ],
-  exports: [ProductosServiciosService, PrecioModule],
+  exports: [ProductosServiciosService, RecetasProductoService, PrecioModule],
 })
 export class ProductosServiciosModule {}

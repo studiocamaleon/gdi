@@ -811,7 +811,9 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;
@@ -1123,6 +1125,7 @@ export interface SlotCargado {
   }>;
   formula: string;
   cantidadFactor?: number | string | null;
+  mermaAdicionalPct?: number | string | null;
   cantidadBase?: string | null;
   /** Fuente de medida del consumo de ESTE slot (override por-material del
    *  default a nivel paso). Mismo vocabulario que fuentePiezasMontaje:

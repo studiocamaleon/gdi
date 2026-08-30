@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -50,6 +51,13 @@ import {
 } from './dto/cargo-directo.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { FormularioCotizacionService } from './formulario-cotizacion.service';
+import { CurrentSession } from '../auth/current-auth.decorator';
+import type { CurrentAuth } from '../auth/auth.types';
+import {
+  GuardarBorradorRecetaDto,
+  PublicarRecetaDto,
+} from './dto/receta-producto.dto';
+import { RecetasProductoService } from './recetas-producto.service';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -68,7 +76,36 @@ export class ProductosServiciosController {
     private readonly service: ProductosServiciosService,
     private readonly pasosTenant: PasosTenantService,
     private readonly formulario: FormularioCotizacionService,
+    private readonly recetas: RecetasProductoService,
   ) {}
+
+  @Get('productos/:id/receta')
+  obtenerReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.recetas.obtener(auth, id);
+  }
+
+  @Permiso('costos.gestionar')
+  @Post('productos/:id/receta/borrador')
+  guardarBorradorReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: GuardarBorradorRecetaDto,
+  ) {
+    return this.recetas.guardarBorrador(auth, id, dto);
+  }
+
+  @Permiso('costos.gestionar')
+  @Post('recetas/revisiones/:revisionId/publicar')
+  publicarReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+    @Body() dto: PublicarRecetaDto,
+  ) {
+    return this.recetas.publicar(auth, revisionId, dto);
+  }
 
   @Get('catalogo-comercial')
   listarCatalogoComercial() {

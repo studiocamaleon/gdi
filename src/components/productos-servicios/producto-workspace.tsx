@@ -14,6 +14,7 @@ import {
   FootprintsIcon,
   GitBranchIcon,
   PlusIcon,
+  PackageCheckIcon,
   SaveIcon,
   StarIcon,
   TagIcon,
@@ -50,7 +51,9 @@ import {
   eliminarProductoRutaAlt,
   getCatalogoComercial,
   type LookupsConfigPaso,
+  type ProductoReceta,
 } from "@/lib/productos-servicios-api";
+import { RecetaProductoTab } from "@/components/productos-servicios/receta-producto-tab";
 import {
   getHerramientaMedidasArchivo,
   setHerramientaMedidasArchivo,
@@ -87,7 +90,13 @@ import {
 import styles from "./producto-workspace.module.css";
 
 export type ProductoWorkspaceTab =
-  "identidad" | "rutas" | "pasos" | "cargos" | "herramientas" | "pricing";
+  | "identidad"
+  | "rutas"
+  | "pasos"
+  | "receta"
+  | "cargos"
+  | "herramientas"
+  | "pricing";
 
 interface Props {
   producto: ProductoDetalle;
@@ -97,6 +106,7 @@ interface Props {
   catalogoFamilias?: CatalogoFamilias;
   lookups?: LookupsConfigPaso;
   catalogoCargos?: CargoDirectoCatalogo[];
+  recetas?: ProductoReceta[];
   canManage: boolean;
 }
 
@@ -461,12 +471,14 @@ const TABS: Array<{
   { id: "identidad", label: "Identidad", icon: TagIcon },
   { id: "rutas", label: "Rutas", icon: GitBranchIcon },
   { id: "pasos", label: "Pasos", icon: FootprintsIcon },
+  { id: "receta", label: "Receta / BOM", icon: PackageCheckIcon },
   { id: "herramientas", label: "Herramientas", icon: WrenchIcon },
   { id: "pricing", label: "Pricing", icon: BanknoteIcon },
 ];
 
 function tabValidaciones(
   producto: ProductoDetalle,
+  recetas: ProductoReceta[],
 ): Record<ProductoWorkspaceTab, ValidacionTab> {
   const rutas = producto.rutasAlternativas;
   const sinRutas = rutas.length === 0;
@@ -491,6 +503,14 @@ function tabValidaciones(
       : pasosIncompletos
         ? { estado: "warning", label: "Incompleto" }
         : { estado: "ok", label: "Completo" },
+    receta:
+      recetas.length === 0
+        ? { estado: "warning", label: "Sin publicar" }
+        : recetas.some((item) =>
+              item.revisiones.some((revision) => revision.estado === "BORRADOR"),
+            )
+          ? { estado: "warning", label: "Cambios sin publicar" }
+          : { estado: "ok", label: "Publicada" },
     cargos: { estado: "ok", label: "Opcional" },
     herramientas: { estado: "ok", label: "Opcional" },
     pricing: precioConfig?.metodoCalculo
@@ -525,12 +545,13 @@ export function ProductoWorkspace({
   rutasDisponibles = [],
   catalogoFamilias,
   catalogoCargos = [],
+  recetas = [],
   canManage,
 }: Props) {
   const router = useRouter();
   const validaciones = React.useMemo(
-    () => tabValidaciones(producto),
-    [producto],
+    () => tabValidaciones(producto, recetas),
+    [producto, recetas],
   );
 
   const irATab = (tab: ProductoWorkspaceTab) => {
@@ -651,6 +672,13 @@ export function ProductoWorkspace({
                   producto={producto}
                   rutaAltId={rutaAltId}
                   catalogoFamilias={catalogoFamilias}
+                />
+              )}
+              {activeTab === "receta" && (
+                <RecetaProductoTab
+                  producto={producto}
+                  recetas={recetas}
+                  canManage={canManage}
                 />
               )}
               {activeTab === "cargos" && (

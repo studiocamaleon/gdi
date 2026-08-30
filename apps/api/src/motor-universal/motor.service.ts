@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
@@ -103,6 +104,7 @@ import {
   type CostingStrategyKind,
 } from '../productos-servicios/nesting/costing';
 import { MAX_HOJAS_CABALLETE_DEFAULT } from '../productos-servicios/nesting/helpers/cuadernillo-imposicion';
+import { RecetasProductoService } from '../productos-servicios/recetas-producto.service';
 import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import {
   getModoColorsFromPerfil,
@@ -116,6 +118,16 @@ import {
   type NivelCobertura,
 } from '../productos-servicios/cobertura-toner';
 import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
+
+export function aplicarMermaAdicional(
+  cantidad: number,
+  porcentaje: unknown,
+): number {
+  const merma = Number(porcentaje ?? 0);
+  return Number.isFinite(merma) && merma > 0
+    ? cantidad * (1 + merma / 100)
+    : cantidad;
+}
 import { indicePerfilUnicoPorOperacion } from './seleccion-perfil-operacion';
 import {
   modoTiempoEfectivo,
@@ -223,6 +235,7 @@ interface PasoExtraSlotJson {
   }>;
   formula?: string;
   cantidadFactor?: number | string | null;
+  mermaAdicionalPct?: number | string | null;
   cantidadBase?: string | null;
   fuenteMedida?: string | null;
   aplicaMultiCaras?: boolean;
@@ -491,6 +504,8 @@ export class MotorUniversalService {
     private readonly preciosEspecialesClientes: PreciosEspecialesClientesService,
     private readonly geometriaCache: GeometriaVectorialCacheService = new GeometriaVectorialCacheService(),
     private readonly recorridosVectoriales: RecorridosVectorialesService = new RecorridosVectorialesService(),
+    @Optional()
+    private readonly recetasProducto?: RecetasProductoService,
   ) {}
 
   private async generarRecorridoCorteCotizacion(
@@ -1082,7 +1097,8 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            PasoEjecutado['ojalesLayout'] | undefined;
+            | PasoEjecutado['ojalesLayout']
+            | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -1401,6 +1417,14 @@ export class MotorUniversalService {
     } catch {
       producto = null;
     }
+    const receta =
+      producto && this.recetasProducto
+        ? await this.recetasProducto.resolverPublicadaParaCotizar(
+            input.tenantId,
+            input.productoId,
+            producto.rutaAlternativaId,
+          )
+        : null;
     const result = await this.cotizar(
       input,
       producto ? { productoPrecargado: producto } : undefined,
@@ -1478,6 +1502,7 @@ export class MotorUniversalService {
             descuento: input.descuento ?? null,
             inputHash: hashCotizacionInput(input),
             periodo: result.cotizacion!.periodoTarifario,
+            receta,
           }),
         });
 
@@ -1528,6 +1553,14 @@ export class MotorUniversalService {
     } catch {
       producto = null;
     }
+    const receta =
+      producto && this.recetasProducto
+        ? await this.recetasProducto.resolverPublicadaParaCotizar(
+            input.tenantId,
+            item.productoId,
+            producto.rutaAlternativaId,
+          )
+        : null;
     const result = await this.cotizar(
       {
         tenantId: input.tenantId,
@@ -1578,6 +1611,7 @@ export class MotorUniversalService {
             rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
           }),
           periodo: result.cotizacion!.periodoTarifario,
+          receta,
         }),
       });
       if (updateResult.count !== 1) {
@@ -1602,6 +1636,12 @@ export class MotorUniversalService {
     descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
     inputHash: string;
     periodo: string;
+    receta?: {
+      id: string;
+      version: number;
+      huella: string;
+      snapshot: unknown;
+    } | null;
   }) {
     const desglosePrecio = args.cotizacion.desglosePrecio;
     const precioResultado = desglosePrecio
@@ -1622,6 +1662,9 @@ export class MotorUniversalService {
       cotizacionId: args.cotizacionId,
       productoId: args.productoId,
       rutaAlternativaId: args.cotizacion.rutaAlternativaId,
+      recetaRevisionId: args.receta?.id ?? null,
+      recetaVersion: args.receta?.version ?? null,
+      recetaHuella: args.receta?.huella ?? null,
       cantidad: args.cotizacion.cantidadComercialReal.toString(),
       jobContextJson: args.jobContext as never,
       snapshotJson: {
@@ -1641,6 +1684,14 @@ export class MotorUniversalService {
           modoMedidas: args.producto.modoMedidas,
           minimoComercialBase: args.producto.minimoComercialBase,
         },
+        receta: args.receta
+          ? {
+              revisionId: args.receta.id,
+              version: args.receta.version,
+              huella: args.receta.huella,
+              bom: args.receta.snapshot,
+            }
+          : null,
         ruta: {
           id: args.producto.rutaId,
           version: args.producto.rutaVersion,
@@ -3557,7 +3608,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -4035,7 +4088,8 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        { tarifa: unknown } | undefined;
+        | { tarifa: unknown }
+        | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -4167,7 +4221,8 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          { tarifa: unknown; nombre?: string | null } | undefined;
+          | { tarifa: unknown; nombre?: string | null }
+          | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -4572,9 +4627,7 @@ export class MotorUniversalService {
     // tratarlo como sustrato producía el mensaje absurdo de que una pieza de
     // 254 mm no entraba en 1.000 mm. En ese caso dejamos que la validación de
     // materiales informe la placa faltante con el diagnóstico correcto.
-    if (
-      estrategiaNestingDeFamilia(paso.familiaCodigo) === 'irregular_placa'
-    ) {
+    if (estrategiaNestingDeFamilia(paso.familiaCodigo) === 'irregular_placa') {
       return material != null && tieneSustratoPliego;
     }
     return tieneSustratoRollo || tieneSustratoPliego;
@@ -4599,9 +4652,7 @@ export class MotorUniversalService {
     const tieneSustratoPliego =
       (config.sheetWidthMm ?? 0) > 0 && (config.sheetHeightMm ?? 0) > 0;
     const esRollo =
-      !tieneSustratoPliego &&
-      anchoUtilRolloMm != null &&
-      anchoUtilRolloMm > 0;
+      !tieneSustratoPliego && anchoUtilRolloMm != null && anchoUtilRolloMm > 0;
     const limiteAnchoMm = esRollo
       ? anchoUtilRolloMm
       : (config.sheetWidthMm ?? 0);
@@ -5294,6 +5345,11 @@ export class MotorUniversalService {
         }
       }
 
+      // Fase 3 — pérdida adicional explícita del taller. El nesting y los
+      // derivadores ya incluyen su propio desperdicio; este porcentaje se
+      // aplica una sola vez, después de caras y multiplicadores.
+      cantidad = aplicarMermaAdicional(cantidad, slot.mermaAdicionalPct);
+
       const unidadConsumo = unidadEfectivaDeFormula(
         slot.formula,
         materialResuelto.unidadStock,
@@ -5421,7 +5477,9 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
+          | 'HARDCODED'
+          | 'COMERCIAL_ELIGE'
+          | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -6930,16 +6988,19 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -7042,14 +7103,16 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              Record<string, unknown> | undefined;
+              | Record<string, unknown>
+              | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -8246,7 +8309,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -8306,7 +8371,8 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        Array<{ codigo: string; monto: number }> | undefined;
+        | Array<{ codigo: string; monto: number }>
+        | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');
@@ -9038,6 +9104,7 @@ export class MotorUniversalService {
             s.cantidadFactor === null || s.cantidadFactor === undefined
               ? null
               : Number(s.cantidadFactor),
+          mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),
           cantidadBase: s.cantidadBase,
           fuenteMedida: s.fuenteMedida,
           aplicaMultiCaras: s.aplicaMultiCaras,
@@ -9854,6 +9921,7 @@ export class MotorUniversalService {
           formula: s.formula ?? '',
           cantidadFactor:
             s.cantidadFactor === undefined ? null : s.cantidadFactor,
+          mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),
           cantidadBase: s.cantidadBase ?? null,
           fuenteMedida: s.fuenteMedida ?? null,
           aplicaMultiCaras: s.aplicaMultiCaras ?? false,

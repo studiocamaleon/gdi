@@ -431,6 +431,21 @@ enum EstadoRevisionArchivo {
   OBSOLETA
 }
 
+enum EstadoProductoRecetaRevision {
+  BORRADOR
+  PUBLICADA
+  DEPRECADA
+}
+
+enum TipoProductoRecetaComponente {
+  FABRICADO
+}
+
+enum PoliticaEjecucionRecetaComponente {
+  INLINE
+  INDEPENDIENTE
+}
+
 enum TipoAprobacionDocumento {
   CLIENTE
   DISENO
@@ -734,6 +749,12 @@ model Tenant {
   cargosDirectosCatalogo                           CargoDirectoCatalogo[]
   productoCargosDirectosPaso                       ProductoCargoDirectoPaso[]
   productoCargosDirectosCotizacion                 ProductoCargoDirectoCotizacion[]
+  productoRecetas                                  ProductoReceta[]
+  productoRecetaRevisiones                         ProductoRecetaRevision[]
+  productoRecetaMateriales                         ProductoRecetaMaterial[]
+  productoRecetaRecursos                           ProductoRecetaRecurso[]
+  productoRecetaComponentes                        ProductoRecetaComponente[]
+  productoRecetaDocumentos                         ProductoRecetaDocumento[]
   cotizacionesV2                                   Cotizacion[]
   cotizacionesV2Items                              CotizacionItem[]
   cotizacionContadores                             CotizacionContador[]
@@ -2622,6 +2643,8 @@ model Producto {
   comisionesAplicadas       ProductoComisionAplicada[]
   cotizacionItems           CotizacionItem[]
   archivos                  Archivo[]
+  recetas                   ProductoReceta[]                  @relation("ProductoRecetaProducto")
+  componenteEnRecetas       ProductoRecetaComponente[]        @relation("ProductoRecetaComponenteProducto")
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])
@@ -2629,30 +2652,214 @@ model Producto {
 }
 
 model ProductoRutaAlternativa {
-  id                     String               @id @default(uuid()) @db.Uuid
-  tenantId               String               @db.Uuid
-  productoId             String               @db.Uuid
-  rutaId                 String               @db.Uuid
+  id                     String                   @id @default(uuid()) @db.Uuid
+  tenantId               String                   @db.Uuid
+  productoId             String                   @db.Uuid
+  rutaId                 String                   @db.Uuid
   /// Versión específica de la ruta a la que apunta este producto.
   rutaVersion            Int
   /// Nombre humano de la alternativa (ej: "Vía láser", "Vía offset").
   nombre                 String
-  esPreferida            Boolean              @default(false)
+  esPreferida            Boolean                  @default(false)
   /// JsonLogic opcional para auto-selección por motor según JobContext.
   reglaAutoSeleccionJson Json?
-  orden                  Int                  @default(0)
-  activo                 Boolean              @default(true)
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-  tenant                 Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  producto               Producto             @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  ruta                   Ruta                 @relation(fields: [rutaId], references: [id])
+  orden                  Int                      @default(0)
+  activo                 Boolean                  @default(true)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  tenant                 Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  producto               Producto                 @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  ruta                   Ruta                     @relation(fields: [rutaId], references: [id])
   configPasos            ProductoConfigPaso[]
   pasosExtras            ProductoPasoExtra[]
+  recetaRevisiones       ProductoRecetaRevision[]
+  recetas                ProductoReceta[]
 
   @@index([tenantId, productoId, activo])
   @@index([tenantId, productoId, rutaId])
   @@index([rutaId])
+}
+
+/// Raíz estable de la receta industrial de un producto. La configuración viva
+/// sigue en rutas/pasos; esta entidad gobierna sus revisiones publicables.
+model ProductoReceta {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @db.Uuid
+  productoId          String   @db.Uuid
+  rutaAlternativaId   String   @db.Uuid
+  codigo              String   @db.VarChar(80)
+  nombre              String   @db.VarChar(180)
+  descripcion         String?  @db.VarChar(1500)
+  revisionPublicadaId String?  @unique @db.Uuid
+  activo              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  producto          Producto                 @relation("ProductoRecetaProducto", fields: [productoId], references: [id], onDelete: Cascade)
+  rutaAlternativa   ProductoRutaAlternativa  @relation(fields: [rutaAlternativaId], references: [id], onDelete: Restrict)
+  revisiones        ProductoRecetaRevision[] @relation("ProductoRecetaRevisiones")
+  revisionPublicada ProductoRecetaRevision?  @relation("ProductoRecetaRevisionPublicada", fields: [revisionPublicadaId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, codigo])
+  @@unique([tenantId, productoId, rutaAlternativaId])
+  @@index([tenantId, activo])
+}
+
+/// Revisión inmutable desde que se publica. `snapshotJson` conserva el agregado
+/// canónico; las líneas hijas son proyecciones relacionales consultables.
+model ProductoRecetaRevision {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  tenantId            String                       @db.Uuid
+  recetaId            String                       @db.Uuid
+  numero              Int
+  estado              EstadoProductoRecetaRevision @default(BORRADOR)
+  rutaAlternativaId   String                       @db.Uuid
+  rutaVersion         Int
+  huellaConfiguracion String                       @db.VarChar(64)
+  snapshotJson        Json
+  cambios             String?                      @db.VarChar(1500)
+  creadaPorId         String?                      @db.Uuid
+  creadaPorNombre     String                       @db.VarChar(200)
+  publicadaPorId      String?                      @db.Uuid
+  publicadaPorNombre  String?                      @db.VarChar(200)
+  publicadaEl         DateTime?
+  deprecadaPorId      String?                      @db.Uuid
+  deprecadaPorNombre  String?                      @db.VarChar(200)
+  deprecadaEl         DateTime?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+
+  tenant            Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  receta            ProductoReceta             @relation("ProductoRecetaRevisiones", fields: [recetaId], references: [id], onDelete: Cascade)
+  publicadaEn       ProductoReceta?            @relation("ProductoRecetaRevisionPublicada")
+  rutaAlternativa   ProductoRutaAlternativa    @relation(fields: [rutaAlternativaId], references: [id], onDelete: Restrict)
+  materiales        ProductoRecetaMaterial[]
+  recursos          ProductoRecetaRecurso[]
+  componentes       ProductoRecetaComponente[]
+  documentos        ProductoRecetaDocumento[]
+  cotizacionItems   CotizacionItem[]
+  ordenTrabajoItems OrdenTrabajoItem[]
+
+  @@unique([recetaId, numero])
+  @@index([tenantId, estado, createdAt])
+  @@index([tenantId, rutaAlternativaId, estado])
+}
+
+/// BOM de materiales consolidada desde los slots de la configuración.
+model ProductoRecetaMaterial {
+  id                    String              @id @default(uuid()) @db.Uuid
+  tenantId              String              @db.Uuid
+  revisionId            String              @db.Uuid
+  pasoClave             String              @db.VarChar(120)
+  pasoNombre            String              @db.VarChar(180)
+  slotCodigo            String              @db.VarChar(100)
+  slotNombre            String?             @db.VarChar(180)
+  rol                   String?             @db.VarChar(30)
+  modoSeleccion         String              @db.VarChar(40)
+  materialVarianteId    String?             @db.Uuid
+  materialSku           String?             @db.VarChar(120)
+  materialNombre        String?             @db.VarChar(220)
+  unidad                UnidadMateriaPrima?
+  formula               String              @db.VarChar(60)
+  cantidadBase          String?             @db.VarChar(80)
+  cantidadFactor        Decimal?            @db.Decimal(14, 6)
+  fuenteMedida          String?             @db.VarChar(120)
+  mermaAdicionalPct     Decimal             @default(0) @db.Decimal(7, 3)
+  aplicaMultiCaras      Boolean             @default(false)
+  seleccionSnapshotJson Json?
+  orden                 Int                 @default(0)
+  createdAt             DateTime            @default(now())
+
+  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revision ProductoRecetaRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@unique([revisionId, pasoClave, slotCodigo])
+  @@index([tenantId, revisionId, rol])
+  @@index([tenantId, materialVarianteId])
+}
+
+/// Recursos productivos declarados por nodo. Los nombres quedan congelados en
+/// la revisión aun si luego cambia el catálogo operativo.
+model ProductoRecetaRecurso {
+  id                        String   @id @default(uuid()) @db.Uuid
+  tenantId                  String   @db.Uuid
+  revisionId                String   @db.Uuid
+  pasoClave                 String   @db.VarChar(120)
+  pasoNombre                String   @db.VarChar(180)
+  familiaCodigo             String   @db.VarChar(120)
+  maquinaId                 String?  @db.Uuid
+  maquinaCodigo             String?  @db.VarChar(100)
+  maquinaNombre             String?  @db.VarChar(180)
+  perfilId                  String?  @db.Uuid
+  perfilNombre              String?  @db.VarChar(180)
+  centroCostoId             String?  @db.Uuid
+  centroCostoCodigo         String?  @db.VarChar(100)
+  centroCostoNombre         String?  @db.VarChar(180)
+  dotacionOperarios         Int      @default(1)
+  tercerizado               Boolean  @default(false)
+  proveedorId               String?  @db.Uuid
+  proveedorNombre           String?  @db.VarChar(220)
+  configuracionSnapshotJson Json?
+  orden                     Int      @default(0)
+  createdAt                 DateTime @default(now())
+
+  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revision ProductoRecetaRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@unique([revisionId, pasoClave])
+  @@index([tenantId, revisionId])
+  @@index([tenantId, maquinaId])
+}
+
+/// Componente fabricado con identidad productiva propia. Los componentes
+/// comprados simples permanecen como materiales con rol COMPONENTE.
+model ProductoRecetaComponente {
+  id                   String                            @id @default(uuid()) @db.Uuid
+  tenantId             String                            @db.Uuid
+  revisionId           String                            @db.Uuid
+  productoComponenteId String                            @db.Uuid
+  codigo               String                            @db.VarChar(100)
+  nombre               String                            @db.VarChar(180)
+  tipo                 TipoProductoRecetaComponente      @default(FABRICADO)
+  politicaEjecucion    PoliticaEjecucionRecetaComponente @default(INDEPENDIENTE)
+  formula              String                            @default("por_unidad") @db.VarChar(60)
+  cantidad             Decimal                           @default(1) @db.Decimal(14, 6)
+  unidad               String                            @default("unidad") @db.VarChar(40)
+  requerido            Boolean                           @default(true)
+  orden                Int                               @default(0)
+  createdAt            DateTime                          @default(now())
+
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revision           ProductoRecetaRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  productoComponente Producto               @relation("ProductoRecetaComponenteProducto", fields: [productoComponenteId], references: [id], onDelete: Restrict)
+
+  @@unique([revisionId, codigo])
+  @@index([tenantId, productoComponenteId])
+}
+
+/// Requisito documental de plantilla. El ArchivoMaestro concreto se resuelve
+/// al aplicar la receta en una campaña/OT.
+model ProductoRecetaDocumento {
+  id             String                   @id @default(uuid()) @db.Uuid
+  tenantId       String                   @db.Uuid
+  revisionId     String                   @db.Uuid
+  pasoClave      String?                  @db.VarChar(120)
+  codigo         String                   @db.VarChar(100)
+  nombre         String                   @db.VarChar(180)
+  proposito      PropositoArchivoMaestro
+  etapa          EtapaDesarrolloDocumento
+  tipoAprobacion TipoAprobacionDocumento?
+  requerido      Boolean                  @default(true)
+  descripcion    String?                  @db.VarChar(1000)
+  orden          Int                      @default(0)
+  createdAt      DateTime                 @default(now())
+
+  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revision ProductoRecetaRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@unique([revisionId, codigo])
+  @@index([tenantId, revisionId, requerido])
 }
 
 /// Configuración del producto para un paso específico de una ruta alternativa.
@@ -2790,6 +2997,9 @@ model ProductoConfigPasoSlotMaterial {
   formula               String                                    @default("por_unidad_productiva")
   /// Multiplicador de consumo para componentes/accesorios adicionales.
   cantidadFactor        Decimal?                                  @default(1) @db.Decimal(12, 4)
+  /// Pérdida adicional explícita del taller. No reemplaza ni duplica la merma
+  /// ya incluida por nesting/geometría. Se aplica una vez antes del costeo.
+  mermaAdicionalPct     Decimal                                   @default(0) @db.Decimal(7, 3)
   /// Base operativa para aplicar cantidadFactor.
   cantidadBase          String?
   /// Fuente de medida del consumo de ESTE slot (override por-material del
@@ -3244,30 +3454,35 @@ model ConfiguracionPresupuestos {
 }
 
 model CotizacionItem {
-  id                                String             @id @default(uuid()) @db.Uuid
-  tenantId                          String             @db.Uuid
-  cotizacionId                      String             @db.Uuid
-  productoId                        String             @db.Uuid
-  rutaAlternativaId                 String?            @db.Uuid
-  cantidad                          Decimal            @db.Decimal(14, 2)
+  id                                String                  @id @default(uuid()) @db.Uuid
+  tenantId                          String                  @db.Uuid
+  cotizacionId                      String                  @db.Uuid
+  productoId                        String                  @db.Uuid
+  rutaAlternativaId                 String?                 @db.Uuid
+  /// Revisión de receta publicada usada para este cálculo. Null conserva el
+  /// flujo legacy de productos todavía no adoptados por Fase 3.
+  recetaRevisionId                  String?                 @db.Uuid
+  recetaVersion                     Int?
+  recetaHuella                      String?                 @db.VarChar(64)
+  cantidad                          Decimal                 @db.Decimal(14, 2)
   /// Inputs del comercial al cotizar (ya normalizados).
   jobContextJson                    Json
   /// Snapshot completo: ruta + producto + materiales + valores + cargos (sub-tema 07 §7).
   snapshotJson                      Json
-  costoUnitario                     Decimal?           @db.Decimal(14, 2)
-  costoTotal                        Decimal?           @db.Decimal(14, 2)
+  costoUnitario                     Decimal?                @db.Decimal(14, 2)
+  costoTotal                        Decimal?                @db.Decimal(14, 2)
   /// Neto fiscal exacto que resolvió el motor. La OT usa estos importes como
   /// fuente de verdad; `precioTotal` es el bruto cobrado.
-  precioNetoUnitario                Decimal?           @db.Decimal(14, 2)
-  precioNetoTotal                   Decimal?           @db.Decimal(14, 2)
-  impuestosPorFueraTotal            Decimal?           @db.Decimal(14, 2)
-  precioUnitario                    Decimal?           @db.Decimal(14, 2)
-  precioTotal                       Decimal?           @db.Decimal(14, 2)
+  precioNetoUnitario                Decimal?                @db.Decimal(14, 2)
+  precioNetoTotal                   Decimal?                @db.Decimal(14, 2)
+  impuestosPorFueraTotal            Decimal?                @db.Decimal(14, 2)
+  precioUnitario                    Decimal?                @db.Decimal(14, 2)
+  precioTotal                       Decimal?                @db.Decimal(14, 2)
   /// Descuento comercial de la línea (sobre el neto). El efecto ya está en
   /// precioUnitario/precioTotal y los snapshots; esto es la traza para editar.
   descuentoTipo                     String?
-  descuentoValor                    Decimal?           @db.Decimal(14, 2)
-  descuentoMonto                    Decimal?           @db.Decimal(14, 2)
+  descuentoValor                    Decimal?                @db.Decimal(14, 2)
+  descuentoMonto                    Decimal?                @db.Decimal(14, 2)
   /// Trazabilidad por bucket (a-g del molde).
   trazabilidadJson                  Json?
   /// === Snapshots inmutables del Tab Precio al momento de cotizar (Sprint 5.a) ===
@@ -3283,15 +3498,17 @@ model CotizacionItem {
   /// Si aplicó override por cliente: copia de ProductoPrecioEspecialClienteV2.configJson
   /// + metadata { precioEspecialId, clienteId, descripcion }. Null si se usó precio standard.
   precioEspecialClienteSnapshotJson Json?
-  createdAt                         DateTime           @default(now())
-  updatedAt                         DateTime           @updatedAt
-  tenant                            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cotizacion                        Cotizacion         @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-  producto                          Producto           @relation(fields: [productoId], references: [id])
+  createdAt                         DateTime                @default(now())
+  updatedAt                         DateTime                @updatedAt
+  tenant                            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cotizacion                        Cotizacion              @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  producto                          Producto                @relation(fields: [productoId], references: [id])
+  recetaRevision                    ProductoRecetaRevision? @relation(fields: [recetaRevisionId], references: [id], onDelete: SetNull)
   ordenTrabajoItems                 OrdenTrabajoItem[]
 
   @@index([tenantId, cotizacionId])
   @@index([tenantId, productoId])
+  @@index([tenantId, recetaRevisionId])
 }
 
 // === ÓRDENES DE TRABAJO ===
@@ -3441,6 +3658,10 @@ model OrdenTrabajoItem {
   /// secciones futuras de Costos/Producción por item leen de ahí.
   /// Null = OT manual/histórica sin cotización.
   cotizacionItemId          String?                      @db.Uuid
+  recetaRevisionId          String?                      @db.Uuid
+  recetaVersion             Int?
+  recetaHuella              String?                      @db.VarChar(64)
+  recetaSnapshotJson        Json?
   codigo                    String
   nombre                    String
   /// Etiqueta corta legada (subcategoría). Preferir los dos campos de abajo.
@@ -3494,12 +3715,14 @@ model OrdenTrabajoItem {
   tenant                    Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   orden                     OrdenTrabajo                 @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   cotizacionItem            CotizacionItem?              @relation(fields: [cotizacionItemId], references: [id])
+  recetaRevision            ProductoRecetaRevision?      @relation(fields: [recetaRevisionId], references: [id], onDelete: SetNull)
   pasos                     OrdenTrabajoItemPaso[]
   etaPromesas               EtaPromesa[]
   archivos                  Archivo[]
   revisionesRecorrido       RecorridoVectorialRevision[]
 
   @@index([tenantId, ordenId])
+  @@index([tenantId, recetaRevisionId])
   @@index([ordenId, entregadoEl])
 }
 
