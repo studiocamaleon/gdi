@@ -1,6 +1,9 @@
 .page {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
   min-height: 100%;
-  padding: 28px clamp(18px, 4vw, 56px) 48px;
+  padding: 28px clamp(20px, 2.6vw, 48px) 48px;
   background: #f5f3f0;
   color: #1b191d;
 }
@@ -75,12 +78,21 @@
   background: #fff;
   font-weight: 700;
 }
-.panelHead button {
+.panelHead .addButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
   color: #d94b28;
+  white-space: nowrap;
+  cursor: pointer;
 }
-.panelHead button svg {
+.panelHead .addButton svg {
+  flex: 0 0 auto;
   width: 16px;
-  vertical-align: -3px;
+  height: 16px;
 }
 
 .empty {
@@ -93,12 +105,11 @@
 }
 .row {
   display: grid;
-  grid-template-columns: 42px minmax(220px, 1.5fr) minmax(180px, 0.8fr) minmax(
-      140px,
-      0.6fr
-    ) 44px;
-  gap: 12px;
-  align-items: end;
+  grid-template-columns:
+    42px minmax(280px, 1.8fr) minmax(220px, 0.9fr) 150px
+    42px;
+  gap: 14px;
+  align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid #eee9e5;
 }
@@ -130,27 +141,69 @@
   font: 500 14px inherit;
 }
 .required {
-  align-self: center !important;
-  display: flex !important;
-  grid-auto-flow: column;
-  justify-content: start;
+  align-self: end;
+  display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #625c61;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
 }
-.required input {
-  width: 18px;
-  height: 18px;
+.required:hover {
+  border-color: #e7ded8;
+  background: #faf8f6;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border: 1px solid #cfc7c1;
+  border-radius: 6px;
+  color: #fff;
+  background: #fff;
+}
+.required[aria-pressed="true"] .check {
+  border-color: #ee5b35;
+  background: #ee5b35;
+}
+.check svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.7;
 }
 .remove {
-  align-self: center;
+  align-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 40px;
   height: 40px;
+  padding: 0;
   border: 1px solid #f0c8bd;
   border-radius: 9px;
   color: #db4d2d;
   background: #fff7f4;
+  cursor: pointer;
+}
+.remove:hover {
+  border-color: #e69b88;
+  background: #fff0eb;
 }
 .remove svg {
   width: 16px;
+  height: 16px;
 }
 .footer {
   justify-content: flex-end;
@@ -172,6 +225,7 @@
   }
   .row {
     grid-template-columns: 30px 1fr 44px;
+    gap: 12px;
   }
   .row label {
     grid-column: 2;
@@ -182,5 +236,21 @@
   .remove {
     grid-column: 3;
     grid-row: 1;
+  }
+  .required {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .panelHead,
+  .footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .panelHead .addButton,
+  .footer button {
+    width: 100%;
   }
 }

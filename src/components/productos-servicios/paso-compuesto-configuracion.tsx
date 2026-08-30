@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { BoxesIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { BoxesIcon, CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import type {
   DefinicionOperacionCompuesta,
@@ -18,6 +18,14 @@ function slug(value: string) {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "")
     .slice(0, 80);
+}
+
+function siguienteCodigoOperacion(operaciones: DefinicionOperacionCompuesta[]) {
+  let numero = operaciones.length + 1;
+  while (operaciones.some((item) => item.codigo === `operacion_${numero}`)) {
+    numero += 1;
+  }
+  return `operacion_${numero}`;
 }
 
 export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
@@ -87,11 +95,12 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
           </div>
           <button
             type="button"
+            className={styles.addButton}
             onClick={() =>
               setOperaciones((current) => [
                 ...current,
                 {
-                  codigo: `operacion_${current.length + 1}`,
+                  codigo: siguienteCodigoOperacion(current),
                   nombre: "",
                   descripcion: null,
                   dimension: "CANTIDAD",
@@ -101,7 +110,8 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
               ])
             }
           >
-            <PlusIcon /> Agregar operación
+            <PlusIcon />
+            <span>Agregar operación</span>
           </button>
         </div>
         {!operaciones.length ? (
@@ -112,7 +122,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
         ) : (
           <div className={styles.rows}>
             {operaciones.map((operacion, index) => (
-              <div className={styles.row} key={`${operacion.codigo}-${index}`}>
+              <div className={styles.row} key={operacion.codigo}>
                 <span className={styles.index}>
                   {String(index + 1).padStart(2, "0")}
                 </span>
@@ -124,7 +134,6 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                     onChange={(event) =>
                       cambiar(index, {
                         nombre: event.target.value,
-                        codigo: slug(event.target.value) || operacion.codigo,
                       })
                     }
                   />
@@ -147,16 +156,19 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                     <option value="SUPERFICIE">Superficie</option>
                   </select>
                 </label>
-                <label className={styles.required}>
-                  <input
-                    type="checkbox"
-                    checked={operacion.requerida}
-                    onChange={(event) =>
-                      cambiar(index, { requerida: event.target.checked })
-                    }
-                  />
-                  Obligatoria
-                </label>
+                <button
+                  type="button"
+                  className={styles.required}
+                  aria-pressed={operacion.requerida}
+                  onClick={() =>
+                    cambiar(index, { requerida: !operacion.requerida })
+                  }
+                >
+                  <span className={styles.check} aria-hidden="true">
+                    {operacion.requerida ? <CheckIcon /> : null}
+                  </span>
+                  <span>Obligatoria</span>
+                </button>
                 <button
                   type="button"
                   className={styles.remove}
