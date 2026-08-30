@@ -149,3 +149,9 @@ Verificaciones automatizadas:
 - `css-guard` continúa señalando diez clases globales preexistentes en `globals.css`; la Fase 2 no modifica ese archivo y todos sus estilos nuevos son CSS Modules.
 
 La fase queda lista para la validación funcional del usuario. No se marca `COMPLETA` ni se integra en `visual-ilusion/analisis` hasta recibir esa conformidad.
+
+## 11. Hallazgo de validación: frescura entre sesiones
+
+Durante la validación funcional se confirmó que Campañas conserva el snapshot con el que se abrió la página: el avance de una OT o una decisión externa realizada desde otra sesión sólo aparece al recargar. No es un defecto exclusivo del control documental; el sistema tiene polling puntual en Tablero, tracking y presupuestos, pero carece de un canal transversal y de una bandeja interna.
+
+La solución se asignó explícitamente a la nueva **Fase 2.5 — Eventos en tiempo real y bandeja de notificaciones internas** del Plan Maestro. Esa fase queda recomendada antes de Fase 3 y cubre SSE autenticado, fallback por polling, invalidación selectiva de Campaña/OT y campana global de no leídas por usuario/rol. La cola de WhatsApp existente permanece separada.

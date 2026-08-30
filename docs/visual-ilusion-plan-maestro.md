@@ -128,6 +128,10 @@ Cada fase requiere persistencia, reglas de negocio, permisos, auditoría, API, U
 
 Toda interfaz nueva debe aplicar el contrato `docs/visual-ilusion-lenguaje-visual.md`. Las superficies ejecutivas y de gestión toman como referencia Tesorería; las superficies densas, productivas o de piso toman como referencia la Orden de Trabajo. Los componentes shadcn pueden utilizarse como infraestructura de interacción y accesibilidad, pero nunca como estética predeterminada: cada módulo tendrá composición, jerarquía y estilos propios de Grafoprint mediante CSS Modules. La revisión visual contra esas referencias forma parte del criterio de cierre de cada fase.
 
+### P12. Frescura operativa y notificaciones son infraestructura transversal
+
+Una vista operacional abierta no puede exigir recarga manual para conocer una aprobación, un avance productivo o un bloqueo ocurrido en otra sesión. Los eventos de negocio se persistirán una sola vez y servirán para invalidar vistas y generar notificaciones internas dirigidas. El tiempo real no reemplaza la fuente relacional ni la auditoría: avisa que algo cambió y cada pantalla reconsulta la proyección autorizada correspondiente.
+
 ---
 
 ## 4. Modelo conceptual objetivo
@@ -188,6 +192,7 @@ Cada fase nace desde la rama integradora actualizada:
 visual-ilusion/analisis
   ├── visual-ilusion/fase-1-campanas
   ├── visual-ilusion/fase-2-arte-aprobaciones
+  ├── visual-ilusion/fase-2-5-tiempo-real-notificaciones
   ├── visual-ilusion/fase-3-recetas-bom
   └── ...
 ```
@@ -420,10 +425,89 @@ Los `Archivo` existentes siguen siendo adjuntos. La migración al modelo maestro
 
 ---
 
+## Fase 2.5 — Eventos en tiempo real y bandeja de notificaciones internas
+
+**Estado inicial:** PENDIENTE
+
+**Dependencias:** Fases 1–2.
+
+**Orden recomendado:** ejecutar antes de Fase 3 para que las fases siguientes publiquen eventos sobre un contrato único.
+
+### Problema que resuelve
+
+Campañas y otras fichas cargan hoy un snapshot inicial: si otra persona avanza una OT o un cliente decide una aprobación, la pantalla abierta no cambia hasta recargarla. Algunos módulos —Tablero, tracking, presupuestos— resuelven casos puntuales con polling de 10–15 segundos, pero no existe una infraestructura común. Las tablas `NotificacionEvento` y `NotificacionWhatsapp` actuales pertenecen exclusivamente al envío externo por WhatsApp y no deben reutilizarse como inbox interno.
+
+### Objetivo de negocio
+
+Que cada usuario vea cambios pertinentes sin recargar y reciba, junto a “Cerrar sesión”, una bandeja persistente de novedades no leídas según sus responsabilidades y permisos. La capacidad será reutilizable por todo Grafoprint, no exclusiva de Shopper ni de Campañas.
+
+### Arquitectura objetivo
+
+- **Evento de dominio / outbox transaccional:** registro append-only, tenant-safe e idempotente del hecho ocurrido, creado en la misma transacción que el cambio de negocio. Incluye tipo, entidad, actor, fecha, correlación y payload mínimo no sensible.
+- **Notificación interna por destinatario:** fila persistente por usuario con estado no leída/leída/archivada, severidad, título, resumen y deep-link autorizado. Los destinatarios se resuelven por asignación explícita, responsable/equipo, rol y permiso según cada tipo de evento.
+- **Entrega en vivo:** Server-Sent Events autenticados como canal principal, porque el sistema necesita comunicación unidireccional servidor → navegador. Debe soportar heartbeat, reconexión, `Last-Event-ID`, replay acotado y paso correcto por el BFF de Next sin bufferizar el stream.
+- **Degradación segura:** si SSE no está disponible, polling incremental con cursor, sólo con la pestaña visible y al recuperar foco. La operación nunca depende de que el canal en vivo esté conectado.
+- **Invalidación selectiva:** el evento transporta identificadores/tópicos de invalidación; Campaña, OT, Tablero u otra vista reconsulta sólo su proyección autorizada. No se envían datasets completos por el stream ni se pisan formularios/modales con cambios sin guardar.
+- **Proveedor global de UI:** una única conexión por sesión de dashboard mantiene el contador, la bandeja y distribuye invalidaciones a las vistas abiertas.
+
+### Alcance obligatorio
+
+- Modelos relacionales de evento durable, notificación por usuario y cursor/lectura cuando corresponda.
+- Catálogo tipado y versionable de eventos internos, separado del catálogo de WhatsApp.
+- Productor transaccional y materialización idempotente de destinatarios; un fallo de entrega no revierte el cambio de negocio.
+- Endpoint incremental de eventos/notificaciones y stream SSE autenticado.
+- Adaptación del BFF para streaming, desconexión y cancelación correctos.
+- Campana abierta actualizada automáticamente ante cambios de OT, hitos, vínculos y aprobaciones documentales.
+- OT, Tablero y documentación liberada sincronizados sin recarga manual.
+- Campana de notificaciones al lado de “Cerrar sesión”, badge de no leídas y panel con: recientes, tipo, fecha, contexto, deep-link, marcar una/todas como leídas y estado vacío/error/desconectado.
+- Destinatarios iniciales:
+  - solicitud/decisión/liberación documental → solicitante, asignado, responsable y equipo pertinente;
+  - bloqueo, inicio, avance y finalización de OT → responsables comerciales/productivos pertinentes;
+  - hitos vencidos/completados y cambios relevantes de campaña → responsable/equipo;
+  - eventos de fases futuras → deben registrar aquí su política al implementarse.
+- Preferencias mínimas por familia sólo si el relevamiento confirma que un evento es informativo y silenciable; eventos críticos de seguridad/operación no pueden ocultarse por defecto.
+- Paginación, retención, deduplicación, métricas de conexión/entrega y limpieza programada documentadas.
+- Compatibilidad con una o varias instancias de API. El diseño no puede depender de memoria local del proceso; podrá usar PostgreSQL para durabilidad/señalización y dejar Redis como evolución medida, no como requisito prematuro.
+
+### Lenguaje visual
+
+- Botón global discreto y contador inspirado en la densidad de la cabecera de Tesorería, ubicado inmediatamente antes de “Cerrar sesión”.
+- Panel de lectura ejecutiva con jerarquía Grafoprint; eventos productivos conservan códigos, estados y acentos técnicos de la OT.
+- No se presenta como un dropdown shadcn genérico. Desktop, tablet y mobile deben conservar contador, navegación y acciones de lectura.
+
+### Invariantes
+
+- Si la transacción de negocio hace rollback, no existe evento; si confirma, el evento durable no se pierde.
+- La entrega es al menos una vez y el consumo es idempotente: reconectar no duplica notificaciones ni efectos visuales.
+- Una notificación pertenece a un tenant y a un usuario concreto; cambiar roles después no permite leer retrospectivamente contenido no autorizado.
+- El stream nunca contiene importes, archivos o datos personales que el destinatario no pueda consultar por el endpoint de destino.
+- Marcar como leída es por usuario y no modifica la auditoría ni el timeline de negocio.
+- El badge y el stream son señales de frescura, no nuevas fuentes de verdad.
+- WhatsApp, email u otros canales podrán consumir los mismos eventos en el futuro, pero conservan colas, consentimiento y políticas de envío independientes.
+
+### Criterios de salida
+
+- Con dos sesiones simultáneas, avanzar una OT en una actualiza su Campaña/OT abierta en la otra sin recargar.
+- Una aprobación externa actualiza la revisión y genera la notificación pertinente en sesiones conectadas.
+- Con SSE sano, el cambio visible llega dentro de un objetivo inicial de 3 segundos; al cortar el stream, la reconexión o fallback lo recupera sin pérdida.
+- Cerrar/reabrir sesión conserva no leídas; marcar una o todas funciona y no afecta a otro usuario.
+- Un usuario no asignado o sin permiso no recibe ni puede consultar la notificación o entidad.
+- Reconexión, doble entrega, dos instancias de API y dos pestañas no duplican filas ni contadores.
+- Campaña, Tablero, tracking y presupuesto conservan su comportamiento anterior durante degradación.
+- Pruebas de aislamiento tenant, autorización, replay, idempotencia, performance y QA visual responsive aprobadas.
+
+### Fuera de alcance, con destino
+
+- Push del sistema operativo y aplicación móvil nativa: evaluar después del piloto.
+- Email como canal: integrar sólo con proveedor y consentimiento definidos.
+- Automatizaciones configurables por usuarios finales: fase posterior al catálogo estable.
+
+---
+
 ## Fase 3 — Receta productiva y BOM versionada
 
 **Estado inicial:** PENDIENTE  
-**Dependencias:** Fase 2 para archivos/aprobaciones reutilizables.
+**Dependencias:** Fase 2 para archivos/aprobaciones reutilizables y Fase 2.5 para eventos/notificaciones transversales.
 
 ### Objetivo de negocio
 
@@ -960,14 +1044,15 @@ Convertir el conjunto de módulos en un producto operable, medible y desplegable
 F0 Gobierno
  └─ F1 Campañas
      ├─ F2 Arte y aprobaciones
-     │   └─ F3 Recetas/BOM
-     │       └─ F4 DAG y gates
-     │           ├─ F5 Nesting/corte
-     │           └─ F6 Lotes/parcialidad
-     │               ├─ F7 Calidad/reproceso
-     │               ├─ F8 Variantes
-     │               └─ F9 Reservas/inventario
-     │                   └─ F10 Compras/tercerización
+     │   └─ F2.5 Tiempo real/notificaciones
+     │       └─ F3 Recetas/BOM
+     │           └─ F4 DAG y gates
+     │               ├─ F5 Nesting/corte
+     │               └─ F6 Lotes/parcialidad
+     │                   ├─ F7 Calidad/reproceso
+     │                   ├─ F8 Variantes
+     │                   └─ F9 Reservas/inventario
+     │                       └─ F10 Compras/tercerización
      └─────────────────────────┐
 F4 + F6 + F9 + F10 ───────────┴─ F11 Planificación
 F1 + F6 + F8 + F9 ────────────── F12 Kits/destinos
@@ -994,9 +1079,9 @@ Esta tabla es el control maestro contra pérdida de alcance.
 | 5 | Rutas dinámicas/condicionales | F3–F4 | F2 | Parcial hoy |
 | 6 | Rutas paralelas y convergencia | F4 | F11 | Pendiente |
 | 7 | Subproductos/componentes | F3–F4 | F6 | Pendiente |
-| 8 | Prototipos y muestras | F2 | F1 | Pendiente |
-| 9 | Versionado de archivos | F2 | F5 | Pendiente |
-| 10 | Aprobaciones | F2 | F4, F7, F10 | Parcial hoy |
+| 8 | Prototipos y muestras | F2 | F1 | Implementado; pendiente validación funcional |
+| 9 | Versionado de archivos | F2 | F5 | Implementado; pendiente validación funcional |
+| 10 | Aprobaciones | F2 | F4, F7, F10 | Implementado; se amplía en fases relacionadas |
 | 11 | Mesa de corte como centro | F5 | F11 | Parcial hoy |
 | 12 | Nesting como entidad | F5 | F9 | Parcial hoy |
 | 13 | Gestión de lotes | F6 | F13 | Pendiente |
@@ -1017,8 +1102,9 @@ Esta tabla es el control maestro contra pérdida de alcance.
 | 28 | Capacidad productiva | F11 | F4, F10 | Avanzado parcialmente |
 | 29 | Planificador visual/Gantt | F11 | F1 | Pendiente |
 | 30 | Fecha objetivo hacia atrás | F11 | F14, F15 | Pendiente |
+| 31 | Actualización en tiempo real y notificaciones internas por usuario/rol | F2.5 | Todas, F16 | Pendiente |
 
-> El archivo original se cortó dentro del requerimiento 30. Si se recibe contenido adicional, se agrega aquí antes de cerrar la fase afectada.
+> El archivo original se cortó dentro del requerimiento 30. El requerimiento 31 se agregó el 29/08/2026 a partir de la validación real de Campañas; si se recibe más contenido del informe original, se agrega aquí antes de cerrar la fase afectada.
 
 ---
 
@@ -1068,6 +1154,14 @@ Estos trabajos no forman una fase aislada; acompañan toda implementación.
 - paginación en históricos;
 - proyecciones livianas para tableros;
 - cálculos intensivos fuera del request si superan umbrales medidos.
+
+### Tiempo real y notificaciones internas
+
+- cada fase registra los eventos nuevos en el catálogo transversal y define destinatarios explícitos;
+- las vistas operativas declaran qué eventos invalidan sus proyecciones;
+- no abrir una conexión por widget: el dashboard comparte un único canal por sesión;
+- la falta de conexión se muestra y degrada a polling/foco sin bloquear comandos;
+- WhatsApp y la bandeja interna son canales diferentes aunque nazcan del mismo hecho de negocio.
 
 ### Accesibilidad y operación de piso
 
@@ -1158,6 +1252,7 @@ Cada fase tomará el subconjunto pertinente y agregará fixtures automatizados c
 | DM-006 | Kits/packing/multidestino forman vertical shopper | Cerrada | Reutilizan producción/inventario sin contaminar el flujo simple. |
 | DM-007 | Planificador visual es proyección del scheduler | Cerrada | Evita dos fuentes de verdad. |
 | DM-008 | Datos operativos centrales serán relacionales | Cerrada | Necesitan integridad, concurrencia, auditoría y reporting. |
+| DM-009 | SSE + outbox durable para frescura; inbox interno separado de WhatsApp | Cerrada | La comunicación es unidireccional, debe sobrevivir reconexiones/varias instancias y no puede mezclar permisos internos con consentimiento externo. |
 
 Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decisión se revoca, se conserva la fila y se añade la sucesora.
 
@@ -1171,7 +1266,8 @@ Esta tabla se actualizará al integrar cada fase.
 |---:|---|---|---|---|---|
 | 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
 | 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
-| 2 | DISEÑO | `visual-ilusion/fase-2-desarrollo-aprobaciones` | Diseño técnico en preparación | — | Activa |
+| 2 | VALIDACIÓN | `visual-ilusion/fase-2-desarrollo-aprobaciones` | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md` | `bf2df97a` | Validación técnica completa; pendiente conformidad funcional |
+| 2.5 | PENDIENTE | — | — | — | Tiempo real e inbox transversal; recomendado antes de F3 |
 | 3 | PENDIENTE | — | — | — | — |
 | 4 | PENDIENTE | — | — | — | — |
 | 5 | PENDIENTE | — | — | — | — |
