@@ -230,6 +230,11 @@ para toda la relación.
 - Los parámetros enumerados —material, modo de color, calidad u otros— usan
   siempre las opciones declaradas por el configurador del hijo; no se editan
   como texto libre.
+- El configurador muestra y solicita las unidades comerciales del sheet. Las
+  medidas se ingresan en centímetros aunque el contrato técnico se conserve en
+  milímetros: la interfaz convierte en ambos sentidos y muestra la unidad junto
+  al valor. En suma y resta la constante usa la unidad del dato padre; en
+  multiplicación y división es un factor sin unidad.
 - El resultado se valida contra el mismo esquema/configurador que usa el
   producto hijo cuando se cotiza directamente.
 - Cada nivel anidado conoce sólo su padre directo.

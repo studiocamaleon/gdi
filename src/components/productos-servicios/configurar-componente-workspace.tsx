@@ -9,6 +9,14 @@ import {
   type FormularioCotizacionProducto,
   type ProductoRecetaComponenteInput,
 } from "@/lib/productos-servicios-api";
+import {
+  operacionUsaUnidad,
+  unidadVisibleParametro,
+  valorInternoAVisible,
+  valorReglaInternoAVisible,
+  valorReglaVisibleAInterno,
+  valorVisibleAInterno,
+} from "@/lib/componentes-configuracion-unidades";
 import styles from "./configurar-componente-workspace.module.css";
 
 const ORIGENES: Array<{
@@ -99,7 +107,12 @@ function parametrosDelFormulario(
   return parametros;
 }
 
-type CampoPadre = { clave: string; etiqueta: string; numerico: boolean };
+type CampoPadre = {
+  clave: string;
+  etiqueta: string;
+  numerico: boolean;
+  unidad: string | null;
+};
 
 function normalizarCampoPadre(clave: string): string {
   return clave
@@ -116,6 +129,7 @@ function camposDelPadre(
       clave: "cantidad",
       etiqueta: "Cantidad del producto padre",
       numerico: true,
+      unidad: formulario.cantidad.unidad,
     },
   ];
   if (
@@ -127,11 +141,13 @@ function camposDelPadre(
         clave: "medidaCustomMm.anchoMm",
         etiqueta: "Ancho del producto padre",
         numerico: true,
+        unidad: "cm",
       },
       {
         clave: "medidaCustomMm.altoMm",
         etiqueta: "Alto del producto padre",
         numerico: true,
+        unidad: "cm",
       },
     );
   }
@@ -154,6 +170,7 @@ function camposDelPadre(
         "decimal",
         "tiempo_manual",
       ].includes(tipo),
+      unidad: typeof pregunta.unidad === "string" ? pregunta.unidad : null,
     });
   }
   return campos.filter(
@@ -206,6 +223,24 @@ function parseValor(value: string, tipo: string): unknown {
   if (value === "true") return true;
   if (value === "false") return false;
   return value;
+}
+
+function valorBindingVisible(binding: BindingParametroComponente): string {
+  const value = binding.valor;
+  if (typeof value === "number") {
+    return String(valorInternoAVisible(binding.clave, value));
+  }
+  return valorInput(value);
+}
+
+function parseValorBinding(
+  value: string,
+  binding: BindingParametroComponente,
+): unknown {
+  const parsed = parseValor(value, binding.tipoDato);
+  return typeof parsed === "number"
+    ? valorVisibleAInterno(binding.clave, parsed)
+    : parsed;
 }
 
 export function ConfigurarComponenteWorkspace({
@@ -333,7 +368,9 @@ export function ConfigurarComponenteWorkspace({
                       <strong>{binding.etiqueta}</strong>
                       <small>
                         {binding.clave}
-                        {binding.unidad ? ` · ${binding.unidad}` : ""}
+                        {unidadVisibleParametro(binding.clave, binding.unidad)
+                          ? ` · ${unidadVisibleParametro(binding.clave, binding.unidad)}`
+                          : ""}
                         {binding.requerido ? " · requerido" : ""}
                       </small>
                     </div>
@@ -409,16 +446,23 @@ export function ConfigurarComponenteWorkspace({
                           <select
                             aria-label={`Dato del padre para ${binding.etiqueta}`}
                             value={binding.regla?.campoPadre ?? ""}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const operador =
+                                binding.regla?.operador ?? "MULTIPLICAR";
                               cambiar(index, {
                                 regla: {
                                   campoPadre: event.target.value,
-                                  operador:
-                                    binding.regla?.operador ?? "MULTIPLICAR",
-                                  valor: binding.regla?.valor ?? 1,
+                                  operador,
+                                  valor: operacionUsaUnidad(operador)
+                                    ? valorReglaVisibleAInterno(
+                                        event.target.value,
+                                        operador,
+                                        1,
+                                      )
+                                    : 1,
                                 },
-                              })
-                            }
+                              });
+                            }}
                           >
                             <option value="">Elegir dato…</option>
                             {camposPadre
@@ -432,44 +476,75 @@ export function ConfigurarComponenteWorkspace({
                           <select
                             aria-label={`Operación para ${binding.etiqueta}`}
                             value={binding.regla?.operador ?? "MULTIPLICAR"}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const operador = event.target.value as Exclude<
+                                NonNullable<
+                                  BindingParametroComponente["regla"]
+                                >["operador"],
+                                "COPIAR"
+                              >;
+                              const campoPadre =
+                                binding.regla?.campoPadre ?? "cantidad";
                               cambiar(index, {
                                 regla: {
-                                  campoPadre:
-                                    binding.regla?.campoPadre ?? "cantidad",
-                                  operador: event.target.value as Exclude<
-                                    NonNullable<
-                                      BindingParametroComponente["regla"]
-                                    >["operador"],
-                                    "COPIAR"
-                                  >,
-                                  valor: binding.regla?.valor ?? 1,
+                                  campoPadre,
+                                  operador,
+                                  valor: operacionUsaUnidad(operador)
+                                    ? valorReglaVisibleAInterno(
+                                        campoPadre,
+                                        operador,
+                                        1,
+                                      )
+                                    : 1,
                                 },
-                              })
-                            }
+                              });
+                            }}
                           >
                             <option value="MULTIPLICAR">Multiplicar por</option>
                             <option value="RESTAR">Restar</option>
                             <option value="SUMAR">Sumar</option>
                             <option value="DIVIDIR">Dividir por</option>
                           </select>
-                          <input
-                            aria-label={`Valor de cálculo para ${binding.etiqueta}`}
-                            type="number"
-                            step="any"
-                            value={binding.regla?.valor ?? 1}
-                            onChange={(event) =>
-                              cambiar(index, {
-                                regla: {
-                                  campoPadre:
-                                    binding.regla?.campoPadre ?? "cantidad",
-                                  operador:
-                                    binding.regla?.operador ?? "MULTIPLICAR",
-                                  valor: Number(event.target.value),
-                                },
-                              })
-                            }
-                          />
+                          <label className={styles.numberWithUnit}>
+                            <input
+                              aria-label={`Valor de cálculo para ${binding.etiqueta}`}
+                              type="number"
+                              step="any"
+                              value={valorReglaInternoAVisible(
+                                binding.regla?.campoPadre ?? "cantidad",
+                                binding.regla?.operador ?? "MULTIPLICAR",
+                                binding.regla?.valor ?? 1,
+                              )}
+                              onChange={(event) => {
+                                const campoPadre =
+                                  binding.regla?.campoPadre ?? "cantidad";
+                                const operador =
+                                  binding.regla?.operador ?? "MULTIPLICAR";
+                                cambiar(index, {
+                                  regla: {
+                                    campoPadre,
+                                    operador,
+                                    valor: valorReglaVisibleAInterno(
+                                      campoPadre,
+                                      operador,
+                                      Number(event.target.value),
+                                    ),
+                                  },
+                                });
+                              }}
+                            />
+                            <span>
+                              {operacionUsaUnidad(
+                                binding.regla?.operador ?? "MULTIPLICAR",
+                              )
+                                ? (camposPadre.find(
+                                    (campo) =>
+                                      campo.clave ===
+                                      (binding.regla?.campoPadre ?? "cantidad"),
+                                  )?.unidad ?? "unidad")
+                                : "factor"}
+                            </span>
+                          </label>
                         </div>
                       ) : binding.origen === "COTIZACION" ? (
                         <span>Se solicitará en el sheet comercial</span>
@@ -488,22 +563,35 @@ export function ConfigurarComponenteWorkspace({
                           ))}
                         </select>
                       ) : (
-                        <input
-                          value={valorInput(binding.valor)}
-                          placeholder={
-                            binding.origen === "DEFAULT_HIJO"
-                              ? "Sin valor predeterminado"
-                              : "Ingresar valor"
-                          }
-                          onChange={(event) =>
-                            cambiar(index, {
-                              valor: parseValor(
-                                event.target.value,
-                                binding.tipoDato,
-                              ),
-                            })
-                          }
-                        />
+                        <label className={styles.numberWithUnit}>
+                          <input
+                            value={valorBindingVisible(binding)}
+                            placeholder={
+                              binding.origen === "DEFAULT_HIJO"
+                                ? "Sin valor predeterminado"
+                                : "Ingresar valor"
+                            }
+                            onChange={(event) =>
+                              cambiar(index, {
+                                valor: parseValorBinding(
+                                  event.target.value,
+                                  binding,
+                                ),
+                              })
+                            }
+                          />
+                          {unidadVisibleParametro(
+                            binding.clave,
+                            binding.unidad,
+                          ) ? (
+                            <span>
+                              {unidadVisibleParametro(
+                                binding.clave,
+                                binding.unidad,
+                              )}
+                            </span>
+                          ) : null}
+                        </label>
                       )}
                     </div>
                   </div>
@@ -511,7 +599,8 @@ export function ConfigurarComponenteWorkspace({
               </div>
               <p className={styles.hint}>
                 Las reglas sólo permiten usar datos publicados por el producto
-                padre. Las medidas y los ajustes se expresan en milímetros.
+                padre. Las medidas se ingresan en centímetros, igual que en el
+                sheet comercial; el sistema realiza la conversión interna.
               </p>
             </>
           ) : null}

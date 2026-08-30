@@ -160,7 +160,37 @@
 .ruleEditor {
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(150px, 1.4fr) minmax(125px, 1fr) 88px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(96px, 0.7fr);
+}
+.numberWithUnit {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 38px;
+  overflow: hidden;
+  border: 1px solid #dcd6d0;
+  border-radius: 8px;
+  background: #fff;
+}
+.numberWithUnit:focus-within {
+  border-color: #77716f;
+  box-shadow: 0 0 0 1px #77716f;
+}
+.numberWithUnit input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+}
+.numberWithUnit span {
+  flex: none;
+  padding-right: 10px;
+  color: #6f6966;
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .hint {
   color: #726d69;
