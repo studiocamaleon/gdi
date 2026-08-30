@@ -4707,7 +4707,7 @@ export function ConfigPasosEditorView({
             <Link
               href={
                 configuracionBase?.volverHref ??
-                `/productos-servicios/${producto.id}?tab=pasos&rutaAltId=${rutaAlternativa.id}`
+                `/productos-servicios/${producto.id}?tab=produccion&vista=operaciones&rutaAltId=${rutaAlternativa.id}`
               }
               className="back-link"
             >

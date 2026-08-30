@@ -427,7 +427,7 @@ Los `Archivo` existentes siguen siendo adjuntos. La migración al modelo maestro
 
 ## Fase 2.5 — Eventos en tiempo real y bandeja de notificaciones internas
 
-**Estado actual:** COMPLETA
+**Estado actual:** EN DESARROLLO — reabierta tras auditoría funcional
 
 **Rama:** `visual-ilusion/fase-2-5-tiempo-real-notificaciones`
 
@@ -1274,7 +1274,7 @@ Esta tabla se actualizará al integrar cada fase.
 | 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
 | 2 | COMPLETA | `visual-ilusion/fase-2-desarrollo-aprobaciones` | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md` | `bf2df97a`, `52538507` | Validación técnica y funcional aprobadas; integración en rama madre habilitada |
 | 2.5 | COMPLETA | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | `46316989` | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
-| 3 | COMPLETA | `visual-ilusion/fase-3-receta-bom` | `docs/visual-ilusion-fase-3-receta-bom-diseno.md` | `b68d0c79`, `2962bddd` | Recetas/BOM versionadas, documentos en OT, trazabilidad de cotización y regresión completa aprobadas |
+| 3 | EN DESARROLLO | `visual-ilusion/fase-3-receta-bom` | `docs/visual-ilusion-fase-3-receta-bom-diseno.md` | `b68d0c79`, `2962bddd`, auditoría funcional 2026-08-30 | Núcleo de versionado implementado; reabierta para unificar Producción y cerrar los criterios industriales faltantes |
 | 4 | PENDIENTE | — | — | — | — |
 | 5 | PENDIENTE | — | — | — | — |
 | 6 | PENDIENTE | — | — | — | — |

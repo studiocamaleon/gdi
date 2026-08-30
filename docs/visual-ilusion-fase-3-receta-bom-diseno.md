@@ -1,6 +1,6 @@
 # Fase 3 — Receta productiva y BOM versionada
 
-**Estado:** COMPLETA
+**Estado:** EN DESARROLLO — reabierta tras auditoría funcional
 **Rama:** `visual-ilusion/fase-3-receta-bom`  
 **Plan rector:** `docs/visual-ilusion-plan-maestro.md`  
 **Contrato visual:** `docs/visual-ilusion-lenguaje-visual.md`
@@ -182,8 +182,13 @@ se comunican por la Fase 2.5.
 
 ## 10. Contrato visual
 
-- La receta vive dentro del workspace actual del producto, no en un módulo
-  paralelo.
+- La ficha expone una sola pestaña principal llamada `Producción`; `Rutas`,
+  `Pasos` y `Receta / BOM` dejan de competir como pestañas hermanas.
+- Producción organiza el recorrido `Rutas y flujo → Pasos y recursos → BOM y
+  versiones`, conservando la vía seleccionada durante toda la navegación.
+- La configuración viva continúa en rutas/pasos y la versión publicada sigue
+  siendo su contrato inmutable, pero la interfaz explica y conecta ambas capas.
+- Las URLs históricas con `tab=rutas|pasos|receta` redirigen al nuevo recorrido.
 - Resumen, estado y revisiones siguen la jerarquía ejecutiva de Tesorería.
 - BOM, recursos, documentos y diagnósticos siguen la densidad técnica de OT.
 - La pantalla distingue “configuración actual”, “borrador” y “publicada”.
@@ -244,6 +249,11 @@ compatibles; los cambios sin publicar no se filtran; y las pruebas de costos,
 unidades, ciclos, snapshots, tenant, permisos y responsive están aprobadas.
 
 ## 16. Cierre de implementación y evidencia
+
+> Revisión del 30 de agosto de 2026: este cierre quedó revocado. La base de
+> versionado está implementada, pero la fase continúa abierta hasta completar
+> el workspace unificado de Producción y demostrar todos los recorridos de
+> aceptación con un caso industrial real.
 
 La implementación quedó cerrada el 30 de agosto de 2026 en los commits
 `b68d0c79` y `2962bddd`.

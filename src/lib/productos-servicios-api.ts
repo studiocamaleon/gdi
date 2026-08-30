@@ -254,6 +254,20 @@ export function publicarReceta(
   );
 }
 
+export function deprecarReceta(
+  revisionId: string,
+  payload: { expectedUpdatedAt: string; motivo?: string },
+): Promise<ProductoRecetaRevision> {
+  return apiRequest<ProductoRecetaRevision>(
+    `/productos-servicios/recetas/revisiones/${revisionId}/deprecar`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
 export async function getCatalogoComercial(): Promise<
   ProductoCategoriaComercial[]
 > {

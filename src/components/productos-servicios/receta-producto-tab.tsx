@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArchiveXIcon,
   BoxesIcon,
   FactoryIcon,
   FileCheck2Icon,
@@ -17,8 +18,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { ProductoDetalle } from "@/lib/productos-servicios";
 import {
+  deprecarReceta,
   guardarBorradorReceta,
   getProductos,
   publicarReceta,
@@ -604,6 +607,8 @@ export function RecetaProductoTab({
   const router = useRouter();
   const [working, setWorking] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState<string | null>(null);
+  const [revisionARetirar, setRevisionARetirar] =
+    React.useState<ProductoRecetaRevision | null>(null);
 
   const guardar = async (
     rutaAlternativaId: string,
@@ -656,6 +661,28 @@ export function RecetaProductoTab({
     }
   };
 
+  const retirarPublicada = async () => {
+    if (!revisionARetirar) return;
+    setWorking(`deprecate:${revisionARetirar.id}`);
+    try {
+      await deprecarReceta(revisionARetirar.id, {
+        expectedUpdatedAt: revisionARetirar.updatedAt,
+        motivo: "Versión retirada desde el workspace de Producción",
+      });
+      toast.success(`La versión V${revisionARetirar.numero} fue retirada.`);
+      setRevisionARetirar(null);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo retirar la versión publicada.",
+      );
+    } finally {
+      setWorking(null);
+    }
+  };
+
   if (!producto.rutasAlternativas.length) {
     return (
       <div className={styles.noRoutes}>
@@ -673,11 +700,11 @@ export function RecetaProductoTab({
           <ShieldCheckIcon />
         </div>
         <div>
-          <span className={styles.eyebrow}>Contrato industrial</span>
-          <h2>Receta productiva y BOM</h2>
+          <span className={styles.eyebrow}>BOM versionada</span>
+          <h2>Materiales, documentos y versiones</h2>
           <p>
-            Publicá una definición inmutable por vía. Las cotizaciones y OTs
-            conservarán exactamente la revisión utilizada.
+            Esta vista consolida lo configurado en los pasos. Al publicar una
+            versión, cotizaciones y OTs conservarán exactamente esa composición.
           </p>
         </div>
       </header>
@@ -723,7 +750,11 @@ export function RecetaProductoTab({
                         onClick={() => guardar(ruta.id, draft)}
                       >
                         <RefreshCwIcon />
-                        {draft ? "Actualizar borrador" : "Crear borrador"}
+                        {draft
+                          ? `Sincronizar borrador V${draft.numero}`
+                          : published
+                            ? `Crear revisión V${published.numero + 1}`
+                            : "Crear primera versión"}
                       </button>
                       {draft ? (
                         <button
@@ -735,7 +766,18 @@ export function RecetaProductoTab({
                           }
                         >
                           <PencilLineIcon />
-                          Definir requisitos
+                          Documentos y componentes
+                        </button>
+                      ) : null}
+                      {published ? (
+                        <button
+                          type="button"
+                          className={styles.dangerButton}
+                          disabled={working !== null}
+                          onClick={() => setRevisionARetirar(published)}
+                        >
+                          <ArchiveXIcon />
+                          Retirar V{published.numero}
                         </button>
                       ) : null}
                       {draft ? (
@@ -811,6 +853,28 @@ export function RecetaProductoTab({
           );
         })}
       </div>
+      <ConfirmacionDestructiva
+        open={revisionARetirar !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevisionARetirar(null);
+        }}
+        titulo="Retirar versión productiva"
+        descripcion={
+          revisionARetirar
+            ? `La versión V${revisionARetirar.numero} dejará de estar disponible para nuevas cotizaciones.`
+            : null
+        }
+        impacto={[
+          "Las cotizaciones y órdenes existentes conservarán esta versión.",
+          "El producto volverá al modo compatible hasta publicar otra versión.",
+        ]}
+        nombreItem={
+          revisionARetirar ? `V${revisionARetirar.numero}` : undefined
+        }
+        requiereTipear={false}
+        accionLabel="Retirar versión"
+        onConfirmar={retirarPublicada}
+      />
     </div>
   );
 }

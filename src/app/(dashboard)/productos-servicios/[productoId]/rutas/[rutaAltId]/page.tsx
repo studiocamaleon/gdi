@@ -18,7 +18,9 @@ export default async function ConfigPasosFocusedPage({
 }) {
   const { productoId, rutaAltId } = await params;
   if (!(await tienePermiso("costos.gestionar"))) {
-    redirect(`/productos-servicios/${productoId}?tab=pasos&rutaAltId=${rutaAltId}`);
+    redirect(
+      `/productos-servicios/${productoId}?tab=produccion&vista=operaciones&rutaAltId=${rutaAltId}`,
+    );
   }
   const [producto, catalogoFamilias, lookups, catalogoCargos] =
     await Promise.all([

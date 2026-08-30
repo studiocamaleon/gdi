@@ -146,7 +146,8 @@
 }
 
 .primaryButton,
-.secondaryButton {
+.secondaryButton,
+.dangerButton {
   display: inline-flex;
   min-height: 36px;
   align-items: center;
@@ -160,7 +161,8 @@
 }
 
 .primaryButton svg,
-.secondaryButton svg {
+.secondaryButton svg,
+.dangerButton svg {
   width: 15px;
   height: 15px;
 }
@@ -188,8 +190,21 @@
   background: #fff7f2;
 }
 
+.dangerButton {
+  border: 1px solid #ebd4ce;
+  color: #b63f2b;
+  background: #fff8f6;
+}
+
+.dangerButton:hover:not(:disabled) {
+  border-color: #e9a394;
+  color: #972f1f;
+  background: #fff0ec;
+}
+
 .primaryButton:disabled,
-.secondaryButton:disabled {
+.secondaryButton:disabled,
+.dangerButton:disabled {
   cursor: wait;
   opacity: 0.55;
 }
@@ -778,7 +793,8 @@
 
   .actions,
   .primaryButton,
-  .secondaryButton {
+  .secondaryButton,
+  .dangerButton {
     width: 100%;
   }
 
