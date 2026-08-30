@@ -63,6 +63,7 @@ import type {
   ComponenteDesgasteCargado,
   DefaultsFamiliaPaso,
   TiempoExtraEjecutado,
+  ComponenteFabricadoCosteado,
 } from './tipos';
 import {
   esCorteSobreHojas,
@@ -163,6 +164,7 @@ import { crearSvgPlacaDesdeNesting } from '../recorridos-vectoriales/nesting-svg
 import {
   dependenciasCalculoComponente,
   ordenarComponentesPorCalculo,
+  resolverOperacionesIncorporacion,
   resolverJobContextComponente,
 } from '../productos-servicios/componentes-configuracion';
 import {
@@ -1121,7 +1123,8 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            PasoEjecutado['ojalesLayout'] | undefined;
+            | PasoEjecutado['ojalesLayout']
+            | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -1152,7 +1155,7 @@ export class MotorUniversalService {
     }
 
     // 5. COMPONER RESULTADO
-    const tiempoTotal = pasosEjecutados.reduce(
+    let tiempoTotal = pasosEjecutados.reduce(
       (acc, p) => acc + (p.tiempo?.costo ?? 0),
       0,
     );
@@ -1210,8 +1213,9 @@ export class MotorUniversalService {
           : 0),
       0,
     );
-    const componentesFabricados = [];
+    const componentesFabricados: ComponenteFabricadoCosteado[] = [];
     const outputsComponentes: Record<string, Record<string, unknown>> = {};
+    let incorporacionComponentesTotal = 0;
     if (recetaPublicada?.componentes.length) {
       const camino = opciones?.componentesCamino ?? [input.productoId];
       let componentesOrdenados: typeof recetaPublicada.componentes;
@@ -1342,6 +1346,94 @@ export class MotorUniversalService {
           componentes: hija.componentesFabricados,
         });
       }
+
+      for (const componente of componentesOrdenados) {
+        if (!componente.requerido) continue;
+        let operaciones;
+        try {
+          operaciones = resolverOperacionesIncorporacion({
+            configuracion: componente.configuracionJson,
+            contextoPadre: jobContext as unknown as Record<string, unknown>,
+            outputsComponentes,
+            componenteCodigo: componente.codigo,
+            componenteNombre: componente.nombre,
+            nodoDestinoClave: componente.nodoIncorporacionClave,
+          });
+        } catch (error) {
+          return fallar([
+            {
+              codigo: 'operacion_incorporacion_invalida',
+              severidad: 'ERROR',
+              mensaje:
+                error instanceof Error
+                  ? error.message
+                  : `No se pudo calcular la incorporación de "${componente.nombre}".`,
+              sugerencia:
+                'Revisá las operaciones configuradas en la relación BOM.',
+            },
+          ]);
+        }
+        const componenteCosteado = componentesFabricados.find(
+          (item) => item.codigo === componente.codigo,
+        );
+        for (const operacion of operaciones) {
+          const pasoDestino = pasosEjecutados.find(
+            (paso) =>
+              `ruta:${paso.rutaPasoId}` === operacion.nodoDestinoClave ||
+              `extra:${paso.rutaPasoId}` === operacion.nodoDestinoClave,
+          );
+          if (!pasoDestino?.activado || !pasoDestino.tiempo) {
+            return fallar([
+              {
+                codigo: 'paso_compuesto_no_disponible',
+                severidad: 'ERROR',
+                mensaje: `La operación "${operacion.nombre}" apunta a un paso de incorporación que no está activo.`,
+                sugerencia:
+                  'Elegí un paso obligatorio y vigente como nodo de incorporación.',
+              },
+            ]);
+          }
+          const tarifaHora = Number(pasoDestino.tiempo.tarifaHora ?? 0);
+          if (!(tarifaHora > 0)) {
+            return fallar([
+              {
+                codigo: 'paso_compuesto_sin_tarifa',
+                severidad: 'ERROR',
+                mensaje: `El paso compuesto "${pasoDestino.nombreVisible ?? pasoDestino.familiaCodigo}" no tiene una tarifa horaria válida para costear "${operacion.nombre}".`,
+                sugerencia:
+                  'Asigná al paso de ensamblaje un centro de costo con tarifa publicada.',
+              },
+            ]);
+          }
+          const costo =
+            (operacion.duracionMin / 60) *
+            tarifaHora *
+            operacion.dotacionOperarios;
+          const costeada = {
+            ...operacion,
+            centroCostoId: pasoDestino.tiempo.centroCostoId ?? null,
+            centroCostoNombre: pasoDestino.tiempo.centroCostoNombre ?? null,
+            tarifaHora,
+            costo,
+          };
+          pasoDestino.operacionesIncorporacion = [
+            ...(pasoDestino.operacionesIncorporacion ?? []),
+            costeada,
+          ];
+          pasoDestino.tiempo.runMin += operacion.duracionMin;
+          pasoDestino.tiempo.totalMin += operacion.duracionMin;
+          pasoDestino.tiempo.costo += costo;
+          pasoDestino.costoTotal += costo;
+          tiempoTotal += costo;
+          incorporacionComponentesTotal += costo;
+          if (componenteCosteado) {
+            componenteCosteado.operacionesIncorporacion = [
+              ...(componenteCosteado.operacionesIncorporacion ?? []),
+              costeada,
+            ];
+          }
+        }
+      }
     }
     const componentesFabricadosTotal = componentesFabricados.reduce(
       (totalComponentes, componente) =>
@@ -1440,6 +1532,7 @@ export class MotorUniversalService {
         cargosSinMargenTotal,
         tercerizadoTotal,
         componentesFabricadosTotal,
+        incorporacionComponentesTotal,
         total,
         unitario: costoUnitarioComercial,
       },
@@ -3794,7 +3887,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -4272,7 +4367,8 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        { tarifa: unknown } | undefined;
+        | { tarifa: unknown }
+        | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -4404,7 +4500,8 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          { tarifa: unknown; nombre?: string | null } | undefined;
+          | { tarifa: unknown; nombre?: string | null }
+          | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -5659,7 +5756,9 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
+          | 'HARDCODED'
+          | 'COMERCIAL_ELIGE'
+          | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -7168,16 +7267,19 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -7280,14 +7382,16 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              Record<string, unknown> | undefined;
+              | Record<string, unknown>
+              | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -8484,7 +8588,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -8544,7 +8650,8 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        Array<{ codigo: string; monto: number }> | undefined;
+        | Array<{ codigo: string; monto: number }>
+        | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');

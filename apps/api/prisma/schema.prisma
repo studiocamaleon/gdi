@@ -3918,6 +3918,9 @@ model OrdenTrabajoItemPaso {
   /// Ver docs/estaciones-reglas-diseno.md.
   maquinaId             String?                       @db.Uuid
   duracionEstimadaMin   Decimal?                      @db.Decimal(10, 2)
+  /// Desglose congelado de las subtareas aportadas por relaciones BOM al
+  /// paso compuesto. No gobierna estados; explica duración, recursos y costo.
+  operacionesIncorporacionSnapshotJson Json?
   /// 'pendiente' | 'en_curso' | 'pausado' | 'hecho' | 'bloqueado'.
   estado                String                        @default("pendiente")
   motivoBloqueo         String?

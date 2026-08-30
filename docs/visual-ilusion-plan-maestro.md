@@ -579,6 +579,9 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 **Ampliación 4.1:**
 `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md`
 
+**Ampliación 4.2:**
+`docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md`
+
 **Dependencias:** Fase 3.
 
 ### Objetivo de negocio
@@ -606,6 +609,12 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 - Permitir que un componente publique outputs planificados y que otros hijos
   los consuman mediante referencias controladas y un DAG de cálculo separado
   del DAG productivo.
+- Permitir que el nodo de incorporación actúe como paso compuesto y reúna
+  operaciones hijas específicas por relación BOM, con inductores, tiempos,
+  recursos, costos y trazabilidad propios.
+- Separar estrictamente la fabricación de cada componente, su trabajo de
+  incorporación y la preparación/cierre general del ensamble, evitando doble
+  conteo y manteniendo legible la ruta principal.
 - Congelar outputs públicos, dependencias de cálculo y contextos resueltos sin
   compartir un JobContext global mutable entre productos.
 - Reutilizar el configurador del producto hijo en un workspace amplio desde la
@@ -650,6 +659,9 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 - Resolver el caso Backlight: Bastidor publica geometría; Lona y Cenefas la
   consumen al cotizar y las tres ramas siguen disponibles en paralelo hasta su
   convergencia física.
+- Resolver el ensamble del Backlight como paso compuesto: tensado, cenefas,
+  iluminación y prueba conservan reglas de tiempo diferentes sin convertirse
+  en productos ni ensuciar la ruta principal.
 
 ### Evidencia de implementación
 
@@ -1323,19 +1335,20 @@ Cada fase tomará el subconjunto pertinente y agregará fixtures automatizados c
 
 ## 13. Registro de decisiones maestras
 
-| ID     | Decisión                                                               | Estado  | Motivo                                                                                                                                             |
-| ------ | ---------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DM-001 | Un solo Grafoprint con módulos avanzados                               | Cerrada | El núcleo compartido es dominante; un fork duplicaría costos y bugs.                                                                               |
-| DM-002 | Campaña es contenedor opcional, no OT                                  | Cerrada | Preserva ciclos, numeración y facturación existentes.                                                                                              |
-| DM-003 | Recetas y rutas se versionan/snapshotean                               | Cerrada | Evita mutar trabajos históricos o en vuelo.                                                                                                        |
-| DM-004 | DAG se incorpora de forma compatible con rutas lineales                | Cerrada | Reduce riesgo de regresión.                                                                                                                        |
-| DM-005 | Lote productivo y tanda de máquina son distintos                       | Cerrada | Representan identidades y cantidades diferentes.                                                                                                   |
-| DM-006 | Kits/packing/multidestino forman vertical shopper                      | Cerrada | Reutilizan producción/inventario sin contaminar el flujo simple.                                                                                   |
-| DM-007 | Planificador visual es proyección del scheduler                        | Cerrada | Evita dos fuentes de verdad.                                                                                                                       |
-| DM-008 | Datos operativos centrales serán relacionales                          | Cerrada | Necesitan integridad, concurrencia, auditoría y reporting.                                                                                         |
-| DM-009 | SSE + outbox durable para frescura; inbox interno separado de WhatsApp | Cerrada | La comunicación es unidireccional, debe sobrevivir reconexiones/varias instancias y no puede mezclar permisos internos con consentimiento externo. |
-| DM-010 | La instancia hija se configura por bindings de parámetros              | Cerrada | Combina defaults, fijos, contexto padre, fórmulas y decisiones de cotización sin duplicar configuradores ni acoplar JobContexts internos.          |
-| DM-011 | Los hijos comparten sólo outputs públicos mediante un DAG de cálculo    | Cerrada | Preserva JobContexts aislados, permite dependencias entre componentes y evita convertir una dependencia de cálculo en una precedencia física.      |
+| ID     | Decisión                                                                  | Estado  | Motivo                                                                                                                                               |
+| ------ | ------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DM-001 | Un solo Grafoprint con módulos avanzados                                  | Cerrada | El núcleo compartido es dominante; un fork duplicaría costos y bugs.                                                                                 |
+| DM-002 | Campaña es contenedor opcional, no OT                                     | Cerrada | Preserva ciclos, numeración y facturación existentes.                                                                                                |
+| DM-003 | Recetas y rutas se versionan/snapshotean                                  | Cerrada | Evita mutar trabajos históricos o en vuelo.                                                                                                          |
+| DM-004 | DAG se incorpora de forma compatible con rutas lineales                   | Cerrada | Reduce riesgo de regresión.                                                                                                                          |
+| DM-005 | Lote productivo y tanda de máquina son distintos                          | Cerrada | Representan identidades y cantidades diferentes.                                                                                                     |
+| DM-006 | Kits/packing/multidestino forman vertical shopper                         | Cerrada | Reutilizan producción/inventario sin contaminar el flujo simple.                                                                                     |
+| DM-007 | Planificador visual es proyección del scheduler                           | Cerrada | Evita dos fuentes de verdad.                                                                                                                         |
+| DM-008 | Datos operativos centrales serán relacionales                             | Cerrada | Necesitan integridad, concurrencia, auditoría y reporting.                                                                                           |
+| DM-009 | SSE + outbox durable para frescura; inbox interno separado de WhatsApp    | Cerrada | La comunicación es unidireccional, debe sobrevivir reconexiones/varias instancias y no puede mezclar permisos internos con consentimiento externo.   |
+| DM-010 | La instancia hija se configura por bindings de parámetros                 | Cerrada | Combina defaults, fijos, contexto padre, fórmulas y decisiones de cotización sin duplicar configuradores ni acoplar JobContexts internos.            |
+| DM-011 | Los hijos comparten sólo outputs públicos mediante un DAG de cálculo      | Cerrada | Preserva JobContexts aislados, permite dependencias entre componentes y evita convertir una dependencia de cálculo en una precedencia física.        |
+| DM-012 | La incorporación vive en la relación BOM y se agrupa en un paso compuesto | Cerrada | El mismo hijo puede incorporarse de formas diferentes; fabricación e incorporación necesitan tiempos y costos separados sin perder una ruta legible. |
 
 Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decisión se revoca, se conserva la fila y se añade la sucesora.
 
@@ -1345,27 +1358,28 @@ Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decis
 
 Esta tabla se actualizará al integrar cada fase.
 
-| Fase | Estado        | Rama                                                 | Documento técnico                                                   | Evidencia/commit                                           | Observaciones                                                                                                       |
-| ---: | ------------- | ---------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-|    0 | COMPLETA      | `visual-ilusion/analisis`                            | Diagnóstico + Plan Maestro                                          | `1d50db6c`                                                 | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829`                                              |
-|    1 | COMPLETA      | `visual-ilusion/fase-1-campanas`                     | `docs/visual-ilusion-fase-1-campanas-diseno.md`                     | `41ead4c3`, `8077992a`, `4290c512`                         | Journey, seguridad, regresión y QA visual desktop/móvil aprobados                                                   |
-|    2 | COMPLETA      | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`      | `bf2df97a`, `52538507`                                     | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                      |
-|  2.5 | COMPLETA      | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | `46316989`                                                 | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
-|    3 | COMPLETA      | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                   | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b` | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados          |
-|    4 | EN DESARROLLO | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-rutas-dag-diseno.md`                    | `ca5109f0`, `c7a42076`                                     | Validación abrió ampliación de configuración padre–componente antes del cierre                                      |
-|  4.1 | IMPLEMENTADA  | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md`     | commit de implementación de Fase 4.1                       | Outputs públicos entre hijos y parámetros del oficio tercerizado; pendiente validación funcional del usuario       |
-|    5 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|    6 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|    7 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|    8 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|    9 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|   10 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|   11 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|   12 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|   13 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|   14 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|   15 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
-|   16 | PENDIENTE     | —                                                    | —                                                                   | —                                                          | —                                                                                                                   |
+| Fase | Estado            | Rama                                                 | Documento técnico                                                       | Evidencia/commit                                           | Observaciones                                                                                                       |
+| ---: | ----------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+|    0 | COMPLETA          | `visual-ilusion/analisis`                            | Diagnóstico + Plan Maestro                                              | `1d50db6c`                                                 | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829`                                              |
+|    1 | COMPLETA          | `visual-ilusion/fase-1-campanas`                     | `docs/visual-ilusion-fase-1-campanas-diseno.md`                         | `41ead4c3`, `8077992a`, `4290c512`                         | Journey, seguridad, regresión y QA visual desktop/móvil aprobados                                                   |
+|    2 | COMPLETA          | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`          | `bf2df97a`, `52538507`                                     | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                      |
+|  2.5 | COMPLETA          | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md`     | `46316989`                                                 | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
+|    3 | COMPLETA          | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                       | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b` | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados          |
+|    4 | EN DESARROLLO     | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-rutas-dag-diseno.md`                        | `ca5109f0`, `c7a42076`                                     | Validación abrió ampliación de configuración padre–componente antes del cierre                                      |
+|  4.1 | IMPLEMENTADA      | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md`         | commit de implementación de Fase 4.1                       | Outputs públicos entre hijos y parámetros del oficio tercerizado; pendiente validación funcional del usuario        |
+|  4.2 | IMPLEMENTADA      | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | commit de Fase 4.2 + 199 suites API + 544 pruebas frontend | Pendiente validación funcional y QA visual desktop/mobile de las operaciones agrupadas en pasos compuestos          |
+|    5 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|    6 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|    7 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|    8 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|    9 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|   10 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|   11 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|   12 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|   13 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|   14 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|   15 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
+|   16 | PENDIENTE         | —                                                    | —                                                                       | —                                                          | —                                                                                                                   |
 
 ---
 

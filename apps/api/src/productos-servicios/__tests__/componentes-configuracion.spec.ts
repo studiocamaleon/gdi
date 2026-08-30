@@ -2,10 +2,63 @@ import { BadRequestException } from '@nestjs/common';
 import {
   ordenarComponentesPorCalculo,
   resolverJobContextComponente,
+  resolverOperacionesIncorporacion,
   validarConfiguracionComponente,
 } from '../componentes-configuracion';
 
 describe('configuración de componentes fabricados', () => {
+  it('resuelve operaciones fijas y por output público sin fórmulas libres', () => {
+    const operaciones = resolverOperacionesIncorporacion({
+      configuracion: {
+        version: 2,
+        bindings: [{ clave: 'cantidad', origen: 'FIJO', valor: 1 }],
+        operacionesIncorporacion: [
+          {
+            codigo: 'tensar_lona',
+            nombre: 'Tensar lona',
+            modoTiempo: 'POR_UNIDAD',
+            fuenteCantidad: {
+              tipo: 'COMPONENTE',
+              componenteCodigo: 'bastidor',
+              campo: 'ml_estructura',
+            },
+            unidadCantidad: 'm',
+            minutosPorUnidad: 5,
+            dotacionOperarios: 2,
+            orden: 1,
+          },
+          {
+            codigo: 'prueba',
+            nombre: 'Conexión y prueba',
+            modoTiempo: 'FIJO',
+            minutosFijos: 20,
+            orden: 2,
+          },
+        ],
+      },
+      contextoPadre: { cantidad: 1 },
+      outputsComponentes: { bastidor: { ml_estructura: 6 } },
+      componenteCodigo: 'lona',
+      componenteNombre: 'Lona Backlight',
+      nodoDestinoClave: 'ruta:ensamblaje',
+    });
+
+    expect(operaciones).toEqual([
+      expect.objectContaining({
+        codigo: 'tensar_lona',
+        cantidadResuelta: 6,
+        duracionMin: 30,
+        dotacionOperarios: 2,
+      }),
+      expect.objectContaining({
+        codigo: 'prueba',
+        cantidadResuelta: 1,
+        duracionMin: 20,
+        dotacionOperarios: 1,
+      }),
+    ]);
+  });
+
   it('combina fórmula, herencia, fijo y dato de cotización en un JobContext normal', () => {
     const result = resolverJobContextComponente({
       codigoComponente: 'vinilo_impreso',

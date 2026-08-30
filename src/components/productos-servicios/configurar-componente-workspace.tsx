@@ -727,7 +727,15 @@ export function ConfigurarComponenteWorkspace({
             onClick={() =>
               formulario &&
               onSave(
-                { version: 1, bindings },
+                {
+                  version: componente.configuracionJson
+                    ?.operacionesIncorporacion?.length
+                    ? 2
+                    : 1,
+                  bindings,
+                  operacionesIncorporacion:
+                    componente.configuracionJson?.operacionesIncorporacion,
+                },
                 formulario.producto.unidadComercial,
               )
             }

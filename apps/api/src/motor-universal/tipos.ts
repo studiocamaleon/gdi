@@ -331,6 +331,8 @@ export interface CotizacionResultado {
     tercerizadoTotal: number;
     /** Costo productivo de subproductos fabricados declarados en la receta. */
     componentesFabricadosTotal?: number;
+    /** Mano de obra de incorporación declarada en las relaciones BOM. */
+    incorporacionComponentesTotal?: number;
     total: number;
     unitario: number;
   };
@@ -417,7 +419,27 @@ export interface ComponenteFabricadoCosteado {
   outputsPublicos?: Record<string, unknown>;
   /** Componentes cuyos outputs fueron necesarios para resolver este contexto. */
   dependenciasCalculo?: string[];
+  operacionesIncorporacion?: OperacionIncorporacionCosteada[];
   componentes?: ComponenteFabricadoCosteado[];
+}
+
+export interface OperacionIncorporacionCosteada {
+  codigo: string;
+  nombre: string;
+  componenteCodigo: string;
+  componenteNombre: string;
+  nodoDestinoClave: string;
+  modoTiempo: 'FIJO' | 'POR_UNIDAD';
+  cantidadResuelta: number;
+  unidadCantidad?: string | null;
+  minutosFijos?: number | null;
+  minutosPorUnidad?: number | null;
+  duracionMin: number;
+  dotacionOperarios: number;
+  centroCostoId?: string | null;
+  centroCostoNombre?: string | null;
+  tarifaHora: number;
+  costo: number;
 }
 
 export interface PasoEjecutado {
@@ -500,6 +522,8 @@ export interface PasoEjecutado {
      */
     origenTiempo?: 'manual_comercial' | 'calculado';
   };
+  /** Subtareas aportadas por relaciones BOM al paso compuesto. */
+  operacionesIncorporacion?: OperacionIncorporacionCosteada[];
   /** Materiales consumidos (si activado). */
   materiales?: MaterialEjecutado[];
   /** Cargos directos a nivel paso (si activado). */
@@ -843,7 +867,9 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;

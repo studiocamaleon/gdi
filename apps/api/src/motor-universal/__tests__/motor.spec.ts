@@ -4487,6 +4487,9 @@ describe('MotorUniversalService — smoke tests', () => {
       const rutaRigido =
         rigido.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
         rigido.rutasAlternativas[0];
+      const pasoIncorporacionRigido = rutaRigido.configPasos.find(
+        (paso) => paso.modoActivacion === 'OBLIGATORIO',
+      )!;
       const borradorRigido = await recetas.guardarBorrador(auth, rigido.id, {
         rutaAlternativaId: rutaRigido.id,
         documentos: [
@@ -4508,7 +4511,35 @@ describe('MotorUniversalService — smoke tests', () => {
             formula: 'por_unidad',
             unidad: 'unidad',
             requerido: true,
-            nodoIncorporacionClave: `ruta:${rutaRigido.configPasos[rutaRigido.configPasos.length - 1].rutaPasoId}`,
+            nodoIncorporacionClave: `ruta:${pasoIncorporacionRigido.rutaPasoId}`,
+            configuracionJson: {
+              version: 2,
+              bindings: [
+                {
+                  clave: 'cantidad',
+                  etiqueta: 'Cantidad',
+                  tipoDato: 'number',
+                  origen: 'FORMULA',
+                  requerido: true,
+                  regla: {
+                    campoPadre: 'cantidad',
+                    operador: 'MULTIPLICAR',
+                    valor: 1000,
+                    fuente: { tipo: 'PADRE', campo: 'cantidad' },
+                  },
+                },
+              ],
+              operacionesIncorporacion: [
+                {
+                  codigo: 'cargar_tarjetas',
+                  nombre: 'Cargar tarjetas en el exhibidor',
+                  modoTiempo: 'FIJO',
+                  minutosFijos: 12,
+                  dotacionOperarios: 1,
+                  orden: 0,
+                },
+              ],
+            },
           },
         ],
       });
@@ -4570,8 +4601,30 @@ describe('MotorUniversalService — smoke tests', () => {
           cantidad: 1000,
           recetaVersion: 1,
           costoTotal: expect.any(Number),
+          operacionesIncorporacion: [
+            expect.objectContaining({
+              codigo: 'cargar_tarjetas',
+              duracionMin: 12,
+              costo: expect.any(Number),
+            }),
+          ],
         }),
       ]);
+      expect(
+        resultado.cotizacion?.costos.incorporacionComponentesTotal,
+      ).toBeGreaterThan(0);
+      expect(resultado.cotizacion?.pasos).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            operacionesIncorporacion: [
+              expect.objectContaining({
+                codigo: 'cargar_tarjetas',
+                duracionMin: 12,
+              }),
+            ],
+          }),
+        ]),
+      );
       expect(resultado.cotizacion?.costos.total).toBeGreaterThan(
         resultado.cotizacion?.costos.componentesFabricadosTotal ?? 0,
       );

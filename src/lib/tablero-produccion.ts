@@ -14,14 +14,22 @@ import { fechaLocalDesdeIso, formatFechaOrden } from "@/lib/ordenes-trabajo";
 // ── Contrato con el backend ──────────────────────────────────────────────
 
 export type TableroPasoEstado =
-  "pendiente" | "en_curso" | "pausado" | "hecho" | "bloqueado";
+  | "pendiente"
+  | "en_curso"
+  | "pausado"
+  | "hecho"
+  | "bloqueado";
 
 /** Registro de tiempos (docs/registro-tiempos-produccion-diseno.md D1). */
 export type TableroPasoModoRegistro = "cronometro" | "solo_completar";
 
 /** Calidad/origen del tiempo real asentado en un paso hecho (D3). */
 export type TableroPasoTiempoFuente =
-  "medido" | "medido_lote" | "declarado" | "estimado" | "invalido";
+  | "medido"
+  | "medido_lote"
+  | "declarado"
+  | "estimado"
+  | "invalido";
 
 /** Cronómetro corriendo sobre el paso: quién y desde cuándo. */
 export type TableroPasoTramoAbierto = {
@@ -73,6 +81,17 @@ export type TableroPasoData = {
   /** Tecnología de esa máquina (derivada). Base del ruteo "por tecnología". */
   tecnologia?: string | null;
   duracionEstimadaMin: number | null;
+  operacionesIncorporacionSnapshotJson?: Array<{
+    codigo: string;
+    nombre: string;
+    componenteCodigo: string;
+    componenteNombre: string;
+    modoTiempo: "FIJO" | "POR_UNIDAD";
+    cantidadResuelta: number;
+    unidadCantidad?: string | null;
+    duracionMin: number;
+    dotacionOperarios: number;
+  }> | null;
   estado: TableroPasoEstado;
   motivoBloqueo: string | null;
   /** ISO datetime o null. */

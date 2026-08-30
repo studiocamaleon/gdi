@@ -34,6 +34,35 @@ export type BindingParametroComponente = {
   opciones?: Array<{ valor: string; etiqueta: string }>;
 };
 
+export type FuenteOperacionIncorporacion = {
+  tipo: 'PADRE' | 'COMPONENTE';
+  campo: string;
+  componenteCodigo?: string | null;
+};
+
+export type OperacionIncorporacion = {
+  codigo: string;
+  nombre: string;
+  modoTiempo: 'FIJO' | 'POR_UNIDAD';
+  fuenteCantidad?: FuenteOperacionIncorporacion | null;
+  /** Convierte el valor técnico publicado a la unidad visible seleccionada. */
+  factorConversionFuente?: number;
+  unidadCantidad?: string | null;
+  minutosFijos?: number | null;
+  minutosPorUnidad?: number | null;
+  dotacionOperarios?: number;
+  orden?: number;
+};
+
+export type OperacionIncorporacionResuelta = OperacionIncorporacion & {
+  componenteCodigo: string;
+  componenteNombre: string;
+  nodoDestinoClave: string;
+  cantidadResuelta: number;
+  duracionMin: number;
+  dotacionOperarios: number;
+};
+
 function resolverRegla(
   regla: NonNullable<BindingParametroComponente['regla']>,
   padre: Record<string, unknown>,
@@ -68,8 +97,9 @@ function resolverRegla(
 }
 
 export type ConfiguracionComponenteFabricado = {
-  version: 1;
+  version: 1 | 2;
   bindings: BindingParametroComponente[];
+  operacionesIncorporacion?: OperacionIncorporacion[];
 };
 
 function esRegistro(value: unknown): value is Record<string, unknown> {
@@ -111,7 +141,7 @@ export function leerConfiguracionComponente(
 ): ConfiguracionComponenteFabricado | null {
   if (
     !esRegistro(value) ||
-    value.version !== 1 ||
+    ![1, 2].includes(Number(value.version)) ||
     !Array.isArray(value.bindings)
   ) {
     return null;
@@ -127,7 +157,122 @@ export function leerConfiguracionComponente(
       ),
   );
   if (bindings.length !== value.bindings.length) return null;
-  return { version: 1, bindings };
+  const operacionesRaw = Array.isArray(value.operacionesIncorporacion)
+    ? value.operacionesIncorporacion
+    : [];
+  const operacionesIncorporacion = operacionesRaw.filter(
+    (item): item is OperacionIncorporacion => {
+      if (
+        !esRegistro(item) ||
+        typeof item.codigo !== 'string' ||
+        !item.codigo.trim() ||
+        typeof item.nombre !== 'string' ||
+        !item.nombre.trim() ||
+        !['FIJO', 'POR_UNIDAD'].includes(String(item.modoTiempo))
+      ) {
+        return false;
+      }
+      if (item.modoTiempo === 'FIJO') {
+        return Number(item.minutosFijos) > 0;
+      }
+      const fuente = item.fuenteCantidad;
+      return (
+        esRegistro(fuente) &&
+        ['PADRE', 'COMPONENTE'].includes(String(fuente.tipo)) &&
+        typeof fuente.campo === 'string' &&
+        Boolean(fuente.campo.trim()) &&
+        (fuente.tipo !== 'COMPONENTE' ||
+          (typeof fuente.componenteCodigo === 'string' &&
+            Boolean(fuente.componenteCodigo.trim()))) &&
+        Number(item.minutosPorUnidad) > 0 &&
+        Number(item.factorConversionFuente ?? 1) > 0
+      );
+    },
+  );
+  if (operacionesIncorporacion.length !== operacionesRaw.length) return null;
+  return {
+    version: Number(value.version) === 2 ? 2 : 1,
+    bindings,
+    operacionesIncorporacion,
+  };
+}
+
+function leerFuenteOperacion(
+  fuente: FuenteOperacionIncorporacion,
+  contextoPadre: Record<string, unknown>,
+  outputsComponentes: Record<string, Record<string, unknown>>,
+): unknown {
+  const root =
+    fuente.tipo === 'COMPONENTE' && fuente.componenteCodigo
+      ? outputsComponentes[fuente.componenteCodigo]
+      : contextoPadre;
+  if (!root) return undefined;
+  return Object.prototype.hasOwnProperty.call(root, fuente.campo)
+    ? root[fuente.campo]
+    : leerRuta(root, fuente.campo);
+}
+
+export function resolverOperacionesIncorporacion(args: {
+  configuracion: unknown;
+  contextoPadre: Record<string, unknown>;
+  outputsComponentes: Record<string, Record<string, unknown>>;
+  componenteCodigo: string;
+  componenteNombre: string;
+  nodoDestinoClave: string | null | undefined;
+}): OperacionIncorporacionResuelta[] {
+  const config = leerConfiguracionComponente(args.configuracion);
+  const operaciones = config?.operacionesIncorporacion ?? [];
+  if (!operaciones.length) return [];
+  if (!args.nodoDestinoClave) {
+    throw new BadRequestException(
+      `El componente "${args.componenteNombre}" necesita un paso de incorporación.`,
+    );
+  }
+  const nodoDestinoClave = args.nodoDestinoClave;
+  return operaciones
+    .map((operacion) => {
+      const cantidadResuelta =
+        operacion.modoTiempo === 'FIJO'
+          ? 1
+          : Number(
+              leerFuenteOperacion(
+                operacion.fuenteCantidad!,
+                args.contextoPadre,
+                args.outputsComponentes,
+              ),
+            ) * Number(operacion.factorConversionFuente ?? 1);
+      if (!Number.isFinite(cantidadResuelta) || cantidadResuelta <= 0) {
+        throw new BadRequestException(
+          `No se pudo resolver la cantidad de "${operacion.nombre}" para incorporar "${args.componenteNombre}".`,
+        );
+      }
+      const duracionMin =
+        operacion.modoTiempo === 'FIJO'
+          ? Number(operacion.minutosFijos)
+          : cantidadResuelta * Number(operacion.minutosPorUnidad);
+      if (!Number.isFinite(duracionMin) || duracionMin <= 0) {
+        throw new BadRequestException(
+          `El tiempo de "${operacion.nombre}" debe ser mayor que cero.`,
+        );
+      }
+      return {
+        ...operacion,
+        componenteCodigo: args.componenteCodigo,
+        componenteNombre: args.componenteNombre,
+        nodoDestinoClave,
+        cantidadResuelta,
+        duracionMin,
+        dotacionOperarios: Math.max(
+          1,
+          Math.round(Number(operacion.dotacionOperarios ?? 1)),
+        ),
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(a.orden ?? 0) - Number(b.orden ?? 0) ||
+        a.codigo.localeCompare(b.codigo),
+    );
 }
 
 function leerRuta(root: Record<string, unknown>, path: string): unknown {
@@ -329,6 +474,21 @@ export function validarConfiguracionComponente(
     throw new BadRequestException(
       `La configuración de "${nombre}" debe resolver la cantidad del componente.`,
     );
+  }
+  const codigosOperacion = new Set<string>();
+  for (const operacion of config.operacionesIncorporacion ?? []) {
+    const codigo = operacion.codigo.trim().toLowerCase();
+    if (codigosOperacion.has(codigo)) {
+      throw new BadRequestException(
+        `La operación "${operacion.nombre}" está duplicada en "${nombre}".`,
+      );
+    }
+    codigosOperacion.add(codigo);
+    if (Number(operacion.dotacionOperarios ?? 1) < 1) {
+      throw new BadRequestException(
+        `La dotación de "${operacion.nombre}" debe ser al menos una persona.`,
+      );
+    }
   }
 }
 

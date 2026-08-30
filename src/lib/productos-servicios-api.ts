@@ -222,7 +222,11 @@ export type ProductoRecetaComponenteInput = {
 };
 
 export type OrigenParametroComponente =
-  "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
+  | "DEFAULT_HIJO"
+  | "FIJO"
+  | "PADRE"
+  | "FORMULA"
+  | "COTIZACION";
 
 export type BindingParametroComponente = {
   clave: string;
@@ -248,8 +252,28 @@ export type BindingParametroComponente = {
 };
 
 export type ConfiguracionComponenteFabricado = {
-  version: 1;
+  version: 1 | 2;
   bindings: BindingParametroComponente[];
+  operacionesIncorporacion?: OperacionIncorporacion[];
+};
+
+export type FuenteOperacionIncorporacion = {
+  tipo: "PADRE" | "COMPONENTE";
+  campo: string;
+  componenteCodigo?: string | null;
+};
+
+export type OperacionIncorporacion = {
+  codigo: string;
+  nombre: string;
+  modoTiempo: "FIJO" | "POR_UNIDAD";
+  fuenteCantidad?: FuenteOperacionIncorporacion | null;
+  factorConversionFuente?: number;
+  unidadCantidad?: string | null;
+  minutosFijos?: number | null;
+  minutosPorUnidad?: number | null;
+  dotacionOperarios?: number;
+  orden?: number;
 };
 
 export type FormularioCotizacionProducto = {
@@ -694,7 +718,10 @@ export interface UpsertSlotMaterialPayload {
   slotNombre?: string | null;
   slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
   modoSeleccion:
-    "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO" | "HEREDA_DE_PASO";
+    | "HARDCODED"
+    | "COMERCIAL_ELIGE"
+    | "MOTOR_ELIGE_AUTO"
+    | "HEREDA_DE_PASO";
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
@@ -876,7 +903,9 @@ export interface CrearCargoDirectoPayload {
   nombre: string;
   descripcion?: string;
   modoCalculo:
-    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -894,7 +923,9 @@ export interface ActualizarCargoDirectoPayload {
   nombre?: string;
   descripcion?: string;
   modoCalculo?:
-    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -1469,6 +1500,8 @@ export interface CotizarResponse {
       tercerizadoTotal?: number;
       /** Costo productivo de subproductos fabricados de la receta. */
       componentesFabricadosTotal?: number;
+      /** Mano de obra para incorporar componentes al producto padre. */
+      incorporacionComponentesTotal?: number;
       total: number;
       unitario: number;
     };
@@ -1485,6 +1518,17 @@ export interface CotizarResponse {
       recetaHuella: string;
       costoUnitario: number;
       costoTotal: number;
+      operacionesIncorporacion?: Array<{
+        codigo: string;
+        nombre: string;
+        nodoDestinoClave: string;
+        cantidadResuelta: number;
+        unidadCantidad?: string | null;
+        duracionMin: number;
+        dotacionOperarios: number;
+        tarifaHora: number;
+        costo: number;
+      }>;
     }>;
     precio?: {
       precioUnitario: number;

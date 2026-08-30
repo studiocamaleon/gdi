@@ -112,6 +112,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { BriefDisenoProduccion } from "@/components/comercial/brief-diseno-resumen";
 import { leerBriefDiseno, type BriefDiseno } from "@/lib/brief-diseno";
+import operationStyles from "./tablero-operaciones-incorporacion.module.css";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban" | "simulacion";
@@ -1221,6 +1222,37 @@ function DetailRuta({
                 ) : null}
               </div>
 
+              {paso.operacionesIncorporacionSnapshotJson?.length ? (
+                <div className={operationStyles.compoundStep}>
+                  <div className={operationStyles.compoundHeader}>
+                    <LayersIcon />
+                    <strong>Operaciones de ensamblaje</strong>
+                    <span>
+                      {paso.operacionesIncorporacionSnapshotJson.length}
+                    </span>
+                  </div>
+                  <div className={operationStyles.compoundRows}>
+                    {paso.operacionesIncorporacionSnapshotJson.map(
+                      (operacion) => (
+                        <div key={operacion.codigo}>
+                          <span />
+                          <div>
+                            <strong>{operacion.nombre}</strong>
+                            <small>
+                              {operacion.componenteNombre}
+                              {operacion.modoTiempo === "POR_UNIDAD"
+                                ? ` · ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(operacion.cantidadResuelta)} ${operacion.unidadCantidad ?? "unidades"}`
+                                : " · tiempo fijo"}
+                            </small>
+                          </div>
+                          <b>{etiquetaDuracion(operacion.duracionMin)}</b>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
               {step.status === "blocked" && paso.motivoBloqueo ? (
                 <div className="ds-blocked-detail">{paso.motivoBloqueo}</div>
               ) : null}
@@ -1284,7 +1316,9 @@ function notaProduccionDeDetalle(
 ): string | null {
   const producto = detalle.productos.find((entry) => entry.id === itemId);
   const jobContext = producto?.snapshot?.jobContext as
-    { notasProduccion?: unknown } | null | undefined;
+    | { notasProduccion?: unknown }
+    | null
+    | undefined;
   const nota =
     typeof jobContext?.notasProduccion === "string"
       ? jobContext.notasProduccion.trim()

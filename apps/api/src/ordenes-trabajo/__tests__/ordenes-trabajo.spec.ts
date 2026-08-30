@@ -615,7 +615,17 @@ describe('OrdenesTrabajoService — pasosDesdeTrazabilidad (Tablero)', () => {
   });
 
   it('toma nombre visible, centro de costo y duración del snapshot', () => {
-    const [paso] = pasosDesde({ pasos: [pasoTraz()] });
+    const operacionesIncorporacion = [
+      {
+        codigo: 'tensar_lona',
+        nombre: 'Tensar lona',
+        componenteCodigo: 'lona',
+        duracionMin: 30,
+      },
+    ];
+    const [paso] = pasosDesde({
+      pasos: [pasoTraz({ operacionesIncorporacion })],
+    });
     expect(paso).toMatchObject({
       tenantId: 't-1',
       ordenId: 'o-1',
@@ -625,6 +635,7 @@ describe('OrdenesTrabajoService — pasosDesdeTrazabilidad (Tablero)', () => {
       categoriaFamilia: 'produccion_impresion',
       centroCostoNombre: 'IMP-001 · HP Indigo',
       duracionEstimadaMin: 42.5,
+      operacionesIncorporacionSnapshotJson: operacionesIncorporacion,
     });
   });
 

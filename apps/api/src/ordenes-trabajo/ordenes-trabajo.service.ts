@@ -487,6 +487,7 @@ type PasoTrazabilidad = {
     centroCostoNombre?: string | null;
     maquinaId?: string | null;
   };
+  operacionesIncorporacion?: Array<Record<string, unknown>>;
   /// Paso tercerizado (compra a proveedor) — ver F2 en el diseño.
   tercerizado?: boolean;
   proveedorId?: string | null;
@@ -2903,7 +2904,8 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
+            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
+            | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -4378,6 +4380,10 @@ export class OrdenesTrabajoService {
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
         maquinaId: paso.tiempo?.maquinaId ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
+        operacionesIncorporacionSnapshotJson: paso.operacionesIncorporacion
+          ?.length
+          ? (paso.operacionesIncorporacion as Prisma.InputJsonValue)
+          : undefined,
         modoRegistro: modoRegistroDeFamilia(familiaCodigo),
         // === Tercerización (F2): el paso comprado va al panel de Compras. ===
         tipoEjecucion: esTercerizado ? 'tercerizado' : 'interno',
@@ -4755,7 +4761,8 @@ export class OrdenesTrabajoService {
           ? snapshot.pasos
           : [];
         const grafoGuardado = revisionHija.grafoProduccionJson as
-          (GrafoProduccion & Prisma.JsonObject) | null;
+          | (GrafoProduccion & Prisma.JsonObject)
+          | null;
         const grafoHijo = grafoGuardado
           ? (grafoGuardado as unknown as GrafoProduccion)
           : compilarRutaLineal(
@@ -6689,6 +6696,7 @@ export class OrdenesTrabajoService {
         centroCostoNombre: string | null;
         maquinaId: string | null;
         duracionEstimadaMin: Prisma.Decimal | null;
+        operacionesIncorporacionSnapshotJson: Prisma.JsonValue;
         estado: string;
         motivoBloqueo: string | null;
         tipoEjecucion: string;
@@ -6820,6 +6828,11 @@ export class OrdenesTrabajoService {
           paso.duracionEstimadaMin != null
             ? Number(paso.duracionEstimadaMin)
             : null,
+        operacionesIncorporacionSnapshotJson: Array.isArray(
+          paso.operacionesIncorporacionSnapshotJson,
+        )
+          ? paso.operacionesIncorporacionSnapshotJson
+          : null,
         estado: paso.estado,
         motivoBloqueo: paso.motivoBloqueo,
         tipoEjecucion: paso.tipoEjecucion,

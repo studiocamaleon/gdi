@@ -329,7 +329,9 @@ export class RecetasProductoService {
         : undefined;
     const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
       existente?.revisionPublicada?.grafoProduccionJson) as
-      (GrafoProduccion & Prisma.JsonObject) | null | undefined;
+      | (GrafoProduccion & Prisma.JsonObject)
+      | null
+      | undefined;
     const gatesFuente = dto.gates
       ? dto.gates
       : (grafoAnterior?.nodos ?? []).flatMap((nodo) =>
@@ -1054,9 +1056,7 @@ export class RecetasProductoService {
       componentes.map((item) => [item.codigo, item]),
     );
     for (const item of componentes) {
-      const configuracion = leerConfiguracionComponente(
-        item.configuracionJson,
-      );
+      const configuracion = leerConfiguracionComponente(item.configuracionJson);
       for (const binding of configuracion?.bindings ?? []) {
         const fuente = binding.regla?.fuente;
         if (fuente?.tipo !== 'COMPONENTE' || !fuente.componenteCodigo) {
@@ -1097,6 +1097,54 @@ export class RecetasProductoService {
         if (!catalogo.some((output) => output.clave === fuente.campo)) {
           throw new BadRequestException(
             `El componente "${item.nombre}" usa el dato "${fuente.campo}" de "${componenteFuente?.nombre ?? fuente.componenteCodigo}", pero ese producto no lo publica en su receta vigente.`,
+          );
+        }
+      }
+      for (const operacion of configuracion?.operacionesIncorporacion ?? []) {
+        const fuente = operacion.fuenteCantidad;
+        if (fuente?.tipo !== 'COMPONENTE' || !fuente.componenteCodigo) {
+          continue;
+        }
+        const componenteFuente = componentePorCodigo.get(
+          fuente.componenteCodigo,
+        );
+        if (item.requerido !== false && componenteFuente?.requerido === false) {
+          throw new BadRequestException(
+            `La incorporación requerida de "${item.nombre}" no puede depender del componente opcional "${componenteFuente.nombre}".`,
+          );
+        }
+        const revisionFuente = componenteFuente
+          ? porProducto.get(componenteFuente.productoComponenteId)
+          : null;
+        const snapshot = revisionFuente?.snapshotJson;
+        const pasos =
+          snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+            ? (snapshot as Record<string, unknown>).pasos
+            : null;
+        const catalogo = catalogoSalidasPublicasComposicion(
+          Array.isArray(pasos)
+            ? pasos.flatMap((paso) => {
+                if (!paso || typeof paso !== 'object' || Array.isArray(paso)) {
+                  return [];
+                }
+                const value = paso as Record<string, unknown>;
+                return typeof value.familiaCodigo === 'string'
+                  ? [
+                      {
+                        familiaCodigo: value.familiaCodigo,
+                        nombreVisible:
+                          typeof value.nombre === 'string'
+                            ? value.nombre
+                            : null,
+                      },
+                    ]
+                  : [];
+              })
+            : [],
+        );
+        if (!catalogo.some((output) => output.clave === fuente.campo)) {
+          throw new BadRequestException(
+            `La operación "${operacion.nombre}" usa el dato "${fuente.campo}" de "${componenteFuente?.nombre ?? fuente.componenteCodigo}", pero ese producto no lo publica en su receta vigente.`,
           );
         }
       }

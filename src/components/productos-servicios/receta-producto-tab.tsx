@@ -42,6 +42,7 @@ import {
   type ProductoRecetaRevision,
 } from "@/lib/productos-servicios-api";
 import { ConfigurarComponenteWorkspace } from "./configurar-componente-workspace";
+import { ConfigurarIncorporacionWorkspace } from "./configurar-incorporacion-workspace";
 import styles from "./receta-producto-tab.module.css";
 
 function fecha(value?: string | null) {
@@ -145,6 +146,8 @@ function EditorDefiniciones({
   const [componenteConfigurando, setComponenteConfigurando] = React.useState<
     number | null
   >(null);
+  const [incorporacionConfigurando, setIncorporacionConfigurando] =
+    React.useState<number | null>(null);
   const pasosDocumento = React.useMemo(
     () => [
       ...ruta.ruta.pasos
@@ -636,7 +639,8 @@ function EditorDefiniciones({
                           ? {
                               ...value,
                               politicaEjecucion: event.target.value as
-                                "INLINE" | "INDEPENDIENTE",
+                                | "INLINE"
+                                | "INDEPENDIENTE",
                             }
                           : value,
                       ),
@@ -682,6 +686,31 @@ function EditorDefiniciones({
                 </button>
                 <button
                   type="button"
+                  className={styles.configureIncorporation}
+                  disabled={
+                    !item.nodoIncorporacionClave ||
+                    !item.configuracionJson?.bindings?.some(
+                      (binding) => binding.clave === "cantidad",
+                    )
+                  }
+                  title={
+                    !item.nodoIncorporacionClave
+                      ? "Primero elegí el paso de incorporación"
+                      : item.configuracionJson?.bindings?.some(
+                            (binding) => binding.clave === "cantidad",
+                          )
+                        ? "Configurar las tareas necesarias para incorporar este componente"
+                        : "Primero configurá el uso del componente"
+                  }
+                  onClick={() => setIncorporacionConfigurando(index)}
+                >
+                  <BlocksIcon />
+                  {item.configuracionJson?.operacionesIncorporacion?.length
+                    ? `${item.configuracionJson.operacionesIncorporacion.length} operaciones de ensamblaje`
+                    : "Configurar incorporación"}
+                </button>
+                <button
+                  type="button"
                   aria-label={`Quitar componente ${index + 1}`}
                   onClick={() =>
                     setComponentes((prev) => prev.filter((_, i) => i !== index))
@@ -721,6 +750,33 @@ function EditorDefiniciones({
               ),
             );
             setComponenteConfigurando(null);
+          }}
+        />
+      ) : null}
+      {incorporacionConfigurando !== null &&
+      componentes[incorporacionConfigurando] ? (
+        <ConfigurarIncorporacionWorkspace
+          componente={componentes[incorporacionConfigurando]}
+          productoPadreId={productoId}
+          productoPadreNombre={productoNombre}
+          componentes={componentes}
+          nodoNombre={
+            pasosDocumento.find(
+              (paso) =>
+                paso.value ===
+                componentes[incorporacionConfigurando].nodoIncorporacionClave,
+            )?.label ?? "Paso de incorporación"
+          }
+          onCancel={() => setIncorporacionConfigurando(null)}
+          onSave={(configuracionJson) => {
+            setComponentes((current) =>
+              current.map((item, index) =>
+                index === incorporacionConfigurando
+                  ? { ...item, configuracionJson }
+                  : item,
+              ),
+            );
+            setIncorporacionConfigurando(null);
           }}
         />
       ) : null}
@@ -777,6 +833,12 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
               const previos = grafo.aristas
                 .filter((arista) => arista.haciaClave === nodo.clave)
                 .map((arista) => arista.desdeClave);
+              const operaciones = revision.componentes.flatMap((componente) =>
+                componente.nodoIncorporacionClave === nodo.clave
+                  ? (componente.configuracionJson?.operacionesIncorporacion ??
+                    [])
+                  : [],
+              );
               return (
                 <div key={nodo.clave}>
                   <b>{String(index + 1).padStart(2, "0")}</b>
@@ -785,6 +847,9 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                     {previos.length
                       ? `Después de ${previos.map(nombreNodo).join(" + ")}`
                       : "Inicio disponible"}
+                    {operaciones.length
+                      ? ` · Paso compuesto con ${operaciones.length} ${operaciones.length === 1 ? "operación" : "operaciones"}`
+                      : ""}
                   </span>
                 </div>
               );
@@ -906,6 +971,10 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                       : "integrado al producto"}
                     {componente.nodoIncorporacionClave
                       ? ` · se incorpora antes de ${nombreNodo(componente.nodoIncorporacionClave)}`
+                      : ""}
+                    {componente.configuracionJson?.operacionesIncorporacion
+                      ?.length
+                      ? ` · ${componente.configuracionJson.operacionesIncorporacion.length} operaciones de incorporación`
                       : ""}
                   </span>
                 </div>
