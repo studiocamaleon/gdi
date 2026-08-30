@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/tooltip";
 import type { ProductoDetalle } from "@/lib/productos-servicios";
 import {
+  descartarBorradorReceta,
   deprecarReceta,
   guardarBorradorReceta,
   getProductos,
@@ -686,6 +687,8 @@ export function RecetaProductoTab({
   const [editing, setEditing] = React.useState<string | null>(null);
   const [revisionARetirar, setRevisionARetirar] =
     React.useState<ProductoRecetaRevision | null>(null);
+  const [revisionADescartar, setRevisionADescartar] =
+    React.useState<ProductoRecetaRevision | null>(null);
 
   const guardar = async (
     rutaAlternativaId: string,
@@ -754,6 +757,30 @@ export function RecetaProductoTab({
         error instanceof Error
           ? error.message
           : "No se pudo retirar la versión publicada.",
+      );
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const descartarBorrador = async () => {
+    if (!revisionADescartar) return;
+    setWorking(`discard:${revisionADescartar.id}`);
+    try {
+      await descartarBorradorReceta(revisionADescartar.id, {
+        expectedUpdatedAt: revisionADescartar.updatedAt,
+      });
+      toast.success(
+        `El borrador V${revisionADescartar.numero} fue descartado.`,
+      );
+      setRevisionADescartar(null);
+      setEditing(null);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo descartar el borrador.",
       );
     } finally {
       setWorking(null);
@@ -870,6 +897,27 @@ export function RecetaProductoTab({
                             Editar receta
                           </button>
                         ) : null}
+                        {draft ? (
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={(props) => (
+                                <button
+                                  {...props}
+                                  type="button"
+                                  className={`${styles.dangerButton} ${styles.iconButton}`}
+                                  disabled={working !== null}
+                                  aria-label={`Descartar borrador V${draft.numero}`}
+                                  onClick={() => setRevisionADescartar(draft)}
+                                >
+                                  <Trash2Icon />
+                                </button>
+                              )}
+                            />
+                            <TooltipContent>
+                              Descartar borrador V{draft.numero}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
                         {published ? (
                           <Tooltip>
                             <TooltipTrigger
@@ -970,6 +1018,30 @@ export function RecetaProductoTab({
             );
           })}
         </div>
+        <ConfirmacionDestructiva
+          open={revisionADescartar !== null}
+          onOpenChange={(open) => {
+            if (!open) setRevisionADescartar(null);
+          }}
+          titulo="Descartar borrador"
+          descripcion={
+            revisionADescartar
+              ? `Se eliminarán los cambios sin publicar de la versión V${revisionADescartar.numero}.`
+              : null
+          }
+          impacto={[
+            "La receta publicada vigente permanecerá sin cambios.",
+            "Los documentos y componentes agregados sólo a este borrador se perderán.",
+          ]}
+          nombreItem={
+            revisionADescartar
+              ? `Borrador V${revisionADescartar.numero}`
+              : undefined
+          }
+          requiereTipear={false}
+          accionLabel="Descartar borrador"
+          onConfirmar={descartarBorrador}
+        />
         <ConfirmacionDestructiva
           open={revisionARetirar !== null}
           onOpenChange={(open) => {

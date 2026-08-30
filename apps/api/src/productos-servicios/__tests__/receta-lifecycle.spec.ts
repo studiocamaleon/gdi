@@ -26,18 +26,28 @@ function fixture(estado = EstadoProductoRecetaRevision.PUBLICADA) {
   const tx = {
     productoRecetaRevision: {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      count: jest.fn().mockResolvedValue(1),
     },
-    productoReceta: { update: jest.fn().mockResolvedValue({}) },
+    productoReceta: {
+      update: jest.fn().mockResolvedValue({}),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
   };
   const prisma = {
     productoRecetaRevision: {
       findFirst: jest.fn().mockResolvedValue(revision),
-      findFirstOrThrow: jest.fn().mockResolvedValue({ ...revision, documentos: [] }),
+      findFirstOrThrow: jest
+        .fn()
+        .mockResolvedValue({ ...revision, documentos: [] }),
     },
     user: {
       findUnique: jest
         .fn()
-        .mockResolvedValue({ nombreCompleto: 'Lucas', email: 'lucas@example.com' }),
+        .mockResolvedValue({
+          nombreCompleto: 'Lucas',
+          email: 'lucas@example.com',
+        }),
     },
     $transaction: jest.fn(async (callback: (db: typeof tx) => unknown) =>
       callback(tx),
@@ -86,6 +96,40 @@ describe('ciclo de vida de receta', () => {
 
     await expect(
       servicio.deprecar(auth, 'revision-1', {
+        expectedUpdatedAt: '2026-08-30T02:00:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('descarta un borrador y conserva la receta publicada', async () => {
+    const { servicio, tx, eventos } = fixture(
+      EstadoProductoRecetaRevision.BORRADOR,
+    );
+
+    const resultado = await servicio.descartarBorrador(auth, 'revision-1', {
+      expectedUpdatedAt: '2026-08-30T02:00:00.000Z',
+    });
+
+    expect(tx.productoRecetaRevision.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'revision-1',
+          estado: EstadoProductoRecetaRevision.BORRADOR,
+        }),
+      }),
+    );
+    expect(tx.productoReceta.deleteMany).not.toHaveBeenCalled();
+    expect(eventos.publicar).toHaveBeenCalled();
+    expect(resultado).toEqual(
+      expect.objectContaining({ descartada: true, recetaEliminada: false }),
+    );
+  });
+
+  it('no permite descartar una revisión publicada', async () => {
+    const { servicio } = fixture();
+
+    await expect(
+      servicio.descartarBorrador(auth, 'revision-1', {
         expectedUpdatedAt: '2026-08-30T02:00:00.000Z',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);

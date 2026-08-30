@@ -146,6 +146,11 @@ export class PublicarRecetaDto {
   cambios?: string;
 }
 
+export class DescartarBorradorRecetaDto {
+  @IsISO8601()
+  expectedUpdatedAt!: string;
+}
+
 export class DeprecarRecetaDto {
   @IsISO8601()
   expectedUpdatedAt!: string;

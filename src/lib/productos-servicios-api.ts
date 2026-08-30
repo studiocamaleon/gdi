@@ -261,6 +261,25 @@ export function publicarReceta(
   );
 }
 
+export function descartarBorradorReceta(
+  revisionId: string,
+  payload: { expectedUpdatedAt: string },
+): Promise<{
+  id: string;
+  numero: number;
+  descartada: true;
+  recetaEliminada: boolean;
+}> {
+  return apiRequest(
+    `/productos-servicios/recetas/revisiones/${revisionId}/borrador`,
+    {
+      method: "DELETE",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
 export function deprecarReceta(
   revisionId: string,
   payload: { expectedUpdatedAt: string; motivo?: string },

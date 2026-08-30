@@ -15,6 +15,7 @@ import { firmaActor } from '../common/firma-actor';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
+  DescartarBorradorRecetaDto,
   DeprecarRecetaDto,
   GuardarBorradorRecetaDto,
   PublicarRecetaDto,
@@ -552,6 +553,90 @@ export class RecetasProductoService {
     });
 
     return this.obtenerRevision(auth.tenantId, revision.id);
+  }
+
+  async descartarBorrador(
+    auth: CurrentAuth,
+    revisionId: string,
+    dto: DescartarBorradorRecetaDto,
+  ) {
+    const revision = await this.prisma.productoRecetaRevision.findFirst({
+      where: { id: revisionId, tenantId: auth.tenantId },
+      include: { receta: { include: { producto: true } } },
+    });
+    if (!revision) {
+      throw new NotFoundException('Revisión de receta inexistente.');
+    }
+    if (revision.estado !== EstadoProductoRecetaRevision.BORRADOR) {
+      throw new BadRequestException(
+        'Sólo una revisión en borrador puede descartarse.',
+      );
+    }
+    if (revision.updatedAt.toISOString() !== dto.expectedUpdatedAt) {
+      throw new ConflictException(
+        'El borrador cambió en otra sesión. Recargá antes de descartarlo.',
+      );
+    }
+
+    const actorNombre = await this.actorNombre(auth);
+    const resultado = await this.prisma.$transaction(async (tx) => {
+      const eliminada = await tx.productoRecetaRevision.deleteMany({
+        where: {
+          id: revision.id,
+          tenantId: auth.tenantId,
+          estado: EstadoProductoRecetaRevision.BORRADOR,
+          updatedAt: revision.updatedAt,
+        },
+      });
+      if (eliminada.count !== 1) {
+        throw new ConflictException(
+          'El borrador cambió mientras se descartaba.',
+        );
+      }
+
+      const revisionesRestantes = await tx.productoRecetaRevision.count({
+        where: { recetaId: revision.recetaId, tenantId: auth.tenantId },
+      });
+      const recetaEliminada =
+        revisionesRestantes === 0 && !revision.receta.revisionPublicadaId;
+      if (recetaEliminada) {
+        await tx.productoReceta.deleteMany({
+          where: {
+            id: revision.recetaId,
+            tenantId: auth.tenantId,
+            revisionPublicadaId: null,
+          },
+        });
+      }
+
+      await this.eventos.publicar(
+        {
+          tenantId: auth.tenantId,
+          actorUserId: auth.userId,
+          actorNombre,
+          tipo: 'receta_borrador_descartado',
+          entidadTipo: 'PRODUCTO_RECETA_REVISION',
+          entidadId: revision.id,
+          titulo: `Borrador V${revision.numero} descartado`,
+          mensaje: `${revision.receta.producto.nombre} descartó sus cambios de receta sin publicar.`,
+          href: `/productos-servicios/${revision.receta.productoId}?tab=produccion&vista=bom`,
+          topicos: [
+            `producto:${revision.receta.productoId}`,
+            `receta:${revision.recetaId}`,
+          ],
+        },
+        tx,
+      );
+
+      return { recetaEliminada };
+    });
+
+    return {
+      id: revision.id,
+      numero: revision.numero,
+      descartada: true,
+      ...resultado,
+    };
   }
 
   async deprecar(

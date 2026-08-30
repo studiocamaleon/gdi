@@ -54,6 +54,7 @@ import { FormularioCotizacionService } from './formulario-cotizacion.service';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import {
+  DescartarBorradorRecetaDto,
   DeprecarRecetaDto,
   GuardarBorradorRecetaDto,
   PublicarRecetaDto,
@@ -106,6 +107,16 @@ export class ProductosServiciosController {
     @Body() dto: PublicarRecetaDto,
   ) {
     return this.recetas.publicar(auth, revisionId, dto);
+  }
+
+  @Permiso('costos.gestionar')
+  @Delete('recetas/revisiones/:revisionId/borrador')
+  descartarBorradorReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+    @Body() dto: DescartarBorradorRecetaDto,
+  ) {
+    return this.recetas.descartarBorrador(auth, revisionId, dto);
   }
 
   @Permiso('costos.gestionar')
