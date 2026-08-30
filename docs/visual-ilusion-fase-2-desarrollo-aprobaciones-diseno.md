@@ -1,6 +1,6 @@
 # Fase 2 — Desarrollo, archivos versionados y aprobaciones
 
-**Estado:** IMPLEMENTADA Y VALIDADA TÉCNICAMENTE · PENDIENTE VALIDACIÓN FUNCIONAL DEL USUARIO
+**Estado:** COMPLETA · VALIDACIÓN FUNCIONAL APROBADA EL 29/08/2026
 
 **Rama:** `visual-ilusion/fase-2-desarrollo-aprobaciones`
 
@@ -148,7 +148,7 @@ Verificaciones automatizadas:
 - `git diff --check` sin errores.
 - `css-guard` continúa señalando diez clases globales preexistentes en `globals.css`; la Fase 2 no modifica ese archivo y todos sus estilos nuevos son CSS Modules.
 
-La fase queda lista para la validación funcional del usuario. No se marca `COMPLETA` ni se integra en `visual-ilusion/analisis` hasta recibir esa conformidad.
+La validación funcional fue aprobada por el usuario el 29/08/2026. La fase puede integrarse en `visual-ilusion/analisis`; el hallazgo transversal de frescura no se pierde y se ejecutará como Fase 2.5 antes de Fase 3.
 
 ## 11. Hallazgo de validación: frescura entre sesiones
 

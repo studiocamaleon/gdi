@@ -372,7 +372,7 @@ Permitir que una operación como “Carrefour — Vuelta a Clases 2027” se ges
 
 ## Fase 2 — Desarrollo, archivos versionados y aprobaciones
 
-**Estado:** IMPLEMENTADA Y VALIDADA TÉCNICAMENTE · PENDIENTE VALIDACIÓN FUNCIONAL DEL USUARIO
+**Estado:** COMPLETA · VALIDACIÓN FUNCIONAL APROBADA
 
 **Rama:** `visual-ilusion/fase-2-desarrollo-aprobaciones`
 
@@ -421,7 +421,7 @@ Los `Archivo` existentes siguen siendo adjuntos. La migración al modelo maestro
 - Migración: `apps/api/prisma/migrations/20260829210000_visual_ilusion_fase_2_desarrollo_aprobaciones/migration.sql`.
 - Recorrido real completado con V1 observada/rechazada, V2 aprobada/liberada, revocación de link y gate productivo bloqueado/habilitado sobre la misma OT.
 - Prisma y base al día; builds Nest/Next exitosos; 197 tests relevantes aprobados.
-- Pendiente únicamente la conformidad funcional del usuario antes de marcar la fase `COMPLETA` e integrarla en la rama madre.
+- Conformidad funcional otorgada el 29/08/2026; lista para integrar en la rama madre.
 
 ---
 
@@ -1079,8 +1079,8 @@ Esta tabla es el control maestro contra pérdida de alcance.
 | 5 | Rutas dinámicas/condicionales | F3–F4 | F2 | Parcial hoy |
 | 6 | Rutas paralelas y convergencia | F4 | F11 | Pendiente |
 | 7 | Subproductos/componentes | F3–F4 | F6 | Pendiente |
-| 8 | Prototipos y muestras | F2 | F1 | Implementado; pendiente validación funcional |
-| 9 | Versionado de archivos | F2 | F5 | Implementado; pendiente validación funcional |
+| 8 | Prototipos y muestras | F2 | F1 | Implementado y validado |
+| 9 | Versionado de archivos | F2 | F5 | Implementado y validado |
 | 10 | Aprobaciones | F2 | F4, F7, F10 | Implementado; se amplía en fases relacionadas |
 | 11 | Mesa de corte como centro | F5 | F11 | Parcial hoy |
 | 12 | Nesting como entidad | F5 | F9 | Parcial hoy |
@@ -1266,7 +1266,7 @@ Esta tabla se actualizará al integrar cada fase.
 |---:|---|---|---|---|---|
 | 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
 | 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
-| 2 | VALIDACIÓN | `visual-ilusion/fase-2-desarrollo-aprobaciones` | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md` | `bf2df97a` | Validación técnica completa; pendiente conformidad funcional |
+| 2 | COMPLETA | `visual-ilusion/fase-2-desarrollo-aprobaciones` | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md` | `bf2df97a`, `52538507` | Validación técnica y funcional aprobadas; integración en rama madre habilitada |
 | 2.5 | PENDIENTE | — | — | — | Tiempo real e inbox transversal; recomendado antes de F3 |
 | 3 | PENDIENTE | — | — | — | — |
 | 4 | PENDIENTE | — | — | — | — |
