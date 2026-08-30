@@ -586,6 +586,10 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 - Regla de ejecutabilidad por predecesores satisfechos y gates.
 - Varias fronteras activas simultáneas por ítem.
 - Convergencia de componentes antes de armado/QC.
+- Vincular cada componente fabricado separado de la BOM a su nodo de
+  incorporación, ensamble o convergencia dentro del flujo principal.
+- Crear y coordinar la ejecución hija desde esa relación, conservando la receta
+  y revisión que Fase 3 dejó congeladas.
 - Actualización de iniciar, completar, bloquear, reabrir, cancelar y finalizar.
 - Progreso por nodos y duración ponderada, sin vender falsa precisión.
 - Adaptación del tablero por ítems/estación/kanban.
@@ -613,6 +617,8 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 - Ejecutar `Diseño → {UV PVC, Cartón/Corte, Acrílico/Láser} → Armado → QC`.
 - Demostrar ramas simultáneamente listas en estaciones distintas.
 - Impedir Armado hasta completar todas las ramas.
+- Demostrar que un componente fabricado con receta propia se ejecuta por su
+  ruta y habilita exactamente el nodo del producto padre donde se incorpora.
 - Ejecutar una OT lineal histórica con resultado equivalente.
 - ETA y progreso coherentes en ambos tipos de topología.
 
