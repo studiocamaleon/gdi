@@ -8,6 +8,7 @@ import { OrdenesTrabajoController } from './ordenes-trabajo.controller';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { EntregaService } from './entrega.service';
 import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorridos-vectoriales.module';
+import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-documental.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorrido
     EnlacesPublicosModule,
     DatosEmpresaModule,
     RecorridosVectorialesModule,
+    DesarrolloDocumentalModule,
   ],
   controllers: [OrdenesTrabajoController],
   providers: [OrdenesTrabajoService, EntregaService],

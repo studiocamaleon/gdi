@@ -1,0 +1,69 @@
+.page {
+  min-height: 100vh;
+  padding: 28px 18px 48px;
+  color: #17161b;
+  background: #efede9;
+}
+.brand, .hero, .sheet, .footer { width: min(760px, 100%); margin-inline: auto; }
+.brand { display: flex; align-items: center; gap: 11px; padding-bottom: 22px; }
+.brandMark { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 10px; color: #fff; background: #18171c; font: 700 13px ui-monospace, monospace; }
+.brand strong, .brand span { display: block; }
+.brand strong { font-size: 13px; }
+.brand span { margin-top: 2px; color: #746f69; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.brand > svg { width: 19px; margin-left: auto; color: #16845a; }
+.hero { padding: 31px 34px 27px; border-radius: 18px 18px 0 0; color: #fff; background: radial-gradient(circle at 88% 5%, rgba(255,106,43,.4), transparent 34%), #19181d; }
+.hero p { margin: 0 0 9px; color: rgba(255,255,255,.55); font: 700 10px ui-monospace, monospace; letter-spacing: .09em; }
+.hero h1 { max-width: 610px; margin: 0; font-size: clamp(26px, 5vw, 40px); line-height: 1.05; letter-spacing: -.04em; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
+.tags span { border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 4px 8px; color: rgba(255,255,255,.78); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.tags span[data-status="APROBADA"] { border-color: #69d1a4; color: #83e1b9; }
+.sheet { position: relative; padding: 34px; border-radius: 0 0 18px 18px; background: #fff; box-shadow: 0 22px 55px rgba(30,26,22,.13); }
+.revisionStamp { position: absolute; right: 34px; top: -37px; display: grid; width: 82px; height: 74px; place-items: center; align-content: center; border: 1px solid #ff8d5c; border-radius: 9px; color: #fff; background: #f36428; box-shadow: 0 8px 20px rgba(243,100,40,.25); transform: rotate(2deg); }
+.revisionStamp small { font: 700 7px ui-monospace, monospace; letter-spacing: .08em; }
+.revisionStamp strong { margin-top: 4px; font: 750 28px/1 ui-monospace, monospace; }
+.fileInfo { display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 13px; padding: 17px; border: 1px solid #ddd8d1; border-radius: 12px; background: #f9f8f6; }
+.fileInfo > svg { width: 25px; color: #f36428; }
+.fileInfo strong, .fileInfo span { display: block; }
+.fileInfo strong { overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.fileInfo span { margin-top: 4px; color: #7b7670; font: 500 9px ui-monospace, monospace; }
+.fileInfo a { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #cfc9c1; border-radius: 8px; padding: 8px 11px; font-size: 11px; font-weight: 700; }
+.fileInfo a svg { width: 14px; }
+.instructions { margin-top: 18px; padding: 16px 17px; border-left: 3px solid #f36428; border-radius: 4px 10px 10px 4px; background: #fff5ef; }
+.instructions strong { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; }
+.instructions p { margin: 6px 0 0; color: #684531; font-size: 13px; line-height: 1.55; }
+.actions { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 10px; margin-top: 25px; }
+.actions button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border-radius: 9px; font-weight: 750; }
+.actions svg { width: 18px; }
+.approve { border: 1px solid #08764f; color: #fff; background: #0b8058; }
+.observe { border: 1px solid #d7d1c9; color: #4f4a45; background: #fff; }
+.reject { border: 1px solid #e4b4a8; color: #a33e27; background: #fff3ef; }
+.resolved { display: flex; align-items: center; gap: 12px; margin-top: 24px; padding: 15px; border: 1px solid #9ed8bf; border-radius: 10px; color: #0b704c; background: #edf8f3; }
+.resolved > svg { width: 24px; }
+.resolved strong, .resolved span { display: block; }
+.resolved span { margin-top: 2px; font-size: 11px; }
+.footer { padding: 18px 10px; color: #77716b; font-size: 10px; line-height: 1.5; text-align: center; }
+.overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 18px; background: rgba(20,18,22,.72); backdrop-filter: blur(4px); }
+.decisionCard { width: min(520px,100%); padding: 26px; border-radius: 15px; background: #fff; box-shadow: 0 25px 70px rgba(0,0,0,.3); }
+.decisionCard h2 { margin: 0; font-size: 21px; }
+.decisionCard > p { margin: 7px 0 20px; color: #746f69; font-size: 12px; line-height: 1.5; }
+.decisionCard label { display: block; margin-top: 14px; }
+.decisionCard label span { display: block; margin-bottom: 6px; font-size: 11px; font-weight: 700; }
+.decisionCard input, .decisionCard textarea { width: 100%; border: 1px solid #d7d1c9; border-radius: 8px; padding: 10px 11px; outline: none; }
+.decisionCard textarea { min-height: 105px; resize: vertical; }
+.decisionCard input:focus, .decisionCard textarea:focus { border-color: #f36428; box-shadow: 0 0 0 3px rgba(243,100,40,.12); }
+.modalActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.modalActions button { min-height: 38px; border: 1px solid #d7d1c9; border-radius: 8px; padding: 8px 13px; font-weight: 700; background: #fff; }
+.modalActions button[data-primary] { border-color: #08764f; color: #fff; background: #0b8058; }
+.error { margin-top: 12px; color: #ae3d28; font-size: 11px; }
+.invalid { width: min(540px,100%); margin: 15vh auto 0; padding: 42px 30px; border-radius: 16px; background: #fff; text-align: center; box-shadow: 0 20px 50px rgba(30,26,22,.1); }
+.invalid svg { width: 34px; margin: 0 auto 12px; color: #bd4930; }
+.invalid h1 { margin: 0; font-size: 23px; }
+.invalid p { color: #746f69; font-size: 13px; line-height: 1.55; }
+@media (max-width: 620px) {
+  .page { padding: 16px 10px 36px; }
+  .hero, .sheet { padding-inline: 20px; }
+  .revisionStamp { right: 20px; }
+  .fileInfo { grid-template-columns: 36px minmax(0,1fr); }
+  .fileInfo a { grid-column: 1 / -1; justify-content: center; }
+  .actions { grid-template-columns: 1fr; }
+}

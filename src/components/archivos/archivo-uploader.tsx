@@ -62,6 +62,8 @@ export type ArchivoUploaderProps = {
    * o en la ficha de un producto no tiene sentido.
    */
   permitirPublico?: boolean;
+  /** Calcula y persiste SHA-256 para que el archivo pueda ser una revisión controlada. */
+  calcularHash?: boolean;
   /** Texto del vacío. Sin esto, un tab sin archivos no dice nada. */
   vacio?: string;
 };
@@ -88,6 +90,7 @@ export function ArchivoUploader({
   soloLectura = false,
   sinLista = false,
   permitirPublico = false,
+  calcularHash = false,
   vacio,
 }: ArchivoUploaderProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -107,6 +110,7 @@ export function ArchivoUploader({
   const procesar = React.useCallback(
     async (files: File[]) => {
       const elegidos = unico ? files.slice(0, 1) : files;
+      let acumulados = archivos;
 
       for (const original of elegidos) {
         // Se valida el ORIGINAL: es lo que el usuario eligió y sobre lo que
@@ -129,7 +133,7 @@ export function ArchivoUploader({
         try {
           const subido = await subirArchivo(
             file,
-            { scope, entidadId },
+            { scope, entidadId, calcularHash },
             (pct) =>
               setEnCurso((s) =>
                 s.map((x) => (x.clave === clave ? { ...x, progreso: pct } : x)),
@@ -137,7 +141,8 @@ export function ArchivoUploader({
             abort.signal,
           );
           setEnCurso((s) => s.filter((x) => x.clave !== clave));
-          onCambio(unico ? [subido] : [subido, ...archivos]);
+          acumulados = unico ? [subido] : [subido, ...acumulados];
+          onCambio(acumulados);
           toast.success(`${file.name} subido.`);
         } catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") {
@@ -153,7 +158,7 @@ export function ArchivoUploader({
         }
       }
     },
-    [archivos, entidadId, extensiones, onCambio, scope, transformar, unico],
+    [archivos, calcularHash, entidadId, extensiones, onCambio, scope, transformar, unico],
   );
 
   const cambiarVisibilidad = async (archivo: Archivo, publico: boolean) => {

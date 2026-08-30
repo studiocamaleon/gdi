@@ -367,7 +367,7 @@ Permitir que una operación como “Carrefour — Vuelta a Clases 2027” se ges
 
 ## Fase 2 — Desarrollo, archivos versionados y aprobaciones
 
-**Estado:** DISEÑO
+**Estado:** IMPLEMENTADA Y VALIDADA TÉCNICAMENTE · PENDIENTE VALIDACIÓN FUNCIONAL DEL USUARIO
 
 **Rama:** `visual-ilusion/fase-2-desarrollo-aprobaciones`
 
@@ -409,6 +409,14 @@ Los `Archivo` existentes siguen siendo adjuntos. La migración al modelo maestro
 - Bloquear e impedir backend-side el inicio de producción sin aprobación requerida.
 - Conservar historial completo aun al cambiar aprobadores o archivos vigentes.
 - Aprobar externamente sin exponer costos, otros clientes o archivos privados.
+
+### Evidencia de implementación
+
+- Diseño y decisiones: `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`.
+- Migración: `apps/api/prisma/migrations/20260829210000_visual_ilusion_fase_2_desarrollo_aprobaciones/migration.sql`.
+- Recorrido real completado con V1 observada/rechazada, V2 aprobada/liberada, revocación de link y gate productivo bloqueado/habilitado sobre la misma OT.
+- Prisma y base al día; builds Nest/Next exitosos; 197 tests relevantes aprobados.
+- Pendiente únicamente la conformidad funcional del usuario antes de marcar la fase `COMPLETA` e integrarla en la rama madre.
 
 ---
 

@@ -363,6 +363,7 @@ import { NotificacionesOrdenesService } from '../integraciones/notificaciones/no
 import { formatearMoneda, type Moneda } from '../common/moneda';
 import { regionalDelTenant } from '../common/regional';
 import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
+import { DesarrolloDocumentalService } from '../desarrollo-documental/desarrollo-documental.service';
 import {
   claveFechaEnZona,
   instanteDe,
@@ -662,6 +663,7 @@ export class OrdenesTrabajoService {
     private readonly facturacionOrdenes: FacturacionOrdenesService,
     private readonly preparacionesRecorrido: PreparacionesRecorridoService,
     private readonly fidelizacion: FidelizacionService,
+    private readonly desarrolloDocumental: DesarrolloDocumentalService,
   ) {}
 
   private async prepararRecorridosDeItems(
@@ -3312,6 +3314,9 @@ export class OrdenesTrabajoService {
     const desde = orden.estado as OrdenTrabajoEstado;
     const hacia = payload.estado as OrdenTrabajoEstado;
     this.validarTransicion(desde, hacia);
+    if (hacia === 'produccion') {
+      await this.desarrolloDocumental.exigirGatesCumplidos(orden.id);
+    }
     // Salir de borrador (a cualquier estado) es emitir: exige cliente y
     // fecha de entrega vigente, igual que la emisión directa.
     if (desde === 'borrador') {
@@ -4884,6 +4889,13 @@ export class OrdenesTrabajoService {
       throw new BadRequestException(
         `No se puede reabrir "${paso.nombre}": hay pasos posteriores que ya arrancaron.`,
       );
+    }
+    if (
+      payload.accion === 'iniciar' ||
+      payload.accion === 'continuar' ||
+      payload.accion === 'completar'
+    ) {
+      await this.desarrolloDocumental.exigirGatesCumplidos(ordenId, paso.id);
     }
 
     const motivo = payload.motivo?.trim();

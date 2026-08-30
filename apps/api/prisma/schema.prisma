@@ -399,6 +399,54 @@ enum ArchivoEstado {
   ELIMINADO
 }
 
+enum PropositoArchivoMaestro {
+  PRINT
+  CUT
+  RENDER
+  PLANO
+  INSTRUCTIVO
+  OTRO
+}
+
+enum EtapaDesarrolloDocumento {
+  BRIEF
+  DISENO
+  PROTOTIPO
+  MUESTRA
+  PRODUCCION
+}
+
+enum EstadoRevisionArchivo {
+  BORRADOR
+  EN_REVISION
+  OBSERVADA
+  APROBADA
+  OBSOLETA
+}
+
+enum TipoAprobacionDocumento {
+  CLIENTE
+  DISENO
+  COLOR_MUESTRA
+  INGENIERIA
+  LIBERACION_PRODUCTIVA
+}
+
+enum EstadoSolicitudAprobacion {
+  PENDIENTE
+  APROBADA
+  OBSERVADA
+  RECHAZADA
+  CANCELADA
+}
+
+enum DecisionAprobacionDocumento {
+  APROBAR
+  OBSERVAR
+  RECHAZAR
+  CANCELAR
+}
+
 /// Qué proveedor externo. Una fila de IntegracionTenant por cada uno que el
 /// tenant conecte.
 enum ProveedorIntegracion {
@@ -611,6 +659,11 @@ model Tenant {
   proyectoCampanaHitos                             ProyectoCampanaHito[]
   proyectoCampanaEventos                           ProyectoCampanaEvento[]
   proyectoCampanaContadores                        ProyectoCampanaContador[]
+  archivosMaestros                                 ArchivoMaestro[]
+  archivosRevisiones                               ArchivoRevision[]
+  solicitudesAprobacionDocumento                   SolicitudAprobacionDocumento[]
+  decisionesAprobacionDocumento                    DecisionAprobacionDocumentoRegistro[]
+  gatesProduccionDocumento                         GateProduccionDocumento[]
   proveedores                                      Proveedor[]
   empleados                                        Empleado[]
   plantas                                          Planta[]
@@ -800,35 +853,41 @@ model CentroCopiadoOperacion {
 }
 
 model User {
-  id                      String                  @id @default(uuid()) @db.Uuid
-  email                   String                  @unique
-  passwordHash            String?
+  id                       String                                @id @default(uuid()) @db.Uuid
+  email                    String                                @unique
+  passwordHash             String?
   /// La clave que tiene es provisoria: la puso un administrador al
   /// restablecerla y el sistema obliga a cambiarla antes de dejar entrar a
   /// ningún lado. Así el admin puede devolverle el acceso a alguien sin quedar
   /// sabiendo con qué clave trabaja después.
-  debeCambiarPassword     Boolean                 @default(false)
-  nombreCompleto          String?
-  activo                  Boolean                 @default(true)
+  debeCambiarPassword      Boolean                               @default(false)
+  nombreCompleto           String?
+  activo                   Boolean                               @default(true)
   /// Rol en el control plane. Null = usuario común (la enorme mayoría).
   /// Se otorga por script/consola y todo cambio queda en PlataformaEvento.
-  rolPlataforma           RolPlataforma?
-  createdAt               DateTime                @default(now())
-  updatedAt               DateTime                @updatedAt
-  memberships             Membership[]
-  authSessions            AuthSession[]
-  plataformaEventos       PlataformaEvento[]      @relation("EventosDeStaff")
-  invitations             Invitation[]
-  empleados               Empleado[]
-  ordenTrabajoEventos     OrdenTrabajoEvento[]
-  archivosSubidos         Archivo[]               @relation("ArchivosSubidos")
-  proyectoCampanaEventos  ProyectoCampanaEvento[] @relation("ProyectoCampanaEventoActor")
-  integracionesConectadas IntegracionTenant[]     @relation("IntegracionesConectadas")
-  pasosEnMesa             OrdenTrabajoItemPaso[]  @relation("PasosEnMesa")
-  pasosIniciados          OrdenTrabajoItemPaso[]  @relation("PasosIniciados")
-  pasosCompletados        OrdenTrabajoItemPaso[]  @relation("PasosCompletados")
-  tramosPaso              OrdenTrabajoPasoTramo[] @relation("TramosPaso")
-  ahorrosConsolidacion    AhorroConsolidacion[]   @relation("AhorrosConsolidacion")
+  rolPlataforma            RolPlataforma?
+  createdAt                DateTime                              @default(now())
+  updatedAt                DateTime                              @updatedAt
+  memberships              Membership[]
+  authSessions             AuthSession[]
+  plataformaEventos        PlataformaEvento[]                    @relation("EventosDeStaff")
+  invitations              Invitation[]
+  empleados                Empleado[]
+  ordenTrabajoEventos      OrdenTrabajoEvento[]
+  archivosSubidos          Archivo[]                             @relation("ArchivosSubidos")
+  proyectoCampanaEventos   ProyectoCampanaEvento[]               @relation("ProyectoCampanaEventoActor")
+  integracionesConectadas  IntegracionTenant[]                   @relation("IntegracionesConectadas")
+  pasosEnMesa              OrdenTrabajoItemPaso[]                @relation("PasosEnMesa")
+  pasosIniciados           OrdenTrabajoItemPaso[]                @relation("PasosIniciados")
+  pasosCompletados         OrdenTrabajoItemPaso[]                @relation("PasosCompletados")
+  tramosPaso               OrdenTrabajoPasoTramo[]               @relation("TramosPaso")
+  ahorrosConsolidacion     AhorroConsolidacion[]                 @relation("AhorrosConsolidacion")
+  archivosMaestrosCreados  ArchivoMaestro[]                      @relation("ArchivoMaestroCreador")
+  revisionesDocumentales   ArchivoRevision[]                     @relation("ArchivoRevisionAutor")
+  aprobacionesSolicitadas  SolicitudAprobacionDocumento[]        @relation("SolicitudAprobacionSolicitante")
+  aprobacionesAsignadas    SolicitudAprobacionDocumento[]        @relation("SolicitudAprobacionAsignada")
+  decisionesDocumentales   DecisionAprobacionDocumentoRegistro[] @relation("DecisionAprobacionActor")
+  liberacionesDocumentales ArchivoRevision[]                     @relation("ArchivoRevisionLiberadaPor")
 }
 
 /// Quién le cambió el acceso a quién, dentro de una empresa.
@@ -2912,15 +2971,17 @@ model ProyectoCampana {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  tenant       Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente      Cliente                  @relation("ProyectoCampanaCliente", fields: [clienteId], references: [id], onDelete: Restrict)
-  responsable  Empleado?                @relation("ProyectoCampanaResponsable", fields: [responsableEmpleadoId], references: [id], onDelete: SetNull)
-  equipo       ProyectoCampanaMiembro[]
-  hitos        ProyectoCampanaHito[]
-  eventos      ProyectoCampanaEvento[]
-  cotizaciones Cotizacion[]
-  ordenes      OrdenTrabajo[]
-  archivos     Archivo[]
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente          Cliente                   @relation("ProyectoCampanaCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  responsable      Empleado?                 @relation("ProyectoCampanaResponsable", fields: [responsableEmpleadoId], references: [id], onDelete: SetNull)
+  equipo           ProyectoCampanaMiembro[]
+  hitos            ProyectoCampanaHito[]
+  eventos          ProyectoCampanaEvento[]
+  cotizaciones     Cotizacion[]
+  ordenes          OrdenTrabajo[]
+  archivos         Archivo[]
+  archivosMaestros ArchivoMaestro[]
+  gatesDocumento   GateProduccionDocumento[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, estado, fechaObjetivo])
@@ -3184,43 +3245,43 @@ model CotizacionItem {
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
 model OrdenTrabajo {
-  id                          String                   @id @default(uuid()) @db.Uuid
-  tenantId                    String                   @db.Uuid
+  id                          String                    @id @default(uuid()) @db.Uuid
+  tenantId                    String                    @db.Uuid
   /// UUID estable del comando de creación. Permite devolver la misma OT ante
   /// reintentos luego de una respuesta perdida, sin duplicar taller ni cobros.
-  idempotencyKey              String?                  @db.Uuid
+  idempotencyKey              String?                   @db.Uuid
   /// "OT-2026-0184" — asignado al crear vía OrdenTrabajoContador.
   numero                      String
-  clienteId                   String?                  @db.Uuid
-  proyectoCampanaId           String?                  @db.Uuid
-  vendedorEmpleadoId          String?                  @db.Uuid
+  clienteId                   String?                   @db.Uuid
+  proyectoCampanaId           String?                   @db.Uuid
+  vendedorEmpleadoId          String?                   @db.Uuid
   /// Presupuesto de origen (si vino del cotizador).
-  cotizacionId                String?                  @db.Uuid
+  cotizacionId                String?                   @db.Uuid
   /// 'borrador' | 'pendiente' | 'produccion' | 'finalizada' | 'entregada' |
   /// 'cancelada'. Las cinco primeras son una SECUENCIA que sólo avanza;
   /// 'cancelada' es una salida lateral y terminal.
-  estado                      String                   @default("borrador")
+  estado                      String                    @default("borrador")
   fechaEmision                DateTime?
-  fechaEntrega                DateTime?                @db.Date
+  fechaEntrega                DateTime?                 @db.Date
   observaciones               String?
   /// 'mostrador' | 'web' | 'vendedor_externo' | 'telefono'.
   canalVenta                  String?
   /// Denormalizados para el listado; la fuente de verdad es items/snapshot.
-  subtotal                    Decimal?                 @db.Decimal(14, 2)
-  impuestos                   Decimal?                 @db.Decimal(14, 2)
-  cargosDirectos              Decimal?                 @db.Decimal(14, 2)
+  subtotal                    Decimal?                  @db.Decimal(14, 2)
+  impuestos                   Decimal?                  @db.Decimal(14, 2)
+  cargosDirectos              Decimal?                  @db.Decimal(14, 2)
   /// Snapshots de cargos a nivel orden. Null en órdenes históricas.
   cargosDirectosJson          Json?
   /// Σ de los descuentos comerciales de los items (sobre el neto), denormalizado
   /// para el listado. El descuento ya está DENTRO de `subtotal`/`total`.
-  descuentoTotal              Decimal?                 @db.Decimal(14, 2)
-  total                       Decimal?                 @db.Decimal(14, 2)
+  descuentoTotal              Decimal?                  @db.Decimal(14, 2)
+  total                       Decimal?                  @db.Decimal(14, 2)
   /// Avance 0-100 informado por producción; null = sin dato.
   progresoPct                 Int?
   /// Token aleatorio url-safe del link PÚBLICO de seguimiento del cliente
   /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
   /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
-  publicToken                 String?                  @unique
+  publicToken                 String?                   @unique
   /// Primera vez que la orden llegó a 'finalizada'. Ancla del aging de la
   /// deuda COMERCIAL (la deuda nace acá, no en la factura). Reabrir la
   /// orden NO la borra: si vuelve a finalizar, el aging no se resetea.
@@ -3229,7 +3290,7 @@ model OrdenTrabajo {
   /// Vencimiento comercial congelado al finalizar. Sin cuenta corriente es
   /// la misma fecha de finalización; con cuenta corriente suma el plazo
   /// configurado entonces en el cliente.
-  fechaVencimientoComercial   DateTime?                @db.Date
+  fechaVencimientoComercial   DateTime?                 @db.Date
   /// Cuándo se entregó, la PRIMERA vez. Es el ancla del pedido de reseña —"N
   /// días después de la entrega"—, y por eso no se resetea: volver a marcar
   /// entregada una orden que se había reabierto no reinicia el reloj.
@@ -3244,8 +3305,8 @@ model OrdenTrabajo {
   /// anuladas (las NC restan); cobradoTotal = Σ Cobro.montoBruto no
   /// anulados de la orden. Los estados derivados (sin facturar/parcial/
   /// facturada y sin cobrar/parcial/cobrada) se calculan de acá.
-  facturadoTotal              Decimal                  @default(0) @db.Decimal(14, 2)
-  cobradoTotal                Decimal                  @default(0) @db.Decimal(14, 2)
+  facturadoTotal              Decimal                   @default(0) @db.Decimal(14, 2)
+  cobradoTotal                Decimal                   @default(0) @db.Decimal(14, 2)
   /// Tratamiento fiscal de la orden: 'FISCAL' (default, lleva IVA y comprobante
   /// electrónico) | 'SIN_COMPROBANTE' (el desglose oculta el IVA, `total` = neto,
   /// y la orden queda FUERA de la cola de facturar — no se factura por error).
@@ -3254,13 +3315,13 @@ model OrdenTrabajo {
   /// El sistema NO modela la evasión: registra un hecho neutro ("no llevó
   /// comprobante"); declarar o no ese ingreso vive fuera del sistema.
   /// Ver docs/margen-y-decisiones-de-precio.md §6.
-  tratamientoFiscal           String                   @default("FISCAL")
+  tratamientoFiscal           String                    @default("FISCAL")
   /// Snapshot comercial del programa de puntos. El canje ya está incorporado
   /// en subtotal/impuestos/total; estos campos conservan su trazabilidad.
-  fidelizacionMargenBase      Decimal?                 @db.Decimal(14, 2)
+  fidelizacionMargenBase      Decimal?                  @db.Decimal(14, 2)
   fidelizacionPuntosEstimados Int?
-  fidelizacionCanjePuntos     Int                      @default(0)
-  fidelizacionCanjeMonto      Decimal                  @default(0) @db.Decimal(14, 2)
+  fidelizacionCanjePuntos     Int                       @default(0)
+  fidelizacionCanjeMonto      Decimal                   @default(0) @db.Decimal(14, 2)
   fidelizacionSnapshotJson    Json?
   /// === Cancelación ===
   /// Cuándo se canceló. Es el "está cancelada" real: `estado` lo dice también,
@@ -3274,7 +3335,7 @@ model OrdenTrabajo {
   /// Por qué. Obligatorio al cancelar: una orden que desaparece de las ventas
   /// sin explicación es una discusión asegurada tres meses después.
   motivoCancelacion           String?
-  canceladaPorId              String?                  @db.Uuid
+  canceladaPorId              String?                   @db.Uuid
   /// Nombre CONGELADO de quien canceló: el legajo puede cambiar o borrarse y
   /// el historial no puede quedar sin responsable.
   canceladaPorNombre          String?
@@ -3285,13 +3346,13 @@ model OrdenTrabajo {
   pasosHechosAlCancelar       Int?
   pasosTotalAlCancelar        Int?
   minutosRealesAlCancelar     Int?
-  createdAt                   DateTime                 @default(now())
-  updatedAt                   DateTime                 @updatedAt
-  tenant                      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente                     Cliente?                 @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
-  proyectoCampana             ProyectoCampana?         @relation(fields: [proyectoCampanaId], references: [id], onDelete: SetNull)
-  vendedor                    Empleado?                @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
-  cotizacion                  Cotizacion?              @relation(fields: [cotizacionId], references: [id])
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  tenant                      Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente                     Cliente?                  @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  proyectoCampana             ProyectoCampana?          @relation(fields: [proyectoCampanaId], references: [id], onDelete: SetNull)
+  vendedor                    Empleado?                 @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
+  cotizacion                  Cotizacion?               @relation(fields: [cotizacionId], references: [id])
   items                       OrdenTrabajoItem[]
   pasos                       OrdenTrabajoItemPaso[]
   eventos                     OrdenTrabajoEvento[]
@@ -3304,6 +3365,7 @@ model OrdenTrabajo {
   cuponRedenciones            CuponRedencion[]
   movimientosFidelizacion     FidelizacionMovimiento[]
   reservasFidelizacion        FidelizacionReserva[]
+  gatesDocumento              GateProduccionDocumento[]
 
   @@unique([tenantId, numero])
   @@unique([tenantId, idempotencyKey])
@@ -3502,10 +3564,10 @@ model EtaSnapshotItem {
 /// inmutable; acá vive el estado de EJECUCIÓN en el taller.
 /// Ver docs/tablero-produccion-conexion-diseno.md
 model OrdenTrabajoItemPaso {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  tenantId            String                  @db.Uuid
-  ordenId             String                  @db.Uuid
-  itemId              String                  @db.Uuid
+  id                  String                    @id @default(uuid()) @db.Uuid
+  tenantId            String                    @db.Uuid
+  ordenId             String                    @db.Uuid
+  itemId              String                    @db.Uuid
   /// Posición del paso en la ruta del item (orden topológico del snapshot).
   indice              Int
   /// rutaPasoId del PasoEjecutado de origen (trazar contra el snapshot).
@@ -3516,22 +3578,22 @@ model OrdenTrabajoItemPaso {
   /// Nombre operativo visible ("Impresión digital frente").
   nombre              String
   /// Centro de costo que tarifó el paso — proxy de "estación" en fase 1.
-  centroCostoId       String?                 @db.Uuid
+  centroCostoId       String?                   @db.Uuid
   centroCostoNombre   String?
   /// Máquina que ejecutó el paso (la que eligió el motor). Señal REAL para
   /// rutear a estaciones por máquina/tecnología, en vez del centro de costo
   /// (que es de costeo). Null en pasos sin máquina o en órdenes viejas.
   /// Ver docs/estaciones-reglas-diseno.md.
-  maquinaId           String?                 @db.Uuid
-  duracionEstimadaMin Decimal?                @db.Decimal(10, 2)
+  maquinaId           String?                   @db.Uuid
+  duracionEstimadaMin Decimal?                  @db.Decimal(10, 2)
   /// 'pendiente' | 'en_curso' | 'pausado' | 'hecho' | 'bloqueado'.
-  estado              String                  @default("pendiente")
+  estado              String                    @default("pendiente")
   motivoBloqueo       String?
   /// === Tercerización (F2, docs/productos-tercerizados-diseno.md §6) ===
   /// 'interno' (producción propia, va al tablero) | 'tercerizado' (compra a un
   /// proveedor, va al panel de Compras, fuera del tablero).
-  tipoEjecucion       String                  @default("interno")
-  proveedorId         String?                 @db.Uuid
+  tipoEjecucion       String                    @default("interno")
+  proveedorId         String?                   @db.Uuid
   /// Snapshot del nombre del proveedor (no FK, patrón de los demás nombres).
   proveedorNombre     String?
   plazoProveedorDias  Int?
@@ -3544,31 +3606,32 @@ model OrdenTrabajoItemPaso {
   /// Cómo se registra el trabajo (snapshot del catálogo de familias al
   /// materializar, D1): 'cronometro' (MO domina, tramos) | 'solo_completar'
   /// (runtime de máquina, un click y tiempo = estimado).
-  modoRegistro        String                  @default("cronometro")
+  modoRegistro        String                    @default("cronometro")
   /// Tiempo real asentado al completar (D3). En modo cronómetro es la suma
   /// de tramos; en solo_completar copia el estimado. Null hasta 'hecho'.
-  tiempoRealMin       Decimal?                @db.Decimal(10, 2)
+  tiempoRealMin       Decimal?                  @db.Decimal(10, 2)
   /// Calidad/origen de tiempoRealMin: 'medido' | 'medido_lote' |
   /// 'declarado' | 'estimado' | 'invalido'.
   tiempoFuente        String?
   /// Atribución directa (D5): quién abrió el primer tramo / quién completó.
   /// Nombre = snapshot (el FK puede quedar null si se borra el usuario).
-  iniciadoPorId       String?                 @db.Uuid
+  iniciadoPorId       String?                   @db.Uuid
   iniciadoPorNombre   String?
-  completadoPorId     String?                 @db.Uuid
+  completadoPorId     String?                   @db.Uuid
   completadoPorNombre String?
   /// Usuario que tomó el paso a SU mesa de trabajo (vista Por estación del
   /// tablero): reclamo visible para todos, persistente entre sesiones.
-  mesaUsuarioId       String?                 @db.Uuid
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
-  tenant              Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orden               OrdenTrabajo            @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  item                OrdenTrabajoItem        @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  mesaUsuario         User?                   @relation("PasosEnMesa", fields: [mesaUsuarioId], references: [id], onDelete: SetNull)
-  iniciadoPor         User?                   @relation("PasosIniciados", fields: [iniciadoPorId], references: [id], onDelete: SetNull)
-  completadoPor       User?                   @relation("PasosCompletados", fields: [completadoPorId], references: [id], onDelete: SetNull)
+  mesaUsuarioId       String?                   @db.Uuid
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  tenant              Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden               OrdenTrabajo              @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  item                OrdenTrabajoItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  mesaUsuario         User?                     @relation("PasosEnMesa", fields: [mesaUsuarioId], references: [id], onDelete: SetNull)
+  iniciadoPor         User?                     @relation("PasosIniciados", fields: [iniciadoPorId], references: [id], onDelete: SetNull)
+  completadoPor       User?                     @relation("PasosCompletados", fields: [completadoPorId], references: [id], onDelete: SetNull)
   tramos              OrdenTrabajoPasoTramo[]
+  gatesDocumento      GateProduccionDocumento[]
 
   /// Un solo paso por posición de la ruta. Es la garantía DURA contra la
   /// doble materialización: el backfill perezoso chequea "item sin pasos" y
@@ -4566,7 +4629,9 @@ model Archivo {
   producto        Producto?         @relation(fields: [productoId], references: [id], onDelete: Cascade)
   proveedor       Proveedor?        @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
 
-  tenantsConEsteLogo Tenant[] @relation("TenantLogo")
+  tenantsConEsteLogo   Tenant[]                              @relation("TenantLogo")
+  revisionDocumental   ArchivoRevision?                      @relation("ArchivoDeRevision")
+  evidenciasAprobacion DecisionAprobacionDocumentoRegistro[] @relation("EvidenciaDecisionAprobacion")
 
   @@index([tenantId, scope, estado])
   @@index([tenantId, scope, generado])
@@ -4577,6 +4642,142 @@ model Archivo {
   @@index([tenantId, cotizacionId])
   @@index([tenantId, egresoId])
   @@index([estado, createdAt])
+}
+
+/// Documento lógico controlado. El objeto de storage vive en Archivo y cada
+/// cambio de contenido crea una ArchivoRevision nueva e inmutable.
+model ArchivoMaestro {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  tenantId           String                   @db.Uuid
+  proyectoCampanaId  String                   @db.Uuid
+  nombre             String                   @db.VarChar(180)
+  proposito          PropositoArchivoMaestro
+  etapa              EtapaDesarrolloDocumento
+  descripcion        String?                  @db.VarChar(1000)
+  requerido          Boolean                  @default(true)
+  creadoPorId        String?                  @db.Uuid
+  creadoPorNombre    String                   @db.VarChar(200)
+  revisionAprobadaId String?                  @unique @db.Uuid
+  revisionLiberadaId String?                  @unique @db.Uuid
+  liberadaEl         DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proyectoCampana  ProyectoCampana           @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  creadoPor        User?                     @relation("ArchivoMaestroCreador", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  revisiones       ArchivoRevision[]         @relation("RevisionesArchivoMaestro")
+  revisionAprobada ArchivoRevision?          @relation("RevisionAprobadaMaestro", fields: [revisionAprobadaId], references: [id], onDelete: SetNull)
+  revisionLiberada ArchivoRevision?          @relation("RevisionLiberadaMaestro", fields: [revisionLiberadaId], references: [id], onDelete: SetNull)
+  gates            GateProduccionDocumento[]
+
+  @@unique([tenantId, proyectoCampanaId, nombre])
+  @@index([tenantId, proyectoCampanaId, etapa])
+}
+
+model ArchivoRevision {
+  id                String                @id @default(uuid()) @db.Uuid
+  tenantId          String                @db.Uuid
+  archivoMaestroId  String                @db.Uuid
+  archivoId         String                @unique @db.Uuid
+  numero            Int
+  estado            EstadoRevisionArchivo @default(BORRADOR)
+  comentario        String?               @db.VarChar(1500)
+  hash              String?
+  autorUserId       String?               @db.Uuid
+  autorNombre       String                @db.VarChar(200)
+  liberadaPorId     String?               @db.Uuid
+  liberadaPorNombre String?               @db.VarChar(200)
+  liberadaEl        DateTime?
+  createdAt         DateTime              @default(now())
+
+  tenant            Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  maestro           ArchivoMaestro                 @relation("RevisionesArchivoMaestro", fields: [archivoMaestroId], references: [id], onDelete: Cascade)
+  archivo           Archivo                        @relation("ArchivoDeRevision", fields: [archivoId], references: [id], onDelete: Restrict)
+  autor             User?                          @relation("ArchivoRevisionAutor", fields: [autorUserId], references: [id], onDelete: SetNull)
+  liberadaPor       User?                          @relation("ArchivoRevisionLiberadaPor", fields: [liberadaPorId], references: [id], onDelete: SetNull)
+  aprobadaEnMaestro ArchivoMaestro?                @relation("RevisionAprobadaMaestro")
+  liberadaEnMaestro ArchivoMaestro?                @relation("RevisionLiberadaMaestro")
+  solicitudes       SolicitudAprobacionDocumento[]
+
+  @@unique([archivoMaestroId, numero])
+  @@index([tenantId, archivoMaestroId, createdAt])
+  @@index([tenantId, estado])
+}
+
+model SolicitudAprobacionDocumento {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  tenantId               String                    @db.Uuid
+  revisionId             String                    @db.Uuid
+  tipo                   TipoAprobacionDocumento
+  estado                 EstadoSolicitudAprobacion @default(PENDIENTE)
+  comentario             String?                   @db.VarChar(1500)
+  solicitadaPorId        String?                   @db.Uuid
+  solicitadaPorNombre    String                    @db.VarChar(200)
+  asignadaAUsuarioId     String?                   @db.Uuid
+  asignadaARol           RolSistema?
+  permiteDecisionExterna Boolean                   @default(false)
+  expiraEl               DateTime?
+  resueltaEl             DateTime?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  tenant           Tenant                                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revision         ArchivoRevision                       @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  solicitadaPor    User?                                 @relation("SolicitudAprobacionSolicitante", fields: [solicitadaPorId], references: [id], onDelete: SetNull)
+  asignadaAUsuario User?                                 @relation("SolicitudAprobacionAsignada", fields: [asignadaAUsuarioId], references: [id], onDelete: SetNull)
+  decisiones       DecisionAprobacionDocumentoRegistro[]
+
+  @@index([tenantId, estado, createdAt])
+  @@index([tenantId, revisionId, tipo])
+}
+
+/// Append-only. Congela identidad y rol incluso si la cuenta cambia después.
+model DecisionAprobacionDocumentoRegistro {
+  id                 String                      @id @default(uuid()) @db.Uuid
+  tenantId           String                      @db.Uuid
+  solicitudId        String                      @db.Uuid
+  decision           DecisionAprobacionDocumento
+  comentario         String?                     @db.VarChar(2000)
+  evidenciaArchivoId String?                     @db.Uuid
+  actorUserId        String?                     @db.Uuid
+  actorNombre        String                      @db.VarChar(200)
+  actorRol           String?                     @db.VarChar(80)
+  origen             String                      @default("INTERNO") @db.VarChar(20)
+  createdAt          DateTime                    @default(now())
+
+  tenant    Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  solicitud SolicitudAprobacionDocumento @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  evidencia Archivo?                     @relation("EvidenciaDecisionAprobacion", fields: [evidenciaArchivoId], references: [id], onDelete: Restrict)
+  actor     User?                        @relation("DecisionAprobacionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, solicitudId, createdAt])
+  @@index([tenantId, actorUserId, createdAt])
+}
+
+model GateProduccionDocumento {
+  id                String                  @id @default(uuid()) @db.Uuid
+  tenantId          String                  @db.Uuid
+  proyectoCampanaId String                  @db.Uuid
+  ordenId           String                  @db.Uuid
+  pasoId            String?                 @db.Uuid
+  archivoMaestroId  String                  @db.Uuid
+  tipoAprobacion    TipoAprobacionDocumento
+  nombre            String                  @db.VarChar(180)
+  activo            Boolean                 @default(true)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proyectoCampana ProyectoCampana       @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  orden           OrdenTrabajo          @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  paso            OrdenTrabajoItemPaso? @relation(fields: [pasoId], references: [id], onDelete: Cascade)
+  archivoMaestro  ArchivoMaestro        @relation(fields: [archivoMaestroId], references: [id], onDelete: Cascade)
+
+  @@unique([ordenId, pasoId, archivoMaestroId, tipoAprobacion])
+  @@index([tenantId, ordenId, activo])
+  @@index([tenantId, pasoId, activo])
+  @@index([tenantId, proyectoCampanaId])
 }
 
 /// Conexión de un tenant con un proveedor externo.
@@ -4639,6 +4840,8 @@ enum TipoEnlacePublico {
   COBRO
   /// /e/ — encuesta de satisfacción.
   ENCUESTA
+  /// /a/ — decisión externa sobre una revisión documental.
+  APROBACION_DOCUMENTAL
 }
 
 /// Credencial de TODO link público del sistema, en una sola tabla.

@@ -5,6 +5,7 @@ import { listarArchivos } from "@/lib/archivos-api";
 import { getCampana } from "@/lib/campanas-api";
 import { getEmpleados } from "@/lib/empleados-api";
 import { tienePermiso } from "@/lib/permisos-server";
+import { getDesarrolloCampana } from "@/lib/desarrollo-documental-api";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,11 @@ export default async function CampanaDetallePage({
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
   }
-  const [archivos, empleados, canManage] = await Promise.all([
+  const [archivos, empleados, canManage, desarrollo] = await Promise.all([
     listarArchivos("CAMPANA", campanaId).catch(() => []),
     getEmpleados().catch(() => []),
     tienePermiso("comercial.gestionar"),
+    getDesarrolloCampana(campanaId).catch(() => ({ maestros: [] })),
   ]);
   return (
     <CampanaDetalleView
@@ -32,6 +34,7 @@ export default async function CampanaDetallePage({
       initialArchivos={archivos}
       empleados={empleados}
       canManage={canManage}
+      initialDesarrollo={desarrollo}
     />
   );
 }
