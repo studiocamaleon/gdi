@@ -56,11 +56,13 @@ function etiquetaRol(rol?: string | null) {
 function EditorDefiniciones({
   productoId,
   rutaAlternativaId,
+  ruta,
   revision,
   onClose,
 }: {
   productoId: string;
   rutaAlternativaId: string;
+  ruta: ProductoDetalle["rutasAlternativas"][number];
   revision: ProductoRecetaRevision;
   onClose: () => void;
 }) {
@@ -99,6 +101,24 @@ function EditorDefiniciones({
       requerido: item.requerido,
       orden: item.orden,
     })),
+  );
+  const pasosDocumento = React.useMemo(
+    () => [
+      ...ruta.ruta.pasos
+        .filter((paso) => paso.activo)
+        .map((paso) => ({
+          value: `ruta:${paso.id}`,
+          label:
+            paso.nombreVisible || paso.familiaNombre || paso.familiaCodigo,
+        })),
+      ...(ruta.pasosExtras ?? [])
+        .filter((paso) => paso.activo)
+        .map((paso) => ({
+          value: `extra:${paso.id}`,
+          label: paso.nombreVisible || paso.familiaCodigo,
+        })),
+    ],
+    [ruta],
   );
 
   React.useEffect(() => {
@@ -255,6 +275,54 @@ function EditorDefiniciones({
                     Liberación productiva
                   </option>
                 </select>
+                <div className={styles.definitionSubrow}>
+                  <select
+                    aria-label={`Etapa del documento ${index + 1}`}
+                    value={item.etapa}
+                    onChange={(event) =>
+                      setDocumentos((prev) =>
+                        prev.map((value, i) =>
+                          i === index
+                            ? {
+                                ...value,
+                                etapa:
+                                  event.target.value as ProductoRecetaDocumentoInput["etapa"],
+                              }
+                            : value,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="BRIEF">Brief</option>
+                    <option value="DISENO">Diseño</option>
+                    <option value="PROTOTIPO">Prototipo</option>
+                    <option value="MUESTRA">Muestra</option>
+                    <option value="PRODUCCION">Producción</option>
+                  </select>
+                  <select
+                    aria-label={`Paso protegido por el documento ${index + 1}`}
+                    value={item.pasoClave ?? ""}
+                    onChange={(event) =>
+                      setDocumentos((prev) =>
+                        prev.map((value, i) =>
+                          i === index
+                            ? {
+                                ...value,
+                                pasoClave: event.target.value || null,
+                              }
+                            : value,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="">Toda la orden</option>
+                    {pasosDocumento.map((paso) => (
+                      <option value={paso.value} key={paso.value}>
+                        Antes de {paso.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   type="button"
                   aria-label={`Quitar documento ${index + 1}`}
@@ -692,6 +760,7 @@ export function RecetaProductoTab({
                     <EditorDefiniciones
                       productoId={producto.id}
                       rutaAlternativaId={ruta.id}
+                      ruta={ruta}
                       revision={draft}
                       onClose={() => setEditing(null)}
                     />
@@ -707,6 +776,24 @@ export function RecetaProductoTab({
                       {fecha(visible.publicadaEl || visible.updatedAt)}
                     </span>
                   </footer>
+                  {receta && receta.revisiones.length > 1 ? (
+                    <div className={styles.history}>
+                      <span>Historial</span>
+                      {receta.revisiones.map((revision) => (
+                        <div key={revision.id} data-state={revision.estado.toLowerCase()}>
+                          <strong>V{revision.numero}</strong>
+                          <span>{revision.estado.toLowerCase()}</span>
+                          <time>
+                            {fecha(
+                              revision.deprecadaEl ||
+                                revision.publicadaEl ||
+                                revision.updatedAt,
+                            )}
+                          </time>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <div className={styles.emptyRecipe}>

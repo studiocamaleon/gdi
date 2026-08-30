@@ -2771,8 +2771,9 @@ model ProductoRecetaMaterial {
   orden                 Int                 @default(0)
   createdAt             DateTime            @default(now())
 
-  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  revision ProductoRecetaRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  tenant   Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revision ProductoRecetaRevision    @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  gates    GateProduccionDocumento[]
 
   @@unique([revisionId, pasoClave, slotCodigo])
   @@index([tenantId, revisionId, rol])
@@ -2855,8 +2856,9 @@ model ProductoRecetaDocumento {
   orden          Int                      @default(0)
   createdAt      DateTime                 @default(now())
 
-  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  revision ProductoRecetaRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  tenant                   Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revision                 ProductoRecetaRevision    @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  gateProduccionDocumentos GateProduccionDocumento[]
 
   @@unique([revisionId, codigo])
   @@index([tenantId, revisionId, requerido])
@@ -3720,6 +3722,7 @@ model OrdenTrabajoItem {
   etaPromesas               EtaPromesa[]
   archivos                  Archivo[]
   revisionesRecorrido       RecorridoVectorialRevision[]
+  gatesDocumento            GateProduccionDocumento[]
 
   @@index([tenantId, ordenId])
   @@index([tenantId, recetaRevisionId])
@@ -5039,22 +5042,30 @@ model GateProduccionDocumento {
   tenantId          String                  @db.Uuid
   proyectoCampanaId String                  @db.Uuid
   ordenId           String                  @db.Uuid
+  ordenItemId       String?                 @db.Uuid
   pasoId            String?                 @db.Uuid
   archivoMaestroId  String                  @db.Uuid
+  recetaDocumentoId String?                 @db.Uuid
   tipoAprobacion    TipoAprobacionDocumento
   nombre            String                  @db.VarChar(180)
   activo            Boolean                 @default(true)
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
 
-  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  proyectoCampana ProyectoCampana       @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
-  orden           OrdenTrabajo          @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  paso            OrdenTrabajoItemPaso? @relation(fields: [pasoId], references: [id], onDelete: Cascade)
-  archivoMaestro  ArchivoMaestro        @relation(fields: [archivoMaestroId], references: [id], onDelete: Cascade)
+  tenant                   Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proyectoCampana          ProyectoCampana          @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  orden                    OrdenTrabajo             @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  ordenItem                OrdenTrabajoItem?        @relation(fields: [ordenItemId], references: [id], onDelete: Cascade)
+  paso                     OrdenTrabajoItemPaso?    @relation(fields: [pasoId], references: [id], onDelete: Cascade)
+  archivoMaestro           ArchivoMaestro           @relation(fields: [archivoMaestroId], references: [id], onDelete: Cascade)
+  recetaDocumento          ProductoRecetaDocumento? @relation(fields: [recetaDocumentoId], references: [id], onDelete: SetNull)
+  productoRecetaMaterial   ProductoRecetaMaterial?  @relation(fields: [productoRecetaMaterialId], references: [id])
+  productoRecetaMaterialId String?                  @db.Uuid
 
   @@unique([ordenId, pasoId, archivoMaestroId, tipoAprobacion])
+  @@unique([ordenItemId, recetaDocumentoId])
   @@index([tenantId, ordenId, activo])
+  @@index([tenantId, ordenItemId, activo])
   @@index([tenantId, pasoId, activo])
   @@index([tenantId, proyectoCampanaId])
 }

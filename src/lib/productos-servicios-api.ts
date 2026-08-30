@@ -123,6 +123,8 @@ export interface ProductoRecetaRevision {
   creadaPorNombre: string;
   publicadaPorNombre?: string | null;
   publicadaEl?: string | null;
+  deprecadaPorNombre?: string | null;
+  deprecadaEl?: string | null;
   createdAt: string;
   updatedAt: string;
   materiales: ProductoRecetaMaterial[];

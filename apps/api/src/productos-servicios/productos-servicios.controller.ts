@@ -54,6 +54,7 @@ import { FormularioCotizacionService } from './formulario-cotizacion.service';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import {
+  DeprecarRecetaDto,
   GuardarBorradorRecetaDto,
   PublicarRecetaDto,
 } from './dto/receta-producto.dto';
@@ -105,6 +106,16 @@ export class ProductosServiciosController {
     @Body() dto: PublicarRecetaDto,
   ) {
     return this.recetas.publicar(auth, revisionId, dto);
+  }
+
+  @Permiso('costos.gestionar')
+  @Post('recetas/revisiones/:revisionId/deprecar')
+  deprecarReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+    @Body() dto: DeprecarRecetaDto,
+  ) {
+    return this.recetas.deprecar(auth, revisionId, dto);
   }
 
   @Get('catalogo-comercial')

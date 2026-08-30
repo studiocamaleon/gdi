@@ -15,6 +15,7 @@ import { firmaActor } from '../common/firma-actor';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
+  DeprecarRecetaDto,
   GuardarBorradorRecetaDto,
   PublicarRecetaDto,
   RecetaComponenteDto,
@@ -523,6 +524,75 @@ export class RecetasProductoService {
     return this.obtenerRevision(auth.tenantId, revision.id);
   }
 
+  async deprecar(
+    auth: CurrentAuth,
+    revisionId: string,
+    dto: DeprecarRecetaDto,
+  ) {
+    const revision = await this.prisma.productoRecetaRevision.findFirst({
+      where: { id: revisionId, tenantId: auth.tenantId },
+      include: { receta: { include: { producto: true } } },
+    });
+    if (!revision) throw new NotFoundException('Revisión de receta inexistente.');
+    if (
+      revision.estado !== EstadoProductoRecetaRevision.PUBLICADA ||
+      revision.receta.revisionPublicadaId !== revision.id
+    ) {
+      throw new BadRequestException(
+        'Sólo la revisión publicada vigente puede deprecarse.',
+      );
+    }
+    if (revision.updatedAt.toISOString() !== dto.expectedUpdatedAt) {
+      throw new ConflictException(
+        'La receta cambió en otra sesión. Recargá antes de retirarla.',
+      );
+    }
+    const actorNombre = await this.actorNombre(auth);
+    await this.prisma.$transaction(async (tx) => {
+      const actualizada = await tx.productoRecetaRevision.updateMany({
+        where: {
+          id: revision.id,
+          tenantId: auth.tenantId,
+          estado: EstadoProductoRecetaRevision.PUBLICADA,
+          updatedAt: revision.updatedAt,
+        },
+        data: {
+          estado: EstadoProductoRecetaRevision.DEPRECADA,
+          cambios: dto.motivo ?? revision.cambios,
+          deprecadaEl: new Date(),
+          deprecadaPorId: auth.userId,
+          deprecadaPorNombre: actorNombre,
+        },
+      });
+      if (actualizada.count !== 1) {
+        throw new ConflictException('La revisión cambió mientras se retiraba.');
+      }
+      await tx.productoReceta.update({
+        where: { id: revision.recetaId },
+        data: { revisionPublicadaId: null },
+      });
+      await this.eventos.publicar(
+        {
+          tenantId: auth.tenantId,
+          actorUserId: auth.userId,
+          actorNombre,
+          tipo: 'receta_deprecada',
+          entidadTipo: 'PRODUCTO_RECETA_REVISION',
+          entidadId: revision.id,
+          titulo: `Receta V${revision.numero} retirada`,
+          mensaje: `${revision.receta.producto.nombre} volvió temporalmente al modo compatible.`,
+          href: `/productos-servicios/${revision.receta.productoId}?tab=receta`,
+          topicos: [
+            `producto:${revision.receta.productoId}`,
+            `receta:${revision.recetaId}`,
+          ],
+        },
+        tx,
+      );
+    });
+    return this.obtenerRevision(auth.tenantId, revision.id);
+  }
+
   private async obtenerRevision(tenantId: string, revisionId: string) {
     return this.prisma.productoRecetaRevision.findFirstOrThrow({
       where: { id: revisionId, tenantId },
@@ -824,9 +894,7 @@ export class RecetasProductoService {
     const ids = new Set<string>();
     for (const paso of snapshot.pasos) {
       for (const slot of paso.slots) {
-        if (typeof slot.materialVarianteId === 'string') {
-          ids.add(slot.materialVarianteId);
-        }
+        for (const id of this.idsVariantesSlot(slot)) ids.add(id);
       }
     }
     if (!ids.size) return new Map<string, UnidadMateriaPrima | null>();
@@ -945,29 +1013,58 @@ export class RecetasProductoService {
     for (const paso of snapshot.pasos) {
       for (const slot of paso.slots) {
         const formula = String(slot.formula ?? '');
-        const varianteId =
-          typeof slot.materialVarianteId === 'string'
-            ? slot.materialVarianteId
-            : null;
-        const unidad = varianteId
-          ? String(unidades.get(varianteId) ?? '').toUpperCase()
-          : '';
-        if (formula === 'por_m2' && unidad && unidad !== 'M2') {
-          throw new BadRequestException(
-            `${paso.nombre} / ${String(slot.slotCodigo)} usa fórmula por m² con unidad ${unidad}.`,
+        const unidadesSlot = new Set(
+          this.idsVariantesSlot(slot)
+            .map((id) => unidades.get(id))
+            .filter((item): item is UnidadMateriaPrima => Boolean(item)),
+        );
+        const esperada =
+          formula === 'por_m2'
+            ? UnidadMateriaPrima.M2
+            : formula === 'por_metro_lineal'
+              ? UnidadMateriaPrima.METRO_LINEAL
+              : null;
+        if (esperada) {
+          const incompatibles = [...unidadesSlot].filter(
+            (unidad) => unidad !== esperada,
           );
-        }
-        if (
-          formula === 'por_metro_lineal' &&
-          unidad &&
-          unidad !== 'METRO_LINEAL'
-        ) {
-          throw new BadRequestException(
-            `${paso.nombre} / ${String(slot.slotCodigo)} usa fórmula por metro lineal con unidad ${unidad}.`,
-          );
+          if (incompatibles.length) {
+            throw new BadRequestException(
+              `${paso.nombre} / ${String(slot.slotCodigo)} usa ${formula.replaceAll('_', ' ')} con variante(s) en ${incompatibles.join(', ')}.`,
+            );
+          }
         }
       }
     }
+  }
+
+  private idsVariantesSlot(slot: Record<string, unknown>): string[] {
+    const ids = new Set<string>();
+    if (typeof slot.materialVarianteId === 'string') {
+      ids.add(slot.materialVarianteId);
+    }
+    const candidatos = Array.isArray(slot.candidatos) ? slot.candidatos : [];
+    for (const candidatoRaw of candidatos) {
+      if (!candidatoRaw || typeof candidatoRaw !== 'object') continue;
+      const candidato = candidatoRaw as Record<string, unknown>;
+      if (typeof candidato.defaultVarianteId === 'string') {
+        ids.add(candidato.defaultVarianteId);
+      }
+      const variantes = Array.isArray(candidato.variantes)
+        ? candidato.variantes
+        : [];
+      for (const varianteRaw of variantes) {
+        if (!varianteRaw || typeof varianteRaw !== 'object') continue;
+        const varianteContenedor = varianteRaw as Record<string, unknown>;
+        const variante =
+          varianteContenedor.variante &&
+          typeof varianteContenedor.variante === 'object'
+            ? (varianteContenedor.variante as Record<string, unknown>)
+            : varianteContenedor;
+        if (typeof variante.id === 'string') ids.add(variante.id);
+      }
+    }
+    return [...ids];
   }
 
   private async actorNombre(auth: CurrentAuth) {

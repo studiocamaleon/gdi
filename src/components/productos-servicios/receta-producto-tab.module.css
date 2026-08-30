@@ -367,6 +367,15 @@
 
 .definitionRow button {
   color: #ff9b79;
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.definitionSubrow {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .editorFooter {
@@ -571,6 +580,52 @@
   font-size: 10.5px;
 }
 
+.history {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 9px 20px 12px;
+  border-top: 1px solid #ebe7e1;
+  color: #85817b;
+  background: #faf9f7;
+}
+
+.history > span {
+  margin-right: 3px;
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.history > div {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid #dfdbd5;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 9.5px;
+}
+
+.history strong {
+  color: #2f2d32;
+  font-family: var(--font-mono);
+}
+
+.history time {
+  color: #aaa59f;
+}
+
+.history > div[data-state="publicada"] {
+  border-color: rgb(27 143 88 / 24%);
+  color: #176d48;
+  background: #edf8f2;
+}
+
 .emptyRecipe {
   display: flex;
   align-items: center;
@@ -709,6 +764,11 @@
   .definitionRow button {
     grid-row: 1;
     grid-column: 2;
+  }
+
+  .definitionSubrow {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .editorFooter {

@@ -1590,6 +1590,16 @@ export class OrdenesTrabajoService {
           await this.redimirCupones(tx, auth, orden.id, items);
         }
 
+        if (proyectoCampanaId) {
+          await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+            tenantId: auth.tenantId,
+            ordenId: orden.id,
+            proyectoCampanaId,
+            actorUserId: auth.userId,
+            actorNombre: usuarioNombre,
+          });
+        }
+
         // Timeline: se insertan en orden cronológico (productos → borrador →
         // número → emisión) con timestamps levemente separados para que el
         // orden por fecha sea estable.
@@ -2093,6 +2103,16 @@ export class OrdenesTrabajoService {
         );
       }
 
+      if (orden.proyectoCampanaId) {
+        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+          tenantId: auth.tenantId,
+          ordenId: orden.id,
+          proyectoCampanaId: orden.proyectoCampanaId,
+          actorUserId: auth.userId,
+          actorNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
+        });
+      }
+
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -2382,6 +2402,7 @@ export class OrdenesTrabajoService {
           estado: true,
           clienteId: true,
           cotizacionId: true,
+          proyectoCampanaId: true,
           cargosDirectos: true,
           updatedAt: true,
           _count: { select: { items: true } },
@@ -3084,6 +3105,15 @@ export class OrdenesTrabajoService {
         });
         await this.reconciliarCupones(tx, auth, orden.id, itemsCupon);
       }
+      if (orden.proyectoCampanaId) {
+        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+          tenantId: auth.tenantId,
+          ordenId: orden.id,
+          proyectoCampanaId: orden.proyectoCampanaId,
+          actorUserId: auth.userId,
+          actorNombre: usuarioNombre,
+        });
+      }
       await this.recalcularTotales(
         tx,
         orden.id,
@@ -3235,6 +3265,15 @@ export class OrdenesTrabajoService {
           select: { descuentoCuponId: true, descuentoMonto: true },
         });
         await this.reconciliarCupones(tx, auth, orden.id, itemsCupon);
+      }
+      if (orden.proyectoCampanaId) {
+        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+          tenantId: auth.tenantId,
+          ordenId: orden.id,
+          proyectoCampanaId: orden.proyectoCampanaId,
+          actorUserId: auth.userId,
+          actorNombre: usuarioNombre,
+        });
       }
       await this.recalcularTotales(
         tx,
@@ -3468,6 +3507,20 @@ export class OrdenesTrabajoService {
           },
         });
         await this.materializarPasosItems(tx, auth.tenantId, items);
+        if (orden.proyectoCampanaId) {
+          await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+            tenantId: auth.tenantId,
+            ordenId: orden.id,
+            proyectoCampanaId: orden.proyectoCampanaId,
+            actorUserId: auth.userId,
+            actorNombre: firmaActor(
+              auth,
+              actor?.nombreCompleto ??
+                orden.vendedor?.nombreCompleto ??
+                auth.email,
+            ),
+          });
+        }
         // Cupones aplicados en el borrador: se redimen recién acá, que es
         // cuando la orden se compromete (misma transacción, F4 descuentos).
         await this.redimirCupones(tx, auth, orden.id, items);

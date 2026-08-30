@@ -145,3 +145,13 @@ export class PublicarRecetaDto {
   @MaxLength(1500)
   cambios?: string;
 }
+
+export class DeprecarRecetaDto {
+  @IsISO8601()
+  expectedUpdatedAt!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1500)
+  motivo?: string;
+}

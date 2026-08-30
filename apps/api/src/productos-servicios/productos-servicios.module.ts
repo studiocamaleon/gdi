@@ -13,6 +13,7 @@ import { ProductosServiciosService } from './productos-servicios.service';
 import { RutasProduccionService } from './rutas-produccion.service';
 import { PrecioModule } from './precio/precio.module';
 import { RecetasProductoService } from './recetas-producto.service';
+import { EventosSistemaModule } from '../eventos-sistema/eventos-sistema.module';
 
 /**
  * Módulo productos-servicios — modelo universal por pasos.
@@ -28,7 +29,7 @@ import { RecetasProductoService } from './recetas-producto.service';
  *               por cliente, servicio AplicarPrecio (pure function).
  */
 @Module({
-  imports: [PrismaModule, PrecioModule],
+  imports: [PrismaModule, PrecioModule, EventosSistemaModule],
   controllers: [ProductosServiciosController],
   providers: [
     ProductosServiciosService,

@@ -209,6 +209,9 @@ export const KEYS_INTERNAS: ReadonlySet<string> = new Set<string>([
   // Configuración que el paso original deja a las capas siguientes del
   // talonario. No es una magnitud heredable ni debe aparecer en la UI.
   'talonario_modo_incompleto',
+  // Plano físico compartido entre impresión y corte. Es trazabilidad técnica
+  // del nesting, no una magnitud seleccionable ni heredable por el usuario.
+  'layout_produccion',
 ]);
 
 /**
