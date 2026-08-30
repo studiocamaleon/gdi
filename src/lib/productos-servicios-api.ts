@@ -135,9 +135,13 @@ export interface ProductoRecetaRevision {
     familiaCodigo: string;
     maquinaCodigo?: string | null;
     maquinaNombre?: string | null;
+    estacionId?: string | null;
+    estacionNombre?: string | null;
     perfilNombre?: string | null;
     centroCostoNombre?: string | null;
     dotacionOperarios: number;
+    habilidadesRequeridas?: string[];
+    capacidadesSnapshotJson?: unknown;
     tercerizado: boolean;
     proveedorNombre?: string | null;
     orden: number;
@@ -145,6 +149,9 @@ export interface ProductoRecetaRevision {
   componentes: Array<{
     id: string;
     productoComponenteId: string;
+    recetaRevisionId: string;
+    recetaVersion: number;
+    recetaHuella: string;
     codigo: string;
     nombre: string;
     politicaEjecucion: "INLINE" | "INDEPENDIENTE";
@@ -1338,9 +1345,24 @@ export interface CotizarResponse {
       cargosSinMargenTotal?: number;
       /** Costo de pasos tercerizados (lo que se paga al proveedor). */
       tercerizadoTotal?: number;
+      /** Costo productivo de subproductos fabricados de la receta. */
+      componentesFabricadosTotal?: number;
       total: number;
       unitario: number;
     };
+    componentesFabricados?: Array<{
+      productoId: string;
+      codigo: string;
+      nombre: string;
+      politicaEjecucion: "INLINE" | "INDEPENDIENTE";
+      cantidad: number;
+      unidad: string;
+      recetaRevisionId: string;
+      recetaVersion: number;
+      recetaHuella: string;
+      costoUnitario: number;
+      costoTotal: number;
+    }>;
     precio?: {
       precioUnitario: number;
       precioTotal: number;

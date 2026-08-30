@@ -8,14 +8,24 @@
 
 import {
   EstadoTarifaCentroCostoPeriodo,
+  EtapaDesarrolloDocumento,
+  FamiliaMateriaPrima,
   Prisma,
   PrismaClient,
+  SubfamiliaMateriaPrima,
   TipoCentroCosto,
+  TipoAprobacionDocumento,
+  UnidadMateriaPrima,
+  PropositoArchivoMaestro,
 } from '@prisma/client';
 import { MotorUniversalService } from '../motor.service';
 import { runNestingForPaso } from '../nesting-dispatcher';
 import { AplicarPrecioService } from '../../productos-servicios/precio/aplicar-precio.service';
 import { PreciosEspecialesClientesService } from '../../productos-servicios/precio/precios-especiales-clientes/precios-especiales-clientes.service';
+import { ProductosService } from '../../productos-servicios/productos.service';
+import { ProductoValidacionService } from '../../productos-servicios/producto-validacion.service';
+import { RecetasProductoService } from '../../productos-servicios/recetas-producto.service';
+import { OrdenesTrabajoService } from '../../ordenes-trabajo/ordenes-trabajo.service';
 
 const prisma = new PrismaClient();
 
@@ -4239,7 +4249,447 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(c.tiempoTotal).toEqual(expect.any(Number));
     expect(c.materialesTotal).toEqual(expect.any(Number));
     expect(c.cargosDirectosTotal).toEqual(expect.any(Number));
+    expect(c.componentesFabricadosTotal).toEqual(expect.any(Number));
     expect(c.total).toEqual(expect.any(Number));
     expect(c.unitario).toEqual(expect.any(Number));
+  });
+
+  it('F3: publica y costea un exhibidor con packaging, componente comprado y componente fabricado', async () => {
+    if (!tenantId) return;
+    const productos = new ProductosService(prisma as never);
+    const recetas = new RecetasProductoService(
+      prisma as never,
+      productos,
+      new ProductoValidacionService(productos),
+      { publicar: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    const auth = {
+      tenantId,
+      userId: '00000000-0000-0000-0000-000000000001',
+      email: 'qa-fase-3@grafoprint.local',
+    } as never;
+    const [rigidoInicial, tarjetas] = await Promise.all([
+      productos.obtenerProducto(
+        tenantId,
+        (
+          await prisma.producto.findFirstOrThrow({
+            where: { tenantId, codigo: 'RIGIDO-CUSTOM' },
+            select: { id: true },
+          })
+        ).id,
+      ),
+      productos.obtenerProducto(
+        tenantId,
+        (
+          await prisma.producto.findFirstOrThrow({
+            where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+            select: { id: true },
+          })
+        ).id,
+      ),
+    ]);
+    const rutaRigidoInicial =
+      rigidoInicial.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+      rigidoInicial.rutasAlternativas[0];
+    const pinturaMaterial = await prisma.materiaPrima.upsert({
+      where: { tenantId_codigo: { tenantId, codigo: 'QA-F3-PINTURA' } },
+      update: { activo: true },
+      create: {
+        tenantId,
+        codigo: 'QA-F3-PINTURA',
+        nombre: 'Pintura blanca para exhibidor',
+        familia: FamiliaMateriaPrima.PINTURA_RECUBRIMIENTO,
+        subfamilia: SubfamiliaMateriaPrima.PINTURA_CARTELERIA,
+        tipoTecnico: 'pintura_exhibidor',
+        templateId: 'pintura_carteleria_v1',
+        unidadStock: UnidadMateriaPrima.LITRO,
+        unidadCompra: UnidadMateriaPrima.LITRO,
+        atributosTecnicosJson: {},
+      },
+    });
+    const pintura = await prisma.materiaPrimaVariante.upsert({
+      where: { tenantId_sku: { tenantId, sku: 'QA-F3-PINT-BLA' } },
+      update: { activo: true, precioReferencia: 8000 },
+      create: {
+        tenantId,
+        materiaPrimaId: pinturaMaterial.id,
+        sku: 'QA-F3-PINT-BLA',
+        nombreVariante: 'Pintura blanca · 1 litro',
+        atributosVarianteJson: {},
+        unidadStock: UnidadMateriaPrima.LITRO,
+        unidadCompra: UnidadMateriaPrima.LITRO,
+        precioReferencia: 8000,
+        moneda: 'ARS',
+      },
+    });
+    const packaging = await prisma.materiaPrima.upsert({
+      where: { tenantId_codigo: { tenantId, codigo: 'QA-F3-PACKAGING' } },
+      update: { activo: true },
+      create: {
+        tenantId,
+        codigo: 'QA-F3-PACKAGING',
+        nombre: 'Caja corrugada para exhibidor',
+        familia: FamiliaMateriaPrima.PACKING_INSTALACION,
+        subfamilia: SubfamiliaMateriaPrima.EMBALAJE_PROTECCION,
+        tipoTecnico: 'caja_corrugada_exhibidor',
+        templateId: 'embalaje_proteccion_v1',
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.UNIDAD,
+        atributosTecnicosJson: { uso: 'exhibidor' },
+      },
+    });
+    const packagingVariante = await prisma.materiaPrimaVariante.upsert({
+      where: { tenantId_sku: { tenantId, sku: 'QA-F3-CAJA-EXH' } },
+      update: { activo: true, precioReferencia: 2400 },
+      create: {
+        tenantId,
+        materiaPrimaId: packaging.id,
+        sku: 'QA-F3-CAJA-EXH',
+        nombreVariante: 'Caja exhibidor 60 × 180 cm',
+        atributosVarianteJson: { anchoMm: 600, altoMm: 1800 },
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.UNIDAD,
+        precioReferencia: 2400,
+        moneda: 'ARS',
+      },
+    });
+    const accesorio = await prisma.materiaPrima.upsert({
+      where: { tenantId_codigo: { tenantId, codigo: 'QA-F3-ACCESORIO' } },
+      update: { activo: true },
+      create: {
+        tenantId,
+        codigo: 'QA-F3-ACCESORIO',
+        nombre: 'Escuadra metálica para exhibidor',
+        familia: FamiliaMateriaPrima.HERRAJE_ACCESORIO,
+        subfamilia: SubfamiliaMateriaPrima.ACCESORIO_MONTAJE_POP,
+        tipoTecnico: 'escuadra_exhibidor',
+        templateId: 'accesorio_montaje_pop_v1',
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.UNIDAD,
+        atributosTecnicosJson: { uso: 'refuerzo' },
+      },
+    });
+    const accesorioVariante = await prisma.materiaPrimaVariante.upsert({
+      where: { tenantId_sku: { tenantId, sku: 'QA-F3-ESCUADRA' } },
+      update: { activo: true, precioReferencia: 350 },
+      create: {
+        tenantId,
+        materiaPrimaId: accesorio.id,
+        sku: 'QA-F3-ESCUADRA',
+        nombreVariante: 'Escuadra metálica reforzada',
+        atributosVarianteJson: {},
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.UNIDAD,
+        precioReferencia: 350,
+        moneda: 'ARS',
+      },
+    });
+    const configPintura = rutaRigidoInicial.configPasos.find(
+      (paso) => paso.rutaPaso.familiaCodigo === 'pintura_superficial',
+    )!;
+    const configEmbalaje = rutaRigidoInicial.configPasos.find(
+      (paso) => paso.rutaPaso.familiaCodigo === 'embalaje',
+    )!;
+    const estacionQa = await prisma.estacion.upsert({
+      where: {
+        tenantId_nombre: { tenantId, nombre: 'QA F3 · Impresión rígida' },
+      },
+      update: { activo: true },
+      create: {
+        tenantId,
+        nombre: 'QA F3 · Impresión rígida',
+        etapa: 'impresion',
+        capacidadConcurrente: 1,
+      },
+    });
+    await prisma.estacionRegla.upsert({
+      where: {
+        estacionId_tipo_valor: {
+          estacionId: estacionQa.id,
+          tipo: 'familia',
+          valor: 'impresion_por_area',
+        },
+      },
+      update: {},
+      create: {
+        tenantId,
+        estacionId: estacionQa.id,
+        tipo: 'familia',
+        valor: 'impresion_por_area',
+      },
+    });
+    await prisma.productoConfigPasoSlotMaterial.createMany({
+      data: [
+        {
+          tenantId,
+          productoConfigPasoId: configPintura.id,
+          slotCodigo: 'pintura',
+          slotNombre: 'Pintura / laca',
+          slotRol: 'CONSUMIBLE',
+          modoSeleccion: 'HARDCODED',
+          materialVarianteId: pintura.id,
+          formula: 'por_unidad_productiva',
+          cantidadFactor: 0.15,
+        },
+        {
+          tenantId,
+          productoConfigPasoId: configEmbalaje.id,
+          slotCodigo: 'caja',
+          slotNombre: 'Caja corrugada',
+          slotRol: 'PACKAGING',
+          modoSeleccion: 'HARDCODED',
+          materialVarianteId: packagingVariante.id,
+          formula: 'por_pieza',
+          cantidadFactor: 1,
+        },
+        {
+          tenantId,
+          productoConfigPasoId: configEmbalaje.id,
+          slotCodigo: 'escuadras',
+          slotNombre: 'Escuadras de refuerzo',
+          slotRol: 'COMPONENTE',
+          modoSeleccion: 'HARDCODED',
+          materialVarianteId: accesorioVariante.id,
+          formula: 'por_pieza',
+          cantidadFactor: 4,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    await prisma.productoConfigPasoSlotMaterial.updateMany({
+      where: {
+        tenantId,
+        productoConfigPasoId: {
+          in: rutaRigidoInicial.configPasos.map((paso) => paso.id),
+        },
+        slotCodigo: 'sustrato_principal',
+      },
+      data: { slotRol: 'SUSTRATO' },
+    });
+    const rigido = await productos.obtenerProducto(tenantId, rigidoInicial.id);
+
+    await prisma.productoReceta.deleteMany({
+      where: { tenantId, productoId: { in: [rigido.id, tarjetas.id] } },
+    });
+    try {
+      const rutaTarjetas =
+        tarjetas.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+        tarjetas.rutasAlternativas[0];
+      const borradorTarjetas = await recetas.guardarBorrador(
+        auth,
+        tarjetas.id,
+        { rutaAlternativaId: rutaTarjetas.id, componentes: [] },
+      );
+      await recetas.publicar(auth, borradorTarjetas.id, {
+        expectedUpdatedAt: borradorTarjetas.updatedAt.toISOString(),
+      });
+
+      const rutaRigido =
+        rigido.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+        rigido.rutasAlternativas[0];
+      const borradorRigido = await recetas.guardarBorrador(auth, rigido.id, {
+        rutaAlternativaId: rutaRigido.id,
+        documentos: [
+          {
+            codigo: 'ARTE-FINAL-EXHIBIDOR',
+            nombre: 'Arte final aprobado del exhibidor',
+            proposito: PropositoArchivoMaestro.PRINT,
+            etapa: EtapaDesarrolloDocumento.PRODUCCION,
+            tipoAprobacion: TipoAprobacionDocumento.CLIENTE,
+            requerido: true,
+          },
+        ],
+        componentes: [
+          {
+            productoComponenteId: tarjetas.id,
+            codigo: tarjetas.codigo,
+            nombre: tarjetas.nombre,
+            cantidad: 1000,
+            formula: 'por_unidad',
+            unidad: 'unidad',
+            requerido: true,
+          },
+        ],
+      });
+      const publicadaRigido = await recetas.publicar(auth, borradorRigido.id, {
+        expectedUpdatedAt: borradorRigido.updatedAt.toISOString(),
+      });
+      const motorConRecetas = new MotorUniversalService(
+        prisma as never,
+        new AplicarPrecioService(),
+        new PreciosEspecialesClientesService(prisma as never),
+        undefined,
+        undefined,
+        recetas,
+      );
+      const pasoMaterialRigido = rutaRigido.configPasos.find((paso) =>
+        paso.slotsMateriales.some(
+          (slot) => slot.modoSeleccion === 'COMERCIAL_ELIGE',
+        ),
+      )!;
+      const slotRigido = pasoMaterialRigido.slotsMateriales.find(
+        (slot) => slot.modoSeleccion === 'COMERCIAL_ELIGE',
+      )!;
+      const materialRigido = slotRigido.candidatos[0].defaultVarianteId!;
+      const resultado = await motorConRecetas.cotizar({
+        tenantId,
+        productoId: rigido.id,
+        jobContext: {
+          cantidad: 1,
+          medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+          [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+            materialRigido,
+        },
+      });
+
+      expect(resultado.exitoso).toBe(true);
+      expect(publicadaRigido.materiales.map((item) => item.rol)).toEqual(
+        expect.arrayContaining([
+          'SUSTRATO',
+          'CONSUMIBLE',
+          'PACKAGING',
+          'COMPONENTE',
+        ]),
+      );
+      expect(publicadaRigido.recursos).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            familiaCodigo: 'impresion_por_area',
+            estacionId: estacionQa.id,
+            capacidadesSnapshotJson: expect.anything(),
+          }),
+        ]),
+      );
+      expect(
+        resultado.cotizacion?.costos.componentesFabricadosTotal,
+      ).toBeGreaterThan(0);
+      expect(resultado.cotizacion?.componentesFabricados).toEqual([
+        expect.objectContaining({
+          productoId: tarjetas.id,
+          cantidad: 1000,
+          recetaVersion: 1,
+          costoTotal: expect.any(Number),
+        }),
+      ]);
+      expect(resultado.cotizacion?.costos.total).toBeGreaterThan(
+        resultado.cotizacion?.costos.componentesFabricadosTotal ?? 0,
+      );
+      const guardada = await motorConRecetas.cotizarYGuardar({
+        tenantId,
+        productoId: rigido.id,
+        jobContext: {
+          cantidad: 1,
+          medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+          [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+            materialRigido,
+        },
+      });
+      expect(guardada.result.exitoso).toBe(true);
+      const itemGuardado = await prisma.cotizacionItem.findUniqueOrThrow({
+        where: { id: guardada.cotizacionItemId! },
+      });
+      expect(itemGuardado.recetaRevisionId).toBe(publicadaRigido.id);
+      expect(itemGuardado.recetaHuella).toBe(
+        publicadaRigido.huellaConfiguracion,
+      );
+      expect(itemGuardado.trazabilidadJson).toEqual(
+        expect.objectContaining({
+          componentesFabricados: expect.arrayContaining([
+            expect.objectContaining({ productoId: tarjetas.id }),
+          ]),
+        }),
+      );
+      const ordenes = new OrdenesTrabajoService(
+        prisma as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+      );
+      const itemAutorizado = (
+        await ordenes.autorizarItemsCotizados(auth, guardada.cotizacionId!, [
+          {
+            cotizacionItemId: guardada.cotizacionItemId!,
+            codigo: rigido.codigo,
+            nombre: rigido.nombre,
+            familia: 'Exhibidor POP',
+            cantidad: 1,
+            cantidadUnidad: 'unidad',
+            subtotal: 0,
+            impuestos: 0,
+            total: 0,
+          },
+        ])
+      )[0] as unknown as Record<string, unknown>;
+      expect(itemAutorizado).toEqual(
+        expect.objectContaining({
+          recetaRevisionId: publicadaRigido.id,
+          recetaVersion: publicadaRigido.numero,
+          recetaHuella: publicadaRigido.huellaConfiguracion,
+          recetaSnapshotJson: expect.objectContaining({
+            componentes: expect.any(Array),
+          }),
+        }),
+      );
+      await prisma.cotizacion.delete({ where: { id: guardada.cotizacionId! } });
+
+      const borradorTarjetasV2 = await recetas.guardarBorrador(
+        auth,
+        tarjetas.id,
+        {
+          rutaAlternativaId: rutaTarjetas.id,
+          componentes: [],
+          cambios: 'Ajuste técnico del componente fabricado',
+        },
+      );
+      await recetas.publicar(auth, borradorTarjetasV2.id, {
+        expectedUpdatedAt: borradorTarjetasV2.updatedAt.toISOString(),
+      });
+      await expect(
+        motorConRecetas.cotizar({
+          tenantId,
+          productoId: rigido.id,
+          jobContext: {
+            cantidad: 1,
+            medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+            [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+              materialRigido,
+          },
+        }),
+      ).rejects.toThrow('cambios productivos sin publicar');
+    } finally {
+      await prisma.productoReceta.deleteMany({
+        where: { tenantId, productoId: { in: [rigido.id, tarjetas.id] } },
+      });
+      await prisma.productoConfigPasoSlotMaterial.deleteMany({
+        where: {
+          tenantId,
+          OR: [
+            { productoConfigPasoId: configPintura.id, slotCodigo: 'pintura' },
+            {
+              productoConfigPasoId: configEmbalaje.id,
+              slotCodigo: { in: ['caja', 'escuadras'] },
+            },
+          ],
+        },
+      });
+      await prisma.materiaPrima.deleteMany({
+        where: {
+          tenantId,
+          codigo: {
+            in: ['QA-F3-PINTURA', 'QA-F3-PACKAGING', 'QA-F3-ACCESORIO'],
+          },
+        },
+      });
+      await prisma.estacion.deleteMany({
+        where: { id: estacionQa.id, tenantId },
+      });
+    }
   });
 });

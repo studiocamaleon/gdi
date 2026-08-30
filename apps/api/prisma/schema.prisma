@@ -2792,6 +2792,8 @@ model ProductoRecetaRecurso {
   maquinaId                 String?  @db.Uuid
   maquinaCodigo             String?  @db.VarChar(100)
   maquinaNombre             String?  @db.VarChar(180)
+  estacionId                String?  @db.Uuid
+  estacionNombre            String?  @db.VarChar(180)
   perfilId                  String?  @db.Uuid
   perfilNombre              String?  @db.VarChar(180)
   centroCostoId             String?  @db.Uuid
@@ -2801,6 +2803,8 @@ model ProductoRecetaRecurso {
   tercerizado               Boolean  @default(false)
   proveedorId               String?  @db.Uuid
   proveedorNombre           String?  @db.VarChar(220)
+  capacidadesSnapshotJson   Json?
+  habilidadesRequeridas     String[] @default([])
   configuracionSnapshotJson Json?
   orden                     Int      @default(0)
   createdAt                 DateTime @default(now())
@@ -2820,6 +2824,9 @@ model ProductoRecetaComponente {
   tenantId             String                            @db.Uuid
   revisionId           String                            @db.Uuid
   productoComponenteId String                            @db.Uuid
+  recetaRevisionId     String                            @db.Uuid
+  recetaVersion        Int
+  recetaHuella         String                            @db.VarChar(64)
   codigo               String                            @db.VarChar(100)
   nombre               String                            @db.VarChar(180)
   tipo                 TipoProductoRecetaComponente      @default(FABRICADO)

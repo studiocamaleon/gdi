@@ -177,6 +177,7 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
   piezas_laminadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas laminadas' },
   metros_lineales_film: { capacidad: 'metros_lineales', etiqueta: 'metros de film' },
   piezas_pintadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas pintadas' },
+  piezas_terminadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas terminadas' },
 
   // ── encuadernado / armado ───────────────────────────────────────────
   libros_anillados: { capacidad: 'unidades_procesadas', etiqueta: 'libros anillados' },

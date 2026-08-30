@@ -110,8 +110,7 @@ function EditorDefiniciones({
         .filter((paso) => paso.activo)
         .map((paso) => ({
           value: `ruta:${paso.id}`,
-          label:
-            paso.nombreVisible || paso.familiaNombre || paso.familiaCodigo,
+          label: paso.nombreVisible || paso.familiaNombre || paso.familiaCodigo,
         })),
       ...(ruta.pasosExtras ?? [])
         .filter((paso) => paso.activo)
@@ -287,8 +286,8 @@ function EditorDefiniciones({
                           i === index
                             ? {
                                 ...value,
-                                etapa:
-                                  event.target.value as ProductoRecetaDocumentoInput["etapa"],
+                                etapa: event.target
+                                  .value as ProductoRecetaDocumentoInput["etapa"],
                               }
                             : value,
                         ),
@@ -552,11 +551,19 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                     </span>
                   </div>
                   <div className={styles.rowMeta}>
+                    {recurso.estacionNombre ? (
+                      <span>Estación {recurso.estacionNombre}</span>
+                    ) : null}
                     {recurso.perfilNombre ? (
                       <span>{recurso.perfilNombre}</span>
                     ) : null}
                     {recurso.dotacionOperarios > 1 ? (
                       <b>{recurso.dotacionOperarios} personas</b>
+                    ) : null}
+                    {recurso.habilidadesRequeridas?.length ? (
+                      <b>
+                        Habilidades: {recurso.habilidadesRequeridas.join(", ")}
+                      </b>
                     ) : null}
                   </div>
                 </div>
@@ -807,7 +814,10 @@ export function RecetaProductoTab({
                     <div className={styles.history}>
                       <span>Historial</span>
                       {receta.revisiones.map((revision) => (
-                        <div key={revision.id} data-state={revision.estado.toLowerCase()}>
+                        <div
+                          key={revision.id}
+                          data-state={revision.estado.toLowerCase()}
+                        >
                           <strong>V{revision.numero}</strong>
                           <span>{revision.estado.toLowerCase()}</span>
                           <time>

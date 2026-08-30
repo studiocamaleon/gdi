@@ -1316,6 +1316,30 @@ const pintura_superficial: DefinicionFamilia = {
   ],
 };
 
+const lijado_canteado: DefinicionFamilia = {
+  codigo: 'lijado_canteado',
+  nombre: 'Lijado y canteado',
+  categoria: 'terminaciones',
+  descripcion:
+    'Terminación manual de bordes y superficies en piezas rígidas cortadas.',
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-1', 'T-2'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'HEREDAR_DEL_OUTPUT_CANONICO',
+  ],
+  modosActivacionSoportados: ['OPCIONAL'],
+  modoActivacionDefault: 'OPCIONAL',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [],
+  inputsRequeridos: ['cantidad'],
+  outputsCanonicos: ['piezas_terminadas'],
+  validaciones: [],
+  paramsPasoSchema: [],
+};
+
 // ============================================================================
 // 3.5 Encuadernación / armado (2)
 // ============================================================================
@@ -2301,6 +2325,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   laminado,
   plastificado_pouch,
   pintura_superficial,
+  lijado_canteado,
   abrochado_caballete,
   encuadernado_anillado,
   engomado_emblocado,

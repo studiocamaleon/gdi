@@ -17,6 +17,12 @@ type ValidadorInterno = {
     productoRaizId: string,
     componentesIniciales: string[],
   ): Promise<void>;
+  validarReferenciasBorrador(
+    tenantId: string,
+    productoId: string,
+    documentos: Array<Record<string, unknown>>,
+    componentes: Array<Record<string, unknown>>,
+  ): Promise<void>;
 };
 
 function servicioConPrisma(prisma: Record<string, unknown>) {
@@ -85,5 +91,27 @@ describe('validaciones industriales de receta', () => {
     await expect(
       servicio.validarCiclos('tenant-1', 'producto-raiz', ['componente-1']),
     ).rejects.toThrow('ciclo de componentes');
+  });
+
+  it('rechaza fórmulas y unidades no fabricables en componentes', async () => {
+    const servicio = servicioConPrisma({});
+
+    await expect(
+      servicio.validarReferenciasBorrador(
+        'tenant-1',
+        'producto-raiz',
+        [],
+        [
+          {
+            productoComponenteId: 'componente-1',
+            codigo: 'COMP-1',
+            nombre: 'Componente',
+            formula: 'por_m2',
+            cantidad: 1,
+            unidad: 'm2',
+          },
+        ],
+      ),
+    ).rejects.toThrow('fórmula por_unidad');
   });
 });

@@ -774,4 +774,29 @@
   .audit {
     flex-direction: column;
   }
+
+  .history {
+    align-items: stretch;
+    flex-wrap: wrap;
+    overflow-x: visible;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .history > span {
+    width: 100%;
+  }
+
+  .history > div {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    width: 100%;
+    border-radius: 10px;
+  }
+
+  .history time {
+    min-width: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
 }

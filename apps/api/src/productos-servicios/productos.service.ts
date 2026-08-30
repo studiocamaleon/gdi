@@ -937,6 +937,8 @@ export class ProductosService {
                     plantilla: true,
                     anchoUtil: true,
                     parametrosTecnicosJson: true,
+                    capacidadesAvanzadasJson: true,
+                    estacion: { select: { id: true, nombre: true } },
                     centroCostoPrincipalId: true,
                     centroCostoPrincipal: {
                       select: {
@@ -1095,6 +1097,8 @@ export class ProductosService {
                         plantilla: true,
                         anchoUtil: true,
                         parametrosTecnicosJson: true,
+                        capacidadesAvanzadasJson: true,
+                        estacion: { select: { id: true, nombre: true } },
                         centroCostoPrincipalId: true,
                         centroCostoPrincipal: {
                           select: {
@@ -1332,6 +1336,8 @@ export class ProductosService {
               plantilla: true,
               anchoUtil: true,
               parametrosTecnicosJson: true,
+              capacidadesAvanzadasJson: true,
+              estacion: { select: { id: true, nombre: true } },
               centroCostoPrincipalId: true,
               centroCostoPrincipal: {
                 select: { id: true, codigo: true, nombre: true },

@@ -144,10 +144,13 @@ export class RecetasProductoService {
       ...this.snapshotConfiguracion(producto, ruta),
       documentos: this.documentosCanonicos(receta.revisionPublicada.documentos),
       componentes: this.componentesCanonicos(
-        receta.revisionPublicada.componentes.map((item) => ({
-          ...item,
-          cantidad: Number(item.cantidad),
-        })),
+        await this.componentesConRevisionActual(
+          tenantId,
+          receta.revisionPublicada.componentes.map((item) => ({
+            ...item,
+            cantidad: Number(item.cantidad),
+          })),
+        ),
       ),
     };
     const huellaActual = huellaDe(snapshot);
@@ -161,6 +164,20 @@ export class RecetasProductoService {
       version: receta.revisionPublicada.numero,
       huella: receta.revisionPublicada.huellaConfiguracion,
       snapshot: receta.revisionPublicada.snapshotJson,
+      componentes: receta.revisionPublicada.componentes.map((item) => ({
+        productoComponenteId: item.productoComponenteId,
+        recetaRevisionId: item.recetaRevisionId,
+        recetaVersion: item.recetaVersion,
+        recetaHuella: item.recetaHuella,
+        codigo: item.codigo,
+        nombre: item.nombre,
+        politicaEjecucion: item.politicaEjecucion,
+        formula: item.formula,
+        cantidad: Number(item.cantidad),
+        unidad: item.unidad,
+        requerido: item.requerido,
+        orden: item.orden,
+      })),
     };
   }
 
@@ -240,16 +257,23 @@ export class RecetasProductoService {
       documentos,
       componentes,
     );
+    const componentesVersionados = await this.componentesConRevisionActual(
+      auth.tenantId,
+      componentes,
+    );
 
     const snapshot = {
       ...configuracion,
       documentos: this.documentosCanonicos(documentos),
-      componentes: this.componentesCanonicos(componentes),
+      componentes: this.componentesCanonicos(componentesVersionados),
     };
     const huella = huellaDe(snapshot);
     const variantes = await this.unidadesVariantes(auth.tenantId, snapshot);
     const materiales = this.materialesDesdeSnapshot(snapshot, variantes);
-    const recursos = this.recursosDesdeSnapshot(snapshot);
+    const recursos = await this.recursosConEstaciones(
+      auth.tenantId,
+      this.recursosDesdeSnapshot(snapshot),
+    );
 
     const revisionId = await this.prisma.$transaction(async (tx) => {
       const receta =
@@ -338,9 +362,13 @@ export class RecetasProductoService {
       if (componentes.length) {
         await tx.productoRecetaComponente.createMany({
           data: componentes.map((item, index) => ({
+            ...(componentesVersionados[index] ?? {}),
             tenantId: auth.tenantId,
             revisionId: revision.id,
             productoComponenteId: item.productoComponenteId,
+            recetaRevisionId: componentesVersionados[index].recetaRevisionId,
+            recetaVersion: componentesVersionados[index].recetaVersion,
+            recetaHuella: componentesVersionados[index].recetaHuella,
             codigo: item.codigo.trim(),
             nombre: item.nombre.trim(),
             politicaEjecucion: item.politicaEjecucion ?? 'INDEPENDIENTE',
@@ -380,7 +408,7 @@ export class RecetasProductoService {
           entidadId: revision.id,
           titulo: `Receta V${revision.numero} actualizada`,
           mensaje: `${producto.nombre} tiene cambios de receta sin publicar.`,
-          href: `/productos-servicios/${productoId}?tab=receta`,
+          href: `/productos-servicios/${productoId}?tab=produccion&vista=bom`,
           topicos: [`producto:${productoId}`, `receta:${receta.id}`],
         },
         tx,
@@ -423,15 +451,17 @@ export class RecetasProductoService {
     );
     const ruta = this.encontrarRuta(producto, revision.rutaAlternativaId);
     const configuracion = this.snapshotConfiguracion(producto, ruta);
+    const componentesActuales = await this.componentesConRevisionActual(
+      auth.tenantId,
+      revision.componentes.map((item) => ({
+        ...item,
+        cantidad: Number(item.cantidad),
+      })),
+    );
     const snapshotActual = {
       ...configuracion,
       documentos: this.documentosCanonicos(revision.documentos),
-      componentes: this.componentesCanonicos(
-        revision.componentes.map((item) => ({
-          ...item,
-          cantidad: Number(item.cantidad),
-        })),
-      ),
+      componentes: this.componentesCanonicos(componentesActuales),
     };
     if (huellaDe(snapshotActual) !== revision.huellaConfiguracion) {
       throw new ConflictException(
@@ -511,7 +541,7 @@ export class RecetasProductoService {
           entidadId: revision.id,
           titulo: `Receta V${revision.numero} publicada`,
           mensaje: `${revision.receta.producto.nombre} ya tiene una definición productiva vigente.`,
-          href: `/productos-servicios/${revision.receta.productoId}?tab=receta`,
+          href: `/productos-servicios/${revision.receta.productoId}?tab=produccion&vista=bom`,
           topicos: [
             `producto:${revision.receta.productoId}`,
             `receta:${revision.recetaId}`,
@@ -533,7 +563,8 @@ export class RecetasProductoService {
       where: { id: revisionId, tenantId: auth.tenantId },
       include: { receta: { include: { producto: true } } },
     });
-    if (!revision) throw new NotFoundException('Revisión de receta inexistente.');
+    if (!revision)
+      throw new NotFoundException('Revisión de receta inexistente.');
     if (
       revision.estado !== EstadoProductoRecetaRevision.PUBLICADA ||
       revision.receta.revisionPublicadaId !== revision.id
@@ -581,7 +612,7 @@ export class RecetasProductoService {
           entidadId: revision.id,
           titulo: `Receta V${revision.numero} retirada`,
           mensaje: `${revision.receta.producto.nombre} volvió temporalmente al modo compatible.`,
-          href: `/productos-servicios/${revision.receta.productoId}?tab=receta`,
+          href: `/productos-servicios/${revision.receta.productoId}?tab=produccion&vista=bom`,
           topicos: [
             `producto:${revision.receta.productoId}`,
             `receta:${revision.recetaId}`,
@@ -756,10 +787,21 @@ export class RecetasProductoService {
       .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo));
   }
 
-  private componentesCanonicos(componentes: RecetaComponenteDto[]) {
+  private componentesCanonicos(
+    componentes: Array<
+      RecetaComponenteDto & {
+        recetaRevisionId?: string;
+        recetaVersion?: number;
+        recetaHuella?: string;
+      }
+    >,
+  ) {
     return componentes
       .map((item, index) => ({
         productoComponenteId: item.productoComponenteId,
+        recetaRevisionId: item.recetaRevisionId ?? null,
+        recetaVersion: item.recetaVersion ?? null,
+        recetaHuella: item.recetaHuella ?? null,
         codigo: item.codigo.trim(),
         nombre: item.nombre.trim(),
         politicaEjecucion: item.politicaEjecucion ?? 'INDEPENDIENTE',
@@ -770,6 +812,51 @@ export class RecetasProductoService {
         orden: item.orden ?? index,
       }))
       .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo));
+  }
+
+  private async componentesConRevisionActual(
+    tenantId: string,
+    componentes: RecetaComponenteDto[],
+  ) {
+    if (!componentes.length) return [];
+    const ids = [
+      ...new Set(componentes.map((item) => item.productoComponenteId)),
+    ];
+    const recetas = await this.prisma.productoReceta.findMany({
+      where: {
+        tenantId,
+        productoId: { in: ids },
+        activo: true,
+        revisionPublicadaId: { not: null },
+      },
+      select: {
+        productoId: true,
+        revisionPublicada: {
+          select: { id: true, numero: true, huellaConfiguracion: true },
+        },
+      },
+    });
+    const porProducto = new Map(
+      recetas.flatMap((receta) =>
+        receta.revisionPublicada
+          ? [[receta.productoId, receta.revisionPublicada] as const]
+          : [],
+      ),
+    );
+    return componentes.map((item) => {
+      const revision = porProducto.get(item.productoComponenteId);
+      if (!revision) {
+        throw new BadRequestException(
+          `El componente ${item.nombre} debe tener una receta publicada.`,
+        );
+      }
+      return {
+        ...item,
+        recetaRevisionId: revision.id,
+        recetaVersion: revision.numero,
+        recetaHuella: revision.huellaConfiguracion,
+      };
+    });
   }
 
   private materialesDesdeSnapshot(
@@ -853,6 +940,10 @@ export class RecetasProductoService {
         recurso.perfil && typeof recurso.perfil === 'object'
           ? (recurso.perfil as Record<string, unknown>)
           : null;
+      const estacion =
+        maquina?.estacion && typeof maquina.estacion === 'object'
+          ? (maquina.estacion as Record<string, unknown>)
+          : null;
       const centro =
         recurso.centroCosto && typeof recurso.centroCosto === 'object'
           ? (recurso.centroCosto as Record<string, unknown>)
@@ -860,6 +951,19 @@ export class RecetasProductoService {
               typeof maquina.centroCostoPrincipal === 'object'
             ? (maquina.centroCostoPrincipal as Record<string, unknown>)
             : null;
+      const paramsPaso =
+        paso.configuracion.paramsPasoJson &&
+        typeof paso.configuracion.paramsPasoJson === 'object'
+          ? (paso.configuracion.paramsPasoJson as Record<string, unknown>)
+          : null;
+      const habilidadesRequeridas = Array.isArray(
+        paramsPaso?.habilidadesRequeridas,
+      )
+        ? paramsPaso.habilidadesRequeridas
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : [];
       return {
         pasoClave: paso.clave,
         pasoNombre: paso.nombre,
@@ -869,6 +973,9 @@ export class RecetasProductoService {
           typeof maquina?.codigo === 'string' ? maquina.codigo : null,
         maquinaNombre:
           typeof maquina?.nombre === 'string' ? maquina.nombre : null,
+        estacionId: typeof estacion?.id === 'string' ? estacion.id : null,
+        estacionNombre:
+          typeof estacion?.nombre === 'string' ? estacion.nombre : null,
         perfilId: typeof perfil?.id === 'string' ? perfil.id : null,
         perfilNombre: typeof perfil?.nombre === 'string' ? perfil.nombre : null,
         centroCostoId: typeof centro?.id === 'string' ? centro.id : null,
@@ -881,9 +988,81 @@ export class RecetasProductoService {
         proveedorId:
           typeof recurso.proveedorId === 'string' ? recurso.proveedorId : null,
         proveedorNombre: null,
+        capacidadesSnapshotJson: jsonSeguro({
+          parametrosTecnicos: maquina?.parametrosTecnicosJson ?? null,
+          capacidadesAvanzadas: maquina?.capacidadesAvanzadasJson ?? null,
+          perfilDetalle: perfil?.detalleJson ?? null,
+        }) as Prisma.InputJsonValue,
+        habilidadesRequeridas,
         configuracionSnapshotJson: jsonSeguro(recurso) as Prisma.InputJsonValue,
         orden: paso.orden,
       };
+    });
+  }
+
+  private async recursosConEstaciones<
+    T extends {
+      familiaCodigo: string;
+      maquinaId: string | null;
+      estacionId: string | null;
+      estacionNombre: string | null;
+    },
+  >(tenantId: string, recursos: T[]): Promise<T[]> {
+    const sinEstacion = recursos.filter((recurso) => !recurso.estacionId);
+    if (!sinEstacion.length) return recursos;
+    const maquinas = sinEstacion
+      .map((recurso) => recurso.maquinaId)
+      .filter((id): id is string => Boolean(id));
+    const familias = [
+      ...new Set(sinEstacion.map((recurso) => recurso.familiaCodigo)),
+    ];
+    const [reglas, legacy] = await Promise.all([
+      this.prisma.estacionRegla.findMany({
+        where: {
+          tenantId,
+          OR: [
+            { tipo: 'maquina', valor: { in: maquinas } },
+            { tipo: 'familia', valor: { in: familias } },
+          ],
+          estacion: { activo: true },
+        },
+        include: { estacion: { select: { id: true, nombre: true } } },
+      }),
+      this.prisma.estacionFamilia.findMany({
+        where: {
+          tenantId,
+          familiaCodigo: { in: familias },
+          estacion: { activo: true },
+        },
+        include: { estacion: { select: { id: true, nombre: true } } },
+      }),
+    ]);
+    const porMaquina = new Map(
+      reglas
+        .filter((regla) => regla.tipo === 'maquina')
+        .map((regla) => [regla.valor, regla.estacion] as const),
+    );
+    const porFamilia = new Map(
+      reglas
+        .filter((regla) => regla.tipo === 'familia')
+        .map((regla) => [regla.valor, regla.estacion] as const),
+    );
+    const porFamiliaLegacy = new Map(
+      legacy.map((item) => [item.familiaCodigo, item.estacion] as const),
+    );
+    return recursos.map((recurso) => {
+      if (recurso.estacionId) return recurso;
+      const estacion =
+        (recurso.maquinaId ? porMaquina.get(recurso.maquinaId) : null) ??
+        porFamilia.get(recurso.familiaCodigo) ??
+        porFamiliaLegacy.get(recurso.familiaCodigo);
+      return estacion
+        ? {
+            ...recurso,
+            estacionId: estacion.id,
+            estacionNombre: estacion.nombre,
+          }
+        : recurso;
     });
   }
 
@@ -934,6 +1113,16 @@ export class RecetasProductoService {
     }
     const codigosComponentes = new Set<string>();
     for (const item of componentes) {
+      if ((item.formula ?? 'por_unidad') !== 'por_unidad') {
+        throw new BadRequestException(
+          `El componente ${item.nombre} debe usar la fórmula por_unidad.`,
+        );
+      }
+      if ((item.unidad ?? 'unidad').trim().toLowerCase() !== 'unidad') {
+        throw new BadRequestException(
+          `El componente ${item.nombre} debe expresarse en unidad.`,
+        );
+      }
       if (item.productoComponenteId === productoId) {
         throw new BadRequestException(
           'Un producto no puede ser componente de sí mismo.',

@@ -37,6 +37,7 @@ export type FamiliaCodigo =
   | 'laminado'
   | 'plastificado_pouch'
   | 'pintura_superficial'
+  | 'lijado_canteado'
   // Encuadernación / armado
   | 'abrochado_caballete'
   | 'encuadernado_anillado'
@@ -112,10 +113,7 @@ export type MecanismoCantidad =
 
 /** Modos de activación. Ver D.1. */
 export type ModoActivacion =
-  | 'OBLIGATORIO'
-  | 'OPCIONAL'
-  | 'CONDICIONAL'
-  | 'NO_EJECUTAR';
+  'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL' | 'NO_EJECUTAR';
 
 export const MODOS_ACTIVACION_UNIVERSALES: ModoActivacion[] = [
   'OBLIGATORIO',
@@ -332,11 +330,7 @@ export type ValidacionDeclarada =
 // ============================================================================
 
 export type TipoParamsPaso =
-  | 'string'
-  | 'number'
-  | 'boolean'
-  | 'enum'
-  | 'multi-enum';
+  'string' | 'number' | 'boolean' | 'enum' | 'multi-enum';
 
 export interface ParamsPasoDeclarado {
   /** Nombre del campo en el JSON paramsPaso. */
@@ -388,10 +382,7 @@ export interface ParamsPasoDeclarado {
  *    rígido dan placa). Lo usa impresión por área, que corre sobre ambos.
  */
 export type SuperficieNesting =
-  | 'pliego'
-  | 'pliegos_multiples'
-  | 'rollo'
-  | 'segun_material';
+  'pliego' | 'pliegos_multiples' | 'rollo' | 'segun_material';
 
 /**
  * Estrategia de acomodado que corre el dispatcher. Si la familia no declara
@@ -428,11 +419,7 @@ export type EstrategiaNesting =
  * Sin declarar → sin guard: fallback silencioso (vía de tenant, intacta).
  */
 export type GuardSinLayoutNesting =
-  | 'laminado_rollo'
-  | 'pouch'
-  | 'pliego_digital'
-  | 'sustrato'
-  | 'montaje';
+  'laminado_rollo' | 'pouch' | 'pliego_digital' | 'sustrato' | 'montaje';
 
 export type DefinicionFamiliaResuelta = Omit<DefinicionFamilia, 'codigo'> & {
   codigo: string;
