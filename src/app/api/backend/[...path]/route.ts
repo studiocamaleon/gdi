@@ -29,6 +29,14 @@ async function handler(
   if (contentType) {
     headers.set("content-type", contentType);
   }
+  const lastEventId = request.headers.get("last-event-id");
+  if (lastEventId) {
+    headers.set("last-event-id", lastEventId);
+  }
+  const accept = request.headers.get("accept");
+  if (accept) {
+    headers.set("accept", accept);
+  }
 
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -52,6 +60,7 @@ async function handler(
       // URL firmada del storage. Se propaga el Location y que lo siga el
       // navegador. Ver docs/archivos-r2-diseno.md §D4.
       redirect: "manual",
+      signal: request.signal,
     });
   } catch {
     return new Response(
@@ -64,6 +73,18 @@ async function handler(
   const respContentType = response.headers.get("content-type");
   if (respContentType) {
     responseHeaders.set("content-type", respContentType);
+  }
+
+  // SSE no puede pasar por el buffer general del BFF: la conexión debe quedar
+  // abierta y cada evento tiene que llegar al navegador apenas lo emite Nest.
+  if (respContentType?.includes("text/event-stream")) {
+    responseHeaders.set("cache-control", "no-cache, no-transform");
+    responseHeaders.set("connection", "keep-alive");
+    responseHeaders.set("x-accel-buffering", "no");
+    return new Response(response.body, {
+      status: response.status,
+      headers: responseHeaders,
+    });
   }
   // Sin esto, un archivo (el PDF de un comprobante) llega sin su nombre y el
   // navegador lo baja como "path" o similar.

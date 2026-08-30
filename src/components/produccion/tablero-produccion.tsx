@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useCambiosSistema } from "@/components/notificaciones/notificaciones-provider";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -90,7 +91,12 @@ import {
   type Estacion,
 } from "@/lib/estaciones";
 import type { DiaNoLaborable, DuracionFamilia } from "@/lib/estaciones-api";
-import { etiquetaEta, simularFlujo, type ResultadoSimulacion, type SimulacionItem } from "@/lib/flujo-produccion";
+import {
+  etiquetaEta,
+  simularFlujo,
+  type ResultadoSimulacion,
+  type SimulacionItem,
+} from "@/lib/flujo-produccion";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { SimulacionView } from "@/components/produccion/simulacion-view";
 import { formatBytes, urlDeArchivo, type Archivo } from "@/lib/archivos";
@@ -177,7 +183,11 @@ function getStepIcon(icon: string) {
 }
 
 function priorityLabel(priority: TableroPrioridad) {
-  return priority === "urgent" ? "Urgente" : priority === "high" ? "Alta" : "Normal";
+  return priority === "urgent"
+    ? "Urgente"
+    : priority === "high"
+      ? "Alta"
+      : "Normal";
 }
 
 function iniciales(nombre: string): string {
@@ -204,7 +214,10 @@ const VENTANA_PASO = 30;
 function useVentanaProgresiva(total: number) {
   const [limite, setLimite] = React.useState(VENTANA_INICIAL);
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
-  const expandir = React.useCallback(() => setLimite((actual) => actual + VENTANA_PASO), []);
+  const expandir = React.useCallback(
+    () => setLimite((actual) => actual + VENTANA_PASO),
+    [],
+  );
 
   React.useEffect(() => {
     const node = sentinelRef.current;
@@ -237,8 +250,12 @@ function VentanaSentinel({
 }) {
   return (
     <div ref={sentinelRef} className="ventana-sentinel">
-      <span>Mostrando {mostrando} de {total}</span>
-      <button type="button" onClick={expandir}>Mostrar más</button>
+      <span>
+        Mostrando {mostrando} de {total}
+      </span>
+      <button type="button" onClick={expandir}>
+        Mostrar más
+      </button>
     </div>
   );
 }
@@ -322,9 +339,14 @@ function ElapsedMin({ desdeIso }: { desdeIso: string }) {
   return <>{etiquetaDuracion(min)}</>;
 }
 
-function buildItemView(item: TableroItemData, estaciones: Estacion[]): ItemView {
+function buildItemView(
+  item: TableroItemData,
+  estaciones: Estacion[],
+): ItemView {
   const actual = pasoActual(item);
-  const estacionActual = actual ? resolverEstacionDePaso(estaciones, actual) : null;
+  const estacionActual = actual
+    ? resolverEstacionDePaso(estaciones, actual)
+    : null;
   const steps = item.pasos.map<StepView>((paso) => ({
     paso,
     status: stepStatus(paso),
@@ -332,7 +354,9 @@ function buildItemView(item: TableroItemData, estaciones: Estacion[]): ItemView 
     iconKey: familiaIcono(paso.familiaCodigo, paso.plantillaCodigo),
     tec: paso.centroCostoNombre ?? "Paso manual",
   }));
-  const currentStep = actual ? steps.find((s) => s.paso.id === actual.id) : undefined;
+  const currentStep = actual
+    ? steps.find((s) => s.paso.id === actual.id)
+    : undefined;
   const blocked = itemBloqueado(item);
   const bloqueadoPaso = item.pasos.find((paso) => paso.estado === "bloqueado");
   // El resumen une valores SIN etiqueta, así que la medida de corte no puede
@@ -371,7 +395,7 @@ function buildItemView(item: TableroItemData, estaciones: Estacion[]): ItemView 
     sinRuta: item.sinRuta,
     progressPct: progresoItem(item),
     statusLine: lineaEstado(item),
-    station: actual ? estacionActual?.nombre ?? "Sin estación" : "—",
+    station: actual ? (estacionActual?.nombre ?? "Sin estación") : "—",
     stationIcon: estacionActual?.icono ?? null,
     currentStep,
     steps,
@@ -389,12 +413,20 @@ function routeStatusIcon(step: StepView, fallback?: React.ReactNode) {
   return <IconCmp />;
 }
 
-function RouteStrip({ steps, compact = false }: { steps: StepView[]; compact?: boolean }) {
+function RouteStrip({
+  steps,
+  compact = false,
+}: {
+  steps: StepView[];
+  compact?: boolean;
+}) {
   if (steps.length === 0) {
     return (
       <div className={`route-strip ${compact ? "compact" : ""}`}>
         <div className="route-step pending" title="Item sin ruta de producción">
-          <span className="ri-dot"><BanIcon /></span>
+          <span className="ri-dot">
+            <BanIcon />
+          </span>
           <span className="ri-label">Sin ruta</span>
         </div>
       </div>
@@ -405,12 +437,20 @@ function RouteStrip({ steps, compact = false }: { steps: StepView[]; compact?: b
       {steps.map((step, index) => {
         // Visual: la frontera pendiente luce como "current" (anillo), aunque
         // semánticamente siga pendiente (el sheet la muestra como estimada).
-        const visual = step.esActivo && step.status === "pending" ? "current" : step.status;
+        const visual =
+          step.esActivo && step.status === "pending" ? "current" : step.status;
         const cls =
           `route-step ${visual}` +
-          (step.status === "done" || (index > 0 && steps[index - 1]?.status === "done") ? " link-done" : "");
+          (step.status === "done" ||
+          (index > 0 && steps[index - 1]?.status === "done")
+            ? " link-done"
+            : "");
         return (
-          <div key={step.paso.id} className={cls} title={`${step.paso.nombre} · ${step.tec}`}>
+          <div
+            key={step.paso.id}
+            className={cls}
+            title={`${step.paso.nombre} · ${step.tec}`}
+          >
             <span className="ri-dot">{routeStatusIcon(step)}</span>
             <span className="ri-label">{step.paso.nombre}</span>
           </div>
@@ -428,19 +468,34 @@ function RouteStrip({ steps, compact = false }: { steps: StepView[]; compact?: b
  * — la señal del vendedor ANTES de que el retraso exista. "~" = corrió con
  * supuestos (estación sin calendario o bloqueo asumido como destrabado).
  */
-function EtaLine({ item, eta }: { item: ItemView; eta: SimulacionItem | undefined }) {
+function EtaLine({
+  item,
+  eta,
+}: {
+  item: ItemView;
+  eta: SimulacionItem | undefined;
+}) {
   if (!eta || item.finished) return null;
-  if (eta.sinEstimar) return <span className="eta-line none">fin sin estimar</span>;
+  if (eta.sinEstimar)
+    return <span className="eta-line none">fin sin estimar</span>;
   if (!eta.finEstimado) return null;
   const fin = eta.finEstimado;
   const finClave = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, "0")}-${String(fin.getDate()).padStart(2, "0")}`;
-  const late = item.data.fechaEntrega ? finClave > item.data.fechaEntrega.slice(0, 10) : false;
+  const late = item.data.fechaEntrega
+    ? finClave > item.data.fechaEntrega.slice(0, 10)
+    : false;
   const aprox = eta.parcial || eta.asumeDesbloqueo;
-  const motivo = [eta.parcial ? "estación sin calendario en la ruta" : null, eta.asumeDesbloqueo ? "asume desbloqueo inmediato" : null]
+  const motivo = [
+    eta.parcial ? "estación sin calendario en la ruta" : null,
+    eta.asumeDesbloqueo ? "asume desbloqueo inmediato" : null,
+  ]
     .filter(Boolean)
     .join(" · ");
   return (
-    <span className={`eta-line ${late ? "late" : ""}`} title={motivo || undefined}>
+    <span
+      className={`eta-line ${late ? "late" : ""}`}
+      title={motivo || undefined}
+    >
       fin {aprox ? "~" : "≈"} {etiquetaEta(fin)}
       {late ? " · no llega" : ""}
     </span>
@@ -448,7 +503,15 @@ function EtaLine({ item, eta }: { item: ItemView; eta: SimulacionItem | undefine
 }
 
 // Memo: misma razón que KanbanCard — ver el comentario de la ventana.
-const ItemRow = React.memo(function ItemRow({ item, eta, onOpen }: { item: ItemView; eta: SimulacionItem | undefined; onOpen: (id: string) => void }) {
+const ItemRow = React.memo(function ItemRow({
+  item,
+  eta,
+  onOpen,
+}: {
+  item: ItemView;
+  eta: SimulacionItem | undefined;
+  onOpen: (id: string) => void;
+}) {
   const cssRow =
     `tab-row priority-${item.priority}` +
     (item.blocked ? " blocked" : "") +
@@ -459,8 +522,14 @@ const ItemRow = React.memo(function ItemRow({ item, eta, onOpen }: { item: ItemV
       <div className="tab-row-left">
         <div className="tab-row-codes">
           <span className="item-code">{item.code}</span>
-          <span className="ot-badge" title="Orden de trabajo origen">{item.otCode}</span>
-          {item.priority !== "normal" ? <span className={`prio-pill prio-${item.priority}`}>{priorityLabel(item.priority)}</span> : null}
+          <span className="ot-badge" title="Orden de trabajo origen">
+            {item.otCode}
+          </span>
+          {item.priority !== "normal" ? (
+            <span className={`prio-pill prio-${item.priority}`}>
+              {priorityLabel(item.priority)}
+            </span>
+          ) : null}
         </div>
         <div className="tab-row-product">{item.product}</div>
         {/* Sólo el cliente: el detalle del producto vive en el sheet. */}
@@ -471,20 +540,37 @@ const ItemRow = React.memo(function ItemRow({ item, eta, onOpen }: { item: ItemV
 
       <div className="tab-row-route">
         <RouteStrip steps={item.steps} />
-        <div className={`tab-status-line ${item.blocked ? "blocked" : item.delayed ? "delayed" : ""}`}>
-          <span className={`dot ${item.blocked ? "dot-block" : item.delayed ? "dot-warn" : "dot-ok"}`} />
+        <div
+          className={`tab-status-line ${item.blocked ? "blocked" : item.delayed ? "delayed" : ""}`}
+        >
+          <span
+            className={`dot ${item.blocked ? "dot-block" : item.delayed ? "dot-warn" : "dot-ok"}`}
+          />
           <span>{item.statusLine}</span>
         </div>
       </div>
 
       <div className="tab-row-right">
-        <div className={`tab-due ${item.delayed && !item.blocked ? "delayed" : ""}`}>
+        <div
+          className={`tab-due ${item.delayed && !item.blocked ? "delayed" : ""}`}
+        >
           <span className="due-label">{item.dueLabel}</span>
-          <span className="due-in">{textoEntregaRelativa(item.dueDays, item.dueIn)}</span>
+          <span className="due-in">
+            {textoEntregaRelativa(item.dueDays, item.dueIn)}
+          </span>
           <EtaLine item={item} eta={eta} />
         </div>
-        <div className="tab-assigned" title={`Estación actual: ${item.station}`}>
-          <span className="av">{item.stationIcon ? React.createElement(getStepIcon(item.stationIcon)) : <FactoryIcon />}</span>
+        <div
+          className="tab-assigned"
+          title={`Estación actual: ${item.station}`}
+        >
+          <span className="av">
+            {item.stationIcon ? (
+              React.createElement(getStepIcon(item.stationIcon))
+            ) : (
+              <FactoryIcon />
+            )}
+          </span>
           <div>
             <div className="role">Estación actual</div>
             <div className="nm">{item.station}</div>
@@ -505,8 +591,21 @@ function FiltersBar({
   counts,
 }: {
   filters: { status: StatusFilter; priority: PriorityFilter; query: string };
-  setFilters: React.Dispatch<React.SetStateAction<{ status: StatusFilter; priority: PriorityFilter; query: string }>>;
-  counts: { all: number; shown: number; inProgress: number; blocked: number; delayed: number; today: number };
+  setFilters: React.Dispatch<
+    React.SetStateAction<{
+      status: StatusFilter;
+      priority: PriorityFilter;
+      query: string;
+    }>
+  >;
+  counts: {
+    all: number;
+    shown: number;
+    inProgress: number;
+    blocked: number;
+    delayed: number;
+    today: number;
+  };
 }) {
   return (
     <div className="tab-filters">
@@ -515,7 +614,9 @@ function FiltersBar({
         <input
           placeholder="Buscar por item, OT, cliente, producto..."
           value={filters.query}
-          onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
+          onChange={(event) =>
+            setFilters((current) => ({ ...current, query: event.target.value }))
+          }
         />
         <span className="kbd">/</span>
       </div>
@@ -533,7 +634,12 @@ function FiltersBar({
             type="button"
             className={filters.status === status.k ? "on" : ""}
             aria-pressed={filters.status === status.k}
-            onClick={() => setFilters((current) => ({ ...current, status: status.k as StatusFilter }))}
+            onClick={() =>
+              setFilters((current) => ({
+                ...current,
+                status: status.k as StatusFilter,
+              }))
+            }
           >
             {status.l}
             <span className="ct">{status.c}</span>
@@ -554,7 +660,12 @@ function FiltersBar({
             type="button"
             className={filters.priority === priority.k ? "on" : ""}
             aria-pressed={filters.priority === priority.k}
-            onClick={() => setFilters((current) => ({ ...current, priority: priority.k as PriorityFilter }))}
+            onClick={() =>
+              setFilters((current) => ({
+                ...current,
+                priority: priority.k as PriorityFilter,
+              }))
+            }
           >
             {priority.l}
           </button>
@@ -574,7 +685,11 @@ type AccionHandler = (
   item: ItemView,
   paso: TableroPasoData,
   accion: TableroPasoAccion,
-  opts?: { motivo?: string; motivoDetalle?: string; tiempoDeclaradoMin?: number },
+  opts?: {
+    motivo?: string;
+    motivoDetalle?: string;
+    tiempoDeclaradoMin?: number;
+  },
 ) => Promise<void>;
 
 /**
@@ -585,7 +700,12 @@ type AccionHandler = (
  */
 function completarSeriaInstantaneo(paso: TableroPasoData): boolean {
   if (paso.modoRegistro !== "cronometro") return false;
-  if (paso.estado !== "pendiente" && paso.estado !== "en_curso" && paso.estado !== "pausado") return false;
+  if (
+    paso.estado !== "pendiente" &&
+    paso.estado !== "en_curso" &&
+    paso.estado !== "pausado"
+  )
+    return false;
   const abiertoMin = paso.tramoAbierto
     ? (Date.now() - new Date(paso.tramoAbierto.inicioEl).getTime()) / 60_000
     : 0;
@@ -598,7 +718,13 @@ function completarSeriaInstantaneo(paso: TableroPasoData): boolean {
 function chipsDeclarar(estimado: number | null): number[] {
   if (estimado == null || estimado <= 0) return [];
   const redondo = (n: number) => Math.max(1, Math.round(n));
-  return [...new Set([redondo(estimado / 2), redondo(estimado), redondo(estimado * 2)])];
+  return [
+    ...new Set([
+      redondo(estimado / 2),
+      redondo(estimado),
+      redondo(estimado * 2),
+    ]),
+  ];
 }
 
 /** Estado de la compra de un paso tercerizado, en lenguaje del taller. */
@@ -685,7 +811,8 @@ function PasoAcciones({
           disabled={busy}
           onClick={() => void onAccion(item, paso, "desbloquear")}
         >
-          <UnlockIcon />Desbloquear
+          <UnlockIcon />
+          Desbloquear
         </button>
       </div>
     );
@@ -713,7 +840,11 @@ function PasoAcciones({
         >
           Bloquear
         </button>
-        <button type="button" className="sta-btn ghost" onClick={() => setBloqueando(false)}>
+        <button
+          type="button"
+          className="sta-btn ghost"
+          onClick={() => setBloqueando(false)}
+        >
           Cancelar
         </button>
       </div>
@@ -750,20 +881,31 @@ function PasoAcciones({
           <button
             type="button"
             className="sta-btn primary"
-            disabled={busy || !motivoPausa || (necesitaDetalle && detallePausa.trim().length === 0)}
+            disabled={
+              busy ||
+              !motivoPausa ||
+              (necesitaDetalle && detallePausa.trim().length === 0)
+            }
             onClick={() => {
               void onAccion(item, paso, "pausar", {
                 motivo: motivoPausa ?? undefined,
-                motivoDetalle: necesitaDetalle ? detallePausa.trim() : undefined,
+                motivoDetalle: necesitaDetalle
+                  ? detallePausa.trim()
+                  : undefined,
               });
               setPausando(false);
               setMotivoPausa(null);
               setDetallePausa("");
             }}
           >
-            <PauseIcon />Pausar
+            <PauseIcon />
+            Pausar
           </button>
-          <button type="button" className="sta-btn ghost" onClick={() => setPausando(false)}>
+          <button
+            type="button"
+            className="sta-btn ghost"
+            onClick={() => setPausando(false)}
+          >
             Cancelar
           </button>
         </div>
@@ -806,16 +948,30 @@ function PasoAcciones({
             onChange={(event) => setTiempoOtro(event.target.value)}
           />
           {Number.isFinite(otroMin) && otroMin >= 1 ? (
-            <button type="button" className="ds-chip on" disabled={busy} onClick={() => completar(otroMin)}>
+            <button
+              type="button"
+              className="ds-chip on"
+              disabled={busy}
+              onClick={() => completar(otroMin)}
+            >
               Usar {etiquetaDuracion(otroMin)}
             </button>
           ) : null}
         </div>
         <div className="ds-form-actions">
-          <button type="button" className="sta-btn ghost" disabled={busy} onClick={() => completar(undefined)}>
+          <button
+            type="button"
+            className="sta-btn ghost"
+            disabled={busy}
+            onClick={() => completar(undefined)}
+          >
             Completar sin tiempo
           </button>
-          <button type="button" className="sta-btn ghost" onClick={() => setDeclarando(false)}>
+          <button
+            type="button"
+            className="sta-btn ghost"
+            onClick={() => setDeclarando(false)}
+          >
             Cancelar
           </button>
         </div>
@@ -834,12 +990,19 @@ function PasoAcciones({
           disabled={busy}
           onClick={() => void onAccion(item, paso, "iniciar")}
         >
-          <PlayIcon />Iniciar
+          <PlayIcon />
+          Iniciar
         </button>
       ) : null}
       {esCronometro && paso.estado === "en_curso" ? (
-        <button type="button" className="sta-btn ghost" disabled={busy} onClick={() => setPausando(true)}>
-          <PauseIcon />Pausar
+        <button
+          type="button"
+          className="sta-btn ghost"
+          disabled={busy}
+          onClick={() => setPausando(true)}
+        >
+          <PauseIcon />
+          Pausar
         </button>
       ) : null}
       {esCronometro && paso.estado === "pausado" ? (
@@ -849,7 +1012,8 @@ function PasoAcciones({
           disabled={busy}
           onClick={() => void onAccion(item, paso, "continuar")}
         >
-          <PlayIcon />Continuar
+          <PlayIcon />
+          Continuar
         </button>
       ) : null}
       <button
@@ -861,10 +1025,17 @@ function PasoAcciones({
           else void onAccion(item, paso, "completar");
         }}
       >
-        <CheckIcon />Completar
+        <CheckIcon />
+        Completar
       </button>
-      <button type="button" className="sta-btn ghost" disabled={busy} onClick={() => setBloqueando(true)}>
-        <BanIcon />Bloquear
+      <button
+        type="button"
+        className="sta-btn ghost"
+        disabled={busy}
+        onClick={() => setBloqueando(true)}
+      >
+        <BanIcon />
+        Bloquear
       </button>
     </div>
   );
@@ -894,9 +1065,9 @@ function DetailRuta({
   if (item.sinRuta) {
     return (
       <div className="detail-route-empty">
-        Este item no tiene ruta de producción: es una orden manual o histórica sin
-        snapshot del cotizador. Los pasos se materializan al emitir órdenes creadas
-        desde el cotizador.
+        Este item no tiene ruta de producción: es una orden manual o histórica
+        sin snapshot del cotizador. Los pasos se materializan al emitir órdenes
+        creadas desde el cotizador.
       </div>
     );
   }
@@ -916,9 +1087,14 @@ function DetailRuta({
         // para ubicar de un vistazo dónde está parado el trabajo.
         const esActivo = item.currentStep?.paso.id === paso.id;
         return (
-          <div key={paso.id} className={`detail-step ${step.status}${esActivo ? " is-active" : ""}`}>
+          <div
+            key={paso.id}
+            className={`detail-step ${step.status}${esActivo ? " is-active" : ""}`}
+          >
             <div className="ds-line">
-              <span className="ds-dot">{routeStatusIcon(step, <span className="ix">{index + 1}</span>)}</span>
+              <span className="ds-dot">
+                {routeStatusIcon(step, <span className="ix">{index + 1}</span>)}
+              </span>
             </div>
             <div className="ds-body">
               <div className="ds-head">
@@ -928,19 +1104,42 @@ function DetailRuta({
                   <div className="ds-tec">{paso.nombre}</div>
                 </div>
                 {step.status === "done" && paso.completadoEl ? (
-                  <span className="ds-time done"><CheckIcon />{etiquetaMomento(paso.completadoEl)}</span>
+                  <span className="ds-time done">
+                    <CheckIcon />
+                    {etiquetaMomento(paso.completadoEl)}
+                  </span>
                 ) : null}
                 {step.status === "current" ? (
                   <span className="ds-time current">
-                    <span className="dot" />En curso
-                    {paso.tramoAbierto ? <> · <ElapsedMin desdeIso={paso.tramoAbierto.inicioEl} /></> : paso.iniciadoEl ? ` · desde ${etiquetaMomento(paso.iniciadoEl)}` : ""}
+                    <span className="dot" />
+                    En curso
+                    {paso.tramoAbierto ? (
+                      <>
+                        {" "}
+                        · <ElapsedMin desdeIso={paso.tramoAbierto.inicioEl} />
+                      </>
+                    ) : paso.iniciadoEl ? (
+                      ` · desde ${etiquetaMomento(paso.iniciadoEl)}`
+                    ) : (
+                      ""
+                    )}
                   </span>
                 ) : null}
                 {step.status === "paused" ? (
-                  <span className="ds-time paused"><PauseIcon />Pausado</span>
+                  <span className="ds-time paused">
+                    <PauseIcon />
+                    Pausado
+                  </span>
                 ) : null}
-                {step.status === "pending" && dur ? <span className="ds-time">estimado {dur}</span> : null}
-                {step.status === "blocked" ? <span className="ds-time blocked"><BanIcon />Bloqueado</span> : null}
+                {step.status === "pending" && dur ? (
+                  <span className="ds-time">estimado {dur}</span>
+                ) : null}
+                {step.status === "blocked" ? (
+                  <span className="ds-time blocked">
+                    <BanIcon />
+                    Bloqueado
+                  </span>
+                ) : null}
               </div>
 
               {step.status === "blocked" && paso.motivoBloqueo ? (
@@ -949,19 +1148,26 @@ function DetailRuta({
               {step.status === "paused" && paso.motivoPausa ? (
                 <div className="ds-paused-detail">{paso.motivoPausa}</div>
               ) : null}
-              {step.status === "current" && paso.tramoAbierto && !paso.tramoAbierto.esMio ? (
-                <div className="ds-operador">Lo está trabajando {paso.tramoAbierto.usuarioNombre}</div>
+              {step.status === "current" &&
+              paso.tramoAbierto &&
+              !paso.tramoAbierto.esMio ? (
+                <div className="ds-operador">
+                  Lo está trabajando {paso.tramoAbierto.usuarioNombre}
+                </div>
               ) : null}
               {step.status === "done" ? (
                 <div className="ds-operador">
-                  {paso.tiempoRealMin != null && paso.tiempoFuente !== "invalido"
+                  {paso.tiempoRealMin != null &&
+                  paso.tiempoFuente !== "invalido"
                     ? `${etiquetaDuracion(paso.tiempoRealMin) ?? `${paso.tiempoRealMin} min`} (${paso.tiempoFuente ? TIEMPO_FUENTE_LABELS[paso.tiempoFuente] : "—"})`
                     : "Sin tiempo registrado"}
-                  {paso.completadoPorNombre ? ` · por ${paso.completadoPorNombre}` : ""}
+                  {paso.completadoPorNombre
+                    ? ` · por ${paso.completadoPorNombre}`
+                    : ""}
                 </div>
               ) : null}
-              {(paso.familiaCodigo === "diseno_grafico" ||
-                paso.plantillaCodigo === "diseno_grafico") ? (
+              {paso.familiaCodigo === "diseno_grafico" ||
+              paso.plantillaCodigo === "diseno_grafico" ? (
                 <BriefDisenoProduccion
                   brief={briefDiseno}
                   caras={carasBrief}
@@ -987,18 +1193,33 @@ function DetailRuta({
 type MaterialRow = { nombre: string; cantidad: number; unidad: string };
 
 /** Nota de producción del item (jobContext.notasProduccion del snapshot). */
-function notaProduccionDeDetalle(detalle: OrdenTrabajoDetalle, itemId: string): string | null {
+function notaProduccionDeDetalle(
+  detalle: OrdenTrabajoDetalle,
+  itemId: string,
+): string | null {
   const producto = detalle.productos.find((entry) => entry.id === itemId);
-  const jobContext = producto?.snapshot?.jobContext as { notasProduccion?: unknown } | null | undefined;
-  const nota = typeof jobContext?.notasProduccion === "string" ? jobContext.notasProduccion.trim() : "";
+  const jobContext = producto?.snapshot?.jobContext as
+    { notasProduccion?: unknown } | null | undefined;
+  const nota =
+    typeof jobContext?.notasProduccion === "string"
+      ? jobContext.notasProduccion.trim()
+      : "";
   return nota || null;
 }
 
 /** Materiales estimados del item, desde la trazabilidad del snapshot. */
-function materialesDeDetalle(detalle: OrdenTrabajoDetalle, itemId: string): MaterialRow[] {
+function materialesDeDetalle(
+  detalle: OrdenTrabajoDetalle,
+  itemId: string,
+): MaterialRow[] {
   const producto = detalle.productos.find((entry) => entry.id === itemId);
   const trazabilidad = producto?.snapshot?.trazabilidad as
-    | { pasos?: Array<{ activado?: boolean; materiales?: Array<Record<string, unknown>> }> }
+    | {
+        pasos?: Array<{
+          activado?: boolean;
+          materiales?: Array<Record<string, unknown>>;
+        }>;
+      }
     | null
     | undefined;
   if (!trazabilidad?.pasos) return [];
@@ -1050,7 +1271,8 @@ function DetailArchivos({ itemId }: { itemId: string }) {
   }, [itemId]);
 
   if (error) return <div className="detail-route-empty">{error}</div>;
-  if (!archivos) return <div className="detail-route-empty">Cargando archivos…</div>;
+  if (!archivos)
+    return <div className="detail-route-empty">Cargando archivos…</div>;
   if (archivos.length === 0) {
     return (
       <div className="detail-route-empty">
@@ -1061,7 +1283,14 @@ function DetailArchivos({ itemId }: { itemId: string }) {
   return (
     <div className="arch-lista" style={{ marginTop: 0 }}>
       {archivos.map((a) => (
-        <a key={a.id} className="arch-row" href={urlDeArchivo(a.id)} target="_blank" rel="noreferrer" style={{ textDecoration: "none", color: "inherit" }}>
+        <a
+          key={a.id}
+          className="arch-row"
+          href={urlDeArchivo(a.id)}
+          target="_blank"
+          rel="noreferrer"
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
           <span className="arch-ico">
             {a.esImagen ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -1072,7 +1301,10 @@ function DetailArchivos({ itemId }: { itemId: string }) {
           </span>
           <div className="arch-nom">
             <b>{a.nombre}</b>
-            <span>{formatBytes(a.bytes)}{a.subidoPor ? ` · ${a.subidoPor}` : ""}</span>
+            <span>
+              {formatBytes(a.bytes)}
+              {a.subidoPor ? ` · ${a.subidoPor}` : ""}
+            </span>
           </div>
         </a>
       ))}
@@ -1080,22 +1312,41 @@ function DetailArchivos({ itemId }: { itemId: string }) {
   );
 }
 
-function DetailMateriales({ materiales, cargando }: { materiales: MaterialRow[]; cargando: boolean }) {
-  if (cargando) return <div className="detail-route-empty">Cargando materiales…</div>;
+function DetailMateriales({
+  materiales,
+  cargando,
+}: {
+  materiales: MaterialRow[];
+  cargando: boolean;
+}) {
+  if (cargando)
+    return <div className="detail-route-empty">Cargando materiales…</div>;
   if (materiales.length === 0) {
-    return <div className="detail-route-empty">Este item no tiene materiales estimados en su ruta.</div>;
+    return (
+      <div className="detail-route-empty">
+        Este item no tiene materiales estimados en su ruta.
+      </div>
+    );
   }
   return (
     <table className="detail-tbl">
       <thead>
-        <tr><th>Material</th><th className="right">Estimado</th></tr>
+        <tr>
+          <th>Material</th>
+          <th className="right">Estimado</th>
+        </tr>
       </thead>
       <tbody>
         {materiales.map((mat, index) => (
           <tr key={`${mat.nombre}-${index}`}>
-            <td><div className="nm">{mat.nombre}</div></td>
+            <td>
+              <div className="nm">{mat.nombre}</div>
+            </td>
             <td className="right mono">
-              {mat.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 2 })} {mat.unidad}
+              {mat.cantidad.toLocaleString("es-AR", {
+                maximumFractionDigits: 2,
+              })}{" "}
+              {mat.unidad}
             </td>
           </tr>
         ))}
@@ -1104,10 +1355,21 @@ function DetailMateriales({ materiales, cargando }: { materiales: MaterialRow[];
   );
 }
 
-function DetailActividad({ eventos, cargando }: { eventos: OrdenTrabajoEvento[]; cargando: boolean }) {
-  if (cargando) return <div className="detail-route-empty">Cargando actividad…</div>;
+function DetailActividad({
+  eventos,
+  cargando,
+}: {
+  eventos: OrdenTrabajoEvento[];
+  cargando: boolean;
+}) {
+  if (cargando)
+    return <div className="detail-route-empty">Cargando actividad…</div>;
   if (eventos.length === 0) {
-    return <div className="detail-route-empty">Sin actividad registrada todavía.</div>;
+    return (
+      <div className="detail-route-empty">
+        Sin actividad registrada todavía.
+      </div>
+    );
   }
   return (
     <div className="detail-activity">
@@ -1150,7 +1412,9 @@ function ItemDetailSheet({
   onClose: () => void;
 }) {
   const [tab, setTab] = React.useState("ruta");
-  const [detalle, setDetalle] = React.useState<OrdenTrabajoDetalle | null>(null);
+  const [detalle, setDetalle] = React.useState<OrdenTrabajoDetalle | null>(
+    null,
+  );
   const [cargandoDetalle, setCargandoDetalle] = React.useState(false);
   const ordenId = item?.data.ordenId;
 
@@ -1197,29 +1461,55 @@ function ItemDetailSheet({
   const doneSteps = item.steps.filter((step) => step.status === "done").length;
   const currentStep = item.currentStep;
   const materiales = detalle ? materialesDeDetalle(detalle, item.id) : [];
-  const notaProduccion = detalle ? notaProduccionDeDetalle(detalle, item.id) : null;
+  const notaProduccion = detalle
+    ? notaProduccionDeDetalle(detalle, item.id)
+    : null;
   const eventos = detalle?.eventos ?? [];
   const estimadoTotal = etiquetaDuracion(
-    item.data.pasos.reduce((acc, paso) => acc + (paso.duracionEstimadaMin ?? 0), 0),
+    item.data.pasos.reduce(
+      (acc, paso) => acc + (paso.duracionEstimadaMin ?? 0),
+      0,
+    ),
   );
   const briefDiseno = leerBriefDiseno(item.data.briefDiseno);
   const carasBrief = item.data.caras === 2 ? 2 : 1;
 
   return (
     <>
-      <button type="button" aria-label="Cerrar detalle" className="sheet-backdrop" onClick={onClose} />
-      <aside className="sheet" role="dialog" aria-modal="true" aria-label={`Detalle ${item.code}`}>
+      <button
+        type="button"
+        aria-label="Cerrar detalle"
+        className="sheet-backdrop"
+        onClick={onClose}
+      />
+      <aside
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Detalle ${item.code}`}
+      >
         <div className="sheet-head item-sheet-head">
           <div className="sheet-title-row">
             <div className="sheet-title-copy">
               <div className="sheet-codes">
                 <span className="item-code">{item.code}</span>
                 <span className="ot-badge">{item.otCode}</span>
-                {item.priority !== "normal" ? <span className={`prio-pill prio-${item.priority}`}>{item.priority === "urgent" ? "Urgente" : "Alta prioridad"}</span> : null}
-                {item.blocked ? <span className="prio-pill prio-blocked"><BanIcon />Bloqueado</span> : null}
+                {item.priority !== "normal" ? (
+                  <span className={`prio-pill prio-${item.priority}`}>
+                    {item.priority === "urgent" ? "Urgente" : "Alta prioridad"}
+                  </span>
+                ) : null}
+                {item.blocked ? (
+                  <span className="prio-pill prio-blocked">
+                    <BanIcon />
+                    Bloqueado
+                  </span>
+                ) : null}
               </div>
               <h2>{item.product}</h2>
-              <div className="sub">{item.customer} · {item.spec}</div>
+              <div className="sub">
+                {item.customer} · {item.spec}
+              </div>
               {item.corteLabel ? (
                 <div className="sub corte-medida">
                   <strong>Cortar {item.corteLabel}</strong> — lleva bolsillo o
@@ -1227,25 +1517,43 @@ function ItemDetailSheet({
                 </div>
               ) : null}
             </div>
-            <button type="button" className="close" onClick={onClose} aria-label="Cerrar">×</button>
+            <button
+              type="button"
+              className="close"
+              onClick={onClose}
+              aria-label="Cerrar"
+            >
+              ×
+            </button>
           </div>
 
-          <div className={`item-status-banner ${item.blocked ? "blocked" : item.delayed ? "delayed" : "ok"}`}>
+          <div
+            className={`item-status-banner ${item.blocked ? "blocked" : item.delayed ? "delayed" : "ok"}`}
+          >
             <span className="dot" />
             <div className="body">
               <div className="ttl">{item.statusLine}</div>
-              {item.blocked && item.blockedReason ? <div className="sub">{item.blockedReason}</div> : null}
+              {item.blocked && item.blockedReason ? (
+                <div className="sub">{item.blockedReason}</div>
+              ) : null}
               {!item.blocked && currentStep ? (
                 <div className="sub">
                   Paso actual · <strong>{currentStep.paso.nombre}</strong>
-                  {currentStep.paso.centroCostoNombre ? <> · en <strong>{currentStep.paso.centroCostoNombre}</strong></> : null}
+                  {currentStep.paso.centroCostoNombre ? (
+                    <>
+                      {" "}
+                      · en <strong>{currentStep.paso.centroCostoNombre}</strong>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
             </div>
             <div className="due">
               <div className="lbl">Entrega</div>
               <div className="val">{item.dueLabel}</div>
-              <div className="sub">{textoEntregaRelativa(item.dueDays, item.dueIn)}</div>
+              <div className="sub">
+                {textoEntregaRelativa(item.dueDays, item.dueIn)}
+              </div>
             </div>
           </div>
 
@@ -1257,22 +1565,52 @@ function ItemDetailSheet({
           ) : null}
 
           <div className="item-meta-strip">
-            <div className="m"><div className="k">Avance</div><div className="v">{item.progressPct}%<span className="sub">· {doneSteps}/{totalSteps} pasos</span></div></div>
-            <div className="m"><div className="k">Cantidad</div><div className="v">{item.qtyLabel}</div></div>
-            {alcance !== "operario" ? <div className="m"><div className="k">Vendedor</div><div className="v"><span className="mini-av">{iniciales(item.vendedor)}</span>{item.vendedor.split(" ")[0]}</div></div> : null}
-            <div className="m"><div className="k">Estación actual</div><div className="v">{item.station}</div></div>
-            <div className="m"><div className="k">Tiempo estimado</div><div className="v mono">{estimadoTotal ?? "—"}</div></div>
+            <div className="m">
+              <div className="k">Avance</div>
+              <div className="v">
+                {item.progressPct}%
+                <span className="sub">
+                  · {doneSteps}/{totalSteps} pasos
+                </span>
+              </div>
+            </div>
+            <div className="m">
+              <div className="k">Cantidad</div>
+              <div className="v">{item.qtyLabel}</div>
+            </div>
+            {alcance !== "operario" ? (
+              <div className="m">
+                <div className="k">Vendedor</div>
+                <div className="v">
+                  <span className="mini-av">{iniciales(item.vendedor)}</span>
+                  {item.vendedor.split(" ")[0]}
+                </div>
+              </div>
+            ) : null}
+            <div className="m">
+              <div className="k">Estación actual</div>
+              <div className="v">{item.station}</div>
+            </div>
+            <div className="m">
+              <div className="k">Tiempo estimado</div>
+              <div className="v mono">{estimadoTotal ?? "—"}</div>
+            </div>
           </div>
 
-          <div className="sheet-tabs" role="tablist" aria-label="Detalle del item">
-            {(alcance === "operario" ? [
-              { k: "ruta", l: "Ruta de producción", n: totalSteps },
-            ] : [
-              { k: "ruta", l: "Ruta de producción", n: totalSteps },
-              { k: "materiales", l: "Materiales", n: materiales.length },
-              { k: "archivos", l: "Archivos", n: item.data.archivosCount },
-              { k: "actividad", l: "Actividad", n: eventos.length },
-            ]).map((entry) => (
+          <div
+            className="sheet-tabs"
+            role="tablist"
+            aria-label="Detalle del item"
+          >
+            {(alcance === "operario"
+              ? [{ k: "ruta", l: "Ruta de producción", n: totalSteps }]
+              : [
+                  { k: "ruta", l: "Ruta de producción", n: totalSteps },
+                  { k: "materiales", l: "Materiales", n: materiales.length },
+                  { k: "archivos", l: "Archivos", n: item.data.archivosCount },
+                  { k: "actividad", l: "Actividad", n: eventos.length },
+                ]
+            ).map((entry) => (
               <button
                 key={entry.k}
                 type="button"
@@ -1284,13 +1622,19 @@ function ItemDetailSheet({
                 className={tab === entry.k ? "on" : ""}
                 onClick={() => setTab(entry.k)}
               >
-                {entry.l}<span className="ct">{entry.n}</span>
+                {entry.l}
+                <span className="ct">{entry.n}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="sheet-body" id="item-tab-panel" role="tabpanel" aria-labelledby={`item-tab-${tab}`}>
+        <div
+          className="sheet-body"
+          id="item-tab-panel"
+          role="tabpanel"
+          aria-labelledby={`item-tab-${tab}`}
+        >
           {tab === "ruta" ? (
             <DetailRuta
               item={item}
@@ -1304,9 +1648,16 @@ function ItemDetailSheet({
               onAccion={onAccion}
             />
           ) : null}
-          {tab === "materiales" ? <DetailMateriales materiales={materiales} cargando={cargandoDetalle} /> : null}
+          {tab === "materiales" ? (
+            <DetailMateriales
+              materiales={materiales}
+              cargando={cargandoDetalle}
+            />
+          ) : null}
           {tab === "archivos" ? <DetailArchivos itemId={item.id} /> : null}
-          {tab === "actividad" ? <DetailActividad eventos={eventos} cargando={cargandoDetalle} /> : null}
+          {tab === "actividad" ? (
+            <DetailActividad eventos={eventos} cargando={cargandoDetalle} />
+          ) : null}
         </div>
 
         <div className="sheet-foot">
@@ -1318,9 +1669,14 @@ function ItemDetailSheet({
                 : null}
           </div>
           <div className="spacer" />
-          {alcance !== "operario" ? <Link className="btn" href={`/produccion/ordenes/${item.data.ordenId}`}>
-            Ver orden {item.otCode}
-          </Link> : null}
+          {alcance !== "operario" ? (
+            <Link
+              className="btn"
+              href={`/produccion/ordenes/${item.data.ordenId}`}
+            >
+              Ver orden {item.otCode}
+            </Link>
+          ) : null}
         </div>
       </aside>
     </>
@@ -1367,8 +1723,10 @@ type IncomingTask = {
 
 function ordenarTareas(tasks: StationTask[]): StationTask[] {
   return tasks.sort((a, b) => {
-    const aw = (a.isBlocked ? 0 : 1) + (a.overdue ? 0 : 2) + (a.isCurrent ? 1 : 4);
-    const bw = (b.isBlocked ? 0 : 1) + (b.overdue ? 0 : 2) + (b.isCurrent ? 1 : 4);
+    const aw =
+      (a.isBlocked ? 0 : 1) + (a.overdue ? 0 : 2) + (a.isCurrent ? 1 : 4);
+    const bw =
+      (b.isBlocked ? 0 : 1) + (b.overdue ? 0 : 2) + (b.isCurrent ? 1 : 4);
     return aw - bw;
   });
 }
@@ -1406,7 +1764,10 @@ function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
           isBlocked: step.status === "blocked",
           isPending: step.status === "pending",
           overdue: item.delayed && step.status !== "blocked",
-          urgent: item.priority === "urgent" || (item.delayed && step.status !== "blocked") || step.status === "blocked",
+          urgent:
+            item.priority === "urgent" ||
+            (item.delayed && step.status !== "blocked") ||
+            step.status === "blocked",
         });
         tareas.set(key, lista);
         continue;
@@ -1475,7 +1836,10 @@ function taskId(task: StationTask) {
  * Un 0 explícito SÍ es duración conocida — ver duracionDePaso en
  * flujo-produccion.ts, misma regla.
  */
-function duracionDeTask(task: { step: StepView }, medianas: Map<string, number>): number | null {
+function duracionDeTask(
+  task: { step: StepView },
+  medianas: Map<string, number>,
+): number | null {
   const propia = task.step.paso.duracionEstimadaMin;
   if (propia != null) return propia;
   return medianas.get(task.step.paso.familiaCodigo) ?? null;
@@ -1549,17 +1913,42 @@ function fmtDiasEntrega(dias: number) {
   return `${dias}d`;
 }
 
-function LoadBar({ pending, urgent, blocked, incoming = 0, max }: { pending: number; urgent: number; blocked: number; incoming?: number; max: number }) {
+function LoadBar({
+  pending,
+  urgent,
+  blocked,
+  incoming = 0,
+  max,
+}: {
+  pending: number;
+  urgent: number;
+  blocked: number;
+  incoming?: number;
+  max: number;
+}) {
   const total = pending + urgent + blocked + incoming;
-  if (max === 0 || total === 0) return <div className="load-bar"><div className="track" /></div>;
+  if (max === 0 || total === 0)
+    return (
+      <div className="load-bar">
+        <div className="track" />
+      </div>
+    );
   const width = (value: number) => `${Math.min(100, (value / max) * 100)}%`;
   return (
     <div className="load-bar">
       <div className="track">
-        {pending > 0 ? <span className="seg pending" style={{ width: width(pending) }} /> : null}
-        {urgent > 0 ? <span className="seg urgent" style={{ width: width(urgent) }} /> : null}
-        {blocked > 0 ? <span className="seg blocked" style={{ width: width(blocked) }} /> : null}
-        {incoming > 0 ? <span className="seg incoming" style={{ width: width(incoming) }} /> : null}
+        {pending > 0 ? (
+          <span className="seg pending" style={{ width: width(pending) }} />
+        ) : null}
+        {urgent > 0 ? (
+          <span className="seg urgent" style={{ width: width(urgent) }} />
+        ) : null}
+        {blocked > 0 ? (
+          <span className="seg blocked" style={{ width: width(blocked) }} />
+        ) : null}
+        {incoming > 0 ? (
+          <span className="seg incoming" style={{ width: width(incoming) }} />
+        ) : null}
       </div>
     </div>
   );
@@ -1593,49 +1982,124 @@ function StationCard({
   const colaLabel = stats.colaMin > 0 ? etiquetaDuracion(stats.colaMin) : null;
   const dias =
     station.capacidad != null && stats.colaMin > 0
-      ? proyectarColaDias(station.calendario, stats.colaMin, station.capacidad, new Date(), noLaborables)
+      ? proyectarColaDias(
+          station.calendario,
+          stats.colaMin,
+          station.capacidad,
+          new Date(),
+          noLaborables,
+        )
       : null;
-  const entranteLabel = stats.entranteMin > 0 ? etiquetaDuracion(stats.entranteMin) : null;
+  const entranteLabel =
+    stats.entranteMin > 0 ? etiquetaDuracion(stats.entranteMin) : null;
   const cargaPartes = [
-    station.capacidad != null ? `${stats.enCurso}/${station.capacidad} puestos` : null,
+    station.capacidad != null
+      ? `${stats.enCurso}/${station.capacidad} puestos`
+      : null,
     colaLabel ? `cola ${colaLabel}` : null,
     // "≈ 0 d" para colas de minutos es ruido: sólo desde 0,1 jornadas.
     dias != null && dias >= 0.05 ? `≈ ${etiquetaDias(dias)}` : null,
-    entranteLabel ? `+${entranteLabel} en camino${hoyMin > 0 ? ` (${etiquetaDuracion(hoyMin)} hoy)` : ""}` : null,
+    entranteLabel
+      ? `+${entranteLabel} en camino${hoyMin > 0 ? ` (${etiquetaDuracion(hoyMin)} hoy)` : ""}`
+      : null,
   ].filter(Boolean);
   // La barra escala contra UN DÍA lleno de la estación; sin calendario, la
   // carga presente la llena (no hay vara de tiempo contra la cual medir).
-  const barMax = capacidadDiariaMaxMin(station.calendario, station.capacidad ?? 1) ?? Math.max(stats.colaMin + stats.entranteMin, 1);
+  const barMax =
+    capacidadDiariaMaxMin(station.calendario, station.capacidad ?? 1) ??
+    Math.max(stats.colaMin + stats.entranteMin, 1);
 
   return (
-    <button type="button" className={`sta-card tone-${tone}`} onClick={() => onSelect(station.key)}>
+    <button
+      type="button"
+      className={`sta-card tone-${tone}`}
+      onClick={() => onSelect(station.key)}
+    >
       <div className="sta-card-head">
         <span className="sta-card-ico">{stationIcon(station)}</span>
         <div className="sta-card-titles">
           <div className="nm">{station.nm}</div>
-          <div className="desc">{station.tercerizada ? "Compras a proveedores" : station.sinEstacion ? "Familias sin estación asignada" : etapa?.nm ?? "Estación del taller"}</div>
+          <div className="desc">
+            {station.tercerizada
+              ? "Compras a proveedores"
+              : station.sinEstacion
+                ? "Familias sin estación asignada"
+                : (etapa?.nm ?? "Estación del taller")}
+          </div>
         </div>
       </div>
       <div className="sta-card-load">
         <div className="lh">
           <span className="num">{stats.total}</span>
           <span className="lbl">pasos activos</span>
-          {cargaPartes.length > 0 ? <span className="pct">{cargaPartes.join(" · ")}</span> : null}
+          {cargaPartes.length > 0 ? (
+            <span className="pct">{cargaPartes.join(" · ")}</span>
+          ) : null}
         </div>
-        <LoadBar pending={stats.pendingMin} urgent={stats.urgentMin} blocked={stats.blockedMin} incoming={stats.entranteMin} max={barMax} />
+        <LoadBar
+          pending={stats.pendingMin}
+          urgent={stats.urgentMin}
+          blocked={stats.blockedMin}
+          incoming={stats.entranteMin}
+          max={barMax}
+        />
         <div className="sta-card-segs">
-          {stats.pending > 0 ? <span className="seg-lbl"><span className="dot pending" />{stats.pending} pendientes</span> : null}
-          {stats.urgent > 0 ? <span className="seg-lbl"><span className="dot urgent" />{stats.urgent} urgente{stats.urgent > 1 ? "s" : ""}</span> : null}
-          {stats.blocked > 0 ? <span className="seg-lbl"><span className="dot blocked" />{stats.blocked} bloqueado{stats.blocked > 1 ? "s" : ""}</span> : null}
-          {stats.entranteCount > 0 ? <span className="seg-lbl"><span className="dot incoming" />{stats.entranteCount} en camino</span> : null}
-          {stats.sinEstimar > 0 ? <span className="seg-lbl"><span className="dot none" />{stats.sinEstimar} sin estimar</span> : null}
+          {stats.pending > 0 ? (
+            <span className="seg-lbl">
+              <span className="dot pending" />
+              {stats.pending} pendientes
+            </span>
+          ) : null}
+          {stats.urgent > 0 ? (
+            <span className="seg-lbl">
+              <span className="dot urgent" />
+              {stats.urgent} urgente{stats.urgent > 1 ? "s" : ""}
+            </span>
+          ) : null}
+          {stats.blocked > 0 ? (
+            <span className="seg-lbl">
+              <span className="dot blocked" />
+              {stats.blocked} bloqueado{stats.blocked > 1 ? "s" : ""}
+            </span>
+          ) : null}
+          {stats.entranteCount > 0 ? (
+            <span className="seg-lbl">
+              <span className="dot incoming" />
+              {stats.entranteCount} en camino
+            </span>
+          ) : null}
+          {stats.sinEstimar > 0 ? (
+            <span className="seg-lbl">
+              <span className="dot none" />
+              {stats.sinEstimar} sin estimar
+            </span>
+          ) : null}
         </div>
       </div>
       <div className="sta-card-signals">
-        {stats.oldestBlocked ? <div className="sig sig-block"><BanIcon /><span><strong>{stats.oldestBlocked.step.paso.motivoBloqueo || "Sin detalle"}</strong></span></div> : null}
-        {stats.minDias != null ? <div className={`sig ${stats.minDias <= 0 ? "sig-warn" : ""}`}><ClockIcon /><span>Próxima entrega · <strong>{fmtDiasEntrega(stats.minDias)}</strong></span></div> : null}
+        {stats.oldestBlocked ? (
+          <div className="sig sig-block">
+            <BanIcon />
+            <span>
+              <strong>
+                {stats.oldestBlocked.step.paso.motivoBloqueo || "Sin detalle"}
+              </strong>
+            </span>
+          </div>
+        ) : null}
+        {stats.minDias != null ? (
+          <div className={`sig ${stats.minDias <= 0 ? "sig-warn" : ""}`}>
+            <ClockIcon />
+            <span>
+              Próxima entrega · <strong>{fmtDiasEntrega(stats.minDias)}</strong>
+            </span>
+          </div>
+        ) : null}
       </div>
-      <div className="sta-card-foot"><span>Ver detalles</span><ArrowRightIcon /></div>
+      <div className="sta-card-foot">
+        <span>Ver detalles</span>
+        <ArrowRightIcon />
+      </div>
     </button>
   );
 }
@@ -1658,58 +2122,145 @@ function StationGrid({
   const { stations, tareas, entrantes } = buildStationsModel(items, estaciones);
   const allStats = stations.map((station) => ({
     station,
-    stats: computeStationStats(tareas.get(station.key) ?? [], entrantes.get(station.key) ?? [], medianas),
+    stats: computeStationStats(
+      tareas.get(station.key) ?? [],
+      entrantes.get(station.key) ?? [],
+      medianas,
+    ),
   }));
-  const totalActive = allStats.reduce((acc, entry) => acc + entry.stats.total, 0);
-  const totalEntrante = allStats.reduce((acc, entry) => acc + entry.stats.entranteCount, 0);
-  const blockedTotal = allStats.reduce((acc, entry) => acc + entry.stats.blocked, 0);
-  const urgentTotal = allStats.reduce((acc, entry) => acc + entry.stats.urgent, 0);
+  const totalActive = allStats.reduce(
+    (acc, entry) => acc + entry.stats.total,
+    0,
+  );
+  const totalEntrante = allStats.reduce(
+    (acc, entry) => acc + entry.stats.entranteCount,
+    0,
+  );
+  const blockedTotal = allStats.reduce(
+    (acc, entry) => acc + entry.stats.blocked,
+    0,
+  );
+  const urgentTotal = allStats.reduce(
+    (acc, entry) => acc + entry.stats.urgent,
+    0,
+  );
   // Una estación sin cola pero CON carga en camino muestra card igual (D12):
   // es exactamente la que el vendedor necesita ver antes de prometer.
-  const active = allStats.filter((entry) => (entry.stats.total > 0 || entry.stats.entranteCount > 0) && !entry.station.sinEstacion && !entry.station.tercerizada);
-  const idle = allStats.filter((entry) => entry.stats.total === 0 && entry.stats.entranteCount === 0 && !entry.station.tercerizada);
+  const active = allStats.filter(
+    (entry) =>
+      (entry.stats.total > 0 || entry.stats.entranteCount > 0) &&
+      !entry.station.sinEstacion &&
+      !entry.station.tercerizada,
+  );
+  const idle = allStats.filter(
+    (entry) =>
+      entry.stats.total === 0 &&
+      entry.stats.entranteCount === 0 &&
+      !entry.station.tercerizada,
+  );
   const sinEstacion = allStats.find((entry) => entry.station.sinEstacion);
   const tercerizados = allStats.find((entry) => entry.station.tercerizada);
   const byEtapa = ETAPAS_ESTACION.map((etapa) => ({
     ...etapa,
     items: active
       .filter(({ station }) => station.etapa === etapa.key)
-      .sort((a, b) => b.stats.blocked - a.stats.blocked || b.stats.urgent - a.stats.urgent || b.stats.total - a.stats.total),
+      .sort(
+        (a, b) =>
+          b.stats.blocked - a.stats.blocked ||
+          b.stats.urgent - a.stats.urgent ||
+          b.stats.total - a.stats.total,
+      ),
   })).filter((etapa) => etapa.items.length > 0);
 
   return (
     <div className="sta-grid-wrap">
       <div className="sta-toolbar">
         <div className="sta-toolbar-stats">
-          <span className="stat"><strong>{totalActive}</strong>pasos activos</span>
-          {totalEntrante > 0 ? <><span className="sep">·</span><span className="stat"><strong>{totalEntrante}</strong>en camino</span></> : null}
+          <span className="stat">
+            <strong>{totalActive}</strong>pasos activos
+          </span>
+          {totalEntrante > 0 ? (
+            <>
+              <span className="sep">·</span>
+              <span className="stat">
+                <strong>{totalEntrante}</strong>en camino
+              </span>
+            </>
+          ) : null}
           <span className="sep">·</span>
-          <span className="stat"><strong>{active.length}</strong>de {stations.filter((s) => !s.sinEstacion && !s.tercerizada).length} estaciones con trabajo</span>
-          {blockedTotal > 0 ? <><span className="sep">·</span><span className="stat warn"><strong>{blockedTotal}</strong>bloqueado{blockedTotal > 1 ? "s" : ""}</span></> : null}
-          {urgentTotal > 0 ? <><span className="sep">·</span><span className="stat amber"><strong>{urgentTotal}</strong>urgente{urgentTotal > 1 ? "s" : ""}</span></> : null}
-          {sinEstacion && sinEstacion.stats.total > 0 ? <><span className="sep">·</span><span className="stat danger"><strong>{sinEstacion.stats.total}</strong>sin estación</span></> : null}
+          <span className="stat">
+            <strong>{active.length}</strong>de{" "}
+            {stations.filter((s) => !s.sinEstacion && !s.tercerizada).length}{" "}
+            estaciones con trabajo
+          </span>
+          {blockedTotal > 0 ? (
+            <>
+              <span className="sep">·</span>
+              <span className="stat warn">
+                <strong>{blockedTotal}</strong>bloqueado
+                {blockedTotal > 1 ? "s" : ""}
+              </span>
+            </>
+          ) : null}
+          {urgentTotal > 0 ? (
+            <>
+              <span className="sep">·</span>
+              <span className="stat amber">
+                <strong>{urgentTotal}</strong>urgente
+                {urgentTotal > 1 ? "s" : ""}
+              </span>
+            </>
+          ) : null}
+          {sinEstacion && sinEstacion.stats.total > 0 ? (
+            <>
+              <span className="sep">·</span>
+              <span className="stat danger">
+                <strong>{sinEstacion.stats.total}</strong>sin estación
+              </span>
+            </>
+          ) : null}
         </div>
-        <Link className="sta-toolbar-cta" href="/produccion/estaciones"><CogIcon /><span>Configurar estaciones</span></Link>
+        <Link className="sta-toolbar-cta" href="/produccion/estaciones">
+          <CogIcon />
+          <span>Configurar estaciones</span>
+        </Link>
       </div>
 
       {estaciones.filter((estacion) => estacion.activo).length === 0 ? (
         <div className="sta-config-hint">
-          Todavía no configuraste estaciones: todo el trabajo aparece en «Sin estación».{" "}
-          <Link href="/produccion/estaciones">Crear estaciones</Link> y asignales familias de pasos para agrupar el tablero por tu taller real.
+          Todavía no configuraste estaciones: todo el trabajo aparece en «Sin
+          estación». <Link href="/produccion/estaciones">Crear estaciones</Link>{" "}
+          y asignales familias de pasos para agrupar el tablero por tu taller
+          real.
         </div>
       ) : null}
 
       {byEtapa.map((category) => {
-        const catTotal = category.items.reduce((acc, entry) => acc + entry.stats.total, 0);
+        const catTotal = category.items.reduce(
+          (acc, entry) => acc + entry.stats.total,
+          0,
+        );
         return (
           <section key={category.key} className="sta-cat">
             <div className="sta-cat-head">
               <h3>{category.nm}</h3>
               <span className="rule" />
-              <span className="ct"><strong>{catTotal}</strong> pasos · {category.items.length} {category.items.length === 1 ? "estación" : "estaciones"}</span>
+              <span className="ct">
+                <strong>{catTotal}</strong> pasos · {category.items.length}{" "}
+                {category.items.length === 1 ? "estación" : "estaciones"}
+              </span>
             </div>
             <div className="sta-grid">
-              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} noLaborables={noLaborables} hoyMin={llegadasHoyMin.get(station.key) ?? 0} onSelect={onSelect} />)}
+              {category.items.map(({ station, stats }) => (
+                <StationCard
+                  key={station.key}
+                  station={station}
+                  stats={stats}
+                  noLaborables={noLaborables}
+                  hoyMin={llegadasHoyMin.get(station.key) ?? 0}
+                  onSelect={onSelect}
+                />
+              ))}
             </div>
           </section>
         );
@@ -1720,10 +2271,19 @@ function StationGrid({
           <div className="sta-cat-head">
             <h3>Proveedor tercerizado</h3>
             <span className="rule" />
-            <span className="ct"><strong>{tercerizados.stats.total}</strong> pasos · se gestionan desde Compras de la orden</span>
+            <span className="ct">
+              <strong>{tercerizados.stats.total}</strong> pasos · se gestionan
+              desde Compras de la orden
+            </span>
           </div>
           <div className="sta-grid">
-            <StationCard station={tercerizados.station} stats={tercerizados.stats} noLaborables={noLaborables} hoyMin={llegadasHoyMin.get(tercerizados.station.key) ?? 0} onSelect={onSelect} />
+            <StationCard
+              station={tercerizados.station}
+              stats={tercerizados.stats}
+              noLaborables={noLaborables}
+              hoyMin={llegadasHoyMin.get(tercerizados.station.key) ?? 0}
+              onSelect={onSelect}
+            />
           </div>
         </section>
       ) : null}
@@ -1733,21 +2293,43 @@ function StationGrid({
           <div className="sta-cat-head">
             <h3>Sin estación asignada</h3>
             <span className="rule" />
-            <span className="ct"><strong>{sinEstacion.stats.total}</strong> pasos · <Link href="/produccion/estaciones">asignar familias</Link></span>
+            <span className="ct">
+              <strong>{sinEstacion.stats.total}</strong> pasos ·{" "}
+              <Link href="/produccion/estaciones">asignar familias</Link>
+            </span>
           </div>
           <div className="sta-grid">
-            <StationCard station={sinEstacion.station} stats={sinEstacion.stats} noLaborables={noLaborables} hoyMin={llegadasHoyMin.get(sinEstacion.station.key) ?? 0} onSelect={onSelect} />
+            <StationCard
+              station={sinEstacion.station}
+              stats={sinEstacion.stats}
+              noLaborables={noLaborables}
+              hoyMin={llegadasHoyMin.get(sinEstacion.station.key) ?? 0}
+              onSelect={onSelect}
+            />
           </div>
         </section>
       ) : null}
 
       {idle.length > 0 ? (
         <div className="sta-idle">
-          <div className="sta-idle-head"><span className="dot" /><span>Sin actividad ahora</span><span className="ct">{idle.length} estaciones</span></div>
+          <div className="sta-idle-head">
+            <span className="dot" />
+            <span>Sin actividad ahora</span>
+            <span className="ct">{idle.length} estaciones</span>
+          </div>
           <div className="sta-idle-chips">
             {idle.map(({ station }) => (
-              <button key={station.key} type="button" className="sta-idle-chip" onClick={() => onSelect(station.key)}>
-                <span className="ic">{stationIcon(station)}</span><span className="nm">{station.nm}</span><span className="arr"><ArrowRightIcon /></span>
+              <button
+                key={station.key}
+                type="button"
+                className="sta-idle-chip"
+                onClick={() => onSelect(station.key)}
+              >
+                <span className="ic">{stationIcon(station)}</span>
+                <span className="nm">{station.nm}</span>
+                <span className="arr">
+                  <ArrowRightIcon />
+                </span>
               </button>
             ))}
           </div>
@@ -1802,29 +2384,107 @@ function TaskCard({
       onDragEnd={() => setDragging(false)}
     >
       <div className="sta-task-row1">
-        {canManage ? <span className="grip" title="Arrastrá para mover"><GripVerticalIcon /></span> : null}
+        {canManage ? (
+          <span className="grip" title="Arrastrá para mover">
+            <GripVerticalIcon />
+          </span>
+        ) : null}
         <span className="code">{task.item.code}</span>
         <span className={`task-status ${statusCls}`}>{statusLabel}</span>
-        {task.overdue ? <span className="task-vencido"><BanIcon />VENCIDO</span> : null}
-        {enMesaDe ? <span className="task-mesa-de" title="Otro usuario la tiene en su mesa"><UserIcon />{enMesaDe}</span> : null}
+        {task.overdue ? (
+          <span className="task-vencido">
+            <BanIcon />
+            VENCIDO
+          </span>
+        ) : null}
+        {enMesaDe ? (
+          <span
+            className="task-mesa-de"
+            title="Otro usuario la tiene en su mesa"
+          >
+            <UserIcon />
+            {enMesaDe}
+          </span>
+        ) : null}
         <span className="ot">{task.item.otCode}</span>
       </div>
       <div className="sta-task-body">
-        <div className="meta"><span className="ic"><UserIcon /></span><span className="v">{task.item.customer}</span></div>
-        <div className="meta"><span className="ic"><BoxIcon /></span><span className="v">{task.item.product} <span className="qty">· {task.item.qtyLabel}</span></span></div>
-        <div className="meta step"><span className="ic"><CogIcon /></span><span className="v">{task.step.paso.nombre}</span></div>
-        {task.step.paso.motivoBloqueo ? <div className="meta sub-detail"><span className="v">{task.step.paso.motivoBloqueo}</span></div> : null}
+        <div className="meta">
+          <span className="ic">
+            <UserIcon />
+          </span>
+          <span className="v">{task.item.customer}</span>
+        </div>
+        <div className="meta">
+          <span className="ic">
+            <BoxIcon />
+          </span>
+          <span className="v">
+            {task.item.product}{" "}
+            <span className="qty">· {task.item.qtyLabel}</span>
+          </span>
+        </div>
+        <div className="meta step">
+          <span className="ic">
+            <CogIcon />
+          </span>
+          <span className="v">{task.step.paso.nombre}</span>
+        </div>
+        {task.step.paso.motivoBloqueo ? (
+          <div className="meta sub-detail">
+            <span className="v">{task.step.paso.motivoBloqueo}</span>
+          </div>
+        ) : null}
       </div>
       <div className="sta-task-foot">
-        <div className="ts"><ClockIcon /><span>{task.item.dueLabel}</span><span className="sep">·</span><span className={task.overdue ? "warn" : ""}>{textoEntregaRelativa(task.item.dueDays, task.item.dueIn)}</span></div>
+        <div className="ts">
+          <ClockIcon />
+          <span>{task.item.dueLabel}</span>
+          <span className="sep">·</span>
+          <span className={task.overdue ? "warn" : ""}>
+            {textoEntregaRelativa(task.item.dueDays, task.item.dueIn)}
+          </span>
+        </div>
         <div className="actions">
-          {canManage ? <button type="button" className="sta-btn ghost" onClick={(event) => { event.stopPropagation(); onMoveToMesa(taskId(task)); }}>
-            {inMesa ? <><ArrowLeftIcon />Devolver</> : <>Mover a mi mesa<ArrowRightIcon /></>}
-          </button> : null}
-          <button type="button" className="sta-btn primary" onClick={(event) => { event.stopPropagation(); onOpen(task.item.id); }}>Ver detalles</button>
+          {canManage ? (
+            <button
+              type="button"
+              className="sta-btn ghost"
+              onClick={(event) => {
+                event.stopPropagation();
+                onMoveToMesa(taskId(task));
+              }}
+            >
+              {inMesa ? (
+                <>
+                  <ArrowLeftIcon />
+                  Devolver
+                </>
+              ) : (
+                <>
+                  Mover a mi mesa
+                  <ArrowRightIcon />
+                </>
+              )}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="sta-btn primary"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen(task.item.id);
+            }}
+          >
+            Ver detalles
+          </button>
         </div>
       </div>
-      {dragHint ? <div className="sta-task-hint">Arrastrá esta tarea a Mesa de trabajo o Pendientes.</div> : null}
+      {dragHint ? (
+        <div className="sta-task-hint">
+          Arrastrá esta tarea a Mesa de trabajo o Pendientes.
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1853,20 +2513,38 @@ function StationDetail({
   const { stations, tareas, entrantes } = buildStationsModel(items, estaciones);
   const station = stations.find((entry) => entry.key === stationKey);
   const tasks = tareas.get(stationKey) ?? [];
-  const stats = computeStationStats(tasks, entrantes.get(stationKey) ?? [], medianas);
+  const stats = computeStationStats(
+    tasks,
+    entrantes.get(stationKey) ?? [],
+    medianas,
+  );
   const diasCola =
     station && station.capacidad != null && stats.colaMin > 0
-      ? proyectarColaDias(station.calendario, stats.colaMin, station.capacidad, new Date(), noLaborables)
+      ? proyectarColaDias(
+          station.calendario,
+          stats.colaMin,
+          station.capacidad,
+          new Date(),
+          noLaborables,
+        )
       : null;
   // Rango honesto (D12): el calendario caminado dos veces — sólo la cola,
   // y cola + lo en camino (cota superior si todo lo conocido llegara).
   const diasTotal =
     station && station.capacidad != null && stats.entranteMin > 0
-      ? proyectarColaDias(station.calendario, stats.colaMin + stats.entranteMin, station.capacidad, new Date(), noLaborables)
+      ? proyectarColaDias(
+          station.calendario,
+          stats.colaMin + stats.entranteMin,
+          station.capacidad,
+          new Date(),
+          noLaborables,
+        )
       : null;
   const [filter, setFilter] = React.useState("todos");
   /** Columna resaltada mientras se arrastra una tarea encima. */
-  const [dragOver, setDragOver] = React.useState<"mesa" | "shared" | null>(null);
+  const [dragOver, setDragOver] = React.useState<"mesa" | "shared" | null>(
+    null,
+  );
   const etapa = station?.etapa ? etapaDeEstacion(station.etapa) : null;
   const estacionConfig = estaciones.find((entry) => entry.id === stationKey);
 
@@ -1880,12 +2558,13 @@ function StationDetail({
     if (task) onMesa(id, !task.step.paso.mesaEsMia);
   };
 
-  const permitirSoltar = (zona: "mesa" | "shared") => (event: React.DragEvent) => {
-    if (!canManage) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setDragOver(zona);
-  };
+  const permitirSoltar =
+    (zona: "mesa" | "shared") => (event: React.DragEvent) => {
+      if (!canManage) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      setDragOver(zona);
+    };
 
   const soltarEn = (zona: "mesa" | "shared") => (event: React.DragEvent) => {
     if (!canManage) return;
@@ -1899,7 +2578,8 @@ function StationDetail({
   };
   let visibleShared = sharedTasks;
   let visibleMesa = mesaTasks;
-  if (filter === "pendientes") visibleShared = sharedTasks.filter((task) => task.isPending);
+  if (filter === "pendientes")
+    visibleShared = sharedTasks.filter((task) => task.isPending);
   if (filter === "mesa") visibleShared = [];
   if (filter === "urgentes") {
     visibleShared = sharedTasks.filter((task) => task.urgent);
@@ -1909,35 +2589,64 @@ function StationDetail({
     <div className="sta-detail">
       <div className="sta-detail-head">
         <div className="sta-detail-head-top">
-          <span className="sta-detail-ico">{station ? stationIcon(station) : <FactoryIcon />}</span>
+          <span className="sta-detail-ico">
+            {station ? stationIcon(station) : <FactoryIcon />}
+          </span>
           <div className="body">
             <h2>{station?.nm ?? "Estación"}</h2>
             <p>
               {station?.tercerizada
                 ? "Pasos tercerizados (compras a proveedor): se gestionan desde Compras de la orden, no se ejecutan en el piso"
                 : station?.sinEstacion
-                ? "Pasos cuya familia no está asignada a ninguna estación activa"
-                : estacionConfig?.descripcion ||
-                  [etapa?.nm, etiquetaCalendario(estacionConfig?.calendario)].filter(Boolean).join(" · ") ||
-                  "Estación del taller"}
+                  ? "Pasos cuya familia no está asignada a ninguna estación activa"
+                  : estacionConfig?.descripcion ||
+                    [etapa?.nm, etiquetaCalendario(estacionConfig?.calendario)]
+                      .filter(Boolean)
+                      .join(" · ") ||
+                    "Estación del taller"}
             </p>
             <div className="actions">
-              <button type="button" className="sta-btn ghost" onClick={onBack}><ArrowLeftIcon />Ver todas las estaciones</button>
+              <button type="button" className="sta-btn ghost" onClick={onBack}>
+                <ArrowLeftIcon />
+                Ver todas las estaciones
+              </button>
             </div>
           </div>
-          <div className="counter"><div className="num">{tasks.length}</div><div className="lbl">pasos activos</div></div>
+          <div className="counter">
+            <div className="num">{tasks.length}</div>
+            <div className="lbl">pasos activos</div>
+          </div>
         </div>
       </div>
 
       <div className="sta-detail-kpis">
         {/* Ocupación instantánea (en curso/puestos) — el diseño tiene exactamente 5 cards. */}
-        <div className={`kpi ${station?.capacidad && stats.enCurso >= station.capacidad ? "warm" : ""}`}>
+        <div
+          className={`kpi ${station?.capacidad && stats.enCurso >= station.capacidad ? "warm" : ""}`}
+        >
           <div className="k">En curso</div>
-          <div className="v">{station?.capacidad ? `${stats.enCurso}/${station.capacidad}` : stats.enCurso}</div>
+          <div className="v">
+            {station?.capacidad
+              ? `${stats.enCurso}/${station.capacidad}`
+              : stats.enCurso}
+          </div>
         </div>
-        <div className={`kpi ${mesaTasks.length > 0 ? "ok" : "warn"}`}><div className="k">Mi mesa de trabajo</div><div className="v">{mesaTasks.length}</div></div>
-        <div className="kpi cool"><div className="k">Pendientes</div><div className="v">{tasks.filter((task) => task.isPending).length}</div></div>
-        <div className={`kpi ${tasks.some((task) => task.urgent) ? "warm" : ""}`}><div className="k">Urgentes</div><div className="v">{tasks.filter((task) => task.urgent).length}</div></div>
+        <div className={`kpi ${mesaTasks.length > 0 ? "ok" : "warn"}`}>
+          <div className="k">Mi mesa de trabajo</div>
+          <div className="v">{mesaTasks.length}</div>
+        </div>
+        <div className="kpi cool">
+          <div className="k">Pendientes</div>
+          <div className="v">
+            {tasks.filter((task) => task.isPending).length}
+          </div>
+        </div>
+        <div
+          className={`kpi ${tasks.some((task) => task.urgent) ? "warm" : ""}`}
+        >
+          <div className="k">Urgentes</div>
+          <div className="v">{tasks.filter((task) => task.urgent).length}</div>
+        </div>
         <div className="kpi">
           <div className="k">
             {diasTotal != null && diasTotal >= 0.05
@@ -1947,8 +2656,17 @@ function StationDetail({
                 : "Cola estimada"}
           </div>
           <div className="v">
-            {stats.colaMin > 0 ? etiquetaDuracion(stats.colaMin) : stats.entranteMin > 0 ? "0 min" : "—"}
-            {stats.entranteMin > 0 ? <span className="kpi-extra"> +{etiquetaDuracion(stats.entranteMin)} en camino</span> : null}
+            {stats.colaMin > 0
+              ? etiquetaDuracion(stats.colaMin)
+              : stats.entranteMin > 0
+                ? "0 min"
+                : "—"}
+            {stats.entranteMin > 0 ? (
+              <span className="kpi-extra">
+                {" "}
+                +{etiquetaDuracion(stats.entranteMin)} en camino
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1961,34 +2679,104 @@ function StationDetail({
           { k: "mesa", l: "Mi mesa" },
           { k: "urgentes", l: "Solo urgentes" },
         ].map((entry) => (
-          <button key={entry.k} type="button" aria-pressed={filter === entry.k} className={`chip ${filter === entry.k ? "on" : ""}`} onClick={() => setFilter(entry.k)}>{entry.l}</button>
+          <button
+            key={entry.k}
+            type="button"
+            aria-pressed={filter === entry.k}
+            className={`chip ${filter === entry.k ? "on" : ""}`}
+            onClick={() => setFilter(entry.k)}
+          >
+            {entry.l}
+          </button>
         ))}
       </div>
 
       <div className="sta-detail-board">
         <div className="sta-col mesa-col">
-          <div className="sta-col-head"><span className="dot mesa" /><span className="ttl">Mi mesa de trabajo</span><span className="ct"><strong>{mesaTasks.length}</strong> pasos</span></div>
+          <div className="sta-col-head">
+            <span className="dot mesa" />
+            <span className="ttl">Mi mesa de trabajo</span>
+            <span className="ct">
+              <strong>{mesaTasks.length}</strong> pasos
+            </span>
+          </div>
           <div
             className={`sta-col-body ${mesaTasks.length === 0 ? "empty-mesa" : ""} ${dragOver === "mesa" ? "drag-over" : ""}`}
             onDragOver={permitirSoltar("mesa")}
-            onDragLeave={() => setDragOver((current) => (current === "mesa" ? null : current))}
+            onDragLeave={() =>
+              setDragOver((current) => (current === "mesa" ? null : current))
+            }
             onDrop={soltarEn("mesa")}
           >
-            {mesaTasks.length === 0 ? <div className="sta-mesa-empty"><div className="ic"><SquareDashedIcon /></div><div className="ttl">{canManage ? "Arrastrá tareas acá para trabajar en ellas" : "No hay tareas en tu mesa"}</div><div className="sub">{canManage ? "Las tareas pasan a tu mesa cuando las tomás de la fila compartida." : "Esta vista es de sólo lectura."}</div></div> : null}
-            {visibleMesa.map((task) => <TaskCard key={taskId(task)} task={task} inMesa canManage={canManage} onMoveToMesa={toggleMesa} onOpen={onOpen} />)}
+            {mesaTasks.length === 0 ? (
+              <div className="sta-mesa-empty">
+                <div className="ic">
+                  <SquareDashedIcon />
+                </div>
+                <div className="ttl">
+                  {canManage
+                    ? "Arrastrá tareas acá para trabajar en ellas"
+                    : "No hay tareas en tu mesa"}
+                </div>
+                <div className="sub">
+                  {canManage
+                    ? "Las tareas pasan a tu mesa cuando las tomás de la fila compartida."
+                    : "Esta vista es de sólo lectura."}
+                </div>
+              </div>
+            ) : null}
+            {visibleMesa.map((task) => (
+              <TaskCard
+                key={taskId(task)}
+                task={task}
+                inMesa
+                canManage={canManage}
+                onMoveToMesa={toggleMesa}
+                onOpen={onOpen}
+              />
+            ))}
           </div>
         </div>
 
         <div className="sta-col shared-col">
-          <div className="sta-col-head"><span className="dot shared" /><span className="ttl">Pendientes compartidas</span><span className="ct"><strong>{visibleShared.length}</strong> pasos</span></div>
+          <div className="sta-col-head">
+            <span className="dot shared" />
+            <span className="ttl">Pendientes compartidas</span>
+            <span className="ct">
+              <strong>{visibleShared.length}</strong> pasos
+            </span>
+          </div>
           <div
             className={`sta-col-body ${dragOver === "shared" ? "drag-over" : ""}`}
             onDragOver={permitirSoltar("shared")}
-            onDragLeave={() => setDragOver((current) => (current === "shared" ? null : current))}
+            onDragLeave={() =>
+              setDragOver((current) => (current === "shared" ? null : current))
+            }
             onDrop={soltarEn("shared")}
           >
-            {visibleShared.length === 0 ? <div className="sta-shared-empty">{filter === "mesa" ? "Solo se muestran las tareas de tu mesa." : "No quedan tareas pendientes que coincidan con el filtro."}</div> : null}
-            {visibleShared.map((task, index) => <TaskCard key={taskId(task)} task={task} inMesa={false} canManage={canManage} onMoveToMesa={toggleMesa} onOpen={onOpen} dragHint={canManage && index === 0 && mesaTasks.length === 0 && filter === "todos"} />)}
+            {visibleShared.length === 0 ? (
+              <div className="sta-shared-empty">
+                {filter === "mesa"
+                  ? "Solo se muestran las tareas de tu mesa."
+                  : "No quedan tareas pendientes que coincidan con el filtro."}
+              </div>
+            ) : null}
+            {visibleShared.map((task, index) => (
+              <TaskCard
+                key={taskId(task)}
+                task={task}
+                inMesa={false}
+                canManage={canManage}
+                onMoveToMesa={toggleMesa}
+                onOpen={onOpen}
+                dragHint={
+                  canManage &&
+                  index === 0 &&
+                  mesaTasks.length === 0 &&
+                  filter === "todos"
+                }
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -2023,8 +2811,30 @@ function ByStationView({
     canManage &&
     (estacionIdsEjecutables === null ||
       estacionIdsEjecutables.includes(stationKey));
-  if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} stationKey={stationKey} canManage={puedeEjecutarEstacion} onMesa={onMesa} onBack={() => setStationKey(null)} onOpen={onOpen} />;
-  return <StationGrid items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onSelect={setStationKey} />;
+  if (stationKey)
+    return (
+      <StationDetail
+        items={items}
+        estaciones={estaciones}
+        medianas={medianas}
+        noLaborables={noLaborables}
+        stationKey={stationKey}
+        canManage={puedeEjecutarEstacion}
+        onMesa={onMesa}
+        onBack={() => setStationKey(null)}
+        onOpen={onOpen}
+      />
+    );
+  return (
+    <StationGrid
+      items={items}
+      estaciones={estaciones}
+      medianas={medianas}
+      noLaborables={noLaborables}
+      llegadasHoyMin={llegadasHoyMin}
+      onSelect={setStationKey}
+    />
+  );
 }
 
 // ── Kanban ───────────────────────────────────────────────────────────────
@@ -2039,37 +2849,67 @@ function getKanbanBucket(item: ItemView): KanbanBucketKey {
 
 function kanbanStepIcon(item: ItemView) {
   if (item.blocked) return <BanIcon />;
-  const IconCmp = item.currentStep ? getStepIcon(item.currentStep.iconKey) : LayoutDashboardIcon;
+  const IconCmp = item.currentStep
+    ? getStepIcon(item.currentStep.iconKey)
+    : LayoutDashboardIcon;
   return <IconCmp />;
 }
 
 // Memo: con listas grandes, tipear en el buscador o abrir un sheet no
 // re-renderiza las cards cuyos props no cambiaron (los ItemView son
 // estables entre renders de UI: se rearman sólo cuando cambian los datos).
-const KanbanCard = React.memo(function KanbanCard({ item, onOpen }: { item: ItemView; onOpen: (id: string) => void }) {
+const KanbanCard = React.memo(function KanbanCard({
+  item,
+  onOpen,
+}: {
+  item: ItemView;
+  onOpen: (id: string) => void;
+}) {
   const step = item.currentStep;
 
   return (
-    <button type="button" className={`kan-card priority-${item.priority} ${item.blocked ? "blocked" : item.delayed ? "delayed" : ""}`} onClick={() => onOpen(item.id)}>
+    <button
+      type="button"
+      className={`kan-card priority-${item.priority} ${item.blocked ? "blocked" : item.delayed ? "delayed" : ""}`}
+      onClick={() => onOpen(item.id)}
+    >
       <div className="kan-card-top">
         <span className="item-code">{item.code}</span>
         <span className="ot-badge">{item.otCode}</span>
-        {item.priority !== "normal" ? <span className={`prio-pill prio-${item.priority}`}>{priorityLabel(item.priority)}</span> : null}
+        {item.priority !== "normal" ? (
+          <span className={`prio-pill prio-${item.priority}`}>
+            {priorityLabel(item.priority)}
+          </span>
+        ) : null}
         <span className="kan-pct">{item.progressPct}%</span>
       </div>
       <div className="kan-title">{item.product}</div>
-      <div className="kan-meta">{item.customer} · {item.spec}</div>
+      <div className="kan-meta">
+        {item.customer} · {item.spec}
+      </div>
       <div className="kan-step">
         <span className="kan-step-ico">{kanbanStepIcon(item)}</span>
         <div>
-          <div className="tec">{step?.paso.nombre ?? (item.sinRuta ? "Sin ruta" : "Completado")}</div>
+          <div className="tec">
+            {step?.paso.nombre ?? (item.sinRuta ? "Sin ruta" : "Completado")}
+          </div>
           <div className="sub">{item.statusLine}</div>
         </div>
       </div>
-      <div className="kan-progress" aria-label={`Avance ${item.progressPct}%`}><span style={{ width: `${item.progressPct}%` }} /></div>
+      <div className="kan-progress" aria-label={`Avance ${item.progressPct}%`}>
+        <span style={{ width: `${item.progressPct}%` }} />
+      </div>
       <div className="kan-foot">
-        <span className={`due ${item.delayed || item.dueDays === 0 ? "warn" : ""}`}><ClockIcon />{item.dueLabel} · {textoEntregaRelativa(item.dueDays, item.dueIn)}</span>
-        <span className="op"><span className="mini-av">{iniciales(item.vendedor)}</span>{item.vendedor.split(" ")[0]}</span>
+        <span
+          className={`due ${item.delayed || item.dueDays === 0 ? "warn" : ""}`}
+        >
+          <ClockIcon />
+          {item.dueLabel} · {textoEntregaRelativa(item.dueDays, item.dueIn)}
+        </span>
+        <span className="op">
+          <span className="mini-av">{iniciales(item.vendedor)}</span>
+          {item.vendedor.split(" ")[0]}
+        </span>
       </div>
     </button>
   );
@@ -2080,10 +2920,17 @@ function KanbanColumn({
   column,
   onOpen,
 }: {
-  column: { key: KanbanBucketKey; title: string; description: string; items: ItemView[] };
+  column: {
+    key: KanbanBucketKey;
+    title: string;
+    description: string;
+    items: ItemView[];
+  };
   onOpen: (id: string) => void;
 }) {
-  const { limite, sentinelRef, expandir, hayMas } = useVentanaProgresiva(column.items.length);
+  const { limite, sentinelRef, expandir, hayMas } = useVentanaProgresiva(
+    column.items.length,
+  );
   return (
     <section className={`kan-col kan-${column.key}`}>
       <div className="kan-col-head">
@@ -2094,17 +2941,42 @@ function KanbanColumn({
         <span>{column.items.length}</span>
       </div>
       <div className="kan-col-body">
-        {column.items.length === 0 ? <div className="kan-empty">No hay items en esta columna.</div> : null}
-        {column.items.slice(0, limite).map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} />)}
-        {hayMas ? <VentanaSentinel mostrando={limite} total={column.items.length} expandir={expandir} sentinelRef={sentinelRef} /> : null}
+        {column.items.length === 0 ? (
+          <div className="kan-empty">No hay items en esta columna.</div>
+        ) : null}
+        {column.items.slice(0, limite).map((item) => (
+          <KanbanCard key={item.id} item={item} onOpen={onOpen} />
+        ))}
+        {hayMas ? (
+          <VentanaSentinel
+            mostrando={limite}
+            total={column.items.length}
+            expandir={expandir}
+            sentinelRef={sentinelRef}
+          />
+        ) : null}
       </div>
     </section>
   );
 }
 
-function KanbanView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string) => void }) {
-  const columns: Array<{ key: KanbanBucketKey; title: string; description: string }> = [
-    { key: "not-started", title: "No iniciados", description: "Sin pasos ejecutados" },
+function KanbanView({
+  items,
+  onOpen,
+}: {
+  items: ItemView[];
+  onOpen: (id: string) => void;
+}) {
+  const columns: Array<{
+    key: KanbanBucketKey;
+    title: string;
+    description: string;
+  }> = [
+    {
+      key: "not-started",
+      title: "No iniciados",
+      description: "Sin pasos ejecutados",
+    },
     { key: "today", title: "Vencen hoy", description: "Prioridad de despacho" },
     { key: "delayed", title: "Con retraso", description: "Entrega vencida" },
     { key: "active", title: "En curso", description: "Avanzando sin retraso" },
@@ -2127,7 +2999,9 @@ function KanbanView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string)
 
   return (
     <div className="kanban-board" aria-label="Kanban de producción">
-      {grouped.map((column) => <KanbanColumn key={column.key} column={column} onOpen={onOpen} />)}
+      {grouped.map((column) => (
+        <KanbanColumn key={column.key} column={column} onOpen={onOpen} />
+      ))}
     </div>
   );
 }
@@ -2142,12 +3016,32 @@ function ItemsList({
   sim: ResultadoSimulacion;
   onOpen: (id: string) => void;
 }) {
-  const { limite, sentinelRef, expandir, hayMas } = useVentanaProgresiva(items.length);
+  const { limite, sentinelRef, expandir, hayMas } = useVentanaProgresiva(
+    items.length,
+  );
   return (
     <div className="tab-board">
-      {items.slice(0, limite).map((item) => <ItemRow key={item.id} item={item} eta={sim.porItem.get(item.id)} onOpen={onOpen} />)}
-      {items.length === 0 ? <div className="empty-results">No hay items que coincidan con los filtros.</div> : null}
-      {hayMas ? <VentanaSentinel mostrando={limite} total={items.length} expandir={expandir} sentinelRef={sentinelRef} /> : null}
+      {items.slice(0, limite).map((item) => (
+        <ItemRow
+          key={item.id}
+          item={item}
+          eta={sim.porItem.get(item.id)}
+          onOpen={onOpen}
+        />
+      ))}
+      {items.length === 0 ? (
+        <div className="empty-results">
+          No hay items que coincidan con los filtros.
+        </div>
+      ) : null}
+      {hayMas ? (
+        <VentanaSentinel
+          mostrando={limite}
+          total={items.length}
+          expandir={expandir}
+          sentinelRef={sentinelRef}
+        />
+      ) : null}
     </div>
   );
 }
@@ -2185,20 +3079,32 @@ export function TableroProduccion({
   const [items, setItems] = React.useState<TableroItemData[]>(initialItems);
   const [meta, setMeta] = React.useState(initialMeta);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
-  const [defaultMode, setDefaultMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
-  const [tabMenu, setTabMenu] = React.useState<{ mode: Mode; x: number; y: number } | null>(null);
+  const [defaultMode, setDefaultMode] =
+    React.useState<Mode>(DEFAULT_BOARD_MODE);
+  const [tabMenu, setTabMenu] = React.useState<{
+    mode: Mode;
+    x: number;
+    y: number;
+  } | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [loadError, setLoadError] = React.useState<string | null>(initialLoadError);
+  const [loadError, setLoadError] = React.useState<string | null>(
+    initialLoadError,
+  );
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
   const [actualizadoEl, setActualizadoEl] = React.useState<Date | null>(
     initialLoadError ? null : new Date(),
   );
-  const [filters, setFilters] = React.useState<{ status: StatusFilter; priority: PriorityFilter; query: string }>({ status: "all", priority: "all", query: "" });
+  const [filters, setFilters] = React.useState<{
+    status: StatusFilter;
+    priority: PriorityFilter;
+    query: string;
+  }>({ status: "all", priority: "all", query: "" });
   const searchParams = useSearchParams();
-  const canManage = (permisoEjecutar || permisoSupervisar) && meta.puedeGestionar;
+  const canManage =
+    (permisoEjecutar || permisoSupervisar) && meta.puedeGestionar;
 
   React.useEffect(() => {
     const savedMode = readStoredBoardMode();
@@ -2222,12 +3128,17 @@ export function TableroProduccion({
   // re-render reemplaza la card arrastrada y corta el drop).
   const mutacionesRef = React.useRef(0);
   const dragActivoRef = React.useRef(false);
-  const ultimoSnapshotRef = React.useRef<string | null>(JSON.stringify(initialItems));
+  const ultimoSnapshotRef = React.useRef<string | null>(
+    JSON.stringify(initialItems),
+  );
   const montadoRef = React.useRef(true);
 
-  React.useEffect(() => () => {
-    montadoRef.current = false;
-  }, []);
+  React.useEffect(
+    () => () => {
+      montadoRef.current = false;
+    },
+    [],
+  );
 
   const refrescar = React.useCallback(async (forzar = false) => {
     if (
@@ -2236,11 +3147,17 @@ export function TableroProduccion({
         mutacionesEnCurso: mutacionesRef.current,
         arrastreActivo: dragActivoRef.current,
       })
-    ) return;
+    )
+      return;
     if (forzar) setRefreshing(true);
     try {
       const respuesta = await getTableroProduccion();
-      if (!montadoRef.current || mutacionesRef.current > 0 || dragActivoRef.current) return;
+      if (
+        !montadoRef.current ||
+        mutacionesRef.current > 0 ||
+        dragActivoRef.current
+      )
+        return;
       const snapshot = JSON.stringify(respuesta.items);
       if (snapshot !== ultimoSnapshotRef.current) {
         ultimoSnapshotRef.current = snapshot;
@@ -2267,13 +3184,26 @@ export function TableroProduccion({
     }
   }, []);
 
+  useCambiosSistema(
+    (cambio) => {
+      if (cambio.topicos.includes("tablero-produccion")) {
+        void refrescar();
+      }
+    },
+    [refrescar],
+  );
+
   React.useEffect(() => {
     const id = window.setInterval(() => void refrescar(), POLL_TABLERO_MS);
     const onFocus = () => {
       if (!document.hidden) void refrescar();
     };
-    const onDragStart = () => { dragActivoRef.current = true; };
-    const onDragEnd = () => { dragActivoRef.current = false; };
+    const onDragStart = () => {
+      dragActivoRef.current = true;
+    };
+    const onDragEnd = () => {
+      dragActivoRef.current = false;
+    };
     document.addEventListener("visibilitychange", onFocus);
     window.addEventListener("focus", onFocus);
     window.addEventListener("dragstart", onDragStart);
@@ -2317,7 +3247,13 @@ export function TableroProduccion({
 
   /** familiaCodigo → mediana histórica en minutos (fallback de la cola). */
   const medianas = React.useMemo(
-    () => new Map(duracionesFamilias.map((entry) => [entry.familiaCodigo, entry.medianaMin])),
+    () =>
+      new Map(
+        duracionesFamilias.map((entry) => [
+          entry.familiaCodigo,
+          entry.medianaMin,
+        ]),
+      ),
     [duracionesFamilias],
   );
 
@@ -2330,8 +3266,22 @@ export function TableroProduccion({
   /** Simulación de flujo (fase 2b): ETA por item + llegadas por estación. */
   const sim = React.useMemo<ResultadoSimulacion>(
     () =>
-      simularFlujo({ items, estaciones, medianas, noLaborables, tiempoEntrePasosMin, zona: zonaHoraria }),
-    [items, estaciones, medianas, noLaborables, tiempoEntrePasosMin, zonaHoraria],
+      simularFlujo({
+        items,
+        estaciones,
+        medianas,
+        noLaborables,
+        tiempoEntrePasosMin,
+        zona: zonaHoraria,
+      }),
+    [
+      items,
+      estaciones,
+      medianas,
+      noLaborables,
+      tiempoEntrePasosMin,
+      zonaHoraria,
+    ],
   );
 
   /** Minutos de carga en camino que LLEGAN HOY, por estación. */
@@ -2357,20 +3307,35 @@ export function TableroProduccion({
       item: ItemView,
       paso: TableroPasoData,
       accion: TableroPasoAccion,
-      opts?: { motivo?: string; motivoDetalle?: string; tiempoDeclaradoMin?: number },
+      opts?: {
+        motivo?: string;
+        motivoDetalle?: string;
+        tiempoDeclaradoMin?: number;
+      },
     ) => {
       if (!canManage) return;
       setBusy(true);
       setError(null);
       mutacionesRef.current += 1;
       try {
-        const actualizado = await accionPasoProduccion(item.data.ordenId, item.id, paso.id, { accion, ...opts });
-        setItems((current) => current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)));
+        const actualizado = await accionPasoProduccion(
+          item.data.ordenId,
+          item.id,
+          paso.id,
+          { accion, ...opts },
+        );
+        setItems((current) =>
+          current.map((entry) =>
+            entry.id === actualizado.id ? actualizado : entry,
+          ),
+        );
         const { items: refrescados } = await getTableroProduccion();
         setItems(refrescados);
         ultimoSnapshotRef.current = JSON.stringify(refrescados);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "No se pudo ejecutar la acción.");
+        setError(
+          err instanceof Error ? err.message : "No se pudo ejecutar la acción.",
+        );
       } finally {
         mutacionesRef.current -= 1;
         setBusy(false);
@@ -2384,34 +3349,41 @@ export function TableroProduccion({
    * la card se mueve al soltar; el server confirma con el item
    * re-proyectado (trae el nombre real del dueño) o se revierte.
    */
-  const handleMesa = React.useCallback(async (pasoId: string, en: boolean) => {
-    if (!canManage) return;
-    const previo = items;
-    mutacionesRef.current += 1;
-    setItems((current) =>
-      current.map((item) => ({
-        ...item,
-        pasos: item.pasos.map((paso) =>
-          paso.id === pasoId
-            ? { ...paso, mesaEsMia: en, mesaUsuarioNombre: en ? "vos" : null }
-            : paso,
-        ),
-      })),
-    );
-    try {
-      const actualizado = await mesaPasoProduccion(pasoId, en);
+  const handleMesa = React.useCallback(
+    async (pasoId: string, en: boolean) => {
+      if (!canManage) return;
+      const previo = items;
+      mutacionesRef.current += 1;
       setItems((current) =>
-        actualizado.pasos.length === 0
-          ? current.filter((entry) => entry.id !== actualizado.id)
-          : current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)),
+        current.map((item) => ({
+          ...item,
+          pasos: item.pasos.map((paso) =>
+            paso.id === pasoId
+              ? { ...paso, mesaEsMia: en, mesaUsuarioNombre: en ? "vos" : null }
+              : paso,
+          ),
+        })),
       );
-    } catch (err) {
-      setItems(previo);
-      setError(err instanceof Error ? err.message : "No se pudo mover el paso.");
-    } finally {
-      mutacionesRef.current -= 1;
-    }
-  }, [canManage, items]);
+      try {
+        const actualizado = await mesaPasoProduccion(pasoId, en);
+        setItems((current) =>
+          actualizado.pasos.length === 0
+            ? current.filter((entry) => entry.id !== actualizado.id)
+            : current.map((entry) =>
+                entry.id === actualizado.id ? actualizado : entry,
+              ),
+        );
+      } catch (err) {
+        setItems(previo);
+        setError(
+          err instanceof Error ? err.message : "No se pudo mover el paso.",
+        );
+      } finally {
+        mutacionesRef.current -= 1;
+      }
+    },
+    [canManage, items],
+  );
 
   const tabEntries: Array<{ mode: Mode; label: string; count?: number }> = [
     { mode: "items", label: BOARD_MODE_LABELS.items, count: views.length },
@@ -2423,8 +3395,14 @@ export function TableroProduccion({
   const tabMenuStyle = React.useMemo<React.CSSProperties | undefined>(() => {
     if (!tabMenu || typeof window === "undefined") return undefined;
     return {
-      left: Math.max(12, Math.min(tabMenu.x, Math.max(12, window.innerWidth - 244))),
-      top: Math.max(12, Math.min(tabMenu.y, Math.max(12, window.innerHeight - 72))),
+      left: Math.max(
+        12,
+        Math.min(tabMenu.x, Math.max(12, window.innerWidth - 244)),
+      ),
+      top: Math.max(
+        12,
+        Math.min(tabMenu.y, Math.max(12, window.innerHeight - 72)),
+      ),
     };
   }, [tabMenu]);
 
@@ -2445,14 +3423,18 @@ export function TableroProduccion({
           bloqueado: item.blocked,
           atrasado: item.delayed,
         })
-      ) return false;
+      )
+        return false;
       if (filters.status === "blocked" && !item.blocked) return false;
-      if (filters.status === "delayed" && (!item.delayed || item.blocked)) return false;
+      if (filters.status === "delayed" && (!item.delayed || item.blocked))
+        return false;
       if (filters.status === "due-today" && item.dueDays !== 0) return false;
-      if (filters.priority !== "all" && item.priority !== filters.priority) return false;
+      if (filters.priority !== "all" && item.priority !== filters.priority)
+        return false;
       if (filters.query) {
         const query = filters.query.toLowerCase();
-        const haystack = `${item.code} ${item.otCode} ${item.customer} ${item.product} ${item.spec}`.toLowerCase();
+        const haystack =
+          `${item.code} ${item.otCode} ${item.customer} ${item.product} ${item.spec}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       return true;
@@ -2474,7 +3456,9 @@ export function TableroProduccion({
     delayed: views.filter((item) => item.delayed && !item.blocked).length,
     today: views.filter((item) => item.dueDays === 0).length,
   };
-  const selectedItem = selectedId ? views.find((item) => item.id === selectedId) : undefined;
+  const selectedItem = selectedId
+    ? views.find((item) => item.id === selectedId)
+    : undefined;
 
   return (
     <div className="tablero-produccion">
@@ -2514,7 +3498,12 @@ export function TableroProduccion({
               Se conservan los últimos datos válidos. {syncError}
             </AlertDescription>
             <AlertAction>
-              <Button type="button" variant="outline" size="sm" onClick={() => void refrescar(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void refrescar(true)}
+              >
                 Reintentar
               </Button>
             </AlertAction>
@@ -2522,11 +3511,61 @@ export function TableroProduccion({
         ) : null}
 
         <div className="d-kpi-row">
-          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Items en producción</span></div><div className="d-kpi-val"><span className="num">{views.length}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">de órdenes emitidas</span></div></div>
-          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">En curso · OK</span></div><div className="d-kpi-val"><span className="num ok">{counts.inProgress}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">avanzando sin retraso</span></div></div>
-          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Con retraso</span></div><div className="d-kpi-val"><span className="num signal">{counts.delayed}</span></div><div className="d-kpi-foot"><span className="d-delta tone-signal">entrega vencida</span></div></div>
-          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Bloqueados</span></div><div className="d-kpi-val"><span className="num">{counts.blocked}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">requieren intervención</span></div></div>
-          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Vencen hoy</span></div><div className="d-kpi-val"><span className="num">{counts.today}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">prioridad de despacho</span></div></div>
+          <div className="d-kpi">
+            <div className="d-kpi-head">
+              <span className="d-kpi-lbl">Items en producción</span>
+            </div>
+            <div className="d-kpi-val">
+              <span className="num">{views.length}</span>
+            </div>
+            <div className="d-kpi-foot">
+              <span className="d-kpi-sub">de órdenes emitidas</span>
+            </div>
+          </div>
+          <div className="d-kpi">
+            <div className="d-kpi-head">
+              <span className="d-kpi-lbl">En curso · OK</span>
+            </div>
+            <div className="d-kpi-val">
+              <span className="num ok">{counts.inProgress}</span>
+            </div>
+            <div className="d-kpi-foot">
+              <span className="d-kpi-sub">avanzando sin retraso</span>
+            </div>
+          </div>
+          <div className="d-kpi">
+            <div className="d-kpi-head">
+              <span className="d-kpi-lbl">Con retraso</span>
+            </div>
+            <div className="d-kpi-val">
+              <span className="num signal">{counts.delayed}</span>
+            </div>
+            <div className="d-kpi-foot">
+              <span className="d-delta tone-signal">entrega vencida</span>
+            </div>
+          </div>
+          <div className="d-kpi">
+            <div className="d-kpi-head">
+              <span className="d-kpi-lbl">Bloqueados</span>
+            </div>
+            <div className="d-kpi-val">
+              <span className="num">{counts.blocked}</span>
+            </div>
+            <div className="d-kpi-foot">
+              <span className="d-kpi-sub">requieren intervención</span>
+            </div>
+          </div>
+          <div className="d-kpi">
+            <div className="d-kpi-head">
+              <span className="d-kpi-lbl">Vencen hoy</span>
+            </div>
+            <div className="d-kpi-val">
+              <span className="num">{counts.today}</span>
+            </div>
+            <div className="d-kpi-foot">
+              <span className="d-kpi-sub">prioridad de despacho</span>
+            </div>
+          </div>
         </div>
 
         {error ? (
@@ -2536,7 +3575,11 @@ export function TableroProduccion({
           </Alert>
         ) : null}
 
-        <div className="dash-tabs" role="tablist" aria-label="Vistas del tablero de producción">
+        <div
+          className="dash-tabs"
+          role="tablist"
+          aria-label="Vistas del tablero de producción"
+        >
           {tabEntries.map((entry) => (
             <button
               key={entry.mode}
@@ -2549,23 +3592,39 @@ export function TableroProduccion({
               aria-selected={mode === entry.mode}
               onClick={() => setMode(entry.mode)}
               onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+                  return;
                 event.preventDefault();
-                const actual = tabEntries.findIndex((tab) => tab.mode === entry.mode);
+                const actual = tabEntries.findIndex(
+                  (tab) => tab.mode === entry.mode,
+                );
                 const delta = event.key === "ArrowRight" ? 1 : -1;
-                const siguiente = tabEntries[(actual + delta + tabEntries.length) % tabEntries.length];
+                const siguiente =
+                  tabEntries[
+                    (actual + delta + tabEntries.length) % tabEntries.length
+                  ];
                 if (!siguiente) return;
                 setMode(siguiente.mode);
-                document.getElementById(`tablero-tab-${siguiente.mode}`)?.focus();
+                document
+                  .getElementById(`tablero-tab-${siguiente.mode}`)
+                  ?.focus();
               }}
               onContextMenu={(event) => {
                 event.preventDefault();
-                setTabMenu({ mode: entry.mode, x: event.clientX, y: event.clientY });
+                setTabMenu({
+                  mode: entry.mode,
+                  x: event.clientX,
+                  y: event.clientY,
+                });
               }}
             >
               <span>{entry.label}</span>
-              {typeof entry.count === "number" ? <span className="count">{entry.count}</span> : null}
-              {defaultMode === entry.mode ? <span className="default-mark">Pred.</span> : null}
+              {typeof entry.count === "number" ? (
+                <span className="count">{entry.count}</span>
+              ) : null}
+              {defaultMode === entry.mode ? (
+                <span className="default-mark">Pred.</span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -2577,9 +3636,21 @@ export function TableroProduccion({
             style={tabMenuStyle}
             onClick={(event) => event.stopPropagation()}
           >
-            <button type="button" role="menuitem" onClick={() => setDefaultBoardMode(tabMenu.mode)}>
-              {defaultMode === tabMenu.mode ? <CheckIcon /> : <LayoutDashboardIcon />}
-              <span>{defaultMode === tabMenu.mode ? "Vista predeterminada" : "Elegir como predeterminada"}</span>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => setDefaultBoardMode(tabMenu.mode)}
+            >
+              {defaultMode === tabMenu.mode ? (
+                <CheckIcon />
+              ) : (
+                <LayoutDashboardIcon />
+              )}
+              <span>
+                {defaultMode === tabMenu.mode
+                  ? "Vista predeterminada"
+                  : "Elegir como predeterminada"}
+              </span>
             </button>
           </div>
         ) : null}
@@ -2589,57 +3660,91 @@ export function TableroProduccion({
           role="tabpanel"
           aria-labelledby={`tablero-tab-${mode}`}
         >
-        {loadError && views.length === 0 ? (
-          <Alert variant="destructive">
-            <AlertTitle>No se pudo cargar el tablero</AlertTitle>
-            <AlertDescription>{loadError}</AlertDescription>
-            <AlertAction>
-              <Button type="button" variant="outline" size="sm" onClick={() => void refrescar(true)}>
-                Reintentar
-              </Button>
-            </AlertAction>
-          </Alert>
-        ) : meta.vendedorSinVinculo ? (
-          <div className="empty-results">
-            Tu usuario vendedor no está vinculado a un empleado. Vinculalo desde
-            Configuración para ver solamente tus órdenes.
-          </div>
-        ) : views.length === 0 ? (
-          <div className="empty-results">
-            {meta.alcance === "operario" ? (
-              "No tenés tareas reclamadas en tu mesa de trabajo."
-            ) : (
-              <>No hay órdenes en producción. Cuando emitas una orden de trabajo al taller,
-              sus items aparecen acá con su ruta de pasos.{" "}
-              <Link href="/produccion/ordenes">Ir a Órdenes de trabajo</Link></>
-            )}
-          </div>
-        ) : (
-          <>
-            {mode === "items" ? (
-              <>
-                <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
-                <ItemsList items={filtered} sim={sim} onOpen={setSelectedId} />
-              </>
-            ) : null}
-            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} canManage={canManage} estacionIdsEjecutables={meta.estacionIdsEjecutables} onMesa={handleMesa} onOpen={setSelectedId} /> : null}
-            {mode === "simulacion" ? (
-          <SimulacionView
-            items={items}
-            estaciones={estaciones}
-            sim={sim}
-            noLaborables={noLaborables}
-            onOpen={setSelectedId}
-          />
-        ) : null}
-        {mode === "kanban" ? (
-              <>
-                <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
-                <KanbanView items={filtered} onOpen={setSelectedId} />
-              </>
-            ) : null}
-          </>
-        )}
+          {loadError && views.length === 0 ? (
+            <Alert variant="destructive">
+              <AlertTitle>No se pudo cargar el tablero</AlertTitle>
+              <AlertDescription>{loadError}</AlertDescription>
+              <AlertAction>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void refrescar(true)}
+                >
+                  Reintentar
+                </Button>
+              </AlertAction>
+            </Alert>
+          ) : meta.vendedorSinVinculo ? (
+            <div className="empty-results">
+              Tu usuario vendedor no está vinculado a un empleado. Vinculalo
+              desde Configuración para ver solamente tus órdenes.
+            </div>
+          ) : views.length === 0 ? (
+            <div className="empty-results">
+              {meta.alcance === "operario" ? (
+                "No tenés tareas reclamadas en tu mesa de trabajo."
+              ) : (
+                <>
+                  No hay órdenes en producción. Cuando emitas una orden de
+                  trabajo al taller, sus items aparecen acá con su ruta de
+                  pasos.{" "}
+                  <Link href="/produccion/ordenes">
+                    Ir a Órdenes de trabajo
+                  </Link>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              {mode === "items" ? (
+                <>
+                  <FiltersBar
+                    filters={filters}
+                    setFilters={setFilters}
+                    counts={counts}
+                  />
+                  <ItemsList
+                    items={filtered}
+                    sim={sim}
+                    onOpen={setSelectedId}
+                  />
+                </>
+              ) : null}
+              {mode === "estacion" ? (
+                <ByStationView
+                  items={views}
+                  estaciones={estaciones}
+                  medianas={medianas}
+                  noLaborables={noLaborables}
+                  llegadasHoyMin={llegadasHoyMin}
+                  canManage={canManage}
+                  estacionIdsEjecutables={meta.estacionIdsEjecutables}
+                  onMesa={handleMesa}
+                  onOpen={setSelectedId}
+                />
+              ) : null}
+              {mode === "simulacion" ? (
+                <SimulacionView
+                  items={items}
+                  estaciones={estaciones}
+                  sim={sim}
+                  noLaborables={noLaborables}
+                  onOpen={setSelectedId}
+                />
+              ) : null}
+              {mode === "kanban" ? (
+                <>
+                  <FiltersBar
+                    filters={filters}
+                    setFilters={setFilters}
+                    counts={counts}
+                  />
+                  <KanbanView items={filtered} onOpen={setSelectedId} />
+                </>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
 

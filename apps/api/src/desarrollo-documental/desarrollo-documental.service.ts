@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   ArchivoEstado,
@@ -12,14 +13,19 @@ import {
   EstadoSolicitudAprobacion,
   Prisma,
   RolSistema,
+  SeveridadNotificacionInterna,
   TipoEnlacePublico,
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ArchivosService } from '../archivos/archivos.service';
 import { firmaActor } from '../common/firma-actor';
-import { generarTokenPublico, EnlacesPublicosService } from '../enlaces-publicos/enlaces-publicos.service';
+import {
+  generarTokenPublico,
+  EnlacesPublicosService,
+} from '../enlaces-publicos/enlaces-publicos.service';
 import { urlEnlacePublico } from '../enlaces-publicos/enlaces-publicos.urls';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import {
   CrearArchivoMaestroDto,
   CrearGateDocumentoDto,
@@ -86,13 +92,15 @@ type GateDocumentoEvaluable = {
   };
 };
 
-export function gateDocumentoEstaCumplido(gate: GateDocumentoEvaluable): boolean {
+export function gateDocumentoEstaCumplido(
+  gate: GateDocumentoEvaluable,
+): boolean {
   const revision = gate.archivoMaestro.revisionLiberada;
   return Boolean(
     revision &&
-      revision.solicitudes.some(
-        (solicitud) => solicitud.tipo === gate.tipoAprobacion,
-      ),
+    revision.solicitudes.some(
+      (solicitud) => solicitud.tipo === gate.tipoAprobacion,
+    ),
   );
 }
 
@@ -111,6 +119,7 @@ export class DesarrolloDocumentalService {
     private readonly prisma: PrismaService,
     private readonly enlaces: EnlacesPublicosService,
     private readonly archivos: ArchivosService,
+    @Optional() private readonly eventosSistema?: EventosSistemaService,
   ) {}
 
   async listarCampana(auth: CurrentAuth, campanaId: string) {
@@ -207,15 +216,24 @@ export class DesarrolloDocumentalService {
             creadoPorNombre: actor,
           },
         });
-        await this.evento(tx, auth.tenantId, campana.id, actor, {
-          tipo: 'archivo_maestro_creado',
-          descripcion: `Se creó el documento controlado “${nombre}”.`,
-          datosJson: { proposito: dto.proposito, etapa: dto.etapa },
-        }, auth.userId);
+        await this.evento(
+          tx,
+          auth.tenantId,
+          campana.id,
+          actor,
+          {
+            tipo: 'archivo_maestro_creado',
+            descripcion: `Se creó el documento controlado “${nombre}”.`,
+            datosJson: { proposito: dto.proposito, etapa: dto.etapa },
+          },
+          auth.userId,
+        );
       });
     } catch (error) {
       if (this.esUnico(error)) {
-        throw new ConflictException('Ya existe un documento con ese nombre en la campaña.');
+        throw new ConflictException(
+          'Ya existe un documento con ese nombre en la campaña.',
+        );
       }
       throw error;
     }
@@ -239,10 +257,14 @@ export class DesarrolloDocumentalService {
       select: { id: true, hash: true, nombreOriginal: true },
     });
     if (!archivo) {
-      throw new BadRequestException('El archivo debe ser un adjunto vigente de esta campaña.');
+      throw new BadRequestException(
+        'El archivo debe ser un adjunto vigente de esta campaña.',
+      );
     }
     if (!archivo.hash) {
-      throw new BadRequestException('El archivo no tiene hash SHA-256. Volvé a subirlo como revisión controlada.');
+      throw new BadRequestException(
+        'El archivo no tiene hash SHA-256. Volvé a subirlo como revisión controlada.',
+      );
     }
     const actor = this.actor(auth);
     try {
@@ -265,15 +287,24 @@ export class DesarrolloDocumentalService {
             autorNombre: actor,
           },
         });
-        await this.evento(tx, auth.tenantId, maestro.proyectoCampanaId, actor, {
-          tipo: 'revision_documental_creada',
-          descripcion: `Se agregó V${numero} a “${maestro.nombre}” (${archivo.nombreOriginal}).`,
-          datosJson: { maestroId: maestro.id, numero, archivoId: archivo.id },
-        }, auth.userId);
+        await this.evento(
+          tx,
+          auth.tenantId,
+          maestro.proyectoCampanaId,
+          actor,
+          {
+            tipo: 'revision_documental_creada',
+            descripcion: `Se agregó V${numero} a “${maestro.nombre}” (${archivo.nombreOriginal}).`,
+            datosJson: { maestroId: maestro.id, numero, archivoId: archivo.id },
+          },
+          auth.userId,
+        );
       });
     } catch (error) {
       if (this.esUnico(error)) {
-        throw new ConflictException('Ese archivo ya pertenece a una revisión controlada.');
+        throw new ConflictException(
+          'Ese archivo ya pertenece a una revisión controlada.',
+        );
       }
       throw error;
     }
@@ -287,7 +318,9 @@ export class DesarrolloDocumentalService {
   ) {
     const revision = await this.revision(revisionId);
     if (revision.estado === EstadoRevisionArchivo.OBSOLETA) {
-      throw new BadRequestException('Una revisión obsoleta no puede enviarse a aprobación.');
+      throw new BadRequestException(
+        'Una revisión obsoleta no puede enviarse a aprobación.',
+      );
     }
     if (dto.asignadaAUsuarioId) {
       const asignada = await this.prisma.user.findFirst({
@@ -302,10 +335,19 @@ export class DesarrolloDocumentalService {
         },
         select: { id: true },
       });
-      if (!asignada) throw new BadRequestException('El aprobador no pertenece a esta empresa.');
+      if (!asignada)
+        throw new BadRequestException(
+          'El aprobador no pertenece a esta empresa.',
+        );
     }
-    if (!dto.asignadaAUsuarioId && !dto.asignadaARol && !dto.permiteDecisionExterna) {
-      throw new BadRequestException('Asigná un usuario, un rol o habilitá la aprobación externa.');
+    if (
+      !dto.asignadaAUsuarioId &&
+      !dto.asignadaARol &&
+      !dto.permiteDecisionExterna
+    ) {
+      throw new BadRequestException(
+        'Asigná un usuario, un rol o habilitá la aprobación externa.',
+      );
     }
     const actor = this.actor(auth);
     const expiraEl = dto.expiraEl ? new Date(dto.expiraEl) : null;
@@ -332,22 +374,35 @@ export class DesarrolloDocumentalService {
           where: { id: revision.id },
           data: { estado: EstadoRevisionArchivo.EN_REVISION },
         });
-        await this.evento(tx, auth.tenantId, revision.maestro.proyectoCampanaId, actor, {
-          tipo: 'aprobacion_documental_solicitada',
-          descripcion: `V${revision.numero} de “${revision.maestro.nombre}” fue enviada a aprobación (${this.labelTipo(dto.tipo)}).`,
-          datosJson: { revisionId: revision.id, tipo: dto.tipo },
-        }, auth.userId);
+        await this.evento(
+          tx,
+          auth.tenantId,
+          revision.maestro.proyectoCampanaId,
+          actor,
+          {
+            tipo: 'aprobacion_documental_solicitada',
+            descripcion: `V${revision.numero} de “${revision.maestro.nombre}” fue enviada a aprobación (${this.labelTipo(dto.tipo)}).`,
+            datosJson: { revisionId: revision.id, tipo: dto.tipo },
+          },
+          auth.userId,
+        );
       });
     } catch (error) {
       if (this.esUnico(error)) {
-        throw new ConflictException('Ya existe una solicitud pendiente de ese tipo para la revisión.');
+        throw new ConflictException(
+          'Ya existe una solicitud pendiente de ese tipo para la revisión.',
+        );
       }
       throw error;
     }
     return this.listar(revision.maestro.proyectoCampanaId);
   }
 
-  async emitirLink(auth: CurrentAuth, solicitudId: string, dto: EmitirLinkAprobacionDto) {
+  async emitirLink(
+    auth: CurrentAuth,
+    solicitudId: string,
+    dto: EmitirLinkAprobacionDto,
+  ) {
     const solicitud = await this.solicitud(solicitudId);
     if (!solicitud.permiteDecisionExterna) {
       throw new BadRequestException('La solicitud no admite decisión externa.');
@@ -357,7 +412,8 @@ export class DesarrolloDocumentalService {
     }
     const token = generarTokenPublico();
     const dias = dto.diasVigencia ?? 14;
-    const expiraEl = solicitud.expiraEl ?? new Date(Date.now() + dias * 86_400_000);
+    const expiraEl =
+      solicitud.expiraEl ?? new Date(Date.now() + dias * 86_400_000);
     await this.prisma.$transaction(async (tx) => {
       await this.enlaces.emitir(tx, {
         tenantId: auth.tenantId,
@@ -373,7 +429,11 @@ export class DesarrolloDocumentalService {
         });
       }
     });
-    return { token, url: urlEnlacePublico(TipoEnlacePublico.APROBACION_DOCUMENTAL, token), expiraEl: expiraEl.toISOString() };
+    return {
+      token,
+      url: urlEnlacePublico(TipoEnlacePublico.APROBACION_DOCUMENTAL, token),
+      expiraEl: expiraEl.toISOString(),
+    };
   }
 
   async revocarLink(auth: CurrentAuth, solicitudId: string) {
@@ -400,13 +460,29 @@ export class DesarrolloDocumentalService {
     return this.listar(solicitud.revision.maestro.proyectoCampanaId);
   }
 
-  async decidir(auth: CurrentAuth, solicitudId: string, dto: DecidirAprobacionDocumentoDto) {
+  async decidir(
+    auth: CurrentAuth,
+    solicitudId: string,
+    dto: DecidirAprobacionDocumentoDto,
+  ) {
     const solicitud = await this.solicitud(solicitudId);
-    const privilegiado = auth.role === RolSistema.ADMINISTRADOR || auth.role === RolSistema.SUPERVISOR;
-    if (solicitud.asignadaAUsuarioId && solicitud.asignadaAUsuarioId !== auth.userId && !privilegiado) {
-      throw new ForbiddenException('La solicitud está asignada a otro aprobador.');
+    const privilegiado =
+      auth.role === RolSistema.ADMINISTRADOR ||
+      auth.role === RolSistema.SUPERVISOR;
+    if (
+      solicitud.asignadaAUsuarioId &&
+      solicitud.asignadaAUsuarioId !== auth.userId &&
+      !privilegiado
+    ) {
+      throw new ForbiddenException(
+        'La solicitud está asignada a otro aprobador.',
+      );
     }
-    if (solicitud.asignadaARol && solicitud.asignadaARol !== auth.role && !privilegiado) {
+    if (
+      solicitud.asignadaARol &&
+      solicitud.asignadaARol !== auth.role &&
+      !privilegiado
+    ) {
       throw new ForbiddenException('Tu rol no puede resolver esta solicitud.');
     }
     if (dto.evidenciaArchivoId) {
@@ -414,7 +490,8 @@ export class DesarrolloDocumentalService {
         where: { id: dto.evidenciaArchivoId, estado: ArchivoEstado.LISTO },
         select: { id: true },
       });
-      if (!evidencia) throw new BadRequestException('La evidencia no está disponible.');
+      if (!evidencia)
+        throw new BadRequestException('La evidencia no está disponible.');
     }
     await this.resolverSolicitud({
       solicitud,
@@ -432,13 +509,20 @@ export class DesarrolloDocumentalService {
   async liberar(auth: CurrentAuth, revisionId: string) {
     const revision = await this.revision(revisionId);
     if (revision.estado !== EstadoRevisionArchivo.APROBADA) {
-      throw new BadRequestException('Sólo una revisión aprobada puede liberarse a producción.');
+      throw new BadRequestException(
+        'Sólo una revisión aprobada puede liberarse a producción.',
+      );
     }
-    const aprobacion = await this.prisma.solicitudAprobacionDocumento.findFirst({
-      where: { revisionId, estado: EstadoSolicitudAprobacion.APROBADA },
-      select: { id: true },
-    });
-    if (!aprobacion) throw new BadRequestException('La revisión no tiene una decisión aprobatoria vigente.');
+    const aprobacion = await this.prisma.solicitudAprobacionDocumento.findFirst(
+      {
+        where: { revisionId, estado: EstadoSolicitudAprobacion.APROBADA },
+        select: { id: true },
+      },
+    );
+    if (!aprobacion)
+      throw new BadRequestException(
+        'La revisión no tiene una decisión aprobatoria vigente.',
+      );
     const actor = this.actor(auth);
     await this.prisma.$transaction(async (tx) => {
       await tx.archivoMaestro.update({
@@ -453,28 +537,62 @@ export class DesarrolloDocumentalService {
           liberadaPorNombre: actor,
         },
       });
-      await this.evento(tx, auth.tenantId, revision.maestro.proyectoCampanaId, actor, {
-        tipo: 'revision_documental_liberada',
-        descripcion: `V${revision.numero} de “${revision.maestro.nombre}” quedó liberada a producción.`,
-        datosJson: { revisionId: revision.id, maestroId: revision.archivoMaestroId },
-      }, auth.userId);
+      await this.evento(
+        tx,
+        auth.tenantId,
+        revision.maestro.proyectoCampanaId,
+        actor,
+        {
+          tipo: 'revision_documental_liberada',
+          descripcion: `V${revision.numero} de “${revision.maestro.nombre}” quedó liberada a producción.`,
+          datosJson: {
+            revisionId: revision.id,
+            maestroId: revision.archivoMaestroId,
+          },
+        },
+        auth.userId,
+      );
     });
     return this.listar(revision.maestro.proyectoCampanaId);
   }
 
   async crearGate(auth: CurrentAuth, dto: CrearGateDocumentoDto) {
     const [campana, orden, maestro, paso] = await Promise.all([
-      this.prisma.proyectoCampana.findFirst({ where: { id: dto.proyectoCampanaId }, select: { id: true } }),
-      this.prisma.ordenTrabajo.findFirst({ where: { id: dto.ordenId }, select: { id: true, proyectoCampanaId: true, numero: true } }),
-      this.prisma.archivoMaestro.findFirst({ where: { id: dto.archivoMaestroId }, select: { id: true, proyectoCampanaId: true, nombre: true } }),
-      dto.pasoId ? this.prisma.ordenTrabajoItemPaso.findFirst({ where: { id: dto.pasoId }, select: { id: true, ordenId: true } }) : Promise.resolve(null),
+      this.prisma.proyectoCampana.findFirst({
+        where: { id: dto.proyectoCampanaId },
+        select: { id: true },
+      }),
+      this.prisma.ordenTrabajo.findFirst({
+        where: { id: dto.ordenId },
+        select: { id: true, proyectoCampanaId: true, numero: true },
+      }),
+      this.prisma.archivoMaestro.findFirst({
+        where: { id: dto.archivoMaestroId },
+        select: { id: true, proyectoCampanaId: true, nombre: true },
+      }),
+      dto.pasoId
+        ? this.prisma.ordenTrabajoItemPaso.findFirst({
+            where: { id: dto.pasoId },
+            select: { id: true, ordenId: true },
+          })
+        : Promise.resolve(null),
     ]);
-    if (!campana || !orden || !maestro) throw new NotFoundException('No se encontraron las referencias del gate.');
-    if (orden.proyectoCampanaId !== campana.id || maestro.proyectoCampanaId !== campana.id) {
-      throw new BadRequestException('La campaña, la OT y el documento deben pertenecer al mismo proyecto.');
+    if (!campana || !orden || !maestro)
+      throw new NotFoundException(
+        'No se encontraron las referencias del gate.',
+      );
+    if (
+      orden.proyectoCampanaId !== campana.id ||
+      maestro.proyectoCampanaId !== campana.id
+    ) {
+      throw new BadRequestException(
+        'La campaña, la OT y el documento deben pertenecer al mismo proyecto.',
+      );
     }
     if (dto.pasoId && (!paso || paso.ordenId !== orden.id)) {
-      throw new BadRequestException('El paso no pertenece a la orden indicada.');
+      throw new BadRequestException(
+        'El paso no pertenece a la orden indicada.',
+      );
     }
     try {
       await this.prisma.gateProduccionDocumento.create({
@@ -489,7 +607,8 @@ export class DesarrolloDocumentalService {
         },
       });
     } catch (error) {
-      if (this.esUnico(error)) throw new ConflictException('Ese gate ya está configurado.');
+      if (this.esUnico(error))
+        throw new ConflictException('Ese gate ya está configurado.');
       throw error;
     }
     return this.listar(campana.id);
@@ -501,7 +620,9 @@ export class DesarrolloDocumentalService {
       select: { id: true, proyectoCampanaId: true },
     });
     if (!gate) throw new NotFoundException('Gate no encontrado.');
-    await this.prisma.gateProduccionDocumento.delete({ where: { id: gate.id } });
+    await this.prisma.gateProduccionDocumento.delete({
+      where: { id: gate.id },
+    });
     return this.listar(gate.proyectoCampanaId);
   }
 
@@ -516,7 +637,11 @@ export class DesarrolloDocumentalService {
         archivoMaestro: {
           include: {
             revisionLiberada: {
-              include: { solicitudes: { where: { estado: EstadoSolicitudAprobacion.APROBADA } } },
+              include: {
+                solicitudes: {
+                  where: { estado: EstadoSolicitudAprobacion.APROBADA },
+                },
+              },
             },
           },
         },
@@ -541,7 +666,11 @@ export class DesarrolloDocumentalService {
   }
 
   async decidirPublico(token: string, dto: DecisionPublicaDocumentoDto) {
-    if (dto.decision !== DecisionAprobacionDocumento.APROBAR && dto.decision !== DecisionAprobacionDocumento.OBSERVAR && dto.decision !== DecisionAprobacionDocumento.RECHAZAR) {
+    if (
+      dto.decision !== DecisionAprobacionDocumento.APROBAR &&
+      dto.decision !== DecisionAprobacionDocumento.OBSERVAR &&
+      dto.decision !== DecisionAprobacionDocumento.RECHAZAR
+    ) {
       throw new BadRequestException('Decisión externa inválida.');
     }
     const solicitud = await this.solicitudPublica(token, false);
@@ -576,20 +705,29 @@ export class DesarrolloDocumentalService {
     }
     const comentario = params.comentario?.trim() || null;
     if (decisionRequiereComentario(params.decision) && !comentario) {
-      throw new BadRequestException('La observación o rechazo debe incluir un fundamento.');
+      throw new BadRequestException(
+        'La observación o rechazo debe incluir un fundamento.',
+      );
     }
     const estado = this.estadoSolicitud(params.decision);
-    const estadoRevision = params.decision === DecisionAprobacionDocumento.APROBAR
-      ? EstadoRevisionArchivo.APROBADA
-      : params.decision === DecisionAprobacionDocumento.CANCELAR
-        ? EstadoRevisionArchivo.BORRADOR
-        : EstadoRevisionArchivo.OBSERVADA;
+    const estadoRevision =
+      params.decision === DecisionAprobacionDocumento.APROBAR
+        ? EstadoRevisionArchivo.APROBADA
+        : params.decision === DecisionAprobacionDocumento.CANCELAR
+          ? EstadoRevisionArchivo.BORRADOR
+          : EstadoRevisionArchivo.OBSERVADA;
     await this.prisma.$transaction(async (tx) => {
       const cambio = await tx.solicitudAprobacionDocumento.updateMany({
-        where: { id: solicitud.id, estado: EstadoSolicitudAprobacion.PENDIENTE },
+        where: {
+          id: solicitud.id,
+          estado: EstadoSolicitudAprobacion.PENDIENTE,
+        },
         data: { estado, resueltaEl: new Date() },
       });
-      if (cambio.count !== 1) throw new ConflictException('La solicitud fue resuelta por otra persona.');
+      if (cambio.count !== 1)
+        throw new ConflictException(
+          'La solicitud fue resuelta por otra persona.',
+        );
       await tx.decisionAprobacionDocumentoRegistro.create({
         data: {
           tenantId: solicitud.tenantId,
@@ -606,23 +744,42 @@ export class DesarrolloDocumentalService {
       if (params.decision === DecisionAprobacionDocumento.APROBAR) {
         const anteriorId = solicitud.revision.maestro.revisionAprobadaId;
         if (anteriorId && anteriorId !== solicitud.revision.id) {
-          await tx.archivoRevision.update({ where: { id: anteriorId }, data: { estado: EstadoRevisionArchivo.OBSOLETA } });
+          await tx.archivoRevision.update({
+            where: { id: anteriorId },
+            data: { estado: EstadoRevisionArchivo.OBSOLETA },
+          });
         }
         await tx.archivoMaestro.update({
           where: { id: solicitud.revision.archivoMaestroId },
           data: {
             revisionAprobadaId: solicitud.revision.id,
-            ...(anteriorId !== solicitud.revision.id ? { revisionLiberadaId: null, liberadaEl: null } : {}),
+            ...(anteriorId !== solicitud.revision.id
+              ? { revisionLiberadaId: null, liberadaEl: null }
+              : {}),
           },
         });
       }
-      await tx.archivoRevision.update({ where: { id: solicitud.revision.id }, data: { estado: estadoRevision } });
-      await this.evento(tx, solicitud.tenantId, solicitud.revision.maestro.proyectoCampanaId, params.actorNombre, {
-        tipo: `aprobacion_documental_${estado.toLowerCase()}`,
-        descripcion: `${params.actorNombre} ${this.labelDecision(params.decision)} V${solicitud.revision.numero} de “${solicitud.revision.maestro.nombre}”.`,
-        datosJson: { solicitudId: solicitud.id, revisionId: solicitud.revision.id, origen: params.origen },
-        origen: params.origen === 'EXTERNO' ? 'cliente' : 'usuario',
-      }, params.actorUserId);
+      await tx.archivoRevision.update({
+        where: { id: solicitud.revision.id },
+        data: { estado: estadoRevision },
+      });
+      await this.evento(
+        tx,
+        solicitud.tenantId,
+        solicitud.revision.maestro.proyectoCampanaId,
+        params.actorNombre,
+        {
+          tipo: `aprobacion_documental_${estado.toLowerCase()}`,
+          descripcion: `${params.actorNombre} ${this.labelDecision(params.decision)} V${solicitud.revision.numero} de “${solicitud.revision.maestro.nombre}”.`,
+          datosJson: {
+            solicitudId: solicitud.id,
+            revisionId: solicitud.revision.id,
+            origen: params.origen,
+          },
+          origen: params.origen === 'EXTERNO' ? 'cliente' : 'usuario',
+        },
+        params.actorUserId,
+      );
     });
   }
 
@@ -647,11 +804,16 @@ export class DesarrolloDocumentalService {
       creadoPorNombre: m.creadoPorNombre,
       createdAt: m.createdAt.toISOString(),
       revisionAprobada: m.revisionAprobada,
-      revisionLiberada: m.revisionLiberada ? {
-        ...m.revisionLiberada,
-        liberadaEl: m.revisionLiberada.liberadaEl?.toISOString() ?? null,
-        archivo: { id: m.revisionLiberada.archivo.id, nombre: m.revisionLiberada.archivo.nombreOriginal },
-      } : null,
+      revisionLiberada: m.revisionLiberada
+        ? {
+            ...m.revisionLiberada,
+            liberadaEl: m.revisionLiberada.liberadaEl?.toISOString() ?? null,
+            archivo: {
+              id: m.revisionLiberada.archivo.id,
+              nombre: m.revisionLiberada.archivo.nombreOriginal,
+            },
+          }
+        : null,
       revisiones: m.revisiones.map((r) => ({
         id: r.id,
         numero: r.numero,
@@ -662,20 +824,35 @@ export class DesarrolloDocumentalService {
         createdAt: r.createdAt.toISOString(),
         liberadaEl: r.liberadaEl?.toISOString() ?? null,
         liberadaPorNombre: r.liberadaPorNombre,
-        archivo: { id: r.archivo.id, nombre: r.archivo.nombreOriginal, mimeType: r.archivo.mimeType, bytes: Number(r.archivo.bytes), hash: r.archivo.hash },
+        archivo: {
+          id: r.archivo.id,
+          nombre: r.archivo.nombreOriginal,
+          mimeType: r.archivo.mimeType,
+          bytes: Number(r.archivo.bytes),
+          hash: r.archivo.hash,
+        },
         solicitudes: r.solicitudes.map((s) => ({
           id: s.id,
           tipo: s.tipo,
           estado: s.estado,
           comentario: s.comentario,
           solicitadaPorNombre: s.solicitadaPorNombre,
-          asignadaAUsuario: s.asignadaAUsuario ? { id: s.asignadaAUsuario.id, nombre: s.asignadaAUsuario.nombreCompleto ?? s.asignadaAUsuario.email } : null,
+          asignadaAUsuario: s.asignadaAUsuario
+            ? {
+                id: s.asignadaAUsuario.id,
+                nombre:
+                  s.asignadaAUsuario.nombreCompleto ?? s.asignadaAUsuario.email,
+              }
+            : null,
           asignadaARol: s.asignadaARol,
           permiteDecisionExterna: s.permiteDecisionExterna,
           expiraEl: s.expiraEl?.toISOString() ?? null,
           resueltaEl: s.resueltaEl?.toISOString() ?? null,
           createdAt: s.createdAt.toISOString(),
-          decisiones: s.decisiones.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() })),
+          decisiones: s.decisiones.map((d) => ({
+            ...d,
+            createdAt: d.createdAt.toISOString(),
+          })),
         })),
       })),
       gates: m.gates.map((g) => ({
@@ -690,45 +867,92 @@ export class DesarrolloDocumentalService {
   }
 
   private maestro(id: string) {
-    return this.prisma.archivoMaestro.findFirst({
-      where: { id },
-      select: { id: true, nombre: true, proyectoCampanaId: true },
-    }).then((row) => row ?? Promise.reject(new NotFoundException('Documento maestro no encontrado.')));
+    return this.prisma.archivoMaestro
+      .findFirst({
+        where: { id },
+        select: { id: true, nombre: true, proyectoCampanaId: true },
+      })
+      .then(
+        (row) =>
+          row ??
+          Promise.reject(
+            new NotFoundException('Documento maestro no encontrado.'),
+          ),
+      );
   }
 
   private revision(id: string) {
-    return this.prisma.archivoRevision.findFirst({
-      where: { id },
-      include: { maestro: { select: { id: true, nombre: true, proyectoCampanaId: true, revisionAprobadaId: true } } },
-    }).then((row) => row ?? Promise.reject(new NotFoundException('Revisión no encontrada.')));
+    return this.prisma.archivoRevision
+      .findFirst({
+        where: { id },
+        include: {
+          maestro: {
+            select: {
+              id: true,
+              nombre: true,
+              proyectoCampanaId: true,
+              revisionAprobadaId: true,
+            },
+          },
+        },
+      })
+      .then(
+        (row) =>
+          row ??
+          Promise.reject(new NotFoundException('Revisión no encontrada.')),
+      );
   }
 
   private solicitud(id: string) {
-    return this.prisma.solicitudAprobacionDocumento.findFirst({
-      where: { id },
-      include: {
-        revision: {
-          include: {
-            maestro: { select: { id: true, nombre: true, proyectoCampanaId: true, revisionAprobadaId: true } },
-            archivo: true,
+    return this.prisma.solicitudAprobacionDocumento
+      .findFirst({
+        where: { id },
+        include: {
+          revision: {
+            include: {
+              maestro: {
+                select: {
+                  id: true,
+                  nombre: true,
+                  proyectoCampanaId: true,
+                  revisionAprobadaId: true,
+                },
+              },
+              archivo: true,
+            },
           },
         },
-      },
-    }).then((row) => row ?? Promise.reject(new NotFoundException('Solicitud no encontrada.')));
+      })
+      .then(
+        (row) =>
+          row ??
+          Promise.reject(new NotFoundException('Solicitud no encontrada.')),
+      );
   }
 
   private async solicitudPublica(token: string, contarVisita: boolean) {
-    const enlace = await this.enlaces.resolver(token, TipoEnlacePublico.APROBACION_DOCUMENTAL, { contarVisita });
-    if (!enlace) throw new NotFoundException('Solicitud no encontrada o link vencido.');
+    const enlace = await this.enlaces.resolver(
+      token,
+      TipoEnlacePublico.APROBACION_DOCUMENTAL,
+      { contarVisita },
+    );
+    if (!enlace)
+      throw new NotFoundException('Solicitud no encontrada o link vencido.');
     const solicitud = await this.prisma.solicitudAprobacionDocumento.findFirst({
-      where: { id: enlace.entidadId, tenantId: enlace.tenantId, permiteDecisionExterna: true },
+      where: {
+        id: enlace.entidadId,
+        tenantId: enlace.tenantId,
+        permiteDecisionExterna: true,
+      },
       include: {
         tenant: { select: { nombre: true } },
         revision: {
           include: {
             archivo: true,
             maestro: {
-              include: { proyectoCampana: { select: { codigo: true, nombre: true } } },
+              include: {
+                proyectoCampana: { select: { codigo: true, nombre: true } },
+              },
             },
           },
         },
@@ -742,18 +966,44 @@ export class DesarrolloDocumentalService {
     return solicitud;
   }
 
-  private aPublico(s: Awaited<ReturnType<DesarrolloDocumentalService['solicitudPublica']>>) {
+  private aPublico(
+    s: Awaited<ReturnType<DesarrolloDocumentalService['solicitudPublica']>>,
+  ) {
     return {
       negocio: s.tenant.nombre,
       campana: s.revision.maestro.proyectoCampana,
-      documento: { nombre: s.revision.maestro.nombre, proposito: s.revision.maestro.proposito, etapa: s.revision.maestro.etapa },
-      revision: { numero: s.revision.numero, nombreArchivo: s.revision.archivo.nombreOriginal, mimeType: s.revision.archivo.mimeType, bytes: Number(s.revision.archivo.bytes), hash: s.revision.hash },
-      solicitud: { tipo: s.tipo, estado: s.estado, comentario: s.comentario, expiraEl: s.expiraEl?.toISOString() ?? null },
-      decision: s.decisiones[0] ? { decision: s.decisiones[0].decision, actorNombre: s.decisiones[0].actorNombre, comentario: s.decisiones[0].comentario, fecha: s.decisiones[0].createdAt.toISOString() } : null,
+      documento: {
+        nombre: s.revision.maestro.nombre,
+        proposito: s.revision.maestro.proposito,
+        etapa: s.revision.maestro.etapa,
+      },
+      revision: {
+        numero: s.revision.numero,
+        nombreArchivo: s.revision.archivo.nombreOriginal,
+        mimeType: s.revision.archivo.mimeType,
+        bytes: Number(s.revision.archivo.bytes),
+        hash: s.revision.hash,
+      },
+      solicitud: {
+        tipo: s.tipo,
+        estado: s.estado,
+        comentario: s.comentario,
+        expiraEl: s.expiraEl?.toISOString() ?? null,
+      },
+      decision: s.decisiones[0]
+        ? {
+            decision: s.decisiones[0].decision,
+            actorNombre: s.decisiones[0].actorNombre,
+            comentario: s.decisiones[0].comentario,
+            fecha: s.decisiones[0].createdAt.toISOString(),
+          }
+        : null,
     };
   }
 
-  private estadoSolicitud(decision: DecisionAprobacionDocumento): EstadoSolicitudAprobacion {
+  private estadoSolicitud(
+    decision: DecisionAprobacionDocumento,
+  ): EstadoSolicitudAprobacion {
     return {
       APROBAR: EstadoSolicitudAprobacion.APROBADA,
       OBSERVAR: EstadoSolicitudAprobacion.OBSERVADA,
@@ -779,7 +1029,7 @@ export class DesarrolloDocumentalService {
     }[decision];
   }
 
-  private evento(
+  private async evento(
     tx: Prisma.TransactionClient,
     tenantId: string,
     proyectoCampanaId: string,
@@ -792,7 +1042,7 @@ export class DesarrolloDocumentalService {
     },
     actorUserId: string | null,
   ) {
-    return tx.proyectoCampanaEvento.create({
+    const eventoCampana = await tx.proyectoCampanaEvento.create({
       data: {
         tenantId,
         proyectoCampanaId,
@@ -804,9 +1054,40 @@ export class DesarrolloDocumentalService {
         origen: data.origen ?? 'usuario',
       },
     });
+    const decisionNegativa = /RECHAZ|OBSERV|BLOQUE/i.test(data.tipo);
+    const decisionPositiva = /APROB|LIBER|COMPLET/i.test(data.tipo);
+    await this.eventosSistema?.publicar(
+      {
+        tenantId,
+        actorUserId,
+        actorNombre,
+        tipo: `documento.${data.tipo.toLowerCase()}`,
+        entidadTipo: 'campana',
+        entidadId: proyectoCampanaId,
+        titulo: decisionNegativa
+          ? 'Documento requiere atención'
+          : decisionPositiva
+            ? 'Documento aprobado'
+            : 'Actualización documental',
+        mensaje: data.descripcion,
+        href: `/comercial/campanas/${proyectoCampanaId}`,
+        severidad: decisionNegativa
+          ? SeveridadNotificacionInterna.ADVERTENCIA
+          : decisionPositiva
+            ? SeveridadNotificacionInterna.EXITO
+            : SeveridadNotificacionInterna.INFO,
+        topicos: [`campana:${proyectoCampanaId}`],
+        proyectoCampanaId,
+      },
+      tx,
+    );
+    return eventoCampana;
   }
 
   private esUnico(error: unknown) {
-    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
   }
 }

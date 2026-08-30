@@ -3,12 +3,14 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ArchivoEstado, Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { firmaActor } from '../common/firma-actor';
 import { paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import {
   type CampanaEstado,
   type CampanaMiembroDto,
@@ -99,7 +101,10 @@ type CampanaCompleta = Prisma.ProyectoCampanaGetPayload<{
 
 @Injectable()
 export class CampanasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly eventosSistema?: EventosSistemaService,
+  ) {}
 
   async listar(auth: CurrentAuth, query: CampanasQueryDto) {
     const texto = query.q?.trim();
@@ -271,7 +276,7 @@ export class CampanasService {
         update: { ultimo: { increment: 1 } },
       });
       const codigo = `CAM-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
-      return tx.proyectoCampana.create({
+      const campana = await tx.proyectoCampana.create({
         data: {
           tenantId: auth.tenantId,
           clienteId: dto.clienteId,
@@ -318,6 +323,16 @@ export class CampanasService {
         },
         select: { id: true },
       });
+      await this.notificar(
+        tx,
+        auth,
+        actorNombre,
+        campana.id,
+        'campana.creada',
+        'Nueva campaña',
+        `Se creó ${codigo}.`,
+      );
+      return campana;
     });
     return this.detalle(auth, creada.id);
   }
@@ -385,6 +400,15 @@ export class CampanasService {
           id,
         ),
       });
+      await this.notificar(
+        tx,
+        auth,
+        actorNombre,
+        id,
+        'campana.editada',
+        'Campaña actualizada',
+        'Se actualizaron los datos de la campaña.',
+      );
     });
     return this.detalle(auth, id);
   }
@@ -427,6 +451,15 @@ export class CampanasService {
           id,
         ),
       });
+      await this.notificar(
+        tx,
+        auth,
+        actorNombre,
+        id,
+        'campana.estado',
+        'Estado de campaña',
+        `La campaña pasó de ${actual.estado} a ${dto.estado}.`,
+      );
     });
     return this.detalle(auth, id);
   }
@@ -462,6 +495,15 @@ export class CampanasService {
           campanaId,
         ),
       });
+      await this.notificar(
+        tx,
+        auth,
+        actorNombre,
+        campanaId,
+        'campana.hito_creado',
+        'Nuevo hito',
+        `Se agregó el hito “${dto.titulo.trim()}”.`,
+      );
     });
     return this.detalle(auth, campanaId);
   }
@@ -525,6 +567,15 @@ export class CampanasService {
           campanaId,
         ),
       });
+      await this.notificar(
+        tx,
+        auth,
+        actorNombre,
+        campanaId,
+        'campana.hito_editado',
+        'Hito actualizado',
+        `Se actualizó el hito “${actual.titulo}”.`,
+      );
     });
     return this.detalle(auth, campanaId);
   }
@@ -563,6 +614,15 @@ export class CampanasService {
           campanaId,
         ),
       });
+      await this.notificar(
+        tx,
+        auth,
+        actorNombre,
+        campanaId,
+        'campana.equipo',
+        'Equipo actualizado',
+        'Se actualizó el equipo de la campaña.',
+      );
     });
     return this.detalle(auth, campanaId);
   }
@@ -662,6 +722,16 @@ export class CampanasService {
           campanaId,
         ),
       });
+      await this.notificar(
+        tx,
+        auth,
+        actorNombre,
+        campanaId,
+        agregar ? 'campana.vinculo' : 'campana.desvinculo',
+        agregar ? 'Documento vinculado' : 'Documento desvinculado',
+        `${agregar ? 'Se vinculó' : 'Se desvinculó'} ${documento.numero ?? tipo}.`,
+        tipo === 'orden' ? [`orden:${documentoId}`, 'tablero-produccion'] : [],
+      );
     });
     return this.detalle(auth, campanaId);
   }
@@ -672,6 +742,35 @@ export class CampanasService {
     });
     if (!campana) throw new NotFoundException('La campaña no existe.');
     return campana;
+  }
+
+  private notificar(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    actorNombre: string,
+    campanaId: string,
+    tipo: string,
+    titulo: string,
+    mensaje: string,
+    topicosExtra: string[] = [],
+  ) {
+    if (!this.eventosSistema) return Promise.resolve();
+    return this.eventosSistema.publicar(
+      {
+        tenantId: auth.tenantId,
+        actorUserId: auth.impersonacion?.actorUserId ?? auth.userId,
+        actorNombre,
+        tipo,
+        entidadTipo: 'campana',
+        entidadId: campanaId,
+        titulo,
+        mensaje,
+        href: `/comercial/campanas/${campanaId}`,
+        topicos: [`campana:${campanaId}`, ...topicosExtra],
+        proyectoCampanaId: campanaId,
+      },
+      tx,
+    );
   }
 
   private async validarReferencias(

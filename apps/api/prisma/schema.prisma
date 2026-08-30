@@ -44,6 +44,13 @@ enum RolPlataforma {
   SOPORTE
 }
 
+enum SeveridadNotificacionInterna {
+  INFO
+  EXITO
+  ADVERTENCIA
+  CRITICA
+}
+
 enum TipoComision {
   PORCENTAJE
   FIJO
@@ -616,6 +623,8 @@ model Tenant {
   configuracionNotificaciones                      ConfiguracionNotificaciones?
   notificacionEventos                              NotificacionEvento[]
   notificacionesWhatsapp                           NotificacionWhatsapp[]
+  eventosSistema                                   EventoSistema[]
+  notificacionesInternas                           NotificacionInterna[]
   enlacesPublicos                                  EnlacePublico[]
   reciboContadores                                 ReciboContador[]
   suscripcion                                      Suscripcion?
@@ -888,6 +897,53 @@ model User {
   aprobacionesAsignadas    SolicitudAprobacionDocumento[]        @relation("SolicitudAprobacionAsignada")
   decisionesDocumentales   DecisionAprobacionDocumentoRegistro[] @relation("DecisionAprobacionActor")
   liberacionesDocumentales ArchivoRevision[]                     @relation("ArchivoRevisionLiberadaPor")
+  eventosSistemaActuados   EventoSistema[]                       @relation("EventoSistemaActor")
+  notificacionesInternas   NotificacionInterna[]
+}
+
+/// Outbox interno append-only. Es a la vez cursor durable para SSE y registro
+/// mínimo de qué recursos deben invalidar las sesiones conectadas.
+model EventoSistema {
+  id          BigInt                       @id @default(autoincrement())
+  tenantId    String                       @db.Uuid
+  tipo        String                       @db.VarChar(100)
+  entidadTipo String                       @db.VarChar(60)
+  entidadId   String?                      @db.Uuid
+  actorUserId String?                      @db.Uuid
+  actorNombre String                       @db.VarChar(200)
+  titulo      String                       @db.VarChar(180)
+  mensaje     String                       @db.VarChar(600)
+  href        String?                      @db.VarChar(500)
+  severidad   SeveridadNotificacionInterna @default(INFO)
+  topicos     String[]
+  createdAt   DateTime                     @default(now())
+
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor          User?                 @relation("EventoSistemaActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  notificaciones NotificacionInterna[]
+
+  @@index([tenantId, id])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entidadTipo, entidadId])
+}
+
+/// Proyección personal y persistente de un EventoSistema.
+model NotificacionInterna {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  eventoId    BigInt
+  userId      String    @db.Uuid
+  leidaEl     DateTime?
+  archivadaEl DateTime?
+  createdAt   DateTime  @default(now())
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  evento EventoSistema @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventoId, userId])
+  @@index([tenantId, userId, archivadaEl, leidaEl, createdAt])
+  @@index([tenantId, eventoId])
 }
 
 /// Quién le cambió el acceso a quién, dentro de una empresa.

@@ -427,7 +427,11 @@ Los `Archivo` existentes siguen siendo adjuntos. La migración al modelo maestro
 
 ## Fase 2.5 — Eventos en tiempo real y bandeja de notificaciones internas
 
-**Estado inicial:** PENDIENTE
+**Estado actual:** EN DESARROLLO
+
+**Rama:** `visual-ilusion/fase-2-5-tiempo-real-notificaciones`
+
+**Documento de diseño:** `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md`
 
 **Dependencias:** Fases 1–2.
 
@@ -1267,7 +1271,7 @@ Esta tabla se actualizará al integrar cada fase.
 | 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
 | 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
 | 2 | COMPLETA | `visual-ilusion/fase-2-desarrollo-aprobaciones` | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md` | `bf2df97a`, `52538507` | Validación técnica y funcional aprobadas; integración en rama madre habilitada |
-| 2.5 | PENDIENTE | — | — | — | Tiempo real e inbox transversal; recomendado antes de F3 |
+| 2.5 | EN DESARROLLO | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | Implementación en curso | Outbox, SSE, fallback, bandeja global e invalidación de Campaña/OT/Tablero implementados; falta validación funcional multiusuario final |
 | 3 | PENDIENTE | — | — | — | — |
 | 4 | PENDIENTE | — | — | — | — |
 | 5 | PENDIENTE | — | — | — | — |

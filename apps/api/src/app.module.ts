@@ -52,6 +52,7 @@ import { ProvisionamientoModule } from './provisionamiento/provisionamiento.modu
 import { RegistroModule } from './registro/registro.module';
 import { CampanasModule } from './campanas/campanas.module';
 import { DesarrolloDocumentalModule } from './desarrollo-documental/desarrollo-documental.module';
+import { EventosSistemaModule } from './eventos-sistema/eventos-sistema.module';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { DesarrolloDocumentalModule } from './desarrollo-documental/desarrollo-d
       },
     ]),
     PrismaModule,
+    EventosSistemaModule,
     AuthModule,
     TenantsModule,
     PlataformaModule,
