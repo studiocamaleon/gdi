@@ -121,14 +121,22 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
           </div>
         ) : (
           <div className={styles.rows}>
+            <div className={styles.rowHead} aria-hidden="true">
+              <span />
+              <span>Operación</span>
+              <span>Magnitud esperada</span>
+              <span />
+              <span />
+            </div>
             {operaciones.map((operacion, index) => (
               <div className={styles.row} key={operacion.codigo}>
                 <span className={styles.index}>
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <label>
-                  Operación
+                  <span className={styles.rowLabel}>Operación</span>
                   <input
+                    aria-label={`Nombre de la operación ${index + 1}`}
                     value={operacion.nombre}
                     placeholder="Ej. Tensar lona"
                     onChange={(event) =>
@@ -139,8 +147,9 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                   />
                 </label>
                 <label>
-                  Magnitud esperada
+                  <span className={styles.rowLabel}>Magnitud esperada</span>
                   <select
+                    aria-label={`Magnitud esperada de la operación ${index + 1}`}
                     value={operacion.dimension}
                     onChange={(event) =>
                       cambiar(index, {
