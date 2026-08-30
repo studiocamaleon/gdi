@@ -1,6 +1,6 @@
 # Fase 4 — Rutas DAG, paralelismo, convergencia y gates
 
-**Estado:** IMPLEMENTACIÓN COMPLETA · PENDIENTE DE VALIDACIÓN FUNCIONAL
+**Estado:** EN DESARROLLO · AMPLIACIÓN DE COMPONENTES CONFIGURABLES
 
 **Rama:** `visual-ilusion/fase-4-rutas-dag`
 
@@ -188,3 +188,134 @@ los reescribe silenciosamente.
   guardar cambios.
 - La aprobación visual/funcional final —incluida la revisión mobile por el
   usuario— permanece como gate de cierre antes de marcar la fase `COMPLETA`.
+
+## 12. Ampliación aprobada: instancia configurable padre–componente
+
+La validación funcional detectó que `cantidad × unidad` sólo describe
+correctamente componentes de especificación fija. No alcanza para productos
+hijos configurables, por ejemplo un vinilo de medida libre, una tarjeta con
+formato elegible o un acrílico cuyas dimensiones dependen del padre.
+
+### 12.1 Decisión de dominio
+
+Un componente fabricado es una **instancia configurable de otro producto**. Su
+configuración se construye combinando, campo por campo, uno de estos orígenes:
+
+- `DEFAULT_HIJO`: usar el valor predeterminado declarado por el configurador
+  del producto hijo;
+- `FIJO`: fijar un valor dentro de la relación padre–componente;
+- `PADRE`: copiar un campo público del JobContext del padre;
+- `FORMULA`: derivar el valor mediante una expresión segura sobre campos
+  públicos del padre;
+- `COTIZACION`: solicitar el valor al configurar el padre en una cotización,
+  con un valor inicial opcional.
+
+Los orígenes se combinan dentro del mismo componente; no son modos excluyentes
+para toda la relación.
+
+### 12.2 Contrato de contexto
+
+- El hijo no recibe ni interpreta el JSON interno completo del padre.
+- Cada configurador expone un contrato estable de parámetros públicos con
+  clave, tipo, unidad, obligatoriedad, opciones y valor predeterminado.
+- Las referencias usan claves públicas (`padre.medidas.ancho`, por ejemplo) y
+  quedan versionadas en la receta del padre.
+- Las fórmulas iniciales admiten copia y aritmética decimal segura con
+  constantes; no ejecutan JavaScript ni acceden a servicios o propiedades no
+  declaradas.
+- El resultado se valida contra el mismo esquema/configurador que usa el
+  producto hijo cuando se cotiza directamente.
+- Cada nivel anidado conoce sólo su padre directo.
+
+### 12.3 Cantidad
+
+La cantidad deja de ser un número ambiguo y se trata como otro binding:
+
+- fija por unidad del padre;
+- copiada o calculada desde la cantidad/contexto del padre;
+- solicitada al cotizar cuando el caso comercial lo requiera.
+
+La salida siempre se normaliza a la unidad comercial admitida por el producto
+hijo y debe ser positiva.
+
+### 12.4 Persistencia y snapshots
+
+La revisión del padre conserva relacionalmente y en su snapshot canónico:
+
+- producto y revisión publicada del hijo;
+- bindings por parámetro;
+- expresiones y referencias utilizadas;
+- configuración fija/default sugerida;
+- campos que deben solicitarse al cotizar;
+- binding de cantidad;
+- nodo de incorporación.
+
+La cotización congela el JobContext completo resultante de cada hijo, su
+configuración visible, receta, versión, huella, cantidad y desglose de costo.
+La OT materializa ese snapshot sin reevaluarlo contra productos vivos.
+
+### 12.5 UX en la receta/BOM
+
+La BOM sólo muestra una tarjeta resumen del componente. No contiene un editor
+de ruta reducido.
+
+- `Configurar uso` abre un workspace amplio para asignar el origen de cada
+  parámetro, probar un contexto padre y previsualizar el hijo resultante.
+- `Ver/editar producto hijo` navega a la ficha productiva normal del hijo,
+  conservando una ruta de regreso al padre.
+- Modificar el uso dentro del padre nunca modifica la receta global del hijo.
+- La receta padre no se publica si falta una revisión hija, un binding
+  obligatorio, una referencia, una unidad compatible o un nodo de
+  incorporación válido.
+
+### 12.6 UX en cotización
+
+El sheet del padre presenta tarjetas compactas por componente:
+
+- componentes completamente resueltos se muestran como resumen y no exigen
+  interacción;
+- componentes con bindings `COTIZACION` muestran los faltantes y una acción
+  `Configurar`;
+- la acción reutiliza el configurador del hijo en un segundo nivel amplio con
+  breadcrumb, no en un modal anidado;
+- los valores fijos/heredados/calculados son informativos y sólo los campos
+  solicitados son editables;
+- no se permite cotizar hasta que padre e hijos sean válidos.
+
+### 12.7 Costeo y ejecución
+
+- Cada hijo se cotiza con el motor universal usando su JobContext normal; el
+  motor no necesita saber que fue instanciado por un padre.
+- El costo del hijo se incorpora una sola vez al padre y no duplica materiales
+  ya absorbidos por su receta.
+- La OT hija conserva ese JobContext y despliega la ruta publicada del hijo.
+- Sus terminales liberan exactamente el nodo de incorporación del padre.
+
+### 12.8 Invariantes adicionales
+
+- Una revisión publicada no cambia si se modifica un preset o producto vivo.
+- No se permiten referencias a campos privados, inexistentes o de tipo/unidad
+  incompatible.
+- Una fórmula inválida o un campo obligatorio sin resolver impide publicar y
+  cotizar.
+- No hay recursión infinita ni ciclos entre productos componentes.
+- El componente configurado directamente y como hijo produce el mismo
+  JobContext canónico ante los mismos valores.
+- La experiencia simple de productos sin componentes no agrega pasos ni
+  formularios.
+
+### 12.9 Caso rector de aceptación
+
+Configurar `Exhibidor promocional` con un componente `Vinilo impreso blanco`:
+
+- `ancho = padre.ancho - 4 cm`;
+- `alto = padre.alto - 6 cm`;
+- material, calidad y corte fijos;
+- laminado solicitado al cotizar;
+- cantidad `1 × cantidad padre`;
+- incorporación antes de `Armado final`.
+
+Al cotizar 30 exhibidores de 80 × 180 cm, el sistema debe obtener 30 vinilos
+de 76 × 174 cm, pedir únicamente el laminado, costear ambos sin duplicación,
+congelar ambos contextos y ejecutar la ruta del vinilo en paralelo antes de
+habilitar el armado.
