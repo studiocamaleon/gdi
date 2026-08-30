@@ -510,7 +510,7 @@ Que cada usuario vea cambios pertinentes sin recargar y reciba, junto a “Cerra
 
 ## Fase 3 — Receta productiva y BOM versionada
 
-**Estado actual:** EN DESARROLLO
+**Estado actual:** COMPLETA
 **Rama:** `visual-ilusion/fase-3-receta-bom`
 **Documento de diseño:** `docs/visual-ilusion-fase-3-receta-bom-diseno.md`
 **Dependencias:** Fase 2 para archivos/aprobaciones reutilizables y Fase 2.5 para eventos/notificaciones transversales.
@@ -1274,7 +1274,7 @@ Esta tabla se actualizará al integrar cada fase.
 | 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
 | 2 | COMPLETA | `visual-ilusion/fase-2-desarrollo-aprobaciones` | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md` | `bf2df97a`, `52538507` | Validación técnica y funcional aprobadas; integración en rama madre habilitada |
 | 2.5 | COMPLETA | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | `46316989` | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
-| 3 | EN DESARROLLO | `visual-ilusion/fase-3-receta-bom` | `docs/visual-ilusion-fase-3-receta-bom-diseno.md` | Diseño técnico iniciado | Reutiliza motor, rutas, slots y snapshots existentes; agrega ciclo de publicación y BOM trazable |
+| 3 | COMPLETA | `visual-ilusion/fase-3-receta-bom` | `docs/visual-ilusion-fase-3-receta-bom-diseno.md` | `b68d0c79`, `2962bddd` | Recetas/BOM versionadas, documentos en OT, trazabilidad de cotización y regresión completa aprobadas |
 | 4 | PENDIENTE | — | — | — | — |
 | 5 | PENDIENTE | — | — | — | — |
 | 6 | PENDIENTE | — | — | — | — |

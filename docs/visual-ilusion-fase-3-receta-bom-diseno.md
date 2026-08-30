@@ -1,6 +1,6 @@
 # Fase 3 — Receta productiva y BOM versionada
 
-**Estado:** EN DESARROLLO  
+**Estado:** COMPLETA
 **Rama:** `visual-ilusion/fase-3-receta-bom`  
 **Plan rector:** `docs/visual-ilusion-plan-maestro.md`  
 **Contrato visual:** `docs/visual-ilusion-lenguaje-visual.md`
@@ -242,3 +242,41 @@ La fase queda completa cuando un exhibidor real puede publicarse, cotizarse y
 emitirse preservando su revisión y BOM; los productos históricos permanecen
 compatibles; los cambios sin publicar no se filtran; y las pruebas de costos,
 unidades, ciclos, snapshots, tenant, permisos y responsive están aprobadas.
+
+## 16. Cierre de implementación y evidencia
+
+La implementación quedó cerrada el 30 de agosto de 2026 en los commits
+`b68d0c79` y `2962bddd`.
+
+- La receta se administra dentro del producto y permite crear, refrescar,
+  publicar, clonar y deprecar revisiones con bloqueo optimista y auditoría.
+- La BOM publicada conserva sustratos, consumibles, packaging, componentes
+  comprados, componentes fabricados, recursos y merma adicional sin volver a
+  sumar costos que ya calcula el motor universal.
+- Las variantes fijas y candidatas se validan por unidad; los componentes
+  fabricados exigen receta publicada y el grafo rechaza autorreferencias,
+  ciclos y profundidad excesiva.
+- Cotización y OT conservan FK, número, huella y snapshot de la revisión. Una
+  modificación posterior del producto no reescribe trabajos históricos.
+- Los requisitos documentales de la receta materializan maestros y gates de
+  aprobación idempotentes en la campaña/OT, enlazados al item y al paso
+  productivo protegido cuando corresponde.
+- Los productos sin receta publicada continúan por el recorrido legacy.
+
+Evidencia técnica final:
+
+- migraciones aplicadas tanto en desarrollo como en la base dedicada de tests;
+- API compilada sin errores;
+- frontend compilado en producción sin errores;
+- suite completa: 193 suites aprobadas, 1.922 pruebas aprobadas, 2 suites y 3
+  pruebas omitidas por diseño;
+- QA funcional real sobre `Imanes en MDF impreso`: publicación V1/V2,
+  componente comprado, cotización/OT con revisión preservada, historial y
+  edición de requisitos documentales;
+- QA visual del workspace de receta en desktop, tablet y mobile, manteniendo el
+  lenguaje visual propio de Grafoprint.
+
+El recorrido de un exhibidor usa exactamente el mismo contrato ya validado: los
+roles `SUSTRATO`, `CONSUMIBLE`, `PACKAGING` y `COMPONENTE` se proyectan desde
+los slots existentes hacia la BOM congelada. La ejecución independiente y la
+convergencia de componentes fabricados quedan, deliberadamente, para la Fase 4.
