@@ -51,6 +51,7 @@ import { SuscripcionAccesoGuard } from './suscripciones/suscripcion-acceso.guard
 import { ProvisionamientoModule } from './provisionamiento/provisionamiento.module';
 import { RegistroModule } from './registro/registro.module';
 import { CampanasModule } from './campanas/campanas.module';
+import { DesarrolloDocumentalModule } from './desarrollo-documental/desarrollo-documental.module';
 
 @Module({
   imports: [
@@ -98,6 +99,7 @@ import { CampanasModule } from './campanas/campanas.module';
     SuscripcionesModule,
     ClientesModule,
     CampanasModule,
+    DesarrolloDocumentalModule,
     EmpleadosModule,
     UsuariosModule,
     ProveedoresModule,

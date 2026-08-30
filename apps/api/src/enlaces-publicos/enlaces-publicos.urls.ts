@@ -16,6 +16,7 @@ export const PREFIJO_ENLACE: Record<TipoEnlacePublico, string> = {
   REMITO: 'r',
   COBRO: 'c',
   ENCUESTA: 'e',
+  APROBACION_DOCUMENTAL: 'a',
 };
 
 /** La primera de FRONTEND_URL: es la que ve el cliente final. */

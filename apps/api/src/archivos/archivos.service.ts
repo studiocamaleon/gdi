@@ -243,6 +243,7 @@ export class ArchivosService {
         publico: dto.publico ?? false,
         descripcion: dto.descripcion ?? null,
         autogeneradoPor: dto.autogeneradoPor ?? null,
+        hash: dto.hash?.toLowerCase() ?? null,
         // Se guarda igual quién tenía la sesión: el arte lo produjo el sistema,
         // pero fue porque esta persona guardó la orden.
         subidoPorId: auth.userId,
@@ -713,6 +714,14 @@ export class ArchivosService {
       // cambió, se re-materializa: no se borra.
       throw new BadRequestException(
         'Ese documento lo genera el sistema y no se borra a mano.',
+      );
+    }
+    const referenciasDocumentales = await this.prisma.archivoRevision.count({
+      where: { archivoId: archivo.id },
+    });
+    if (referenciasDocumentales > 0) {
+      throw new BadRequestException(
+        'El archivo forma parte de una revisión controlada y debe conservarse en el historial.',
       );
     }
 

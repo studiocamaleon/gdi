@@ -19,6 +19,7 @@ import {
   ExpandIcon,
   FactoryIcon,
   FileIcon,
+  FileCheck2Icon,
   FileXIcon,
   EyeIcon,
   FolderIcon,
@@ -198,6 +199,8 @@ import {
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
+import { DocumentosLiberadosOtTab } from "@/components/comercial/documentos-liberados-ot-tab";
+import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-panel";
 import { PlantillaInstalacionPanel } from "@/components/produccion/plantilla-instalacion-panel";
@@ -246,6 +249,7 @@ type PropuestaFichaProps = {
    * taller. Ver <AvisoOtEnBorrador />.
    */
   recienConvertida?: boolean;
+  initialDocumentos?: EstadoDocumentalOrden | null;
 };
 
 type OrdenTab =
@@ -254,6 +258,7 @@ type OrdenTab =
   | "pagos"
   | "comprobantes"
   | "archivos"
+  | "documentos"
   | "costos"
   | "historial";
 type InnerTab = "specs" | "costos" | "produccion";
@@ -866,6 +871,7 @@ function OrdenTabs({
   historialCount,
   comprobantesCount,
   archivosCount,
+  documentosCount,
 }: {
   value: OrdenTab;
   onChange: (value: OrdenTab) => void;
@@ -876,6 +882,7 @@ function OrdenTabs({
   comprobantesCount?: number;
   /** null hasta que el tab de Archivos se abre y los cuenta. */
   archivosCount?: number | null;
+  documentosCount?: number;
 }) {
   const verMargenes = usePuede("finanzas.ver_margenes");
   const tabs: Array<{
@@ -904,6 +911,9 @@ function OrdenTabs({
       count: archivosCount ?? undefined,
       icon: <FolderIcon />,
     },
+    ...(documentosCount !== undefined
+      ? [{ key: "documentos" as const, label: "Documentos", count: documentosCount, icon: <FileCheck2Icon /> }]
+      : []),
     // El tab Costos es el desglose de lo que le sale a la imprenta: material,
     // máquina, mano de obra. Quien no puede ver márgenes tampoco lo ve — y el
     // API ya le manda la orden sin esos campos, así que el tab estaría vacío.
@@ -5625,6 +5635,7 @@ export function PropuestaFicha({
   orden: ordenProp,
   recienEmitida = false,
   recienConvertida = false,
+  initialDocumentos = null,
 }: PropuestaFichaProps) {
   const { moneda, zonaHoraria } = useConfigRegional();
   const formatEventoFecha = useFormatEventoFecha();
@@ -8137,6 +8148,7 @@ export function PropuestaFicha({
             historialCount={orden ? orden.eventosTotal : undefined}
             comprobantesCount={orden ? 0 : undefined}
             archivosCount={archivosCount}
+            documentosCount={orden ? (initialDocumentos?.gates.length ?? 0) : undefined}
           />
           {!modoOrden || itemsEnEdicion ? (
             <div className="orden-actions">
@@ -8459,6 +8471,9 @@ export function PropuestaFicha({
                 description="Guardá la propuesta o emitila como orden para poder adjuntar el arte y las referencias del cliente."
               />
             )
+          ) : null}
+          {tab === "documentos" && orden ? (
+            <DocumentosLiberadosOtTab data={initialDocumentos} />
           ) : null}
           {tab === "costos" ? (
             <CostosOrdenTab

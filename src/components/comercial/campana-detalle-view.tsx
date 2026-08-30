@@ -59,6 +59,8 @@ import {
 import { getOrdenesTrabajo } from "@/lib/ordenes-trabajo-api";
 import type { OrdenTrabajoListItem } from "@/lib/ordenes-trabajo";
 import styles from "./campanas.module.css";
+import { DesarrolloDocumentalPanel } from "./desarrollo-documental-panel";
+import type { DesarrolloDocumental } from "@/lib/desarrollo-documental-api";
 
 const SIGUIENTES: Record<CampanaEstado, CampanaEstado[]> = {
   borrador: ["activo", "cancelado"],
@@ -109,11 +111,13 @@ export function CampanaDetalleView({
   initialArchivos,
   empleados,
   canManage,
+  initialDesarrollo,
 }: {
   initial: CampanaDetalle;
   initialArchivos: Archivo[];
   empleados: EmpleadoOpcion[];
   canManage: boolean;
+  initialDesarrollo: DesarrolloDocumental;
 }) {
   const { moneda } = useConfigRegional();
   const [campana, setCampana] = React.useState(initial);
@@ -530,6 +534,9 @@ export function CampanaDetalleView({
                 <TabsTrigger value="archivos">
                   Archivos ({archivos.length})
                 </TabsTrigger>
+                <TabsTrigger value="desarrollo">
+                  Desarrollo ({initialDesarrollo.maestros.length})
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="ordenes" className={styles.tabContent}>
                 {campana.ordenes.length ? (
@@ -680,6 +687,16 @@ export function CampanaDetalleView({
                   soloLectura={!canManage}
                   titulo="Adjuntar brief, cronograma o documentación"
                   vacio="La campaña todavía no tiene archivos."
+                  calcularHash
+                />
+              </TabsContent>
+              <TabsContent value="desarrollo" className={styles.tabContent}>
+                <DesarrolloDocumentalPanel
+                  campanaId={campana.id}
+                  initial={initialDesarrollo}
+                  archivos={archivos}
+                  ordenes={campana.ordenes}
+                  canManage={canManage}
                 />
               </TabsContent>
             </Tabs>

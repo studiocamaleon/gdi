@@ -397,8 +397,14 @@ describe('concurrencia del Tablero de producción', () => {
     const findMany = jest.fn();
     const service = servicioVacio() as unknown as {
       prisma: unknown;
+      desarrolloDocumental: {
+        exigirGatesCumplidos: () => Promise<void>;
+      };
       reconciliarTramosVencidos: () => Promise<void>;
       accionPaso: OrdenesTrabajoService['accionPaso'];
+    };
+    service.desarrolloDocumental = {
+      exigirGatesCumplidos: jest.fn().mockResolvedValue(undefined),
     };
     service.reconciliarTramosVencidos = jest.fn().mockResolvedValue(undefined);
     service.prisma = {
@@ -439,8 +445,14 @@ describe('concurrencia del Tablero de producción', () => {
     };
     const service = servicioVacio() as unknown as {
       prisma: unknown;
+      desarrolloDocumental: {
+        exigirGatesCumplidos: () => Promise<void>;
+      };
       reconciliarTramosVencidos: () => Promise<void>;
       accionPaso: OrdenesTrabajoService['accionPaso'];
+    };
+    service.desarrolloDocumental = {
+      exigirGatesCumplidos: jest.fn().mockResolvedValue(undefined),
     };
     service.reconciliarTramosVencidos = jest.fn().mockResolvedValue(undefined);
     service.prisma = {
