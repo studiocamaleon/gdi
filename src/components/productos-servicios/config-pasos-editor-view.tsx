@@ -14154,6 +14154,22 @@ function SeccionesEsquemaPaso({
               onAplicar={onAplicar}
               renderComponente={renderComponente}
             />
+            {!noEjecutar ? (
+              <EjeGuiado
+                titulo="Parámetros del oficio"
+                subtitulo="Qué se fabrica y con qué criterios, independientemente de quién ejecuta el paso."
+                opciones={opcionesDeEje("trabajo", ctx).filter(
+                  (o) => o.clave === "oficio.params_familia",
+                )}
+                grupos={GRUPOS_EJE.trabajo}
+                fijo
+                resumenPrincipal={["oficio.params_familia"]}
+                ctx={ctx}
+                pendientesVivos={pendientesVivos}
+                onAplicar={onAplicar}
+                renderComponente={renderComponente}
+              />
+            ) : null}
             {/* Tercerizado o apagado: no se produce internamente —
                 sin tiempo/costo ni máquina (mismo criterio que el
                 detallado congelado). Excepción: tercerizado con
@@ -14521,20 +14537,6 @@ function SeccionesEsquemaPaso({
                       grupos={GRUPOS_EJE.trabajo}
                       fijo
                       resumenPrincipal={["oficio.acomodado"]}
-                      ctx={ctx}
-                      pendientesVivos={pendientesVivos}
-                      onAplicar={onAplicar}
-                      renderComponente={renderComponente}
-                    />
-                    <EjeGuiado
-                      titulo="Parámetros del oficio"
-                      subtitulo="Los números propios de este oficio que el motor usa para calcular el paso."
-                      opciones={opcionesDeEje("trabajo", ctx).filter(
-                        (o) => o.clave === "oficio.params_familia",
-                      )}
-                      grupos={GRUPOS_EJE.trabajo}
-                      fijo
-                      resumenPrincipal={["oficio.params_familia"]}
                       ctx={ctx}
                       pendientesVivos={pendientesVivos}
                       onAplicar={onAplicar}

@@ -708,6 +708,9 @@ function EditorDefiniciones({
           componente={componentes[componenteConfigurando]}
           productoPadreId={productoId}
           productoPadreNombre={productoNombre}
+          componentesHermanos={componentes.filter(
+            (_, index) => index !== componenteConfigurando,
+          )}
           onCancel={() => setComponenteConfigurando(null)}
           onSave={(configuracionJson, unidad) => {
             setComponentes((current) =>

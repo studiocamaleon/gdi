@@ -9,6 +9,7 @@ import {
   camposEditablesComercial,
   camposFijadosComercial,
 } from '../motor-universal/params-runtime';
+import { catalogoSalidasPublicasComposicion } from './composicion-outputs';
 
 /**
  * Formulario de cotización derivado por producto: la lista plana de PREGUNTAS
@@ -213,6 +214,12 @@ export class FormularioCotizacionService {
         ...this.preguntasDePasos(ejecutables),
         ...this.preguntasDeCargos(producto, ejecutables),
       ],
+      outputsPublicos: catalogoSalidasPublicasComposicion(
+        ejecutables.map((config) => ({
+          familiaCodigo: config.rutaPaso?.familiaCodigo ?? '',
+          nombreVisible: config.nombreVisible,
+        })),
+      ),
       multiplicadores: this.bloqueMultiplicadores(ejecutables),
       adicionales: this.bloqueAdicionales(
         producto,

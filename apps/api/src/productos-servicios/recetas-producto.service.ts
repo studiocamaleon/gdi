@@ -29,7 +29,12 @@ import {
   validarYOrdenarGrafo,
   type GrafoProduccion,
 } from '../ordenes-trabajo/grafo-produccion';
-import { validarConfiguracionComponente } from './componentes-configuracion';
+import {
+  leerConfiguracionComponente,
+  ordenarComponentesPorCalculo,
+  validarConfiguracionComponente,
+} from './componentes-configuracion';
+import { catalogoSalidasPublicasComposicion } from './composicion-outputs';
 
 type ProductoDetalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaDetalle = ProductoDetalle['rutasAlternativas'][number];
@@ -1029,7 +1034,12 @@ export class RecetasProductoService {
       select: {
         productoId: true,
         revisionPublicada: {
-          select: { id: true, numero: true, huellaConfiguracion: true },
+          select: {
+            id: true,
+            numero: true,
+            huellaConfiguracion: true,
+            snapshotJson: true,
+          },
         },
       },
     });
@@ -1040,6 +1050,57 @@ export class RecetasProductoService {
           : [],
       ),
     );
+    const componentePorCodigo = new Map(
+      componentes.map((item) => [item.codigo, item]),
+    );
+    for (const item of componentes) {
+      const configuracion = leerConfiguracionComponente(
+        item.configuracionJson,
+      );
+      for (const binding of configuracion?.bindings ?? []) {
+        const fuente = binding.regla?.fuente;
+        if (fuente?.tipo !== 'COMPONENTE' || !fuente.componenteCodigo) {
+          continue;
+        }
+        const componenteFuente = componentePorCodigo.get(
+          fuente.componenteCodigo,
+        );
+        const revisionFuente = componenteFuente
+          ? porProducto.get(componenteFuente.productoComponenteId)
+          : null;
+        const snapshot = revisionFuente?.snapshotJson;
+        const pasos =
+          snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+            ? (snapshot as Record<string, unknown>).pasos
+            : null;
+        const catalogo = catalogoSalidasPublicasComposicion(
+          Array.isArray(pasos)
+            ? pasos.flatMap((paso) => {
+                if (!paso || typeof paso !== 'object' || Array.isArray(paso)) {
+                  return [];
+                }
+                const value = paso as Record<string, unknown>;
+                return typeof value.familiaCodigo === 'string'
+                  ? [
+                      {
+                        familiaCodigo: value.familiaCodigo,
+                        nombreVisible:
+                          typeof value.nombre === 'string'
+                            ? value.nombre
+                            : null,
+                      },
+                    ]
+                  : [];
+              })
+            : [],
+        );
+        if (!catalogo.some((output) => output.clave === fuente.campo)) {
+          throw new BadRequestException(
+            `El componente "${item.nombre}" usa el dato "${fuente.campo}" de "${componenteFuente?.nombre ?? fuente.componenteCodigo}", pero ese producto no lo publica en su receta vigente.`,
+          );
+        }
+      }
+    }
     return componentes.map((item) => {
       const revision = porProducto.get(item.productoComponenteId);
       if (!revision) {
@@ -1322,6 +1383,7 @@ export class RecetasProductoService {
       }
       codigosComponentes.add(codigo);
     }
+    ordenarComponentesPorCalculo(componentes);
     const ids = [
       ...new Set(componentes.map((item) => item.productoComponenteId)),
     ];

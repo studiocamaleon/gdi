@@ -238,6 +238,11 @@ export type BindingParametroComponente = {
     campoPadre: string;
     operador: "COPIAR" | "SUMAR" | "RESTAR" | "MULTIPLICAR" | "DIVIDIR";
     valor?: number | null;
+    fuente?: {
+      tipo: "PADRE" | "COMPONENTE";
+      campo: string;
+      componenteCodigo?: string | null;
+    } | null;
   } | null;
   opciones?: Array<{ valor: string; etiqueta: string }>;
 };
@@ -275,6 +280,15 @@ export type FormularioCotizacionProducto = {
   preguntas: Array<
     Record<string, unknown> & { tipo: string; jobContextKey: string }
   >;
+  outputsPublicos: Array<{
+    clave: string;
+    etiqueta: string;
+    tipoDato: "number";
+    unidad: string | null;
+    unidadVisible: string | null;
+    familiaCodigo: string;
+    pasoNombre: string;
+  }>;
 };
 
 export interface ProductoReceta {

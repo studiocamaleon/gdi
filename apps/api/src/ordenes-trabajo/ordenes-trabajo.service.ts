@@ -4663,6 +4663,22 @@ export class OrdenesTrabajoService {
         const costeados = Array.isArray(traza?.componentesFabricados)
           ? traza.componentesFabricados
           : [];
+        const outputsComponentes = Object.fromEntries(
+          costeados.flatMap((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+              return [];
+            }
+            const snapshot = item as Record<string, unknown>;
+            const codigo = snapshot.codigo;
+            const outputs = snapshot.outputsPublicos;
+            return typeof codigo === 'string' &&
+              outputs &&
+              typeof outputs === 'object' &&
+              !Array.isArray(outputs)
+              ? [[codigo, outputs as Record<string, unknown>]]
+              : [];
+          }),
+        );
         const costeado = costeados.find(
           (item) =>
             item &&
@@ -4681,6 +4697,7 @@ export class OrdenesTrabajoService {
                 contextoPadre,
                 codigoComponente: componente.codigo,
                 cantidadLegacy: Number(componente.cantidad),
+                outputsComponentes,
               });
 
         let hijo = await tx.ordenTrabajoItem.findFirst({

@@ -25,6 +25,11 @@ export type BindingParametroComponente = {
     campoPadre: string;
     operador: 'COPIAR' | 'SUMAR' | 'RESTAR' | 'MULTIPLICAR' | 'DIVIDIR';
     valor?: number | null;
+    fuente?: {
+      tipo: 'PADRE' | 'COMPONENTE';
+      campo: string;
+      componenteCodigo?: string | null;
+    } | null;
   } | null;
   opciones?: Array<{ valor: string; etiqueta: string }>;
 };
@@ -32,14 +37,25 @@ export type BindingParametroComponente = {
 function resolverRegla(
   regla: NonNullable<BindingParametroComponente['regla']>,
   padre: Record<string, unknown>,
+  outputsComponentes: Record<string, Record<string, unknown>>,
 ): unknown {
-  const base = leerRuta(padre, regla.campoPadre);
+  const fuente = regla.fuente;
+  const campo = fuente?.campo || regla.campoPadre;
+  const root =
+    fuente?.tipo === 'COMPONENTE' && fuente.componenteCodigo
+      ? outputsComponentes[fuente.componenteCodigo]
+      : padre;
+  const base = root
+    ? Object.prototype.hasOwnProperty.call(root, campo)
+      ? root[campo]
+      : leerRuta(root, campo)
+    : undefined;
   if (regla.operador === 'COPIAR') return base;
   const numeroBase = Number(base);
   const valor = Number(regla.valor);
   if (!Number.isFinite(numeroBase) || !Number.isFinite(valor)) {
     throw new BadRequestException(
-      `No se pudo calcular desde "${regla.campoPadre}": se requieren valores numéricos.`,
+      `No se pudo calcular desde "${campo}": se requieren valores numéricos.`,
     );
   }
   if (regla.operador === 'SUMAR') return numeroBase + valor;
@@ -64,6 +80,19 @@ function esReglaControlada(
   value: unknown,
 ): value is NonNullable<BindingParametroComponente['regla']> {
   if (!esRegistro(value) || typeof value.campoPadre !== 'string') return false;
+  if (value.fuente != null) {
+    if (
+      !esRegistro(value.fuente) ||
+      !['PADRE', 'COMPONENTE'].includes(String(value.fuente.tipo)) ||
+      typeof value.fuente.campo !== 'string' ||
+      !value.fuente.campo.trim() ||
+      (value.fuente.tipo === 'COMPONENTE' &&
+        (typeof value.fuente.componenteCodigo !== 'string' ||
+          !value.fuente.componenteCodigo.trim()))
+    ) {
+      return false;
+    }
+  }
   if (
     !['COPIAR', 'SUMAR', 'RESTAR', 'MULTIPLICAR', 'DIVIDIR'].includes(
       String(value.operador),
@@ -213,6 +242,7 @@ export function resolverJobContextComponente(args: {
   contextoPadre: Record<string, unknown>;
   codigoComponente: string;
   cantidadLegacy: number;
+  outputsComponentes?: Record<string, Record<string, unknown>>;
 }): Record<string, unknown> {
   const config = leerConfiguracionComponente(args.configuracion);
   if (!config || config.bindings.length === 0) {
@@ -227,6 +257,7 @@ export function resolverJobContextComponente(args: {
     ? (overridesRaiz[args.codigoComponente] as Record<string, unknown>)
     : {};
   const resultado: Record<string, unknown> = {};
+  const outputsComponentes = args.outputsComponentes ?? {};
   const faltantes: string[] = [];
   for (const binding of config.bindings) {
     let value: unknown;
@@ -234,13 +265,13 @@ export function resolverJobContextComponente(args: {
       value = binding.valor;
     } else if (binding.origen === 'PADRE') {
       value = binding.regla
-        ? resolverRegla(binding.regla, args.contextoPadre)
+        ? resolverRegla(binding.regla, args.contextoPadre, outputsComponentes)
         : binding.padreClave
           ? leerRuta(args.contextoPadre, binding.padreClave)
           : undefined;
     } else if (binding.origen === 'FORMULA') {
       value = binding.regla
-        ? resolverRegla(binding.regla, args.contextoPadre)
+        ? resolverRegla(binding.regla, args.contextoPadre, outputsComponentes)
         : binding.expresion
           ? evaluarFormula(binding.expresion, args.contextoPadre)
           : undefined;
@@ -299,4 +330,88 @@ export function validarConfiguracionComponente(
       `La configuración de "${nombre}" debe resolver la cantidad del componente.`,
     );
   }
+}
+
+export function dependenciasCalculoComponente(
+  configuracion: unknown,
+): string[] {
+  const config = leerConfiguracionComponente(configuracion);
+  if (!config) return [];
+  return [
+    ...new Set(
+      config.bindings.flatMap((binding) => {
+        const fuente = binding.regla?.fuente;
+        return fuente?.tipo === 'COMPONENTE' && fuente.componenteCodigo
+          ? [fuente.componenteCodigo]
+          : [];
+      }),
+    ),
+  ];
+}
+
+export function ordenarComponentesPorCalculo<
+  T extends {
+    codigo: string;
+    nombre: string;
+    requerido?: boolean;
+    configuracionJson?: unknown;
+    orden?: number;
+  },
+>(componentes: T[]): T[] {
+  const porCodigo = new Map(componentes.map((item) => [item.codigo, item]));
+  const dependencias = new Map<string, string[]>();
+  for (const item of componentes) {
+    const deps = dependenciasCalculoComponente(item.configuracionJson);
+    for (const codigo of deps) {
+      const origen = porCodigo.get(codigo);
+      if (!origen) {
+        throw new BadRequestException(
+          `El componente "${item.nombre}" usa outputs de "${codigo}", que no existe en esta receta.`,
+        );
+      }
+      if (codigo === item.codigo) {
+        throw new BadRequestException(
+          `El componente "${item.nombre}" no puede depender de sus propios outputs.`,
+        );
+      }
+      if (item.requerido !== false && origen.requerido === false) {
+        throw new BadRequestException(
+          `El componente requerido "${item.nombre}" no puede depender del componente opcional "${origen.nombre}".`,
+        );
+      }
+    }
+    dependencias.set(item.codigo, deps);
+  }
+
+  const pendientes = new Map(porCodigo);
+  const resueltos = new Set<string>();
+  const resultado: T[] = [];
+  while (pendientes.size > 0) {
+    const disponibles = [...pendientes.values()]
+      .filter((item) =>
+        (dependencias.get(item.codigo) ?? []).every((dep) =>
+          resueltos.has(dep),
+        ),
+      )
+      .sort(
+        (a, b) =>
+          Number(a.orden ?? 0) - Number(b.orden ?? 0) ||
+          a.codigo.localeCompare(b.codigo),
+      );
+    if (disponibles.length === 0) {
+      throw new BadRequestException(
+        `La composición contiene un ciclo de cálculo entre: ${[
+          ...pendientes.values(),
+        ]
+          .map((item) => item.nombre)
+          .join(', ')}.`,
+      );
+    }
+    for (const item of disponibles) {
+      pendientes.delete(item.codigo);
+      resueltos.add(item.codigo);
+      resultado.push(item);
+    }
+  }
+  return resultado;
 }

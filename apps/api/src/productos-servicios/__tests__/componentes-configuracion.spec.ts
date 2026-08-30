@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  ordenarComponentesPorCalculo,
   resolverJobContextComponente,
   validarConfiguracionComponente,
 } from '../componentes-configuracion';
@@ -145,6 +146,135 @@ describe('configuración de componentes fabricados', () => {
         },
         'Vinilo',
       ),
+    ).toThrow(BadRequestException);
+  });
+
+  it('resuelve parámetros desde outputs públicos de otro componente', () => {
+    const result = resolverJobContextComponente({
+      codigoComponente: 'lona_backlight',
+      cantidadLegacy: 1,
+      contextoPadre: { cantidad: 1 },
+      outputsComponentes: {
+        bastidor: {
+          'lonaBrutaMm.anchoMm': 2080,
+          'lonaBrutaMm.altoMm': 1080,
+        },
+      },
+      configuracion: {
+        version: 1,
+        bindings: [
+          {
+            clave: 'cantidad',
+            origen: 'FIJO',
+            valor: 1,
+            requerido: true,
+          },
+          {
+            clave: 'medidaCustomMm.anchoMm',
+            origen: 'PADRE',
+            requerido: true,
+            regla: {
+              campoPadre: 'lonaBrutaMm.anchoMm',
+              operador: 'COPIAR',
+              fuente: {
+                tipo: 'COMPONENTE',
+                componenteCodigo: 'bastidor',
+                campo: 'lonaBrutaMm.anchoMm',
+              },
+            },
+          },
+          {
+            clave: 'medidaCustomMm.altoMm',
+            origen: 'FORMULA',
+            requerido: true,
+            regla: {
+              campoPadre: 'lonaBrutaMm.altoMm',
+              operador: 'SUMAR',
+              valor: 20,
+              fuente: {
+                tipo: 'COMPONENTE',
+                componenteCodigo: 'bastidor',
+                campo: 'lonaBrutaMm.altoMm',
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result).toMatchObject({
+      cantidad: 1,
+      medidaCustomMm: { anchoMm: 2080, altoMm: 1100 },
+    });
+  });
+
+  it('ordena el cálculo por dependencias sin usar el orden visual', () => {
+    const componentes = [
+      {
+        codigo: 'lona',
+        nombre: 'Lona',
+        orden: 1,
+        configuracionJson: {
+          version: 1,
+          bindings: [
+            {
+              clave: 'cantidad',
+              origen: 'PADRE',
+              regla: {
+                campoPadre: 'ml_estructura',
+                operador: 'COPIAR',
+                fuente: {
+                  tipo: 'COMPONENTE',
+                  componenteCodigo: 'bastidor',
+                  campo: 'ml_estructura',
+                },
+              },
+            },
+          ],
+        },
+      },
+      {
+        codigo: 'bastidor',
+        nombre: 'Bastidor',
+        orden: 2,
+        configuracionJson: null,
+      },
+    ];
+
+    expect(
+      ordenarComponentesPorCalculo(componentes).map((item) => item.codigo),
+    ).toEqual(['bastidor', 'lona']);
+  });
+
+  it('rechaza ciclos entre outputs de componentes', () => {
+    const componente = (codigo: string, dependeDe: string) => ({
+      codigo,
+      nombre: codigo,
+      configuracionJson: {
+        version: 1,
+        bindings: [
+          {
+            clave: 'cantidad',
+            origen: 'PADRE',
+            regla: {
+              campoPadre: 'salida',
+              operador: 'COPIAR',
+              fuente: {
+                tipo: 'COMPONENTE',
+                componenteCodigo: dependeDe,
+                campo: 'salida',
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(() =>
+      ordenarComponentesPorCalculo([
+        componente('estructura', 'lona'),
+        componente('lona', 'estructura'),
+      ]),
     ).toThrow(BadRequestException);
   });
 });

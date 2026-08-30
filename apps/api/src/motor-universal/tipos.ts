@@ -336,6 +336,8 @@ export interface CotizacionResultado {
   };
   /** Desglose recursivo de componentes fabricados, sin crear aún OTs hijas. */
   componentesFabricados?: ComponenteFabricadoCosteado[];
+  /** Outputs planificados y públicos que otro componente puede consumir. */
+  outputsComposicion?: Record<string, unknown>;
   /** Proyección compatible del desglose autoritativo, expresada a neto. */
   precio?: {
     metodoUsado: string;
@@ -411,6 +413,10 @@ export interface ComponenteFabricadoCosteado {
   recetaHuella: string;
   costoUnitario: number;
   costoTotal: number;
+  /** Contrato público resultante, congelado junto con la cotización. */
+  outputsPublicos?: Record<string, unknown>;
+  /** Componentes cuyos outputs fueron necesarios para resolver este contexto. */
+  dependenciasCalculo?: string[];
   componentes?: ComponenteFabricadoCosteado[];
 }
 

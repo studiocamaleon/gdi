@@ -46,6 +46,7 @@ function parametrosDelFormulario(
         campoPadre: "cantidad",
         operador: "MULTIPLICAR",
         valor: cantidadLegacy || 1,
+        fuente: { tipo: "PADRE", campo: "cantidad" },
       },
     },
   ];
@@ -112,7 +113,42 @@ type CampoPadre = {
   etiqueta: string;
   numerico: boolean;
   unidad: string | null;
+  fuenteTipo: "PADRE" | "COMPONENTE";
+  componenteCodigo?: string;
 };
+
+type ComponenteHermano = Pick<
+  ProductoRecetaComponenteInput,
+  "codigo" | "nombre" | "productoComponenteId"
+>;
+
+function idCampo(campo: CampoPadre): string {
+  return campo.fuenteTipo === "COMPONENTE"
+    ? `COMPONENTE:${campo.componenteCodigo}:${campo.clave}`
+    : `PADRE:${campo.clave}`;
+}
+
+function idRegla(
+  regla: BindingParametroComponente["regla"],
+  padreClave?: string | null,
+): string {
+  const fuente = regla?.fuente;
+  if (fuente?.tipo === "COMPONENTE" && fuente.componenteCodigo) {
+    return `COMPONENTE:${fuente.componenteCodigo}:${fuente.campo}`;
+  }
+  return `PADRE:${fuente?.campo ?? regla?.campoPadre ?? padreClave ?? ""}`;
+}
+
+function fuenteDeCampo(campo: CampoPadre) {
+  return {
+    tipo: campo.fuenteTipo,
+    campo: campo.clave,
+    componenteCodigo:
+      campo.fuenteTipo === "COMPONENTE"
+        ? (campo.componenteCodigo ?? null)
+        : null,
+  } as const;
+}
 
 function normalizarCampoPadre(clave: string): string {
   return clave
@@ -130,6 +166,7 @@ function camposDelPadre(
       etiqueta: "Cantidad del producto padre",
       numerico: true,
       unidad: formulario.cantidad.unidad,
+      fuenteTipo: "PADRE",
     },
   ];
   if (
@@ -142,12 +179,14 @@ function camposDelPadre(
         etiqueta: "Ancho del producto padre",
         numerico: true,
         unidad: "cm",
+        fuenteTipo: "PADRE",
       },
       {
         clave: "medidaCustomMm.altoMm",
         etiqueta: "Alto del producto padre",
         numerico: true,
         unidad: "cm",
+        fuenteTipo: "PADRE",
       },
     );
   }
@@ -171,6 +210,7 @@ function camposDelPadre(
         "tiempo_manual",
       ].includes(tipo),
       unidad: typeof pregunta.unidad === "string" ? pregunta.unidad : null,
+      fuenteTipo: "PADRE",
     });
   }
   return campos.filter(
@@ -188,6 +228,10 @@ function reglaLegacy(
       campoPadre: normalizarCampoPadre(binding.padreClave),
       operador: "COPIAR",
       valor: null,
+      fuente: {
+        tipo: "PADRE",
+        campo: normalizarCampoPadre(binding.padreClave),
+      },
     };
   }
   const match = binding.expresion
@@ -206,6 +250,7 @@ function reglaLegacy(
       ? operadores[match[2] as keyof typeof operadores]
       : "COPIAR",
     valor: match[3] ? Number(match[3]) : null,
+    fuente: { tipo: "PADRE", campo: normalizarCampoPadre(match[1]) },
   };
 }
 
@@ -247,12 +292,14 @@ export function ConfigurarComponenteWorkspace({
   componente,
   productoPadreId,
   productoPadreNombre,
+  componentesHermanos,
   onCancel,
   onSave,
 }: {
   componente: ProductoRecetaComponenteInput;
   productoPadreId: string;
   productoPadreNombre: string;
+  componentesHermanos: ComponenteHermano[];
   onCancel: () => void;
   onSave: (
     configuracion: ConfiguracionComponenteFabricado,
@@ -274,11 +321,43 @@ export function ConfigurarComponenteWorkspace({
     Promise.all([
       getFormularioCotizacionProducto(componente.productoComponenteId),
       getFormularioCotizacionProducto(productoPadreId),
+      Promise.all(
+        componentesHermanos.map(async (hermano) =>
+          getFormularioCotizacionProducto(hermano.productoComponenteId)
+            .then((formulario) => ({ hermano, formulario }))
+            .catch(() => null),
+        ),
+      ),
     ])
-      .then(([result, formularioPadre]) => {
+      .then(([result, formularioPadre, formulariosHermanos]) => {
         if (!active) return;
         setFormulario(result);
-        setCamposPadre(camposDelPadre(formularioPadre));
+        const camposFuente = [
+          ...camposDelPadre(formularioPadre),
+          ...formulariosHermanos.flatMap((resultado) =>
+            resultado
+              ? resultado.formulario.outputsPublicos.map((output) => ({
+                  clave: output.clave,
+                  etiqueta: `${resultado.hermano.nombre} · ${output.etiqueta.replace(
+                    `${output.pasoNombre} · `,
+                    "",
+                  )}`,
+                  numerico: output.tipoDato === "number",
+                  unidad: output.unidadVisible ?? output.unidad,
+                  fuenteTipo: "COMPONENTE" as const,
+                  componenteCodigo: resultado.hermano.codigo,
+                }))
+              : [],
+          ),
+        ];
+        setCamposPadre(
+          camposFuente.filter(
+            (campo, index, list) =>
+              list.findIndex(
+                (candidate) => idCampo(candidate) === idCampo(campo),
+              ) === index,
+          ),
+        );
         const base = parametrosDelFormulario(result, componente.cantidad);
         setBindings((actuales) => {
           const existentes = new Map(
@@ -302,7 +381,12 @@ export function ConfigurarComponenteWorkspace({
     return () => {
       active = false;
     };
-  }, [componente.cantidad, componente.productoComponenteId, productoPadreId]);
+  }, [
+    componente.cantidad,
+    componente.productoComponenteId,
+    componentesHermanos,
+    productoPadreId,
+  ]);
 
   const cambiar = (index: number, patch: Partial<BindingParametroComponente>) =>
     setBindings((current) =>
@@ -382,10 +466,13 @@ export function ConfigurarComponenteWorkspace({
                           origen === "FORMULA"
                             ? camposPadre.filter((campo) => campo.numerico)
                             : camposPadre;
-                        const campoPadre =
-                          binding.regla?.campoPadre ??
-                          candidatos[0]?.clave ??
-                          "";
+                        const campoElegido =
+                          candidatos.find(
+                            (campo) =>
+                              idCampo(campo) ===
+                              idRegla(binding.regla, binding.padreClave),
+                          ) ?? candidatos[0];
+                        const campoPadre = campoElegido?.clave ?? "";
                         cambiar(index, {
                           origen,
                           regla:
@@ -403,6 +490,9 @@ export function ConfigurarComponenteWorkspace({
                                     origen === "FORMULA"
                                       ? (binding.regla?.valor ?? 1)
                                       : null,
+                                  fuente: campoElegido
+                                    ? fuenteDeCampo(campoElegido)
+                                    : null,
                                 }
                               : binding.regla,
                         });
@@ -417,25 +507,31 @@ export function ConfigurarComponenteWorkspace({
                     <div className={styles.valueField}>
                       {binding.origen === "PADRE" ? (
                         <select
-                          value={
-                            binding.regla?.campoPadre ??
-                            binding.padreClave ??
-                            ""
-                          }
-                          onChange={(event) =>
+                          value={idRegla(binding.regla, binding.padreClave)}
+                          onChange={(event) => {
+                            const campo = camposPadre.find(
+                              (item) => idCampo(item) === event.target.value,
+                            );
+                            if (!campo) return;
                             cambiar(index, {
-                              padreClave: event.target.value,
+                              padreClave:
+                                campo.fuenteTipo === "PADRE"
+                                  ? campo.clave
+                                  : null,
                               regla: {
-                                campoPadre: event.target.value,
+                                campoPadre: campo.clave,
                                 operador: "COPIAR",
                                 valor: null,
+                                fuente: fuenteDeCampo(campo),
                               },
-                            })
-                          }
+                            });
+                          }}
                         >
-                          <option value="">Elegir dato del padre…</option>
+                          <option value="PADRE:">
+                            Elegir dato disponible…
+                          </option>
                           {camposPadre.map((campo) => (
-                            <option value={campo.clave} key={campo.clave}>
+                            <option value={idCampo(campo)} key={idCampo(campo)}>
                               {campo.etiqueta}
                             </option>
                           ))}
@@ -443,31 +539,39 @@ export function ConfigurarComponenteWorkspace({
                       ) : binding.origen === "FORMULA" ? (
                         <div className={styles.ruleEditor}>
                           <select
-                            aria-label={`Dato del padre para ${binding.etiqueta}`}
-                            value={binding.regla?.campoPadre ?? ""}
+                            aria-label={`Dato disponible para ${binding.etiqueta}`}
+                            value={idRegla(binding.regla)}
                             onChange={(event) => {
+                              const campo = camposPadre.find(
+                                (item) => idCampo(item) === event.target.value,
+                              );
+                              if (!campo) return;
                               const operador =
                                 binding.regla?.operador ?? "MULTIPLICAR";
                               cambiar(index, {
                                 regla: {
-                                  campoPadre: event.target.value,
+                                  campoPadre: campo.clave,
                                   operador,
                                   valor: operacionUsaUnidad(operador)
                                     ? valorReglaVisibleAInterno(
-                                        event.target.value,
+                                        campo.clave,
                                         operador,
                                         1,
                                       )
                                     : 1,
+                                  fuente: fuenteDeCampo(campo),
                                 },
                               });
                             }}
                           >
-                            <option value="">Elegir dato…</option>
+                            <option value="PADRE:">Elegir dato…</option>
                             {camposPadre
                               .filter((campo) => campo.numerico)
                               .map((campo) => (
-                                <option value={campo.clave} key={campo.clave}>
+                                <option
+                                  value={idCampo(campo)}
+                                  key={idCampo(campo)}
+                                >
                                   {campo.etiqueta}
                                 </option>
                               ))}
@@ -495,6 +599,10 @@ export function ConfigurarComponenteWorkspace({
                                         1,
                                       )
                                     : 1,
+                                  fuente: binding.regla?.fuente ?? {
+                                    tipo: "PADRE",
+                                    campo: campoPadre,
+                                  },
                                 },
                               });
                             }}
@@ -528,6 +636,10 @@ export function ConfigurarComponenteWorkspace({
                                       operador,
                                       Number(event.target.value),
                                     ),
+                                    fuente: binding.regla?.fuente ?? {
+                                      tipo: "PADRE",
+                                      campo: campoPadre,
+                                    },
                                   },
                                 });
                               }}
@@ -538,8 +650,7 @@ export function ConfigurarComponenteWorkspace({
                               )
                                 ? (camposPadre.find(
                                     (campo) =>
-                                      campo.clave ===
-                                      (binding.regla?.campoPadre ?? "cantidad"),
+                                      idCampo(campo) === idRegla(binding.regla),
                                   )?.unidad ?? "unidad")
                                 : "factor"}
                             </span>
@@ -598,8 +709,9 @@ export function ConfigurarComponenteWorkspace({
               </div>
               <p className={styles.hint}>
                 Las reglas sólo permiten usar datos publicados por el producto
-                padre. Las medidas se ingresan en centímetros, igual que en el
-                sheet comercial; el sistema realiza la conversión interna.
+                padre o por otros componentes de esta receta. Las medidas se
+                ingresan en centímetros, igual que en el sheet comercial; el
+                sistema realiza la conversión interna.
               </p>
             </>
           ) : null}

@@ -160,7 +160,15 @@ import { MotorCotizacionError } from './motor-error';
 import { jobContextCotizacionValido } from './cotizar.dto';
 import { RecorridosVectorialesService } from '../recorridos-vectoriales/recorridos-vectoriales.service';
 import { crearSvgPlacaDesdeNesting } from '../recorridos-vectoriales/nesting-svg';
-import { resolverJobContextComponente } from '../productos-servicios/componentes-configuracion';
+import {
+  dependenciasCalculoComponente,
+  ordenarComponentesPorCalculo,
+  resolverJobContextComponente,
+} from '../productos-servicios/componentes-configuracion';
+import {
+  catalogoSalidasPublicasComposicion,
+  extraerSalidasPublicasComposicion,
+} from '../productos-servicios/composicion-outputs';
 
 const MOTOR_CONTRACT_VERSION = 'motor-universal-v4';
 
@@ -1203,9 +1211,29 @@ export class MotorUniversalService {
       0,
     );
     const componentesFabricados = [];
+    const outputsComponentes: Record<string, Record<string, unknown>> = {};
     if (recetaPublicada?.componentes.length) {
       const camino = opciones?.componentesCamino ?? [input.productoId];
-      for (const componente of recetaPublicada.componentes) {
+      let componentesOrdenados: typeof recetaPublicada.componentes;
+      try {
+        componentesOrdenados = ordenarComponentesPorCalculo(
+          recetaPublicada.componentes,
+        );
+      } catch (error) {
+        return fallar([
+          {
+            codigo: 'dependencias_componentes_invalidas',
+            severidad: 'ERROR',
+            mensaje:
+              error instanceof Error
+                ? error.message
+                : 'No se pudo resolver el orden de cálculo de los componentes.',
+            sugerencia:
+              'Revisar las fuentes de parámetros configuradas en la BOM.',
+          },
+        ]);
+      }
+      for (const componente of componentesOrdenados) {
         if (!componente.requerido) continue;
         if (camino.includes(componente.productoComponenteId)) {
           return fallar([
@@ -1225,6 +1253,7 @@ export class MotorUniversalService {
             contextoPadre: jobContext as unknown as Record<string, unknown>,
             codigoComponente: componente.codigo,
             cantidadLegacy: componente.cantidad,
+            outputsComponentes,
           });
         } catch (error) {
           return fallar([
@@ -1241,16 +1270,12 @@ export class MotorUniversalService {
           ]);
         }
         const cantidadComponente = Number(jobContextComponente.cantidad);
-        if (
-          !Number.isFinite(cantidadComponente) ||
-          cantidadComponente <= 0 ||
-          !Number.isInteger(cantidadComponente)
-        ) {
+        if (!Number.isFinite(cantidadComponente) || cantidadComponente <= 0) {
           return fallar([
             {
               codigo: 'cantidad_componente_invalida',
               severidad: 'ERROR',
-              mensaje: `La cantidad calculada de "${componente.nombre}" debe ser un número entero positivo.`,
+              mensaje: `La cantidad calculada de "${componente.nombre}" debe ser un número positivo.`,
               contexto: {
                 cantidad: cantidadComponente,
                 unidad: componente.unidad,
@@ -1295,6 +1320,8 @@ export class MotorUniversalService {
             },
           ]);
         }
+        const outputsPublicos = hija.outputsComposicion ?? {};
+        outputsComponentes[componente.codigo] = outputsPublicos;
         componentesFabricados.push({
           productoId: componente.productoComponenteId,
           codigo: componente.codigo,
@@ -1308,6 +1335,10 @@ export class MotorUniversalService {
           recetaHuella: hija.receta.huella,
           costoUnitario: hija.costos.unitario,
           costoTotal: hija.costos.total,
+          outputsPublicos,
+          dependenciasCalculo: dependenciasCalculoComponente(
+            componente.configuracionJson,
+          ),
           componentes: hija.componentesFabricados,
         });
       }
@@ -1365,6 +1396,15 @@ export class MotorUniversalService {
         : cantidadComercialReal,
       cantidadComercialPricing,
     );
+    const outputsComposicion = extraerSalidasPublicasComposicion(
+      jobContext as unknown as Record<string, unknown>,
+      catalogoSalidasPublicasComposicion(
+        producto.pasos.map((paso) => ({
+          familiaCodigo: paso.familiaCodigo,
+          nombreVisible: paso.nombreVisible,
+        })),
+      ),
+    );
 
     const cotizacion: CotizacionResultado = {
       productoId: producto.productoId,
@@ -1404,6 +1444,7 @@ export class MotorUniversalService {
         unitario: costoUnitarioComercial,
       },
       componentesFabricados,
+      outputsComposicion,
       pasos: pasosEjecutados,
       cargosDirectosCotizacion,
     };
