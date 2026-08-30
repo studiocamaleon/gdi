@@ -113,9 +113,9 @@
   display: grid;
   gap: 16px;
   align-items: center;
-  grid-template-columns: minmax(220px, 1.2fr) minmax(190px, 0.7fr) minmax(
-      260px,
-      1fr
+  grid-template-columns: minmax(220px, 0.75fr) minmax(210px, 0.7fr) minmax(
+      420px,
+      1.3fr
     );
 }
 .tableHead {
