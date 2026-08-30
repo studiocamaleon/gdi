@@ -1,6 +1,6 @@
 # Fase 3 — Receta productiva y BOM versionada
 
-**Estado:** EN DESARROLLO — reabierta tras auditoría funcional
+**Estado:** COMPLETA · VALIDACIÓN FUNCIONAL, TÉCNICA Y VISUAL APROBADA
 **Rama:** `visual-ilusion/fase-3-receta-bom`  
 **Plan rector:** `docs/visual-ilusion-plan-maestro.md`  
 **Contrato visual:** `docs/visual-ilusion-lenguaje-visual.md`
@@ -248,21 +248,23 @@ emitirse preservando su revisión y BOM; los productos históricos permanecen
 compatibles; los cambios sin publicar no se filtran; y las pruebas de costos,
 unidades, ciclos, snapshots, tenant, permisos y responsive están aprobadas.
 
-## 16. Cierre de implementación y evidencia
+## 16. Estado de implementación y evidencia
 
-> Revisión del 30 de agosto de 2026: este cierre quedó revocado. La base de
-> versionado está implementada, pero la fase continúa abierta hasta completar
-> el workspace unificado de Producción y demostrar todos los recorridos de
-> aceptación con un caso industrial real.
-
-La implementación quedó cerrada el 30 de agosto de 2026 en los commits
-`b68d0c79` y `2962bddd`.
+> Cierre del 30 de agosto de 2026: el contrato funcional, la regresión completa
+> y el control visual final están aprobados. La Fase 3 queda cerrada; la
+> ejecución independiente y convergente de componentes corresponde a Fase 4.
 
 - La receta se administra dentro del producto y permite crear, refrescar,
   publicar, clonar y deprecar revisiones con bloqueo optimista y auditoría.
 - La BOM publicada conserva sustratos, consumibles, packaging, componentes
-  comprados, componentes fabricados, recursos y merma adicional sin volver a
-  sumar costos que ya calcula el motor universal.
+  comprados, componentes fabricados, recursos y merma adicional. Los
+  componentes fabricados se costean recursivamente en un bucket propio, sin
+  crear todavía órdenes hijas ni duplicar materiales del producto padre.
+- Cada componente fabricado congela revisión, versión y huella de su receta. Si
+  el hijo publica una nueva versión, el padre exige publicar otra revisión antes
+  de volver a cotizar.
+- Los recursos congelan estación resuelta, máquina, capacidades, perfil,
+  habilidades declaradas y dotación cuando aplican.
 - Las variantes fijas y candidatas se validan por unidad; los componentes
   fabricados exigen receta publicada y el grafo rechaza autorreferencias,
   ciclos y profundidad excesiva.
@@ -273,18 +275,22 @@ La implementación quedó cerrada el 30 de agosto de 2026 en los commits
   productivo protegido cuando corresponde.
 - Los productos sin receta publicada continúan por el recorrido legacy.
 
-Evidencia técnica final:
+Evidencia técnica de cierre:
 
 - migraciones aplicadas tanto en desarrollo como en la base dedicada de tests;
 - API compilada sin errores;
 - frontend compilado en producción sin errores;
-- suite completa: 193 suites aprobadas, 1.922 pruebas aprobadas, 2 suites y 3
-  pruebas omitidas por diseño;
-- QA funcional real sobre `Imanes en MDF impreso`: publicación V1/V2,
-  componente comprado, cotización/OT con revisión preservada, historial y
-  edición de requisitos documentales;
-- QA visual del workspace de receta en desktop, tablet y mobile, manteniendo el
-  lenguaje visual propio de Grafoprint.
+- caso industrial automatizado sobre un exhibidor rígido de 600 × 1.800 mm:
+  sustrato, pintura, packaging, escuadras compradas, estación, arte requerido y
+  un componente fabricado con receta propia;
+- cotización persistida con desglose recursivo y autorización de OT conservando
+  revisión, versión, huella y snapshot BOM;
+- prueba de invalidez del padre al publicar una nueva revisión de su componente;
+- regresión completa aprobada: 194 suites y 1.927 pruebas; 2 suites y 3 casos
+  permanecen omitidos explícitamente por el repositorio;
+- QA visual del workspace de Producción/BOM aprobado en escritorio y mobile,
+  sin elementos fuera del viewport y manteniendo el lenguaje visual propio de
+  Grafoprint.
 
 El recorrido de un exhibidor usa exactamente el mismo contrato ya validado: los
 roles `SUSTRATO`, `CONSUMIBLE`, `PACKAGING` y `COMPONENTE` se proyectan desde
