@@ -234,6 +234,11 @@ export type BindingParametroComponente = {
   valor?: unknown;
   padreClave?: string | null;
   expresion?: string | null;
+  regla?: {
+    campoPadre: string;
+    operador: "COPIAR" | "SUMAR" | "RESTAR" | "MULTIPLICAR" | "DIVIDIR";
+    valor?: number | null;
+  } | null;
   opciones?: Array<{ valor: string; etiqueta: string }>;
 };
 

@@ -21,8 +21,35 @@ export type BindingParametroComponente = {
   valor?: unknown;
   padreClave?: string | null;
   expresion?: string | null;
+  regla?: {
+    campoPadre: string;
+    operador: 'COPIAR' | 'SUMAR' | 'RESTAR' | 'MULTIPLICAR' | 'DIVIDIR';
+    valor?: number | null;
+  } | null;
   opciones?: Array<{ valor: string; etiqueta: string }>;
 };
+
+function resolverRegla(
+  regla: NonNullable<BindingParametroComponente['regla']>,
+  padre: Record<string, unknown>,
+): unknown {
+  const base = leerRuta(padre, regla.campoPadre);
+  if (regla.operador === 'COPIAR') return base;
+  const numeroBase = Number(base);
+  const valor = Number(regla.valor);
+  if (!Number.isFinite(numeroBase) || !Number.isFinite(valor)) {
+    throw new BadRequestException(
+      `No se pudo calcular desde "${regla.campoPadre}": se requieren valores numéricos.`,
+    );
+  }
+  if (regla.operador === 'SUMAR') return numeroBase + valor;
+  if (regla.operador === 'RESTAR') return numeroBase - valor;
+  if (regla.operador === 'MULTIPLICAR') return numeroBase * valor;
+  if (valor === 0) {
+    throw new BadRequestException('No se puede dividir por cero.');
+  }
+  return numeroBase / valor;
+}
 
 export type ConfiguracionComponenteFabricado = {
   version: 1;
@@ -31,6 +58,23 @@ export type ConfiguracionComponenteFabricado = {
 
 function esRegistro(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function esReglaControlada(
+  value: unknown,
+): value is NonNullable<BindingParametroComponente['regla']> {
+  if (!esRegistro(value) || typeof value.campoPadre !== 'string') return false;
+  if (
+    !['COPIAR', 'SUMAR', 'RESTAR', 'MULTIPLICAR', 'DIVIDIR'].includes(
+      String(value.operador),
+    )
+  ) {
+    return false;
+  }
+  return (
+    value.operador === 'COPIAR' ||
+    (typeof value.valor === 'number' && Number.isFinite(value.valor))
+  );
 }
 
 export function leerConfiguracionComponente(
@@ -48,6 +92,7 @@ export function leerConfiguracionComponente(
       esRegistro(item) &&
       typeof item.clave === 'string' &&
       item.clave.trim().length > 0 &&
+      (item.regla == null || esReglaControlada(item.regla)) &&
       ORIGENES_PARAMETRO_COMPONENTE.includes(
         item.origen as OrigenParametroComponente,
       ),
@@ -188,13 +233,17 @@ export function resolverJobContextComponente(args: {
     if (binding.origen === 'DEFAULT_HIJO' || binding.origen === 'FIJO') {
       value = binding.valor;
     } else if (binding.origen === 'PADRE') {
-      value = binding.padreClave
-        ? leerRuta(args.contextoPadre, binding.padreClave)
-        : undefined;
+      value = binding.regla
+        ? resolverRegla(binding.regla, args.contextoPadre)
+        : binding.padreClave
+          ? leerRuta(args.contextoPadre, binding.padreClave)
+          : undefined;
     } else if (binding.origen === 'FORMULA') {
-      value = binding.expresion
-        ? evaluarFormula(binding.expresion, args.contextoPadre)
-        : undefined;
+      value = binding.regla
+        ? resolverRegla(binding.regla, args.contextoPadre)
+        : binding.expresion
+          ? evaluarFormula(binding.expresion, args.contextoPadre)
+          : undefined;
     } else {
       value = leerRuta(overrides, binding.clave);
       if (value === undefined) value = binding.valor;
@@ -234,12 +283,12 @@ export function validarConfiguracionComponente(
       );
     }
     claves.add(binding.clave);
-    if (binding.origen === 'PADRE' && !binding.padreClave) {
+    if (binding.origen === 'PADRE' && !binding.padreClave && !binding.regla) {
       throw new BadRequestException(
         `El parámetro ${binding.clave} de "${nombre}" no indica qué dato hereda.`,
       );
     }
-    if (binding.origen === 'FORMULA' && !binding.expresion) {
+    if (binding.origen === 'FORMULA' && !binding.expresion && !binding.regla) {
       throw new BadRequestException(
         `El parámetro ${binding.clave} de "${nombre}" no tiene fórmula.`,
       );

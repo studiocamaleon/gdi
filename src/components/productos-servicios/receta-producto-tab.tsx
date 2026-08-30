@@ -706,6 +706,7 @@ function EditorDefiniciones({
       componentes[componenteConfigurando] ? (
         <ConfigurarComponenteWorkspace
           componente={componentes[componenteConfigurando]}
+          productoPadreId={productoId}
           productoPadreNombre={productoNombre}
           onCancel={() => setComponenteConfigurando(null)}
           onSave={(configuracionJson, unidad) => {

@@ -1,5 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import { resolverJobContextComponente } from '../componentes-configuracion';
+import {
+  resolverJobContextComponente,
+  validarConfiguracionComponente,
+} from '../componentes-configuracion';
 
 describe('configuración de componentes fabricados', () => {
   it('combina fórmula, herencia, fijo y dato de cotización en un JobContext normal', () => {
@@ -19,19 +22,31 @@ describe('configuración de componentes fabricados', () => {
           {
             clave: 'cantidad',
             origen: 'FORMULA',
-            expresion: 'padre.cantidad * 1',
+            regla: {
+              campoPadre: 'cantidad',
+              operador: 'MULTIPLICAR',
+              valor: 1,
+            },
             requerido: true,
           },
           {
             clave: 'medidaCustomMm.anchoMm',
             origen: 'FORMULA',
-            expresion: 'padre.medidas.ancho - 40',
+            regla: {
+              campoPadre: 'medidaCustomMm.anchoMm',
+              operador: 'RESTAR',
+              valor: 40,
+            },
             requerido: true,
           },
           {
             clave: 'medidaCustomMm.altoMm',
             origen: 'FORMULA',
-            expresion: 'padre.medidas.alto - 60',
+            regla: {
+              campoPadre: 'medidaCustomMm.altoMm',
+              operador: 'RESTAR',
+              valor: 60,
+            },
             requerido: true,
           },
           {
@@ -108,6 +123,28 @@ describe('configuración de componentes fabricados', () => {
           ],
         },
       }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('rechaza reglas manipuladas fuera de los controles permitidos', () => {
+    expect(() =>
+      validarConfiguracionComponente(
+        {
+          version: 1,
+          bindings: [
+            {
+              clave: 'cantidad',
+              origen: 'FORMULA',
+              regla: {
+                campoPadre: 'cantidad',
+                operador: 'EJECUTAR',
+                valor: 1,
+              },
+            },
+          ],
+        },
+        'Vinilo',
+      ),
     ).toThrow(BadRequestException);
   });
 });

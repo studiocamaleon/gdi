@@ -34,10 +34,17 @@ function parametrosDelFormulario(
       unidad: formulario.cantidad.unidad,
       requerido: true,
       origen: "FORMULA",
-      expresion: `padre.cantidad * ${cantidadLegacy || 1}`,
+      regla: {
+        campoPadre: "cantidad",
+        operador: "MULTIPLICAR",
+        valor: cantidadLegacy || 1,
+      },
     },
   ];
-  if (formulario.medidas.instruccion !== "no_preguntar") {
+  if (
+    formulario.medidas.instruccion !== "no_preguntar" ||
+    formulario.medidas.default
+  ) {
     parametros.push(
       {
         clave: "medidaCustomMm.anchoMm",
@@ -92,6 +99,99 @@ function parametrosDelFormulario(
   return parametros;
 }
 
+type CampoPadre = { clave: string; etiqueta: string; numerico: boolean };
+
+function normalizarCampoPadre(clave: string): string {
+  return clave
+    .replace(/^padre\./, "")
+    .replace(/^medidas\.ancho$/, "medidaCustomMm.anchoMm")
+    .replace(/^medidas\.alto$/, "medidaCustomMm.altoMm");
+}
+
+function camposDelPadre(
+  formulario: FormularioCotizacionProducto,
+): CampoPadre[] {
+  const campos: CampoPadre[] = [
+    {
+      clave: "cantidad",
+      etiqueta: "Cantidad del producto padre",
+      numerico: true,
+    },
+  ];
+  if (
+    formulario.medidas.instruccion !== "no_preguntar" ||
+    formulario.medidas.default
+  ) {
+    campos.push(
+      {
+        clave: "medidaCustomMm.anchoMm",
+        etiqueta: "Ancho del producto padre",
+        numerico: true,
+      },
+      {
+        clave: "medidaCustomMm.altoMm",
+        etiqueta: "Alto del producto padre",
+        numerico: true,
+      },
+    );
+  }
+  for (const pregunta of formulario.preguntas) {
+    const tipo = String(
+      pregunta.tipoDato ?? pregunta.tipo ?? "text",
+    ).toLowerCase();
+    campos.push({
+      clave: pregunta.jobContextKey,
+      etiqueta: String(
+        pregunta.etiqueta ??
+          pregunta.slotNombre ??
+          pregunta.paso ??
+          pregunta.jobContextKey,
+      ),
+      numerico: [
+        "number",
+        "numero",
+        "entero",
+        "decimal",
+        "tiempo_manual",
+      ].includes(tipo),
+    });
+  }
+  return campos.filter(
+    (campo, index, list) =>
+      list.findIndex((candidate) => candidate.clave === campo.clave) === index,
+  );
+}
+
+function reglaLegacy(
+  binding: BindingParametroComponente,
+): BindingParametroComponente["regla"] {
+  if (binding.regla) return binding.regla;
+  if (binding.origen === "PADRE" && binding.padreClave) {
+    return {
+      campoPadre: normalizarCampoPadre(binding.padreClave),
+      operador: "COPIAR",
+      valor: null,
+    };
+  }
+  const match = binding.expresion
+    ?.trim()
+    .match(/^padre\.([A-Za-z0-9_.]+)(?:\s*([+\-*/])\s*(\d+(?:\.\d+)?))?$/);
+  if (!match) return null;
+  const operadores = {
+    "+": "SUMAR",
+    "-": "RESTAR",
+    "*": "MULTIPLICAR",
+    "/": "DIVIDIR",
+  } as const;
+  return {
+    campoPadre: normalizarCampoPadre(match[1]),
+    operador: match[2]
+      ? operadores[match[2] as keyof typeof operadores]
+      : "COPIAR",
+    valor: match[3] ? Number(match[3]) : null,
+  };
+}
+
 function valorInput(value: unknown): string {
   if (value == null) return "";
   return typeof value === "string" ? value : JSON.stringify(value);
@@ -110,11 +210,13 @@ function parseValor(value: string, tipo: string): unknown {
 
 export function ConfigurarComponenteWorkspace({
   componente,
+  productoPadreId,
   productoPadreNombre,
   onCancel,
   onSave,
 }: {
   componente: ProductoRecetaComponenteInput;
+  productoPadreId: string;
   productoPadreNombre: string;
   onCancel: () => void;
   onSave: (
@@ -124,6 +226,7 @@ export function ConfigurarComponenteWorkspace({
 }) {
   const [formulario, setFormulario] =
     React.useState<FormularioCotizacionProducto | null>(null);
+  const [camposPadre, setCamposPadre] = React.useState<CampoPadre[]>([]);
   const [bindings, setBindings] = React.useState<BindingParametroComponente[]>(
     componente.configuracionJson?.bindings ?? [],
   );
@@ -133,19 +236,23 @@ export function ConfigurarComponenteWorkspace({
   React.useEffect(() => {
     let active = true;
     setLoading(true);
-    getFormularioCotizacionProducto(componente.productoComponenteId)
-      .then((result) => {
+    Promise.all([
+      getFormularioCotizacionProducto(componente.productoComponenteId),
+      getFormularioCotizacionProducto(productoPadreId),
+    ])
+      .then(([result, formularioPadre]) => {
         if (!active) return;
         setFormulario(result);
+        setCamposPadre(camposDelPadre(formularioPadre));
         const base = parametrosDelFormulario(result, componente.cantidad);
         setBindings((actuales) => {
           const existentes = new Map(
             actuales.map((item) => [item.clave, item]),
           );
-          return base.map((item) => ({
-            ...item,
-            ...existentes.get(item.clave),
-          }));
+          return base.map((item) => {
+            const merged = { ...item, ...existentes.get(item.clave) };
+            return { ...merged, regla: reglaLegacy(merged) };
+          });
         });
       })
       .catch((reason) => {
@@ -160,7 +267,7 @@ export function ConfigurarComponenteWorkspace({
     return () => {
       active = false;
     };
-  }, [componente.cantidad, componente.productoComponenteId]);
+  }, [componente.cantidad, componente.productoComponenteId, productoPadreId]);
 
   const cambiar = (index: number, patch: Partial<BindingParametroComponente>) =>
     setBindings((current) =>
@@ -232,12 +339,38 @@ export function ConfigurarComponenteWorkspace({
                     </div>
                     <select
                       value={binding.origen}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const origen = event.target
+                          .value as BindingParametroComponente["origen"];
+                        const candidatos =
+                          origen === "FORMULA"
+                            ? camposPadre.filter((campo) => campo.numerico)
+                            : camposPadre;
+                        const campoPadre =
+                          binding.regla?.campoPadre ??
+                          candidatos[0]?.clave ??
+                          "";
                         cambiar(index, {
-                          origen: event.target
-                            .value as BindingParametroComponente["origen"],
-                        })
-                      }
+                          origen,
+                          regla:
+                            origen === "PADRE" || origen === "FORMULA"
+                              ? {
+                                  campoPadre,
+                                  operador:
+                                    origen === "PADRE"
+                                      ? "COPIAR"
+                                      : binding.regla?.operador === "COPIAR"
+                                        ? "MULTIPLICAR"
+                                        : (binding.regla?.operador ??
+                                          "MULTIPLICAR"),
+                                  valor:
+                                    origen === "FORMULA"
+                                      ? (binding.regla?.valor ?? 1)
+                                      : null,
+                                }
+                              : binding.regla,
+                        });
+                      }}
                     >
                       {ORIGENES.map((origen) => (
                         <option key={origen.value} value={origen.value}>
@@ -247,23 +380,113 @@ export function ConfigurarComponenteWorkspace({
                     </select>
                     <div className={styles.valueField}>
                       {binding.origen === "PADRE" ? (
-                        <input
-                          value={binding.padreClave ?? ""}
-                          placeholder="medidas.ancho"
-                          onChange={(event) =>
-                            cambiar(index, { padreClave: event.target.value })
+                        <select
+                          value={
+                            binding.regla?.campoPadre ??
+                            binding.padreClave ??
+                            ""
                           }
-                        />
+                          onChange={(event) =>
+                            cambiar(index, {
+                              padreClave: event.target.value,
+                              regla: {
+                                campoPadre: event.target.value,
+                                operador: "COPIAR",
+                                valor: null,
+                              },
+                            })
+                          }
+                        >
+                          <option value="">Elegir dato del padre…</option>
+                          {camposPadre.map((campo) => (
+                            <option value={campo.clave} key={campo.clave}>
+                              {campo.etiqueta}
+                            </option>
+                          ))}
+                        </select>
                       ) : binding.origen === "FORMULA" ? (
-                        <input
-                          value={binding.expresion ?? ""}
-                          placeholder="padre.medidas.ancho - 40"
-                          onChange={(event) =>
-                            cambiar(index, { expresion: event.target.value })
-                          }
-                        />
+                        <div className={styles.ruleEditor}>
+                          <select
+                            aria-label={`Dato del padre para ${binding.etiqueta}`}
+                            value={binding.regla?.campoPadre ?? ""}
+                            onChange={(event) =>
+                              cambiar(index, {
+                                regla: {
+                                  campoPadre: event.target.value,
+                                  operador:
+                                    binding.regla?.operador ?? "MULTIPLICAR",
+                                  valor: binding.regla?.valor ?? 1,
+                                },
+                              })
+                            }
+                          >
+                            <option value="">Elegir dato…</option>
+                            {camposPadre
+                              .filter((campo) => campo.numerico)
+                              .map((campo) => (
+                                <option value={campo.clave} key={campo.clave}>
+                                  {campo.etiqueta}
+                                </option>
+                              ))}
+                          </select>
+                          <select
+                            aria-label={`Operación para ${binding.etiqueta}`}
+                            value={binding.regla?.operador ?? "MULTIPLICAR"}
+                            onChange={(event) =>
+                              cambiar(index, {
+                                regla: {
+                                  campoPadre:
+                                    binding.regla?.campoPadre ?? "cantidad",
+                                  operador: event.target.value as Exclude<
+                                    NonNullable<
+                                      BindingParametroComponente["regla"]
+                                    >["operador"],
+                                    "COPIAR"
+                                  >,
+                                  valor: binding.regla?.valor ?? 1,
+                                },
+                              })
+                            }
+                          >
+                            <option value="MULTIPLICAR">Multiplicar por</option>
+                            <option value="RESTAR">Restar</option>
+                            <option value="SUMAR">Sumar</option>
+                            <option value="DIVIDIR">Dividir por</option>
+                          </select>
+                          <input
+                            aria-label={`Valor de cálculo para ${binding.etiqueta}`}
+                            type="number"
+                            step="any"
+                            value={binding.regla?.valor ?? 1}
+                            onChange={(event) =>
+                              cambiar(index, {
+                                regla: {
+                                  campoPadre:
+                                    binding.regla?.campoPadre ?? "cantidad",
+                                  operador:
+                                    binding.regla?.operador ?? "MULTIPLICAR",
+                                  valor: Number(event.target.value),
+                                },
+                              })
+                            }
+                          />
+                        </div>
                       ) : binding.origen === "COTIZACION" ? (
                         <span>Se solicitará en el sheet comercial</span>
+                      ) : binding.opciones?.length ? (
+                        <select
+                          value={String(binding.valor ?? "")}
+                          onChange={(event) =>
+                            cambiar(index, { valor: event.target.value })
+                          }
+                        >
+                          <option value="">Elegir opción…</option>
+                          {binding.opciones.map((opcion) => (
+                            <option value={opcion.valor} key={opcion.valor}>
+                              {opcion.etiqueta}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
                         <input
                           value={valorInput(binding.valor)}
@@ -287,10 +510,8 @@ export function ConfigurarComponenteWorkspace({
                 ))}
               </div>
               <p className={styles.hint}>
-                Campos disponibles del padre: <code>padre.cantidad</code>,{" "}
-                <code>padre.medidas.ancho</code> y{" "}
-                <code>padre.medidas.alto</code>. Las medidas y fórmulas se
-                expresan en milímetros.
+                Las reglas sólo permiten usar datos publicados por el producto
+                padre. Las medidas y los ajustes se expresan en milímetros.
               </p>
             </>
           ) : null}

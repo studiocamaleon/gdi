@@ -94,6 +94,10 @@
   display: grid;
   gap: 3px;
 }
+.contextCard strong {
+  color: #252227;
+  font-size: 13px;
+}
 .contextCard span {
   color: #77716f;
   font-size: 12px;
@@ -153,6 +157,11 @@
   color: #a15532;
   font-size: 12px;
 }
+.ruleEditor {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(150px, 1.4fr) minmax(125px, 1fr) 88px;
+}
 .hint {
   color: #726d69;
   font-size: 12px;
@@ -184,6 +193,12 @@
   border: 1px solid #dad5cf;
   border-radius: 9px;
   background: #fff;
+  color: #373339;
+  font-weight: 650;
+}
+.footer button:first-child:hover {
+  border-color: #bdb6af;
+  background: #f4f1ed;
 }
 .footer button:last-child {
   border-color: #1d1b20;
@@ -221,5 +236,8 @@
   .binding {
     grid-template-columns: 1fr;
     gap: 9px;
+  }
+  .ruleEditor {
+    grid-template-columns: 1fr;
   }
 }

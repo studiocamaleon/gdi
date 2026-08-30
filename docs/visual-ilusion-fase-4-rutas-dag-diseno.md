@@ -163,18 +163,18 @@ los reescribe silenciosamente.
 
 ## 10. Matriz de trazabilidad implementada
 
-| Requisito | Implementación | Evidencia |
-|---|---|---|
-| Topología lineal/DAG | Grafo versionado en receta y snapshot de OT | Compilador y validador puro; migraciones `171500`/`173000` |
-| Compatibilidad lineal | Compilación `A → B → C` y fallback histórico por índice | Tests de grafo y regresión acumulada |
-| Paralelismo y convergencia | Dependencias relacionales y múltiples fronteras activas | Tests de ramas, tablero y scheduler |
-| Componentes fabricados | Ítem hijo congelado y arista terminal → nodo de incorporación padre | Migración `174500` y test de materialización |
-| Gates documentales | Gate existente de Desarrollo Documental antes de ejecutar | Tests de seguridad del tablero |
-| Gates material/calidad | `OrdenTrabajoPasoGate`, bloqueo backend y resolución auditada | Migración `183000`, tests backend y render del tablero |
-| Tercerización | Recepción de compra completa el nodo y libera sucesores | Regresión de órdenes y producción |
-| Progreso | Ponderación por duración con fallback explícito | Tests de flujo y tablero |
-| ETA | Scheduler DAG en API y cliente con semántica equivalente | Tests de ETA/flujo y simulación |
-| Editor/visualizador | Dependencias, convergencias y gates configurables en borrador | QA interactivo en Producción/BOM |
+| Requisito                  | Implementación                                                      | Evidencia                                                  |
+| -------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Topología lineal/DAG       | Grafo versionado en receta y snapshot de OT                         | Compilador y validador puro; migraciones `171500`/`173000` |
+| Compatibilidad lineal      | Compilación `A → B → C` y fallback histórico por índice             | Tests de grafo y regresión acumulada                       |
+| Paralelismo y convergencia | Dependencias relacionales y múltiples fronteras activas             | Tests de ramas, tablero y scheduler                        |
+| Componentes fabricados     | Ítem hijo congelado y arista terminal → nodo de incorporación padre | Migración `174500` y test de materialización               |
+| Gates documentales         | Gate existente de Desarrollo Documental antes de ejecutar           | Tests de seguridad del tablero                             |
+| Gates material/calidad     | `OrdenTrabajoPasoGate`, bloqueo backend y resolución auditada       | Migración `183000`, tests backend y render del tablero     |
+| Tercerización              | Recepción de compra completa el nodo y libera sucesores             | Regresión de órdenes y producción                          |
+| Progreso                   | Ponderación por duración con fallback explícito                     | Tests de flujo y tablero                                   |
+| ETA                        | Scheduler DAG en API y cliente con semántica equivalente            | Tests de ETA/flujo y simulación                            |
+| Editor/visualizador        | Dependencias, convergencias y gates configurables en borrador       | QA interactivo en Producción/BOM                           |
 
 ## 11. Evidencia técnica al 30-08-2026
 
@@ -223,6 +223,13 @@ para toda la relación.
 - Las fórmulas iniciales admiten copia y aritmética decimal segura con
   constantes; no ejecutan JavaScript ni acceden a servicios o propiedades no
   declaradas.
+- La interfaz no expone claves ni expresiones libres: herencia y cálculo se
+  configuran mediante selectores de campo público, operación permitida y valor
+  numérico. La expresión canónica, si se conserva por compatibilidad, la genera
+  el sistema y nunca depende de que el usuario escriba código correctamente.
+- Los parámetros enumerados —material, modo de color, calidad u otros— usan
+  siempre las opciones declaradas por el configurador del hijo; no se editan
+  como texto libre.
 - El resultado se valida contra el mismo esquema/configurador que usa el
   producto hijo cuando se cotiza directamente.
 - Cada nivel anidado conoce sólo su padre directo.
