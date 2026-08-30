@@ -15,7 +15,6 @@ import {
   FAMILIAS,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
-import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import {
   normalizarCalendarioAlmacenado,
   parseCalendario,
@@ -40,6 +39,44 @@ import {
  * no se proyecta cola sobre anécdota (D6 de capacidad-estaciones-diseno.md).
  */
 const MIN_MUESTRAS_MEDIANA = 3;
+
+type PasoFronteraDAG = {
+  id: string;
+  indice: number;
+  nodoClave?: string | null;
+  estado: string;
+  dependenciasEntrantes?: Array<{ predecesorPasoId: string }>;
+};
+
+/**
+ * Fronteras realmente disponibles de una OT. En un DAG puede devolver más de
+ * un paso del mismo ítem; las dependencias pueden venir de un componente hijo.
+ * Para órdenes históricas sin identidad de nodo conserva la secuencia lineal.
+ */
+export function fronterasEjecutablesDAG<T extends PasoFronteraDAG>(
+  pasosOrden: T[],
+  pasosItem: T[],
+): T[] {
+  const estadoPorId = new Map(
+    pasosOrden.map((paso) => [paso.id, paso.estado] as const),
+  );
+  const usaGrafo =
+    pasosItem.length > 0 && pasosItem.every((paso) => paso.nodoClave);
+  if (!usaGrafo) {
+    const primero = [...pasosItem]
+      .sort((a, b) => a.indice - b.indice)
+      .find((paso) => paso.estado !== 'hecho');
+    return primero ? [primero] : [];
+  }
+  return pasosItem.filter(
+    (paso) =>
+      paso.estado !== 'hecho' &&
+      (paso.dependenciasEntrantes ?? []).every(
+        (dependencia) =>
+          estadoPorId.get(dependencia.predecesorPasoId) === 'hecho',
+      ),
+  );
+}
 
 /** Serializa el calendario validado para la columna Json nullable. */
 function calendarioAJson(calendario: CalendarioEstacion | null) {
@@ -779,6 +816,10 @@ export class ProduccionService {
                 tipoEjecucion: true,
                 rutaPasoId: true,
                 duracionEstimadaMin: true,
+                nodoClave: true,
+                dependenciasEntrantes: {
+                  select: { predecesorPasoId: true },
+                },
               },
             },
           },
@@ -788,21 +829,23 @@ export class ProduccionService {
 
     const jobs: Array<ReturnType<typeof buildSimuladorJob>> = [];
     for (const orden of ordenes) {
+      const pasosOrden = orden.items.flatMap((item) => item.pasos);
       for (const item of orden.items) {
-        // Frontera de la secuencia: el primer paso no hecho del item.
-        // [Tanda A] Entra a esta cola si su familia declara impresión sobre
-        // material continuo — antes preguntaba por familiaCodigo.
-        const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
-        if (
-          !frontera ||
-          colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'gran_formato'
-        )
-          continue;
-        // Bloqueado no es imprimible ni completable: el tablero lo señala.
-        if (frontera.estado === 'bloqueado') continue;
-        // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
-        if (frontera.tipoEjecucion === 'tercerizado') continue;
-        jobs.push(buildSimuladorJob(orden, item, frontera));
+        // Un DAG puede abrir varias ramas simultáneas. Cada cola recibe sólo
+        // los nodos cuyos predecesores (también cross-item) ya terminaron.
+        for (const frontera of fronterasEjecutablesDAG(
+          pasosOrden,
+          item.pasos,
+        )) {
+          if (
+            colaConsolidacionDeFamilia(frontera.familiaCodigo) !==
+            'gran_formato'
+          )
+            continue;
+          if (frontera.estado === 'bloqueado') continue;
+          if (frontera.tipoEjecucion === 'tercerizado') continue;
+          jobs.push(buildSimuladorJob(orden, item, frontera));
+        }
       }
     }
 
@@ -1058,6 +1101,10 @@ export class ProduccionService {
                 centroCostoNombre: true,
                 duracionEstimadaMin: true,
                 iniciadoEl: true,
+                nodoClave: true,
+                dependenciasEntrantes: {
+                  select: { predecesorPasoId: true },
+                },
               },
             },
           },
@@ -1067,18 +1114,18 @@ export class ProduccionService {
 
     const jobs: Array<ReturnType<typeof buildLaserJob>> = [];
     for (const orden of ordenes) {
+      const pasosOrden = orden.items.flatMap((item) => item.pasos);
       for (const item of orden.items) {
-        // [Tanda A] Ídem gran formato: impresión sobre pliego declarada.
-        const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
-        if (
-          !frontera ||
-          colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'laser'
-        )
-          continue;
-        if (frontera.estado === 'bloqueado') continue;
-        // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
-        if (frontera.tipoEjecucion === 'tercerizado') continue;
-        jobs.push(buildLaserJob(orden, item, frontera));
+        for (const frontera of fronterasEjecutablesDAG(
+          pasosOrden,
+          item.pasos,
+        )) {
+          if (colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'laser')
+            continue;
+          if (frontera.estado === 'bloqueado') continue;
+          if (frontera.tipoEjecucion === 'tercerizado') continue;
+          jobs.push(buildLaserJob(orden, item, frontera));
+        }
       }
     }
 
@@ -1293,12 +1340,16 @@ export class ProduccionService {
       ).values(),
     ];
 
-    const codigosPropios = [...new Set([
-      ...familias.filter((codigo) => !resolverFamilia(codigo)),
-      ...reglas
-        .filter((regla) => regla.tipo === 'paso' && !resolverFamilia(regla.valor))
-        .map((regla) => regla.valor),
-    ])];
+    const codigosPropios = [
+      ...new Set([
+        ...familias.filter((codigo) => !resolverFamilia(codigo)),
+        ...reglas
+          .filter(
+            (regla) => regla.tipo === 'paso' && !resolverFamilia(regla.valor),
+          )
+          .map((regla) => regla.valor),
+      ]),
+    ];
     const propiosEncontrados = codigosPropios.length
       ? await this.prisma.pasoTenant.findMany({
           where: {
@@ -1326,17 +1377,22 @@ export class ProduccionService {
         !propiosValidos.has(regla.valor),
     );
     if (reglasPasoInvalidas.length > 0) {
-      throw new BadRequestException('Algún paso concreto no existe en este tenant.');
+      throw new BadRequestException(
+        'Algún paso concreto no existe en este tenant.',
+      );
     }
     const tecnologiasInvalidas = reglas.filter(
       (regla) =>
         regla.tipo === 'tecnologia' &&
         (!TECNOLOGIAS_MAQUINA.includes(
           regla.valor as (typeof TECNOLOGIAS_MAQUINA)[number],
-        ) || normalizarTecnologiaMaquina(regla.valor) !== regla.valor),
+        ) ||
+          normalizarTecnologiaMaquina(regla.valor) !== regla.valor),
     );
     if (tecnologiasInvalidas.length > 0) {
-      throw new BadRequestException('Alguna tecnología de estación no es válida.');
+      throw new BadRequestException(
+        'Alguna tecnología de estación no es válida.',
+      );
     }
 
     // Una familia puede repetirse entre estaciones CON máquinas (filtran por

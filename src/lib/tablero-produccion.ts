@@ -38,7 +38,17 @@ export type TableroPasoData = {
   nodoClave?: string | null;
   esTerminal?: boolean;
   predecesorPasoIds?: string[];
+  /** Evaluado por API contra todos los ítems de la OT (incluye componentes). */
+  predecesoresSatisfechos?: boolean;
   sucesorPasoIds?: string[];
+  gatesOperativos?: Array<{
+    id: string;
+    tipo: "MATERIAL" | "CALIDAD";
+    estado: "PENDIENTE" | "CUMPLIDO";
+    detalle: string | null;
+    resueltoEl: string | null;
+    resueltoPorNombre: string | null;
+  }>;
   /**
    * Paso de la ruta que lo originó. Es la clave con la que la vista
    * consolidada de Costos empareja el tiempo REAL de este paso con la tarifa
@@ -96,6 +106,11 @@ export type TableroPasoData = {
 export type TableroItemData = {
   /** Id del OrdenTrabajoItem. */
   id: string;
+  /** Un componente fabricado es un subítem ejecutable del producto padre. */
+  parentItemId?: string | null;
+  componenteCodigo?: string | null;
+  nodoIncorporacionClave?: string | null;
+  componenteDe?: { id: string; nombre: string } | null;
   ordenId: string;
   ordenNumero: string;
   ordenEstado: string;
@@ -352,7 +367,12 @@ export function itemIniciado(item: TableroItemData): boolean {
 
 /** Primera frontera visible; en un DAG puede haber varias activas a la vez. */
 export function pasoActual(item: TableroItemData): TableroPasoData | undefined {
-  return item.pasos.find((paso) => pasoActivo(item, paso));
+  return pasosActivos(item)[0];
+}
+
+/** Todas las fronteras visibles de la ruta; una ruta DAG puede tener varias. */
+export function pasosActivos(item: TableroItemData): TableroPasoData[] {
+  return item.pasos.filter((paso) => pasoActivo(item, paso));
 }
 
 /**
@@ -365,6 +385,9 @@ export function pasoActivo(
 ): boolean {
   if (paso.estado === "hecho") return false;
   if (paso.nodoClave) {
+    if (paso.predecesoresSatisfechos != null) {
+      return paso.predecesoresSatisfechos;
+    }
     const porId = new Map(
       item.pasos.map((candidato) => [candidato.id, candidato]),
     );

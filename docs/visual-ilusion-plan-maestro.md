@@ -570,7 +570,12 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 
 ## Fase 4 — Rutas DAG, paralelismo, convergencia y gates
 
-**Estado inicial:** PENDIENTE  
+**Estado actual:** IMPLEMENTACIÓN COMPLETA · PENDIENTE DE VALIDACIÓN FUNCIONAL
+
+**Rama:** `visual-ilusion/fase-4-rutas-dag`
+
+**Documento de diseño:** `docs/visual-ilusion-fase-4-rutas-dag-diseno.md`
+
 **Dependencias:** Fase 3.
 
 ### Objetivo de negocio
@@ -621,6 +626,29 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
   ruta y habilita exactamente el nodo del producto padre donde se incorpora.
 - Ejecutar una OT lineal histórica con resultado equivalente.
 - ETA y progreso coherentes en ambos tipos de topología.
+
+### Evidencia de implementación
+
+- Grafo `LINEAL | DAG` versionado, validado, congelado en OT y materializado
+  mediante dependencias relacionales, con fallback equivalente para órdenes
+  históricas.
+- Ejecución con varias fronteras simultáneas, convergencia estricta,
+  reapertura segura por descendientes, finalización por terminales y progreso
+  ponderado.
+- Componentes fabricados como ítems hijos con receta propia congelada; sus
+  terminales habilitan exactamente el nodo de incorporación del padre.
+- Gates de aprobación, componente y tercerización integrados con sus fuentes;
+  gates de `MATERIAL` y `CALIDAD` persistentes, auditables y bloqueantes. En F4
+  se resuelven por supervisor; F7 y F9 conectarán evidencia de QC e inventario
+  sin cambiar el contrato.
+- Scheduler ETA, simuladores y tablero adaptados a DAG; editor controlado de
+  dependencias y gates en Producción/BOM.
+- Migraciones aplicadas en desarrollo y test; builds aprobados; regresión
+  acumulada: backend 197 suites/1.944 pruebas y frontend 54 archivos/542
+  pruebas aprobadas.
+- QA desktop del editor aprobado técnicamente. La validación funcional y
+  mobile del usuario sigue siendo obligatoria antes de marcar la fase
+  `COMPLETA` y comenzar la Fase 5.
 
 ---
 
@@ -1297,7 +1325,7 @@ Esta tabla se actualizará al integrar cada fase.
 |    2 | COMPLETA      | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`      | `bf2df97a`, `52538507`                                 | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                      |
 |  2.5 | COMPLETA      | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | `46316989`                                             | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
 |    3 | COMPLETA      | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                   | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b` | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados           |
-|    4 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|    4 | EN VALIDACIÓN | `visual-ilusion/fase-4-rutas-dag`                  | `docs/visual-ilusion-fase-4-rutas-dag-diseno.md`                    | `ca5109f0` + checkpoint de cierre                      | DAG, convergencia, componentes, gates, ETA y regresión completos; falta aprobación funcional/mobile del usuario      |
 |    5 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
 |    6 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
 |    7 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |

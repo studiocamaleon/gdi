@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsEnum,
   IsISO8601,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -123,6 +124,15 @@ export class RecetaDependenciaDto {
   haciaClave!: string;
 }
 
+export class RecetaGateOperativoDto {
+  @IsString()
+  @Length(1, 160)
+  nodoClave!: string;
+
+  @IsIn(['MATERIAL', 'CALIDAD'])
+  tipo!: 'MATERIAL' | 'CALIDAD';
+}
+
 export class GuardarBorradorRecetaDto {
   @IsUUID()
   rutaAlternativaId!: string;
@@ -159,6 +169,14 @@ export class GuardarBorradorRecetaDto {
   @ValidateNested({ each: true })
   @Type(() => RecetaDependenciaDto)
   dependencias?: RecetaDependenciaDto[];
+
+  /** Condiciones operativas que deben resolverse antes de ejecutar el nodo. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => RecetaGateOperativoDto)
+  gates?: RecetaGateOperativoDto[];
 }
 
 export class PublicarRecetaDto {

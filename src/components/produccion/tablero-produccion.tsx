@@ -56,7 +56,7 @@ import {
   MOTIVOS_PAUSA,
   resolverEstacionDePaso,
   pasoActivo,
-  pasoActual,
+  pasosActivos,
   pasoReabrible,
   prioridadDerivada,
   progresoItem,
@@ -75,6 +75,7 @@ import {
   getOrdenTrabajo,
   getTableroProduccion,
   mesaPasoProduccion,
+  resolverGatePasoProduccion,
 } from "@/lib/ordenes-trabajo-api";
 import type {
   OrdenTrabajoDetalle,
@@ -307,6 +308,7 @@ type ItemView = {
   /** Icono de esa estación (clave del set del tablero). */
   stationIcon: string | null;
   currentStep: StepView | undefined;
+  currentSteps: StepView[];
   steps: StepView[];
 };
 
@@ -343,20 +345,22 @@ function buildItemView(
   item: TableroItemData,
   estaciones: Estacion[],
 ): ItemView {
-  const actual = pasoActual(item);
+  const activos = pasosActivos(item);
+  const actual = activos[0];
   const estacionActual = actual
     ? resolverEstacionDePaso(estaciones, actual)
     : null;
   const steps = item.pasos.map<StepView>((paso) => ({
     paso,
     status: stepStatus(paso),
-    esActivo: paso.id === actual?.id,
+    esActivo: activos.some((activo) => activo.id === paso.id),
     iconKey: familiaIcono(paso.familiaCodigo, paso.plantillaCodigo),
     tec: paso.centroCostoNombre ?? "Paso manual",
   }));
   const currentStep = actual
     ? steps.find((s) => s.paso.id === actual.id)
     : undefined;
+  const currentSteps = steps.filter((step) => step.esActivo);
   const blocked = itemBloqueado(item);
   const bloqueadoPaso = item.pasos.find((paso) => paso.estado === "bloqueado");
   // El resumen une valores SIN etiqueta, así que la medida de corte no puede
@@ -398,6 +402,7 @@ function buildItemView(
     station: actual ? (estacionActual?.nombre ?? "Sin estación") : "—",
     stationIcon: estacionActual?.icono ?? null,
     currentStep,
+    currentSteps,
     steps,
   };
 }
@@ -525,6 +530,14 @@ const ItemRow = React.memo(function ItemRow({
           <span className="ot-badge" title="Orden de trabajo origen">
             {item.otCode}
           </span>
+          {item.data.componenteDe ? (
+            <span
+              className="ot-badge"
+              title={`Componente fabricado de ${item.data.componenteDe.nombre}`}
+            >
+              Componente
+            </span>
+          ) : null}
           {item.priority !== "normal" ? (
             <span className={`prio-pill prio-${item.priority}`}>
               {priorityLabel(item.priority)}
@@ -692,6 +705,66 @@ type AccionHandler = (
   },
 ) => Promise<void>;
 
+type GateHandler = (
+  paso: TableroPasoData,
+  tipo: "MATERIAL" | "CALIDAD",
+  estado: "CUMPLIDO" | "PENDIENTE",
+) => Promise<void>;
+
+export function GatesOperativos({
+  paso,
+  busy,
+  canSupervise,
+  onGate,
+}: {
+  paso: TableroPasoData;
+  busy: boolean;
+  canSupervise: boolean;
+  onGate: GateHandler;
+}) {
+  const gates = paso.gatesOperativos ?? [];
+  if (!gates.length) return null;
+  return (
+    <div className="ds-terc">
+      {gates.map((gate) => {
+        const cumplido = gate.estado === "CUMPLIDO";
+        const etiqueta = gate.tipo === "MATERIAL" ? "Material" : "Calidad";
+        return (
+          <React.Fragment key={gate.id}>
+            <span
+              className={`dst-badge ${cumplido ? "recibido" : "pendiente"}`}
+            >
+              {cumplido ? "✓ " : ""}
+              {etiqueta}
+            </span>
+            <span className="dst-info">
+              {cumplido
+                ? `Confirmado${gate.resueltoPorNombre ? ` por ${gate.resueltoPorNombre}` : ""}`
+                : "Pendiente: bloquea la ejecución"}
+            </span>
+            {canSupervise ? (
+              <button
+                type="button"
+                className="sta-btn ghost"
+                disabled={busy}
+                onClick={() =>
+                  void onGate(
+                    paso,
+                    gate.tipo,
+                    cumplido ? "PENDIENTE" : "CUMPLIDO",
+                  )
+                }
+              >
+                {cumplido ? "Revocar" : "Confirmar"}
+              </button>
+            ) : null}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * ¿Completar este paso dejaría el tiempo INVÁLIDO (D8, el "inicio y
  * completo en 1 seg")? Espejo del criterio del backend: suma de tramos
@@ -758,10 +831,14 @@ function PasoAcciones({
   const [declarando, setDeclarando] = React.useState(false);
   const [tiempoOtro, setTiempoOtro] = React.useState("");
   const paso = step.paso;
-  const esActual = item.currentStep?.paso.id === paso.id;
+  const esActual = step.esActivo;
   const esCronometro = paso.modoRegistro === "cronometro";
+  const gatePendiente = (paso.gatesOperativos ?? []).some(
+    (gate) => gate.estado !== "CUMPLIDO",
+  );
 
   if (!canManage) return null;
+  if (gatePendiente && paso.estado === "pendiente") return null;
 
   // Un paso TERCERIZADO es una compra al proveedor, no trabajo del taller: no se
   // ejecuta desde el tablero (se avanza en "Compras / Tercerizados" de la OT).
@@ -1051,6 +1128,7 @@ function DetailRuta({
   estaciones,
   estacionIdsEjecutables,
   onAccion,
+  onGate,
 }: {
   item: ItemView;
   briefDiseno: BriefDiseno;
@@ -1061,6 +1139,7 @@ function DetailRuta({
   estaciones: Estacion[];
   estacionIdsEjecutables: string[] | null;
   onAccion: AccionHandler;
+  onGate: GateHandler;
 }) {
   if (item.sinRuta) {
     return (
@@ -1085,7 +1164,7 @@ function DetailRuta({
         const dur = etiquetaDuracion(paso.duracionEstimadaMin);
         // El paso ACTIVO (la frontera de la secuencia) se resalta con borde
         // para ubicar de un vistazo dónde está parado el trabajo.
-        const esActivo = item.currentStep?.paso.id === paso.id;
+        const esActivo = step.esActivo;
         return (
           <div
             key={paso.id}
@@ -1174,6 +1253,12 @@ function DetailRuta({
                   detalleInline
                 />
               ) : null}
+              <GatesOperativos
+                paso={paso}
+                busy={busy}
+                canSupervise={canSupervise}
+                onGate={onGate}
+              />
               <PasoAcciones
                 item={item}
                 step={step}
@@ -1399,6 +1484,7 @@ function ItemDetailSheet({
   estacionIdsEjecutables,
   alcance,
   onAccion,
+  onGate,
   onClose,
 }: {
   item: ItemView | undefined;
@@ -1409,6 +1495,7 @@ function ItemDetailSheet({
   estacionIdsEjecutables: string[] | null;
   alcance: AlcanceTableroProduccion;
   onAccion: AccionHandler;
+  onGate: GateHandler;
   onClose: () => void;
 }) {
   const [tab, setTab] = React.useState("ruta");
@@ -1494,6 +1581,14 @@ function ItemDetailSheet({
               <div className="sheet-codes">
                 <span className="item-code">{item.code}</span>
                 <span className="ot-badge">{item.otCode}</span>
+                {item.data.componenteDe ? (
+                  <span
+                    className="ot-badge"
+                    title={`Se incorpora en ${item.data.componenteDe.nombre}`}
+                  >
+                    Componente de {item.data.componenteDe.nombre}
+                  </span>
+                ) : null}
                 {item.priority !== "normal" ? (
                   <span className={`prio-pill prio-${item.priority}`}>
                     {item.priority === "urgent" ? "Urgente" : "Alta prioridad"}
@@ -1538,7 +1633,14 @@ function ItemDetailSheet({
               ) : null}
               {!item.blocked && currentStep ? (
                 <div className="sub">
-                  Paso actual · <strong>{currentStep.paso.nombre}</strong>
+                  {item.currentSteps.length > 1
+                    ? `${item.currentSteps.length} ramas disponibles · `
+                    : "Paso actual · "}
+                  <strong>
+                    {item.currentSteps
+                      .map((step) => step.paso.nombre)
+                      .join(" + ")}
+                  </strong>
                   {currentStep.paso.centroCostoNombre ? (
                     <>
                       {" "}
@@ -1646,6 +1748,7 @@ function ItemDetailSheet({
               estaciones={estaciones}
               estacionIdsEjecutables={estacionIdsEjecutables}
               onAccion={onAccion}
+              onGate={onGate}
             />
           ) : null}
           {tab === "materiales" ? (
@@ -2876,6 +2979,14 @@ const KanbanCard = React.memo(function KanbanCard({
       <div className="kan-card-top">
         <span className="item-code">{item.code}</span>
         <span className="ot-badge">{item.otCode}</span>
+        {item.data.componenteDe ? (
+          <span
+            className="ot-badge"
+            title={`Componente fabricado de ${item.data.componenteDe.nombre}`}
+          >
+            Componente
+          </span>
+        ) : null}
         {item.priority !== "normal" ? (
           <span className={`prio-pill prio-${item.priority}`}>
             {priorityLabel(item.priority)}
@@ -3344,6 +3455,31 @@ export function TableroProduccion({
     [canManage],
   );
 
+  const handleGate = React.useCallback<GateHandler>(
+    async (paso, tipo, estado) => {
+      if (!permisoSupervisar) return;
+      setBusy(true);
+      setError(null);
+      mutacionesRef.current += 1;
+      try {
+        await resolverGatePasoProduccion(paso.id, { tipo, estado });
+        const respuesta = await getTableroProduccion();
+        setItems(respuesta.items);
+        ultimoSnapshotRef.current = JSON.stringify(respuesta.items);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No se pudo actualizar la condición operativa.",
+        );
+      } finally {
+        mutacionesRef.current -= 1;
+        setBusy(false);
+      }
+    },
+    [permisoSupervisar],
+  );
+
   /**
    * Tomar/soltar un paso de MI mesa (persistente por usuario). Optimista:
    * la card se mueve al soltar; el server confirma con el item
@@ -3757,6 +3893,7 @@ export function TableroProduccion({
         estacionIdsEjecutables={meta.estacionIdsEjecutables}
         alcance={meta.alcance}
         onAccion={handleAccion}
+        onGate={handleGate}
         onClose={() => setSelectedId(null)}
       />
     </div>

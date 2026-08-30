@@ -28,6 +28,18 @@ describe('grafo de producción', () => {
     expect(grafo.terminales).toEqual(['carton']);
   });
 
+  it('conserva y normaliza los gates declarados por nodo', () => {
+    const grafo = compilarRutaLineal([
+      { clave: 'impresion', indice: 0, gates: ['MATERIAL', 'MATERIAL'] },
+      { clave: 'packing', indice: 1, gates: ['CALIDAD'] },
+    ]);
+
+    expect(grafo.nodos).toEqual([
+      { clave: 'impresion', indice: 0, gates: ['MATERIAL'] },
+      { clave: 'packing', indice: 1, gates: ['CALIDAD'] },
+    ]);
+  });
+
   it('habilita ramas paralelas y bloquea la convergencia incompleta', () => {
     const aristas = [
       { desdeClave: 'diseno', haciaClave: 'uv' },

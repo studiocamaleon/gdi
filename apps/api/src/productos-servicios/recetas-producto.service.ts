@@ -83,10 +83,14 @@ function numero(valor: unknown, fallback = 0): number {
 function grafoParaConfiguracion(
   configuracion: SnapshotConfiguracion,
   aristas?: Array<{ desdeClave: string; haciaClave: string }>,
+  gates?: Array<{ nodoClave: string; tipo: 'MATERIAL' | 'CALIDAD' }>,
 ): GrafoProduccion {
   const nodos = configuracion.pasos.map((paso, indice) => ({
     clave: paso.clave,
     indice,
+    gates: (gates ?? [])
+      .filter((gate) => gate.nodoClave === paso.clave)
+      .map((gate) => gate.tipo),
   }));
   try {
     return aristas
@@ -309,9 +313,23 @@ export class RecetasProductoService {
                 ?.grafoProduccionJson) as unknown as GrafoProduccion
           ).aristas
         : undefined;
+    const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
+      existente?.revisionPublicada?.grafoProduccionJson) as
+      | (GrafoProduccion & Prisma.JsonObject)
+      | null
+      | undefined;
+    const gatesFuente = dto.gates
+      ? dto.gates
+      : (grafoAnterior?.nodos ?? []).flatMap((nodo) =>
+          (nodo.gates ?? []).map((tipo) => ({
+            nodoClave: nodo.clave,
+            tipo,
+          })),
+        );
     const grafoProduccion = grafoParaConfiguracion(
       configuracion,
       aristasFuente,
+      gatesFuente,
     );
     const clavesNodo = new Set(grafoProduccion.nodos.map((nodo) => nodo.clave));
     for (const componente of componentes) {

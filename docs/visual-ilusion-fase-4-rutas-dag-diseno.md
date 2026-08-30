@@ -1,8 +1,11 @@
 # Fase 4 — Rutas DAG, paralelismo, convergencia y gates
 
-**Estado:** EN DESARROLLO  
-**Rama:** `visual-ilusion/fase-4-rutas-dag`  
-**Plan rector:** `docs/visual-ilusion-plan-maestro.md`  
+**Estado:** IMPLEMENTACIÓN COMPLETA · PENDIENTE DE VALIDACIÓN FUNCIONAL
+
+**Rama:** `visual-ilusion/fase-4-rutas-dag`
+
+**Plan rector:** `docs/visual-ilusion-plan-maestro.md`
+
 **Dependencia:** Fase 3 completa e integrada en `visual-ilusion/analisis`.
 
 ## 1. Objetivo
@@ -104,6 +107,13 @@ Un nodo es ejecutable cuando:
 4. todo componente obligatorio vinculado fue completado/recibido;
 5. no existe un bloqueo operativo vigente.
 
+Los gates `MATERIAL` y `CALIDAD` se congelan como entidades relacionales por
+paso. En esta fase un supervisor puede confirmarlos o revocarlos manualmente y
+la resolución queda auditada. La Fase 7 sustituirá la confirmación manual de
+`CALIDAD` por una inspección con evidencia; la Fase 9 hará lo mismo con
+`MATERIAL` desde reservas/asignaciones reales. El contrato de ejecución no
+cambia entre esas fases.
+
 Pueden existir varias fronteras activas simultáneamente.
 
 ## 5. Reapertura
@@ -150,3 +160,31 @@ los reescribe silenciosamente.
 - componente fabricado ejecutado y conectado al ensamble padre;
 - equivalencia demostrada sobre una ruta lineal histórica;
 - builds, regresión completa y QA desktop/mobile aprobados.
+
+## 10. Matriz de trazabilidad implementada
+
+| Requisito | Implementación | Evidencia |
+|---|---|---|
+| Topología lineal/DAG | Grafo versionado en receta y snapshot de OT | Compilador y validador puro; migraciones `171500`/`173000` |
+| Compatibilidad lineal | Compilación `A → B → C` y fallback histórico por índice | Tests de grafo y regresión acumulada |
+| Paralelismo y convergencia | Dependencias relacionales y múltiples fronteras activas | Tests de ramas, tablero y scheduler |
+| Componentes fabricados | Ítem hijo congelado y arista terminal → nodo de incorporación padre | Migración `174500` y test de materialización |
+| Gates documentales | Gate existente de Desarrollo Documental antes de ejecutar | Tests de seguridad del tablero |
+| Gates material/calidad | `OrdenTrabajoPasoGate`, bloqueo backend y resolución auditada | Migración `183000`, tests backend y render del tablero |
+| Tercerización | Recepción de compra completa el nodo y libera sucesores | Regresión de órdenes y producción |
+| Progreso | Ponderación por duración con fallback explícito | Tests de flujo y tablero |
+| ETA | Scheduler DAG en API y cliente con semántica equivalente | Tests de ETA/flujo y simulación |
+| Editor/visualizador | Dependencias, convergencias y gates configurables en borrador | QA interactivo en Producción/BOM |
+
+## 11. Evidencia técnica al 30-08-2026
+
+- Migraciones aplicadas correctamente en las bases de desarrollo y test.
+- Backend: 197 suites y 1.944 pruebas aprobadas; 2 suites y 3 pruebas omitidas
+  explícitamente por el repositorio.
+- Frontend: 54 archivos de test y 542 pruebas aprobadas.
+- Builds de API y frontend aprobados.
+- QA interactivo desktop del editor: dependencias y gates responden, sin
+  overflow horizontal; el borrador utilizado para la prueba se cerró sin
+  guardar cambios.
+- La aprobación visual/funcional final —incluida la revisión mobile por el
+  usuario— permanece como gate de cierre antes de marcar la fase `COMPLETA`.

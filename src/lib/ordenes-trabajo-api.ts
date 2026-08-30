@@ -277,6 +277,20 @@ export async function avanzarCompraProduccion(
   });
 }
 
+export async function resolverGatePasoProduccion(
+  pasoId: string,
+  payload: {
+    tipo: "MATERIAL" | "CALIDAD";
+    estado: "CUMPLIDO" | "PENDIENTE";
+    detalle?: string;
+  },
+): Promise<void> {
+  await apiRequest(`/ordenes-trabajo/tablero/pasos/${pasoId}/gate`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 /**
  * Completar varios pasos de una (simulador de impresión): resultado
  * PARCIAL honesto — los que no pudieron, con su motivo. `duracionTandaMin`

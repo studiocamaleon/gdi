@@ -321,7 +321,10 @@
 
 .flowRow {
   display: grid;
-  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 2fr);
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.5fr) minmax(
+      170px,
+      1fr
+    );
   gap: 12px;
   padding: 9px 10px;
   border: 1px solid rgb(255 255 255 / 8%);

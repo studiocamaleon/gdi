@@ -33,7 +33,6 @@ import {
   ESTADO_CANCELADA,
   MOTIVOS_PAUSA,
   MOTIVO_PAUSA_LABELS,
-  ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_ESTADO_LABELS,
   ORDEN_TRABAJO_FLUJO,
   progresoEfectivo,
@@ -55,12 +54,12 @@ import type {
 } from './dto/crear-orden-trabajo.dto';
 import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import type { AhorroConsolidacionDto } from './dto/completar-pasos-lote.dto';
+import type { ResolverGatePasoDto } from './dto/resolver-gate-paso.dto';
 import {
   colaConsolidacionDeFamilia,
   modoRegistroDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
-import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { evaluarCupon, planDescuentoCupon } from '../cupones/cupon-reglas';
 import { FacturacionOrdenesService } from '../administracion/facturacion-ordenes.service';
 import {
@@ -674,6 +673,12 @@ export function progresoPonderadoPasos(
   return Math.round((hecho / total) * 100);
 }
 
+export function gatesOperativosPendientes(
+  gates: Array<{ tipo: string; estado: string }>,
+) {
+  return gates.filter((gate) => gate.estado !== 'CUMPLIDO');
+}
+
 /**
  * Una OT se finaliza sola cuando se completa su último paso pendiente: el
  * total de pasos ya está hecho tras un `completar`. Sólo aplica a esa acción
@@ -1050,6 +1055,7 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            parentItem: { select: { id: true, nombre: true } },
             // Payload de rehidratación: la vista de la OT emitida es la misma
             // ficha de creación, reconstruida desde el snapshot del cotizador.
             cotizacionItem: {
@@ -2896,7 +2902,8 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
+            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
+            | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -4531,6 +4538,29 @@ export class OrdenesTrabajoService {
         });
       }
 
+      const gatesOperativos = conSnapshot.flatMap((item) => {
+        const pasosItem = pasosPorItem.get(item.id) ?? [];
+        const porClave = new Map(
+          pasosItem.flatMap((paso) =>
+            paso.nodoClave ? [[paso.nodoClave, paso.id] as const] : [],
+          ),
+        );
+        return (grafoPorItem.get(item.id)?.nodos ?? []).flatMap((nodo) =>
+          (nodo.gates ?? []).flatMap((tipo) => {
+            const pasoId = porClave.get(nodo.clave);
+            return pasoId
+              ? [{ tenantId, ordenId: item.ordenId, pasoId, tipo }]
+              : [];
+          }),
+        );
+      });
+      if (gatesOperativos.length > 0) {
+        await tx.ordenTrabajoPasoGate.createMany({
+          data: gatesOperativos,
+          skipDuplicates: true,
+        });
+      }
+
       for (const item of conSnapshot) {
         const pasosItem = pasosPorItem.get(item.id) ?? [];
         if (pasosItem.length === 0) continue;
@@ -4549,6 +4579,240 @@ export class OrdenesTrabajoService {
             grafoProduccionSnapshotJson: grafo as Prisma.InputJsonValue,
           },
         });
+      }
+
+      await this.materializarComponentesFabricados(
+        tx,
+        tenantId,
+        conSnapshot.map((item) => item.id),
+      );
+    }
+  }
+
+  /**
+   * Convierte cada componente INDEPENDIENTE versionado por Fase 3 en un item
+   * hijo ejecutable y conecta sus terminales al nodo de incorporación padre.
+   * La cola admite componentes anidados; la validación de recetas ya impide
+   * ciclos y el unique (parentItemId, componenteCodigo) lo vuelve idempotente.
+   */
+  private async materializarComponentesFabricados(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    padresIniciales: string[],
+  ) {
+    const pendientes = [...padresIniciales];
+    const visitados = new Set<string>();
+    while (pendientes.length > 0) {
+      const padreId = pendientes.shift()!;
+      if (visitados.has(padreId)) continue;
+      visitados.add(padreId);
+      const padre = await tx.ordenTrabajoItem.findFirst({
+        where: { id: padreId, tenantId },
+        include: {
+          recetaRevision: {
+            include: { componentes: { orderBy: { orden: 'asc' } } },
+          },
+        },
+      });
+      if (!padre?.recetaRevision) continue;
+
+      for (const componente of padre.recetaRevision.componentes) {
+        // Publicaciones F3 anteriores a la convergencia conservan su ejecución
+        // histórica: sólo las nuevas revisiones con nodo declarado crean red.
+        if (
+          componente.politicaEjecucion !== 'INDEPENDIENTE' ||
+          !componente.nodoIncorporacionClave
+        ) {
+          continue;
+        }
+        const revisionHija = await tx.productoRecetaRevision.findFirst({
+          where: {
+            id: componente.recetaRevisionId,
+            tenantId,
+            estado: { in: ['PUBLICADA', 'DEPRECADA'] },
+          },
+          include: { recursos: { orderBy: { orden: 'asc' } } },
+        });
+        if (!revisionHija) {
+          throw new ConflictException(
+            `La receta congelada del componente "${componente.nombre}" ya no está disponible.`,
+          );
+        }
+
+        let hijo = await tx.ordenTrabajoItem.findFirst({
+          where: {
+            tenantId,
+            parentItemId: padre.id,
+            componenteCodigo: componente.codigo,
+          },
+        });
+        if (!hijo) {
+          hijo = await tx.ordenTrabajoItem.create({
+            data: {
+              tenantId,
+              ordenId: padre.ordenId,
+              parentItemId: padre.id,
+              componenteCodigo: componente.codigo,
+              nodoIncorporacionClave: componente.nodoIncorporacionClave,
+              recetaRevisionId: revisionHija.id,
+              recetaVersion: revisionHija.numero,
+              recetaHuella: revisionHija.huellaConfiguracion,
+              recetaSnapshotJson:
+                revisionHija.snapshotJson as Prisma.InputJsonValue,
+              topologiaProduccion: revisionHija.topologiaProduccion,
+              grafoProduccionSnapshotJson:
+                (revisionHija.grafoProduccionJson as Prisma.InputJsonValue) ??
+                undefined,
+              codigo: `${padre.codigo}/${componente.codigo}`.slice(0, 180),
+              nombre: componente.nombre,
+              familia: 'Componente fabricado',
+              categoriaComercial: 'Producción interna',
+              subcategoriaComercial: 'Componente fabricado',
+              cantidad: Number(padre.cantidad) * Number(componente.cantidad),
+              cantidadUnidad: componente.unidad,
+              subtotal: 0,
+              impuestos: 0,
+              total: 0,
+              ordenIndice: padre.ordenIndice,
+            },
+          });
+        }
+
+        const snapshot = revisionHija.snapshotJson as unknown as {
+          pasos?: Array<{
+            clave?: string;
+            nombre?: string;
+            familiaCodigo?: string;
+            orden?: number;
+            recurso?: {
+              plazoProveedorDias?: number | null;
+            };
+          }>;
+        };
+        const pasosSnapshot = Array.isArray(snapshot.pasos)
+          ? snapshot.pasos
+          : [];
+        const grafoGuardado = revisionHija.grafoProduccionJson as
+          | (GrafoProduccion & Prisma.JsonObject)
+          | null;
+        const grafoHijo = grafoGuardado
+          ? (grafoGuardado as unknown as GrafoProduccion)
+          : compilarRutaLineal(
+              pasosSnapshot.map((paso, index) => ({
+                clave: paso.clave ?? `paso:${index + 1}`,
+                indice: paso.orden ?? index,
+              })),
+            );
+        const recursoPorClave = new Map(
+          revisionHija.recursos.map((recurso) => [recurso.pasoClave, recurso]),
+        );
+        const snapshotPorClave = new Map(
+          pasosSnapshot.flatMap((paso) =>
+            paso.clave ? [[paso.clave, paso] as const] : [],
+          ),
+        );
+        const filasHijas = grafoHijo.nodos.map((nodo) => {
+          const recurso = recursoPorClave.get(nodo.clave);
+          const pasoSnapshot = snapshotPorClave.get(nodo.clave);
+          const familiaCodigo =
+            recurso?.familiaCodigo ??
+            pasoSnapshot?.familiaCodigo ??
+            'trabajo_manual';
+          const familia = resolverFamilia(familiaCodigo);
+          return {
+            tenantId,
+            ordenId: padre.ordenId,
+            itemId: hijo!.id,
+            indice: nodo.indice,
+            nodoClave: nodo.clave,
+            esTerminal: grafoHijo.terminales.includes(nodo.clave),
+            rutaPasoId: nodo.clave.replace(/^(ruta|extra):/, ''),
+            familiaCodigo,
+            categoriaFamilia: familia?.categoria ?? 'operaciones_manuales',
+            nombre:
+              recurso?.pasoNombre ??
+              pasoSnapshot?.nombre ??
+              familia?.nombre ??
+              familiaCodigo,
+            centroCostoId: recurso?.centroCostoId ?? null,
+            centroCostoNombre: recurso?.centroCostoNombre ?? null,
+            maquinaId: recurso?.maquinaId ?? null,
+            duracionEstimadaMin: null,
+            modoRegistro: modoRegistroDeFamilia(familiaCodigo),
+            tipoEjecucion: recurso?.tercerizado ? 'tercerizado' : 'interno',
+            proveedorId: recurso?.proveedorId ?? null,
+            proveedorNombre: recurso?.proveedorNombre ?? null,
+            plazoProveedorDias:
+              pasoSnapshot?.recurso?.plazoProveedorDias ?? null,
+            estadoCompra: recurso?.tercerizado ? 'pendiente' : null,
+          };
+        });
+        if (filasHijas.length > 0) {
+          await tx.ordenTrabajoItemPaso.createMany({
+            data: filasHijas,
+            skipDuplicates: true,
+          });
+        }
+        const pasosHijos = await tx.ordenTrabajoItemPaso.findMany({
+          where: { tenantId, itemId: hijo.id },
+          select: { id: true, nodoClave: true },
+        });
+        const idPorClave = new Map(
+          pasosHijos.flatMap((paso) =>
+            paso.nodoClave ? [[paso.nodoClave, paso.id] as const] : [],
+          ),
+        );
+        const gatesHijos = grafoHijo.nodos.flatMap((nodo) =>
+          (nodo.gates ?? []).flatMap((tipo) => {
+            const pasoId = idPorClave.get(nodo.clave);
+            return pasoId
+              ? [{ tenantId, ordenId: padre.ordenId, pasoId, tipo }]
+              : [];
+          }),
+        );
+        if (gatesHijos.length > 0) {
+          await tx.ordenTrabajoPasoGate.createMany({
+            data: gatesHijos,
+            skipDuplicates: true,
+          });
+        }
+        const aristasHijas = grafoHijo.aristas.map((arista) => ({
+          tenantId,
+          ordenId: padre.ordenId,
+          predecesorPasoId: idPorClave.get(arista.desdeClave)!,
+          sucesorPasoId: idPorClave.get(arista.haciaClave)!,
+        }));
+        const incorporacion = await tx.ordenTrabajoItemPaso.findFirst({
+          where: {
+            tenantId,
+            itemId: padre.id,
+            nodoClave: componente.nodoIncorporacionClave,
+          },
+          select: { id: true },
+        });
+        if (!incorporacion) {
+          throw new ConflictException(
+            `No se pudo ubicar el nodo de incorporación de "${componente.nombre}" en la OT.`,
+          );
+        }
+        const convergencias = grafoHijo.terminales.map((clave) => ({
+          tenantId,
+          ordenId: padre.ordenId,
+          predecesorPasoId: idPorClave.get(clave)!,
+          sucesorPasoId: incorporacion.id,
+          tipo: 'componente_fabricado',
+        }));
+        const dependencias = [...aristasHijas, ...convergencias].filter(
+          (dependencia) =>
+            dependencia.predecesorPasoId && dependencia.sucesorPasoId,
+        );
+        if (dependencias.length > 0) {
+          await tx.ordenTrabajoPasoDependencia.createMany({
+            data: dependencias,
+            skipDuplicates: true,
+          });
+        }
+        pendientes.push(hijo.id);
       }
     }
   }
@@ -4797,6 +5061,17 @@ export class OrdenesTrabajoService {
                   where: { obligatoria: true },
                   select: { sucesorPasoId: true },
                 },
+                gatesOperativos: {
+                  orderBy: { tipo: 'asc' as const },
+                  select: {
+                    id: true,
+                    tipo: true,
+                    estado: true,
+                    detalle: true,
+                    resueltoEl: true,
+                    resueltoPorNombre: true,
+                  },
+                },
                 tramos: {
                   // Todos los tramos del paso (son pocos): la proyección
                   // deriva el abierto, el último cierre y el acumulado.
@@ -4829,7 +5104,17 @@ export class OrdenesTrabajoService {
     const items = ordenes.flatMap((orden) =>
       orden.items
         .map((item) =>
-          this.toTableroItem(orden, item, auth.userId, tecnologias),
+          this.toTableroItem(
+            orden,
+            item,
+            auth.userId,
+            tecnologias,
+            new Map(
+              orden.items.flatMap((fila) =>
+                fila.pasos.map((paso) => [paso.id, paso.estado] as const),
+              ),
+            ),
+          ),
         )
         .map((item) => item),
     );
@@ -4875,6 +5160,7 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            parentItem: { select: { id: true, nombre: true } },
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
             cotizacionItem: {
@@ -4900,6 +5186,17 @@ export class OrdenesTrabajoService {
                 dependenciasSalientes: {
                   where: { obligatoria: true },
                   select: { sucesorPasoId: true },
+                },
+                gatesOperativos: {
+                  orderBy: { tipo: 'asc' as const },
+                  select: {
+                    id: true,
+                    tipo: true,
+                    estado: true,
+                    detalle: true,
+                    resueltoEl: true,
+                    resueltoPorNombre: true,
+                  },
                 },
                 tramos: {
                   // Todos los tramos del paso (son pocos): la proyección
@@ -4928,7 +5225,17 @@ export class OrdenesTrabajoService {
     );
     return {
       items: (orden?.items ?? []).map((item) =>
-        this.toTableroItem(orden!, item, auth.userId, tecnologias),
+        this.toTableroItem(
+          orden!,
+          item,
+          auth.userId,
+          tecnologias,
+          new Map(
+            (orden?.items ?? []).flatMap((fila) =>
+              fila.pasos.map((paso) => [paso.id, paso.estado] as const),
+            ),
+          ),
+        ),
       ),
     };
   }
@@ -5100,6 +5407,9 @@ export class OrdenesTrabajoService {
           tramos: {
             select: { id: true, usuarioId: true, inicioEl: true, finEl: true },
           },
+          gatesOperativos: {
+            select: { tipo: true, estado: true },
+          },
         },
       }),
       this.prisma.empleado.findFirst({
@@ -5183,10 +5493,10 @@ export class OrdenesTrabajoService {
       pasosItem.length > 0 &&
       pasosItem.every((candidato) => candidato.nodoClave);
     const dependencias = usaGrafo
-      ? await this.prisma.ordenTrabajoPasoDependencia.findMany({
+      ? ((await this.prisma.ordenTrabajoPasoDependencia.findMany({
           where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
           select: { predecesorPasoId: true, sucesorPasoId: true },
-        })
+        })) ?? [])
       : [];
     const ejecuta =
       payload.accion === 'iniciar' ||
@@ -5240,6 +5550,20 @@ export class OrdenesTrabajoService {
       payload.accion === 'continuar' ||
       payload.accion === 'completar'
     ) {
+      const gatesPendientes = gatesOperativosPendientes(
+        paso.gatesOperativos ?? [],
+      );
+      if (gatesPendientes.length > 0) {
+        const etiquetas: Record<string, string> = {
+          MATERIAL: 'material asignado/disponible',
+          CALIDAD: 'condición de calidad satisfecha',
+        };
+        throw new ConflictException(
+          `"${paso.nombre}" todavía no está listo: falta ${gatesPendientes
+            .map((gate) => etiquetas[gate.tipo] ?? gate.tipo.toLowerCase())
+            .join(' y ')}.`,
+        );
+      }
       await this.desarrolloDocumental.exigirGatesCumplidos(ordenId, paso.id);
     }
 
@@ -5401,10 +5725,10 @@ export class OrdenesTrabajoService {
         pasosItemActuales.length > 0 &&
         pasosItemActuales.every((candidato) => candidato.nodoClave);
       const dependenciasActuales = usaGrafoActual
-        ? await tx.ordenTrabajoPasoDependencia.findMany({
+        ? ((await tx.ordenTrabajoPasoDependencia.findMany({
             where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
             select: { predecesorPasoId: true, sucesorPasoId: true },
-          })
+          })) ?? [])
         : [];
       const fronteraActual = evaluarFrontera(
         pasosActuales,
@@ -5988,6 +6312,17 @@ export class OrdenesTrabajoService {
               where: { obligatoria: true },
               select: { sucesorPasoId: true },
             },
+            gatesOperativos: {
+              orderBy: { tipo: 'asc' as const },
+              select: {
+                id: true,
+                tipo: true,
+                estado: true,
+                detalle: true,
+                resueltoEl: true,
+                resueltoPorNombre: true,
+              },
+            },
             tramos: {
               orderBy: {
                 finEl: { sort: 'desc' as const, nulls: 'first' as const },
@@ -6017,11 +6352,20 @@ export class OrdenesTrabajoService {
     const tecnologias = await this.tecnologiaPorMaquinaDeItems(auth.tenantId, [
       item,
     ]);
+    const estadosOrden = new Map(
+      (
+        await this.prisma.ordenTrabajoItemPaso.findMany({
+          where: { tenantId: auth.tenantId, ordenId: item.ordenId },
+          select: { id: true, estado: true },
+        })
+      ).map((paso) => [paso.id, paso.estado] as const),
+    );
     const proyectado = this.toTableroItem(
       item.orden,
       item,
       auth.userId,
       tecnologias,
+      estadosOrden,
     );
     if (alcanceTableroProduccionDe(auth) !== 'operario') return proyectado;
     return {
@@ -6142,6 +6486,75 @@ export class OrdenesTrabajoService {
   }
 
   /**
+   * Resolución manual y auditada del contrato de gate de Fase 4. Las fases de
+   * Calidad e Inventario llamarán esta misma transición desde sus evidencias;
+   * hasta entonces sólo un supervisor puede afirmar o revocar la condición.
+   */
+  async resolverGatePaso(
+    auth: CurrentAuth,
+    pasoId: string,
+    payload: ResolverGatePasoDto,
+  ) {
+    const detalle = payload.detalle?.trim() || null;
+    return this.prisma.$transaction(async (tx) => {
+      const gate = await tx.ordenTrabajoPasoGate.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          pasoId,
+          tipo: payload.tipo,
+        },
+        include: {
+          paso: { select: { nombre: true } },
+        },
+      });
+      if (!gate) {
+        throw new NotFoundException(
+          'Ese paso no exige la condición operativa indicada.',
+        );
+      }
+      const cumplido = payload.estado === 'CUMPLIDO';
+      const actualizado = await tx.ordenTrabajoPasoGate.update({
+        where: { id: gate.id },
+        data: {
+          estado: payload.estado,
+          detalle,
+          resueltoEl: cumplido ? new Date() : null,
+          resueltoPorId: cumplido ? auth.userId : null,
+          resueltoPorNombre: cumplido ? auth.email : null,
+        },
+      });
+      const etiqueta = payload.tipo === 'MATERIAL' ? 'Material' : 'Calidad';
+      await tx.ordenTrabajoEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          ordenId: gate.ordenId,
+          tipo: 'gate_operativo',
+          descripcion: `${etiqueta} ${cumplido ? 'confirmado' : 'reabierto'} para "${gate.paso.nombre}".`,
+          usuarioNombre: auth.email,
+          usuarioId: auth.userId,
+          origen: 'usuario',
+          datosJson: {
+            pasoId,
+            gateId: gate.id,
+            tipo: payload.tipo,
+            estado: payload.estado,
+            detalle,
+          },
+        },
+      });
+      return {
+        id: actualizado.id,
+        pasoId,
+        tipo: actualizado.tipo,
+        estado: actualizado.estado,
+        detalle: actualizado.detalle,
+        resueltoEl: actualizado.resueltoEl?.toISOString() ?? null,
+        resueltoPorNombre: actualizado.resueltoPorNombre,
+      };
+    });
+  }
+
+  /**
    * Mapa `maquinaId → tecnología` para el lote de items del tablero. La
    * tecnología NO se persiste en el paso (una sola fuente de verdad); se deriva
    * de `Maquina` en lectura para rutear "por tecnología". Una query por lote.
@@ -6182,6 +6595,10 @@ export class OrdenesTrabajoService {
     },
     item: {
       id: string;
+      parentItemId: string | null;
+      componenteCodigo: string | null;
+      nodoIncorporacionClave: string | null;
+      parentItem?: { id: string; nombre: string } | null;
       ordenIndice: number;
       codigo: string;
       nombre: string;
@@ -6228,6 +6645,14 @@ export class OrdenesTrabajoService {
         mesaUsuario: { nombreCompleto: string | null; email: string } | null;
         dependenciasEntrantes: Array<{ predecesorPasoId: string }>;
         dependenciasSalientes: Array<{ sucesorPasoId: string }>;
+        gatesOperativos?: Array<{
+          id: string;
+          tipo: string;
+          estado: string;
+          detalle: string | null;
+          resueltoEl: Date | null;
+          resueltoPorNombre: string | null;
+        }>;
         tramos: Array<{
           usuarioId: string | null;
           usuarioNombre: string;
@@ -6247,6 +6672,7 @@ export class OrdenesTrabajoService {
      * arma en lectura desde `Maquina`. Default vacío = ruteo por fallback.
      */
     tecnologiaPorMaquina: Map<string, string | null> = new Map(),
+    estadoPasosOrden: Map<string, string> = new Map(),
   ) {
     const jobContext =
       item.cotizacionItem?.jobContextJson &&
@@ -6256,6 +6682,12 @@ export class OrdenesTrabajoService {
         : null;
     return {
       id: item.id,
+      parentItemId: item.parentItemId,
+      componenteCodigo: item.componenteCodigo,
+      nodoIncorporacionClave: item.nodoIncorporacionClave,
+      componenteDe: item.parentItem
+        ? { id: item.parentItem.id, nombre: item.parentItem.nombre }
+        : null,
       ordenId: orden.id,
       ordenNumero: orden.numero,
       ordenEstado: orden.estado,
@@ -6286,12 +6718,20 @@ export class OrdenesTrabajoService {
         indice: paso.indice,
         nodoClave: paso.nodoClave,
         esTerminal: paso.esTerminal,
-        predecesorPasoIds: paso.dependenciasEntrantes.map(
+        predecesorPasoIds: (paso.dependenciasEntrantes ?? []).map(
           (dependencia) => dependencia.predecesorPasoId,
         ),
-        sucesorPasoIds: paso.dependenciasSalientes.map(
+        predecesoresSatisfechos: (paso.dependenciasEntrantes ?? []).every(
+          (dependencia) =>
+            estadoPasosOrden.get(dependencia.predecesorPasoId) === 'hecho',
+        ),
+        sucesorPasoIds: (paso.dependenciasSalientes ?? []).map(
           (dependencia) => dependencia.sucesorPasoId,
         ),
+        gatesOperativos: (paso.gatesOperativos ?? []).map((gate) => ({
+          ...gate,
+          resueltoEl: gate.resueltoEl?.toISOString() ?? null,
+        })),
         // Clave de emparejamiento con el paso del snapshot de costeo: la vista
         // consolidada de Costos cruza el tiempo REAL de acá con la tarifa y el
         // costo COTIZADOS de allá. Sale del `rutaPasoId` que la

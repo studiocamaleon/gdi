@@ -4508,6 +4508,7 @@ describe('MotorUniversalService — smoke tests', () => {
             formula: 'por_unidad',
             unidad: 'unidad',
             requerido: true,
+            nodoIncorporacionClave: `ruta:${rutaRigido.configPasos[rutaRigido.configPasos.length - 1].rutaPasoId}`,
           },
         ],
       });

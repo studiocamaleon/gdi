@@ -183,6 +183,13 @@ function EditorDefiniciones({
       haciaClave,
     }));
   });
+  const [gates, setGates] = React.useState<
+    Array<{ nodoClave: string; tipo: "MATERIAL" | "CALIDAD" }>
+  >(() =>
+    (revision.grafoProduccionJson?.nodos ?? []).flatMap((nodo) =>
+      (nodo.gates ?? []).map((tipo) => ({ nodoClave: nodo.clave, tipo })),
+    ),
+  );
 
   React.useEffect(() => {
     void getProductos(true)
@@ -210,6 +217,7 @@ function EditorDefiniciones({
         documentos: documentos.map((item, orden) => ({ ...item, orden })),
         componentes: componentes.map((item, orden) => ({ ...item, orden })),
         dependencias,
+        gates,
       });
       toast.success("Las definiciones quedaron guardadas en el borrador.");
       onClose();
@@ -319,6 +327,46 @@ function EditorDefiniciones({
                     ) : (
                       <span className={styles.rootNode}>Inicio de la ruta</span>
                     )}
+                  </div>
+                  <div className={styles.predecessors}>
+                    {(
+                      [
+                        ["MATERIAL", "Material disponible"],
+                        ["CALIDAD", "Control de calidad"],
+                      ] as const
+                    ).map(([tipo, etiqueta]) => {
+                      const activo = gates.some(
+                        (gate) =>
+                          gate.nodoClave === paso.value && gate.tipo === tipo,
+                      );
+                      return (
+                        <button
+                          type="button"
+                          key={tipo}
+                          data-active={activo}
+                          title={`Exigir ${etiqueta.toLowerCase()} antes de ejecutar ${paso.label}`}
+                          onClick={() =>
+                            setGates((actuales) =>
+                              activo
+                                ? actuales.filter(
+                                    (gate) =>
+                                      !(
+                                        gate.nodoClave === paso.value &&
+                                        gate.tipo === tipo
+                                      ),
+                                  )
+                                : [
+                                    ...actuales,
+                                    { nodoClave: paso.value, tipo },
+                                  ],
+                            )
+                          }
+                        >
+                          {activo ? "✓ " : "+ "}
+                          {etiqueta}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );

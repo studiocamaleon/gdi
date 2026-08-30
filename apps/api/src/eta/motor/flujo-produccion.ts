@@ -392,6 +392,7 @@ export function simularFlujo({
       .map(({ paso }) => paso.id),
   );
   const itemsSinEstimacion = new Set<string>();
+  const itemsSinVentana = new Set<string>();
   type Candidato = {
     item: TableroItemData;
     paso: TableroPasoData;
@@ -402,6 +403,10 @@ export function simularFlujo({
   };
   const esMejor = (a: Candidato, b: Candidato) => {
     if (a.inicio.getTime() !== b.inicio.getTime()) return a.inicio < b.inicio;
+    // Si dos trabajos disputan el mismo hueco, atiende primero al que lleva
+    // más tiempo listo. Evita que una rama recién liberada se adelante a una
+    // OT que ya esperaba por ese puesto.
+    if (a.listo.getTime() !== b.listo.getTime()) return a.listo < b.listo;
     const urgenteA = prioridadDerivada(a.item.fechaEntrega) === 'urgent';
     const urgenteB = prioridadDerivada(b.item.fechaEntrega) === 'urgent';
     if (urgenteA !== urgenteB) return urgenteA;
@@ -427,7 +432,11 @@ export function simularFlujo({
 
     for (const pasoId of pendientes) {
       const nodo = pasoPorId.get(pasoId)!;
-      if (itemsSinEstimacion.has(nodo.item.id)) continue;
+      if (
+        itemsSinEstimacion.has(nodo.item.id) ||
+        itemsSinVentana.has(nodo.item.id)
+      )
+        continue;
       const previos = predecesores.get(pasoId) ?? [];
       if (!previos.every((id) => programados.has(id))) continue;
       const listo = previos.reduce((max, id) => {
@@ -501,8 +510,9 @@ export function simularFlujo({
         zona,
       );
       if (!inicio) {
-        resultadoDe(nodo.item).sinEstimar = true;
-        itemsSinEstimacion.add(nodo.item.id);
+        // La duración es conocida: no es "sin estimar". Simplemente no hay
+        // ninguna ventana laboral dentro del horizonte configurado.
+        itemsSinVentana.add(nodo.item.id);
         marcoSinEstimacion = true;
         continue;
       }
@@ -591,7 +601,8 @@ export function simularFlujo({
   // una referencia imposible. No se inventa fecha: se propaga "sin estimar".
   for (const pasoId of pendientes) {
     const nodo = pasoPorId.get(pasoId);
-    if (nodo) resultadoDe(nodo.item).sinEstimar = true;
+    if (nodo && !itemsSinVentana.has(nodo.item.id))
+      resultadoDe(nodo.item).sinEstimar = true;
   }
   for (const item of items) {
     const resultado = porItem.get(item.id);

@@ -16,7 +16,10 @@ import { describe, expect, it } from "vitest";
 
 import type { CalendarioEstacion, Estacion } from "@/lib/estaciones";
 import { SIN_ESTACION_KEY } from "@/lib/tablero-produccion";
-import type { TableroItemData, TableroPasoData } from "@/lib/tablero-produccion";
+import type {
+  TableroItemData,
+  TableroPasoData,
+} from "@/lib/tablero-produccion";
 import {
   avanzarAVentana,
   estimarDemoraNuevos,
@@ -45,9 +48,12 @@ const CALENDARIO: CalendarioEstacion = {
 const AHORA = new Date(2026, 6, 20, 8, 0);
 
 /** Atajo para fechas de julio 2026 en hora local. */
-const jul = (dia: number, hora = 0, minuto = 0) => new Date(2026, 6, dia, hora, minuto);
+const jul = (dia: number, hora = 0, minuto = 0) =>
+  new Date(2026, 6, dia, hora, minuto);
 
-function estacion(overrides: Partial<Estacion> & Pick<Estacion, "id">): Estacion {
+function estacion(
+  overrides: Partial<Estacion> & Pick<Estacion, "id">,
+): Estacion {
   return {
     nombre: overrides.id,
     descripcion: "",
@@ -113,7 +119,12 @@ const interno = (indice: number, familia: string, minutos: number) =>
  * que los tests distingan "se programó como tercerizado" de "se programó
  * como paso interno y dio lo mismo de casualidad".
  */
-const tercerizado = (indice: number, familia: string, dias: number | null, minutos: number | null = null) =>
+const tercerizado = (
+  indice: number,
+  familia: string,
+  dias: number | null,
+  minutos: number | null = null,
+) =>
   paso(indice, familia, {
     tipoEjecucion: "tercerizado",
     plazoProveedorDias: dias,
@@ -125,6 +136,7 @@ function item(
   pasos: TableroPasoData[],
   overrides: Partial<TableroItemData> = {},
 ): TableroItemData {
+  const ids = new Map(pasos.map((paso) => [paso.id, `${id}-${paso.id}`]));
   return {
     id,
     ordenId: `orden-${id}`,
@@ -141,7 +153,18 @@ function item(
     fechaEntrega: null,
     archivosCount: 0,
     sinRuta: false,
-    pasos,
+    // Los ids de paso son UUID globales en producción; el prefijo evita que
+    // dos fixtures inventen accidentalmente el mismo nodo del grafo.
+    pasos: pasos.map((paso) => ({
+      ...paso,
+      id: ids.get(paso.id)!,
+      predecesorPasoIds: (paso.predecesorPasoIds ?? []).map(
+        (pasoId) => ids.get(pasoId) ?? pasoId,
+      ),
+      sucesorPasoIds: (paso.sucesorPasoIds ?? []).map(
+        (pasoId) => ids.get(pasoId) ?? pasoId,
+      ),
+    })),
     ...overrides,
   };
 }
@@ -177,14 +200,20 @@ const maquina = (centroCostoId: string, i = 0) => ({
 });
 
 /** Paso interno que corre en la máquina de ese centro de costo. */
-const enMaquina = (indice: number, familia: string, minutos: number, cc: string) =>
-  paso(indice, familia, { duracionEstimadaMin: minutos, centroCostoId: cc });
+const enMaquina = (
+  indice: number,
+  familia: string,
+  minutos: number,
+  cc: string,
+) => paso(indice, familia, { duracionEstimadaMin: minutos, centroCostoId: cc });
 
 // ── Aritmética de calendario ─────────────────────────────────────────────
 
 describe("avanzarAVentana", () => {
   it("devuelve el mismo instante si ya cae dentro de la franja", () => {
-    expect(avanzarAVentana(CALENDARIO, jul(20, 10, 30))).toEqual(jul(20, 10, 30));
+    expect(avanzarAVentana(CALENDARIO, jul(20, 10, 30))).toEqual(
+      jul(20, 10, 30),
+    );
   });
 
   it("empuja al inicio de la franja si es antes de abrir", () => {
@@ -197,7 +226,9 @@ describe("avanzarAVentana", () => {
 
   it("salta los feriados del taller", () => {
     const feriado = new Set(["2026-07-20"]);
-    expect(avanzarAVentana(CALENDARIO, jul(20, 9, 0), feriado)).toEqual(jul(21, 8, 0));
+    expect(avanzarAVentana(CALENDARIO, jul(20, 9, 0), feriado)).toEqual(
+      jul(21, 8, 0),
+    );
   });
 
   it("devuelve null si no hay ninguna ventana en el horizonte (D8)", () => {
@@ -214,21 +245,29 @@ describe("avanzarAVentana", () => {
 
 describe("sumarMinutosLaborales", () => {
   it("suma dentro de la misma jornada", () => {
-    expect(sumarMinutosLaborales(CALENDARIO, jul(20, 8, 0), 60)).toEqual(jul(20, 9, 0));
+    expect(sumarMinutosLaborales(CALENDARIO, jul(20, 8, 0), 60)).toEqual(
+      jul(20, 9, 0),
+    );
   });
 
   it("parte el trabajo que no entra en el día y sigue al siguiente", () => {
     // 16:00 lunes + 120 min: 60 min quedan el lunes, 60 pasan al martes.
-    expect(sumarMinutosLaborales(CALENDARIO, jul(20, 16, 0), 120)).toEqual(jul(21, 9, 0));
+    expect(sumarMinutosLaborales(CALENDARIO, jul(20, 16, 0), 120)).toEqual(
+      jul(21, 9, 0),
+    );
   });
 
   it("cruza el fin de semana sin contar sábado ni domingo", () => {
     // Viernes 16:00 + 120 min: 60 el viernes, 60 el lunes.
-    expect(sumarMinutosLaborales(CALENDARIO, jul(24, 16, 0), 120)).toEqual(jul(27, 9, 0));
+    expect(sumarMinutosLaborales(CALENDARIO, jul(24, 16, 0), 120)).toEqual(
+      jul(27, 9, 0),
+    );
   });
 
   it("avanza a la ventana antes de empezar a contar", () => {
-    expect(sumarMinutosLaborales(CALENDARIO, jul(20, 5, 0), 30)).toEqual(jul(20, 8, 30));
+    expect(sumarMinutosLaborales(CALENDARIO, jul(20, 5, 0), 30)).toEqual(
+      jul(20, 8, 30),
+    );
   });
 });
 
@@ -236,11 +275,26 @@ describe("jornada cortada (varias franjas por día)", () => {
   /** L–V 09:00–12:00 y 15:00–19:00 (7 h por día). */
   const CORTADO: CalendarioEstacion = {
     dias: {
-      lun: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
-      mar: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
-      mie: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
-      jue: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
-      vie: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
+      lun: [
+        { desde: "09:00", hasta: "12:00" },
+        { desde: "15:00", hasta: "19:00" },
+      ],
+      mar: [
+        { desde: "09:00", hasta: "12:00" },
+        { desde: "15:00", hasta: "19:00" },
+      ],
+      mie: [
+        { desde: "09:00", hasta: "12:00" },
+        { desde: "15:00", hasta: "19:00" },
+      ],
+      jue: [
+        { desde: "09:00", hasta: "12:00" },
+        { desde: "15:00", hasta: "19:00" },
+      ],
+      vie: [
+        { desde: "09:00", hasta: "12:00" },
+        { desde: "15:00", hasta: "19:00" },
+      ],
       sab: null,
       dom: null,
     },
@@ -260,22 +314,31 @@ describe("jornada cortada (varias franjas por día)", () => {
 
   it("el trabajo que no entra a la mañana sigue a la tarde, sin contar el corte", () => {
     // 11:00 + 120 min: 60 hasta las 12:00, 60 desde las 15:00.
-    expect(sumarMinutosLaborales(CORTADO, jul(20, 11, 0), 120)).toEqual(jul(20, 16, 0));
+    expect(sumarMinutosLaborales(CORTADO, jul(20, 11, 0), 120)).toEqual(
+      jul(20, 16, 0),
+    );
   });
 
   it("cruza el corte y el fin del día encadenando franjas", () => {
     // Viernes 11:00 + 6 h: 1 h mañana + 4 h tarde del viernes, 1 h lunes.
-    expect(sumarMinutosLaborales(CORTADO, jul(24, 11, 0), 360)).toEqual(jul(27, 10, 0));
+    expect(sumarMinutosLaborales(CORTADO, jul(24, 11, 0), 360)).toEqual(
+      jul(27, 10, 0),
+    );
   });
 
   it("franjas contiguas (9–12 y 12–18) equivalen a una jornada corrida", () => {
     const contiguo: CalendarioEstacion = {
       dias: {
         ...CORTADO.dias,
-        lun: [{ desde: "09:00", hasta: "12:00" }, { desde: "12:00", hasta: "18:00" }],
+        lun: [
+          { desde: "09:00", hasta: "12:00" },
+          { desde: "12:00", hasta: "18:00" },
+        ],
       },
     };
-    expect(sumarMinutosLaborales(contiguo, jul(20, 9, 0), 240)).toEqual(jul(20, 13, 0));
+    expect(sumarMinutosLaborales(contiguo, jul(20, 9, 0), 240)).toEqual(
+      jul(20, 13, 0),
+    );
   });
 });
 
@@ -295,7 +358,9 @@ describe("sumarDiasHabiles", () => {
 
   it("saltea feriados además del fin de semana", () => {
     // Lunes + 2 hábiles, con el miércoles feriado: martes y jueves.
-    expect(sumarDiasHabiles(jul(20, 8, 0), 2, new Set(["2026-07-22"]))).toEqual(jul(23, 8, 0));
+    expect(sumarDiasHabiles(jul(20, 8, 0), 2, new Set(["2026-07-22"]))).toEqual(
+      jul(23, 8, 0),
+    );
   });
 });
 
@@ -366,7 +431,9 @@ describe("simularFlujo · pasos internos", () => {
       },
     };
     const { porItem } = correr([item("A", [interno(0, "impresion", 60)])], {
-      estaciones: [estacion({ id: "e1", familias: ["impresion"], calendario: soloLunes })],
+      estaciones: [
+        estacion({ id: "e1", familias: ["impresion"], calendario: soloLunes }),
+      ],
     });
 
     const eta = porItem.get("A");
@@ -392,8 +459,19 @@ describe("simularFlujo · capacidad finita", () => {
 
   it("con dos puestos los dos items corren en paralelo", () => {
     const { porItem } = correr(
-      [item("1", [interno(0, "impresion", 120)]), item("2", [interno(0, "impresion", 120)])],
-      { estaciones: [estacion({ id: "e1", familias: ["impresion"], capacidadConcurrente: 2 })] },
+      [
+        item("1", [interno(0, "impresion", 120)]),
+        item("2", [interno(0, "impresion", 120)]),
+      ],
+      {
+        estaciones: [
+          estacion({
+            id: "e1",
+            familias: ["impresion"],
+            capacidadConcurrente: 2,
+          }),
+        ],
+      },
     );
 
     expect(porItem.get("1")?.finEstimado).toEqual(jul(20, 10, 0));
@@ -443,7 +521,12 @@ describe("simularFlujo · pasos tercerizados", () => {
     // como interno saldría una ETA prolija — y sería una fecha inventada,
     // porque nadie sabe cuánto tarda el proveedor.
     const { porItem } = correr(
-      [item("A", [interno(0, "impresion", 60), tercerizado(1, "offset", null, 30)])],
+      [
+        item("A", [
+          interno(0, "impresion", 60),
+          tercerizado(1, "offset", null, 30),
+        ]),
+      ],
       { medianas: new Map([["offset", 30]]) },
     );
 
@@ -508,7 +591,18 @@ describe("simularFlujo · pasos tercerizados", () => {
 describe("estimarDemoraNuevos", () => {
   it("estima un trabajo nuevo contra un taller vacío", () => {
     const demoras = estimarDemoraNuevos({
-      nuevos: [{ id: "nuevo", pasos: [{ familiaCodigo: "impresion", centroCostoId: null, duracionMin: 60 }] }],
+      nuevos: [
+        {
+          id: "nuevo",
+          pasos: [
+            {
+              familiaCodigo: "impresion",
+              centroCostoId: null,
+              duracionMin: 60,
+            },
+          ],
+        },
+      ],
       enCola: [],
       estaciones: TALLER,
       medianas: new Map(),
@@ -520,7 +614,18 @@ describe("estimarDemoraNuevos", () => {
 
   it("hace esperar al trabajo nuevo detrás de la cola real (D9)", () => {
     const demoras = estimarDemoraNuevos({
-      nuevos: [{ id: "nuevo", pasos: [{ familiaCodigo: "impresion", centroCostoId: null, duracionMin: 60 }] }],
+      nuevos: [
+        {
+          id: "nuevo",
+          pasos: [
+            {
+              familiaCodigo: "impresion",
+              centroCostoId: null,
+              duracionMin: 60,
+            },
+          ],
+        },
+      ],
       enCola: [item("1", [interno(0, "impresion", 120)])],
       estaciones: TALLER,
       medianas: new Map(),
@@ -537,8 +642,18 @@ describe("estimarDemoraNuevos", () => {
         {
           id: "nuevo",
           pasos: [
-            { familiaCodigo: "impresion", centroCostoId: null, duracionMin: 60 },
-            { familiaCodigo: "offset", centroCostoId: null, duracionMin: null, tercerizado: true, plazoProveedorDias: 3 },
+            {
+              familiaCodigo: "impresion",
+              centroCostoId: null,
+              duracionMin: 60,
+            },
+            {
+              familiaCodigo: "offset",
+              centroCostoId: null,
+              duracionMin: null,
+              tercerizado: true,
+              plazoProveedorDias: 3,
+            },
           ],
         },
       ],
@@ -557,10 +672,19 @@ describe("estimarDemoraNuevos", () => {
         {
           id: "nuevo",
           pasos: [
-            { familiaCodigo: "impresion", centroCostoId: null, duracionMin: 60 },
+            {
+              familiaCodigo: "impresion",
+              centroCostoId: null,
+              duracionMin: 60,
+            },
             // Con duración interna cargada: tratado como paso propio daría
             // una fecha prolija e igualmente falsa.
-            { familiaCodigo: "offset", centroCostoId: null, duracionMin: 30, tercerizado: true },
+            {
+              familiaCodigo: "offset",
+              centroCostoId: null,
+              duracionMin: 30,
+              tercerizado: true,
+            },
           ],
         },
       ],
@@ -802,9 +926,12 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
 
 describe("simularFlujo · separación entre pasos", () => {
   it("el bloque es sólo el trabajo: la separación no lo alarga", () => {
-    const { traza, porItem } = correr([item("A", [interno(0, "impresion", 60)])], {
-      tiempoEntrePasosMin: 15,
-    });
+    const { traza, porItem } = correr(
+      [item("A", [interno(0, "impresion", 60)])],
+      {
+        tiempoEntrePasosMin: 15,
+      },
+    );
 
     // Un solo paso: arranca y termina el trabajo puro, sin colchón adelante.
     expect(traza[0].inicio).toEqual(jul(20, 8, 0));
@@ -882,10 +1009,9 @@ describe("simularFlujo · separación entre pasos", () => {
   });
 
   it("no se le cobra separación al proveedor ni a lo que ya está en curso", () => {
-    const { traza } = correr(
-      [item("A", [tercerizado(0, "impresion", 2)])],
-      { tiempoEntrePasosMin: 20 },
-    );
+    const { traza } = correr([item("A", [tercerizado(0, "impresion", 2)])], {
+      tiempoEntrePasosMin: 20,
+    });
 
     expect(traza[0].preparacionMin).toBe(0);
   });

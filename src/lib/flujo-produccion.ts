@@ -17,7 +17,6 @@ import {
   type Estacion,
 } from "@/lib/estaciones";
 import {
-  pasoActivo,
   prioridadDerivada,
   resolverEstacionDePaso,
   SIN_ESTACION_KEY,
@@ -189,7 +188,8 @@ export function sumarMinutosLaborales(
       continue;
     }
     const disponibles = (finVentana.getTime() - t.getTime()) / 60000;
-    if (restante <= disponibles) return new Date(t.getTime() + restante * 60000);
+    if (restante <= disponibles)
+      return new Date(t.getTime() + restante * 60000);
     restante -= disponibles;
     t = avanzarAVentana(calendario, finVentana, noLaborables, zona);
   }
@@ -228,17 +228,6 @@ type EstacionSim = {
   preparacionMin: number;
 };
 
-type ItemSim = {
-  data: TableroItemData;
-  restantes: TableroPasoData[];
-  idx: number;
-  readyAt: Date;
-  resultado: SimulacionItem;
-  urgente: boolean;
-  entregaTs: number | null;
-  done: boolean;
-};
-
 /**
  * Un paso tercerizado no se produce acá: lo hace un proveedor, en su propio
  * calendario y sin ocupar un puesto del taller. Su costo en tiempo es el lead
@@ -248,7 +237,10 @@ function esTercerizado(paso: TableroPasoData): boolean {
   return paso.tipoEjecucion === "tercerizado";
 }
 
-function duracionDePaso(paso: TableroPasoData, medianas: Map<string, number>): number | null {
+function duracionDePaso(
+  paso: TableroPasoData,
+  medianas: Map<string, number>,
+): number | null {
   // Un tercerizado nunca toma la mediana de la familia: esa mediana se midió
   // sobre pasos INTERNOS y no dice nada del proveedor. Se programa aparte.
   if (esTercerizado(paso)) return null;
@@ -308,8 +300,13 @@ export function simularFlujo({
     }
     registros.set(estacion.id, {
       key: estacion.id,
-      calendario: sinCalendario ? calendarioDefault() : (estacion.calendario as CalendarioEstacion),
-      servers: Array.from({ length: Math.max(1, estacion.capacidadConcurrente) }, () => new Date(ahora)),
+      calendario: sinCalendario
+        ? calendarioDefault()
+        : (estacion.calendario as CalendarioEstacion),
+      servers: Array.from(
+        { length: Math.max(1, estacion.capacidadConcurrente) },
+        () => new Date(ahora),
+      ),
       parcial: sinCalendario,
       maquinas: new Map(),
       ccsConMaquina,
@@ -334,223 +331,296 @@ export function simularFlujo({
     return (resuelta && registros.get(resuelta.id)) || sinEstacion;
   };
 
-  // Estado inicial por item; los en curso ocupan su puesto YA (D3).
-  const sims: ItemSim[] = [];
+  // La unidad del scheduler deja de ser "el próximo índice de un item" y pasa
+  // a ser un nodo cuyas precedencias ya tienen fecha. Así tres ramas pueden
+  // competir por estaciones distintas y una convergencia toma el máximo de
+  // sus predecesores. Para datos históricos se deriva A → B → C por índice.
+  const pasoPorId = new Map(
+    items.flatMap((item) =>
+      item.pasos.map((paso) => [paso.id, { item, paso }] as const),
+    ),
+  );
+  const predecesores = new Map<string, string[]>();
   for (const item of items) {
-    if (item.sinRuta) continue;
-    const restantes = [...item.pasos]
-      .filter((paso) => paso.estado !== "hecho")
-      .sort((a, b) => a.indice - b.indice);
-    if (restantes.length === 0) continue;
-
-    const sim: ItemSim = {
-      data: item,
-      restantes,
-      idx: 0,
-      readyAt: new Date(ahora),
-      resultado: { finEstimado: null, sinEstimar: false, parcial: false, asumeDesbloqueo: false },
-      urgente: prioridadDerivada(item.fechaEntrega) === "urgent",
-      entregaTs: item.fechaEntrega ? new Date(item.fechaEntrega).getTime() : null,
-      done: false,
-    };
-    porItem.set(item.id, sim.resultado);
-
-    const frontera = restantes[0];
-    if (frontera.estado === "bloqueado") sim.resultado.asumeDesbloqueo = true;
-    if (frontera.estado === "en_curso") {
-      const est = estacionDe(frontera);
-      const duracion = duracionDePaso(frontera, medianas);
-      if (duracion == null) {
-        sim.resultado.sinEstimar = true;
-        sim.done = true;
-      } else {
-        const transcurrido = frontera.iniciadoEl
-          ? Math.max(0, (ahora.getTime() - new Date(frontera.iniciadoEl).getTime()) / 60000)
-          : 0;
-        const restanteMin = Math.max(duracion - transcurrido, MIN_RESTANTE_EN_CURSO);
-        const fin = sumarMinutosLaborales(est.calendario, ahora, restanteMin, noLaborables, zona);
-        if (fin === null) {
-          sim.done = true;
-        } else {
-          ocupar(est, fin);
-          if (est.parcial) sim.resultado.parcial = true;
-          anotar({
-            itemId: item.id,
-            pasoId: frontera.id,
-            pasoIndice: frontera.indice,
-            estacionKey: est.key,
-            inicio: new Date(ahora),
-            fin,
-            duracionMin: restanteMin,
-            // Ya está en curso: el material llegó hace rato.
-            preparacionMin: 0,
-            plazoDias: null,
-            esperaMin: 0,
-            parcial: est.parcial,
-            tercerizado: false,
-            enCurso: true,
-            candidatos: null,
-          });
-          sim.readyAt = fin;
-          sim.idx = 1;
-          if (sim.idx === restantes.length) {
-            sim.resultado.finEstimado = fin;
-            sim.done = true;
-          }
-        }
-      }
+    const ordenados = [...item.pasos].sort((a, b) => a.indice - b.indice);
+    for (let i = 0; i < ordenados.length; i += 1) {
+      const paso = ordenados[i];
+      predecesores.set(
+        paso.id,
+        paso.nodoClave
+          ? (paso.predecesorPasoIds ?? [])
+          : i > 0
+            ? [ordenados[i - 1].id]
+            : [],
+      );
     }
-    sims.push(sim);
   }
 
-  // List-scheduling (D2): siempre el candidato que puede arrancar antes;
-  // empates por urgencia > entrega más próxima > orden de emisión.
+  const resultadoDe = (item: TableroItemData) => {
+    let resultado = porItem.get(item.id);
+    if (!resultado) {
+      resultado = {
+        finEstimado: null,
+        sinEstimar: false,
+        parcial: false,
+        asumeDesbloqueo: item.pasos.some((paso) => paso.estado === "bloqueado"),
+      };
+      porItem.set(item.id, resultado);
+    }
+    return resultado;
+  };
+  for (const item of items) {
+    if (!item.sinRuta && item.pasos.some((paso) => paso.estado !== "hecho"))
+      resultadoDe(item);
+  }
+
+  const programados = new Set<string>();
+  const finTrabajo = new Map<string, Date>();
+  const disponibleDesde = new Map<string, Date>();
+  for (const { paso } of pasoPorId.values()) {
+    if (paso.estado !== "hecho") continue;
+    programados.add(paso.id);
+    finTrabajo.set(paso.id, new Date(ahora));
+    disponibleDesde.set(paso.id, new Date(ahora));
+  }
+
+  const pendientes = new Set(
+    [...pasoPorId.values()]
+      .filter(({ paso }) => paso.estado !== "hecho")
+      .map(({ paso }) => paso.id),
+  );
+  const itemsSinEstimacion = new Set<string>();
+  const itemsSinVentana = new Set<string>();
+  type Candidato = {
+    item: TableroItemData;
+    paso: TableroPasoData;
+    listo: Date;
+    inicio: Date;
+    est: EstacionSim | null;
+    duracion: number | null;
+  };
+  const esMejor = (a: Candidato, b: Candidato) => {
+    if (a.inicio.getTime() !== b.inicio.getTime()) return a.inicio < b.inicio;
+    // Si dos trabajos disputan el mismo hueco, atiende primero al que lleva
+    // más tiempo listo. Evita que una rama recién liberada se adelante a una
+    // OT que ya esperaba por ese puesto.
+    if (a.listo.getTime() !== b.listo.getTime()) return a.listo < b.listo;
+    const urgenteA = prioridadDerivada(a.item.fechaEntrega) === "urgent";
+    const urgenteB = prioridadDerivada(b.item.fechaEntrega) === "urgent";
+    if (urgenteA !== urgenteB) return urgenteA;
+    const entregaA = a.item.fechaEntrega
+      ? new Date(a.item.fechaEntrega).getTime()
+      : Number.POSITIVE_INFINITY;
+    const entregaB = b.item.fechaEntrega
+      ? new Date(b.item.fechaEntrega).getTime()
+      : Number.POSITIVE_INFINITY;
+    if (entregaA !== entregaB) return entregaA < entregaB;
+    if (a.item.ordenNumero !== b.item.ordenNumero)
+      return a.item.ordenNumero < b.item.ordenNumero;
+    return a.paso.indice < b.paso.indice;
+  };
+
   let guardia = 0;
-  const limite = sims.reduce((acc, sim) => acc + sim.restantes.length, 0) + 8;
-  while (guardia < limite) {
+  const limite = pendientes.size * 3 + 8;
+  while (pendientes.size > 0 && guardia < limite) {
     guardia += 1;
-
-    // Los tercerizados se resuelven ANTES de repartir capacidad: no compiten
-    // por un puesto (el proveedor trabaja en paralelo al taller), sólo corren
-    // el reloj del item y liberan al paso siguiente. Se drenan en cadena por
-    // si la ruta tiene dos seguidos.
-    for (const sim of sims) {
-      while (
-        !sim.done &&
-        sim.idx < sim.restantes.length &&
-        esTercerizado(sim.restantes[sim.idx])
-      ) {
-        const paso = sim.restantes[sim.idx];
-        const plazo = paso.plazoProveedorDias;
-        if (plazo == null || plazo < 0) {
-          // Sin lead time cargado no hay con qué estimar. Igual que cualquier
-          // paso sin duración (D6): no se inventa una ETA.
-          sim.resultado.sinEstimar = true;
-          sim.done = true;
-          break;
-        }
-        const fin = sumarDiasHabiles(sim.readyAt, plazo, noLaborables, zona);
-        anotar({
-          itemId: sim.data.id,
-          pasoId: paso.id,
-          pasoIndice: paso.indice,
-          estacionKey: PROVEEDOR_KEY,
-          inicio: new Date(sim.readyAt),
-          fin,
-          duracionMin: null,
-          // Lo hace el proveedor: no hay traslado interno que modelar.
-          preparacionMin: 0,
-          plazoDias: plazo,
-          esperaMin: 0,
-          parcial: false,
-          tercerizado: true,
-          enCurso: false,
-          candidatos: null,
-        });
-        sim.readyAt = fin;
-        sim.idx += 1;
-        if (sim.idx === sim.restantes.length) {
-          sim.resultado.finEstimado = fin;
-          sim.done = true;
-        }
-      }
-    }
-
-    let mejor: { sim: ItemSim; est: EstacionSim; duracion: number; start: Date } | null = null;
-    /* Cuántos trabajos competían por un puesto en este turno: es el "por
-       qué" de la decisión, no una métrica de performance. */
+    let mejor: Candidato | null = null;
     let candidatos = 0;
+    let marcoSinEstimacion = false;
 
-    for (const sim of sims) {
-      if (sim.done || sim.idx >= sim.restantes.length) continue;
-      const paso = sim.restantes[sim.idx];
-      const duracion = duracionDePaso(paso, medianas);
-      if (duracion == null) {
-        sim.resultado.sinEstimar = true;
-        sim.done = true;
+    for (const pasoId of pendientes) {
+      const nodo = pasoPorId.get(pasoId)!;
+      if (
+        itemsSinEstimacion.has(nodo.item.id) ||
+        itemsSinVentana.has(nodo.item.id)
+      )
+        continue;
+      const previos = predecesores.get(pasoId) ?? [];
+      if (!previos.every((id) => programados.has(id))) continue;
+      const listo = previos.reduce((max, id) => {
+        const fecha = disponibleDesde.get(id) ?? ahora;
+        return fecha > max ? fecha : max;
+      }, new Date(ahora));
+
+      if (esTercerizado(nodo.paso)) {
+        if (
+          nodo.paso.plazoProveedorDias == null ||
+          nodo.paso.plazoProveedorDias < 0
+        ) {
+          resultadoDe(nodo.item).sinEstimar = true;
+          itemsSinEstimacion.add(nodo.item.id);
+          marcoSinEstimacion = true;
+          continue;
+        }
+        const candidato: Candidato = {
+          ...nodo,
+          listo,
+          inicio: listo,
+          est: null,
+          duracion: null,
+        };
+        candidatos += 1;
+        if (!mejor || esMejor(candidato, mejor)) mejor = candidato;
         continue;
       }
-      const est = estacionDe(paso);
-      /* Hay que esperar a que se liberen los DOS recursos: el puesto y la
-         máquina. Cada uno ya viene con la separación del ocupante anterior
-         incorporada (se libera prep minutos después de terminar), así que
-         entre dos pasos del mismo recurso queda un hueco visible. */
+
+      const duracionBase = duracionDePaso(nodo.paso, medianas);
+      if (duracionBase == null) {
+        resultadoDe(nodo.item).sinEstimar = true;
+        itemsSinEstimacion.add(nodo.item.id);
+        marcoSinEstimacion = true;
+        continue;
+      }
+      const est = estacionDe(nodo.paso);
+      const enCurso = nodo.paso.estado === "en_curso";
+      const transcurrido =
+        enCurso && nodo.paso.iniciadoEl
+          ? Math.max(
+              0,
+              (ahora.getTime() - new Date(nodo.paso.iniciadoEl).getTime()) /
+                60000,
+            )
+          : 0;
+      const duracion = enCurso
+        ? Math.max(duracionBase - transcurrido, MIN_RESTANTE_EN_CURSO)
+        : duracionBase;
       const libreDesde = est.servers
-        ? est.servers.reduce((min, s) => (s < min ? s : min), est.servers[0])
-        : sim.readyAt;
-      const pool = poolDeMaquina(est, paso, ahora);
+        ? est.servers.reduce(
+            (min, fecha) => (fecha < min ? fecha : min),
+            est.servers[0],
+          )
+        : listo;
+      const pool = poolDeMaquina(est, nodo.paso, ahora);
       const maquinaLibre = pool
-        ? pool.reduce((min, s) => (s < min ? s : min), pool[0])
+        ? pool.reduce((min, fecha) => (fecha < min ? fecha : min), pool[0])
         : null;
-      let startRaw = libreDesde > sim.readyAt ? libreDesde : sim.readyAt;
-      if (maquinaLibre && maquinaLibre > startRaw) startRaw = maquinaLibre;
-      const start = avanzarAVentana(est.calendario, startRaw, noLaborables, zona);
-      if (start === null) {
-        sim.done = true;
+      let inicioCrudo = enCurso
+        ? new Date(ahora)
+        : libreDesde > listo
+          ? libreDesde
+          : listo;
+      if (!enCurso && maquinaLibre && maquinaLibre > inicioCrudo)
+        inicioCrudo = maquinaLibre;
+      const inicio = avanzarAVentana(
+        est.calendario,
+        inicioCrudo,
+        noLaborables,
+        zona,
+      );
+      if (!inicio) {
+        // La duración es conocida: no es "sin estimar". Simplemente no hay
+        // ninguna ventana laboral dentro del horizonte configurado.
+        itemsSinVentana.add(nodo.item.id);
+        marcoSinEstimacion = true;
         continue;
       }
-      const candidato = { sim, est, duracion, start };
+      const candidato: Candidato = { ...nodo, listo, inicio, est, duracion };
       candidatos += 1;
-      if (!mejor || antesQue(candidato, mejor)) mejor = candidato;
+      if (!mejor || esMejor(candidato, mejor)) mejor = candidato;
     }
-    if (!mejor) break;
 
-    const { sim, est, duracion, start } = mejor;
-    const paso = sim.restantes[sim.idx];
-    const prep = est.preparacionMin;
-    const fin = sumarMinutosLaborales(est.calendario, start, duracion, noLaborables, zona);
-    if (fin === null) {
-      sim.done = true;
-      continue;
+    if (!mejor) {
+      if (marcoSinEstimacion) continue;
+      break;
     }
-    /* La separación entre pasos es un hueco DESPUÉS del trabajo: cambio de
-       material, traslado, el operario que no arranca lo siguiente en el mismo
-       instante. Se aplica liberando el puesto, la máquina y el item `prep`
-       minutos más tarde que el fin, así que el próximo paso de ese recurso
-       arranca con un hueco visible. El bloque que se dibuja es sólo el
-       trabajo (start → fin); la separación queda como aire entre bloques. */
-    const finSeparado =
-      prep > 0
-        ? (sumarMinutosLaborales(est.calendario, fin, prep, noLaborables, zona) ?? fin)
-        : fin;
-    ocupar(est, finSeparado);
-    ocuparMaquina(est, paso, finSeparado, ahora);
-    if (est.parcial) sim.resultado.parcial = true;
+
+    const { item, paso, listo, inicio, est, duracion } = mejor;
+    let fin: Date;
+    let finSeparado: Date;
+    let preparacionMin = 0;
+    if (esTercerizado(paso)) {
+      fin = sumarDiasHabiles(
+        listo,
+        paso.plazoProveedorDias!,
+        noLaborables,
+        zona,
+      );
+      finSeparado = fin;
+    } else {
+      fin = sumarMinutosLaborales(
+        est!.calendario,
+        inicio,
+        duracion!,
+        noLaborables,
+        zona,
+      )!;
+      preparacionMin = est!.preparacionMin;
+      finSeparado =
+        preparacionMin > 0
+          ? (sumarMinutosLaborales(
+              est!.calendario,
+              fin,
+              preparacionMin,
+              noLaborables,
+              zona,
+            ) ?? fin)
+          : fin;
+      ocupar(est!, finSeparado);
+      ocuparMaquina(est!, paso, finSeparado, ahora);
+      if (est!.parcial) resultadoDe(item).parcial = true;
+    }
+
+    programados.add(paso.id);
+    pendientes.delete(paso.id);
+    finTrabajo.set(paso.id, fin);
+    disponibleDesde.set(paso.id, finSeparado);
     anotar({
-      itemId: sim.data.id,
+      itemId: item.id,
       pasoId: paso.id,
       pasoIndice: paso.indice,
-      estacionKey: est.key,
-      inicio: start,
+      estacionKey: esTercerizado(paso) ? PROVEEDOR_KEY : est!.key,
+      inicio,
       fin,
       duracionMin: duracion,
-      preparacionMin: prep,
-      plazoDias: null,
-      // El trabajo estaba listo en readyAt; si arrancó después, esperó puesto
-      // o máquina.
+      preparacionMin,
+      plazoDias: esTercerizado(paso) ? paso.plazoProveedorDias : null,
       esperaMin: Math.max(
         0,
-        Math.round((start.getTime() - sim.readyAt.getTime()) / 60000),
+        Math.round((inicio.getTime() - listo.getTime()) / 60000),
       ),
-      parcial: est.parcial,
-      tercerizado: false,
-      enCurso: false,
+      parcial: esTercerizado(paso) ? false : est!.parcial,
+      tercerizado: esTercerizado(paso),
+      enCurso: paso.estado === "en_curso",
       candidatos,
     });
-    // Llegada = cuando el paso queda listo (no cuando arranca): los pasos
-    // que NO son la frontera actual son la "carga en camino" con timing.
-    if (sim.idx > 0 || !pasoActivo(sim.data, paso)) {
-      const lista = llegadasPorEstacion.get(est.key) ?? [];
-      lista.push({ pasoId: paso.id, itemId: sim.data.id, llegada: sim.readyAt, duracionMin: duracion });
-      llegadasPorEstacion.set(est.key, lista);
+    if (!esTercerizado(paso) && listo > ahora) {
+      const lista = llegadasPorEstacion.get(est!.key) ?? [];
+      lista.push({
+        pasoId: paso.id,
+        itemId: item.id,
+        llegada: listo,
+        duracionMin: duracion!,
+      });
+      llegadasPorEstacion.set(est!.key, lista);
     }
-    // El item queda libre para su próximo paso `prep` después (traslado),
-    // pero su ETA es el fin del trabajo real, no incluye la separación final.
-    sim.readyAt = finSeparado;
-    sim.idx += 1;
-    if (sim.idx === sim.restantes.length) {
-      sim.resultado.finEstimado = fin;
-      sim.done = true;
+  }
+
+  // Si quedó un nodo sin programar, depende de un camino sin duración o de
+  // una referencia imposible. No se inventa fecha: se propaga "sin estimar".
+  for (const pasoId of pendientes) {
+    const nodo = pasoPorId.get(pasoId);
+    if (nodo && !itemsSinVentana.has(nodo.item.id))
+      resultadoDe(nodo.item).sinEstimar = true;
+  }
+  for (const item of items) {
+    const resultado = porItem.get(item.id);
+    if (!resultado || resultado.sinEstimar) continue;
+    const terminalesDeclarados = item.pasos.filter((paso) => paso.esTerminal);
+    const terminales =
+      terminalesDeclarados.length > 0
+        ? terminalesDeclarados
+        : item.pasos.filter((paso) =>
+            item.pasos.every(
+              (otro) => !(predecesores.get(otro.id) ?? []).includes(paso.id),
+            ),
+          );
+    const fechas = terminales
+      .map((paso) => finTrabajo.get(paso.id))
+      .filter((fecha): fecha is Date => fecha != null);
+    if (fechas.length === terminales.length && fechas.length > 0) {
+      resultado.finEstimado = fechas.reduce((max, fecha) =>
+        fecha > max ? fecha : max,
+      );
     }
   }
 
@@ -604,20 +674,6 @@ function ocupar(est: EstacionSim, fin: Date) {
     if (est.servers[i] < est.servers[idx]) idx = i;
   }
   est.servers[idx] = fin;
-}
-
-function antesQue(
-  a: { sim: ItemSim; start: Date },
-  b: { sim: ItemSim; start: Date },
-): boolean {
-  if (a.start.getTime() !== b.start.getTime()) return a.start < b.start;
-  if (a.sim.urgente !== b.sim.urgente) return a.sim.urgente;
-  const entregaA = a.sim.entregaTs ?? Number.POSITIVE_INFINITY;
-  const entregaB = b.sim.entregaTs ?? Number.POSITIVE_INFINITY;
-  if (entregaA !== entregaB) return entregaA < entregaB;
-  // FIFO real: el que ESPERA en la estación desde antes va primero.
-  if (a.sim.readyAt.getTime() !== b.sim.readyAt.getTime()) return a.sim.readyAt < b.sim.readyAt;
-  return a.sim.data.ordenNumero < b.sim.data.ordenNumero;
 }
 
 // ── Fase 3: demora sugerida para trabajo NUEVO (cotizador) ───────────────

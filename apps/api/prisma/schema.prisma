@@ -776,6 +776,7 @@ model Tenant {
   revisionesRecorridoVectorial                     RecorridoVectorialRevision[]
   ordenTrabajoItemPasos                            OrdenTrabajoItemPaso[]
   ordenTrabajoPasoDependencias                     OrdenTrabajoPasoDependencia[]
+  ordenTrabajoPasoGates                            OrdenTrabajoPasoGate[]
   etaPromesas                                      EtaPromesa[]
   etaSnapshotsEstacion                             EtaSnapshotEstacion[]
   etaSnapshotsItem                                 EtaSnapshotItem[]
@@ -3653,6 +3654,7 @@ model OrdenTrabajo {
   items                       OrdenTrabajoItem[]
   pasos                       OrdenTrabajoItemPaso[]
   dependenciasPasos           OrdenTrabajoPasoDependencia[]
+  gatesPasos                  OrdenTrabajoPasoGate[]
   eventos                     OrdenTrabajoEvento[]
   cobros                      Cobro[]
   aplicacionesCobro           CobroOrden[]
@@ -3691,6 +3693,11 @@ model OrdenTrabajoItem {
   /// sus pasos continúan interpretándose como secuencia por `indice`.
   topologiaProduccion         TopologiaProduccion          @default(LINEAL)
   grafoProduccionSnapshotJson Json?
+  /// Descomposición ejecutable de un componente fabricado. Null identifica
+  /// una línea comercial principal; los hijos viven en la misma OT.
+  parentItemId                String?                      @db.Uuid
+  componenteCodigo            String?                      @db.VarChar(100)
+  nodoIncorporacionClave      String?                      @db.VarChar(160)
   codigo                      String
   nombre                      String
   /// Etiqueta corta legada (subcategoría). Preferir los dos campos de abajo.
@@ -3745,14 +3752,18 @@ model OrdenTrabajoItem {
   orden                       OrdenTrabajo                 @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   cotizacionItem              CotizacionItem?              @relation(fields: [cotizacionItemId], references: [id])
   recetaRevision              ProductoRecetaRevision?      @relation(fields: [recetaRevisionId], references: [id], onDelete: SetNull)
+  parentItem                  OrdenTrabajoItem?            @relation("ComponentesFabricadosOT", fields: [parentItemId], references: [id], onDelete: Cascade)
+  componentesFabricados       OrdenTrabajoItem[]           @relation("ComponentesFabricadosOT")
   pasos                       OrdenTrabajoItemPaso[]
   etaPromesas                 EtaPromesa[]
   archivos                    Archivo[]
   revisionesRecorrido         RecorridoVectorialRevision[]
   gatesDocumento              GateProduccionDocumento[]
 
+  @@unique([parentItemId, componenteCodigo])
   @@index([tenantId, ordenId])
   @@index([tenantId, recetaRevisionId])
+  @@index([tenantId, parentItemId])
   @@index([ordenId, entregadoEl])
 }
 
@@ -3949,6 +3960,7 @@ model OrdenTrabajoItemPaso {
   gatesDocumento        GateProduccionDocumento[]
   dependenciasSalientes OrdenTrabajoPasoDependencia[] @relation("PasoPredecesor")
   dependenciasEntrantes OrdenTrabajoPasoDependencia[] @relation("PasoSucesor")
+  gatesOperativos       OrdenTrabajoPasoGate[]
 
   /// Un solo paso por posición de la ruta. Es la garantía DURA contra la
   /// doble materialización: el backfill perezoso chequea "item sin pasos" y
@@ -3964,6 +3976,33 @@ model OrdenTrabajoItemPaso {
   @@index([tenantId, mesaUsuarioId])
   @@index([tenantId, maquinaId])
   @@index([tenantId, estado, completadoEl])
+}
+
+/// Condición operativa congelada sobre un nodo de una OT. En Fase 4 puede
+/// resolverse manualmente y queda auditada; Calidad (F7) e Inventario (F9)
+/// usarán la misma entidad para resolverla desde sus procesos específicos.
+model OrdenTrabajoPasoGate {
+  id                String               @id @default(uuid()) @db.Uuid
+  tenantId          String               @db.Uuid
+  ordenId           String               @db.Uuid
+  pasoId            String               @db.Uuid
+  /// 'MATERIAL' | 'CALIDAD'. Aprobación, componente y tercerización tienen
+  /// fuentes propias y se proyectan como gates en el motor de ejecución.
+  tipo              String               @db.VarChar(40)
+  estado            String               @default("PENDIENTE") @db.VarChar(20)
+  detalle           String?              @db.VarChar(500)
+  resueltoEl        DateTime?
+  resueltoPorId     String?              @db.Uuid
+  resueltoPorNombre String?              @db.VarChar(200)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden             OrdenTrabajo         @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  paso              OrdenTrabajoItemPaso @relation(fields: [pasoId], references: [id], onDelete: Cascade)
+
+  @@unique([pasoId, tipo])
+  @@index([tenantId, ordenId])
+  @@index([tenantId, estado])
 }
 
 /// Arista de precedencia materializada para la ejecución real de una OT. Se

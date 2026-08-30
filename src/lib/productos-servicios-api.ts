@@ -122,7 +122,11 @@ export interface ProductoRecetaRevision {
   topologiaProduccion: "LINEAL" | "DAG";
   grafoProduccionJson?: {
     topologia: "LINEAL" | "DAG";
-    nodos: Array<{ clave: string; indice: number }>;
+    nodos: Array<{
+      clave: string;
+      indice: number;
+      gates?: Array<"MATERIAL" | "CALIDAD">;
+    }>;
     aristas: Array<{ desdeClave: string; haciaClave: string }>;
     raices: string[];
     terminales: string[];
@@ -246,6 +250,10 @@ export function guardarBorradorReceta(
     documentos?: ProductoRecetaDocumentoInput[];
     componentes?: ProductoRecetaComponenteInput[];
     dependencias?: Array<{ desdeClave: string; haciaClave: string }>;
+    gates?: Array<{
+      nodoClave: string;
+      tipo: "MATERIAL" | "CALIDAD";
+    }>;
   },
 ): Promise<ProductoRecetaRevision> {
   return apiRequest<ProductoRecetaRevision>(

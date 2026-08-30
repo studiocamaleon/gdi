@@ -90,7 +90,9 @@ describe('alcance seguro del Tablero de producción', () => {
     };
     service.reconciliarTramosVencidos = jest.fn().mockResolvedValue(undefined);
     service.backfillPasosTablero = jest.fn().mockResolvedValue(undefined);
-    service.tecnologiaPorMaquinaDeItems = jest.fn().mockResolvedValue(new Map());
+    service.tecnologiaPorMaquinaDeItems = jest
+      .fn()
+      .mockResolvedValue(new Map());
 
     const respuesta = await service.tablero(
       authCon(['comercial.ver', 'comercial.gestionar', 'produccion.ver']),
@@ -230,7 +232,10 @@ describe('alcance seguro del Tablero de producción', () => {
 
     expect(respuesta.alcance).toBe('completo');
     expect(respuesta.items).toHaveLength(1);
-    expect(respuesta.items[0]?.pasos.map((p) => p.id)).toEqual(['propio', 'ajeno']);
+    expect(respuesta.items[0]?.pasos.map((p) => p.id)).toEqual([
+      'propio',
+      'ajeno',
+    ]);
     expect(respuesta.items[0]).toMatchObject({
       caras: 2,
       briefDiseno: {
@@ -276,7 +281,9 @@ describe('concurrencia del Tablero de producción', () => {
         ]),
       },
     };
-    service.tableroItemActualizado = jest.fn().mockResolvedValue({ id: 'item-1' });
+    service.tableroItemActualizado = jest
+      .fn()
+      .mockResolvedValue({ id: 'item-1' });
 
     await expect(
       service.mesaPaso(
@@ -440,7 +447,19 @@ describe('concurrencia del Tablero de producción', () => {
     const ordenUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
     const tx = {
       ordenTrabajo: { updateMany: ordenUpdateMany },
-      ordenTrabajoItemPaso: { updateMany: pasoUpdateMany },
+      ordenTrabajoItemPaso: {
+        updateMany: pasoUpdateMany,
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'paso-1',
+            itemId: 'item-1',
+            indice: 0,
+            nodoClave: null,
+            estado: 'pendiente',
+            duracionEstimadaMin: 10,
+          },
+        ]),
+      },
       ordenTrabajoPasoTramo: { create: tramoCreate },
     };
     const service = servicioVacio() as unknown as {

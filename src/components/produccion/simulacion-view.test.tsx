@@ -14,7 +14,10 @@ vi.mock("@/lib/fuentes-simulacion", () => ({ fuentesSimulacion: "" }));
 import { SimulacionView } from "@/components/produccion/simulacion-view";
 import { simularFlujo } from "@/lib/flujo-produccion";
 import type { CalendarioEstacion, Estacion } from "@/lib/estaciones";
-import type { TableroItemData, TableroPasoData } from "@/lib/tablero-produccion";
+import type {
+  TableroItemData,
+  TableroPasoData,
+} from "@/lib/tablero-produccion";
 
 const CAL: CalendarioEstacion = {
   dias: {
@@ -88,24 +91,36 @@ const item = (
   nombre: string,
   pasos: TableroPasoData[],
   fechaEntrega: string | null = null,
-): TableroItemData => ({
-  id,
-  ordenId: `o-${id}`,
-  ordenNumero,
-  ordenEstado: "produccion",
-  itemIndice: 0,
-  codigo: id,
-  nombre,
-  clienteNombre: "Imprenta Imagen",
-  vendedorNombre: "",
-  cantidad: 1,
-  cantidadUnidad: "u",
-  specs: [],
-  fechaEntrega,
-  archivosCount: 0,
-  sinRuta: false,
-  pasos,
-});
+): TableroItemData => {
+  const ids = new Map(pasos.map((paso) => [paso.id, `${id}-${paso.id}`]));
+  return {
+    id,
+    ordenId: `o-${id}`,
+    ordenNumero,
+    ordenEstado: "produccion",
+    itemIndice: 0,
+    codigo: id,
+    nombre,
+    clienteNombre: "Imprenta Imagen",
+    vendedorNombre: "",
+    cantidad: 1,
+    cantidadUnidad: "u",
+    specs: [],
+    fechaEntrega,
+    archivosCount: 0,
+    sinRuta: false,
+    pasos: pasos.map((paso) => ({
+      ...paso,
+      id: ids.get(paso.id)!,
+      predecesorPasoIds: (paso.predecesorPasoIds ?? []).map(
+        (pasoId) => ids.get(pasoId) ?? pasoId,
+      ),
+      sucesorPasoIds: (paso.sucesorPasoIds ?? []).map(
+        (pasoId) => ids.get(pasoId) ?? pasoId,
+      ),
+    })),
+  };
+};
 
 function montar(vistaInicial: "mesa" | "proj" = "mesa") {
   const estaciones = [
@@ -122,12 +137,18 @@ function montar(vistaInicial: "mesa" | "proj" = "mesa") {
       // Familia sin estación: cae al carril de capacidad infinita.
       paso(1, "Pegado", "trabajo_manual", 20),
     ]),
-    item("C", "OT-2026-0003", "Lona", [
-      paso(0, "Offset", "impresion", null, {
-        tipoEjecucion: "tercerizado",
-        plazoProveedorDias: 5,
-      }),
-    ], "2026-07-21T00:00:00.000Z"),
+    item(
+      "C",
+      "OT-2026-0003",
+      "Lona",
+      [
+        paso(0, "Offset", "impresion", null, {
+          tipoEjecucion: "tercerizado",
+          plazoProveedorDias: 5,
+        }),
+      ],
+      "2026-07-21T00:00:00.000Z",
+    ),
   ];
   const sim = simularFlujo({
     items,

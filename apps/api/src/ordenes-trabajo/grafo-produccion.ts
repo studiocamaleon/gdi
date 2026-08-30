@@ -3,7 +3,10 @@ export type TopologiaProduccion = 'LINEAL' | 'DAG';
 export type NodoGrafoProduccion = {
   clave: string;
   indice: number;
+  gates?: TipoGateOperativo[];
 };
+
+export type TipoGateOperativo = 'MATERIAL' | 'CALIDAD';
 
 export type AristaGrafoProduccion = {
   desdeClave: string;
@@ -42,7 +45,11 @@ export function validarYOrdenarGrafo(
 ): GrafoProduccion {
   const claves = clavesUnicas(nodosEntrada);
   const nodos = [...nodosEntrada]
-    .map((nodo) => ({ ...nodo, clave: nodo.clave.trim() }))
+    .map((nodo) => ({
+      ...nodo,
+      clave: nodo.clave.trim(),
+      gates: [...new Set(nodo.gates ?? [])].sort(),
+    }))
     .sort((a, b) => a.indice - b.indice || a.clave.localeCompare(b.clave));
   const indicePorClave = new Map(
     nodos.map((nodo) => [nodo.clave, nodo.indice]),
