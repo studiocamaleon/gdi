@@ -99,12 +99,28 @@ export class RecetaComponenteDto {
   @IsBoolean()
   requerido?: boolean;
 
+  /** Nodo del producto padre que queda bloqueado hasta recibir el componente. */
+  @IsOptional()
+  @IsString()
+  @Length(1, 160)
+  nodoIncorporacionClave?: string | null;
+
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   @Max(10_000)
   orden?: number;
+}
+
+export class RecetaDependenciaDto {
+  @IsString()
+  @Length(1, 160)
+  desdeClave!: string;
+
+  @IsString()
+  @Length(1, 160)
+  haciaClave!: string;
 }
 
 export class GuardarBorradorRecetaDto {
@@ -134,6 +150,15 @@ export class GuardarBorradorRecetaDto {
   @ValidateNested({ each: true })
   @Type(() => RecetaComponenteDto)
   componentes?: RecetaComponenteDto[];
+
+  /** Aristas obligatorias del flujo. Si se omiten, se conserva el borrador
+   * actual o se compila la ruta lineal por primera vez. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(300)
+  @ValidateNested({ each: true })
+  @Type(() => RecetaDependenciaDto)
+  dependencias?: RecetaDependenciaDto[];
 }
 
 export class PublicarRecetaDto {

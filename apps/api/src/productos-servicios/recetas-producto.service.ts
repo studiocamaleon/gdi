@@ -24,6 +24,11 @@ import type {
 } from './dto/receta-producto.dto';
 import { ProductoValidacionService } from './producto-validacion.service';
 import { ProductosService } from './productos.service';
+import {
+  compilarRutaLineal,
+  validarYOrdenarGrafo,
+  type GrafoProduccion,
+} from '../ordenes-trabajo/grafo-produccion';
 
 type ProductoDetalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaDetalle = ProductoDetalle['rutasAlternativas'][number];
@@ -73,6 +78,27 @@ export function huellaDe(valor: unknown): string {
 function numero(valor: unknown, fallback = 0): number {
   const result = Number(valor);
   return Number.isFinite(result) ? result : fallback;
+}
+
+function grafoParaConfiguracion(
+  configuracion: SnapshotConfiguracion,
+  aristas?: Array<{ desdeClave: string; haciaClave: string }>,
+): GrafoProduccion {
+  const nodos = configuracion.pasos.map((paso, indice) => ({
+    clave: paso.clave,
+    indice,
+  }));
+  try {
+    return aristas
+      ? validarYOrdenarGrafo(nodos, aristas)
+      : compilarRutaLineal(nodos);
+  } catch (error: unknown) {
+    throw new BadRequestException(
+      error instanceof Error
+        ? error.message
+        : 'La topología productiva no es válida.',
+    );
+  }
 }
 
 @Injectable()
@@ -143,6 +169,11 @@ export class RecetasProductoService {
     const ruta = this.encontrarRuta(producto, rutaAlternativaId);
     const snapshot = {
       ...this.snapshotConfiguracion(producto, ruta),
+      ...(receta.revisionPublicada.grafoProduccionJson
+        ? {
+            grafoProduccion: receta.revisionPublicada.grafoProduccionJson,
+          }
+        : {}),
       documentos: this.documentosCanonicos(receta.revisionPublicada.documentos),
       componentes: this.componentesCanonicos(
         await this.componentesConRevisionActual(
@@ -177,6 +208,7 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad,
         requerido: item.requerido,
+        nodoIncorporacionClave: item.nodoIncorporacionClave,
         orden: item.orden,
       })),
     };
@@ -249,6 +281,7 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad,
         requerido: item.requerido,
+        nodoIncorporacionClave: item.nodoIncorporacionClave,
         orden: item.orden,
       })) ??
       [];
@@ -263,8 +296,46 @@ export class RecetasProductoService {
       componentes,
     );
 
+    const aristasFuente = dto.dependencias
+      ? dto.dependencias.map((dependencia) => ({
+          desdeClave: dependencia.desdeClave,
+          haciaClave: dependencia.haciaClave,
+        }))
+      : (borradorExistente?.grafoProduccionJson ??
+          existente?.revisionPublicada?.grafoProduccionJson)
+        ? (
+            (borradorExistente?.grafoProduccionJson ??
+              existente?.revisionPublicada
+                ?.grafoProduccionJson) as unknown as GrafoProduccion
+          ).aristas
+        : undefined;
+    const grafoProduccion = grafoParaConfiguracion(
+      configuracion,
+      aristasFuente,
+    );
+    const clavesNodo = new Set(grafoProduccion.nodos.map((nodo) => nodo.clave));
+    for (const componente of componentes) {
+      if (
+        (componente.politicaEjecucion ?? 'INDEPENDIENTE') === 'INDEPENDIENTE' &&
+        !componente.nodoIncorporacionClave
+      ) {
+        throw new BadRequestException(
+          `El componente "${componente.nombre}" necesita un nodo de incorporación en el flujo principal.`,
+        );
+      }
+      if (
+        componente.nodoIncorporacionClave &&
+        !clavesNodo.has(componente.nodoIncorporacionClave)
+      ) {
+        throw new BadRequestException(
+          `El nodo de incorporación de "${componente.nombre}" ya no existe en esta ruta.`,
+        );
+      }
+    }
+
     const snapshot = {
       ...configuracion,
+      grafoProduccion,
       documentos: this.documentosCanonicos(documentos),
       componentes: this.componentesCanonicos(componentesVersionados),
     };
@@ -314,6 +385,8 @@ export class RecetasProductoService {
             rutaVersion: ruta.rutaVersion,
             huellaConfiguracion: huella,
             snapshotJson: snapshot as Prisma.InputJsonValue,
+            topologiaProduccion: grafoProduccion.topologia,
+            grafoProduccionJson: grafoProduccion as Prisma.InputJsonValue,
             cambios: dto.cambios ?? revision.cambios,
             creadaPorId: auth.userId,
             creadaPorNombre: actorNombre,
@@ -334,6 +407,8 @@ export class RecetasProductoService {
             rutaVersion: ruta.rutaVersion,
             huellaConfiguracion: huella,
             snapshotJson: snapshot as Prisma.InputJsonValue,
+            topologiaProduccion: grafoProduccion.topologia,
+            grafoProduccionJson: grafoProduccion as Prisma.InputJsonValue,
             cambios: dto.cambios,
             creadaPorId: auth.userId,
             creadaPorNombre: actorNombre,
@@ -377,6 +452,7 @@ export class RecetasProductoService {
             cantidad: item.cantidad,
             unidad: item.unidad ?? 'unidad',
             requerido: item.requerido ?? true,
+            nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
             orden: item.orden ?? index,
           })),
         });
@@ -461,6 +537,9 @@ export class RecetasProductoService {
     );
     const snapshotActual = {
       ...configuracion,
+      ...(revision.grafoProduccionJson
+        ? { grafoProduccion: revision.grafoProduccionJson }
+        : {}),
       documentos: this.documentosCanonicos(revision.documentos),
       componentes: this.componentesCanonicos(componentesActuales),
     };
@@ -894,6 +973,7 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad ?? 'unidad',
         requerido: item.requerido ?? true,
+        nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
         orden: item.orden ?? index,
       }))
       .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo));

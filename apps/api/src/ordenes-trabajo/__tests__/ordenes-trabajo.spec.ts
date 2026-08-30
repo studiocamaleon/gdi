@@ -14,6 +14,7 @@ import {
   ordenSeFinaliza,
   pasoEjecutable,
   pasoReabrible,
+  progresoPonderadoPasos,
   sumaTramosMin,
   TRANSICIONES_PASO,
   validarCancelacion,
@@ -737,6 +738,26 @@ describe('auto-finalización — ordenSeFinaliza', () => {
 
   it('una OT sin pasos materializados no se auto-finaliza', () => {
     expect(ordenSeFinaliza('completar', 0, 0)).toBe(false);
+  });
+});
+
+describe('progreso DAG ponderado por duración', () => {
+  it('una rama breve no pesa igual que una operación larga', () => {
+    expect(
+      progresoPonderadoPasos([
+        { estado: 'hecho', duracionEstimadaMin: 15 },
+        { estado: 'pendiente', duracionEstimadaMin: 225 },
+      ]),
+    ).toBe(6);
+  });
+
+  it('sin duraciones conserva el avance histórico por cantidad', () => {
+    expect(
+      progresoPonderadoPasos([
+        { estado: 'hecho', duracionEstimadaMin: null },
+        { estado: 'pendiente', duracionEstimadaMin: null },
+      ]),
+    ).toBe(50);
   });
 });
 

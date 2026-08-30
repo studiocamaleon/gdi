@@ -437,6 +437,14 @@ enum EstadoProductoRecetaRevision {
   DEPRECADA
 }
 
+/// Forma del flujo productivo congelado en una receta y materializado en la
+/// orden. LINEAL conserva el comportamiento histórico; DAG habilita ramas y
+/// convergencias con precedencias explícitas.
+enum TopologiaProduccion {
+  LINEAL
+  DAG
+}
+
 enum TipoProductoRecetaComponente {
   FABRICADO
 }
@@ -767,6 +775,7 @@ model Tenant {
   ordenTrabajoItems                                OrdenTrabajoItem[]
   revisionesRecorridoVectorial                     RecorridoVectorialRevision[]
   ordenTrabajoItemPasos                            OrdenTrabajoItemPaso[]
+  ordenTrabajoPasoDependencias                     OrdenTrabajoPasoDependencia[]
   etaPromesas                                      EtaPromesa[]
   etaSnapshotsEstacion                             EtaSnapshotEstacion[]
   etaSnapshotsItem                                 EtaSnapshotItem[]
@@ -2718,6 +2727,10 @@ model ProductoRecetaRevision {
   rutaVersion         Int
   huellaConfiguracion String                       @db.VarChar(64)
   snapshotJson        Json
+  /// Contrato de ejecución de esta versión. Una receta publicada nunca
+  /// cambia: el grafo queda congelado junto con el resto del snapshot.
+  topologiaProduccion TopologiaProduccion          @default(LINEAL)
+  grafoProduccionJson Json?
   cambios             String?                      @db.VarChar(1500)
   creadaPorId         String?                      @db.Uuid
   creadaPorNombre     String                       @db.VarChar(200)
@@ -2820,23 +2833,25 @@ model ProductoRecetaRecurso {
 /// Componente fabricado con identidad productiva propia. Los componentes
 /// comprados simples permanecen como materiales con rol COMPONENTE.
 model ProductoRecetaComponente {
-  id                   String                            @id @default(uuid()) @db.Uuid
-  tenantId             String                            @db.Uuid
-  revisionId           String                            @db.Uuid
-  productoComponenteId String                            @db.Uuid
-  recetaRevisionId     String                            @db.Uuid
-  recetaVersion        Int
-  recetaHuella         String                            @db.VarChar(64)
-  codigo               String                            @db.VarChar(100)
-  nombre               String                            @db.VarChar(180)
-  tipo                 TipoProductoRecetaComponente      @default(FABRICADO)
-  politicaEjecucion    PoliticaEjecucionRecetaComponente @default(INDEPENDIENTE)
-  formula              String                            @default("por_unidad") @db.VarChar(60)
-  cantidad             Decimal                           @default(1) @db.Decimal(14, 6)
-  unidad               String                            @default("unidad") @db.VarChar(40)
-  requerido            Boolean                           @default(true)
-  orden                Int                               @default(0)
-  createdAt            DateTime                          @default(now())
+  id                     String                            @id @default(uuid()) @db.Uuid
+  tenantId               String                            @db.Uuid
+  revisionId             String                            @db.Uuid
+  productoComponenteId   String                            @db.Uuid
+  recetaRevisionId       String                            @db.Uuid
+  recetaVersion          Int
+  recetaHuella           String                            @db.VarChar(64)
+  codigo                 String                            @db.VarChar(100)
+  nombre                 String                            @db.VarChar(180)
+  tipo                   TipoProductoRecetaComponente      @default(FABRICADO)
+  politicaEjecucion      PoliticaEjecucionRecetaComponente @default(INDEPENDIENTE)
+  formula                String                            @default("por_unidad") @db.VarChar(60)
+  cantidad               Decimal                           @default(1) @db.Decimal(14, 6)
+  unidad                 String                            @default("unidad") @db.VarChar(40)
+  requerido              Boolean                           @default(true)
+  /// Nodo del producto padre al que esta ejecución debe entregar su salida.
+  nodoIncorporacionClave String?                           @db.VarChar(160)
+  orden                  Int                               @default(0)
+  createdAt              DateTime                          @default(now())
 
   tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   revision           ProductoRecetaRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
@@ -3527,43 +3542,43 @@ model CotizacionItem {
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
 model OrdenTrabajo {
-  id                          String                    @id @default(uuid()) @db.Uuid
-  tenantId                    String                    @db.Uuid
+  id                          String                        @id @default(uuid()) @db.Uuid
+  tenantId                    String                        @db.Uuid
   /// UUID estable del comando de creación. Permite devolver la misma OT ante
   /// reintentos luego de una respuesta perdida, sin duplicar taller ni cobros.
-  idempotencyKey              String?                   @db.Uuid
+  idempotencyKey              String?                       @db.Uuid
   /// "OT-2026-0184" — asignado al crear vía OrdenTrabajoContador.
   numero                      String
-  clienteId                   String?                   @db.Uuid
-  proyectoCampanaId           String?                   @db.Uuid
-  vendedorEmpleadoId          String?                   @db.Uuid
+  clienteId                   String?                       @db.Uuid
+  proyectoCampanaId           String?                       @db.Uuid
+  vendedorEmpleadoId          String?                       @db.Uuid
   /// Presupuesto de origen (si vino del cotizador).
-  cotizacionId                String?                   @db.Uuid
+  cotizacionId                String?                       @db.Uuid
   /// 'borrador' | 'pendiente' | 'produccion' | 'finalizada' | 'entregada' |
   /// 'cancelada'. Las cinco primeras son una SECUENCIA que sólo avanza;
   /// 'cancelada' es una salida lateral y terminal.
-  estado                      String                    @default("borrador")
+  estado                      String                        @default("borrador")
   fechaEmision                DateTime?
-  fechaEntrega                DateTime?                 @db.Date
+  fechaEntrega                DateTime?                     @db.Date
   observaciones               String?
   /// 'mostrador' | 'web' | 'vendedor_externo' | 'telefono'.
   canalVenta                  String?
   /// Denormalizados para el listado; la fuente de verdad es items/snapshot.
-  subtotal                    Decimal?                  @db.Decimal(14, 2)
-  impuestos                   Decimal?                  @db.Decimal(14, 2)
-  cargosDirectos              Decimal?                  @db.Decimal(14, 2)
+  subtotal                    Decimal?                      @db.Decimal(14, 2)
+  impuestos                   Decimal?                      @db.Decimal(14, 2)
+  cargosDirectos              Decimal?                      @db.Decimal(14, 2)
   /// Snapshots de cargos a nivel orden. Null en órdenes históricas.
   cargosDirectosJson          Json?
   /// Σ de los descuentos comerciales de los items (sobre el neto), denormalizado
   /// para el listado. El descuento ya está DENTRO de `subtotal`/`total`.
-  descuentoTotal              Decimal?                  @db.Decimal(14, 2)
-  total                       Decimal?                  @db.Decimal(14, 2)
+  descuentoTotal              Decimal?                      @db.Decimal(14, 2)
+  total                       Decimal?                      @db.Decimal(14, 2)
   /// Avance 0-100 informado por producción; null = sin dato.
   progresoPct                 Int?
   /// Token aleatorio url-safe del link PÚBLICO de seguimiento del cliente
   /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
   /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
-  publicToken                 String?                   @unique
+  publicToken                 String?                       @unique
   /// Primera vez que la orden llegó a 'finalizada'. Ancla del aging de la
   /// deuda COMERCIAL (la deuda nace acá, no en la factura). Reabrir la
   /// orden NO la borra: si vuelve a finalizar, el aging no se resetea.
@@ -3572,7 +3587,7 @@ model OrdenTrabajo {
   /// Vencimiento comercial congelado al finalizar. Sin cuenta corriente es
   /// la misma fecha de finalización; con cuenta corriente suma el plazo
   /// configurado entonces en el cliente.
-  fechaVencimientoComercial   DateTime?                 @db.Date
+  fechaVencimientoComercial   DateTime?                     @db.Date
   /// Cuándo se entregó, la PRIMERA vez. Es el ancla del pedido de reseña —"N
   /// días después de la entrega"—, y por eso no se resetea: volver a marcar
   /// entregada una orden que se había reabierto no reinicia el reloj.
@@ -3587,8 +3602,8 @@ model OrdenTrabajo {
   /// anuladas (las NC restan); cobradoTotal = Σ Cobro.montoBruto no
   /// anulados de la orden. Los estados derivados (sin facturar/parcial/
   /// facturada y sin cobrar/parcial/cobrada) se calculan de acá.
-  facturadoTotal              Decimal                   @default(0) @db.Decimal(14, 2)
-  cobradoTotal                Decimal                   @default(0) @db.Decimal(14, 2)
+  facturadoTotal              Decimal                       @default(0) @db.Decimal(14, 2)
+  cobradoTotal                Decimal                       @default(0) @db.Decimal(14, 2)
   /// Tratamiento fiscal de la orden: 'FISCAL' (default, lleva IVA y comprobante
   /// electrónico) | 'SIN_COMPROBANTE' (el desglose oculta el IVA, `total` = neto,
   /// y la orden queda FUERA de la cola de facturar — no se factura por error).
@@ -3597,13 +3612,13 @@ model OrdenTrabajo {
   /// El sistema NO modela la evasión: registra un hecho neutro ("no llevó
   /// comprobante"); declarar o no ese ingreso vive fuera del sistema.
   /// Ver docs/margen-y-decisiones-de-precio.md §6.
-  tratamientoFiscal           String                    @default("FISCAL")
+  tratamientoFiscal           String                        @default("FISCAL")
   /// Snapshot comercial del programa de puntos. El canje ya está incorporado
   /// en subtotal/impuestos/total; estos campos conservan su trazabilidad.
-  fidelizacionMargenBase      Decimal?                  @db.Decimal(14, 2)
+  fidelizacionMargenBase      Decimal?                      @db.Decimal(14, 2)
   fidelizacionPuntosEstimados Int?
-  fidelizacionCanjePuntos     Int                       @default(0)
-  fidelizacionCanjeMonto      Decimal                   @default(0) @db.Decimal(14, 2)
+  fidelizacionCanjePuntos     Int                           @default(0)
+  fidelizacionCanjeMonto      Decimal                       @default(0) @db.Decimal(14, 2)
   fidelizacionSnapshotJson    Json?
   /// === Cancelación ===
   /// Cuándo se canceló. Es el "está cancelada" real: `estado` lo dice también,
@@ -3617,7 +3632,7 @@ model OrdenTrabajo {
   /// Por qué. Obligatorio al cancelar: una orden que desaparece de las ventas
   /// sin explicación es una discusión asegurada tres meses después.
   motivoCancelacion           String?
-  canceladaPorId              String?                   @db.Uuid
+  canceladaPorId              String?                       @db.Uuid
   /// Nombre CONGELADO de quien canceló: el legajo puede cambiar o borrarse y
   /// el historial no puede quedar sin responsable.
   canceladaPorNombre          String?
@@ -3628,15 +3643,16 @@ model OrdenTrabajo {
   pasosHechosAlCancelar       Int?
   pasosTotalAlCancelar        Int?
   minutosRealesAlCancelar     Int?
-  createdAt                   DateTime                  @default(now())
-  updatedAt                   DateTime                  @updatedAt
-  tenant                      Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente                     Cliente?                  @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
-  proyectoCampana             ProyectoCampana?          @relation(fields: [proyectoCampanaId], references: [id], onDelete: SetNull)
-  vendedor                    Empleado?                 @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
-  cotizacion                  Cotizacion?               @relation(fields: [cotizacionId], references: [id])
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime                      @updatedAt
+  tenant                      Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente                     Cliente?                      @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  proyectoCampana             ProyectoCampana?              @relation(fields: [proyectoCampanaId], references: [id], onDelete: SetNull)
+  vendedor                    Empleado?                     @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
+  cotizacion                  Cotizacion?                   @relation(fields: [cotizacionId], references: [id])
   items                       OrdenTrabajoItem[]
   pasos                       OrdenTrabajoItemPaso[]
+  dependenciasPasos           OrdenTrabajoPasoDependencia[]
   eventos                     OrdenTrabajoEvento[]
   cobros                      Cobro[]
   aplicacionesCobro           CobroOrden[]
@@ -3660,76 +3676,80 @@ model OrdenTrabajo {
 }
 
 model OrdenTrabajoItem {
-  id                        String                       @id @default(uuid()) @db.Uuid
-  tenantId                  String                       @db.Uuid
-  ordenId                   String                       @db.Uuid
+  id                          String                       @id @default(uuid()) @db.Uuid
+  tenantId                    String                       @db.Uuid
+  ordenId                     String                       @db.Uuid
   /// FK al snapshot completo (ruta + pasos + materiales + valores). Las
   /// secciones futuras de Costos/Producción por item leen de ahí.
   /// Null = OT manual/histórica sin cotización.
-  cotizacionItemId          String?                      @db.Uuid
-  recetaRevisionId          String?                      @db.Uuid
-  recetaVersion             Int?
-  recetaHuella              String?                      @db.VarChar(64)
-  recetaSnapshotJson        Json?
-  codigo                    String
-  nombre                    String
+  cotizacionItemId            String?                      @db.Uuid
+  recetaRevisionId            String?                      @db.Uuid
+  recetaVersion               Int?
+  recetaHuella                String?                      @db.VarChar(64)
+  recetaSnapshotJson          Json?
+  /// Copia ejecutable de la topología publicada. Null en órdenes históricas;
+  /// sus pasos continúan interpretándose como secuencia por `indice`.
+  topologiaProduccion         TopologiaProduccion          @default(LINEAL)
+  grafoProduccionSnapshotJson Json?
+  codigo                      String
+  nombre                      String
   /// Etiqueta corta legada (subcategoría). Preferir los dos campos de abajo.
-  familia                   String
+  familia                     String
   /// Categoría/subcategoría comercial tal como se ven al crear la orden
   /// ("Gran formato flexible" / "Vinilos impresos").
-  categoriaComercial        String                       @default("")
-  subcategoriaComercial     String                       @default("")
-  cantidad                  Decimal                      @db.Decimal(14, 2)
-  cantidadUnidad            String
-  subtotal                  Decimal                      @db.Decimal(14, 2)
-  impuestos                 Decimal                      @db.Decimal(14, 2)
-  total                     Decimal                      @db.Decimal(14, 2)
+  categoriaComercial          String                       @default("")
+  subcategoriaComercial       String                       @default("")
+  cantidad                    Decimal                      @db.Decimal(14, 2)
+  cantidadUnidad              String
+  subtotal                    Decimal                      @db.Decimal(14, 2)
+  impuestos                   Decimal                      @db.Decimal(14, 2)
+  total                       Decimal                      @db.Decimal(14, 2)
   /// Descuento comercial de la línea (sobre el neto, antes del IVA). El efecto
   /// Cupón que originó el descuento (F4). Sin FK dura: el cupón puede
   /// borrarse del catálogo sin romper órdenes históricas.
-  descuentoCuponId          String?                      @db.Uuid
+  descuentoCuponId            String?                      @db.Uuid
   /// YA está dentro de subtotal/impuestos/total; estos campos son la traza:
   /// tipo + valor ingresado + monto neto efectivamente descontado.
-  descuentoTipo             String?
-  descuentoValor            Decimal?                     @db.Decimal(14, 2)
-  descuentoMonto            Decimal?                     @db.Decimal(14, 2)
+  descuentoTipo               String?
+  descuentoValor              Decimal?                     @db.Decimal(14, 2)
+  descuentoMonto              Decimal?                     @db.Decimal(14, 2)
   /// Parte neta de la bonificación por canje asignada a esta línea.
-  fidelizacionDescuentoNeto Decimal                      @default(0) @db.Decimal(14, 2)
+  fidelizacionDescuentoNeto   Decimal                      @default(0) @db.Decimal(14, 2)
   /// Proyección visible: [{ etiqueta, valor }].
-  specsJson                 Json?
+  specsJson                   Json?
   /// string[] de adicionales incluidos.
-  adicionalesJson           Json?
-  ordenIndice               Int                          @default(0)
+  adicionalesJson             Json?
+  ordenIndice                 Int                          @default(0)
   /// ── Entrega en el mostrador (docs/entrega-por-escaneo-diseno.md).
   /// La entrega es POR ITEM: el cliente puede llevarse lo que está listo y
   /// dejar el resto en producción. La orden pasa a `entregada` recién cuando
   /// todos sus items lo están. null = todavía no se entregó.
-  entregadoEl               DateTime?
+  entregadoEl                 DateTime?
   /// Quién lo despachó (firma del operador, congelada).
-  entregadoPorNombre        String?
+  entregadoPorNombre          String?
   /// Si no lo retiró el cliente sino un tercero, con qué documento.
-  retiradoPorNombre         String?
-  retiradoPorDni            String?
-  createdAt                 DateTime                     @default(now())
+  retiradoPorNombre           String?
+  retiradoPorDni              String?
+  createdAt                   DateTime                     @default(now())
   /// ── Descomposición del ciclo real, calculada UNA vez al finalizar el
   /// item (docs/eta-metricas-historicas-diseno.md §4.4). null hasta el
   /// cierre; también null en items sin timestamps de pasos (OT vieja).
-  cicloTotalMin             Int?
-  trabajoRealMin            Int?
-  esperaCicloMin            Int?
-  trasladoMin               Int?
-  proveedorMin              Int?
+  cicloTotalMin               Int?
+  trabajoRealMin              Int?
+  esperaCicloMin              Int?
+  trasladoMin                 Int?
+  proveedorMin                Int?
   /// trabajoRealMin / cicloTotalMin × 100 (0–100).
-  flowEfficiencyPct         Decimal?                     @db.Decimal(5, 1)
-  tenant                    Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orden                     OrdenTrabajo                 @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  cotizacionItem            CotizacionItem?              @relation(fields: [cotizacionItemId], references: [id])
-  recetaRevision            ProductoRecetaRevision?      @relation(fields: [recetaRevisionId], references: [id], onDelete: SetNull)
-  pasos                     OrdenTrabajoItemPaso[]
-  etaPromesas               EtaPromesa[]
-  archivos                  Archivo[]
-  revisionesRecorrido       RecorridoVectorialRevision[]
-  gatesDocumento            GateProduccionDocumento[]
+  flowEfficiencyPct           Decimal?                     @db.Decimal(5, 1)
+  tenant                      Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden                       OrdenTrabajo                 @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  cotizacionItem              CotizacionItem?              @relation(fields: [cotizacionItemId], references: [id])
+  recetaRevision              ProductoRecetaRevision?      @relation(fields: [recetaRevisionId], references: [id], onDelete: SetNull)
+  pasos                       OrdenTrabajoItemPaso[]
+  etaPromesas                 EtaPromesa[]
+  archivos                    Archivo[]
+  revisionesRecorrido         RecorridoVectorialRevision[]
+  gatesDocumento              GateProduccionDocumento[]
 
   @@index([tenantId, ordenId])
   @@index([tenantId, recetaRevisionId])
@@ -3853,74 +3873,82 @@ model EtaSnapshotItem {
 /// inmutable; acá vive el estado de EJECUCIÓN en el taller.
 /// Ver docs/tablero-produccion-conexion-diseno.md
 model OrdenTrabajoItemPaso {
-  id                  String                    @id @default(uuid()) @db.Uuid
-  tenantId            String                    @db.Uuid
-  ordenId             String                    @db.Uuid
-  itemId              String                    @db.Uuid
+  id                    String                        @id @default(uuid()) @db.Uuid
+  tenantId              String                        @db.Uuid
+  ordenId               String                        @db.Uuid
+  itemId                String                        @db.Uuid
   /// Posición del paso en la ruta del item (orden topológico del snapshot).
-  indice              Int
+  indice                Int
+  /// Identidad estable del nodo dentro del snapshot. No depende del orden
+  /// visual y permite referenciarlo aunque el grafo tenga ramas.
+  nodoClave             String?                       @db.VarChar(160)
+  /// En una ruta lineal sólo el último paso es terminal. En un DAG puede
+  /// haber más de uno, y todos deben completarse para cerrar el item.
+  esTerminal            Boolean                       @default(false)
   /// rutaPasoId del PasoEjecutado de origen (trazar contra el snapshot).
-  rutaPasoId          String?
-  familiaCodigo       String
+  rutaPasoId            String?
+  familiaCodigo         String
   /// Categoría de alto nivel de la familia (agrupa la vista Por estación).
-  categoriaFamilia    String
+  categoriaFamilia      String
   /// Nombre operativo visible ("Impresión digital frente").
-  nombre              String
+  nombre                String
   /// Centro de costo que tarifó el paso — proxy de "estación" en fase 1.
-  centroCostoId       String?                   @db.Uuid
-  centroCostoNombre   String?
+  centroCostoId         String?                       @db.Uuid
+  centroCostoNombre     String?
   /// Máquina que ejecutó el paso (la que eligió el motor). Señal REAL para
   /// rutear a estaciones por máquina/tecnología, en vez del centro de costo
   /// (que es de costeo). Null en pasos sin máquina o en órdenes viejas.
   /// Ver docs/estaciones-reglas-diseno.md.
-  maquinaId           String?                   @db.Uuid
-  duracionEstimadaMin Decimal?                  @db.Decimal(10, 2)
+  maquinaId             String?                       @db.Uuid
+  duracionEstimadaMin   Decimal?                      @db.Decimal(10, 2)
   /// 'pendiente' | 'en_curso' | 'pausado' | 'hecho' | 'bloqueado'.
-  estado              String                    @default("pendiente")
-  motivoBloqueo       String?
+  estado                String                        @default("pendiente")
+  motivoBloqueo         String?
   /// === Tercerización (F2, docs/productos-tercerizados-diseno.md §6) ===
   /// 'interno' (producción propia, va al tablero) | 'tercerizado' (compra a un
   /// proveedor, va al panel de Compras, fuera del tablero).
-  tipoEjecucion       String                    @default("interno")
-  proveedorId         String?                   @db.Uuid
+  tipoEjecucion         String                        @default("interno")
+  proveedorId           String?                       @db.Uuid
   /// Snapshot del nombre del proveedor (no FK, patrón de los demás nombres).
-  proveedorNombre     String?
-  plazoProveedorDias  Int?
+  proveedorNombre       String?
+  plazoProveedorDias    Int?
   /// Sólo tercerizados: 'pendiente' | 'pedido' | 'recibido' | 'entregado'.
   /// Al llegar a recibido/entregado, `estado` pasa a 'hecho' (desbloquea el
   /// paso interno siguiente y cuenta en el progreso de la OT).
-  estadoCompra        String?
-  iniciadoEl          DateTime?
-  completadoEl        DateTime?
+  estadoCompra          String?
+  iniciadoEl            DateTime?
+  completadoEl          DateTime?
   /// Cómo se registra el trabajo (snapshot del catálogo de familias al
   /// materializar, D1): 'cronometro' (MO domina, tramos) | 'solo_completar'
   /// (runtime de máquina, un click y tiempo = estimado).
-  modoRegistro        String                    @default("cronometro")
+  modoRegistro          String                        @default("cronometro")
   /// Tiempo real asentado al completar (D3). En modo cronómetro es la suma
   /// de tramos; en solo_completar copia el estimado. Null hasta 'hecho'.
-  tiempoRealMin       Decimal?                  @db.Decimal(10, 2)
+  tiempoRealMin         Decimal?                      @db.Decimal(10, 2)
   /// Calidad/origen de tiempoRealMin: 'medido' | 'medido_lote' |
   /// 'declarado' | 'estimado' | 'invalido'.
-  tiempoFuente        String?
+  tiempoFuente          String?
   /// Atribución directa (D5): quién abrió el primer tramo / quién completó.
   /// Nombre = snapshot (el FK puede quedar null si se borra el usuario).
-  iniciadoPorId       String?                   @db.Uuid
-  iniciadoPorNombre   String?
-  completadoPorId     String?                   @db.Uuid
-  completadoPorNombre String?
+  iniciadoPorId         String?                       @db.Uuid
+  iniciadoPorNombre     String?
+  completadoPorId       String?                       @db.Uuid
+  completadoPorNombre   String?
   /// Usuario que tomó el paso a SU mesa de trabajo (vista Por estación del
   /// tablero): reclamo visible para todos, persistente entre sesiones.
-  mesaUsuarioId       String?                   @db.Uuid
-  createdAt           DateTime                  @default(now())
-  updatedAt           DateTime                  @updatedAt
-  tenant              Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orden               OrdenTrabajo              @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  item                OrdenTrabajoItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  mesaUsuario         User?                     @relation("PasosEnMesa", fields: [mesaUsuarioId], references: [id], onDelete: SetNull)
-  iniciadoPor         User?                     @relation("PasosIniciados", fields: [iniciadoPorId], references: [id], onDelete: SetNull)
-  completadoPor       User?                     @relation("PasosCompletados", fields: [completadoPorId], references: [id], onDelete: SetNull)
-  tramos              OrdenTrabajoPasoTramo[]
-  gatesDocumento      GateProduccionDocumento[]
+  mesaUsuarioId         String?                       @db.Uuid
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
+  tenant                Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden                 OrdenTrabajo                  @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  item                  OrdenTrabajoItem              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  mesaUsuario           User?                         @relation("PasosEnMesa", fields: [mesaUsuarioId], references: [id], onDelete: SetNull)
+  iniciadoPor           User?                         @relation("PasosIniciados", fields: [iniciadoPorId], references: [id], onDelete: SetNull)
+  completadoPor         User?                         @relation("PasosCompletados", fields: [completadoPorId], references: [id], onDelete: SetNull)
+  tramos                OrdenTrabajoPasoTramo[]
+  gatesDocumento        GateProduccionDocumento[]
+  dependenciasSalientes OrdenTrabajoPasoDependencia[] @relation("PasoPredecesor")
+  dependenciasEntrantes OrdenTrabajoPasoDependencia[] @relation("PasoSucesor")
 
   /// Un solo paso por posición de la ruta. Es la garantía DURA contra la
   /// doble materialización: el backfill perezoso chequea "item sin pasos" y
@@ -3929,12 +3957,36 @@ model OrdenTrabajoItemPaso {
   /// duplicar la ruta entera. Con el único, el perdedor de la carrera no
   /// inserta nada (createMany usa ON CONFLICT DO NOTHING).
   @@unique([itemId, indice])
+  @@unique([itemId, nodoClave])
   @@index([tenantId, ordenId])
   @@index([tenantId, itemId])
   @@index([tenantId, estado])
   @@index([tenantId, mesaUsuarioId])
   @@index([tenantId, maquinaId])
   @@index([tenantId, estado, completadoEl])
+}
+
+/// Arista de precedencia materializada para la ejecución real de una OT. Se
+/// permite conectar items distintos de la misma orden: así un componente
+/// fabricado puede alimentar el nodo de ensamble del producto padre.
+model OrdenTrabajoPasoDependencia {
+  id               String               @id @default(uuid()) @db.Uuid
+  tenantId         String               @db.Uuid
+  ordenId          String               @db.Uuid
+  predecesorPasoId String               @db.Uuid
+  sucesorPasoId    String               @db.Uuid
+  tipo             String               @default("precedencia") @db.VarChar(40)
+  obligatoria      Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden            OrdenTrabajo         @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  predecesor       OrdenTrabajoItemPaso @relation("PasoPredecesor", fields: [predecesorPasoId], references: [id], onDelete: Cascade)
+  sucesor          OrdenTrabajoItemPaso @relation("PasoSucesor", fields: [sucesorPasoId], references: [id], onDelete: Cascade)
+
+  @@unique([predecesorPasoId, sucesorPasoId])
+  @@index([tenantId, ordenId])
+  @@index([tenantId, predecesorPasoId])
+  @@index([tenantId, sucesorPasoId])
 }
 
 /// Sesión de trabajo sobre un paso (registro-tiempos-produccion D2): quién,

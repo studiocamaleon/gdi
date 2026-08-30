@@ -293,6 +293,86 @@
   border-left: 1px solid rgb(255 255 255 / 9%);
 }
 
+.flowSection {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid rgb(255 255 255 / 9%);
+}
+
+.flowSection + .editorSection {
+  border-left: 0;
+}
+
+.topologyBadge {
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid rgb(255 139 84 / 24%);
+  border-radius: 999px;
+  color: #ff9d70 !important;
+  background: rgb(255 106 43 / 9%);
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.flowRows {
+  display: grid;
+  gap: 6px;
+}
+
+.flowRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 2fr);
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 2.5%);
+}
+
+.flowNode {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.flowNode span {
+  color: #ff8b54;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.flowNode strong {
+  overflow: hidden;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.predecessors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.predecessors button,
+.rootNode {
+  min-height: 25px;
+  padding: 4px 7px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 7px;
+  color: #aaa7ae;
+  background: #242329;
+  font-size: 9px;
+}
+
+.predecessors button[data-active="true"] {
+  border-color: rgb(255 139 84 / 34%);
+  color: #ffd2bd;
+  background: rgb(255 106 43 / 12%);
+}
+
 .editorTitle {
   align-items: center;
   margin-bottom: 10px;
@@ -375,6 +455,11 @@
   grid-row: 1;
 }
 
+.definitionRow select[aria-label^="Nodo de incorporación"] {
+  grid-column: 1 / 4;
+  grid-row: 2;
+}
+
 .definitionSubrow {
   display: grid;
   grid-column: 1 / -1;
@@ -427,6 +512,94 @@
   color: #fff;
   font-family: var(--font-mono);
   font-size: 20px;
+}
+
+.flowOverview {
+  overflow: hidden;
+  border: 1px solid #e4dfd9;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.flowOverview > header,
+.flowOverview > header > div {
+  display: flex;
+  align-items: center;
+}
+
+.flowOverview > header {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #ebe7e1;
+  background: linear-gradient(120deg, #fff9f5, #fff);
+}
+
+.flowOverview > header > div {
+  gap: 9px;
+}
+
+.flowOverview > header svg {
+  width: 18px;
+  color: #ff6a2b;
+}
+
+.flowOverview h4,
+.flowOverview p {
+  margin: 0;
+}
+
+.flowOverview h4 {
+  font-size: 12px;
+}
+
+.flowOverview p {
+  color: #8a867f;
+  font-size: 10px;
+}
+
+.flowOverview > header > span {
+  padding: 4px 7px;
+  border: 1px solid #ded9d3;
+  border-radius: 999px;
+  color: #625f5a;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.flowOverviewRows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.flowOverviewRows > div {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 10px 12px;
+  border-right: 1px solid #eeeae4;
+  border-bottom: 1px solid #eeeae4;
+}
+
+.flowOverviewRows b {
+  grid-row: 1 / 3;
+  color: #ff6a2b;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.flowOverviewRows strong {
+  color: #29272c;
+  font-size: 10.5px;
+}
+
+.flowOverviewRows span {
+  overflow: hidden;
+  color: #8a867f;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .grid,
@@ -759,6 +932,15 @@
   .definitionRow button {
     grid-row: 1;
     grid-column: 2;
+  }
+
+  .definitionRow select[aria-label^="Nodo de incorporación"] {
+    grid-row: auto;
+    grid-column: 1;
+  }
+
+  .flowRow {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .definitionSubrow {

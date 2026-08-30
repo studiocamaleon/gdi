@@ -97,6 +97,8 @@ export class EtaService {
               select: {
                 id: true,
                 indice: true,
+                nodoClave: true,
+                esTerminal: true,
                 nombre: true,
                 familiaCodigo: true,
                 centroCostoId: true,
@@ -106,6 +108,14 @@ export class EtaService {
                 iniciadoEl: true,
                 tipoEjecucion: true,
                 plazoProveedorDias: true,
+                dependenciasEntrantes: {
+                  where: { obligatoria: true },
+                  select: { predecesorPasoId: true },
+                },
+                dependenciasSalientes: {
+                  where: { obligatoria: true },
+                  select: { sucesorPasoId: true },
+                },
               },
             },
           },
@@ -134,6 +144,14 @@ export class EtaService {
           (paso): TableroPasoData => ({
             id: paso.id,
             indice: paso.indice,
+            nodoClave: paso.nodoClave,
+            esTerminal: paso.esTerminal,
+            predecesorPasoIds: paso.dependenciasEntrantes.map(
+              (dependencia) => dependencia.predecesorPasoId,
+            ),
+            sucesorPasoIds: paso.dependenciasSalientes.map(
+              (dependencia) => dependencia.sucesorPasoId,
+            ),
             nombre: paso.nombre,
             familiaCodigo: paso.familiaCodigo,
             plantillaCodigo:
@@ -252,7 +270,8 @@ export class EtaService {
         item.pasos.map((p) => ({
           iniciadoEl: p.iniciadoEl,
           completadoEl: p.completadoEl,
-          tiempoRealMin: p.tiempoRealMin === null ? null : Number(p.tiempoRealMin),
+          tiempoRealMin:
+            p.tiempoRealMin === null ? null : Number(p.tiempoRealMin),
           tipoEjecucion: p.tipoEjecucion,
         })),
       );
@@ -424,8 +443,10 @@ export class EtaService {
     rango?: { desde?: string; hasta?: string },
   ) {
     const congeladaEl: Prisma.DateTimeFilter = {};
-    if (rango?.desde) congeladaEl.gte = new Date(`${rango.desde}T00:00:00.000Z`);
-    if (rango?.hasta) congeladaEl.lte = new Date(`${rango.hasta}T23:59:59.999Z`);
+    if (rango?.desde)
+      congeladaEl.gte = new Date(`${rango.desde}T00:00:00.000Z`);
+    if (rango?.hasta)
+      congeladaEl.lte = new Date(`${rango.hasta}T23:59:59.999Z`);
     const promesas = await this.prisma.etaPromesa.findMany({
       where: {
         tenantId: auth.tenantId,
@@ -494,9 +515,11 @@ export class EtaService {
         AND "tiempoRealMin" IS NOT NULL
         AND "duracionEstimadaMin" IS NOT NULL
         AND "tiempoFuente" IN ('medido', 'medido_lote')
-        ${rango
-          ? Prisma.sql`AND "completadoEl" >= ${rango.desde} AND "completadoEl" < ${finExclusivo(rango)}`
-          : Prisma.empty}
+        ${
+          rango
+            ? Prisma.sql`AND "completadoEl" >= ${rango.desde} AND "completadoEl" < ${finExclusivo(rango)}`
+            : Prisma.empty
+        }
       GROUP BY "familiaCodigo"
       HAVING COUNT(*) >= 3
     `;

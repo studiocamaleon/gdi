@@ -68,6 +68,13 @@ import {
   claveCompatibilidadVariante,
 } from '../produccion/produccion.service';
 import {
+  compilarRutaLineal,
+  nodoEjecutable,
+  nodoReabrible,
+  reducirGrafoAClaves,
+  type GrafoProduccion,
+} from './grafo-produccion';
+import {
   aplicarFallbackConfigLaser,
   claveCompatibilidadLoteLaser,
   extraerCompatibilidadLaser,
@@ -426,7 +433,10 @@ export function alcanceTableroProduccionDe(
 }
 
 type PasoVisibleParaOperario = {
+  id?: string;
   indice: number;
+  nodoClave?: string | null;
+  predecesorPasoIds?: string[];
   estado: string;
   mesaEsMia: boolean;
   mesaUsuarioNombre: string | null;
@@ -437,6 +447,9 @@ type PasoVisibleParaOperario = {
 export function pasosVisiblesParaOperario<T extends PasoVisibleParaOperario>(
   pasos: T[],
 ): T[] {
+  const porId = new Map(
+    pasos.flatMap((paso) => (paso.id ? [[paso.id, paso] as const] : [])),
+  );
   return pasos.filter((paso) => {
     if (paso.mesaEsMia || paso.tramoAbierto?.esMio) return true;
     if (
@@ -445,6 +458,11 @@ export function pasosVisiblesParaOperario<T extends PasoVisibleParaOperario>(
       paso.mesaUsuarioNombre
     ) {
       return false;
+    }
+    if (paso.nodoClave) {
+      return (paso.predecesorPasoIds ?? []).every(
+        (id) => porId.get(id)?.estado === 'hecho',
+      );
     }
     return pasos
       .filter((anterior) => anterior.indice < paso.indice)
@@ -474,6 +492,16 @@ type PasoTrazabilidad = {
   proveedorId?: string | null;
   plazoProveedorDias?: number | null;
 };
+
+function grafoDesdeSnapshotReceta(valor: Prisma.JsonValue | null | undefined) {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const grafo = (valor as Record<string, Prisma.JsonValue>).grafoProduccion;
+  if (!grafo || typeof grafo !== 'object' || Array.isArray(grafo)) return null;
+  const candidato = grafo as unknown as GrafoProduccion;
+  return Array.isArray(candidato.nodos) && Array.isArray(candidato.aristas)
+    ? candidato
+    : null;
+}
 
 function pasosActivados(trazabilidad: unknown): PasoTrazabilidad[] {
   const pasos = (trazabilidad as { pasos?: unknown } | null | undefined)?.pasos;
@@ -617,6 +645,33 @@ export function pasoReabrible(pasos: PasoSecuencia[], indice: number): boolean {
   return pasos
     .filter((paso) => paso.indice > indice)
     .every((paso) => paso.estado === 'pendiente');
+}
+
+/**
+ * Avance por trabajo estimado, no por cantidad de cajitas. Si faltan tiempos,
+ * cada desconocido toma la mediana de los conocidos; si faltan todos se cae
+ * al conteo histórico. De ese modo un QC de 5 min no pesa igual que 4 h de UV
+ * y tampoco se inventa precisión extrema para pasos sin estimación.
+ */
+export function progresoPonderadoPasos(
+  pasos: Array<{ estado: string; duracionEstimadaMin: number | null }>,
+): number {
+  if (pasos.length === 0) return 0;
+  const conocidos = pasos
+    .map((paso) => paso.duracionEstimadaMin)
+    .filter((valor): valor is number => valor != null && valor > 0)
+    .sort((a, b) => a - b);
+  const pesoDesconocido =
+    conocidos.length > 0 ? conocidos[Math.floor(conocidos.length / 2)] : 1;
+  const peso = (paso: (typeof pasos)[number]) =>
+    paso.duracionEstimadaMin != null && paso.duracionEstimadaMin > 0
+      ? paso.duracionEstimadaMin
+      : pesoDesconocido;
+  const total = pasos.reduce((suma, paso) => suma + peso(paso), 0);
+  const hecho = pasos
+    .filter((paso) => paso.estado === 'hecho')
+    .reduce((suma, paso) => suma + peso(paso), 0);
+  return Math.round((hecho / total) * 100);
 }
 
 /**
@@ -2841,8 +2896,7 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
-            | undefined;
+            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -4283,16 +4337,32 @@ export class OrdenesTrabajoService {
     itemId: string,
     trazabilidad: unknown,
     proveedorNombrePorId: Map<string, string> = new Map(),
+    grafoProduccion: GrafoProduccion | null = null,
   ) {
-    return pasosActivados(trazabilidad).map((paso, indice) => {
+    const pasos = pasosActivados(trazabilidad);
+    return pasos.map((paso, indice) => {
       const familiaCodigo = paso.familiaCodigo ?? 'trabajo_manual';
       const familia = resolverFamilia(familiaCodigo);
       const esTercerizado = paso.tercerizado === true;
+      const claveRuta = paso.rutaPasoId ? `ruta:${paso.rutaPasoId}` : null;
+      const claveExtra = paso.rutaPasoId ? `extra:${paso.rutaPasoId}` : null;
+      const clavesDeclaradas = new Set(
+        grafoProduccion?.nodos.map((nodo) => nodo.clave) ?? [],
+      );
+      const nodoClave =
+        (claveRuta && clavesDeclaradas.has(claveRuta) && claveRuta) ||
+        (claveExtra && clavesDeclaradas.has(claveExtra) && claveExtra) ||
+        claveRuta ||
+        `paso:${indice + 1}:${familiaCodigo}`;
       return {
         tenantId,
         ordenId,
         itemId,
         indice,
+        nodoClave,
+        esTerminal: grafoProduccion
+          ? grafoProduccion.terminales.includes(nodoClave)
+          : indice === pasos.length - 1,
         rutaPasoId: paso.rutaPasoId ?? null,
         familiaCodigo,
         categoriaFamilia: familia?.categoria ?? 'operaciones_manuales',
@@ -4347,6 +4417,19 @@ export class OrdenesTrabajoService {
     const trazabilidadPorId = new Map(
       snapshots.map((snap) => [snap.id, snap.trazabilidadJson]),
     );
+    const itemsConReceta = await tx.ordenTrabajoItem.findMany({
+      where: {
+        tenantId,
+        id: { in: conSnapshot.map((item) => item.id) },
+      },
+      select: { id: true, recetaSnapshotJson: true },
+    });
+    const grafoPorItem = new Map(
+      itemsConReceta.map((item) => [
+        item.id,
+        grafoDesdeSnapshotReceta(item.recetaSnapshotJson),
+      ]),
+    );
     // Snapshot del nombre de cada proveedor de los pasos tercerizados.
     const proveedorIds = new Set<string>();
     for (const snap of snapshots) {
@@ -4364,20 +4447,109 @@ export class OrdenesTrabajoService {
       });
       for (const p of provs) proveedorNombrePorId.set(p.id, p.nombre);
     }
-    const data = conSnapshot.flatMap((item) =>
-      this.pasosDesdeTrazabilidad(
-        tenantId,
-        item.ordenId,
-        item.id,
-        trazabilidadPorId.get(item.cotizacionItemId!),
-        proveedorNombrePorId,
-      ),
+    const dataPorItem = new Map(
+      conSnapshot.map((item) => {
+        const filas = this.pasosDesdeTrazabilidad(
+          tenantId,
+          item.ordenId,
+          item.id,
+          trazabilidadPorId.get(item.cotizacionItemId!),
+          proveedorNombrePorId,
+          grafoPorItem.get(item.id) ?? null,
+        );
+        const grafoCompleto = grafoPorItem.get(item.id);
+        if (grafoCompleto) {
+          const grafoEfectivo = reducirGrafoAClaves(
+            grafoCompleto,
+            new Set(filas.map((fila) => fila.nodoClave)),
+          );
+          grafoPorItem.set(item.id, grafoEfectivo);
+          for (const fila of filas) {
+            fila.esTerminal = grafoEfectivo.terminales.includes(fila.nodoClave);
+          }
+        }
+        return [item.id, filas] as const;
+      }),
     );
+    const data = [...dataPorItem.values()].flat();
     if (data.length > 0) {
       // skipDuplicates = ON CONFLICT DO NOTHING contra el único
       // (itemId, indice): si dos materializaciones corren a la vez, el
       // perdedor no inserta en vez de reventar una lectura del tablero.
       await tx.ordenTrabajoItemPaso.createMany({ data, skipDuplicates: true });
+
+      // La Fase 4 nace compatible: toda ruta histórica lineal se compila a un
+      // DAG trivial A → B → C. `indice` conserva el orden visual, mientras
+      // estas aristas pasan a ser el contrato de precedencia explícito.
+      const pasosPersistidos = await tx.ordenTrabajoItemPaso.findMany({
+        where: {
+          tenantId,
+          itemId: { in: conSnapshot.map((item) => item.id) },
+        },
+        select: {
+          id: true,
+          itemId: true,
+          indice: true,
+          nodoClave: true,
+        },
+        orderBy: [{ itemId: 'asc' }, { indice: 'asc' }],
+      });
+      const pasosPorItem = new Map<string, typeof pasosPersistidos>();
+      for (const paso of pasosPersistidos) {
+        const actuales = pasosPorItem.get(paso.itemId) ?? [];
+        actuales.push(paso);
+        pasosPorItem.set(paso.itemId, actuales);
+      }
+
+      const dependencias = conSnapshot.flatMap((item) => {
+        const pasosItem = pasosPorItem.get(item.id) ?? [];
+        const grafo = grafoPorItem.get(item.id);
+        if (grafo) {
+          const porClave = new Map(
+            pasosItem.flatMap((paso) =>
+              paso.nodoClave ? [[paso.nodoClave, paso.id] as const] : [],
+            ),
+          );
+          return grafo.aristas.map((arista) => ({
+            tenantId,
+            ordenId: item.ordenId,
+            predecesorPasoId: porClave.get(arista.desdeClave)!,
+            sucesorPasoId: porClave.get(arista.haciaClave)!,
+          }));
+        }
+        return pasosItem.slice(1).map((paso, index) => ({
+          tenantId,
+          ordenId: item.ordenId,
+          predecesorPasoId: pasosItem[index].id,
+          sucesorPasoId: paso.id,
+        }));
+      });
+      if (dependencias.length > 0) {
+        await tx.ordenTrabajoPasoDependencia.createMany({
+          data: dependencias,
+          skipDuplicates: true,
+        });
+      }
+
+      for (const item of conSnapshot) {
+        const pasosItem = pasosPorItem.get(item.id) ?? [];
+        if (pasosItem.length === 0) continue;
+        const grafo =
+          grafoPorItem.get(item.id) ??
+          compilarRutaLineal(
+            pasosItem.map((paso) => ({
+              clave: paso.nodoClave ?? `paso:${paso.indice + 1}`,
+              indice: paso.indice,
+            })),
+          );
+        await tx.ordenTrabajoItem.update({
+          where: { id: item.id },
+          data: {
+            topologiaProduccion: grafo.topologia,
+            grafoProduccionSnapshotJson: grafo as Prisma.InputJsonValue,
+          },
+        });
+      }
     }
   }
 
@@ -4617,6 +4789,14 @@ export class OrdenesTrabajoService {
               orderBy: { indice: 'asc' as const },
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
+                dependenciasEntrantes: {
+                  where: { obligatoria: true },
+                  select: { predecesorPasoId: true },
+                },
+                dependenciasSalientes: {
+                  where: { obligatoria: true },
+                  select: { sucesorPasoId: true },
+                },
                 tramos: {
                   // Todos los tramos del paso (son pocos): la proyección
                   // deriva el abierto, el último cierre y el acumulado.
@@ -4713,6 +4893,14 @@ export class OrdenesTrabajoService {
               orderBy: { indice: 'asc' as const },
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
+                dependenciasEntrantes: {
+                  where: { obligatoria: true },
+                  select: { predecesorPasoId: true },
+                },
+                dependenciasSalientes: {
+                  where: { obligatoria: true },
+                  select: { sucesorPasoId: true },
+                },
                 tramos: {
                   // Todos los tramos del paso (son pocos): la proyección
                   // deriva el abierto, el último cierre y el acumulado.
@@ -4976,26 +5164,73 @@ export class OrdenesTrabajoService {
       );
     }
 
-    // La ruta es una secuencia: sólo se ejecuta el paso ACTIVO (frontera).
-    const pasosItem = await this.prisma.ordenTrabajoItemPaso.findMany({
-      where: { tenantId: auth.tenantId, itemId },
-      select: { indice: true, estado: true },
+    // Fase 4: para órdenes nuevas mandan las precedencias explícitas. Una OT
+    // histórica sin nodoClave conserva exactamente la frontera por índice.
+    const pasosOrden = await this.prisma.ordenTrabajoItemPaso.findMany({
+      where: { tenantId: auth.tenantId, ordenId },
+      select: {
+        id: true,
+        itemId: true,
+        indice: true,
+        nodoClave: true,
+        estado: true,
+      },
     });
+    const pasosItem = pasosOrden.filter(
+      (candidato) => candidato.itemId === itemId,
+    );
+    const usaGrafo =
+      pasosItem.length > 0 &&
+      pasosItem.every((candidato) => candidato.nodoClave);
+    const dependencias = usaGrafo
+      ? await this.prisma.ordenTrabajoPasoDependencia.findMany({
+          where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
+          select: { predecesorPasoId: true, sucesorPasoId: true },
+        })
+      : [];
     const ejecuta =
       payload.accion === 'iniciar' ||
       payload.accion === 'pausar' ||
       payload.accion === 'continuar' ||
       payload.accion === 'completar' ||
       payload.accion === 'bloquear';
-    if (ejecuta && !pasoEjecutable(pasosItem, paso.indice)) {
+    const evaluarFrontera = (
+      pasosEvaluados: typeof pasosOrden,
+      dependenciasEvaluadas: typeof dependencias,
+    ) => {
+      const delItem = pasosEvaluados.filter(
+        (candidato) => candidato.itemId === itemId,
+      );
+      const conGrafo =
+        delItem.length > 0 && delItem.every((candidato) => candidato.nodoClave);
+      if (!conGrafo) {
+        return {
+          ejecutable: pasoEjecutable(delItem, paso.indice),
+          reabrible: pasoReabrible(delItem, paso.indice),
+        };
+      }
+      const estados = pasosEvaluados.map((candidato) => ({
+        clave: candidato.id,
+        estado: candidato.estado,
+      }));
+      const aristas = dependenciasEvaluadas.map((dependencia) => ({
+        desdeClave: dependencia.predecesorPasoId,
+        haciaClave: dependencia.sucesorPasoId,
+      }));
+      return {
+        ejecutable: nodoEjecutable(paso.id, estados, aristas),
+        reabrible: nodoReabrible(paso.id, estados, aristas),
+      };
+    };
+    const frontera = evaluarFrontera(pasosOrden, dependencias);
+    const listoParaEjecutar = frontera.ejecutable;
+    if (ejecuta && !listoParaEjecutar) {
       throw new BadRequestException(
-        `"${paso.nombre}" todavía no está listo: la ruta es secuencial y hay pasos anteriores sin completar.`,
+        `"${paso.nombre}" todavía no está listo: faltan dependencias obligatorias por completar.`,
       );
     }
-    if (
-      payload.accion === 'reabrir' &&
-      !pasoReabrible(pasosItem, paso.indice)
-    ) {
+    const puedeReabrir = frontera.reabrible;
+    if (payload.accion === 'reabrir' && !puedeReabrir) {
       throw new BadRequestException(
         `No se puede reabrir "${paso.nombre}": hay pasos posteriores que ya arrancaron.`,
       );
@@ -5146,6 +5381,46 @@ export class OrdenesTrabajoService {
         );
       }
 
+      // La fila de la orden ya está bloqueada por esta transacción. Volvemos
+      // a leer la frontera para que dos operadores sobre ramas relacionadas
+      // no puedan abrir/reabrir un nodo usando un snapshot concurrente viejo.
+      const pasosActuales = await tx.ordenTrabajoItemPaso.findMany({
+        where: { tenantId: auth.tenantId, ordenId },
+        select: {
+          id: true,
+          itemId: true,
+          indice: true,
+          nodoClave: true,
+          estado: true,
+        },
+      });
+      const pasosItemActuales = pasosActuales.filter(
+        (candidato) => candidato.itemId === itemId,
+      );
+      const usaGrafoActual =
+        pasosItemActuales.length > 0 &&
+        pasosItemActuales.every((candidato) => candidato.nodoClave);
+      const dependenciasActuales = usaGrafoActual
+        ? await tx.ordenTrabajoPasoDependencia.findMany({
+            where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
+            select: { predecesorPasoId: true, sucesorPasoId: true },
+          })
+        : [];
+      const fronteraActual = evaluarFrontera(
+        pasosActuales,
+        dependenciasActuales,
+      );
+      if (ejecuta && !fronteraActual.ejecutable) {
+        throw new ConflictException(
+          `Las dependencias de "${paso.nombre}" cambiaron mientras operabas. Actualizá el tablero.`,
+        );
+      }
+      if (payload.accion === 'reabrir' && !fronteraActual.reabrible) {
+        throw new ConflictException(
+          `Un nodo descendiente de "${paso.nombre}" ya arrancó. Actualizá el tablero.`,
+        );
+      }
+
       // Compare-and-set: la transición sólo se confirma si el paso conserva
       // exactamente el estado que validamos. El segundo de dos clicks
       // concurrentes obtiene conflicto y no abre otro tramo.
@@ -5197,13 +5472,25 @@ export class OrdenesTrabajoService {
         });
       }
 
-      // Progreso real de la orden: pasos hechos sobre el total (D3 del doc).
-      const [total, hechos] = await Promise.all([
-        tx.ordenTrabajoItemPaso.count({ where: { ordenId } }),
-        tx.ordenTrabajoItemPaso.count({
-          where: { ordenId, estado: 'hecho' },
-        }),
-      ]);
+      // Progreso real: duración estimada ponderada. El helper conserva un
+      // fallback honesto por conteo cuando la orden no tiene tiempos.
+      const pasosParaProgreso = await tx.ordenTrabajoItemPaso.findMany({
+        where: { ordenId },
+        select: { estado: true, duracionEstimadaMin: true },
+      });
+      const total = pasosParaProgreso.length;
+      const hechos = pasosParaProgreso.filter(
+        (candidato) => candidato.estado === 'hecho',
+      ).length;
+      const progresoPonderado = progresoPonderadoPasos(
+        pasosParaProgreso.map((candidato) => ({
+          estado: candidato.estado,
+          duracionEstimadaMin:
+            candidato.duracionEstimadaMin != null
+              ? Number(candidato.duracionEstimadaMin)
+              : null,
+        })),
+      );
       // Estado destino de la OT tras la acción:
       // - completar el último paso pendiente la FINALIZA sola;
       // - reabrir un paso de una OT finalizada la reabre a producción;
@@ -5223,9 +5510,7 @@ export class OrdenesTrabajoService {
         where: { id: ordenId },
         data: {
           ...(nuevoEstadoOrden ? { estado: nuevoEstadoOrden } : {}),
-          ...(total > 0
-            ? { progresoPct: Math.round((hechos / total) * 100) }
-            : {}),
+          ...(total > 0 ? { progresoPct: progresoPonderado } : {}),
         },
       });
       // Primera finalización (acá: el último paso completado la finaliza
@@ -5695,6 +5980,14 @@ export class OrdenesTrabajoService {
           orderBy: { indice: 'asc' as const },
           include: {
             mesaUsuario: { select: { nombreCompleto: true, email: true } },
+            dependenciasEntrantes: {
+              where: { obligatoria: true },
+              select: { predecesorPasoId: true },
+            },
+            dependenciasSalientes: {
+              where: { obligatoria: true },
+              select: { sucesorPasoId: true },
+            },
             tramos: {
               orderBy: {
                 finEl: { sort: 'desc' as const, nulls: 'first' as const },
@@ -5907,6 +6200,8 @@ export class OrdenesTrabajoService {
       pasos: Array<{
         id: string;
         indice: number;
+        nodoClave: string | null;
+        esTerminal: boolean;
         /** Paso de la ruta que lo originó: empareja con el snapshot del costeo. */
         rutaPasoId: string | null;
         nombre: string;
@@ -5931,6 +6226,8 @@ export class OrdenesTrabajoService {
         completadoPorNombre: string | null;
         mesaUsuarioId: string | null;
         mesaUsuario: { nombreCompleto: string | null; email: string } | null;
+        dependenciasEntrantes: Array<{ predecesorPasoId: string }>;
+        dependenciasSalientes: Array<{ sucesorPasoId: string }>;
         tramos: Array<{
           usuarioId: string | null;
           usuarioNombre: string;
@@ -5987,6 +6284,14 @@ export class OrdenesTrabajoService {
       pasos: item.pasos.map((paso) => ({
         id: paso.id,
         indice: paso.indice,
+        nodoClave: paso.nodoClave,
+        esTerminal: paso.esTerminal,
+        predecesorPasoIds: paso.dependenciasEntrantes.map(
+          (dependencia) => dependencia.predecesorPasoId,
+        ),
+        sucesorPasoIds: paso.dependenciasSalientes.map(
+          (dependencia) => dependencia.sucesorPasoId,
+        ),
         // Clave de emparejamiento con el paso del snapshot de costeo: la vista
         // consolidada de Costos cruza el tiempo REAL de acá con la tarifa y el
         // costo COTIZADOS de allá. Sale del `rutaPasoId` que la

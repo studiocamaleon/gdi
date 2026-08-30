@@ -133,6 +133,7 @@ function EditorDefiniciones({
       cantidad: Number(item.cantidad),
       unidad: item.unidad,
       requerido: item.requerido,
+      nodoIncorporacionClave: item.nodoIncorporacionClave,
       orden: item.orden,
     })),
   );
@@ -140,19 +141,48 @@ function EditorDefiniciones({
     () => [
       ...ruta.ruta.pasos
         .filter((paso) => paso.activo)
-        .map((paso) => ({
-          value: `ruta:${paso.id}`,
-          label: paso.nombreVisible || paso.familiaNombre || paso.familiaCodigo,
-        })),
+        .map((paso) => {
+          const config = ruta.configPasos.find(
+            (item) => item.rutaPasoId === paso.id,
+          );
+          return {
+            value: `ruta:${paso.id}`,
+            label: nombreHumano(
+              config?.nombreVisible ||
+                paso.nombreVisible ||
+                paso.familiaNombre ||
+                paso.familiaCodigo,
+            ),
+          };
+        }),
       ...(ruta.pasosExtras ?? [])
         .filter((paso) => paso.activo)
         .map((paso) => ({
           value: `extra:${paso.id}`,
-          label: paso.nombreVisible || paso.familiaCodigo,
+          label: nombreHumano(paso.nombreVisible || paso.familiaCodigo),
         })),
     ],
     [ruta],
   );
+  const [dependencias, setDependencias] = React.useState<
+    Array<{ desdeClave: string; haciaClave: string }>
+  >(() => {
+    const publicadas = revision.grafoProduccionJson?.aristas;
+    if (publicadas?.length || revision.grafoProduccionJson?.nodos.length === 1)
+      return publicadas ?? [];
+    const claves = [
+      ...ruta.ruta.pasos
+        .filter((paso) => paso.activo)
+        .map((paso) => `ruta:${paso.id}`),
+      ...(ruta.pasosExtras ?? [])
+        .filter((paso) => paso.activo)
+        .map((paso) => `extra:${paso.id}`),
+    ];
+    return claves.slice(1).map((haciaClave, index) => ({
+      desdeClave: claves[index],
+      haciaClave,
+    }));
+  });
 
   React.useEffect(() => {
     void getProductos(true)
@@ -179,6 +209,7 @@ function EditorDefiniciones({
         cambios: "Requisitos documentales y componentes actualizados",
         documentos: documentos.map((item, orden) => ({ ...item, orden })),
         componentes: componentes.map((item, orden) => ({ ...item, orden })),
+        dependencias,
       });
       toast.success("Las definiciones quedaron guardadas en el borrador.");
       onClose();
@@ -212,6 +243,89 @@ function EditorDefiniciones({
       </header>
 
       <div className={styles.editorColumns}>
+        <section className={`${styles.editorSection} ${styles.flowSection}`}>
+          <div className={styles.editorTitle}>
+            <div>
+              <strong>Dependencias del flujo</strong>
+              <span>
+                Marcá qué pasos deben terminar antes de habilitar cada nodo.
+                Varias marcas crean una convergencia; un mismo antecesor puede
+                liberar ramas paralelas.
+              </span>
+            </div>
+            <span className={styles.topologyBadge}>
+              {dependencias.length === Math.max(0, pasosDocumento.length - 1) &&
+              pasosDocumento
+                .slice(1)
+                .every((paso, index) =>
+                  dependencias.some(
+                    (dependencia) =>
+                      dependencia.desdeClave === pasosDocumento[index].value &&
+                      dependencia.haciaClave === paso.value,
+                  ),
+                )
+                ? "Ruta lineal"
+                : "Ruta con ramas"}
+            </span>
+          </div>
+          <div className={styles.flowRows}>
+            {pasosDocumento.map((paso, index) => {
+              const anteriores = pasosDocumento.slice(0, index);
+              return (
+                <div className={styles.flowRow} key={paso.value}>
+                  <div className={styles.flowNode}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <strong>{paso.label}</strong>
+                  </div>
+                  <div className={styles.predecessors}>
+                    {anteriores.length ? (
+                      anteriores.map((anterior) => {
+                        const activo = dependencias.some(
+                          (dependencia) =>
+                            dependencia.desdeClave === anterior.value &&
+                            dependencia.haciaClave === paso.value,
+                        );
+                        return (
+                          <button
+                            type="button"
+                            key={anterior.value}
+                            data-active={activo}
+                            onClick={() =>
+                              setDependencias((actuales) =>
+                                activo
+                                  ? actuales.filter(
+                                      (dependencia) =>
+                                        !(
+                                          dependencia.desdeClave ===
+                                            anterior.value &&
+                                          dependencia.haciaClave === paso.value
+                                        ),
+                                    )
+                                  : [
+                                      ...actuales,
+                                      {
+                                        desdeClave: anterior.value,
+                                        haciaClave: paso.value,
+                                      },
+                                    ],
+                              )
+                            }
+                          >
+                            {activo ? "✓ " : "+ "}
+                            {anterior.label}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <span className={styles.rootNode}>Inicio de la ruta</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         <section className={styles.editorSection}>
           <div className={styles.editorTitle}>
             <div>
@@ -376,7 +490,8 @@ function EditorDefiniciones({
             <div>
               <strong>Componentes fabricados</strong>
               <span>
-                Subproductos con receta propia; la Fase 4 coordinará su red.
+                Subproductos con receta propia y el punto exacto donde se
+                incorporan al flujo principal.
               </span>
             </div>
             <button
@@ -396,6 +511,8 @@ function EditorDefiniciones({
                     cantidad: 1,
                     unidad: "unidad",
                     requerido: true,
+                    nodoIncorporacionClave:
+                      pasosDocumento.at(-1)?.value ?? null,
                   },
                 ]);
               }}
@@ -473,6 +590,30 @@ function EditorDefiniciones({
                   <option value="INDEPENDIENTE">Fabricación separada</option>
                   <option value="INLINE">Integrado al producto</option>
                 </select>
+                <select
+                  aria-label={`Nodo de incorporación ${index + 1}`}
+                  value={item.nodoIncorporacionClave ?? ""}
+                  onChange={(event) =>
+                    setComponentes((prev) =>
+                      prev.map((value, i) =>
+                        i === index
+                          ? {
+                              ...value,
+                              nodoIncorporacionClave:
+                                event.target.value || null,
+                            }
+                          : value,
+                      ),
+                    )
+                  }
+                >
+                  <option value="">Elegir incorporación…</option>
+                  {pasosDocumento.map((paso) => (
+                    <option value={paso.value} key={paso.value}>
+                      Antes de {paso.label}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
                   aria-label={`Quitar componente ${index + 1}`}
@@ -500,6 +641,12 @@ function EditorDefiniciones({
 }
 
 function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
+  const grafo = revision.grafoProduccionJson;
+  const nombreNodo = (clave: string) =>
+    nombreHumano(
+      revision.recursos.find((recurso) => recurso.pasoClave === clave)
+        ?.pasoNombre ?? clave.replace(/^(ruta|extra):/, ""),
+    );
   return (
     <div className={styles.revisionBody}>
       <div className={styles.metrics}>
@@ -520,6 +667,43 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
           <strong>{revision.documentos.length}</strong>
         </div>
       </div>
+
+      {grafo?.nodos.length ? (
+        <section className={styles.flowOverview}>
+          <header>
+            <div>
+              <GitCommitHorizontalIcon />
+              <div>
+                <h4>Flujo y precedencias</h4>
+                <p>
+                  {grafo.topologia === "LINEAL"
+                    ? "Recorrido lineal compatible"
+                    : `${grafo.raices.length} inicio(s), ${grafo.terminales.length} terminal(es) y ramas paralelas`}
+                </p>
+              </div>
+            </div>
+            <span>{grafo.topologia}</span>
+          </header>
+          <div className={styles.flowOverviewRows}>
+            {grafo.nodos.map((nodo, index) => {
+              const previos = grafo.aristas
+                .filter((arista) => arista.haciaClave === nodo.clave)
+                .map((arista) => arista.desdeClave);
+              return (
+                <div key={nodo.clave}>
+                  <b>{String(index + 1).padStart(2, "0")}</b>
+                  <strong>{nombreNodo(nodo.clave)}</strong>
+                  <span>
+                    {previos.length
+                      ? `Después de ${previos.map(nombreNodo).join(" + ")}`
+                      : "Inicio disponible"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <div className={styles.grid}>
         <section className={styles.block}>
@@ -632,6 +816,9 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                     {componente.politicaEjecucion === "INDEPENDIENTE"
                       ? "fabricación separada"
                       : "integrado al producto"}
+                    {componente.nodoIncorporacionClave
+                      ? ` · se incorpora antes de ${nombreNodo(componente.nodoIncorporacionClave)}`
+                      : ""}
                   </span>
                 </div>
                 <div className={styles.rowMeta}>

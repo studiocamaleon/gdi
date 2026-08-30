@@ -119,6 +119,14 @@ export interface ProductoRecetaRevision {
   rutaAlternativaId: string;
   rutaVersion: number;
   huellaConfiguracion: string;
+  topologiaProduccion: "LINEAL" | "DAG";
+  grafoProduccionJson?: {
+    topologia: "LINEAL" | "DAG";
+    nodos: Array<{ clave: string; indice: number }>;
+    aristas: Array<{ desdeClave: string; haciaClave: string }>;
+    raices: string[];
+    terminales: string[];
+  } | null;
   cambios?: string | null;
   creadaPorNombre: string;
   publicadaPorNombre?: string | null;
@@ -159,6 +167,7 @@ export interface ProductoRecetaRevision {
     cantidad: number;
     unidad: string;
     requerido: boolean;
+    nodoIncorporacionClave?: string | null;
     orden: number;
   }>;
   documentos: Array<{
@@ -202,6 +211,7 @@ export type ProductoRecetaComponenteInput = {
   cantidad: number;
   unidad?: string;
   requerido?: boolean;
+  nodoIncorporacionClave?: string | null;
   orden?: number;
 };
 
@@ -235,6 +245,7 @@ export function guardarBorradorReceta(
     expectedUpdatedAt?: string;
     documentos?: ProductoRecetaDocumentoInput[];
     componentes?: ProductoRecetaComponenteInput[];
+    dependencias?: Array<{ desdeClave: string; haciaClave: string }>;
   },
 ): Promise<ProductoRecetaRevision> {
   return apiRequest<ProductoRecetaRevision>(

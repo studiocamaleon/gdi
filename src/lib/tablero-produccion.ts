@@ -14,22 +14,14 @@ import { fechaLocalDesdeIso, formatFechaOrden } from "@/lib/ordenes-trabajo";
 // ── Contrato con el backend ──────────────────────────────────────────────
 
 export type TableroPasoEstado =
-  | "pendiente"
-  | "en_curso"
-  | "pausado"
-  | "hecho"
-  | "bloqueado";
+  "pendiente" | "en_curso" | "pausado" | "hecho" | "bloqueado";
 
 /** Registro de tiempos (docs/registro-tiempos-produccion-diseno.md D1). */
 export type TableroPasoModoRegistro = "cronometro" | "solo_completar";
 
 /** Calidad/origen del tiempo real asentado en un paso hecho (D3). */
 export type TableroPasoTiempoFuente =
-  | "medido"
-  | "medido_lote"
-  | "declarado"
-  | "estimado"
-  | "invalido";
+  "medido" | "medido_lote" | "declarado" | "estimado" | "invalido";
 
 /** Cronómetro corriendo sobre el paso: quién y desde cuándo. */
 export type TableroPasoTramoAbierto = {
@@ -42,6 +34,11 @@ export type TableroPasoTramoAbierto = {
 export type TableroPasoData = {
   id: string;
   indice: number;
+  /** Null en OTs históricas: esas conservan la semántica lineal por índice. */
+  nodoClave?: string | null;
+  esTerminal?: boolean;
+  predecesorPasoIds?: string[];
+  sucesorPasoIds?: string[];
   /**
    * Paso de la ruta que lo originó. Es la clave con la que la vista
    * consolidada de Costos empareja el tiempo REAL de este paso con la tarifa
@@ -271,7 +268,10 @@ export const CATEGORIAS_FAMILIA: Array<{ key: string; nm: string }> = [
 export type TableroPrioridad = "urgent" | "high" | "normal";
 
 /** "OT-2026-0184" + índice 0 → "OT-0184 · A" (código visible del item). */
-export function codigoVisibleItem(ordenNumero: string, itemIndice: number): string {
+export function codigoVisibleItem(
+  ordenNumero: string,
+  itemIndice: number,
+): string {
   const corto = ordenNumero.replace(/^OT-\d{4}-/, "OT-");
   const letra = String.fromCharCode(65 + (itemIndice % 26));
   return `${corto} · ${letra}`;
@@ -288,7 +288,20 @@ export function diasHastaEntrega(fechaEntrega: string | null): number | null {
 }
 
 const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const MESES_CORTOS = [
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic",
+];
 
 /** "Vie 30 may", como el diseño (arrays fijos: sin depender del locale). */
 export function etiquetaEntrega(fechaEntrega: string | null): string {
@@ -313,7 +326,9 @@ export function etiquetaRestante(fechaEntrega: string | null): string {
  * Prioridad DERIVADA del vencimiento (no hay campo real todavía):
  * vencida u hoy → urgente · ≤2 días → alta · resto → normal.
  */
-export function prioridadDerivada(fechaEntrega: string | null): TableroPrioridad {
+export function prioridadDerivada(
+  fechaEntrega: string | null,
+): TableroPrioridad {
   const dias = diasHastaEntrega(fechaEntrega);
   if (dias === null) return "normal";
   if (dias <= 0) return "urgent";
@@ -335,27 +350,56 @@ export function itemIniciado(item: TableroItemData): boolean {
   return item.pasos.some((paso) => paso.estado !== "pendiente");
 }
 
-/** Primer paso que no está hecho: donde está parado el trabajo. */
+/** Primera frontera visible; en un DAG puede haber varias activas a la vez. */
 export function pasoActual(item: TableroItemData): TableroPasoData | undefined {
-  return item.pasos.find((paso) => paso.estado !== "hecho");
+  return item.pasos.find((paso) => pasoActivo(item, paso));
 }
 
 /**
- * La ruta es una SECUENCIA: el paso ACTIVO es el que está listo para
- * hacerse — es el primero, o todos los anteriores ya están hechos. Las
- * vistas operativas (Por estación) muestran únicamente pasos activos: los
- * futuros todavía no son trabajo de nadie.
+ * Una OT nueva usa precedencias explícitas y puede exponer varias fronteras
+ * activas. Una OT histórica sin nodoClave conserva la secuencia por índice.
  */
-export function pasoActivo(item: TableroItemData, paso: TableroPasoData): boolean {
+export function pasoActivo(
+  item: TableroItemData,
+  paso: TableroPasoData,
+): boolean {
   if (paso.estado === "hecho") return false;
+  if (paso.nodoClave) {
+    const porId = new Map(
+      item.pasos.map((candidato) => [candidato.id, candidato]),
+    );
+    return (paso.predecesorPasoIds ?? []).every(
+      (id) => porId.get(id)?.estado === "hecho",
+    );
+  }
   return item.pasos
     .filter((otro) => otro.indice < paso.indice)
     .every((otro) => otro.estado === "hecho");
 }
 
 /** Deshacer sólo en la frontera: nada posterior puede haber arrancado. */
-export function pasoReabrible(item: TableroItemData, paso: TableroPasoData): boolean {
+export function pasoReabrible(
+  item: TableroItemData,
+  paso: TableroPasoData,
+): boolean {
   if (paso.estado !== "hecho") return false;
+  if (paso.nodoClave) {
+    const porId = new Map(
+      item.pasos.map((candidato) => [candidato.id, candidato]),
+    );
+    const pendientes = [...(paso.sucesorPasoIds ?? [])];
+    const visitados = new Set<string>();
+    while (pendientes.length > 0) {
+      const id = pendientes.pop()!;
+      if (visitados.has(id)) continue;
+      visitados.add(id);
+      const descendiente = porId.get(id);
+      if (!descendiente) continue;
+      if (descendiente.estado !== "pendiente") return false;
+      pendientes.push(...(descendiente.sucesorPasoIds ?? []));
+    }
+    return true;
+  }
   return item.pasos
     .filter((otro) => otro.indice > paso.indice)
     .every((otro) => otro.estado === "pendiente");
@@ -455,7 +499,8 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
   if (paso.tecnologia) {
     const porTecnologia = activas.find((estacion) =>
       (estacion.reglas ?? []).some(
-        (regla) => regla.tipo === "tecnologia" && regla.valor === paso.tecnologia,
+        (regla) =>
+          regla.tipo === "tecnologia" && regla.valor === paso.tecnologia,
       ),
     );
     if (porTecnologia) return porTecnologia;
