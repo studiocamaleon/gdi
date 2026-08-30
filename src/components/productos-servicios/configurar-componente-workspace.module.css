@@ -86,6 +86,38 @@
   border-radius: 12px;
   background: #fff;
 }
+
+.executionCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: 20px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 17px 20px;
+  border: 1px solid #ddd8d2;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.executionCard strong,
+.executionCard span {
+  display: block;
+}
+
+.executionCard span {
+  margin-top: 4px;
+  color: #7a7478;
+  font-size: 13px;
+}
+
+.executionCard select {
+  height: 44px;
+  border: 1px solid #d8d2cc;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #fff;
+  color: #242126;
+}
 .contextCard > svg {
   width: 22px;
   color: #f2692f;
@@ -263,6 +295,9 @@
 }
 
 @media (max-width: 760px) {
+  .executionCard {
+    grid-template-columns: 1fr;
+  }
   .backdrop {
     padding: 0;
   }

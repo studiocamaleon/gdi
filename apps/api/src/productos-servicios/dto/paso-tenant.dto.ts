@@ -7,7 +7,9 @@
  */
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
+  IsEnum,
   IsIn,
   IsNumber,
   IsOptional,
@@ -17,6 +19,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { TipoPasoTenant } from '@prisma/client';
 
 /** Defaults del taller; null limpia el campo. */
 export class DefaultsPasoTenantDto {
@@ -72,6 +75,14 @@ export class CrearPasoTenantDto {
   plantillaCodigo!: string;
 
   @IsOptional()
+  @IsEnum(TipoPasoTenant)
+  tipoPaso?: TipoPasoTenant;
+
+  @IsOptional()
+  @IsArray()
+  operacionesCompuestas?: unknown[];
+
+  @IsOptional()
   @IsString()
   @MaxLength(300)
   descripcion?: string | null;
@@ -96,6 +107,14 @@ export class ActualizarPasoTenantDto {
   @IsOptional()
   @IsString()
   plantillaCodigo?: string;
+
+  @IsOptional()
+  @IsEnum(TipoPasoTenant)
+  tipoPaso?: TipoPasoTenant;
+
+  @IsOptional()
+  @IsArray()
+  operacionesCompuestas?: unknown[];
 
   @IsOptional()
   @IsString()

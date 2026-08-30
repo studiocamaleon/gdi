@@ -454,6 +454,11 @@ enum PoliticaEjecucionRecetaComponente {
   INDEPENDIENTE
 }
 
+enum TipoPasoTenant {
+  SIMPLE
+  COMPUESTO
+}
+
 enum TipoAprobacionDocumento {
   CLIENTE
   DISENO
@@ -2151,14 +2156,18 @@ model PasoTenant {
 
   /// FamiliaCodigo del catálogo del sistema del que hereda TODA la ficha.
   /// Es la herencia: cambiarlo re-apunta el paso a otra plantilla.
-  plantillaCodigo String
-  nombre          String
-  descripcion     String?
+  plantillaCodigo           String
+  nombre                    String
+  descripcion               String?
   /// Ícono propio; si se omite vale el de la plantilla.
-  icono           String?
+  icono                     String?
   /// Inhabilitado: fuera de selectores, pero el resolver lo sigue
   /// resolviendo para rutas/OTs históricas.
-  activo          Boolean @default(true)
+  activo                    Boolean        @default(true)
+  /// SIMPLE conserva el comportamiento histórico. COMPUESTO declara un
+  /// catálogo de operaciones que cada receta configura con su propio contexto.
+  tipoPaso                  TipoPasoTenant @default(SIMPLE)
+  operacionesCompuestasJson Json?
 
   /// Defaults del taller (antes en FamiliaPasoDefaults, que sobrevive para
   /// las familias del sistema usadas sin instanciar). La instancia puede
@@ -2732,6 +2741,10 @@ model ProductoRecetaRevision {
   /// cambia: el grafo queda congelado junto con el resto del snapshot.
   topologiaProduccion TopologiaProduccion          @default(LINEAL)
   grafoProduccionJson Json?
+  /// Configuración contextual de las operaciones de cada nodo compuesto.
+  /// Vive en la revisión, no en los componentes, porque una operación puede
+  /// relacionar varios hijos y consumir outputs de cualquiera de ellos.
+  pasosCompuestosJson Json?
   cambios             String?                      @db.VarChar(1500)
   creadaPorId         String?                      @db.Uuid
   creadaPorNombre     String                       @db.VarChar(200)
@@ -3890,86 +3903,86 @@ model EtaSnapshotItem {
 /// inmutable; acá vive el estado de EJECUCIÓN en el taller.
 /// Ver docs/tablero-produccion-conexion-diseno.md
 model OrdenTrabajoItemPaso {
-  id                    String                        @id @default(uuid()) @db.Uuid
-  tenantId              String                        @db.Uuid
-  ordenId               String                        @db.Uuid
-  itemId                String                        @db.Uuid
+  id                                   String                        @id @default(uuid()) @db.Uuid
+  tenantId                             String                        @db.Uuid
+  ordenId                              String                        @db.Uuid
+  itemId                               String                        @db.Uuid
   /// Posición del paso en la ruta del item (orden topológico del snapshot).
-  indice                Int
+  indice                               Int
   /// Identidad estable del nodo dentro del snapshot. No depende del orden
   /// visual y permite referenciarlo aunque el grafo tenga ramas.
-  nodoClave             String?                       @db.VarChar(160)
+  nodoClave                            String?                       @db.VarChar(160)
   /// En una ruta lineal sólo el último paso es terminal. En un DAG puede
   /// haber más de uno, y todos deben completarse para cerrar el item.
-  esTerminal            Boolean                       @default(false)
+  esTerminal                           Boolean                       @default(false)
   /// rutaPasoId del PasoEjecutado de origen (trazar contra el snapshot).
-  rutaPasoId            String?
-  familiaCodigo         String
+  rutaPasoId                           String?
+  familiaCodigo                        String
   /// Categoría de alto nivel de la familia (agrupa la vista Por estación).
-  categoriaFamilia      String
+  categoriaFamilia                     String
   /// Nombre operativo visible ("Impresión digital frente").
-  nombre                String
+  nombre                               String
   /// Centro de costo que tarifó el paso — proxy de "estación" en fase 1.
-  centroCostoId         String?                       @db.Uuid
-  centroCostoNombre     String?
+  centroCostoId                        String?                       @db.Uuid
+  centroCostoNombre                    String?
   /// Máquina que ejecutó el paso (la que eligió el motor). Señal REAL para
   /// rutear a estaciones por máquina/tecnología, en vez del centro de costo
   /// (que es de costeo). Null en pasos sin máquina o en órdenes viejas.
   /// Ver docs/estaciones-reglas-diseno.md.
-  maquinaId             String?                       @db.Uuid
-  duracionEstimadaMin   Decimal?                      @db.Decimal(10, 2)
+  maquinaId                            String?                       @db.Uuid
+  duracionEstimadaMin                  Decimal?                      @db.Decimal(10, 2)
   /// Desglose congelado de las subtareas aportadas por relaciones BOM al
   /// paso compuesto. No gobierna estados; explica duración, recursos y costo.
   operacionesIncorporacionSnapshotJson Json?
   /// 'pendiente' | 'en_curso' | 'pausado' | 'hecho' | 'bloqueado'.
-  estado                String                        @default("pendiente")
-  motivoBloqueo         String?
+  estado                               String                        @default("pendiente")
+  motivoBloqueo                        String?
   /// === Tercerización (F2, docs/productos-tercerizados-diseno.md §6) ===
   /// 'interno' (producción propia, va al tablero) | 'tercerizado' (compra a un
   /// proveedor, va al panel de Compras, fuera del tablero).
-  tipoEjecucion         String                        @default("interno")
-  proveedorId           String?                       @db.Uuid
+  tipoEjecucion                        String                        @default("interno")
+  proveedorId                          String?                       @db.Uuid
   /// Snapshot del nombre del proveedor (no FK, patrón de los demás nombres).
-  proveedorNombre       String?
-  plazoProveedorDias    Int?
+  proveedorNombre                      String?
+  plazoProveedorDias                   Int?
   /// Sólo tercerizados: 'pendiente' | 'pedido' | 'recibido' | 'entregado'.
   /// Al llegar a recibido/entregado, `estado` pasa a 'hecho' (desbloquea el
   /// paso interno siguiente y cuenta en el progreso de la OT).
-  estadoCompra          String?
-  iniciadoEl            DateTime?
-  completadoEl          DateTime?
+  estadoCompra                         String?
+  iniciadoEl                           DateTime?
+  completadoEl                         DateTime?
   /// Cómo se registra el trabajo (snapshot del catálogo de familias al
   /// materializar, D1): 'cronometro' (MO domina, tramos) | 'solo_completar'
   /// (runtime de máquina, un click y tiempo = estimado).
-  modoRegistro          String                        @default("cronometro")
+  modoRegistro                         String                        @default("cronometro")
   /// Tiempo real asentado al completar (D3). En modo cronómetro es la suma
   /// de tramos; en solo_completar copia el estimado. Null hasta 'hecho'.
-  tiempoRealMin         Decimal?                      @db.Decimal(10, 2)
+  tiempoRealMin                        Decimal?                      @db.Decimal(10, 2)
   /// Calidad/origen de tiempoRealMin: 'medido' | 'medido_lote' |
   /// 'declarado' | 'estimado' | 'invalido'.
-  tiempoFuente          String?
+  tiempoFuente                         String?
   /// Atribución directa (D5): quién abrió el primer tramo / quién completó.
   /// Nombre = snapshot (el FK puede quedar null si se borra el usuario).
-  iniciadoPorId         String?                       @db.Uuid
-  iniciadoPorNombre     String?
-  completadoPorId       String?                       @db.Uuid
-  completadoPorNombre   String?
+  iniciadoPorId                        String?                       @db.Uuid
+  iniciadoPorNombre                    String?
+  completadoPorId                      String?                       @db.Uuid
+  completadoPorNombre                  String?
   /// Usuario que tomó el paso a SU mesa de trabajo (vista Por estación del
   /// tablero): reclamo visible para todos, persistente entre sesiones.
-  mesaUsuarioId         String?                       @db.Uuid
-  createdAt             DateTime                      @default(now())
-  updatedAt             DateTime                      @updatedAt
-  tenant                Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orden                 OrdenTrabajo                  @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  item                  OrdenTrabajoItem              @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  mesaUsuario           User?                         @relation("PasosEnMesa", fields: [mesaUsuarioId], references: [id], onDelete: SetNull)
-  iniciadoPor           User?                         @relation("PasosIniciados", fields: [iniciadoPorId], references: [id], onDelete: SetNull)
-  completadoPor         User?                         @relation("PasosCompletados", fields: [completadoPorId], references: [id], onDelete: SetNull)
-  tramos                OrdenTrabajoPasoTramo[]
-  gatesDocumento        GateProduccionDocumento[]
-  dependenciasSalientes OrdenTrabajoPasoDependencia[] @relation("PasoPredecesor")
-  dependenciasEntrantes OrdenTrabajoPasoDependencia[] @relation("PasoSucesor")
-  gatesOperativos       OrdenTrabajoPasoGate[]
+  mesaUsuarioId                        String?                       @db.Uuid
+  createdAt                            DateTime                      @default(now())
+  updatedAt                            DateTime                      @updatedAt
+  tenant                               Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden                                OrdenTrabajo                  @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  item                                 OrdenTrabajoItem              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  mesaUsuario                          User?                         @relation("PasosEnMesa", fields: [mesaUsuarioId], references: [id], onDelete: SetNull)
+  iniciadoPor                          User?                         @relation("PasosIniciados", fields: [iniciadoPorId], references: [id], onDelete: SetNull)
+  completadoPor                        User?                         @relation("PasosCompletados", fields: [completadoPorId], references: [id], onDelete: SetNull)
+  tramos                               OrdenTrabajoPasoTramo[]
+  gatesDocumento                       GateProduccionDocumento[]
+  dependenciasSalientes                OrdenTrabajoPasoDependencia[] @relation("PasoPredecesor")
+  dependenciasEntrantes                OrdenTrabajoPasoDependencia[] @relation("PasoSucesor")
+  gatesOperativos                      OrdenTrabajoPasoGate[]
 
   /// Un solo paso por posición de la ruta. Es la garantía DURA contra la
   /// doble materialización: el backfill perezoso chequea "item sin pasos" y

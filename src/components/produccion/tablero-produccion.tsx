@@ -1239,7 +1239,9 @@ function DetailRuta({
                           <div>
                             <strong>{operacion.nombre}</strong>
                             <small>
-                              {operacion.componenteNombre}
+                              {operacion.componentesNombres?.join(" + ") ??
+                                operacion.componenteNombre ??
+                                "Operación del paso"}
                               {operacion.modoTiempo === "POR_UNIDAD"
                                 ? ` · ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(operacion.cantidadResuelta)} ${operacion.unidadCantidad ?? "unidades"}`
                                 : " · tiempo fijo"}
@@ -1316,9 +1318,7 @@ function notaProduccionDeDetalle(
 ): string | null {
   const producto = detalle.productos.find((entry) => entry.id === itemId);
   const jobContext = producto?.snapshot?.jobContext as
-    | { notasProduccion?: unknown }
-    | null
-    | undefined;
+    { notasProduccion?: unknown } | null | undefined;
   const nota =
     typeof jobContext?.notasProduccion === "string"
       ? jobContext.notasProduccion.trim()

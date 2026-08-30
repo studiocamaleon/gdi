@@ -426,8 +426,13 @@ export interface ComponenteFabricadoCosteado {
 export interface OperacionIncorporacionCosteada {
   codigo: string;
   nombre: string;
-  componenteCodigo: string;
-  componenteNombre: string;
+  /** Campos singulares conservados para snapshots iniciales de Fase 4.2. */
+  componenteCodigo?: string;
+  componenteNombre?: string;
+  componentesCodigos?: string[];
+  componentesNombres?: string[];
+  pasoTenantId?: string;
+  pasoNombre?: string;
   nodoDestinoClave: string;
   modoTiempo: 'FIJO' | 'POR_UNIDAD';
   cantidadResuelta: number;

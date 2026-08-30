@@ -166,6 +166,12 @@ export class GuardarBorradorRecetaDto {
   @Type(() => RecetaComponenteDto)
   componentes?: RecetaComponenteDto[];
 
+  /** Configuración contextual de los pasos compuestos de esta receta. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  pasosCompuestos?: unknown[];
+
   /** Aristas obligatorias del flujo. Si se omiten, se conserva el borrador
    * actual o se compila la ruta lineal por primera vez. */
   @IsOptional()

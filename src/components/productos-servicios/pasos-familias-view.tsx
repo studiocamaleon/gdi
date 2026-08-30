@@ -184,7 +184,10 @@ export function PasosFamiliasView({
               variant="compacto"
               titulo="No pudimos cargar tus pasos"
               descripcion="Revisá la conexión y volvé a intentar."
-              cta={{ label: "Reintentar", onClick: () => window.location.reload() }}
+              cta={{
+                label: "Reintentar",
+                onClick: () => window.location.reload(),
+              }}
             />
           ) : pasos.length === 0 ? (
             <EstadoVacio
@@ -200,91 +203,109 @@ export function PasosFamiliasView({
               }
             />
           ) : (
-            <div className="overflow-x-auto"><table className="tbl min-w-[760px]">
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Parte de</th>
-                  <th>Categoría</th>
-                  <th>Estación</th>
-                  <th>Estado</th>
-                  <th className="right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pasos.map((paso) => (
-                  <tr
-                    key={paso.id}
-                    className={paso.activo ? undefined : s.inactiva}
-                  >
-                    <td>
-                      <div className="name">{paso.nombre}</div>
-                      {paso.descripcion ? (
-                        <div className="desc">{paso.descripcion}</div>
-                      ) : null}
-                    </td>
-                    <td>
-                      {paso.heredaFicha === false ? (
-                        <span className="tag warm">Plantilla inexistente</span>
-                      ) : (
-                        <span className={s.formaChip}>
-                          {paso.plantillaNombre ?? paso.plantillaCodigo}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      {paso.categoria
-                        ? getLabel(categoriaFamiliaLabels, paso.categoria).label
-                        : "—"}
-                    </td>
-                    <td>
-                      {paso.estacion ? (
-                        <>
-                          {paso.estacion.nombre}
-                          {paso.estacionHeredada ? (
-                            <span className="desc"> (de la plantilla)</span>
-                          ) : null}
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td>
-                      <span className="tag">
-                        {paso.activo ? "Activo" : "Inhabilitado"}
-                      </span>
-                    </td>
-                    <td className="right">
-                      {puedeGestionar ? (
-                        <Link
-                          href={`/productos-servicios/pasos/${paso.id}`}
-                          className={buttonVariants({
-                            variant: "outline",
-                            size: "sm",
-                          })}
-                        >
-                          Configurar
-                        </Link>
-                      ) : null}
-                      {puedeGestionar ? <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleActivo(paso)}
-                      >
-                        {paso.activo ? "Inhabilitar" : "Reactivar"}
-                      </Button> : null}
-                      {puedeGestionar ? <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setAEliminar(paso)}
-                      >
-                        Eliminar
-                      </Button> : null}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="tbl min-w-[760px]">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Parte de</th>
+                    <th>Categoría</th>
+                    <th>Estación</th>
+                    <th>Estado</th>
+                    <th className="right">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table></div>
+                </thead>
+                <tbody>
+                  {pasos.map((paso) => (
+                    <tr
+                      key={paso.id}
+                      className={paso.activo ? undefined : s.inactiva}
+                    >
+                      <td>
+                        <div className="name">{paso.nombre}</div>
+                        {paso.descripcion ? (
+                          <div className="desc">{paso.descripcion}</div>
+                        ) : null}
+                        {paso.tipoPaso === "COMPUESTO" ? (
+                          <span className="tag warm">
+                            Paso compuesto ·{" "}
+                            {paso.operacionesCompuestas?.length ?? 0}{" "}
+                            operaciones
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
+                        {paso.heredaFicha === false ? (
+                          <span className="tag warm">
+                            Plantilla inexistente
+                          </span>
+                        ) : (
+                          <span className={s.formaChip}>
+                            {paso.tipoPaso === "COMPUESTO"
+                              ? "Operaciones configurables"
+                              : (paso.plantillaNombre ?? paso.plantillaCodigo)}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {paso.categoria
+                          ? getLabel(categoriaFamiliaLabels, paso.categoria)
+                              .label
+                          : "—"}
+                      </td>
+                      <td>
+                        {paso.estacion ? (
+                          <>
+                            {paso.estacion.nombre}
+                            {paso.estacionHeredada ? (
+                              <span className="desc"> (de la plantilla)</span>
+                            ) : null}
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>
+                        <span className="tag">
+                          {paso.activo ? "Activo" : "Inhabilitado"}
+                        </span>
+                      </td>
+                      <td className="right">
+                        {puedeGestionar ? (
+                          <Link
+                            href={`/productos-servicios/pasos/${paso.id}`}
+                            className={buttonVariants({
+                              variant: "outline",
+                              size: "sm",
+                            })}
+                          >
+                            Configurar
+                          </Link>
+                        ) : null}
+                        {puedeGestionar ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleActivo(paso)}
+                          >
+                            {paso.activo ? "Inhabilitar" : "Reactivar"}
+                          </Button>
+                        ) : null}
+                        {puedeGestionar ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAEliminar(paso)}
+                          >
+                            Eliminar
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
@@ -308,15 +329,15 @@ export function PasosFamiliasView({
               aria-label="Buscar en el catálogo de pasos"
               className="sm:max-w-sm"
             />
-            <Select value={categoriaCatalogo} onValueChange={(value) => setCategoriaCatalogo(value ?? "todas")}>
+            <Select
+              value={categoriaCatalogo}
+              onValueChange={(value) => setCategoriaCatalogo(value ?? "todas")}
+            >
               <SelectTrigger className="w-full sm:w-64">
                 <SelectValue>
                   {categoriaCatalogo === "todas"
                     ? "Todas las categorías"
-                    : getLabel(
-                        categoriaFamiliaLabels,
-                        categoriaCatalogo,
-                      ).label}
+                    : getLabel(categoriaFamiliaLabels, categoriaCatalogo).label}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -331,44 +352,48 @@ export function PasosFamiliasView({
               </SelectContent>
             </Select>
           </div>
-          <div className="overflow-x-auto"><table className="tbl min-w-[760px]">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Descripción</th>
-                <th>Categoría</th>
-                <th className="right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sistemaFiltrado.map((f) => (
-                <tr key={f.codigo}>
-                  <td>
-                    <div className="name">{f.nombre}</div>
-                  </td>
-                  <td>
-                    <div className="desc">
-                      {descripcionPasoParaUsuario(f.descripcion)}
-                    </div>
-                  </td>
-                  <td>{getLabel(categoriaFamiliaLabels, f.categoria).label}</td>
-                  <td className="right">
-                    {puedeGestionar ? (
-                      <Link
-                        href={`/productos-servicios/pasos/${f.codigo}`}
-                        className={buttonVariants({
-                          variant: f.configBase ? "outline" : "ghost",
-                          size: "sm",
-                        })}
-                      >
-                        {f.configBase ? "Editar configuración" : "Configurar"}
-                      </Link>
-                    ) : null}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="tbl min-w-[760px]">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Categoría</th>
+                  <th className="right">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table></div>
+              </thead>
+              <tbody>
+                {sistemaFiltrado.map((f) => (
+                  <tr key={f.codigo}>
+                    <td>
+                      <div className="name">{f.nombre}</div>
+                    </td>
+                    <td>
+                      <div className="desc">
+                        {descripcionPasoParaUsuario(f.descripcion)}
+                      </div>
+                    </td>
+                    <td>
+                      {getLabel(categoriaFamiliaLabels, f.categoria).label}
+                    </td>
+                    <td className="right">
+                      {puedeGestionar ? (
+                        <Link
+                          href={`/productos-servicios/pasos/${f.codigo}`}
+                          className={buttonVariants({
+                            variant: f.configBase ? "outline" : "ghost",
+                            size: "sm",
+                          })}
+                        >
+                          {f.configBase ? "Editar configuración" : "Configurar"}
+                        </Link>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {!cargando && sistemaFiltrado.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">
               No hay tipos de paso que coincidan con esos filtros.
@@ -377,15 +402,17 @@ export function PasosFamiliasView({
         </section>
       </div>
 
-      {puedeGestionar ? <PasoAltaDialog
-        open={altaAbierta}
-        plantillas={plantillas}
-        onClose={() => setAltaAbierta(false)}
-        onCreado={(paso) => {
-          setAltaAbierta(false);
-          router.push(`/productos-servicios/pasos/${paso.id}`);
-        }}
-      /> : null}
+      {puedeGestionar ? (
+        <PasoAltaDialog
+          open={altaAbierta}
+          plantillas={plantillas}
+          onClose={() => setAltaAbierta(false)}
+          onCreado={(paso) => {
+            setAltaAbierta(false);
+            router.push(`/productos-servicios/pasos/${paso.id}`);
+          }}
+        />
+      ) : null}
 
       <ConfirmacionDestructiva
         open={aEliminar !== null}

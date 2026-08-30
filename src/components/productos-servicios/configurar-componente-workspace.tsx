@@ -304,6 +304,7 @@ export function ConfigurarComponenteWorkspace({
   onSave: (
     configuracion: ConfiguracionComponenteFabricado,
     unidadComercial: string,
+    politicaEjecucion: "INLINE" | "INDEPENDIENTE",
   ) => void;
 }) {
   const [formulario, setFormulario] =
@@ -314,6 +315,9 @@ export function ConfigurarComponenteWorkspace({
   );
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [politicaEjecucion, setPoliticaEjecucion] = React.useState<
+    "INLINE" | "INDEPENDIENTE"
+  >(componente.politicaEjecucion ?? "INDEPENDIENTE");
 
   React.useEffect(() => {
     let active = true;
@@ -439,6 +443,30 @@ export function ConfigurarComponenteWorkspace({
                     valores congelados al cotizar
                   </span>
                 </div>
+              </div>
+              <div className={styles.executionCard}>
+                <div>
+                  <strong>Seguimiento productivo</strong>
+                  <span>
+                    Define si este componente tendrá su propio flujo ejecutable
+                    dentro de la orden de trabajo.
+                  </span>
+                </div>
+                <select
+                  value={politicaEjecucion}
+                  onChange={(event) =>
+                    setPoliticaEjecucion(
+                      event.target.value as "INLINE" | "INDEPENDIENTE",
+                    )
+                  }
+                >
+                  <option value="INDEPENDIENTE">
+                    Generar flujo productivo propio
+                  </option>
+                  <option value="INLINE">
+                    Incluir en el flujo del producto padre
+                  </option>
+                </select>
               </div>
               <div className={styles.table}>
                 <div className={styles.tableHead}>
@@ -728,15 +756,11 @@ export function ConfigurarComponenteWorkspace({
               formulario &&
               onSave(
                 {
-                  version: componente.configuracionJson
-                    ?.operacionesIncorporacion?.length
-                    ? 2
-                    : 1,
+                  version: 1,
                   bindings,
-                  operacionesIncorporacion:
-                    componente.configuracionJson?.operacionesIncorporacion,
                 },
                 formulario.producto.unidadComercial,
+                politicaEjecucion,
               )
             }
           >

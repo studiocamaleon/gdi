@@ -647,6 +647,17 @@ export interface PasoTenant {
   estacionHeredada?: boolean;
   defaults?: DefaultsFamiliaPaso | null;
   configBase?: Record<string, unknown> | null;
+  tipoPaso: "SIMPLE" | "COMPUESTO";
+  operacionesCompuestas?: DefinicionOperacionCompuesta[];
+}
+
+export interface DefinicionOperacionCompuesta {
+  codigo: string;
+  nombre: string;
+  descripcion?: string | null;
+  dimension: "FIJO" | "UNIDAD" | "LONGITUD" | "SUPERFICIE" | "CANTIDAD";
+  requerida: boolean;
+  orden: number;
 }
 
 /** Plantilla instanciable que ofrece el modal de alta. */
@@ -665,6 +676,8 @@ export interface UpsertPasoTenantInput {
   icono?: string | null;
   activo?: boolean;
   defaults?: Partial<DefaultsFamiliaPaso> | null;
+  tipoPaso?: "SIMPLE" | "COMPUESTO";
+  operacionesCompuestas?: DefinicionOperacionCompuesta[];
 }
 
 export interface PreviewCosteoFamilia {

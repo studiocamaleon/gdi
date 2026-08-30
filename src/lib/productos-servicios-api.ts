@@ -131,6 +131,7 @@ export interface ProductoRecetaRevision {
     raices: string[];
     terminales: string[];
   } | null;
+  pasosCompuestosJson?: ConfiguracionPasoCompuesto[] | null;
   cambios?: string | null;
   creadaPorNombre: string;
   publicadaPorNombre?: string | null;
@@ -222,11 +223,7 @@ export type ProductoRecetaComponenteInput = {
 };
 
 export type OrigenParametroComponente =
-  | "DEFAULT_HIJO"
-  | "FIJO"
-  | "PADRE"
-  | "FORMULA"
-  | "COTIZACION";
+  "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
 
 export type BindingParametroComponente = {
   clave: string;
@@ -274,6 +271,19 @@ export type OperacionIncorporacion = {
   minutosPorUnidad?: number | null;
   dotacionOperarios?: number;
   orden?: number;
+};
+
+export type ConfiguracionOperacionCompuesta = OperacionIncorporacion & {
+  activa: boolean;
+  componentesCodigos: string[];
+};
+
+export type ConfiguracionPasoCompuesto = {
+  version: 1;
+  nodoClave: string;
+  pasoTenantId: string;
+  pasoNombre: string;
+  operaciones: ConfiguracionOperacionCompuesta[];
 };
 
 export type FormularioCotizacionProducto = {
@@ -357,6 +367,7 @@ export function guardarBorradorReceta(
     expectedUpdatedAt?: string;
     documentos?: ProductoRecetaDocumentoInput[];
     componentes?: ProductoRecetaComponenteInput[];
+    pasosCompuestos?: ConfiguracionPasoCompuesto[];
     dependencias?: Array<{ desdeClave: string; haciaClave: string }>;
     gates?: Array<{
       nodoClave: string;
@@ -718,10 +729,7 @@ export interface UpsertSlotMaterialPayload {
   slotNombre?: string | null;
   slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
   modoSeleccion:
-    | "HARDCODED"
-    | "COMERCIAL_ELIGE"
-    | "MOTOR_ELIGE_AUTO"
-    | "HEREDA_DE_PASO";
+    "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO" | "HEREDA_DE_PASO";
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
@@ -903,9 +911,7 @@ export interface CrearCargoDirectoPayload {
   nombre: string;
   descripcion?: string;
   modoCalculo:
-    | "MONTO_FIJO_PLANO"
-    | "PORCENTAJE_SOBRE_BASE"
-    | "POR_UNIDAD_INPUT";
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -923,9 +929,7 @@ export interface ActualizarCargoDirectoPayload {
   nombre?: string;
   descripcion?: string;
   modoCalculo?:
-    | "MONTO_FIJO_PLANO"
-    | "PORCENTAJE_SOBRE_BASE"
-    | "POR_UNIDAD_INPUT";
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;

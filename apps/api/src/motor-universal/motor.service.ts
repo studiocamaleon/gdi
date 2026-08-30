@@ -167,6 +167,7 @@ import {
   resolverOperacionesIncorporacion,
   resolverJobContextComponente,
 } from '../productos-servicios/componentes-configuracion';
+import { resolverPasoCompuesto } from '../productos-servicios/pasos-compuestos';
 import {
   catalogoSalidasPublicasComposicion,
   extraerSalidasPublicasComposicion,
@@ -1347,85 +1348,113 @@ export class MotorUniversalService {
         });
       }
 
-      for (const componente of componentesOrdenados) {
-        if (!componente.requerido) continue;
-        let operaciones;
-        try {
-          operaciones = resolverOperacionesIncorporacion({
-            configuracion: componente.configuracionJson,
-            contextoPadre: jobContext as unknown as Record<string, unknown>,
-            outputsComponentes,
-            componenteCodigo: componente.codigo,
-            componenteNombre: componente.nombre,
-            nodoDestinoClave: componente.nodoIncorporacionClave,
-          });
-        } catch (error) {
+      const operacionesResueltas: Array<
+        | ReturnType<typeof resolverOperacionesIncorporacion>[number]
+        | ReturnType<typeof resolverPasoCompuesto>[number]
+      > = [];
+      try {
+        if (recetaPublicada.pasosCompuestos?.length) {
+          const nombresComponentes = Object.fromEntries(
+            componentesOrdenados.map((item) => [item.codigo, item.nombre]),
+          );
+          for (const pasoCompuesto of recetaPublicada.pasosCompuestos) {
+            operacionesResueltas.push(
+              ...resolverPasoCompuesto({
+                configuracion: pasoCompuesto,
+                contextoPadre: jobContext as unknown as Record<string, unknown>,
+                outputsComponentes,
+                nombresComponentes,
+              }),
+            );
+          }
+        } else {
+          for (const componente of componentesOrdenados) {
+            if (!componente.requerido) continue;
+            operacionesResueltas.push(
+              ...resolverOperacionesIncorporacion({
+                configuracion: componente.configuracionJson,
+                contextoPadre: jobContext as unknown as Record<string, unknown>,
+                outputsComponentes,
+                componenteCodigo: componente.codigo,
+                componenteNombre: componente.nombre,
+                nodoDestinoClave: componente.nodoIncorporacionClave,
+              }),
+            );
+          }
+        }
+      } catch (error) {
+        return fallar([
+          {
+            codigo: 'operacion_incorporacion_invalida',
+            severidad: 'ERROR',
+            mensaje:
+              error instanceof Error
+                ? error.message
+                : 'No se pudieron calcular las operaciones del paso compuesto.',
+            sugerencia: 'Revisá la configuración del paso compuesto en la BOM.',
+          },
+        ]);
+      }
+      for (const operacion of operacionesResueltas) {
+        const pasoDestino = pasosEjecutados.find(
+          (paso) =>
+            `ruta:${paso.rutaPasoId}` === operacion.nodoDestinoClave ||
+            `extra:${paso.rutaPasoId}` === operacion.nodoDestinoClave,
+        );
+        if (!pasoDestino?.activado || !pasoDestino.tiempo) {
           return fallar([
             {
-              codigo: 'operacion_incorporacion_invalida',
+              codigo: 'paso_compuesto_no_disponible',
               severidad: 'ERROR',
-              mensaje:
-                error instanceof Error
-                  ? error.message
-                  : `No se pudo calcular la incorporación de "${componente.nombre}".`,
+              mensaje: `La operación "${operacion.nombre}" apunta a un paso de incorporación que no está activo.`,
               sugerencia:
-                'Revisá las operaciones configuradas en la relación BOM.',
+                'Elegí un paso obligatorio y vigente como nodo de incorporación.',
             },
           ]);
         }
-        const componenteCosteado = componentesFabricados.find(
-          (item) => item.codigo === componente.codigo,
-        );
-        for (const operacion of operaciones) {
-          const pasoDestino = pasosEjecutados.find(
-            (paso) =>
-              `ruta:${paso.rutaPasoId}` === operacion.nodoDestinoClave ||
-              `extra:${paso.rutaPasoId}` === operacion.nodoDestinoClave,
+        const tarifaHora = Number(pasoDestino.tiempo.tarifaHora ?? 0);
+        if (!(tarifaHora > 0)) {
+          return fallar([
+            {
+              codigo: 'paso_compuesto_sin_tarifa',
+              severidad: 'ERROR',
+              mensaje: `El paso compuesto "${pasoDestino.nombreVisible ?? pasoDestino.familiaCodigo}" no tiene una tarifa horaria válida para costear "${operacion.nombre}".`,
+              sugerencia:
+                'Asigná al paso de ensamblaje un centro de costo con tarifa publicada.',
+            },
+          ]);
+        }
+        const costo =
+          (operacion.duracionMin / 60) *
+          tarifaHora *
+          operacion.dotacionOperarios;
+        const costeada = {
+          ...operacion,
+          centroCostoId: pasoDestino.tiempo.centroCostoId ?? null,
+          centroCostoNombre: pasoDestino.tiempo.centroCostoNombre ?? null,
+          tarifaHora,
+          costo,
+        };
+        pasoDestino.operacionesIncorporacion = [
+          ...(pasoDestino.operacionesIncorporacion ?? []),
+          costeada,
+        ];
+        pasoDestino.tiempo.runMin += operacion.duracionMin;
+        pasoDestino.tiempo.totalMin += operacion.duracionMin;
+        pasoDestino.tiempo.costo += costo;
+        pasoDestino.costoTotal += costo;
+        tiempoTotal += costo;
+        incorporacionComponentesTotal += costo;
+        const codigosRelacionados =
+          'componentesCodigos' in operacion
+            ? (operacion.componentesCodigos ?? [])
+            : 'componenteCodigo' in operacion && operacion.componenteCodigo
+              ? [operacion.componenteCodigo]
+              : [];
+        for (const codigo of codigosRelacionados) {
+          const componenteCosteado = componentesFabricados.find(
+            (item) => item.codigo === codigo,
           );
-          if (!pasoDestino?.activado || !pasoDestino.tiempo) {
-            return fallar([
-              {
-                codigo: 'paso_compuesto_no_disponible',
-                severidad: 'ERROR',
-                mensaje: `La operación "${operacion.nombre}" apunta a un paso de incorporación que no está activo.`,
-                sugerencia:
-                  'Elegí un paso obligatorio y vigente como nodo de incorporación.',
-              },
-            ]);
-          }
-          const tarifaHora = Number(pasoDestino.tiempo.tarifaHora ?? 0);
-          if (!(tarifaHora > 0)) {
-            return fallar([
-              {
-                codigo: 'paso_compuesto_sin_tarifa',
-                severidad: 'ERROR',
-                mensaje: `El paso compuesto "${pasoDestino.nombreVisible ?? pasoDestino.familiaCodigo}" no tiene una tarifa horaria válida para costear "${operacion.nombre}".`,
-                sugerencia:
-                  'Asigná al paso de ensamblaje un centro de costo con tarifa publicada.',
-              },
-            ]);
-          }
-          const costo =
-            (operacion.duracionMin / 60) *
-            tarifaHora *
-            operacion.dotacionOperarios;
-          const costeada = {
-            ...operacion,
-            centroCostoId: pasoDestino.tiempo.centroCostoId ?? null,
-            centroCostoNombre: pasoDestino.tiempo.centroCostoNombre ?? null,
-            tarifaHora,
-            costo,
-          };
-          pasoDestino.operacionesIncorporacion = [
-            ...(pasoDestino.operacionesIncorporacion ?? []),
-            costeada,
-          ];
-          pasoDestino.tiempo.runMin += operacion.duracionMin;
-          pasoDestino.tiempo.totalMin += operacion.duracionMin;
-          pasoDestino.tiempo.costo += costo;
-          pasoDestino.costoTotal += costo;
-          tiempoTotal += costo;
-          incorporacionComponentesTotal += costo;
           if (componenteCosteado) {
             componenteCosteado.operacionesIncorporacion = [
               ...(componenteCosteado.operacionesIncorporacion ?? []),

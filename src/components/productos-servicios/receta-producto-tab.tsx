@@ -29,17 +29,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { ProductoDetalle } from "@/lib/productos-servicios";
+import type { PasoTenant, ProductoDetalle } from "@/lib/productos-servicios";
 import {
   descartarBorradorReceta,
   deprecarReceta,
   guardarBorradorReceta,
   getProductos,
+  getPasosTenant,
   publicarReceta,
   type ProductoRecetaComponenteInput,
   type ProductoRecetaDocumentoInput,
   type ProductoReceta,
   type ProductoRecetaRevision,
+  type ConfiguracionPasoCompuesto,
 } from "@/lib/productos-servicios-api";
 import { ConfigurarComponenteWorkspace } from "./configurar-componente-workspace";
 import { ConfigurarIncorporacionWorkspace } from "./configurar-incorporacion-workspace";
@@ -110,6 +112,7 @@ function EditorDefiniciones({
   const [productos, setProductos] = React.useState<
     Array<{ id: string; codigo: string; nombre: string }>
   >([]);
+  const [pasosTenant, setPasosTenant] = React.useState<PasoTenant[]>([]);
   const [documentos, setDocumentos] = React.useState<
     ProductoRecetaDocumentoInput[]
   >(() =>
@@ -143,11 +146,14 @@ function EditorDefiniciones({
       orden: item.orden,
     })),
   );
+  const [pasosCompuestos, setPasosCompuestos] = React.useState<
+    ConfiguracionPasoCompuesto[]
+  >(revision.pasosCompuestosJson ?? []);
   const [componenteConfigurando, setComponenteConfigurando] = React.useState<
     number | null
   >(null);
-  const [incorporacionConfigurando, setIncorporacionConfigurando] =
-    React.useState<number | null>(null);
+  const [pasoCompuestoConfigurando, setPasoCompuestoConfigurando] =
+    React.useState<string | null>(null);
   const pasosDocumento = React.useMemo(
     () => [
       ...ruta.ruta.pasos
@@ -203,8 +209,8 @@ function EditorDefiniciones({
   );
 
   React.useEffect(() => {
-    void getProductos(true)
-      .then((items) =>
+    void Promise.all([getProductos(true), getPasosTenant()])
+      .then(([items, pasos]) => {
         setProductos(
           items
             .filter((item) => item.id !== productoId)
@@ -213,10 +219,44 @@ function EditorDefiniciones({
               codigo: item.codigo,
               nombre: item.nombre,
             })),
-        ),
-      )
-      .catch(() => setProductos([]));
-  }, [productoId]);
+        );
+        setPasosTenant(pasos);
+        setPasosCompuestos((current) => {
+          const existentes = new Set(current.map((item) => item.nodoClave));
+          const nuevos = pasosDocumento.flatMap((nodo) => {
+            if (existentes.has(nodo.value)) return [];
+            const rutaPaso = ruta.ruta.pasos.find(
+              (item) => `ruta:${item.id}` === nodo.value,
+            );
+            const extra = (ruta.pasosExtras ?? []).find(
+              (item) => `extra:${item.id}` === nodo.value,
+            );
+            const familiaCodigo =
+              rutaPaso?.familiaCodigo ?? extra?.familiaCodigo;
+            const plantilla = pasos.find(
+              (item) =>
+                item.id === familiaCodigo && item.tipoPaso === "COMPUESTO",
+            );
+            return plantilla
+              ? [
+                  {
+                    version: 1 as const,
+                    nodoClave: nodo.value,
+                    pasoTenantId: plantilla.id,
+                    pasoNombre: nodo.label,
+                    operaciones: [],
+                  },
+                ]
+              : [];
+          });
+          return [...current, ...nuevos];
+        });
+      })
+      .catch(() => {
+        setProductos([]);
+        setPasosTenant([]);
+      });
+  }, [pasosDocumento, productoId, ruta]);
 
   const guardarDefiniciones = async () => {
     setSaving(true);
@@ -227,6 +267,7 @@ function EditorDefiniciones({
         cambios: "Requisitos documentales y componentes actualizados",
         documentos: documentos.map((item, orden) => ({ ...item, orden })),
         componentes: componentes.map((item, orden) => ({ ...item, orden })),
+        pasosCompuestos,
         dependencias,
         gates,
       });
@@ -613,43 +654,6 @@ function EditorDefiniciones({
                     </option>
                   ))}
                 </select>
-                <input
-                  aria-label={`Cantidad del componente ${index + 1}`}
-                  type="number"
-                  min={0.000001}
-                  step={0.01}
-                  value={item.cantidad}
-                  onChange={(event) =>
-                    setComponentes((prev) =>
-                      prev.map((value, i) =>
-                        i === index
-                          ? { ...value, cantidad: Number(event.target.value) }
-                          : value,
-                      ),
-                    )
-                  }
-                />
-                <select
-                  aria-label={`Política del componente ${index + 1}`}
-                  value={item.politicaEjecucion ?? "INDEPENDIENTE"}
-                  onChange={(event) =>
-                    setComponentes((prev) =>
-                      prev.map((value, i) =>
-                        i === index
-                          ? {
-                              ...value,
-                              politicaEjecucion: event.target.value as
-                                | "INLINE"
-                                | "INDEPENDIENTE",
-                            }
-                          : value,
-                      ),
-                    )
-                  }
-                >
-                  <option value="INDEPENDIENTE">Fabricación separada</option>
-                  <option value="INLINE">Integrado al producto</option>
-                </select>
                 <select
                   aria-label={`Nodo de incorporación ${index + 1}`}
                   value={item.nodoIncorporacionClave ?? ""}
@@ -667,10 +671,10 @@ function EditorDefiniciones({
                     )
                   }
                 >
-                  <option value="">Elegir incorporación…</option>
+                  <option value="">Se incorpora en…</option>
                   {pasosDocumento.map((paso) => (
                     <option value={paso.value} key={paso.value}>
-                      Antes de {paso.label}
+                      {paso.label}
                     </option>
                   ))}
                 </select>
@@ -684,31 +688,20 @@ function EditorDefiniciones({
                     ? `${item.configuracionJson.bindings.length} parámetros configurados`
                     : "Configurar uso"}
                 </button>
-                <button
-                  type="button"
-                  className={styles.configureIncorporation}
-                  disabled={
-                    !item.nodoIncorporacionClave ||
-                    !item.configuracionJson?.bindings?.some(
+                <div className={styles.componentSummary}>
+                  <span>
+                    {item.configuracionJson?.bindings?.some(
                       (binding) => binding.clave === "cantidad",
                     )
-                  }
-                  title={
-                    !item.nodoIncorporacionClave
-                      ? "Primero elegí el paso de incorporación"
-                      : item.configuracionJson?.bindings?.some(
-                            (binding) => binding.clave === "cantidad",
-                          )
-                        ? "Configurar las tareas necesarias para incorporar este componente"
-                        : "Primero configurá el uso del componente"
-                  }
-                  onClick={() => setIncorporacionConfigurando(index)}
-                >
-                  <BlocksIcon />
-                  {item.configuracionJson?.operacionesIncorporacion?.length
-                    ? `${item.configuracionJson.operacionesIncorporacion.length} operaciones de ensamblaje`
-                    : "Configurar incorporación"}
-                </button>
+                      ? "Cantidad configurada por regla"
+                      : "Falta configurar la cantidad"}
+                  </span>
+                  <b>
+                    {item.politicaEjecucion === "INLINE"
+                      ? "Sin seguimiento separado"
+                      : "Flujo productivo propio"}
+                  </b>
+                </div>
                 <button
                   type="button"
                   aria-label={`Quitar componente ${index + 1}`}
@@ -723,6 +716,65 @@ function EditorDefiniciones({
             {!componentes.length ? <p>Sin componentes fabricados.</p> : null}
           </div>
         </section>
+
+        {pasosCompuestos.length ? (
+          <section
+            className={`${styles.editorSection} ${styles.compoundSection}`}
+          >
+            <div className={styles.editorTitle}>
+              <div>
+                <strong>Pasos compuestos</strong>
+                <span>
+                  Configurá el trabajo que estos nodos realizan con los
+                  componentes y outputs de esta receta.
+                </span>
+              </div>
+            </div>
+            <div className={styles.compoundCards}>
+              {pasosCompuestos.map((paso) => {
+                const plantilla = pasosTenant.find(
+                  (item) => item.id === paso.pasoTenantId,
+                );
+                const vinculados = componentes.filter(
+                  (item) => item.nodoIncorporacionClave === paso.nodoClave,
+                );
+                const activas = paso.operaciones.filter(
+                  (item) => item.activa,
+                ).length;
+                return (
+                  <div className={styles.compoundCard} key={paso.nodoClave}>
+                    <BoxesIcon />
+                    <div>
+                      <strong>{paso.pasoNombre}</strong>
+                      <span>
+                        {plantilla?.operacionesCompuestas?.length ?? 0}{" "}
+                        operaciones declaradas · {vinculados.length} componentes
+                        vinculados
+                      </span>
+                      <small>
+                        {activas
+                          ? `${activas} operaciones configuradas`
+                          : "Pendiente de configuración"}
+                      </small>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={
+                        !vinculados.length ||
+                        !plantilla?.operacionesCompuestas?.length
+                      }
+                      onClick={() =>
+                        setPasoCompuestoConfigurando(paso.nodoClave)
+                      }
+                    >
+                      <Settings2Icon /> Configurar operaciones
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
       </div>
 
       <footer className={styles.editorFooter}>
@@ -741,11 +793,16 @@ function EditorDefiniciones({
             (_, index) => index !== componenteConfigurando,
           )}
           onCancel={() => setComponenteConfigurando(null)}
-          onSave={(configuracionJson, unidad) => {
+          onSave={(configuracionJson, unidad, politicaEjecucion) => {
             setComponentes((current) =>
               current.map((item, index) =>
                 index === componenteConfigurando
-                  ? { ...item, configuracionJson, unidad }
+                  ? {
+                      ...item,
+                      configuracionJson,
+                      unidad,
+                      politicaEjecucion,
+                    }
                   : item,
               ),
             );
@@ -753,30 +810,33 @@ function EditorDefiniciones({
           }}
         />
       ) : null}
-      {incorporacionConfigurando !== null &&
-      componentes[incorporacionConfigurando] ? (
+      {pasoCompuestoConfigurando ? (
         <ConfigurarIncorporacionWorkspace
-          componente={componentes[incorporacionConfigurando]}
+          paso={pasosCompuestos.find(
+            (item) => item.nodoClave === pasoCompuestoConfigurando,
+          )!}
+          definiciones={
+            pasosTenant.find(
+              (item) =>
+                item.id ===
+                pasosCompuestos.find(
+                  (paso) => paso.nodoClave === pasoCompuestoConfigurando,
+                )?.pasoTenantId,
+            )?.operacionesCompuestas ?? []
+          }
           productoPadreId={productoId}
           productoPadreNombre={productoNombre}
           componentes={componentes}
-          nodoNombre={
-            pasosDocumento.find(
-              (paso) =>
-                paso.value ===
-                componentes[incorporacionConfigurando].nodoIncorporacionClave,
-            )?.label ?? "Paso de incorporación"
-          }
-          onCancel={() => setIncorporacionConfigurando(null)}
-          onSave={(configuracionJson) => {
-            setComponentes((current) =>
-              current.map((item, index) =>
-                index === incorporacionConfigurando
-                  ? { ...item, configuracionJson }
+          onCancel={() => setPasoCompuestoConfigurando(null)}
+          onSave={(configuracion) => {
+            setPasosCompuestos((current) =>
+              current.map((item) =>
+                item.nodoClave === configuracion.nodoClave
+                  ? configuracion
                   : item,
               ),
             );
-            setIncorporacionConfigurando(null);
+            setPasoCompuestoConfigurando(null);
           }}
         />
       ) : null}
@@ -833,12 +893,10 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
               const previos = grafo.aristas
                 .filter((arista) => arista.haciaClave === nodo.clave)
                 .map((arista) => arista.desdeClave);
-              const operaciones = revision.componentes.flatMap((componente) =>
-                componente.nodoIncorporacionClave === nodo.clave
-                  ? (componente.configuracionJson?.operacionesIncorporacion ??
-                    [])
-                  : [],
-              );
+              const operaciones =
+                revision.pasosCompuestosJson
+                  ?.find((paso) => paso.nodoClave === nodo.clave)
+                  ?.operaciones.filter((operacion) => operacion.activa) ?? [];
               return (
                 <div key={nodo.clave}>
                   <b>{String(index + 1).padStart(2, "0")}</b>
@@ -967,21 +1025,20 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                   <span>
                     Receta V{componente.recetaVersion} ·{" "}
                     {componente.politicaEjecucion === "INDEPENDIENTE"
-                      ? "fabricación separada"
-                      : "integrado al producto"}
+                      ? "flujo productivo propio"
+                      : "sin seguimiento separado"}
                     {componente.nodoIncorporacionClave
                       ? ` · se incorpora antes de ${nombreNodo(componente.nodoIncorporacionClave)}`
-                      : ""}
-                    {componente.configuracionJson?.operacionesIncorporacion
-                      ?.length
-                      ? ` · ${componente.configuracionJson.operacionesIncorporacion.length} operaciones de incorporación`
                       : ""}
                   </span>
                 </div>
                 <div className={styles.rowMeta}>
                   <span>
-                    {Number(componente.cantidad)}{" "}
-                    {nombreHumano(componente.unidad).toLocaleLowerCase("es-AR")}
+                    {componente.configuracionJson?.bindings?.some(
+                      (binding) => binding.clave === "cantidad",
+                    )
+                      ? "Cantidad configurada"
+                      : "Cantidad histórica"}
                   </span>
                   <b>{componente.requerido ? "Requerido" : "Opcional"}</b>
                 </div>

@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfigPasosEditorView } from "@/components/productos-servicios/config-pasos-editor-view";
+import { PasoCompuestoConfiguracion } from "@/components/productos-servicios/paso-compuesto-configuracion";
 import {
   getCatalogoFamilias,
   getLookupsConfigPaso,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/productos-servicios-api";
 import type {
   CatalogoFamilias,
+  PasoTenant,
   ProductoDetalle,
   RutaAlternativaDetalle,
 } from "@/lib/productos-servicios";
@@ -28,6 +30,9 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
     lookups: LookupsConfigPaso;
   } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [pasoCompuesto, setPasoCompuesto] = React.useState<PasoTenant | null>(
+    null,
+  );
   const [intento, setIntento] = React.useState(0);
 
   React.useEffect(() => {
@@ -46,6 +51,10 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
         );
         if (!pasoTenant && !familiaSistema) {
           throw new Error("El paso no existe o no está disponible.");
+        }
+        if (pasoTenant?.tipoPaso === "COMPUESTO") {
+          setPasoCompuesto(pasoTenant);
+          return;
         }
         const paso = pasoTenant
           ? {
@@ -74,7 +83,9 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
         const plantilla = catalogo.familias.find(
           (item) => item.codigo === paso.plantillaCodigo,
         );
-        const familia = familiaSistema ?? heredada ??
+        const familia =
+          familiaSistema ??
+          heredada ??
           (plantilla
             ? {
                 ...plantilla,
@@ -198,7 +209,9 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
       })
       .catch((err: unknown) => {
         if (vivo) {
-          setError(err instanceof Error ? err.message : "No se pudo cargar el paso.");
+          setError(
+            err instanceof Error ? err.message : "No se pudo cargar el paso.",
+          );
         }
       });
     return () => {
@@ -214,13 +227,19 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
           <AlertTitle>No se pudo abrir la configuración</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <Button className="mt-4" onClick={() => setIntento((value) => value + 1)}>
+        <Button
+          className="mt-4"
+          onClick={() => setIntento((value) => value + 1)}
+        >
           Reintentar
         </Button>
       </div>
     );
   }
   if (!datos) {
+    if (pasoCompuesto) {
+      return <PasoCompuestoConfiguracion paso={pasoCompuesto} />;
+    }
     return (
       <div className="content flex flex-col gap-3">
         <Skeleton className="h-8 w-72" />
@@ -236,8 +255,9 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
       lookups={datos.lookups}
       configuracionBase={{
         familiaCodigo: pasoId,
-        origen: datos.catalogo.familias.find((item) => item.codigo === pasoId)
-          ?.origen ?? "sistema",
+        origen:
+          datos.catalogo.familias.find((item) => item.codigo === pasoId)
+            ?.origen ?? "sistema",
         volverHref: "/productos-servicios/pasos",
       }}
     />
