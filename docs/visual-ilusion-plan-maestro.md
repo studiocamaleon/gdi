@@ -427,7 +427,7 @@ Los `Archivo` existentes siguen siendo adjuntos. La migración al modelo maestro
 
 ## Fase 2.5 — Eventos en tiempo real y bandeja de notificaciones internas
 
-**Estado actual:** COMPLETA
+**Estado actual:** COMPLETA · VALIDACIÓN FUNCIONAL APROBADA
 
 **Rama:** `visual-ilusion/fase-2-5-tiempo-real-notificaciones`
 
@@ -510,7 +510,9 @@ Que cada usuario vea cambios pertinentes sin recargar y reciba, junto a “Cerra
 
 ## Fase 3 — Receta productiva y BOM versionada
 
-**Estado inicial:** PENDIENTE  
+**Estado actual:** COMPLETA · VALIDACIÓN FUNCIONAL, TÉCNICA Y VISUAL APROBADA
+**Rama:** `visual-ilusion/fase-3-receta-bom`
+**Documento de diseño:** `docs/visual-ilusion-fase-3-receta-bom-diseno.md`
 **Dependencias:** Fase 2 para archivos/aprobaciones reutilizables y Fase 2.5 para eventos/notificaciones transversales.
 
 ### Objetivo de negocio
@@ -548,6 +550,22 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 - Cotizar y emitir preservando revisión y desglose.
 - Detectar ciclos, unidades incompatibles y componentes faltantes.
 
+### Evidencia de cierre
+
+- Caso industrial automatizado: exhibidor rígido de 600 × 1.800 mm con
+  sustrato, consumible, packaging, componente comprado, componente fabricado,
+  estación, capacidades y documento aprobado requerido.
+- Cotización recursiva y frontera de emisión de OT conservan revisión, versión,
+  huella, BOM y desglose de componentes.
+- Una nueva versión de la receta hija invalida la cotización del padre hasta
+  publicar una revisión consistente; ciclos, unidades y referencias faltantes
+  se rechazan explícitamente.
+- Migraciones aplicadas en desarrollo y test; builds de API y frontend
+  aprobados; regresión total: 194 suites y 1.927 pruebas aprobadas (2 suites y
+  3 casos omitidos explícitamente por el repositorio).
+- QA visual de Producción/BOM aprobado en escritorio y mobile, sin elementos
+  fuera del viewport y respetando el lenguaje visual propio de Grafoprint.
+
 ---
 
 ## Fase 4 — Rutas DAG, paralelismo, convergencia y gates
@@ -568,6 +586,10 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 - Regla de ejecutabilidad por predecesores satisfechos y gates.
 - Varias fronteras activas simultáneas por ítem.
 - Convergencia de componentes antes de armado/QC.
+- Vincular cada componente fabricado separado de la BOM a su nodo de
+  incorporación, ensamble o convergencia dentro del flujo principal.
+- Crear y coordinar la ejecución hija desde esa relación, conservando la receta
+  y revisión que Fase 3 dejó congeladas.
 - Actualización de iniciar, completar, bloquear, reabrir, cancelar y finalizar.
 - Progreso por nodos y duración ponderada, sin vender falsa precisión.
 - Adaptación del tablero por ítems/estación/kanban.
@@ -595,6 +617,8 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 - Ejecutar `Diseño → {UV PVC, Cartón/Corte, Acrílico/Láser} → Armado → QC`.
 - Demostrar ramas simultáneamente listas en estaciones distintas.
 - Impedir Armado hasta completar todas las ramas.
+- Demostrar que un componente fabricado con receta propia se ejecuta por su
+  ruta y habilita exactamente el nodo del producto padre donde se incorpora.
 - Ejecutar una OT lineal histórica con resultado equivalente.
 - ETA y progreso coherentes en ambos tipos de topología.
 
@@ -1074,39 +1098,39 @@ La numeración expresa el orden recomendado, no prohíbe investigación paralela
 
 Esta tabla es el control maestro contra pérdida de alcance.
 
-| Req. | Capacidad | Fase primaria | Fases relacionadas | Estado inicial |
-|---:|---|---|---|---|
-| 1 | No cambiar el corazón de Grafo | Todas | F0, F16 | Gobernado |
-| 2 | Proyecto/Campaña | F1 | F16 | Implementado; consolidación en F16 |
-| 3 | Múltiples órdenes y ampliaciones | F1 | F12 | Implementado; se extiende en F12 |
-| 4 | BOM/receta avanzada | F3 | F4, F9 | Pendiente |
-| 5 | Rutas dinámicas/condicionales | F3–F4 | F2 | Parcial hoy |
-| 6 | Rutas paralelas y convergencia | F4 | F11 | Pendiente |
-| 7 | Subproductos/componentes | F3–F4 | F6 | Pendiente |
-| 8 | Prototipos y muestras | F2 | F1 | Implementado y validado |
-| 9 | Versionado de archivos | F2 | F5 | Implementado y validado |
-| 10 | Aprobaciones | F2 | F4, F7, F10 | Implementado; se amplía en fases relacionadas |
-| 11 | Mesa de corte como centro | F5 | F11 | Parcial hoy |
-| 12 | Nesting como entidad | F5 | F9 | Parcial hoy |
-| 13 | Gestión de lotes | F6 | F13 | Pendiente |
-| 14 | Producción parcial/yield | F6 | F7 | Pendiente |
-| 15 | Incidencias/reprocesos | F7 | F6, F16 | Pendiente |
-| 16 | Calidad/QC | F7 | F2, F13 | Pendiente |
-| 17 | Variantes/matriz | F8 | F12 | Parcial hoy |
-| 18 | Kits | F12 | F13 | Pendiente |
-| 19 | Distribución multidestino | F12 | F14 | Pendiente |
-| 20 | Packing/picking | F13 | F7, F12 | Pendiente |
-| 21 | Etiquetas y QR | F13 | F6, F14 | Infraestructura parcial |
-| 22 | Logística | F14 | F12, F13 | Pendiente |
-| 23 | Instalaciones | F15 | F11, F14 | Parcial hoy |
-| 24 | Stock físico/reservado/disponible/en compra | F9–F10 | F11 | Parcial hoy |
-| 25 | Stock comprometido y trazabilidad | F9 | F6, F7 | Pendiente |
-| 26 | Compras vinculadas a proyectos | F10 | F1, F9 | Pendiente |
-| 27 | Tercerizaciones | F10 | F3, F11 | Parcial hoy |
-| 28 | Capacidad productiva | F11 | F4, F10 | Avanzado parcialmente |
-| 29 | Planificador visual/Gantt | F11 | F1 | Pendiente |
-| 30 | Fecha objetivo hacia atrás | F11 | F14, F15 | Pendiente |
-| 31 | Actualización en tiempo real y notificaciones internas por usuario/rol | F2.5 | Todas, F16 | Implementado y validado; se amplía por catálogo en cada fase |
+| Req. | Capacidad                                                              | Fase primaria | Fases relacionadas | Estado inicial                                               |
+| ---: | ---------------------------------------------------------------------- | ------------- | ------------------ | ------------------------------------------------------------ |
+|    1 | No cambiar el corazón de Grafo                                         | Todas         | F0, F16            | Gobernado                                                    |
+|    2 | Proyecto/Campaña                                                       | F1            | F16                | Implementado; consolidación en F16                           |
+|    3 | Múltiples órdenes y ampliaciones                                       | F1            | F12                | Implementado; se extiende en F12                             |
+|    4 | BOM/receta avanzada                                                    | F3            | F4, F9             | Implementada y validada en F3                                |
+|    5 | Rutas dinámicas/condicionales                                          | F3–F4         | F2                 | Parcial hoy                                                  |
+|    6 | Rutas paralelas y convergencia                                         | F4            | F11                | Pendiente                                                    |
+|    7 | Subproductos/componentes                                               | F3–F4         | F6                 | Costeo/versionado en F3; ejecución independiente en F4       |
+|    8 | Prototipos y muestras                                                  | F2            | F1                 | Implementado y validado                                      |
+|    9 | Versionado de archivos                                                 | F2            | F5                 | Implementado y validado                                      |
+|   10 | Aprobaciones                                                           | F2            | F4, F7, F10        | Implementado; se amplía en fases relacionadas                |
+|   11 | Mesa de corte como centro                                              | F5            | F11                | Parcial hoy                                                  |
+|   12 | Nesting como entidad                                                   | F5            | F9                 | Parcial hoy                                                  |
+|   13 | Gestión de lotes                                                       | F6            | F13                | Pendiente                                                    |
+|   14 | Producción parcial/yield                                               | F6            | F7                 | Pendiente                                                    |
+|   15 | Incidencias/reprocesos                                                 | F7            | F6, F16            | Pendiente                                                    |
+|   16 | Calidad/QC                                                             | F7            | F2, F13            | Pendiente                                                    |
+|   17 | Variantes/matriz                                                       | F8            | F12                | Parcial hoy                                                  |
+|   18 | Kits                                                                   | F12           | F13                | Pendiente                                                    |
+|   19 | Distribución multidestino                                              | F12           | F14                | Pendiente                                                    |
+|   20 | Packing/picking                                                        | F13           | F7, F12            | Pendiente                                                    |
+|   21 | Etiquetas y QR                                                         | F13           | F6, F14            | Infraestructura parcial                                      |
+|   22 | Logística                                                              | F14           | F12, F13           | Pendiente                                                    |
+|   23 | Instalaciones                                                          | F15           | F11, F14           | Parcial hoy                                                  |
+|   24 | Stock físico/reservado/disponible/en compra                            | F9–F10        | F11                | Parcial hoy                                                  |
+|   25 | Stock comprometido y trazabilidad                                      | F9            | F6, F7             | Pendiente                                                    |
+|   26 | Compras vinculadas a proyectos                                         | F10           | F1, F9             | Pendiente                                                    |
+|   27 | Tercerizaciones                                                        | F10           | F3, F11            | Parcial hoy                                                  |
+|   28 | Capacidad productiva                                                   | F11           | F4, F10            | Avanzado parcialmente                                        |
+|   29 | Planificador visual/Gantt                                              | F11           | F1                 | Pendiente                                                    |
+|   30 | Fecha objetivo hacia atrás                                             | F11           | F14, F15           | Pendiente                                                    |
+|   31 | Actualización en tiempo real y notificaciones internas por usuario/rol | F2.5          | Todas, F16         | Implementado y validado; se amplía por catálogo en cada fase |
 
 > El archivo original se cortó dentro del requerimiento 30. El requerimiento 31 se agregó el 29/08/2026 a partir de la validación real de Campañas; si se recibe más contenido del informe original, se agrega aquí antes de cerrar la fase afectada.
 
@@ -1246,16 +1270,16 @@ Cada fase tomará el subconjunto pertinente y agregará fixtures automatizados c
 
 ## 13. Registro de decisiones maestras
 
-| ID | Decisión | Estado | Motivo |
-|---|---|---|---|
-| DM-001 | Un solo Grafoprint con módulos avanzados | Cerrada | El núcleo compartido es dominante; un fork duplicaría costos y bugs. |
-| DM-002 | Campaña es contenedor opcional, no OT | Cerrada | Preserva ciclos, numeración y facturación existentes. |
-| DM-003 | Recetas y rutas se versionan/snapshotean | Cerrada | Evita mutar trabajos históricos o en vuelo. |
-| DM-004 | DAG se incorpora de forma compatible con rutas lineales | Cerrada | Reduce riesgo de regresión. |
-| DM-005 | Lote productivo y tanda de máquina son distintos | Cerrada | Representan identidades y cantidades diferentes. |
-| DM-006 | Kits/packing/multidestino forman vertical shopper | Cerrada | Reutilizan producción/inventario sin contaminar el flujo simple. |
-| DM-007 | Planificador visual es proyección del scheduler | Cerrada | Evita dos fuentes de verdad. |
-| DM-008 | Datos operativos centrales serán relacionales | Cerrada | Necesitan integridad, concurrencia, auditoría y reporting. |
+| ID     | Decisión                                                               | Estado  | Motivo                                                                                                                                             |
+| ------ | ---------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DM-001 | Un solo Grafoprint con módulos avanzados                               | Cerrada | El núcleo compartido es dominante; un fork duplicaría costos y bugs.                                                                               |
+| DM-002 | Campaña es contenedor opcional, no OT                                  | Cerrada | Preserva ciclos, numeración y facturación existentes.                                                                                              |
+| DM-003 | Recetas y rutas se versionan/snapshotean                               | Cerrada | Evita mutar trabajos históricos o en vuelo.                                                                                                        |
+| DM-004 | DAG se incorpora de forma compatible con rutas lineales                | Cerrada | Reduce riesgo de regresión.                                                                                                                        |
+| DM-005 | Lote productivo y tanda de máquina son distintos                       | Cerrada | Representan identidades y cantidades diferentes.                                                                                                   |
+| DM-006 | Kits/packing/multidestino forman vertical shopper                      | Cerrada | Reutilizan producción/inventario sin contaminar el flujo simple.                                                                                   |
+| DM-007 | Planificador visual es proyección del scheduler                        | Cerrada | Evita dos fuentes de verdad.                                                                                                                       |
+| DM-008 | Datos operativos centrales serán relacionales                          | Cerrada | Necesitan integridad, concurrencia, auditoría y reporting.                                                                                         |
 | DM-009 | SSE + outbox durable para frescura; inbox interno separado de WhatsApp | Cerrada | La comunicación es unidireccional, debe sobrevivir reconexiones/varias instancias y no puede mezclar permisos internos con consentimiento externo. |
 
 Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decisión se revoca, se conserva la fila y se añade la sucesora.
@@ -1266,26 +1290,26 @@ Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decis
 
 Esta tabla se actualizará al integrar cada fase.
 
-| Fase | Estado | Rama | Documento técnico | Evidencia/commit | Observaciones |
-|---:|---|---|---|---|---|
-| 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
-| 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
-| 2 | COMPLETA | `visual-ilusion/fase-2-desarrollo-aprobaciones` | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md` | `bf2df97a`, `52538507` | Validación técnica y funcional aprobadas; integración en rama madre habilitada |
-| 2.5 | COMPLETA | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | `46316989` | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
-| 3 | PENDIENTE | — | — | — | — |
-| 4 | PENDIENTE | — | — | — | — |
-| 5 | PENDIENTE | — | — | — | — |
-| 6 | PENDIENTE | — | — | — | — |
-| 7 | PENDIENTE | — | — | — | — |
-| 8 | PENDIENTE | — | — | — | — |
-| 9 | PENDIENTE | — | — | — | — |
-| 10 | PENDIENTE | — | — | — | — |
-| 11 | PENDIENTE | — | — | — | — |
-| 12 | PENDIENTE | — | — | — | — |
-| 13 | PENDIENTE | — | — | — | — |
-| 14 | PENDIENTE | — | — | — | — |
-| 15 | PENDIENTE | — | — | — | — |
-| 16 | PENDIENTE | — | — | — | — |
+| Fase | Estado        | Rama                                                 | Documento técnico                                                   | Evidencia/commit                                       | Observaciones                                                                                                       |
+| ---: | ------------- | ---------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+|    0 | COMPLETA      | `visual-ilusion/analisis`                            | Diagnóstico + Plan Maestro                                          | `1d50db6c`                                             | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829`                                              |
+|    1 | COMPLETA      | `visual-ilusion/fase-1-campanas`                     | `docs/visual-ilusion-fase-1-campanas-diseno.md`                     | `41ead4c3`, `8077992a`, `4290c512`                     | Journey, seguridad, regresión y QA visual desktop/móvil aprobados                                                   |
+|    2 | COMPLETA      | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`      | `bf2df97a`, `52538507`                                 | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                      |
+|  2.5 | COMPLETA      | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | `46316989`                                             | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
+|    3 | COMPLETA      | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                   | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b` | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados           |
+|    4 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|    5 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|    6 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|    7 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|    8 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|    9 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|   10 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|   11 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|   12 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|   13 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|   14 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|   15 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|   16 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
 
 ---
 

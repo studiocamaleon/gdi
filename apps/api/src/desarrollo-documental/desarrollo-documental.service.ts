@@ -122,6 +122,143 @@ export class DesarrolloDocumentalService {
     @Optional() private readonly eventosSistema?: EventosSistemaService,
   ) {}
 
+  /**
+   * Convierte los requisitos declarativos de la receta congelada en documentos
+   * reales de la campaña y, cuando corresponde, en gates de la OT. Es
+   * idempotente: guardar/emitir más de una vez reutiliza maestro y gate.
+   */
+  async materializarRequisitosReceta(
+    tx: Prisma.TransactionClient,
+    args: {
+      tenantId: string;
+      ordenId: string;
+      proyectoCampanaId: string;
+      actorUserId?: string | null;
+      actorNombre: string;
+    },
+  ) {
+    const orden = await tx.ordenTrabajo.findFirst({
+      where: {
+        id: args.ordenId,
+        tenantId: args.tenantId,
+        proyectoCampanaId: args.proyectoCampanaId,
+      },
+      select: {
+        items: {
+          where: { recetaRevisionId: { not: null } },
+          select: {
+            id: true,
+            codigo: true,
+            pasos: { select: { id: true, rutaPasoId: true } },
+            recetaRevision: {
+              select: {
+                documentos: {
+                  where: { requerido: true },
+                  orderBy: { orden: 'asc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!orden) throw new NotFoundException('Orden o campaña inexistente.');
+
+    let documentosCreados = 0;
+    let gatesCreados = 0;
+    for (const item of orden.items) {
+      const requisitos = item.recetaRevision?.documentos ?? [];
+      const idsVigentes = requisitos
+        .filter((item) => item.tipoAprobacion)
+        .map((item) => item.id);
+      await tx.gateProduccionDocumento.updateMany({
+        where: {
+          tenantId: args.tenantId,
+          ordenItemId: item.id,
+          ...(idsVigentes.length
+            ? { recetaDocumentoId: { notIn: idsVigentes } }
+            : { recetaDocumentoId: { not: null } }),
+        },
+        data: { activo: false },
+      });
+      for (const requisito of requisitos) {
+        const nombre = `${item.codigo} · ${requisito.nombre}`.slice(0, 180);
+        const existente = await tx.archivoMaestro.findUnique({
+          where: {
+            tenantId_proyectoCampanaId_nombre: {
+              tenantId: args.tenantId,
+              proyectoCampanaId: args.proyectoCampanaId,
+              nombre,
+            },
+          },
+          select: { id: true },
+        });
+        const maestro =
+          existente ??
+          (await tx.archivoMaestro.create({
+            data: {
+              tenantId: args.tenantId,
+              proyectoCampanaId: args.proyectoCampanaId,
+              nombre,
+              proposito: requisito.proposito,
+              etapa: requisito.etapa,
+              descripcion:
+                requisito.descripcion ??
+                `Requerido por la receta ${item.codigo} (${requisito.codigo}).`,
+              requerido: true,
+              creadoPorId: args.actorUserId ?? null,
+              creadoPorNombre: args.actorNombre,
+            },
+          }));
+        if (!existente) documentosCreados += 1;
+        if (!requisito.tipoAprobacion) continue;
+
+        const clavePaso = requisito.pasoClave?.replace(/^(ruta|extra):/, '');
+        const pasoId = clavePaso
+          ? (item.pasos.find((paso) => paso.rutaPasoId === clavePaso)?.id ??
+            null)
+          : null;
+        const gateExistente = await tx.gateProduccionDocumento.findUnique({
+          where: {
+            ordenItemId_recetaDocumentoId: {
+              ordenItemId: item.id,
+              recetaDocumentoId: requisito.id,
+            },
+          },
+          select: { id: true },
+        });
+        if (gateExistente) {
+          await tx.gateProduccionDocumento.update({
+            where: { id: gateExistente.id },
+            data: {
+              pasoId,
+              archivoMaestroId: maestro.id,
+              tipoAprobacion: requisito.tipoAprobacion,
+              nombre: requisito.nombre,
+              activo: true,
+            },
+          });
+        } else {
+          await tx.gateProduccionDocumento.create({
+            data: {
+              tenantId: args.tenantId,
+              proyectoCampanaId: args.proyectoCampanaId,
+              ordenId: args.ordenId,
+              ordenItemId: item.id,
+              pasoId,
+              archivoMaestroId: maestro.id,
+              recetaDocumentoId: requisito.id,
+              tipoAprobacion: requisito.tipoAprobacion,
+              nombre: requisito.nombre,
+            },
+          });
+          gatesCreados += 1;
+        }
+      }
+    }
+    return { documentosCreados, gatesCreados };
+  }
+
   async listarCampana(auth: CurrentAuth, campanaId: string) {
     const campana = await this.prisma.proyectoCampana.findFirst({
       where: { id: campanaId, tenantId: auth.tenantId },

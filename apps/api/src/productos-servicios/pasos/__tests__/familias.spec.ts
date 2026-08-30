@@ -21,7 +21,7 @@ import type {
 } from '../types';
 
 describe('Catálogo de familias', () => {
-  it('contiene exactamente 33 familias', () => {
+  it('contiene exactamente 34 familias', () => {
     // Poda del catálogo 2026-08-03: se borraron 10 familias manuales sin uso ni
     // cableado y se sumó aplicacion_transfer_textil (plancha térmica).
     // 2026-08-04: se sumaron impresion_3d, abrochado_caballete y las dos de
@@ -31,7 +31,8 @@ describe('Catálogo de familias', () => {
     // 2026-08-19: corte_hilo_caliente independiza el nesting vectorial de
     // Polyfan de la familia genérica corte_manual.
     // 2026-08-25: colocacion_raspadita agrega el acabado manual por pieza.
-    expect(FAMILIAS_TOTAL).toBe(33);
+    // 2026-08-30 (F3): lijado_canteado modela la terminación de piezas rígidas.
+    expect(FAMILIAS_TOTAL).toBe(34);
   });
 
   it('colocación de raspadita consume la pegatina por pieza pedida', () => {
@@ -417,7 +418,7 @@ describe('Helpers', () => {
     expect(() => getFamilia('familia_inexistente' as FamiliaCodigo)).toThrow();
   });
 
-  it('listarFamilias devuelve los 33 códigos', () => {
-    expect(listarFamilias().length).toBe(33);
+  it('listarFamilias devuelve los 34 códigos', () => {
+    expect(listarFamilias().length).toBe(34);
   });
 });

@@ -308,6 +308,11 @@ export interface CotizacionResultado {
     unidadLabel: string;
     politica: string;
   } | null;
+  receta?: {
+    revisionId: string;
+    version: number;
+    huella: string;
+  } | null;
   /** Costos por bucket (a-g del molde). */
   costos: {
     tiempoTotal: number;
@@ -324,9 +329,13 @@ export interface CotizacionResultado {
     cargosSinMargenTotal: number;
     /** Costo de pasos tercerizados (lo que se paga al proveedor). */
     tercerizadoTotal: number;
+    /** Costo productivo de subproductos fabricados declarados en la receta. */
+    componentesFabricadosTotal?: number;
     total: number;
     unitario: number;
   };
+  /** Desglose recursivo de componentes fabricados, sin crear aún OTs hijas. */
+  componentesFabricados?: ComponenteFabricadoCosteado[];
   /** Proyección compatible del desglose autoritativo, expresada a neto. */
   precio?: {
     metodoUsado: string;
@@ -386,6 +395,21 @@ export interface CotizacionResultado {
   pasos: PasoEjecutado[];
   /** Cargos directos a nivel cotización (ej: viático, recargo urgencia). */
   cargosDirectosCotizacion: CargoDirectoEjecutado[];
+}
+
+export interface ComponenteFabricadoCosteado {
+  productoId: string;
+  codigo: string;
+  nombre: string;
+  politicaEjecucion: 'INLINE' | 'INDEPENDIENTE';
+  cantidad: number;
+  unidad: string;
+  recetaRevisionId: string;
+  recetaVersion: number;
+  recetaHuella: string;
+  costoUnitario: number;
+  costoTotal: number;
+  componentes?: ComponenteFabricadoCosteado[];
 }
 
 export interface PasoEjecutado {
@@ -1123,6 +1147,7 @@ export interface SlotCargado {
   }>;
   formula: string;
   cantidadFactor?: number | string | null;
+  mermaAdicionalPct?: number | string | null;
   cantidadBase?: string | null;
   /** Fuente de medida del consumo de ESTE slot (override por-material del
    *  default a nivel paso). Mismo vocabulario que fuentePiezasMontaje:

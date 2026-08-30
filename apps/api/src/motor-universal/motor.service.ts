@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
@@ -103,6 +104,7 @@ import {
   type CostingStrategyKind,
 } from '../productos-servicios/nesting/costing';
 import { MAX_HOJAS_CABALLETE_DEFAULT } from '../productos-servicios/nesting/helpers/cuadernillo-imposicion';
+import { RecetasProductoService } from '../productos-servicios/recetas-producto.service';
 import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import {
   getModoColorsFromPerfil,
@@ -116,6 +118,16 @@ import {
   type NivelCobertura,
 } from '../productos-servicios/cobertura-toner';
 import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
+
+export function aplicarMermaAdicional(
+  cantidad: number,
+  porcentaje: unknown,
+): number {
+  const merma = Number(porcentaje ?? 0);
+  return Number.isFinite(merma) && merma > 0
+    ? cantidad * (1 + merma / 100)
+    : cantidad;
+}
 import { indicePerfilUnicoPorOperacion } from './seleccion-perfil-operacion';
 import {
   modoTiempoEfectivo,
@@ -223,6 +235,7 @@ interface PasoExtraSlotJson {
   }>;
   formula?: string;
   cantidadFactor?: number | string | null;
+  mermaAdicionalPct?: number | string | null;
   cantidadBase?: string | null;
   fuenteMedida?: string | null;
   aplicaMultiCaras?: boolean;
@@ -491,6 +504,8 @@ export class MotorUniversalService {
     private readonly preciosEspecialesClientes: PreciosEspecialesClientesService,
     private readonly geometriaCache: GeometriaVectorialCacheService = new GeometriaVectorialCacheService(),
     private readonly recorridosVectoriales: RecorridosVectorialesService = new RecorridosVectorialesService(),
+    @Optional()
+    private readonly recetasProducto?: RecetasProductoService,
   ) {}
 
   private async generarRecorridoCorteCotizacion(
@@ -622,6 +637,10 @@ export class MotorUniversalService {
     input: CotizarInput,
     opciones?: {
       omitirPrecioReferenciaMinimo?: boolean;
+      componentesCamino?: string[];
+      recetaPrecargada?: Awaited<
+        ReturnType<RecetasProductoService['resolverPublicadaParaCotizar']>
+      >;
       /**
        * Producto ya cargado por el caller (mismo tenant/producto/ruta), para
        * evitar recargar el "include gigante" cuando cotizar-y-guardar ya lo
@@ -707,6 +726,17 @@ export class MotorUniversalService {
       }
       return fallar([err.toErrorMotor()]);
     }
+
+    const recetaPublicada =
+      opciones?.recetaPrecargada !== undefined
+        ? opciones.recetaPrecargada
+        : this.recetasProducto
+          ? await this.recetasProducto.resolverPublicadaParaCotizar(
+              input.tenantId,
+              input.productoId,
+              producto.rutaAlternativaId,
+            )
+          : null;
 
     // JobContext mutable (los pasos PRE pueden mutarlo) + defaults sensatos
     const jobContext: JobContext = {
@@ -1171,12 +1201,116 @@ export class MotorUniversalService {
           : 0),
       0,
     );
+    const componentesFabricados = [];
+    if (recetaPublicada?.componentes.length) {
+      const camino = opciones?.componentesCamino ?? [input.productoId];
+      for (const componente of recetaPublicada.componentes) {
+        if (!componente.requerido) continue;
+        if (componente.formula !== 'por_unidad') {
+          return fallar([
+            {
+              codigo: 'formula_componente_no_soportada',
+              severidad: 'ERROR',
+              mensaje: `El componente fabricado "${componente.nombre}" usa la fórmula "${componente.formula}", que todavía no es calculable.`,
+              sugerencia: 'Usar por_unidad para componentes fabricados.',
+            },
+          ]);
+        }
+        if (camino.includes(componente.productoComponenteId)) {
+          return fallar([
+            {
+              codigo: 'ciclo_componentes_fabricados',
+              severidad: 'ERROR',
+              mensaje: `La composición de "${componente.nombre}" forma un ciclo.`,
+              sugerencia:
+                'Revisar la BOM publicada y quitar la referencia circular.',
+            },
+          ]);
+        }
+        const cantidadComponente =
+          Number(jobContext.cantidad ?? 1) * componente.cantidad;
+        if (
+          !Number.isFinite(cantidadComponente) ||
+          cantidadComponente <= 0 ||
+          !Number.isInteger(cantidadComponente)
+        ) {
+          return fallar([
+            {
+              codigo: 'cantidad_componente_invalida',
+              severidad: 'ERROR',
+              mensaje: `La cantidad calculada de "${componente.nombre}" debe ser un número entero positivo.`,
+              contexto: {
+                cantidad: cantidadComponente,
+                unidad: componente.unidad,
+              },
+            },
+          ]);
+        }
+        const resultadoComponente = await this.cotizar(
+          {
+            tenantId: input.tenantId,
+            productoId: componente.productoComponenteId,
+            jobContext: { cantidad: cantidadComponente },
+            periodo,
+          },
+          {
+            omitirPrecioReferenciaMinimo: true,
+            componentesCamino: [...camino, componente.productoComponenteId],
+          },
+        );
+        if (!resultadoComponente.exitoso || !resultadoComponente.cotizacion) {
+          return fallar([
+            {
+              codigo: 'componente_fabricado_no_cotizable',
+              severidad: 'ERROR',
+              mensaje: `No se pudo costear el componente fabricado "${componente.nombre}".`,
+              contexto: {
+                productoComponenteId: componente.productoComponenteId,
+                errores: resultadoComponente.errores,
+              },
+              sugerencia:
+                'Corregir y publicar la configuración productiva del componente.',
+            },
+          ]);
+        }
+        const hija = resultadoComponente.cotizacion;
+        if (!hija.receta) {
+          return fallar([
+            {
+              codigo: 'componente_sin_receta_publicada',
+              severidad: 'ERROR',
+              mensaje: `El componente fabricado "${componente.nombre}" no tiene una receta publicada vigente.`,
+            },
+          ]);
+        }
+        componentesFabricados.push({
+          productoId: componente.productoComponenteId,
+          codigo: componente.codigo,
+          nombre: componente.nombre,
+          politicaEjecucion: componente.politicaEjecucion,
+          cantidad: cantidadComponente,
+          unidad: componente.unidad,
+          recetaRevisionId: hija.receta.revisionId,
+          recetaVersion: hija.receta.version,
+          recetaHuella: hija.receta.huella,
+          costoUnitario: hija.costos.unitario,
+          costoTotal: hija.costos.total,
+          componentes: hija.componentesFabricados,
+        });
+      }
+    }
+    const componentesFabricadosTotal = componentesFabricados.reduce(
+      (totalComponentes, componente) =>
+        totalComponentes + componente.costoTotal,
+      0,
+    );
     const total =
       tiempoTotal +
       tiempoExtraTotal +
       materialesTotal +
       cargosDirectosTotal +
-      tercerizadoTotal;
+      tercerizadoTotal +
+      componentesFabricadosTotal;
     const cantidadEfectiva = jobContext.cantidad ?? 1;
     const cantidadComercialReal = this.resolverCantidadComercialBase(
       producto,
@@ -1238,6 +1372,13 @@ export class MotorUniversalService {
         minimoComercialContext,
         cantidadComercialPricing,
       ),
+      receta: recetaPublicada
+        ? {
+            revisionId: recetaPublicada.id,
+            version: recetaPublicada.version,
+            huella: recetaPublicada.huella,
+          }
+        : null,
       costos: {
         tiempoTotal,
         tiempoExtraTotal,
@@ -1245,9 +1386,11 @@ export class MotorUniversalService {
         cargosDirectosTotal,
         cargosSinMargenTotal,
         tercerizadoTotal,
+        componentesFabricadosTotal,
         total,
         unitario: costoUnitarioComercial,
       },
+      componentesFabricados,
       pasos: pasosEjecutados,
       cargosDirectosCotizacion,
     };
@@ -1401,9 +1544,19 @@ export class MotorUniversalService {
     } catch {
       producto = null;
     }
+    const receta =
+      producto && this.recetasProducto
+        ? await this.recetasProducto.resolverPublicadaParaCotizar(
+            input.tenantId,
+            input.productoId,
+            producto.rutaAlternativaId,
+          )
+        : null;
     const result = await this.cotizar(
       input,
-      producto ? { productoPrecargado: producto } : undefined,
+      producto
+        ? { productoPrecargado: producto, recetaPrecargada: receta }
+        : undefined,
     );
     if (!result.exitoso || !result.cotizacion || !producto) {
       return { result };
@@ -1478,6 +1631,7 @@ export class MotorUniversalService {
             descuento: input.descuento ?? null,
             inputHash: hashCotizacionInput(input),
             periodo: result.cotizacion!.periodoTarifario,
+            receta,
           }),
         });
 
@@ -1528,6 +1682,14 @@ export class MotorUniversalService {
     } catch {
       producto = null;
     }
+    const receta =
+      producto && this.recetasProducto
+        ? await this.recetasProducto.resolverPublicadaParaCotizar(
+            input.tenantId,
+            item.productoId,
+            producto.rutaAlternativaId,
+          )
+        : null;
     const result = await this.cotizar(
       {
         tenantId: input.tenantId,
@@ -1538,7 +1700,9 @@ export class MotorUniversalService {
         periodo: input.periodo ?? null,
         descuento: input.descuento ?? null,
       },
-      producto ? { productoPrecargado: producto } : undefined,
+      producto
+        ? { productoPrecargado: producto, recetaPrecargada: receta }
+        : undefined,
     );
     if (!result.exitoso || !result.cotizacion || !producto) {
       return { result };
@@ -1578,6 +1742,7 @@ export class MotorUniversalService {
             rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
           }),
           periodo: result.cotizacion!.periodoTarifario,
+          receta,
         }),
       });
       if (updateResult.count !== 1) {
@@ -1602,6 +1767,12 @@ export class MotorUniversalService {
     descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
     inputHash: string;
     periodo: string;
+    receta?: {
+      id: string;
+      version: number;
+      huella: string;
+      snapshot: unknown;
+    } | null;
   }) {
     const desglosePrecio = args.cotizacion.desglosePrecio;
     const precioResultado = desglosePrecio
@@ -1622,6 +1793,9 @@ export class MotorUniversalService {
       cotizacionId: args.cotizacionId,
       productoId: args.productoId,
       rutaAlternativaId: args.cotizacion.rutaAlternativaId,
+      recetaRevisionId: args.receta?.id ?? null,
+      recetaVersion: args.receta?.version ?? null,
+      recetaHuella: args.receta?.huella ?? null,
       cantidad: args.cotizacion.cantidadComercialReal.toString(),
       jobContextJson: args.jobContext as never,
       snapshotJson: {
@@ -1641,6 +1815,14 @@ export class MotorUniversalService {
           modoMedidas: args.producto.modoMedidas,
           minimoComercialBase: args.producto.minimoComercialBase,
         },
+        receta: args.receta
+          ? {
+              revisionId: args.receta.id,
+              version: args.receta.version,
+              huella: args.receta.huella,
+              bom: args.receta.snapshot,
+            }
+          : null,
         ruta: {
           id: args.producto.rutaId,
           version: args.producto.rutaVersion,
@@ -1695,6 +1877,7 @@ export class MotorUniversalService {
           : null,
       trazabilidadJson: {
         pasos: args.cotizacion.pasos,
+        componentesFabricados: args.cotizacion.componentesFabricados ?? [],
         cargosDirectosCotizacion: args.cotizacion.cargosDirectosCotizacion,
       } as never,
       precioConfigSnapshotJson: (precioResultado?.snapshots.precioConfig ??
@@ -4572,9 +4755,7 @@ export class MotorUniversalService {
     // tratarlo como sustrato producía el mensaje absurdo de que una pieza de
     // 254 mm no entraba en 1.000 mm. En ese caso dejamos que la validación de
     // materiales informe la placa faltante con el diagnóstico correcto.
-    if (
-      estrategiaNestingDeFamilia(paso.familiaCodigo) === 'irregular_placa'
-    ) {
+    if (estrategiaNestingDeFamilia(paso.familiaCodigo) === 'irregular_placa') {
       return material != null && tieneSustratoPliego;
     }
     return tieneSustratoRollo || tieneSustratoPliego;
@@ -4599,9 +4780,7 @@ export class MotorUniversalService {
     const tieneSustratoPliego =
       (config.sheetWidthMm ?? 0) > 0 && (config.sheetHeightMm ?? 0) > 0;
     const esRollo =
-      !tieneSustratoPliego &&
-      anchoUtilRolloMm != null &&
-      anchoUtilRolloMm > 0;
+      !tieneSustratoPliego && anchoUtilRolloMm != null && anchoUtilRolloMm > 0;
     const limiteAnchoMm = esRollo
       ? anchoUtilRolloMm
       : (config.sheetWidthMm ?? 0);
@@ -5293,6 +5472,11 @@ export class MotorUniversalService {
           }
         }
       }
+
+      // Fase 3 — pérdida adicional explícita del taller. El nesting y los
+      // derivadores ya incluyen su propio desperdicio; este porcentaje se
+      // aplica una sola vez, después de caras y multiplicadores.
+      cantidad = aplicarMermaAdicional(cantidad, slot.mermaAdicionalPct);
 
       const unidadConsumo = unidadEfectivaDeFormula(
         slot.formula,
@@ -9038,6 +9222,7 @@ export class MotorUniversalService {
             s.cantidadFactor === null || s.cantidadFactor === undefined
               ? null
               : Number(s.cantidadFactor),
+          mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),
           cantidadBase: s.cantidadBase,
           fuenteMedida: s.fuenteMedida,
           aplicaMultiCaras: s.aplicaMultiCaras,
@@ -9854,6 +10039,7 @@ export class MotorUniversalService {
           formula: s.formula ?? '',
           cantidadFactor:
             s.cantidadFactor === undefined ? null : s.cantidadFactor,
+          mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),
           cantidadBase: s.cantidadBase ?? null,
           fuenteMedida: s.fuenteMedida ?? null,
           aplicaMultiCaras: s.aplicaMultiCaras ?? false,

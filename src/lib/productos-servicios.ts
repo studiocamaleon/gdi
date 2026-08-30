@@ -296,6 +296,7 @@ export interface SlotMaterialDetalle {
   criterioMotorAuto: string | null;
   formula: string;
   cantidadFactor: string | number | null;
+  mermaAdicionalPct?: string | number | null;
   cantidadBase: string | null;
   aplicaMultiCaras: boolean;
   materialVariante: {

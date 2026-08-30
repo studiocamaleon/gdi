@@ -5,6 +5,7 @@ import { MotorUniversalService } from './motor.service';
 import { PrecioModule } from '../productos-servicios/precio/precio.module';
 import { GeometriaVectorialCacheService } from './geometria-vectorial/geometria-vectorial-cache.service';
 import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorridos-vectoriales.module';
+import { ProductosServiciosModule } from '../productos-servicios/productos-servicios.module';
 
 /**
  * MotorUniversalModule importa PrecioModule para que MotorUniversalService pueda
@@ -12,7 +13,12 @@ import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorrido
  * un CotizacionItem (Sprint 5.a — snapshots inmutables del Tab Precio).
  */
 @Module({
-  imports: [PrismaModule, PrecioModule, RecorridosVectorialesModule],
+  imports: [
+    PrismaModule,
+    PrecioModule,
+    RecorridosVectorialesModule,
+    ProductosServiciosModule,
+  ],
   controllers: [MotorUniversalController],
   providers: [MotorUniversalService, GeometriaVectorialCacheService],
   exports: [MotorUniversalService],

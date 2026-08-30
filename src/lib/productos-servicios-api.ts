@@ -92,6 +92,208 @@ export async function getProductoById(id: string): Promise<ProductoDetalle> {
   return apiRequest<ProductoDetalle>(`/productos-servicios/productos/${id}`);
 }
 
+export interface ProductoRecetaMaterial {
+  id: string;
+  pasoClave: string;
+  pasoNombre: string;
+  slotCodigo: string;
+  slotNombre?: string | null;
+  rol?: string | null;
+  modoSeleccion: string;
+  materialSku?: string | null;
+  materialNombre?: string | null;
+  unidad?: string | null;
+  formula: string;
+  cantidadBase?: string | null;
+  cantidadFactor?: number | null;
+  fuenteMedida?: string | null;
+  mermaAdicionalPct: number;
+  aplicaMultiCaras: boolean;
+  orden: number;
+}
+
+export interface ProductoRecetaRevision {
+  id: string;
+  numero: number;
+  estado: "BORRADOR" | "PUBLICADA" | "DEPRECADA";
+  rutaAlternativaId: string;
+  rutaVersion: number;
+  huellaConfiguracion: string;
+  cambios?: string | null;
+  creadaPorNombre: string;
+  publicadaPorNombre?: string | null;
+  publicadaEl?: string | null;
+  deprecadaPorNombre?: string | null;
+  deprecadaEl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  materiales: ProductoRecetaMaterial[];
+  recursos: Array<{
+    id: string;
+    pasoClave: string;
+    pasoNombre: string;
+    familiaCodigo: string;
+    maquinaCodigo?: string | null;
+    maquinaNombre?: string | null;
+    estacionId?: string | null;
+    estacionNombre?: string | null;
+    perfilNombre?: string | null;
+    centroCostoNombre?: string | null;
+    dotacionOperarios: number;
+    habilidadesRequeridas?: string[];
+    capacidadesSnapshotJson?: unknown;
+    tercerizado: boolean;
+    proveedorNombre?: string | null;
+    orden: number;
+  }>;
+  componentes: Array<{
+    id: string;
+    productoComponenteId: string;
+    recetaRevisionId: string;
+    recetaVersion: number;
+    recetaHuella: string;
+    codigo: string;
+    nombre: string;
+    politicaEjecucion: "INLINE" | "INDEPENDIENTE";
+    formula: string;
+    cantidad: number;
+    unidad: string;
+    requerido: boolean;
+    orden: number;
+  }>;
+  documentos: Array<{
+    id: string;
+    pasoClave?: string | null;
+    codigo: string;
+    nombre: string;
+    proposito: string;
+    etapa: string;
+    tipoAprobacion?: string | null;
+    requerido: boolean;
+    descripcion?: string | null;
+    orden: number;
+  }>;
+}
+
+export type ProductoRecetaDocumentoInput = {
+  codigo: string;
+  nombre: string;
+  pasoClave?: string | null;
+  proposito: "PRINT" | "CUT" | "RENDER" | "PLANO" | "INSTRUCTIVO" | "OTRO";
+  etapa: "BRIEF" | "DISENO" | "PROTOTIPO" | "MUESTRA" | "PRODUCCION";
+  tipoAprobacion?:
+    | "CLIENTE"
+    | "DISENO"
+    | "COLOR_MUESTRA"
+    | "INGENIERIA"
+    | "LIBERACION_PRODUCTIVA"
+    | null;
+  requerido?: boolean;
+  descripcion?: string | null;
+  orden?: number;
+};
+
+export type ProductoRecetaComponenteInput = {
+  productoComponenteId: string;
+  codigo: string;
+  nombre: string;
+  politicaEjecucion?: "INLINE" | "INDEPENDIENTE";
+  formula?: string;
+  cantidad: number;
+  unidad?: string;
+  requerido?: boolean;
+  orden?: number;
+};
+
+export interface ProductoReceta {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion?: string | null;
+  revisionPublicadaId?: string | null;
+  rutaAlternativa: {
+    id: string;
+    nombre: string;
+    rutaVersion: number;
+    activo: boolean;
+  };
+  revisionPublicada?: ProductoRecetaRevision | null;
+  revisiones: ProductoRecetaRevision[];
+}
+
+export function getRecetasProducto(id: string): Promise<ProductoReceta[]> {
+  return apiRequest<ProductoReceta[]>(
+    `/productos-servicios/productos/${id}/receta`,
+  );
+}
+
+export function guardarBorradorReceta(
+  productoId: string,
+  payload: {
+    rutaAlternativaId: string;
+    cambios?: string;
+    expectedUpdatedAt?: string;
+    documentos?: ProductoRecetaDocumentoInput[];
+    componentes?: ProductoRecetaComponenteInput[];
+  },
+): Promise<ProductoRecetaRevision> {
+  return apiRequest<ProductoRecetaRevision>(
+    `/productos-servicios/productos/${productoId}/receta/borrador`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+export function publicarReceta(
+  revisionId: string,
+  payload: { expectedUpdatedAt: string; cambios?: string },
+): Promise<ProductoRecetaRevision> {
+  return apiRequest<ProductoRecetaRevision>(
+    `/productos-servicios/recetas/revisiones/${revisionId}/publicar`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+export function descartarBorradorReceta(
+  revisionId: string,
+  payload: { expectedUpdatedAt: string },
+): Promise<{
+  id: string;
+  numero: number;
+  descartada: true;
+  recetaEliminada: boolean;
+}> {
+  return apiRequest(
+    `/productos-servicios/recetas/revisiones/${revisionId}/borrador`,
+    {
+      method: "DELETE",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+export function deprecarReceta(
+  revisionId: string,
+  payload: { expectedUpdatedAt: string; motivo?: string },
+): Promise<ProductoRecetaRevision> {
+  return apiRequest<ProductoRecetaRevision>(
+    `/productos-servicios/recetas/revisiones/${revisionId}/deprecar`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
 export async function getCatalogoComercial(): Promise<
   ProductoCategoriaComercial[]
 > {
@@ -406,6 +608,7 @@ export interface UpsertSlotMaterialPayload {
   }>;
   formula?: string;
   cantidadFactor?: number | null;
+  mermaAdicionalPct?: number;
   cantidadBase?: string | null;
   /** Fuente de medida del consumo de este slot (override del default a nivel
    *  paso): 'piezas_visibles' | 'piezas_jobcontext' | 'output:<clave>'.
@@ -1161,9 +1364,24 @@ export interface CotizarResponse {
       cargosSinMargenTotal?: number;
       /** Costo de pasos tercerizados (lo que se paga al proveedor). */
       tercerizadoTotal?: number;
+      /** Costo productivo de subproductos fabricados de la receta. */
+      componentesFabricadosTotal?: number;
       total: number;
       unitario: number;
     };
+    componentesFabricados?: Array<{
+      productoId: string;
+      codigo: string;
+      nombre: string;
+      politicaEjecucion: "INLINE" | "INDEPENDIENTE";
+      cantidad: number;
+      unidad: string;
+      recetaRevisionId: string;
+      recetaVersion: number;
+      recetaHuella: string;
+      costoUnitario: number;
+      costoTotal: number;
+    }>;
     precio?: {
       precioUnitario: number;
       precioTotal: number;

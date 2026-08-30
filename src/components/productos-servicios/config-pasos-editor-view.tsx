@@ -3076,6 +3076,7 @@ export function ConfigPasosEditorView({
               s.cantidadFactor === null || s.cantidadFactor === undefined
                 ? null
                 : Number(s.cantidadFactor),
+            mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),
             cantidadBase: s.cantidadBase ?? null,
             aplicaMultiCaras: s.aplicaMultiCaras,
           })) ??
@@ -4037,6 +4038,7 @@ export function ConfigPasosEditorView({
         materialVarianteId: null,
         formula: "por_pieza",
         cantidadFactor: 1,
+        mermaAdicionalPct: 0,
         cantidadBase: "cantidad_pedida",
         aplicaMultiCaras: false,
       };
@@ -4705,7 +4707,7 @@ export function ConfigPasosEditorView({
             <Link
               href={
                 configuracionBase?.volverHref ??
-                `/productos-servicios/${producto.id}?tab=pasos&rutaAltId=${rutaAlternativa.id}`
+                `/productos-servicios/${producto.id}?tab=produccion&vista=operaciones&rutaAltId=${rutaAlternativa.id}`
               }
               className="back-link"
             >
@@ -9920,6 +9922,41 @@ function ConsumoReglaGuiado({
   const permiteReglaPropia =
     esAdicional || decl?.tipo === "INSUMO_PASO" || derivado;
 
+  const mermaAdicional = (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 8,
+        marginTop: 12,
+        paddingTop: 12,
+        borderTop: "1px solid var(--border, #e7e3de)",
+      }}
+    >
+      <span style={{ fontSize: 12, fontWeight: 650 }}>Merma adicional</span>
+      <Input
+        aria-label="Merma adicional del material"
+        type="number"
+        min={0}
+        max={1000}
+        step={0.1}
+        value={slot.mermaAdicionalPct ?? 0}
+        onChange={(event) =>
+          onSlotPatch({
+            mermaAdicionalPct:
+              event.target.value === "" ? 0 : Number(event.target.value),
+          })
+        }
+        style={{ width: 82 }}
+      />
+      <span style={fraseConectorStyle}>%</span>
+      <span style={{ ...fraseConectorStyle, fontSize: 11.5 }}>
+        Se suma una sola vez al consumo; no reemplaza el desperdicio geométrico.
+      </span>
+    </div>
+  );
+
   const dePart = fuenteLabel ? (
     <>
       {" "}
@@ -10014,6 +10051,7 @@ function ConsumoReglaGuiado({
             <SlidersHorizontalIcon size={13} /> …o pisala con una regla propia
           </EnlaceForma>
         ) : null}
+        {mermaAdicional}
       </FormaConsumoSeccion>
     );
   }
@@ -10075,6 +10113,7 @@ function ConsumoReglaGuiado({
           <ArrowLeftIcon size={13} />{" "}
           {derivado ? "Volver a lo que deriva la geometría" : "Volver a lo que mide el paso"}
         </EnlaceForma>
+        {mermaAdicional}
       </FormaConsumoSeccion>
     );
   }
@@ -10134,6 +10173,7 @@ function ConsumoReglaGuiado({
           <SlidersHorizontalIcon size={13} /> …o usá una regla propia (N por base)
         </EnlaceForma>
       ) : null}
+      {mermaAdicional}
     </FormaConsumoSeccion>
   );
 }

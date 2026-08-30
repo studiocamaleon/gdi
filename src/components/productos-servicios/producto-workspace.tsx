@@ -11,9 +11,11 @@ import {
   CogIcon,
   CopyIcon,
   Edit3Icon,
+  FactoryIcon,
   FootprintsIcon,
   GitBranchIcon,
   PlusIcon,
+  PackageCheckIcon,
   SaveIcon,
   StarIcon,
   TagIcon,
@@ -50,7 +52,9 @@ import {
   eliminarProductoRutaAlt,
   getCatalogoComercial,
   type LookupsConfigPaso,
+  type ProductoReceta,
 } from "@/lib/productos-servicios-api";
+import { RecetaProductoTab } from "@/components/productos-servicios/receta-producto-tab";
 import {
   getHerramientaMedidasArchivo,
   setHerramientaMedidasArchivo,
@@ -87,16 +91,24 @@ import {
 import styles from "./producto-workspace.module.css";
 
 export type ProductoWorkspaceTab =
-  "identidad" | "rutas" | "pasos" | "cargos" | "herramientas" | "pricing";
+  | "identidad"
+  | "produccion"
+  | "cargos"
+  | "herramientas"
+  | "pricing";
+
+export type ProductoProduccionVista = "rutas" | "operaciones" | "bom";
 
 interface Props {
   producto: ProductoDetalle;
   activeTab: ProductoWorkspaceTab;
+  produccionVista?: ProductoProduccionVista;
   rutaAltId?: string;
   rutasDisponibles?: RutaListItem[];
   catalogoFamilias?: CatalogoFamilias;
   lookups?: LookupsConfigPaso;
   catalogoCargos?: CargoDirectoCatalogo[];
+  recetas?: ProductoReceta[];
   canManage: boolean;
 }
 
@@ -459,14 +471,14 @@ const TABS: Array<{
   icon: React.ComponentType<{ className?: string }>;
 }> = [
   { id: "identidad", label: "Identidad", icon: TagIcon },
-  { id: "rutas", label: "Rutas", icon: GitBranchIcon },
-  { id: "pasos", label: "Pasos", icon: FootprintsIcon },
+  { id: "produccion", label: "Producción", icon: FactoryIcon },
   { id: "herramientas", label: "Herramientas", icon: WrenchIcon },
   { id: "pricing", label: "Pricing", icon: BanknoteIcon },
 ];
 
 function tabValidaciones(
   producto: ProductoDetalle,
+  recetas: ProductoReceta[],
 ): Record<ProductoWorkspaceTab, ValidacionTab> {
   const rutas = producto.rutasAlternativas;
   const sinRutas = rutas.length === 0;
@@ -481,16 +493,21 @@ function tabValidaciones(
       producto.codigo && producto.nombre
         ? { estado: "ok", label: "Completo" }
         : { estado: "error", label: "Faltan datos" },
-    rutas: sinRutas
+    produccion: sinRutas
       ? { estado: "error", label: "Sin rutas" }
       : sinPreferida
-        ? { estado: "warning", label: "Sin preferida" }
-        : { estado: "ok", label: "Completo" },
-    pasos: sinRutas
-      ? { estado: "error", label: "Sin rutas" }
-      : pasosIncompletos
-        ? { estado: "warning", label: "Incompleto" }
-        : { estado: "ok", label: "Completo" },
+        ? { estado: "warning", label: "Sin ruta preferida" }
+        : pasosIncompletos
+          ? { estado: "warning", label: "Pasos incompletos" }
+          : recetas.length === 0
+            ? { estado: "warning", label: "Sin versión publicada" }
+            : recetas.some((item) =>
+                  item.revisiones.some(
+                    (revision) => revision.estado === "BORRADOR",
+                  ),
+                )
+              ? { estado: "warning", label: "Cambios sin publicar" }
+              : { estado: "ok", label: "Publicada" },
     cargos: { estado: "ok", label: "Opcional" },
     herramientas: { estado: "ok", label: "Opcional" },
     pricing: precioConfig?.metodoCalculo
@@ -521,16 +538,18 @@ function EstadoBadge({ estado, label }: ValidacionTab) {
 export function ProductoWorkspace({
   producto,
   activeTab,
+  produccionVista = "rutas",
   rutaAltId,
   rutasDisponibles = [],
   catalogoFamilias,
   catalogoCargos = [],
+  recetas = [],
   canManage,
 }: Props) {
   const router = useRouter();
   const validaciones = React.useMemo(
-    () => tabValidaciones(producto),
-    [producto],
+    () => tabValidaciones(producto, recetas),
+    [producto, recetas],
   );
 
   const irATab = (tab: ProductoWorkspaceTab) => {
@@ -540,12 +559,15 @@ export function ProductoWorkspace({
   const tabHref = (tab: ProductoWorkspaceTab) => {
     const params = new URLSearchParams();
     params.set("tab", tab);
-    if (tab === "pasos") {
+    if (tab === "produccion" && produccionVista === "operaciones") {
       const selectedRuta =
         rutaAltId ??
         producto.rutasAlternativas.find((r) => r.esPreferida)?.id ??
         producto.rutasAlternativas[0]?.id;
+      params.set("vista", produccionVista);
       if (selectedRuta) params.set("rutaAltId", selectedRuta);
+    } else if (tab === "produccion") {
+      params.set("vista", produccionVista);
     }
     return `/productos-servicios/${producto.id}?${params.toString()}`;
   };
@@ -640,17 +662,15 @@ export function ProductoWorkspace({
               {activeTab === "identidad" && (
                 <IdentidadTab producto={producto} />
               )}
-              {activeTab === "rutas" && (
-                <RutasTab
+              {activeTab === "produccion" && (
+                <ProduccionTab
                   producto={producto}
-                  rutasDisponibles={rutasDisponibles}
-                />
-              )}
-              {activeTab === "pasos" && (
-                <PasosTab
-                  producto={producto}
+                  vista={produccionVista}
                   rutaAltId={rutaAltId}
+                  rutasDisponibles={rutasDisponibles}
                   catalogoFamilias={catalogoFamilias}
+                  recetas={recetas}
+                  canManage={canManage}
                 />
               )}
               {activeTab === "cargos" && (
@@ -1214,6 +1234,123 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   );
 }
 
+const PRODUCCION_VISTAS: Array<{
+  id: ProductoProduccionVista;
+  numero: string;
+  label: string;
+  descripcion: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  {
+    id: "rutas",
+    numero: "01",
+    label: "Rutas y flujo",
+    descripcion: "Elegí las vías posibles y su recorrido.",
+    icon: GitBranchIcon,
+  },
+  {
+    id: "operaciones",
+    numero: "02",
+    label: "Pasos y recursos",
+    descripcion: "Configurá operaciones, máquinas y materiales.",
+    icon: FootprintsIcon,
+  },
+  {
+    id: "bom",
+    numero: "03",
+    label: "BOM y versiones",
+    descripcion: "Revisá la composición y publicá el contrato.",
+    icon: PackageCheckIcon,
+  },
+];
+
+function ProduccionTab({
+  producto,
+  vista,
+  rutaAltId,
+  rutasDisponibles,
+  catalogoFamilias,
+  recetas,
+  canManage,
+}: {
+  producto: ProductoDetalle;
+  vista: ProductoProduccionVista;
+  rutaAltId?: string;
+  rutasDisponibles: RutaListItem[];
+  catalogoFamilias?: CatalogoFamilias;
+  recetas: ProductoReceta[];
+  canManage: boolean;
+}) {
+  const rutaSeleccionada =
+    producto.rutasAlternativas.find((ruta) => ruta.id === rutaAltId) ??
+    producto.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+    producto.rutasAlternativas[0];
+  const hrefVista = (destino: ProductoProduccionVista) => {
+    const params = new URLSearchParams({ tab: "produccion", vista: destino });
+    if (rutaSeleccionada?.id) params.set("rutaAltId", rutaSeleccionada.id);
+    return `/productos-servicios/${producto.id}?${params.toString()}`;
+  };
+
+  return (
+    <div className={styles.productionWorkspace}>
+      <nav
+        className={styles.productionNav}
+        aria-label="Etapas de configuración productiva"
+      >
+        {PRODUCCION_VISTAS.map((item, index) => {
+          const Icon = item.icon;
+          const active = vista === item.id;
+          return (
+            <React.Fragment key={item.id}>
+              <Link
+                href={hrefVista(item.id)}
+                className={styles.productionNavItem}
+                data-active={active || undefined}
+                aria-current={active ? "step" : undefined}
+              >
+                <span className={styles.productionNavNumber}>{item.numero}</span>
+                <span className={styles.productionNavIcon}>
+                  <Icon />
+                </span>
+                <span className={styles.productionNavCopy}>
+                  <strong>{item.label}</strong>
+                  <small>{item.descripcion}</small>
+                </span>
+              </Link>
+              {index < PRODUCCION_VISTAS.length - 1 ? (
+                <span className={styles.productionConnector} aria-hidden="true" />
+              ) : null}
+            </React.Fragment>
+          );
+        })}
+      </nav>
+
+      <div className={styles.productionContent}>
+        {vista === "rutas" ? (
+          <RutasTab
+            producto={producto}
+            rutasDisponibles={rutasDisponibles}
+          />
+        ) : null}
+        {vista === "operaciones" ? (
+          <PasosTab
+            producto={producto}
+            rutaAltId={rutaSeleccionada?.id}
+            catalogoFamilias={catalogoFamilias}
+          />
+        ) : null}
+        {vista === "bom" ? (
+          <RecetaProductoTab
+            producto={producto}
+            recetas={recetas}
+            canManage={canManage}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function RutasTab({
   producto,
   rutasDisponibles,
@@ -1521,22 +1658,6 @@ function RutasTab({
         ) : null}
       </div>
 
-      <div className="wiz-section">
-        <div className="wiz-section-head">
-          <div className="body">
-            <h2>Pasos extras</h2>
-            <div className="helptext">
-              Pasos puntuales que solo este producto necesita, sin crear una
-              ruta nueva. Ahora se configuran <strong>por ruta</strong>, desde
-              el editor de pasos: abrí <em>Configurar pasos</em> de una ruta y
-              usá “＋ Agregar paso extra” para posicionarlo en el flujo, elegir
-              cuándo se aplica (condicional con regla), su máquina o centro de
-              costo y el tiempo.
-            </div>
-          </div>
-        </div>
-      </div>
-
       <ConfirmacionDestructiva
         open={rutaAQuitar !== null}
         onOpenChange={(open) => {
@@ -1593,7 +1714,8 @@ function PasosTab({
 
   const cambiarRuta = (value: string) => {
     const params = new URLSearchParams();
-    params.set("tab", "pasos");
+    params.set("tab", "produccion");
+    params.set("vista", "operaciones");
     params.set("rutaAltId", value);
     router.push(`/productos-servicios/${producto.id}?${params.toString()}`);
   };

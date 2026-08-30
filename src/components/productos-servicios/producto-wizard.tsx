@@ -518,7 +518,9 @@ export function ProductoWizard({
           "Borrador creado · completá las rutas antes de publicarlo",
         );
         router.push(
-          `/productos-servicios/${creado.id}?tab=${avanzar ? "rutas" : "identidad"}`,
+          avanzar
+            ? `/productos-servicios/${creado.id}?tab=produccion&vista=rutas`
+            : `/productos-servicios/${creado.id}?tab=identidad`,
         );
         router.refresh();
       } else if (productoExistente) {

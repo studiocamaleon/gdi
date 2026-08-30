@@ -337,6 +337,7 @@ export class ProductoRutasService {
               materialVarianteId: slot.materialVarianteId,
               formula: slot.formula,
               cantidadFactor: slot.cantidadFactor,
+              mermaAdicionalPct: slot.mermaAdicionalPct,
               cantidadBase: slot.cantidadBase,
               fuenteMedida: slot.fuenteMedida,
               aplicaMultiCaras: slot.aplicaMultiCaras,
