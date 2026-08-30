@@ -1658,22 +1658,6 @@ function RutasTab({
         ) : null}
       </div>
 
-      <div className="wiz-section">
-        <div className="wiz-section-head">
-          <div className="body">
-            <h2>Pasos extras</h2>
-            <div className="helptext">
-              Pasos puntuales que solo este producto necesita, sin crear una
-              ruta nueva. Ahora se configuran <strong>por ruta</strong>, desde
-              el editor de pasos: abrí <em>Configurar pasos</em> de una ruta y
-              usá “＋ Agregar paso extra” para posicionarlo en el flujo, elegir
-              cuándo se aplica (condicional con regla), su máquina o centro de
-              costo y el tiempo.
-            </div>
-          </div>
-        </div>
-      </div>
-
       <ConfirmacionDestructiva
         open={rutaAQuitar !== null}
         onOpenChange={(open) => {
