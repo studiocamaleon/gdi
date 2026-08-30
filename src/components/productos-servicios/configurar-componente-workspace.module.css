@@ -211,8 +211,13 @@
   text-transform: uppercase;
 }
 .hint {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  margin: 0;
   color: #726d69;
   font-size: 12px;
+  line-height: 1.45;
 }
 .hint code {
   color: #8a3e1d;
