@@ -113,9 +113,9 @@
   display: grid;
   gap: 16px;
   align-items: center;
-  grid-template-columns: minmax(220px, 0.75fr) minmax(210px, 0.7fr) minmax(
-      420px,
-      1.3fr
+  grid-template-columns: minmax(220px, 0.65fr) minmax(200px, 0.6fr) minmax(
+      480px,
+      1.6fr
     );
 }
 .tableHead {
@@ -160,7 +160,10 @@
 .ruleEditor {
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(96px, 0.7fr);
+  grid-template-columns: minmax(230px, 1.55fr) minmax(128px, 0.85fr) minmax(
+      110px,
+      0.7fr
+    );
 }
 .numberWithUnit {
   display: flex;
