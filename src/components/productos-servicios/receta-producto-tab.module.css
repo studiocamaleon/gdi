@@ -3,38 +3,6 @@
   gap: 16px;
 }
 
-.hero {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 22px;
-  border: 1px solid #2c2b31;
-  border-radius: 18px;
-  color: #f7f6f3;
-  background:
-    radial-gradient(circle at 88% 0%, rgb(255 106 43 / 30%), transparent 28rem),
-    #18171c;
-  box-shadow: 0 18px 42px rgb(21 20 25 / 14%);
-}
-
-.heroIcon {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  flex: none;
-  place-items: center;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 14px;
-  color: #ff8b54;
-  background: rgb(255 255 255 / 6%);
-}
-
-.heroIcon svg {
-  width: 22px;
-  height: 22px;
-}
-
-.eyebrow,
 .routeCode {
   color: #ff8b54;
   font-family: var(--font-mono);
@@ -44,14 +12,6 @@
   text-transform: uppercase;
 }
 
-.hero h2 {
-  margin: 3px 0 4px;
-  font-size: 22px;
-  font-weight: 680;
-  letter-spacing: -0.03em;
-}
-
-.hero p,
 .recipeHeader p {
   margin: 0;
   color: #aaa7ae;
@@ -746,16 +706,6 @@
 }
 
 @media (max-width: 560px) {
-  .hero {
-    align-items: flex-start;
-    padding: 17px;
-  }
-
-  .heroIcon {
-    width: 40px;
-    height: 40px;
-  }
-
   .recipeHeader,
   .revisionBody {
     padding-right: 14px;

@@ -1285,16 +1285,6 @@ function ProduccionTab({
     producto.rutasAlternativas.find((ruta) => ruta.id === rutaAltId) ??
     producto.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
     producto.rutasAlternativas[0];
-  const recetaSeleccionada = rutaSeleccionada
-    ? recetas.find(
-        (receta) => receta.rutaAlternativa.id === rutaSeleccionada.id,
-      )
-    : null;
-  const borrador = recetaSeleccionada?.revisiones.find(
-    (revision) => revision.estado === "BORRADOR",
-  );
-  const publicada = recetaSeleccionada?.revisionPublicada;
-
   const hrefVista = (destino: ProductoProduccionVista) => {
     const params = new URLSearchParams({ tab: "produccion", vista: destino });
     if (rutaSeleccionada?.id) params.set("rutaAltId", rutaSeleccionada.id);
@@ -1303,34 +1293,6 @@ function ProduccionTab({
 
   return (
     <div className={styles.productionWorkspace}>
-      <header className={styles.productionHeader}>
-        <div className={styles.productionHeaderIcon}>
-          <FactoryIcon />
-        </div>
-        <div className={styles.productionHeaderBody}>
-          <span className={styles.eyebrow}>Sistema productivo del producto</span>
-          <h2>Producción</h2>
-          <p>
-            La ruta organiza el flujo, los pasos definen cómo se fabrica y la
-            BOM reúne lo necesario. Al publicar, todo queda congelado como una
-            versión trazable para cotizaciones y órdenes de trabajo.
-          </p>
-        </div>
-        {rutaSeleccionada ? (
-          <div className={styles.productionContext}>
-            <span>Vía seleccionada</span>
-            <strong>{rutaSeleccionada.nombre}</strong>
-            <small>
-              {borrador
-                ? `V${borrador.numero} con cambios sin publicar`
-                : publicada
-                  ? `V${publicada.numero} publicada`
-                  : "Todavía sin versión publicada"}
-            </small>
-          </div>
-        ) : null}
-      </header>
-
       <nav
         className={styles.productionNav}
         aria-label="Etapas de configuración productiva"

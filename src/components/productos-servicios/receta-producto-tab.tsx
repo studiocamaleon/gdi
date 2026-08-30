@@ -12,7 +12,6 @@ import {
   PlusIcon,
   RefreshCwIcon,
   RocketIcon,
-  ShieldCheckIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -695,20 +694,6 @@ export function RecetaProductoTab({
 
   return (
     <div className={styles.page}>
-      <header className={styles.hero}>
-        <div className={styles.heroIcon}>
-          <ShieldCheckIcon />
-        </div>
-        <div>
-          <span className={styles.eyebrow}>BOM versionada</span>
-          <h2>Materiales, documentos y versiones</h2>
-          <p>
-            Esta vista consolida lo configurado en los pasos. Al publicar una
-            versión, cotizaciones y OTs conservarán exactamente esa composición.
-          </p>
-        </div>
-      </header>
-
       <div className={styles.routes}>
         {producto.rutasAlternativas.map((ruta) => {
           const receta = recetas.find(
