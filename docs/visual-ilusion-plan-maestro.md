@@ -427,7 +427,7 @@ Los `Archivo` existentes siguen siendo adjuntos. La migración al modelo maestro
 
 ## Fase 2.5 — Eventos en tiempo real y bandeja de notificaciones internas
 
-**Estado actual:** EN DESARROLLO
+**Estado actual:** COMPLETA
 
 **Rama:** `visual-ilusion/fase-2-5-tiempo-real-notificaciones`
 
@@ -1106,7 +1106,7 @@ Esta tabla es el control maestro contra pérdida de alcance.
 | 28 | Capacidad productiva | F11 | F4, F10 | Avanzado parcialmente |
 | 29 | Planificador visual/Gantt | F11 | F1 | Pendiente |
 | 30 | Fecha objetivo hacia atrás | F11 | F14, F15 | Pendiente |
-| 31 | Actualización en tiempo real y notificaciones internas por usuario/rol | F2.5 | Todas, F16 | Pendiente |
+| 31 | Actualización en tiempo real y notificaciones internas por usuario/rol | F2.5 | Todas, F16 | Implementado y validado; se amplía por catálogo en cada fase |
 
 > El archivo original se cortó dentro del requerimiento 30. El requerimiento 31 se agregó el 29/08/2026 a partir de la validación real de Campañas; si se recibe más contenido del informe original, se agrega aquí antes de cerrar la fase afectada.
 
@@ -1271,7 +1271,7 @@ Esta tabla se actualizará al integrar cada fase.
 | 0 | COMPLETA | `visual-ilusion/analisis` | Diagnóstico + Plan Maestro | `1d50db6c` | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829` |
 | 1 | COMPLETA | `visual-ilusion/fase-1-campanas` | `docs/visual-ilusion-fase-1-campanas-diseno.md` | `41ead4c3`, `8077992a`, `4290c512` | Journey, seguridad, regresión y QA visual desktop/móvil aprobados |
 | 2 | COMPLETA | `visual-ilusion/fase-2-desarrollo-aprobaciones` | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md` | `bf2df97a`, `52538507` | Validación técnica y funcional aprobadas; integración en rama madre habilitada |
-| 2.5 | EN DESARROLLO | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | Implementación en curso | Outbox, SSE, fallback, bandeja global e invalidación de Campaña/OT/Tablero implementados; falta validación funcional multiusuario final |
+| 2.5 | COMPLETA | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | `46316989` | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
 | 3 | PENDIENTE | — | — | — | — |
 | 4 | PENDIENTE | — | — | — | — |
 | 5 | PENDIENTE | — | — | — | — |

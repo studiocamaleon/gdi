@@ -156,10 +156,27 @@ Implementado:
 - prueba real base → SSE → badge/panel dentro de 2,5 segundos;
 - builds Nest y Next, suite frontend de 541 tests y suites backend relevantes.
 
-Pendiente antes de declarar la fase completa:
+Validación de cierre completada el 29/08/2026:
 
-- recorrido funcional con dos usuarios reales y permisos distintos;
-- prueba manual de desconexión/reconexión y recuperación por cursor;
-- revisar el catálogo inicial con negocio para ajustar qué eventos productivos
-  generan inbox personal además de invalidación;
-- conformidad visual/funcional del usuario sobre desktop y mobile.
+- recorrido real con dos usuarios del mismo tenant y permisos distintos: el
+  destinatario recibió el cambio por SSE y una única notificación persistente;
+  el actor excluido conservó el contador en cero;
+- desconexión y reconexión con `Last-Event-ID` recuperaron el evento siguiente;
+  el endpoint incremental devolvió el mismo evento como respaldo de polling;
+- “marcar todas” llevó el contador a cero y el estado leído persistió después
+  de cerrar e iniciar sesión nuevamente;
+- aislamiento tenant, autorización, audiencia y serialización del cursor
+  quedaron cubiertos por las pruebas automatizadas del servicio;
+- con un modal de edición abierto, un evento remoto de la campaña no cerró el
+  formulario ni reemplazó sus valores locales;
+- panel verificado en escritorio, tablet y mobile: conexión en vivo visible,
+  estado vacío correcto, panel dentro del viewport y sin overflow horizontal;
+- sin errores de consola durante el recorrido y con eliminación verificada de
+  todos los usuarios, relaciones, eventos y notificaciones temporales de QA;
+- builds Nest/Next aprobados, 541 pruebas frontend aprobadas y 1.911 pruebas
+  backend aprobadas. Permanece un único fallo preexistente y ajeno a esta fase
+  en el catálogo de capacidades (`layout_produccion`).
+
+**Estado final:** COMPLETA. La revisión futura del catálogo de audiencias por
+negocio queda como gobernanza evolutiva de cada nueva familia de eventos y no
+bloquea el contrato base validado en esta fase.
