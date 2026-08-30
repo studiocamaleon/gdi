@@ -4,9 +4,13 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   ArchiveXIcon,
+  BadgeCheckIcon,
+  BlocksIcon,
   BoxesIcon,
+  CopyPlusIcon,
   FactoryIcon,
   FileCheck2Icon,
+  FilePlus2Icon,
   GitCommitHorizontalIcon,
   PencilLineIcon,
   PlusIcon,
@@ -18,6 +22,12 @@ import {
 import { toast } from "sonner";
 
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { ProductoDetalle } from "@/lib/productos-servicios";
 import {
   deprecarReceta,
@@ -53,6 +63,27 @@ function etiquetaRol(rol?: string | null) {
     PACKAGING: "Packaging",
   };
   return rol ? (labels[rol] ?? rol) : "Material";
+}
+
+function nombreHumano(value?: string | null) {
+  if (!value) return "—";
+  let limpio = value.replace(/_+/g, " ").replace(/\s+/g, " ").trim();
+  if (!limpio) return "—";
+  const correcciones: Array<[RegExp, string]> = [
+    [/\bimpresion\b/gi, "impresión"],
+    [/\bproduccion\b/gi, "producción"],
+    [/\bpreparacion\b/gi, "preparación"],
+    [/\bcolocacion\b/gi, "colocación"],
+    [/\bacrilico\b/gi, "acrílico"],
+    [/\bceramico\b/gi, "cerámico"],
+    [/\bplastico\b/gi, "plástico"],
+    [/\biman\b/gi, "imán"],
+    [/\blaser\b/gi, "láser"],
+  ];
+  for (const [patron, reemplazo] of correcciones) {
+    limpio = limpio.replace(patron, reemplazo);
+  }
+  return limpio.charAt(0).toLocaleUpperCase("es-AR") + limpio.slice(1);
 }
 
 function EditorDefiniciones({
@@ -438,8 +469,8 @@ function EditorDefiniciones({
                     )
                   }
                 >
-                  <option value="INDEPENDIENTE">OT independiente</option>
-                  <option value="INLINE">Dentro de la OT principal</option>
+                  <option value="INDEPENDIENTE">Fabricación separada</option>
+                  <option value="INLINE">Integrado al producto</option>
                 </select>
                 <button
                   type="button"
@@ -504,12 +535,15 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                 <div className={styles.row} key={material.id}>
                   <div>
                     <strong>
-                      {material.materialNombre ||
-                        material.slotNombre ||
-                        material.slotCodigo}
+                      {nombreHumano(
+                        material.materialNombre ||
+                          material.slotNombre ||
+                          material.slotCodigo,
+                      )}
                     </strong>
                     <span>
-                      {material.pasoNombre} · {etiquetaRol(material.rol)}
+                      {nombreHumano(material.pasoNombre)} ·{" "}
+                      {etiquetaRol(material.rol)}
                     </span>
                   </div>
                   <div className={styles.rowMeta}>
@@ -541,7 +575,7 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
               {revision.recursos.map((recurso) => (
                 <div className={styles.row} key={recurso.id}>
                   <div>
-                    <strong>{recurso.pasoNombre}</strong>
+                    <strong>{nombreHumano(recurso.pasoNombre)}</strong>
                     <span>
                       {recurso.tercerizado
                         ? recurso.proveedorNombre || "Proceso tercerizado"
@@ -562,7 +596,10 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                     ) : null}
                     {recurso.habilidadesRequeridas?.length ? (
                       <b>
-                        Habilidades: {recurso.habilidadesRequeridas.join(", ")}
+                        Habilidades:{" "}
+                        {recurso.habilidadesRequeridas
+                          .map(nombreHumano)
+                          .join(", ")}
                       </b>
                     ) : null}
                   </div>
@@ -574,6 +611,40 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
           )}
         </section>
       </div>
+
+      {revision.componentes.length ? (
+        <section className={styles.block}>
+          <header>
+            <BlocksIcon />
+            <div>
+              <h4>Componentes fabricados</h4>
+              <p>Productos con receta propia incluidos en esta versión.</p>
+            </div>
+          </header>
+          <div className={styles.rows}>
+            {revision.componentes.map((componente) => (
+              <div className={styles.row} key={componente.id}>
+                <div>
+                  <strong>{nombreHumano(componente.nombre)}</strong>
+                  <span>
+                    Receta V{componente.recetaVersion} ·{" "}
+                    {componente.politicaEjecucion === "INDEPENDIENTE"
+                      ? "fabricación separada"
+                      : "integrado al producto"}
+                  </span>
+                </div>
+                <div className={styles.rowMeta}>
+                  <span>
+                    {Number(componente.cantidad)}{" "}
+                    {nombreHumano(componente.unidad).toLocaleLowerCase("es-AR")}
+                  </span>
+                  <b>{componente.requerido ? "Requerido" : "Opcional"}</b>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className={styles.secondaryGrid}>
         <section className={styles.secondaryBlock}>
@@ -700,176 +771,228 @@ export function RecetaProductoTab({
   }
 
   return (
-    <div className={styles.page}>
-      <div className={styles.routes}>
-        {producto.rutasAlternativas.map((ruta) => {
-          const receta = recetas.find(
-            (item) => item.rutaAlternativa.id === ruta.id,
-          );
-          const draft = receta?.revisiones.find(
-            (item) => item.estado === "BORRADOR",
-          );
-          const published = receta?.revisionPublicada ?? null;
-          const visible = draft ?? published;
-          return (
-            <article className={styles.recipe} key={ruta.id}>
-              <header className={styles.recipeHeader}>
-                <div>
-                  <span className={styles.routeCode}>
-                    {ruta.ruta.codigo} · ruta V{ruta.rutaVersion}
-                  </span>
-                  <h3>{ruta.nombre}</h3>
-                  <p>{ruta.ruta.nombre}</p>
-                </div>
-                <div className={styles.headerRight}>
-                  {draft ? (
-                    <span className={styles.status} data-state="draft">
-                      V{draft.numero} · cambios sin publicar
-                    </span>
-                  ) : published ? (
-                    <span className={styles.status} data-state="published">
-                      V{published.numero} · publicada
-                    </span>
-                  ) : (
-                    <span className={styles.status}>Sin receta</span>
-                  )}
-                  {canManage ? (
-                    <div className={styles.actions}>
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        disabled={working !== null}
-                        onClick={() => guardar(ruta.id, draft)}
-                      >
-                        <RefreshCwIcon />
-                        {draft
-                          ? `Sincronizar borrador V${draft.numero}`
-                          : published
-                            ? `Crear revisión V${published.numero + 1}`
-                            : "Crear primera versión"}
-                      </button>
-                      {draft ? (
-                        <button
-                          type="button"
-                          className={styles.secondaryButton}
-                          disabled={working !== null}
-                          onClick={() =>
-                            setEditing(editing === draft.id ? null : draft.id)
-                          }
-                        >
-                          <PencilLineIcon />
-                          Documentos y componentes
-                        </button>
-                      ) : null}
-                      {published ? (
-                        <button
-                          type="button"
-                          className={styles.dangerButton}
-                          disabled={working !== null}
-                          onClick={() => setRevisionARetirar(published)}
-                        >
-                          <ArchiveXIcon />
-                          Retirar V{published.numero}
-                        </button>
-                      ) : null}
-                      {draft ? (
-                        <button
-                          type="button"
-                          className={styles.primaryButton}
-                          disabled={working !== null}
-                          onClick={() => publicar(draft)}
-                        >
-                          <RocketIcon />
-                          Publicar V{draft.numero}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              </header>
-
-              {visible ? (
-                <>
-                  {draft && editing === draft.id ? (
-                    <EditorDefiniciones
-                      productoId={producto.id}
-                      rutaAlternativaId={ruta.id}
-                      ruta={ruta}
-                      revision={draft}
-                      onClose={() => setEditing(null)}
-                    />
-                  ) : null}
-                  <RevisionResumen revision={visible} />
-                  <footer className={styles.audit}>
-                    <span>
-                      {visible.estado === "PUBLICADA"
-                        ? `Publicada por ${visible.publicadaPorNombre || visible.creadaPorNombre}`
-                        : `Borrador de ${visible.creadaPorNombre}`}
-                    </span>
-                    <span>
-                      {fecha(visible.publicadaEl || visible.updatedAt)}
-                    </span>
-                  </footer>
-                  {receta && receta.revisiones.length > 1 ? (
-                    <div className={styles.history}>
-                      <span>Historial</span>
-                      {receta.revisiones.map((revision) => (
-                        <div
-                          key={revision.id}
-                          data-state={revision.estado.toLowerCase()}
-                        >
-                          <strong>V{revision.numero}</strong>
-                          <span>{revision.estado.toLowerCase()}</span>
-                          <time>
-                            {fecha(
-                              revision.deprecadaEl ||
-                                revision.publicadaEl ||
-                                revision.updatedAt,
-                            )}
-                          </time>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className={styles.emptyRecipe}>
-                  <BoxesIcon />
+    <TooltipProvider delay={180}>
+      <div className={styles.page}>
+        <div className={styles.routes}>
+          {producto.rutasAlternativas.map((ruta) => {
+            const receta = recetas.find(
+              (item) => item.rutaAlternativa.id === ruta.id,
+            );
+            const draft = receta?.revisiones.find(
+              (item) => item.estado === "BORRADOR",
+            );
+            const published = receta?.revisionPublicada ?? null;
+            const visible = draft ?? published;
+            return (
+              <article className={styles.recipe} key={ruta.id}>
+                <header className={styles.recipeHeader}>
                   <div>
-                    <strong>Esta vía todavía trabaja en modo compatible</strong>
-                    <span>
-                      Puede seguir cotizando como hasta ahora. Creá el borrador
-                      cuando quieras comenzar a controlar sus revisiones.
+                    <span className={styles.routeCode}>
+                      {ruta.ruta.codigo} · ruta V{ruta.rutaVersion}
                     </span>
+                    <h3>{ruta.nombre}</h3>
+                    <p>{ruta.ruta.nombre}</p>
                   </div>
-                </div>
-              )}
-            </article>
-          );
-        })}
+                  <div className={styles.headerRight}>
+                    {draft ? (
+                      <span className={styles.status} data-state="draft">
+                        V{draft.numero} · cambios sin publicar
+                      </span>
+                    ) : published ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={(props) => (
+                            <span
+                              {...props}
+                              className={styles.statusIcon}
+                              data-state="published"
+                              tabIndex={0}
+                              aria-label={`Receta V${published.numero} publicada`}
+                            >
+                              <BadgeCheckIcon />
+                            </span>
+                          )}
+                        />
+                        <TooltipContent>
+                          Receta V{published.numero} publicada
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className={styles.status}>Sin receta</span>
+                    )}
+                    {canManage ? (
+                      <div className={styles.actions}>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={(props) => (
+                              <button
+                                {...props}
+                                type="button"
+                                className={`${styles.secondaryButton} ${styles.iconButton}`}
+                                disabled={working !== null}
+                                aria-label={
+                                  draft
+                                    ? `Sincronizar borrador V${draft.numero}`
+                                    : published
+                                      ? `Crear revisión V${published.numero + 1}`
+                                      : "Crear primera versión"
+                                }
+                                onClick={() => guardar(ruta.id, draft)}
+                              >
+                                {draft ? (
+                                  <RefreshCwIcon />
+                                ) : published ? (
+                                  <CopyPlusIcon />
+                                ) : (
+                                  <FilePlus2Icon />
+                                )}
+                              </button>
+                            )}
+                          />
+                          <TooltipContent>
+                            {draft
+                              ? `Actualizar el borrador V${draft.numero} con rutas y pasos actuales`
+                              : published
+                                ? `Crear borrador V${published.numero + 1} para editar documentos y componentes`
+                                : "Crear la primera versión de la receta"}
+                          </TooltipContent>
+                        </Tooltip>
+                        {draft ? (
+                          <button
+                            type="button"
+                            className={styles.secondaryButton}
+                            disabled={working !== null}
+                            onClick={() =>
+                              setEditing(editing === draft.id ? null : draft.id)
+                            }
+                          >
+                            <PencilLineIcon />
+                            Editar receta
+                          </button>
+                        ) : null}
+                        {published ? (
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={(props) => (
+                                <button
+                                  {...props}
+                                  type="button"
+                                  className={`${styles.dangerButton} ${styles.iconButton}`}
+                                  disabled={working !== null}
+                                  aria-label={`Retirar receta V${published.numero}`}
+                                  onClick={() => setRevisionARetirar(published)}
+                                >
+                                  <ArchiveXIcon />
+                                </button>
+                              )}
+                            />
+                            <TooltipContent>
+                              Retirar receta V{published.numero}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                        {draft ? (
+                          <button
+                            type="button"
+                            className={styles.primaryButton}
+                            disabled={working !== null}
+                            onClick={() => publicar(draft)}
+                          >
+                            <RocketIcon />
+                            Publicar V{draft.numero}
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </header>
+
+                {visible ? (
+                  <>
+                    {draft && editing === draft.id ? (
+                      <EditorDefiniciones
+                        productoId={producto.id}
+                        rutaAlternativaId={ruta.id}
+                        ruta={ruta}
+                        revision={draft}
+                        onClose={() => setEditing(null)}
+                      />
+                    ) : null}
+                    <RevisionResumen revision={visible} />
+                    <footer className={styles.audit}>
+                      <span>
+                        {visible.estado === "PUBLICADA"
+                          ? `Publicada por ${visible.publicadaPorNombre || visible.creadaPorNombre}`
+                          : `Borrador de ${visible.creadaPorNombre}`}
+                      </span>
+                      <span>
+                        {fecha(visible.publicadaEl || visible.updatedAt)}
+                      </span>
+                    </footer>
+                    {receta && receta.revisiones.length > 1 ? (
+                      <div className={styles.history}>
+                        <span>Historial</span>
+                        {receta.revisiones.map((revision) => (
+                          <div
+                            key={revision.id}
+                            data-state={revision.estado.toLowerCase()}
+                          >
+                            <strong>V{revision.numero}</strong>
+                            <span>{revision.estado.toLowerCase()}</span>
+                            <time>
+                              {fecha(
+                                revision.deprecadaEl ||
+                                  revision.publicadaEl ||
+                                  revision.updatedAt,
+                              )}
+                            </time>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className={styles.emptyRecipe}>
+                    <BoxesIcon />
+                    <div>
+                      <strong>
+                        Esta vía todavía trabaja en modo compatible
+                      </strong>
+                      <span>
+                        Puede seguir cotizando como hasta ahora. Creá el
+                        borrador cuando quieras comenzar a controlar sus
+                        revisiones.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+        <ConfirmacionDestructiva
+          open={revisionARetirar !== null}
+          onOpenChange={(open) => {
+            if (!open) setRevisionARetirar(null);
+          }}
+          titulo="Retirar versión productiva"
+          descripcion={
+            revisionARetirar
+              ? `La versión V${revisionARetirar.numero} dejará de estar disponible para nuevas cotizaciones.`
+              : null
+          }
+          impacto={[
+            "Las cotizaciones y órdenes existentes conservarán esta versión.",
+            "El producto volverá al modo compatible hasta publicar otra versión.",
+          ]}
+          nombreItem={
+            revisionARetirar ? `V${revisionARetirar.numero}` : undefined
+          }
+          requiereTipear={false}
+          accionLabel="Retirar versión"
+          onConfirmar={retirarPublicada}
+        />
       </div>
-      <ConfirmacionDestructiva
-        open={revisionARetirar !== null}
-        onOpenChange={(open) => {
-          if (!open) setRevisionARetirar(null);
-        }}
-        titulo="Retirar versión productiva"
-        descripcion={
-          revisionARetirar
-            ? `La versión V${revisionARetirar.numero} dejará de estar disponible para nuevas cotizaciones.`
-            : null
-        }
-        impacto={[
-          "Las cotizaciones y órdenes existentes conservarán esta versión.",
-          "El producto volverá al modo compatible hasta publicar otra versión.",
-        ]}
-        nombreItem={
-          revisionARetirar ? `V${revisionARetirar.numero}` : undefined
-        }
-        requiereTipear={false}
-        accionLabel="Retirar versión"
-        onConfirmar={retirarPublicada}
-      />
-    </div>
+    </TooltipProvider>
   );
 }

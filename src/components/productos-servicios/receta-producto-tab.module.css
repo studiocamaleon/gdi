@@ -52,9 +52,10 @@
 }
 
 .headerRight {
-  display: grid;
-  justify-items: end;
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .status {
@@ -98,6 +99,29 @@
   background: #1b8f58;
 }
 
+.statusIcon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  cursor: help;
+  place-items: center;
+  border: 1px solid rgb(27 143 88 / 22%);
+  border-radius: 50%;
+  color: #176d48;
+  background: #edf8f2;
+}
+
+.statusIcon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.statusIcon:focus-visible {
+  outline: 2px solid #ff8b54;
+  outline-offset: 2px;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -118,6 +142,12 @@
   font-size: 12px;
   font-weight: 680;
   transition: 150ms ease;
+}
+
+.iconButton {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
 }
 
 .primaryButton svg,
@@ -313,10 +343,9 @@
 
 .definitionRow {
   display: grid;
-  grid-template-columns: minmax(130px, 1.3fr) minmax(90px, 0.8fr) minmax(
-      120px,
-      1fr
-    ) 30px;
+  grid-template-columns:
+    minmax(130px, 1.3fr) minmax(90px, 0.8fr) minmax(120px, 1fr)
+    30px;
   gap: 6px;
 }
 
@@ -671,7 +700,8 @@
   }
 
   .headerRight {
-    justify-items: start;
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .actions {
@@ -746,6 +776,10 @@
   .secondaryButton,
   .dangerButton {
     width: 100%;
+  }
+
+  .iconButton {
+    width: 36px;
   }
 
   .metrics {
