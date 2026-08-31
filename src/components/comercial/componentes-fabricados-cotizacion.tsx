@@ -108,6 +108,38 @@ export function ComponentesFabricadosCotizacion({
               <div className={styles.fields}>
                 {solicitados.map((binding: BindingParametroComponente) => {
                   const current = values[componente.codigo] ?? {};
+                  const currentValue =
+                    leerRuta(current, binding.clave) ?? binding.valor;
+                  if (binding.tipoDato.toLowerCase() === "boolean") {
+                    const checked = currentValue === true;
+                    return (
+                      <label
+                        className={styles.booleanField}
+                        key={binding.clave}
+                      >
+                        <span>
+                          <strong>{binding.etiqueta}</strong>
+                          <small>
+                            {checked ? "Incluido en esta cotización" : "No incluido"}
+                          </small>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) =>
+                            onChange({
+                              ...values,
+                              [componente.codigo]: escribirRuta(
+                                current,
+                                binding.clave,
+                                event.target.checked,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                    );
+                  }
                   return (
                     <label key={binding.clave}>
                       <span>
@@ -117,9 +149,7 @@ export function ComponentesFabricadosCotizacion({
                       {binding.opciones?.length ? (
                         <select
                           value={String(
-                            leerRuta(current, binding.clave) ??
-                              binding.valor ??
-                              "",
+                            currentValue ?? "",
                           )}
                           onChange={(event) =>
                             onChange({
@@ -149,9 +179,7 @@ export function ComponentesFabricadosCotizacion({
                             binding.tipoDato === "number" ? 0.000001 : undefined
                           }
                           value={String(
-                            leerRuta(current, binding.clave) ??
-                              binding.valor ??
-                              "",
+                            currentValue ?? "",
                           )}
                           onChange={(event) => {
                             const raw = event.target.value;

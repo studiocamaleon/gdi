@@ -72,6 +72,7 @@ import {
 } from "@/lib/productos-servicios-api";
 import type {
   CargoDirectoCatalogo,
+  DimensionProducto,
   MedidaPredefinidaProducto,
   ModoMedidasProducto,
   ProductoCategoriaComercial,
@@ -80,6 +81,7 @@ import type {
 } from "@/lib/productos-servicios";
 import { unidadComercialProductoItems } from "@/lib/productos-servicios";
 import {
+  getDimensionesRequeridas,
   getMedidasPredefinidas,
   medidaLabel,
   normalizeMedidasDraft,
@@ -98,7 +100,7 @@ const STEPS = [
   {
     id: "identidad",
     nombre: "Identidad",
-    descripcion: "Qué es y cómo se cobra",
+    descripcion: "Qué es y cómo se vende",
     icon: TagIcon,
   },
   {
@@ -116,7 +118,7 @@ const STEPS = [
   {
     id: "precio",
     nombre: "Precio + revisar",
-    descripcion: "Cómo se cobra y validar",
+    descripcion: "Precio y validación",
     icon: SaveIcon,
   },
 ] as const;
@@ -124,10 +126,10 @@ const STEPS = [
 type StepId = (typeof STEPS)[number]["id"];
 
 const MODOS_MEDIDAS = [
-  { value: "FIJA", label: "Fija" },
-  { value: "LIBRE", label: "Libre" },
-  { value: "COMERCIAL_ELIGE", label: "Comercial elige" },
-  { value: "MIXTA", label: "Mixta" },
+  { value: "FIJA", label: "Medida fija" },
+  { value: "LIBRE", label: "Medida libre" },
+  { value: "COMERCIAL_ELIGE", label: "Medidas predefinidas" },
+  { value: "MIXTA", label: "Predefinida o personalizada" },
 ];
 
 function modoMedidasUsaPredefinidas(modo: string) {
@@ -137,9 +139,15 @@ function modoMedidasUsaPredefinidas(modo: string) {
 function normalizarMedidasPorModo(
   modo: string,
   medidas: MedidaPredefinidaProducto[],
+  es3D = false,
 ) {
   if (!modoMedidasUsaPredefinidas(modo)) return [];
-  const normalizadas = normalizeMedidasDraft(medidas);
+  const normalizadas = normalizeMedidasDraft(medidas).map((medida) => ({
+    ...medida,
+    ...(es3D
+      ? { profundidadMm: medida.profundidadMm }
+      : { profundidadMm: undefined }),
+  }));
   if (modo !== "FIJA") return normalizadas;
   const defaultMedida =
     normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
@@ -158,11 +166,23 @@ function nuevaMedidaPredefinida(index: number): MedidaPredefinidaProducto {
 
 function MedidasPredefinidasWizard({
   medidas,
+  modo,
+  es3D,
   onChange,
 }: {
   medidas: MedidaPredefinidaProducto[];
+  modo: ModoMedidasProducto;
+  es3D: boolean;
   onChange: (medidas: MedidaPredefinidaProducto[]) => void;
 }) {
+  const esMedidaFija = modo === "FIJA";
+  const medidaDefault =
+    medidas.find((medida) => medida.esDefault) ?? medidas[0] ?? null;
+  const medidasVisibles = esMedidaFija
+    ? medidaDefault
+      ? [medidaDefault]
+      : []
+    : medidas;
   const updateMedida = (
     id: string,
     patch: Partial<MedidaPredefinidaProducto>,
@@ -189,23 +209,31 @@ function MedidasPredefinidasWizard({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <Label>Medidas disponibles</Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])
-          }
-        >
-          Agregar medida
-        </Button>
+        <Label>
+          {esMedidaFija ? "Medida del producto" : "Medidas disponibles"}
+        </Label>
+        {!esMedidaFija && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])
+            }
+          >
+            Agregar medida
+          </Button>
+        )}
       </div>
       <div className="space-y-2">
-        {medidas.map((medida, index) => (
+        {medidasVisibles.map((medida, index) => (
           <div
             key={medida.id}
-            className="grid grid-cols-[1.4fr_0.8fr_0.8fr_auto_auto] items-center gap-2"
+            className={`grid items-center gap-2 ${
+              es3D
+                ? "grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto_auto]"
+                : "grid-cols-[1.4fr_0.8fr_0.8fr_auto_auto]"
+            }`}
           >
             <Input
               value={medida.nombre}
@@ -218,59 +246,81 @@ function MedidasPredefinidasWizard({
             <Input
               type="number"
               min="0"
-              value={medida.anchoMm || ""}
+              value={medida.anchoMm ? medida.anchoMm / 10 : ""}
               onChange={(event) =>
                 updateMedida(medida.id, {
-                  anchoMm: Number(event.target.value) || 0,
+                  anchoMm: (Number(event.target.value) || 0) * 10,
                 })
               }
-              placeholder="Ancho"
+              placeholder="Ancho cm"
               aria-label={`Ancho de medida ${index + 1}`}
             />
             <Input
               type="number"
               min="0"
-              value={medida.altoMm || ""}
+              value={medida.altoMm ? medida.altoMm / 10 : ""}
               onChange={(event) =>
                 updateMedida(medida.id, {
-                  altoMm: Number(event.target.value) || 0,
+                  altoMm: (Number(event.target.value) || 0) * 10,
                 })
               }
-              placeholder="Alto"
+              placeholder="Alto cm"
               aria-label={`Alto de medida ${index + 1}`}
             />
-            <Button
-              type="button"
-              variant={medida.esDefault ? "default" : "outline"}
-              size="icon"
-              onClick={() => setDefault(medida.id)}
-              aria-pressed={medida.esDefault}
-              title={
-                medida.esDefault
-                  ? "Medida predeterminada"
-                  : "Marcar como predeterminada"
-              }
-            >
-              <StarIcon
-                className="size-4"
-                fill={medida.esDefault ? "currentColor" : "none"}
+            {es3D && (
+              <Input
+                type="number"
+                min="0"
+                value={medida.profundidadMm ? medida.profundidadMm / 10 : ""}
+                onChange={(event) =>
+                  updateMedida(medida.id, {
+                    profundidadMm: (Number(event.target.value) || 0) * 10,
+                  })
+                }
+                placeholder="Profundidad cm"
+                aria-label={`Profundidad de medida ${index + 1}`}
               />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => removeMedida(medida.id)}
-              disabled={medidas.length <= 1}
-              title="Eliminar medida"
-            >
-              <Trash2Icon className="size-4" />
-            </Button>
+            )}
+            {!esMedidaFija ? (
+              <>
+                <Button
+                  type="button"
+                  variant={medida.esDefault ? "default" : "outline"}
+                  size="icon"
+                  onClick={() => setDefault(medida.id)}
+                  aria-pressed={medida.esDefault}
+                  title={
+                    medida.esDefault
+                      ? "Medida predeterminada"
+                      : "Marcar como predeterminada"
+                  }
+                >
+                  <StarIcon
+                    className="size-4"
+                    fill={medida.esDefault ? "currentColor" : "none"}
+                  />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeMedida(medida.id)}
+                  disabled={medidas.length <= 1}
+                  title="Eliminar medida"
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              </>
+            ) : (
+              <span className="col-span-2" />
+            )}
           </div>
         ))}
       </div>
       <p className="text-muted-foreground text-xs">
-        La medida con estrella se usa por defecto al cotizar.
+        {esMedidaFija
+          ? "Esta medida se aplicará automáticamente al cotizar."
+          : "La medida con estrella aparecerá seleccionada inicialmente al cotizar."}
       </p>
     </div>
   );
@@ -373,6 +423,12 @@ export function ProductoWizard({
   const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(
     productoExistente?.modoMedidas ?? "FIJA",
   );
+  const [geometria, setGeometria] = React.useState<"2D" | "3D">(() =>
+    productoExistente &&
+    getDimensionesRequeridas(productoExistente).includes("PROFUNDIDAD")
+      ? "3D"
+      : "2D",
+  );
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(
     () =>
       productoExistente
@@ -396,15 +452,19 @@ export function ProductoWizard({
   // Ver docs/productos-comprados-merchandising-diseno.md
   const [sinMedida, setSinMedida] = React.useState<boolean>(() =>
     productoExistente
-      ? (productoExistente.modoMedidas ?? "FIJA") === "FIJA" &&
-        getMedidasPredefinidas(productoExistente).length === 0
+      ? getDimensionesRequeridas(productoExistente).length === 0
       : false,
   );
 
   // "Sin medida" solo aplica a productos por unidad; si cambia a m²/ml, se apaga.
   React.useEffect(() => {
-    if (unidadComercial !== "unidad" && sinMedida) setSinMedida(false);
-  }, [unidadComercial, sinMedida]);
+    if (unidadComercial !== "unidad" && sinMedida) {
+      setSinMedida(false);
+      if (medidas.length === 0) {
+        setMedidas([nuevaMedidaPredefinida(0)]);
+      }
+    }
+  }, [medidas.length, unidadComercial, sinMedida]);
 
   // Estado de step 5 — Precio
   const [precioPersistido, setPrecioPersistido] =
@@ -486,7 +546,7 @@ export function ProductoWizard({
     const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
     const medidasNormalizadas = sinMedida
       ? []
-      : normalizarMedidasPorModo(modoMedidas, medidas);
+      : normalizarMedidasPorModo(modoMedidas, medidas, geometria === "3D");
     const medidaDefault = medidasNormalizadas.find(
       (medida) => medida.esDefault,
     );
@@ -494,6 +554,22 @@ export function ProductoWizard({
       toast.error("Agregá al menos una medida predefinida.");
       return;
     }
+    if (
+      !sinMedida &&
+      geometria === "3D" &&
+      modoMedidas !== "LIBRE" &&
+      medidasNormalizadas.some(
+        (medida) => !medida.profundidadMm || medida.profundidadMm <= 0,
+      )
+    ) {
+      toast.error("Completá la profundidad de cada medida 3D.");
+      return;
+    }
+    const dimensionesRequeridas: DimensionProducto[] = sinMedida
+      ? []
+      : geometria === "3D"
+        ? ["ANCHO", "ALTO", "PROFUNDIDAD"]
+        : ["ANCHO", "ALTO"];
     setGuardandoStep(true);
     try {
       const payload = {
@@ -507,8 +583,10 @@ export function ProductoWizard({
           > | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidasEfectivo,
+        dimensionesRequeridas,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
         medidaDefaultAltoMm: medidaDefault?.altoMm,
+        medidaDefaultProfundidadMm: medidaDefault?.profundidadMm,
         medidasPredefinidasJson: medidasNormalizadas,
         precioConfigJson: precioConfig as unknown as Record<string, unknown>,
       };
@@ -546,10 +624,15 @@ export function ProductoWizard({
     const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
     const medidasNormalizadas = sinMedida
       ? []
-      : normalizarMedidasPorModo(modoMedidas, medidas);
+      : normalizarMedidasPorModo(modoMedidas, medidas, geometria === "3D");
     const medidaDefault = medidasNormalizadas.find(
       (medida) => medida.esDefault,
     );
+    const dimensionesRequeridas: DimensionProducto[] = sinMedida
+      ? []
+      : geometria === "3D"
+        ? ["ANCHO", "ALTO", "PROFUNDIDAD"]
+        : ["ANCHO", "ALTO"];
     setGuardandoStep(true);
     try {
       await actualizarProducto(productoExistente.id, {
@@ -563,8 +646,10 @@ export function ProductoWizard({
           > | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidasEfectivo,
+        dimensionesRequeridas,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
         medidaDefaultAltoMm: medidaDefault?.altoMm,
+        medidaDefaultProfundidadMm: medidaDefault?.profundidadMm,
         medidasPredefinidasJson: medidasNormalizadas,
         precioConfigJson: precioConfig as unknown as Record<string, unknown>,
         activo,
@@ -695,6 +780,8 @@ export function ProductoWizard({
               setUnidadComercial={setUnidadComercial}
               modoMedidas={modoMedidas}
               setModoMedidas={setModoMedidas}
+              geometria={geometria}
+              setGeometria={setGeometria}
               sinMedida={sinMedida}
               setSinMedida={setSinMedida}
               medidas={medidas}
@@ -808,6 +895,8 @@ interface StepIdentidadProps {
   setUnidadComercial: (v: string) => void;
   modoMedidas: ModoMedidasProducto;
   setModoMedidas: (v: ModoMedidasProducto) => void;
+  geometria: "2D" | "3D";
+  setGeometria: (v: "2D" | "3D") => void;
   sinMedida: boolean;
   setSinMedida: (v: boolean) => void;
   medidas: MedidaPredefinidaProducto[];
@@ -904,13 +993,14 @@ function StepIdentidad(props: StepIdentidadProps) {
         <CardHeader>
           <CardTitle>Comercial y medidas</CardTitle>
           <CardDescription>
-            Cómo se cobra y cómo se manejan las medidas al cotizar.
+            Definí cómo se vende el producto y qué datos deberá completar el
+            comercial al cotizarlo.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <LabelConTooltip
-              label="¿Cómo se cobra?"
+              label="Unidad de venta"
               htmlFor="unidad"
               tooltip={
                 getLabel(unidadComercialLabels, props.unidadComercial)
@@ -929,23 +1019,29 @@ function StepIdentidad(props: StepIdentidadProps) {
           {props.unidadComercial === "unidad" && (
             <div className="space-y-2">
               <LabelConTooltip
-                label="¿El producto tiene medida?"
+                label="¿El producto se define por medidas?"
                 htmlFor="sinMedida"
-                tooltip="Los productos comprados por unidad (tazas, remeras, lapiceras) no tienen medida propia: se cotizan por unidad y la estampa la maneja la personalización. Elegí «Sin medida» para ellos."
+                tooltip="Indicá si el producto necesita dimensiones para calcular su precio, materiales o producción."
               />
               <HumanSelect
                 value={props.sinMedida ? "sin" : "con"}
-                onValueChange={(v) => props.setSinMedida(v === "sin")}
+                onValueChange={(v) => {
+                  const nextSinMedida = v === "sin";
+                  props.setSinMedida(nextSinMedida);
+                  if (!nextSinMedida && props.medidas.length === 0) {
+                    props.setMedidas([nuevaMedidaPredefinida(0)]);
+                  }
+                }}
                 options={[
                   {
                     value: "con",
-                    label: "Con medida",
+                    label: "Sí, utiliza medidas",
                     description:
                       "El producto tiene una medida física (ej. tarjeta 90×50 mm).",
                   },
                   {
                     value: "sin",
-                    label: "Sin medida (por unidad)",
+                    label: "No utiliza medidas",
                     description:
                       "Merchandising comprado: taza, remera, lapicera. Se cotiza por unidad.",
                   },
@@ -956,8 +1052,32 @@ function StepIdentidad(props: StepIdentidadProps) {
           )}
           {!props.sinMedida && (
             <div className="space-y-2">
+              <Label>Geometría del producto</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={props.geometria === "2D" ? "default" : "outline"}
+                  onClick={() => props.setGeometria("2D")}
+                >
+                  2D · Ancho y alto
+                </Button>
+                <Button
+                  type="button"
+                  variant={props.geometria === "3D" ? "default" : "outline"}
+                  onClick={() => props.setGeometria("3D")}
+                >
+                  3D · Ancho, alto y profundidad
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                El sheet solicitará exactamente estas dimensiones al cotizar.
+              </p>
+            </div>
+          )}
+          {!props.sinMedida && (
+            <div className="space-y-2">
               <LabelConTooltip
-                label="Manejo de medidas"
+                label="¿Cómo se define la medida?"
                 htmlFor="modoMedidas"
                 tooltip={
                   getLabel(modoMedidasLabels, props.modoMedidas).descripcion
@@ -966,9 +1086,13 @@ function StepIdentidad(props: StepIdentidadProps) {
               />
               <HumanSelect
                 value={props.modoMedidas}
-                onValueChange={(v) =>
-                  props.setModoMedidas((v || "FIJA") as ModoMedidasProducto)
-                }
+                onValueChange={(v) => {
+                  const nextModo = (v || "FIJA") as ModoMedidasProducto;
+                  props.setModoMedidas(nextModo);
+                  if (nextModo === "FIJA" && props.medidas.length === 0) {
+                    props.setMedidas([nuevaMedidaPredefinida(0)]);
+                  }
+                }}
                 options={MODOS_MEDIDAS.map((it) =>
                   optionFromLabel(it.value, modoMedidasLabels),
                 )}
@@ -980,6 +1104,8 @@ function StepIdentidad(props: StepIdentidadProps) {
             modoMedidasUsaPredefinidas(props.modoMedidas) && (
               <MedidasPredefinidasWizard
                 medidas={props.medidas}
+                modo={props.modoMedidas}
+                es3D={props.geometria === "3D"}
                 onChange={props.setMedidas}
               />
             )}

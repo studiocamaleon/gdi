@@ -69,6 +69,7 @@ export function ConfigurarIncorporacionWorkspace({
   componentes,
   onCancel,
   onSave,
+  embedded = false,
 }: {
   paso: ConfiguracionPasoCompuesto;
   definiciones: DefinicionPasoInternoCompuesto[];
@@ -76,6 +77,7 @@ export function ConfigurarIncorporacionWorkspace({
   componentes: ProductoRecetaComponenteInput[];
   onCancel: () => void;
   onSave: (configuracion: ConfiguracionPasoCompuesto) => void;
+  embedded?: boolean;
 }) {
   const [catalogo, setCatalogo] = React.useState<CatalogoFamilias | null>(null);
   const [lookups, setLookups] = React.useState<LookupsConfigPaso | null>(null);
@@ -171,8 +173,17 @@ export function ConfigurarIncorporacionWorkspace({
       pasosExtras: [],
     };
     return (
-      <div className={styles.backdrop} role="dialog" aria-modal="true">
-        <div className={`${styles.workspace} ${styles.editorWorkspace}`}>
+      <div
+        className={embedded ? styles.embedded : styles.backdrop}
+        role={embedded ? "region" : "dialog"}
+        aria-modal={embedded ? undefined : true}
+        aria-label={
+          embedded ? `Configuración de ${pasoActivo.nombre}` : undefined
+        }
+      >
+        <div
+          className={`${styles.workspace} ${styles.editorWorkspace} ${embedded ? styles.workspaceEmbedded : ""}`}
+        >
           <header className={styles.header}>
             <button
               type="button"
@@ -182,11 +193,12 @@ export function ConfigurarIncorporacionWorkspace({
               <ArrowLeftIcon />
             </button>
             <div>
-              <span>Producción · BOM · {paso.pasoNombre}</span>
+              <span>Producción · Etapa · {paso.pasoNombre}</span>
               <h2>{pasoActivo.nombre}</h2>
               <p>
-                Paso productivo completo: configurá parámetros, materiales,
-                recursos, tiempos o tercerización como en una ruta normal.
+                Operación interna de cálculo: configurá parámetros, materiales,
+                recursos y tiempos como en un paso normal. No tendrá estado
+                independiente en la OT.
               </p>
             </div>
           </header>
@@ -220,18 +232,25 @@ export function ConfigurarIncorporacionWorkspace({
   }
 
   return (
-    <div className={styles.backdrop} role="dialog" aria-modal="true">
-      <div className={styles.workspace}>
+    <div
+      className={embedded ? styles.embedded : styles.backdrop}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : true}
+      aria-label={embedded ? `Configuración de ${paso.pasoNombre}` : undefined}
+    >
+      <div
+        className={`${styles.workspace} ${embedded ? styles.workspaceEmbedded : ""}`}
+      >
         <header className={styles.header}>
           <button type="button" onClick={onCancel} aria-label="Volver a la BOM">
             <ArrowLeftIcon />
           </button>
           <div>
-            <span>Producción · BOM · Etapa compuesta</span>
+            <span>Producción · Etapa compuesta</span>
             <h2>{paso.pasoNombre}</h2>
             <p>
-              Configurá pasos internos reales. La etapa no agrega tiempo ni
-              materiales: consolida el trabajo de sus hijos.
+              Configurá las operaciones que determinan el tiempo, los materiales
+              y el costo. En producción se ejecutará una sola etapa.
             </p>
           </div>
         </header>
@@ -241,8 +260,8 @@ export function ConfigurarIncorporacionWorkspace({
             <div>
               <strong>Subruta contextual del producto</strong>
               <span>
-                {pasos.filter((item) => item.activa).length} pasos activos ·{" "}
-                {componentes.length} componentes disponibles
+                {pasos.filter((item) => item.activa).length} operaciones activas
+                · {componentes.length} componentes disponibles
               </span>
             </div>
           </div>
@@ -332,7 +351,7 @@ export function ConfigurarIncorporacionWorkspace({
                     }
                     onClick={() => setEditando(item.codigo)}
                   >
-                    <Settings2Icon /> Configurar paso
+                    <Settings2Icon /> Configurar operación
                   </button>
                 </section>
               );
@@ -341,8 +360,8 @@ export function ConfigurarIncorporacionWorkspace({
         </main>
         <footer className={styles.footer}>
           <p>
-            Los pasos se versionarán con la receta y la OT conservará su
-            configuración, materiales y recursos.
+            El desglose se versionará con la receta. La OT recibirá una sola
+            etapa con tiempo, materiales y costo consolidados.
           </p>
           <div>
             <button type="button" onClick={onCancel}>

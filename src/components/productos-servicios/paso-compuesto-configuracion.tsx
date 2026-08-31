@@ -114,12 +114,12 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
       <header className={styles.hero}>
         <BoxesIcon />
         <div>
-          <span className={styles.eyebrow}>Paso compuesto reutilizable</span>
+          <span className={styles.eyebrow}>Etapa compuesta reutilizable</span>
           <h1>{paso.nombre}</h1>
           <p>
-            Definí qué pasos reales contiene esta etapa. Sus materiales,
-            parámetros, recursos y tiempos se configurarán en la BOM de cada
-            producto con el editor habitual.
+            Definí las operaciones internas que calculan esta etapa. Cada una
+            conserva materiales, parámetros, recursos y tiempos, pero la OT
+            mostrará un único paso operativo.
           </p>
         </div>
       </header>
@@ -127,9 +127,9 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
       <section className={styles.panel}>
         <div className={styles.panelHead}>
           <div>
-            <strong>Pasos internos</strong>
+            <strong>Operaciones internas</strong>
             <span>
-              Cada fila es un paso productivo completo, no una etiqueta.
+              Calculan el trabajo sin crear estados separados en producción.
             </span>
           </div>
           <button
@@ -152,19 +152,19 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
             }
           >
             <PlusIcon />
-            <span>Agregar paso</span>
+            <span>Agregar operación</span>
           </button>
         </div>
         {!operaciones.length ? (
           <div className={styles.empty}>
-            Agregá el primer paso real que formará parte de esta etapa.
+            Agregá la primera operación que formará parte de esta etapa.
           </div>
         ) : (
           <div className={styles.rows}>
             <div className={styles.rowHead} aria-hidden="true">
               <span />
-              <span>Paso real</span>
-              <span>Nombre en la etapa</span>
+              <span>Familia de cálculo</span>
+              <span>Nombre de la operación</span>
               <span />
               <span />
             </div>
@@ -174,7 +174,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <label>
-                  <span className={styles.rowLabel}>Paso real</span>
+                  <span className={styles.rowLabel}>Familia de cálculo</span>
                   <select
                     aria-label={`Paso real ${index + 1}`}
                     value={operacion.familiaCodigo}
@@ -197,7 +197,9 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                   </select>
                 </label>
                 <label>
-                  <span className={styles.rowLabel}>Nombre en la etapa</span>
+                  <span className={styles.rowLabel}>
+                    Nombre de la operación
+                  </span>
                   <input
                     aria-label={`Nombre del paso ${index + 1}`}
                     value={operacion.nombre}
@@ -241,7 +243,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
             Volver
           </button>
           <button type="button" disabled={guardando} onClick={guardar}>
-            {guardando ? "Guardando…" : "Guardar subruta"}
+            {guardando ? "Guardando…" : "Guardar operaciones"}
           </button>
         </footer>
       </section>

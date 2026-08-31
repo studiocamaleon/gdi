@@ -15,8 +15,16 @@ type ConPrivados = {
     medidas?: unknown;
     anchoDefault?: number | null;
     altoDefault?: number | null;
+    profundidadDefault?: number | null;
+    dimensionesRequeridas?: string[];
     unidadComercial?: string | null;
-  }) => Array<{ anchoMm: number; altoMm: number; esDefault: boolean }>;
+  }) => Array<{
+    nombre: string;
+    anchoMm: number;
+    altoMm: number;
+    profundidadMm?: number;
+    esDefault: boolean;
+  }>;
 };
 
 function svc(): ConPrivados {
@@ -51,5 +59,47 @@ describe('ProductosService — normalizarMedidasPredefinidas (sin medida)', () =
     });
     expect(r).toHaveLength(1);
     expect(r[0].esDefault).toBe(true);
+  });
+
+  it('3D exige profundidad en cada medida', () => {
+    expect(() =>
+      svc().normalizarMedidasPredefinidas({
+        modoMedidas: 'FIJA',
+        dimensionesRequeridas: ['ANCHO', 'ALTO', 'PROFUNDIDAD'],
+        medidas: [
+          {
+            id: 'm1',
+            anchoMm: 1500,
+            altoMm: 1000,
+            esDefault: true,
+          },
+        ],
+        unidadComercial: 'unidad',
+      }),
+    ).toThrow(/profundidad/i);
+  });
+
+  it('3D conserva profundidad y la incorpora al nombre humano', () => {
+    const r = svc().normalizarMedidasPredefinidas({
+      modoMedidas: 'FIJA',
+      dimensionesRequeridas: ['ANCHO', 'ALTO', 'PROFUNDIDAD'],
+      medidas: [
+        {
+          id: 'm1',
+          nombre: '',
+          anchoMm: 1500,
+          altoMm: 1000,
+          profundidadMm: 180,
+          esDefault: true,
+        },
+      ],
+      unidadComercial: 'unidad',
+    });
+    expect(r[0]).toMatchObject({
+      anchoMm: 1500,
+      altoMm: 1000,
+      profundidadMm: 180,
+      nombre: '1500 x 1000 x 180 mm',
+    });
   });
 });

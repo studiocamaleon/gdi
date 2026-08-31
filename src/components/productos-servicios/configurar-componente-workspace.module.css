@@ -8,6 +8,41 @@
   place-items: center;
 }
 
+.embedded {
+  min-height: 100%;
+  background: #f7f5f2;
+}
+
+.workspaceEmbedded {
+  width: 100%;
+  min-height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.workspaceEmbedded .header {
+  color: var(--ink, #1d1b20);
+  border-bottom: 1px solid var(--border, #dedad4);
+  background: var(--surface, #fff);
+}
+
+.workspaceEmbedded .header button,
+.workspaceEmbedded .header a {
+  border-color: var(--border, #dedad4);
+  color: var(--ink-2, #49464d);
+  background: var(--surface, #fff);
+}
+
+.workspaceEmbedded .header span {
+  color: var(--signal, #e85f2a);
+}
+
+.workspaceEmbedded .header p {
+  color: var(--muted-text, #77736d);
+}
+
 .workspace {
   display: grid;
   width: min(1180px, 100%);
@@ -184,6 +219,22 @@
   font: 650 10px var(--font-sans);
   letter-spacing: 0.02em;
 }
+.binding .optionalMark {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  color: #b74d25;
+  font: 650 10px var(--font-sans);
+  letter-spacing: 0.02em;
+}
+.optionalMark svg {
+  width: 12px;
+  height: 12px;
+}
+.activationBinding {
+  background: linear-gradient(90deg, rgb(242 105 47 / 5%), transparent 42%);
+}
 .requiredMark span {
   width: 5px;
   height: 5px;
@@ -203,6 +254,69 @@
 .valueField span {
   color: #a15532;
   font-size: 12px;
+}
+.valueField .activationSummary {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  padding: 8px 11px;
+  border: 1px solid #e2d6cf;
+  border-radius: 8px;
+  color: #6f5b52;
+  background: #fbf8f5;
+}
+.automations {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid #ded9d2;
+  border-radius: 14px;
+  background: #fff;
+}
+.automationsHead {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #ebe6e0;
+  background: #f4f1ed;
+}
+.automationsHead > svg {
+  width: 19px;
+  color: #d49318;
+}
+.automationsHead strong,
+.automationsHead span,
+.automationList strong,
+.automationList span {
+  display: block;
+}
+.automationsHead strong {
+  color: #272328;
+  font-size: 13px;
+}
+.automationsHead span {
+  margin-top: 2px;
+  color: #7a7471;
+  font-size: 12px;
+}
+.automationList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.automationList article {
+  min-width: 0;
+  padding: 13px 16px;
+  border-right: 1px solid #eee9e3;
+}
+.automationList strong {
+  color: #28242a;
+  font-size: 12px;
+}
+.automationList span {
+  margin-top: 3px;
+  color: #7b7571;
+  font-size: 11px;
+  line-height: 1.45;
 }
 .ruleEditor {
   display: grid;

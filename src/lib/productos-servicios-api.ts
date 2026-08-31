@@ -12,6 +12,8 @@ import type {
   PlantillaPaso,
   UpsertPasoTenantInput,
   MedidaPredefinidaProducto,
+  DimensionProducto,
+  EstructuraProducto,
   ModoMedidasProducto,
   ProductoCategoriaComercial,
   ProductoDetalle,
@@ -30,6 +32,7 @@ export interface ProductosListParams {
   subcategoriaCodigo?: string;
   categoriaCodigo?: string;
   orden?: "recientes" | "nombre_asc" | "nombre_desc";
+  composicion?: "simple" | "compuesto";
 }
 
 export interface ProductosListResponse {
@@ -52,6 +55,7 @@ function buildProductosPath(params: ProductosListParams = {}) {
   }
   if (params.categoriaCodigo) sp.set("categoriaCodigo", params.categoriaCodigo);
   if (params.orden) sp.set("orden", params.orden);
+  if (params.composicion) sp.set("composicion", params.composicion);
   const qs = sp.toString();
   return `/productos-servicios/productos${qs ? `?${qs}` : ""}`;
 }
@@ -174,6 +178,7 @@ export interface ProductoRecetaRevision {
     requerido: boolean;
     configuracionJson?: ConfiguracionComponenteFabricado | null;
     nodoIncorporacionClave?: string | null;
+    nodosPredecesoresClaves?: string[];
     orden: number;
   }>;
   documentos: Array<{
@@ -219,11 +224,16 @@ export type ProductoRecetaComponenteInput = {
   requerido?: boolean;
   configuracionJson?: ConfiguracionComponenteFabricado | null;
   nodoIncorporacionClave?: string | null;
+  nodosPredecesoresClaves?: string[];
   orden?: number;
 };
 
 export type OrigenParametroComponente =
-  "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
+  | "DEFAULT_HIJO"
+  | "FIJO"
+  | "PADRE"
+  | "FORMULA"
+  | "COTIZACION";
 
 export type BindingParametroComponente = {
   clave: string;
@@ -312,19 +322,36 @@ export type FormularioCotizacionProducto = {
   };
   medidas: {
     modo: string;
+    ejes: DimensionProducto[];
     instruccion: string;
     unidadEntrada: "mm";
+    jobContextKeys: string[];
     predefinidas: Array<{
       id: string;
       nombre: string;
       anchoMm: number;
       altoMm: number;
+      profundidadMm?: number | null;
       esDefault: boolean;
     }>;
-    default: { anchoMm: number; altoMm: number } | null;
+    default: {
+      anchoMm: number;
+      altoMm: number;
+      profundidadMm?: number | null;
+    } | null;
   };
   preguntas: Array<
     Record<string, unknown> & { tipo: string; jobContextKey: string }
+  >;
+  adicionales: Array<
+    Record<string, unknown> & {
+      id: string;
+      tipo: "paso" | "paso_condicional" | "cargo_paso" | "cargo_cotizacion";
+      nombre: string;
+      jobContextKey: string;
+      condicionadoPor?: string[];
+      requiereIds?: string[];
+    }
   >;
   outputsPublicos: Array<{
     clave: string;
@@ -476,15 +503,18 @@ export interface CrearProductoPayload {
   codigo?: string;
   nombre: string;
   descripcion?: string;
+  estructuraProducto?: EstructuraProducto;
   subcategoriaComercialCodigo: string;
   atributosComercialesJson?: Record<string, unknown>;
   unidadComercial: "unidad" | "m2" | "metro_lineal";
   modoMedidas: ModoMedidasProducto;
+  dimensionesRequeridas: DimensionProducto[];
   minimoComercialPolitica?: MinimoComercialPolitica;
   minimoComercialCantidad?: number | null;
   minimoComercialBase?: MinimoComercialBase;
   medidaDefaultAnchoMm?: number;
   medidaDefaultAltoMm?: number;
+  medidaDefaultProfundidadMm?: number;
   medidasPredefinidasJson?: MedidaPredefinidaProducto[];
   personalizacionesJson?: Record<string, unknown>[];
   precioConfigJson?: Record<string, unknown>;
@@ -502,15 +532,18 @@ export interface ActualizarProductoPayload {
   expectedUpdatedAt?: string;
   nombre?: string;
   descripcion?: string;
+  estructuraProducto?: EstructuraProducto;
   subcategoriaComercialCodigo?: string;
   atributosComercialesJson?: Record<string, unknown>;
   unidadComercial?: "unidad" | "m2" | "metro_lineal";
   modoMedidas?: ModoMedidasProducto;
+  dimensionesRequeridas?: DimensionProducto[];
   minimoComercialPolitica?: MinimoComercialPolitica;
   minimoComercialCantidad?: number | null;
   minimoComercialBase?: MinimoComercialBase;
   medidaDefaultAnchoMm?: number | null;
   medidaDefaultAltoMm?: number | null;
+  medidaDefaultProfundidadMm?: number | null;
   medidasPredefinidasJson?: MedidaPredefinidaProducto[] | null;
   personalizacionesJson?: Record<string, unknown>[] | null;
   precioConfigJson?: Record<string, unknown>;
@@ -741,7 +774,10 @@ export interface UpsertSlotMaterialPayload {
   slotNombre?: string | null;
   slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
   modoSeleccion:
-    "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO" | "HEREDA_DE_PASO";
+    | "HARDCODED"
+    | "COMERCIAL_ELIGE"
+    | "MOTOR_ELIGE_AUTO"
+    | "HEREDA_DE_PASO";
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
@@ -923,7 +959,9 @@ export interface CrearCargoDirectoPayload {
   nombre: string;
   descripcion?: string;
   modoCalculo:
-    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -941,7 +979,9 @@ export interface ActualizarCargoDirectoPayload {
   nombre?: string;
   descripcion?: string;
   modoCalculo?:
-    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -1534,6 +1574,22 @@ export interface CotizarResponse {
       recetaHuella: string;
       costoUnitario: number;
       costoTotal: number;
+      nodoIncorporacionClave?: string | null;
+      /** Ruta real ejecutada para fabricar esta rama del BOM. */
+      pasos?: Array<{
+        rutaPasoId?: string;
+        rutaPasoOrden: number;
+        familiaCodigo: string;
+        nombreVisible?: string | null;
+        activado: boolean;
+        costoTotal: number;
+        tiempo?: {
+          totalMin: number;
+          centroCostoNombre?: string | null;
+          origenTiempo?: "manual_comercial" | "calculado";
+        };
+      }>;
+      componentes?: Array<Record<string, unknown>>;
       operacionesIncorporacion?: Array<{
         codigo: string;
         nombre: string;
@@ -1611,6 +1667,21 @@ export interface CotizarResponse {
       rutaPasoOrden: number;
       familiaCodigo: string;
       nombreVisible?: string | null;
+      contenedorClave?: string | null;
+      contenedorNombre?: string | null;
+      pasoInternoCodigo?: string | null;
+      componentesCodigos?: string[];
+      operacionesInternas?: Array<{
+        codigo: string;
+        nombre: string;
+        familiaCodigo: string;
+        activada: boolean;
+        duracionMin: number;
+        costoTotal: number;
+        centroCostoId?: string | null;
+        centroCostoNombre?: string | null;
+        componentesCodigos?: string[];
+      }>;
       configPasoId?: string;
       activado: boolean;
       razonNoActivado?: string;

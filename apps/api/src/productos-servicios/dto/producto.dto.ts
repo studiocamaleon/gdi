@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsISO8601,
   IsArray,
+  ArrayUnique,
   IsNotEmpty,
   IsNumber,
   IsObject,
@@ -29,6 +30,17 @@ export enum ModoMedidasDto {
   LIBRE = 'LIBRE',
   COMERCIAL_ELIGE = 'COMERCIAL_ELIGE',
   MIXTA = 'MIXTA',
+}
+
+export enum DimensionProductoDto {
+  ANCHO = 'ANCHO',
+  ALTO = 'ALTO',
+  PROFUNDIDAD = 'PROFUNDIDAD',
+}
+
+export enum EstructuraProductoDto {
+  SIMPLE = 'SIMPLE',
+  COMPUESTO = 'COMPUESTO',
 }
 
 export enum MinimoComercialPoliticaDto {
@@ -66,6 +78,12 @@ export class MedidaPredefinidaDto {
   altoMm?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
+  profundidadMm?: number;
+
+  @IsOptional()
   @IsBoolean()
   esDefault?: boolean;
   /** "pliego_util" = plancha completa: la pieza se deriva del pliego del paso
@@ -95,6 +113,10 @@ export class CrearProductoDto {
   @MaxLength(5000)
   descripcion?: string;
 
+  @IsOptional()
+  @IsEnum(EstructuraProductoDto)
+  estructuraProducto?: EstructuraProductoDto;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
@@ -105,6 +127,12 @@ export class CrearProductoDto {
 
   @IsEnum(ModoMedidasDto)
   modoMedidas!: ModoMedidasDto;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsEnum(DimensionProductoDto, { each: true })
+  dimensionesRequeridas?: DimensionProductoDto[];
 
   @IsOptional()
   @IsEnum(MinimoComercialPoliticaDto)
@@ -128,6 +156,11 @@ export class CrearProductoDto {
   @IsNumber()
   @Min(0)
   medidaDefaultAltoMm?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  medidaDefaultProfundidadMm?: number;
 
   @IsOptional()
   @IsArray()
@@ -166,6 +199,10 @@ export class ActualizarProductoDto {
   descripcion?: string;
 
   @IsOptional()
+  @IsEnum(EstructuraProductoDto)
+  estructuraProducto?: EstructuraProductoDto;
+
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
@@ -178,6 +215,12 @@ export class ActualizarProductoDto {
   @IsOptional()
   @IsEnum(ModoMedidasDto)
   modoMedidas?: ModoMedidasDto;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsEnum(DimensionProductoDto, { each: true })
+  dimensionesRequeridas?: DimensionProductoDto[];
 
   @IsOptional()
   @IsEnum(MinimoComercialPoliticaDto)
@@ -201,6 +244,11 @@ export class ActualizarProductoDto {
   @IsNumber()
   @Min(0)
   medidaDefaultAltoMm?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  medidaDefaultProfundidadMm?: number | null;
 
   @IsOptional()
   @IsArray()

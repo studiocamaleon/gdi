@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeftIcon, BoxesIcon, ExternalLinkIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  BoxesIcon,
+  ExternalLinkIcon,
+  GitBranchIcon,
+  SparklesIcon,
+} from "lucide-react";
 import {
   getFormularioCotizacionProducto,
   type BindingParametroComponente,
@@ -9,6 +15,10 @@ import {
   type FormularioCotizacionProducto,
   type ProductoRecetaComponenteInput,
 } from "@/lib/productos-servicios-api";
+import {
+  condicionalesPublicosDelComponente,
+  parametrosPublicosDelComponente,
+} from "@/lib/componentes-contrato-publico";
 import {
   operacionUsaUnidad,
   unidadVisibleParametro,
@@ -30,88 +40,11 @@ const ORIGENES: Array<{
   { value: "COTIZACION", label: "Definir al cotizar" },
 ];
 
-function parametrosDelFormulario(
-  formulario: FormularioCotizacionProducto,
-  cantidadLegacy: number,
-): BindingParametroComponente[] {
-  const parametros: BindingParametroComponente[] = [
-    {
-      clave: "cantidad",
-      etiqueta: `Cantidad (${formulario.cantidad.unidad})`,
-      tipoDato: "number",
-      unidad: formulario.cantidad.unidad,
-      requerido: true,
-      origen: "FORMULA",
-      regla: {
-        campoPadre: "cantidad",
-        operador: "MULTIPLICAR",
-        valor: cantidadLegacy || 1,
-        fuente: { tipo: "PADRE", campo: "cantidad" },
-      },
-    },
-  ];
-  if (
-    formulario.medidas.instruccion !== "no_preguntar" ||
-    formulario.medidas.default
-  ) {
-    parametros.push(
-      {
-        clave: "medidaCustomMm.anchoMm",
-        etiqueta: "Ancho",
-        tipoDato: "number",
-        unidad: "mm",
-        requerido: true,
-        origen: formulario.medidas.default ? "DEFAULT_HIJO" : "COTIZACION",
-        valor: formulario.medidas.default?.anchoMm,
-      },
-      {
-        clave: "medidaCustomMm.altoMm",
-        etiqueta: "Alto",
-        tipoDato: "number",
-        unidad: "mm",
-        requerido: true,
-        origen: formulario.medidas.default ? "DEFAULT_HIJO" : "COTIZACION",
-        valor: formulario.medidas.default?.altoMm,
-      },
-    );
-  }
-  for (const pregunta of formulario.preguntas) {
-    const opcionesCrudas = Array.isArray(pregunta.opciones)
-      ? (pregunta.opciones as Array<Record<string, unknown>>)
-      : [];
-    parametros.push({
-      clave: pregunta.jobContextKey,
-      etiqueta: String(
-        pregunta.etiqueta ??
-          pregunta.slotNombre ??
-          pregunta.paso ??
-          pregunta.jobContextKey,
-      ),
-      tipoDato: String(pregunta.tipoDato ?? pregunta.tipo ?? "text"),
-      unidad: typeof pregunta.unidad === "string" ? pregunta.unidad : null,
-      requerido: pregunta.requerido === true,
-      origen:
-        pregunta.sugerido !== undefined || pregunta.default !== undefined
-          ? "DEFAULT_HIJO"
-          : pregunta.requerido === true
-            ? "COTIZACION"
-            : "DEFAULT_HIJO",
-      valor: pregunta.sugerido ?? pregunta.default,
-      opciones: opcionesCrudas.flatMap((opcion) => {
-        const valor = opcion.varianteId ?? opcion.valor;
-        return typeof valor === "string"
-          ? [{ valor, etiqueta: String(opcion.etiqueta ?? valor) }]
-          : [];
-      }),
-    });
-  }
-  return parametros;
-}
-
 type CampoPadre = {
   clave: string;
   etiqueta: string;
   numerico: boolean;
+  tipoDato: "number" | "boolean" | "string";
   unidad: string | null;
   fuenteTipo: "PADRE" | "COMPONENTE";
   componenteCodigo?: string;
@@ -154,7 +87,8 @@ function normalizarCampoPadre(clave: string): string {
   return clave
     .replace(/^padre\./, "")
     .replace(/^medidas\.ancho$/, "medidaCustomMm.anchoMm")
-    .replace(/^medidas\.alto$/, "medidaCustomMm.altoMm");
+    .replace(/^medidas\.alto$/, "medidaCustomMm.altoMm")
+    .replace(/^medidas\.profundidad$/, "profundidadMm");
 }
 
 function camposDelPadre(
@@ -165,6 +99,7 @@ function camposDelPadre(
       clave: "cantidad",
       etiqueta: "Cantidad del producto padre",
       numerico: true,
+      tipoDato: "number",
       unidad: formulario.cantidad.unidad,
       fuenteTipo: "PADRE",
     },
@@ -178,6 +113,7 @@ function camposDelPadre(
         clave: "medidaCustomMm.anchoMm",
         etiqueta: "Ancho del producto padre",
         numerico: true,
+        tipoDato: "number",
         unidad: "cm",
         fuenteTipo: "PADRE",
       },
@@ -185,10 +121,37 @@ function camposDelPadre(
         clave: "medidaCustomMm.altoMm",
         etiqueta: "Alto del producto padre",
         numerico: true,
+        tipoDato: "number",
         unidad: "cm",
         fuenteTipo: "PADRE",
       },
+      {
+        clave: "piezaAreaTotalM2",
+        etiqueta: "Superficie total del producto padre",
+        numerico: true,
+        tipoDato: "number",
+        unidad: "m²",
+        fuenteTipo: "PADRE",
+      },
+      {
+        clave: "piezaPerimetroTotalM",
+        etiqueta: "Perímetro total del producto padre",
+        numerico: true,
+        tipoDato: "number",
+        unidad: "m",
+        fuenteTipo: "PADRE",
+      },
     );
+    if (formulario.medidas.ejes.includes("PROFUNDIDAD")) {
+      campos.push({
+        clave: "profundidadMm",
+        etiqueta: "Profundidad del producto padre",
+        numerico: true,
+        tipoDato: "number",
+        unidad: "cm",
+        fuenteTipo: "PADRE",
+      });
+    }
   }
   for (const pregunta of formulario.preguntas) {
     const tipo = String(
@@ -209,7 +172,25 @@ function camposDelPadre(
         "decimal",
         "tiempo_manual",
       ].includes(tipo),
+      tipoDato: ["number", "numero", "entero", "decimal", "tiempo_manual"].includes(
+        tipo,
+      )
+        ? "number"
+        : ["boolean", "bool"].includes(tipo)
+          ? "boolean"
+          : "string",
       unidad: typeof pregunta.unidad === "string" ? pregunta.unidad : null,
+      fuenteTipo: "PADRE",
+    });
+  }
+  for (const adicional of formulario.adicionales ?? []) {
+    if (adicional.tipo !== "paso") continue;
+    campos.push({
+      clave: adicional.jobContextKey,
+      etiqueta: adicional.nombre,
+      numerico: false,
+      tipoDato: "boolean",
+      unidad: null,
       fuenteTipo: "PADRE",
     });
   }
@@ -288,6 +269,47 @@ function parseValorBinding(
     : parsed;
 }
 
+function esActivacionOpcional(binding: BindingParametroComponente): boolean {
+  return binding.clave.startsWith("opcionalesActivados.");
+}
+
+function tipoCampoBinding(
+  binding: BindingParametroComponente,
+): CampoPadre["tipoDato"] {
+  const tipo = binding.tipoDato.toLowerCase();
+  if (["number", "numero", "entero", "decimal"].includes(tipo)) {
+    return "number";
+  }
+  if (["boolean", "bool"].includes(tipo)) return "boolean";
+  return "string";
+}
+
+function camposCompatibles(
+  binding: BindingParametroComponente,
+  campos: CampoPadre[],
+): CampoPadre[] {
+  const tipo = tipoCampoBinding(binding);
+  return campos.filter((campo) => campo.tipoDato === tipo);
+}
+
+function opcionActivacion(binding: BindingParametroComponente): string {
+  if (binding.origen === "FIJO") {
+    return binding.valor === true ? "FIJO_TRUE" : "FIJO_FALSE";
+  }
+  return binding.origen;
+}
+
+function etiquetaCampoCondicional(
+  campo: string,
+  bindings: BindingParametroComponente[],
+): string {
+  const exacto = bindings.find((binding) => binding.clave === campo);
+  if (exacto) return exacto.etiqueta;
+  const ultimo = campo.split(".").at(-1) ?? campo;
+  const humano = ultimo.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  return humano.charAt(0).toUpperCase() + humano.slice(1);
+}
+
 export function ConfigurarComponenteWorkspace({
   componente,
   productoPadreId,
@@ -295,6 +317,7 @@ export function ConfigurarComponenteWorkspace({
   componentesHermanos,
   onCancel,
   onSave,
+  embedded = false,
 }: {
   componente: ProductoRecetaComponenteInput;
   productoPadreId: string;
@@ -306,6 +329,7 @@ export function ConfigurarComponenteWorkspace({
     unidadComercial: string,
     politicaEjecucion: "INLINE" | "INDEPENDIENTE",
   ) => void;
+  embedded?: boolean;
 }) {
   const [formulario, setFormulario] =
     React.useState<FormularioCotizacionProducto | null>(null);
@@ -321,7 +345,6 @@ export function ConfigurarComponenteWorkspace({
 
   React.useEffect(() => {
     let active = true;
-    setLoading(true);
     Promise.all([
       getFormularioCotizacionProducto(componente.productoComponenteId),
       getFormularioCotizacionProducto(productoPadreId),
@@ -347,6 +370,7 @@ export function ConfigurarComponenteWorkspace({
                     "",
                   )}`,
                   numerico: output.tipoDato === "number",
+                  tipoDato: "number" as const,
                   unidad: output.unidadVisible ?? output.unidad,
                   fuenteTipo: "COMPONENTE" as const,
                   componenteCodigo: resultado.hermano.codigo,
@@ -362,14 +386,25 @@ export function ConfigurarComponenteWorkspace({
               ) === index,
           ),
         );
-        const base = parametrosDelFormulario(result, componente.cantidad);
+        const base = parametrosPublicosDelComponente(result, componente.cantidad);
         setBindings((actuales) => {
           const existentes = new Map(
             actuales.map((item) => [item.clave, item]),
           );
           return base.map((item) => {
             const merged = { ...item, ...existentes.get(item.clave) };
-            return { ...merged, regla: reglaLegacy(merged) };
+            return {
+              ...merged,
+              // Etiqueta, tipo, unidad y opciones pertenecen al contrato
+              // público vigente del hijo. La revisión conserva la decisión
+              // del usuario, no textos técnicos o unidades antiguas.
+              etiqueta: item.etiqueta,
+              tipoDato: item.tipoDato,
+              unidad: item.unidad,
+              requerido: item.requerido,
+              opciones: item.opciones,
+              regla: reglaLegacy(merged),
+            };
           });
         });
       })
@@ -398,10 +433,24 @@ export function ConfigurarComponenteWorkspace({
         itemIndex === index ? { ...item, ...patch } : item,
       ),
     );
+  const condicionales = formulario
+    ? condicionalesPublicosDelComponente(formulario)
+    : [];
+  const opcionales = bindings.filter(esActivacionOpcional);
+  const parametros = bindings.length - opcionales.length;
 
   return (
-    <div className={styles.backdrop} role="dialog" aria-modal="true">
-      <div className={styles.workspace}>
+    <div
+      className={embedded ? styles.embedded : styles.backdrop}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : true}
+      aria-label={
+        embedded ? `Configuración de ${componente.nombre}` : undefined
+      }
+    >
+      <div
+        className={`${styles.workspace} ${embedded ? styles.workspaceEmbedded : ""}`}
+      >
         <header className={styles.header}>
           <button
             type="button"
@@ -411,7 +460,7 @@ export function ConfigurarComponenteWorkspace({
             <ArrowLeftIcon />
           </button>
           <div>
-            <span>Producción · BOM · Configuración de uso</span>
+            <span>Producción · Componente · Configuración de uso</span>
             <h2>{componente.nombre}</h2>
             <p>
               Definí cómo {productoPadreNombre} completa cada parámetro de este
@@ -439,8 +488,13 @@ export function ConfigurarComponenteWorkspace({
                 <div>
                   <strong>Contrato público del hijo</strong>
                   <span>
-                    {bindings.length} parámetros · receta y ruta propias ·
-                    valores congelados al cotizar
+                    {parametros} parámetros
+                    {opcionales.length
+                      ? ` · ${opcionales.length} opcional${opcionales.length === 1 ? "" : "es"}`
+                      : ""}
+                    {condicionales.length
+                      ? ` · ${condicionales.length} automático${condicionales.length === 1 ? "" : "s"}`
+                      : ""}
                   </span>
                 </div>
               </div>
@@ -475,10 +529,17 @@ export function ConfigurarComponenteWorkspace({
                   <span>Configuración</span>
                 </div>
                 {bindings.map((binding, index) => (
-                  <div className={styles.binding} key={binding.clave}>
+                  <div
+                    className={`${styles.binding} ${esActivacionOpcional(binding) ? styles.activationBinding : ""}`}
+                    key={binding.clave}
+                  >
                     <div>
                       <strong>{binding.etiqueta}</strong>
-                      {binding.requerido ? (
+                      {esActivacionOpcional(binding) ? (
+                        <small className={styles.optionalMark}>
+                          <GitBranchIcon /> Servicio opcional del componente
+                        </small>
+                      ) : binding.requerido ? (
                         <small className={styles.requiredMark}>
                           <span aria-hidden="true" />
                           Requerido
@@ -486,14 +547,39 @@ export function ConfigurarComponenteWorkspace({
                       ) : null}
                     </div>
                     <select
-                      value={binding.origen}
+                      value={
+                        esActivacionOpcional(binding)
+                          ? opcionActivacion(binding)
+                          : binding.origen
+                      }
                       onChange={(event) => {
-                        const origen = event.target
-                          .value as BindingParametroComponente["origen"];
+                        const opcion = event.target.value;
+                        if (esActivacionOpcional(binding)) {
+                          if (opcion === "FIJO_TRUE") {
+                            cambiar(index, {
+                              origen: "FIJO",
+                              valor: true,
+                              regla: null,
+                              padreClave: null,
+                            });
+                            return;
+                          }
+                          if (opcion === "FIJO_FALSE") {
+                            cambiar(index, {
+                              origen: "FIJO",
+                              valor: false,
+                              regla: null,
+                              padreClave: null,
+                            });
+                            return;
+                          }
+                        }
+                        const origen =
+                          opcion as BindingParametroComponente["origen"];
                         const candidatos =
                           origen === "FORMULA"
                             ? camposPadre.filter((campo) => campo.numerico)
-                            : camposPadre;
+                            : camposCompatibles(binding, camposPadre);
                         const campoElegido =
                           candidatos.find(
                             (campo) =>
@@ -526,11 +612,25 @@ export function ConfigurarComponenteWorkspace({
                         });
                       }}
                     >
-                      {ORIGENES.map((origen) => (
-                        <option key={origen.value} value={origen.value}>
-                          {origen.label}
-                        </option>
-                      ))}
+                      {esActivacionOpcional(binding) ? (
+                        <>
+                          <option value="DEFAULT_HIJO">
+                            Usar predeterminado del hijo
+                          </option>
+                          <option value="FIJO_TRUE">Incluir siempre</option>
+                          <option value="FIJO_FALSE">No incluir</option>
+                          <option value="PADRE">Resolver desde el padre</option>
+                          <option value="COTIZACION">
+                            Definir al cotizar
+                          </option>
+                        </>
+                      ) : (
+                        ORIGENES.map((origen) => (
+                          <option key={origen.value} value={origen.value}>
+                            {origen.label}
+                          </option>
+                        ))
+                      )}
                     </select>
                     <div className={styles.valueField}>
                       {binding.origen === "PADRE" ? (
@@ -558,7 +658,7 @@ export function ConfigurarComponenteWorkspace({
                           <option value="PADRE:">
                             Elegir dato disponible…
                           </option>
-                          {camposPadre.map((campo) => (
+                          {camposCompatibles(binding, camposPadre).map((campo) => (
                             <option value={idCampo(campo)} key={idCampo(campo)}>
                               {campo.etiqueta}
                             </option>
@@ -686,6 +786,16 @@ export function ConfigurarComponenteWorkspace({
                         </div>
                       ) : binding.origen === "COTIZACION" ? (
                         <span>Se solicitará en el sheet comercial</span>
+                      ) : esActivacionOpcional(binding) ? (
+                        <span className={styles.activationSummary}>
+                          {binding.origen === "FIJO"
+                            ? binding.valor === true
+                              ? "Este trabajo siempre se incluirá"
+                              : "Este trabajo no se incluirá"
+                            : binding.valor === true
+                              ? "El hijo lo incluye de forma predeterminada"
+                              : "El hijo lo omite de forma predeterminada"}
+                        </span>
                       ) : binding.opciones?.length ? (
                         <select
                           value={String(binding.valor ?? "")}
@@ -735,6 +845,36 @@ export function ConfigurarComponenteWorkspace({
                   </div>
                 ))}
               </div>
+              {condicionales.length ? (
+                <section className={styles.automations}>
+                  <div className={styles.automationsHead}>
+                    <SparklesIcon />
+                    <div>
+                      <strong>Automatismos de la ruta hija</strong>
+                      <span>
+                        No se activan manualmente: el sistema evalúa sus reglas
+                        con la configuración resuelta del componente.
+                      </span>
+                    </div>
+                  </div>
+                  <div className={styles.automationList}>
+                    {condicionales.map((condicional) => (
+                      <article key={condicional.id}>
+                        <strong>{condicional.nombre}</strong>
+                        <span>
+                          {condicional.condicionadoPor.length
+                            ? `Depende de ${condicional.condicionadoPor
+                                .map((campo) =>
+                                  etiquetaCampoCondicional(campo, bindings),
+                                )
+                                .join(", ")}`
+                            : "Se resuelve mediante la condición configurada en su ruta"}
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
               <p className={styles.hint}>
                 Las reglas sólo permiten usar datos publicados por el producto
                 padre o por otros componentes de esta receta. Las medidas se

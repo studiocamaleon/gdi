@@ -7,6 +7,52 @@
   gap: 22px;
 }
 
+.tipoNav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 22px;
+  padding: 6px;
+  border: 1px solid #dfdcd7;
+  border-radius: 14px;
+  background: #efede9;
+}
+
+.tipoNav button {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 15px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #625e59;
+  background: transparent;
+  text-align: left;
+}
+
+.tipoNav button[data-active="true"] {
+  border-color: #26252a;
+  color: #fff;
+  background: linear-gradient(140deg, #17171d, #29262a 68%, #543027);
+  box-shadow: 0 7px 18px rgb(20 20 26 / 15%);
+}
+
+.tipoNav strong {
+  font-size: 13px;
+}
+
+.tipoNav span {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+@media (max-width: 680px) {
+  .tipoNav {
+    grid-template-columns: 1fr;
+  }
+}
+
 .seccion {
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e7e5e2);

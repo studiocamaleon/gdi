@@ -269,19 +269,35 @@ export class FormularioCotizacionService {
   private bloqueMedidas(producto: Detalle) {
     const predefinidas = this.medidasPredefinidas(producto);
     const modo = producto.modoMedidas;
+    const ejes = Array.isArray(producto.dimensionesRequeridas)
+      ? producto.dimensionesRequeridas
+      : modo === 'FIJA' && predefinidas.length === 0
+        ? []
+        : ['ANCHO', 'ALTO'];
+    const usaProfundidad = ejes.includes('PROFUNDIDAD');
     const instruccion =
       modo === 'FIJA'
         ? 'no_preguntar'
         : modo === 'COMERCIAL_ELIGE'
           ? 'elegir_predefinida'
           : modo === 'LIBRE'
-            ? 'pedir_ancho_alto'
+            ? usaProfundidad
+              ? 'pedir_ancho_alto_profundidad'
+              : 'pedir_ancho_alto'
             : 'predefinida_o_custom'; // MIXTA
     return {
       modo,
+      ejes,
       instruccion,
       unidadEntrada: 'mm',
-      jobContextKeys: modo === 'FIJA' ? [] : ['piezas', 'medidaCustomMm'], // el MCP arma ambos desde ancho×alto
+      jobContextKeys:
+        modo === 'FIJA'
+          ? []
+          : [
+              'piezas',
+              'medidaCustomMm',
+              ...(usaProfundidad ? ['profundidadMm'] : []),
+            ],
       predefinidas,
       default: predefinidas.find((m) => m.esDefault) ?? predefinidas[0] ?? null,
     };
@@ -301,6 +317,9 @@ export class FormularioCotizacionService {
             ),
             anchoMm: positivo(medida.anchoMm) ?? 0,
             altoMm: positivo(medida.altoMm) ?? 0,
+            profundidadMm:
+              positivo(medida.profundidadMm) ??
+              positivo(producto.medidaDefaultProfundidadMm),
             esDefault: medida.esDefault === true,
           };
         })
@@ -317,6 +336,7 @@ export class FormularioCotizacionService {
         nombre: `${anchoMm} x ${altoMm} mm`,
         anchoMm,
         altoMm,
+        profundidadMm: positivo(producto.medidaDefaultProfundidadMm),
         esDefault: true,
       },
     ];
@@ -345,7 +365,6 @@ export class FormularioCotizacionService {
         ...this.preguntaModoColor(config, base, familia),
         ...this.preguntaTiempoManual(config, base),
         ...this.preguntasTercerizado(config, base),
-        ...this.preguntaProfundidad(config, base, familiaCodigo),
       );
     }
     return preguntas;
@@ -569,34 +588,6 @@ export class FormularioCotizacionService {
         requerido: true,
         jobContextKey: `tercerizado_${config.id}.${eje.clave}`,
       }));
-  }
-
-  /**
-   * Cartelería backlight: bastidor DOBLE sin profundidad fija en params ⇒ el
-   * comercial (o la IA) carga la profundidad del cajón. Espejo de
-   * getProfundidadDeRuta (sheet). En MM (la UI muestra cm y convierte).
-   */
-  private preguntaProfundidad(
-    config: ConfigPaso,
-    base: Record<string, unknown>,
-    familiaCodigo: string,
-  ): PreguntaFormulario[] {
-    if (familiaCodigo !== 'estructura_bastidor') return [];
-    const params = asRecord(config.paramsPasoJson);
-    if (String(params.tipoBastidor ?? 'doble').toLowerCase() === 'simple') {
-      return [];
-    }
-    const fija = positivo(params.profundidadMm);
-    return [
-      {
-        tipo: 'profundidad',
-        ...base,
-        unidad: 'mm',
-        sugerido: fija,
-        requerido: fija === null,
-        jobContextKey: 'profundidadMm',
-      },
-    ];
   }
 
   /**

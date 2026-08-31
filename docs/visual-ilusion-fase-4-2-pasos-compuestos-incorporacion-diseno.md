@@ -1,6 +1,13 @@
 # Fase 4.2 — Pasos compuestos y operaciones de incorporación
 
-**Estado:** EN DESARROLLO · CORRECCIÓN ESTRUCTURAL 4.2.1
+**Estado:** EN DESARROLLO · CORRECCIÓN OPERATIVA 4.2.2
+
+> Decisión del 31/08/2026: una etapa compuesta es **un único paso operativo**.
+> Sus operaciones internas conservan la configuración completa de un paso para
+> calcular tiempo, materiales, recursos y costo, pero son privadas del modelo
+> de cálculo: no generan tarjetas, estados, responsables ni registros de
+> inicio/fin independientes en la OT. La etapa se inicia y completa una sola
+> vez. El snapshot conserva el desglose técnico para explicación y auditoría.
 
 > Revisión del 30/08/2026: la validación con un caso real demostró que una
 > “operación” reducida a nombre, magnitud y tiempo no alcanza. Tensar una lona,
@@ -50,24 +57,26 @@ Ensamblaje final
 
 ## 2. Decisión de dominio
 
-### 2.1 El paso compuesto es una etapa o subruta reutilizable
+### 2.1 El paso compuesto es una etapa calculable y operativamente atómica
 
-Un nodo de la ruta padre puede actuar como **paso compuesto**. Continúa siendo
-el nodo visible de convergencia en la ruta principal, pero reúne pasos internos
-reales, calculables y trazables.
+Un nodo de la ruta padre puede actuar como **etapa compuesta**. Continúa siendo
+el nodo visible de convergencia en la ruta principal y reúne operaciones
+internas calculables y trazables. En ejecución sigue siendo un único paso.
 
-Los pasos internos:
+Las operaciones internas:
 
 - no son productos ni componentes de BOM;
-- son instancias de las mismas familias de paso que usa una ruta normal;
+- reutilizan las mismas familias y el mismo editor técnico que un paso normal;
 - pertenecen al trabajo de incorporación del componente al padre;
 - conservan parámetros, materiales, máquinas, tercerización, tiempos,
   recursos, costos, documentos y outputs del editor estándar;
-- se congelan con la revisión y se materializan con la OT.
+- se congelan con la revisión como desglose técnico privado;
+- no se materializan como pasos independientes de la OT.
 
-El contenedor no tiene tiempo, materiales ni costo propios. Su duración y costo
-son el agregado de sus hijos según el DAG interno. No se crea un pseudopaso
-paralelo al modelo productivo existente.
+La etapa no agrega un tiempo o costo adicional al de sus operaciones. Su
+duración, materiales, recursos y costo son el agregado calculado de ellas. El
+resultado se materializa en una sola instancia operativa con estado
+`pendiente | en_curso | pausado | bloqueado | hecho`.
 
 ### 2.2 La incorporación pertenece al paso compuesto de la receta padre
 
@@ -90,12 +99,12 @@ o entregarse sin montaje, sin modificar su receta de fabricación.
   operaciones propias sin componente asociado.
 - El costo total suma las tres capas una sola vez y conserva su desglose.
 
-## 3. Dos grafos, una relación explícita
+## 3. Dos niveles, una frontera operativa explícita
 
 Se conservan dos grafos distintos:
 
 1. **DAG de cálculo:** ordena la resolución de outputs y reglas.
-2. **DAG productivo:** ordena la ejecución física y la convergencia.
+2. **DAG productivo:** ordena componentes y etapas operativas visibles.
 
 Una operación del paso compuesto puede leer:
 
@@ -105,14 +114,15 @@ Una operación del paso compuesto puede leer:
   dependencia de cálculo válida.
 
 Una referencia de cálculo no crea por sí sola una precedencia física. La
-operación queda físicamente contenida en el nodo compuesto elegido, y ese nodo
-sólo se habilita cuando sus predecesores y componentes requeridos terminaron.
+operación queda contenida en el nodo compuesto elegido y no crea una
+dependencia productiva propia. La etapa completa sólo se habilita cuando sus
+predecesores y componentes requeridos terminaron.
 
 ## 4. Contrato versionado corregido
 
-El catálogo declara una plantilla reusable de subruta. Cada hijo referencia
-una familia de paso real; su código sólo identifica esa ocurrencia dentro del
-contenedor:
+El catálogo declara una plantilla reutilizable de operaciones. Cada operación
+referencia una familia de paso real; su código sólo identifica esa ocurrencia
+dentro de la etapa:
 
 ```ts
 type DefinicionPasoInternoCompuesto = {
@@ -125,8 +135,8 @@ type DefinicionPasoInternoCompuesto = {
 };
 ```
 
-Cada revisión de receta guarda la configuración contextual completa de esos
-pasos. `configuracion` usa el mismo contrato que `ProductoConfigPaso`, incluidos
+Cada revisión de receta guarda la configuración contextual completa de esas
+operaciones. `configuracion` usa el mismo contrato que `ProductoConfigPaso`, incluidos
 los slots de materiales y los datos de tercerización:
 
 ```ts
@@ -149,29 +159,29 @@ parámetros y dependencias existan. No se ejecutan expresiones libres.
 
 ## 5. Cálculo de tiempo y costo
 
-Cada hijo se calcula con el motor universal exactamente como un paso normal.
+Cada operación se calcula internamente con el motor universal como un paso normal.
 Esto incluye T-1/T-2/T-3/T-4, mecanismos de cantidad, materiales y mermas,
 máquinas, centro de costo, dotación y tercerización. Los componentes vinculados
 y sus outputs públicos amplían el `JobContext` disponible, pero no crean un
 lenguaje de fórmulas alternativo.
 
-### 5.2 Duración del paso compuesto
+### 5.2 Consolidación de la etapa
 
-La duración del contenedor es la ruta crítica de su DAG interno. Si no se
-declaran dependencias, se conserva el orden lineal como fallback seguro:
+La primera versión consolida las operaciones internas en secuencia, porque una
+etapa atómica representa un mismo proceso y un mismo registro de ejecución:
 
 ```text
-ruta crítica de los pasos internos activos
+suma de las duraciones de las operaciones internas activas
 ```
 
-Las ramas que fabrican componentes sí continúan en paralelo. El ETA del
-producto usa la ruta crítica hasta la convergencia y luego la duración completa
-del paso compuesto. El paralelismo interno del ensamblaje queda como ampliación
-posterior y no se infiere silenciosamente.
+Las ramas que fabrican componentes sí continúan en paralelo. Si una tarea
+interna necesita planificación, responsable, estación, estado o precedencia
+propios, debe modelarse como paso normal fuera de la etapa y no como operación
+interna. No se infiere paralelismo privado que el tablero no pueda observar.
 
 ## 6. Experiencia de usuario
 
-### 6.1 En Producción / BOM
+### 6.1 En el Editor de producción
 
 Cada componente fabricado conserva:
 
@@ -181,8 +191,8 @@ Cada componente fabricado conserva:
 - acción **Configurar uso**, que contiene parámetros y modo de seguimiento;
 - acción de eliminación.
 
-La BOM presenta además una sección **Etapas compuestas**. Su workspace muestra
-los pasos internos declarados en el catálogo y abre el mismo editor técnico de
+Las **Etapas compuestas** aparecen dentro del mismo flujo. Su inspector muestra
+las operaciones declaradas en el catálogo y abre el mismo editor técnico de
 un paso normal, contextualizado al producto:
 
 1. paso real (`Tensado de lona`);
@@ -194,19 +204,20 @@ un paso normal, contextualizado al producto:
 
 No se muestran claves técnicas ni fórmulas editables.
 
-### 6.2 En Rutas y flujo
+### 6.2 En el flujo principal
 
-La ruta principal continúa legible. Un paso compuesto muestra un resumen como
-`Ensamblaje final · 5 pasos`. Al expandirlo se ven sus pasos internos,
+La ruta principal continúa legible. Una etapa muestra un resumen como
+`Ensamblaje final · 5 operaciones`. Al expandirla se ven sus operaciones,
 los componentes vinculados y su regla de tiempo. No se duplican como nodos
 principales ni ensucian el editor general de pasos.
 
-### 6.3 En cotización y OT
+### 6.3 En cotización, OT y Tablero
 
 La cotización muestra el tiempo, materiales y costo de incorporación separado
-de la fabricación de componentes. La OT materializa los hijos bajo el
-contenedor, con sus consumos y recursos, para ejecutarlos y auditarlos sin
-aplanarlos ni duplicarlos.
+de la fabricación de componentes. La OT materializa **una única etapa** con la
+duración, costo y recursos consolidados. El tablero ofrece una sola acción de
+inicio, pausa, bloqueo y finalización. El desglose interno puede consultarse
+como explicación o instrucciones, pero no posee estado propio.
 
 ## 7. Validaciones e invariantes
 
@@ -220,8 +231,10 @@ aplanarlos ni duplicarlos.
 - Una revisión publicada es inmutable.
 - Las recetas históricas sin operaciones conservan exactamente su resultado.
 - El costo de fabricación del hijo no se replica dentro del paso compuesto.
-- La reapertura y finalización siguen gobernadas por el nodo padre para evitar
-  estados imposibles entre padre y subtareas.
+- Nunca se crean estados operativos para las operaciones internas.
+- Iniciar, pausar, bloquear, completar o reabrir actúa exclusivamente sobre la
+  etapa padre.
+- El tiempo y costo no se contabilizan dos veces entre etapa y operaciones.
 
 ## 8. Snapshot y trazabilidad
 
@@ -251,7 +264,7 @@ revisión del hijo, del padre o de las operaciones no altera trabajos emitidos.
 
 1. Configurar `Ensamblaje final` como paso compuesto sin alterar el orden de la
    ruta principal.
-2. Configurar los pasos internos reales declarados por la etapa y vincular uno
+2. Configurar las operaciones internas declaradas por la etapa y vincular uno
    o varios componentes mediante selectores controlados.
 3. Resolver tiempos desde datos del padre y outputs públicos de componentes.
 4. Separar claramente materiales, costo y tiempo de fabricación e
@@ -264,6 +277,8 @@ revisión del hijo, del padre o de las operaciones no altera trabajos emitidos.
    antes de publicar.
 9. Demostrar equivalencia en rutas y recetas históricas sin etapas compuestas.
 10. Aprobar pruebas backend/frontend, builds y QA desktop/mobile.
+11. Emitir una OT y comprobar que `Ensamblaje final` genera una sola tarjeta y
+    un solo estado, sin acciones independientes para sus operaciones internas.
 
 ## 11. Caso rector de aceptación
 
@@ -387,3 +402,185 @@ Validación técnica de esta corrección:
   pérdida de foco y apertura de la etapa sin componentes vinculados;
 - el guard de CSS conserva diez observaciones globales preexistentes; los
   estilos nuevos viven en CSS Modules.
+
+## 15. Cierre 4.2.2 — orden real de resolución y caso Backlight
+
+La validación del caso rector detectó una brecha adicional: materializar los
+pasos internos como pasos reales no alcanza si se los ejecuta antes de
+resolver las recetas hijas. En ese orden, `Tensar lona` existe y puede tener
+materiales y centro de costo, pero todavía no puede leer el perímetro publicado
+por `Lona Backlight`.
+
+El orden contractual definitivo es:
+
+```text
+parámetros y pasos del padre
+  → componentes fabricados en orden de cálculo
+  → outputs públicos de cada componente
+  → pasos internos de las etapas compuestas
+  → cargos, costo total, ETA y snapshot
+```
+
+Cada paso interno conserva la lista explícita de componentes vinculados. Si
+está vinculado a un único componente, sus outputs públicos amplían el
+`JobContext` de ese paso y pueden alimentar las mismas primitivas controladas
+de cantidad, geometría, materiales y tiempo que usa una ruta normal. Todos los
+outputs quedan además disponibles bajo un espacio de nombres por componente
+para evitar ambigüedad cuando un paso relaciona más de uno. Los outputs que
+publique el paso interno vuelven al contexto del padre y quedan disponibles
+para los pasos internos posteriores.
+
+El configurador controlado de componentes expone también las magnitudes
+geométricas derivadas del padre: superficie total y perímetro total. En los
+productos a medida, `cantidad` conserva un significado único: cantidad de
+piezas enteras. La unidad comercial en m² o metros lineales se calcula desde
+la geometría. Así, una `Lona Backlight` para un cartel de 150 × 100 cm recibe
+una pieza con esas medidas; su motor valoriza 1,5 m² sin pedir el área otra vez
+ni usar fórmulas de texto.
+
+El contenedor continúa sin costo ni duración propios. Los cargos porcentuales
+de la cotización se calculan recién después de incorporar los costos de los
+pasos internos.
+
+### 15.1 Clasificación de catálogos
+
+La clasificación no crea motores diferentes:
+
+- `Producto simple`: tiene receta y ruta propias, sin productos fabricados
+  hijos.
+- `Producto compuesto`: su receta incorpora uno o más productos fabricados.
+- `Componente`: es el rol de un producto dentro de otra receta, no un tercer
+  tipo de producto.
+- `Paso simple`: una operación productiva real.
+- `Etapa compuesta`: una subruta reutilizable formada por pasos simples
+  reales.
+
+Los catálogos deben ofrecer filtros y señales visuales para estas categorías
+sin duplicar entidades ni pantallas de edición.
+
+### 15.2 Caso de aceptación desde cero
+
+`Cartel Backlight` será el producto padre compuesto. Su contrato público
+declara ancho, alto, profundidad, cantidad de caras y tipo de iluminación. Sus
+componentes fabricados candidatos son `Bastidor Backlight`, `Lona Backlight`,
+`Juego de cenefas` y, sólo cuando realmente tengan una ruta independiente,
+`Fondo trasero` y `Sistema de iluminación`.
+
+La etapa `Ensamblaje final` agrupa pasos reales como colocar fondo, montar
+iluminación, cablear, tensar lona y colocar cenefas. Tornillos, cables, fuentes
+y módulos instalados directamente permanecen como materiales de esos pasos.
+
+El cierre exige cotizar al menos un cartel de 150 × 100 cm y demostrar que:
+
+1. cada hijo recibe su configuración controlada;
+2. sus outputs públicos llegan al paso interno vinculado;
+3. fabricación e incorporación se contabilizan una sola vez;
+4. el DAG y el ETA respetan la convergencia;
+5. cotización y OT conservan el snapshot completo.
+
+### 15.3 Trazabilidad y representación de la ruta
+
+La cotización no debe aplanar la estructura productiva para presentarla. El
+snapshot conserva, además de los costos consolidados:
+
+- el nodo de incorporación de cada componente fabricado;
+- la subruta ejecutada por cada componente;
+- la etapa contenedora de cada paso interno;
+- el nombre congelado de la etapa y los componentes vinculados a cada paso.
+
+En Producción, las subrutas de los componentes se muestran como ramas
+paralelas, seguidas por una convergencia. La etapa compuesta aparece como un
+nodo visible y desplegable; sus pasos reales viven dentro de ella, no como
+pasos sueltos de la ruta padre. Esta jerarquía es sólo de presentación y
+trazabilidad: los tiempos, materiales y costos continúan perteneciendo a los
+pasos reales, por lo que no se duplican al mostrar el contenedor.
+
+## 16. Corrección 4.2.2 — consolidación operativa
+
+Las secciones 14 y 15 describen correctamente la reutilización del editor y el
+orden de cálculo, pero queda reemplazada su semántica de ejecución: los pasos
+internos son **operaciones privadas de cálculo**, no pasos operativos hijos.
+
+El límite contractual es:
+
+```text
+operaciones internas completas
+  → motor universal
+  → tiempos + materiales + recursos + costos desglosados
+  → consolidación
+  → una etapa en cotización
+  → un paso y un estado en OT/Tablero
+```
+
+El snapshot de cotización conserva `operacionesInternas[]` para explicar el
+resultado. Al emitir la OT, ese arreglo se copia como detalle consultable de la
+etapa, mientras `OrdenTrabajoItemPaso` recibe una sola fila con el
+`nodoClave` del contenedor. Ninguna operación interna puede iniciarse,
+pausarse, bloquearse, completarse o reabrirse por separado.
+
+Si una tarea necesita centro, responsable, calendario, compra, dependencia o
+estado propios durante la ejecución, no pertenece dentro de una etapa
+compuesta: debe modelarse como paso normal del flujo principal.
+
+## 17. Ampliación 4.2.4 — activación interna de componentes fabricados
+
+Un componente fabricado conserva la semántica completa de su propia ruta. Al
+usarlo dentro de un producto compuesto, sus pasos no dejan de ser obligatorios,
+opcionales o condicionales. Se separan dos decisiones que no deben confundirse:
+
+- la activación del nodo componente en el producto padre decide si existe toda
+  la subruta;
+- la activación de un paso interno decide qué recorrido ejecuta esa subruta una
+  vez incluido el componente.
+
+El contrato público del hijo incorpora sus pasos opcionales como decisiones
+booleanas controladas. La instancia del componente puede fijarlas activas o
+inactivas, resolverlas desde un dato público del padre o solicitarlas durante
+la cotización. El valor resuelto se escribe en
+`opcionalesActivados.<configPasoId>` dentro del `JobContext` aislado del hijo.
+Al descubrir un opcional nuevo, el origen predeterminado es **Definir al
+cotizar**: aparece desmarcado en el sheet, pero no se omite silenciosamente. El
+modelador puede reemplazar esa conducta por una decisión fija, heredada o por
+el predeterminado del producto hijo.
+
+Los pasos condicionales no se convierten en interruptores. Conservan su regla y
+se evalúan automáticamente contra el `JobContext` final del componente. El
+configurador sólo informa qué datos gobiernan la condición y valida que esos
+datos estén incluidos en el contrato público, heredados, fijados o solicitados
+al cotizar.
+
+En el sheet comercial, los opcionales del padre permanecen en `Opcionales` y
+los del hijo aparecen dentro de la tarjeta del componente. En el lienzo del
+padre el componente sigue siendo un único nodo; el resultado puede resumir la
+cantidad de decisiones internas, pero no aplana sus pasos sobre la ruta
+principal.
+
+La cotización y la OT congelan, por cada componente:
+
+- el `JobContext` hijo completo, incluidas sus activaciones;
+- los pasos opcionales activados y omitidos;
+- los condicionales evaluados y su resultado;
+- la revisión de receta, costos, tiempos y outputs resultantes.
+
+Caso mínimo de aceptación: `Lona Backlight` declara `Diseño gráfico` como
+opcional y `Tinta blanca` como condicional al modo de impresión. Desde `Cartel
+Backlight`, diseño puede fijarse o preguntarse al cotizar; tinta blanca nunca
+se marca manualmente y se activa al resolver `CMYK + Blanco`. En ambos casos el
+componente continúa existiendo y la convergencia del padre espera su terminal
+real, sin quedar bloqueada por pasos omitidos.
+
+### Estado de implementación y validación
+
+La ampliación 4.2.4 quedó implementada y entra en validación funcional. El
+contrato público del componente, el configurador contextual, el sheet
+comercial, el motor de cotización y la materialización de la OT comparten la
+misma decisión resuelta. La OT omite los pasos internos inactivos y recompone
+las aristas de la subruta para mantener su DAG ejecutable.
+
+Validación técnica del 31 de agosto de 2026:
+
+- build de frontend y API aprobados;
+- 57 archivos y 551 pruebas de frontend aprobadas;
+- 202 suites, 1.969 pruebas y 10 snapshots de API aprobados;
+- QA visual del configurador contextual aprobado sin errores ni advertencias
+  de consola.

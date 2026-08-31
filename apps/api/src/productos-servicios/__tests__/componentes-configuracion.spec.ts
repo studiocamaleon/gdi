@@ -128,6 +128,44 @@ describe('configuración de componentes fabricados', () => {
     expect(result.piezaAreaTotalM2).toBeCloseTo(39.672);
   });
 
+  it('inyecta activaciones opcionales resueltas dentro del JobContext hijo', () => {
+    const result = resolverJobContextComponente({
+      codigoComponente: 'lona_backlight',
+      cantidadLegacy: 1,
+      contextoPadre: {
+        cantidad: 1,
+        componentesConfiguracion: {
+          lona_backlight: {
+            opcionalesActivados: { 'paso-diseno': true },
+          },
+        },
+      },
+      configuracion: {
+        version: 2,
+        bindings: [
+          {
+            clave: 'cantidad',
+            origen: 'FIJO',
+            valor: 1,
+            requerido: true,
+          },
+          {
+            clave: 'opcionalesActivados.paso-diseno',
+            etiqueta: 'Diseño gráfico',
+            tipoDato: 'boolean',
+            origen: 'COTIZACION',
+            valor: false,
+          },
+        ],
+      },
+    });
+
+    expect(result).toMatchObject({
+      cantidad: 1,
+      opcionalesActivados: { 'paso-diseno': true },
+    });
+  });
+
   it('mantiene la compatibilidad con componentes anteriores', () => {
     expect(
       resolverJobContextComponente({

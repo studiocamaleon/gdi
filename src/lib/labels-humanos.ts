@@ -33,7 +33,10 @@ export type EntradaLabel = {
   ejemplo?: string;
 };
 
-export type DiccionarioLabels<K extends string = string> = Record<K, EntradaLabel>;
+export type DiccionarioLabels<K extends string = string> = Record<
+  K,
+  EntradaLabel
+>;
 
 /**
  * Devuelve el label si existe, sino devuelve un fallback con la key cruda.
@@ -54,7 +57,10 @@ export function getLabel<K extends string>(
 /**
  * Devuelve solo el label corto (helper para casos donde no necesitamos tooltip).
  */
-export function shortLabel<K extends string>(dict: DiccionarioLabels<K>, key: string): string {
+export function shortLabel<K extends string>(
+  dict: DiccionarioLabels<K>,
+  key: string,
+): string {
   return getLabel(dict, key).label;
 }
 
@@ -66,7 +72,8 @@ export function shortLabel<K extends string>(dict: DiccionarioLabels<K>, key: st
 export const modoActivacionLabels: DiccionarioLabels = {
   OBLIGATORIO: {
     label: "Obligatorio",
-    descripcion: "El paso siempre se ejecuta. El comercial no puede desactivarlo al cotizar.",
+    descripcion:
+      "El paso siempre se ejecuta. El comercial no puede desactivarlo al cotizar.",
     ejemplo: "Pre-prensa o impresión en una tarjeta — siempre va.",
   },
   OPCIONAL: {
@@ -85,7 +92,8 @@ export const modoActivacionLabels: DiccionarioLabels = {
     label: "No ejecutar",
     descripcion:
       "El paso queda apagado para esta ruta del producto. El motor lo saltea siempre al cotizar.",
-    ejemplo: "Una ruta reusable trae CNC, pero este producto solo necesita impresión.",
+    ejemplo:
+      "Una ruta reusable trae CNC, pero este producto solo necesita impresión.",
   },
 };
 
@@ -167,7 +175,8 @@ export const modoSeleccionMaterialLabels: DiccionarioLabels = {
     label: "Hereda de otro paso",
     descripcion:
       "Usa el material ya resuelto en un paso anterior de la misma ruta, sin volver a cobrarlo.",
-    ejemplo: "El corte láser usa la placa de MDF elegida en el paso de impresión.",
+    ejemplo:
+      "El corte láser usa la placa de MDF elegida en el paso de impresión.",
   },
 };
 
@@ -187,7 +196,8 @@ export const criterioMotorAutoLabels: DiccionarioLabels = {
     label: "El más chico que cumpla",
     descripcion:
       "Elige la variante MÁS PEQUEÑA cuya capacidad cumpla con el requerimiento del trabajo.",
-    ejemplo: "Anillo: para libro de 80 hojas, elige espiral 15mm (cap 100), no el 20mm.",
+    ejemplo:
+      "Anillo: para libro de 80 hojas, elige espiral 15mm (cap 100), no el 20mm.",
   },
 };
 
@@ -215,7 +225,8 @@ export const formulaConsumoLabels: DiccionarioLabels = {
   },
   fijo: {
     label: "Cantidad fija (1 unidad)",
-    descripcion: "Una sola unidad de material por cotización (ej: una matriz custom).",
+    descripcion:
+      "Una sola unidad de material por cotización (ej: una matriz custom).",
   },
 };
 
@@ -229,7 +240,8 @@ export const modoCalculoCargoLabels: DiccionarioLabels = {
     label: "Monto fijo",
     descripcion:
       "Cobra un monto fijo declarado en el cargo. Puede tener variantes por zona (ej: viático según destino).",
-    ejemplo: "Tercerización = $500 fijos. Viático CABA = $3000, FUERA_AMBA = $12000.",
+    ejemplo:
+      "Tercerización = $500 fijos. Viático CABA = $3000, FUERA_AMBA = $12000.",
   },
   PORCENTAJE_SOBRE_BASE: {
     label: "Porcentaje sobre subtotal",
@@ -267,19 +279,22 @@ export const scopeCargoLabels: DiccionarioLabels = {
 export const metodoPrecioLabels: DiccionarioLabels = {
   por_margen: {
     label: "Margen objetivo fijo",
-    descripcion: "Calcula el precio necesario para preservar un margen sobre el precio final.",
+    descripcion:
+      "Calcula el precio necesario para preservar un margen sobre el precio final.",
     ejemplo: "Costo $100 + margen objetivo 50% = precio $200.",
   },
   precio_fijo: {
     label: "Precio fijo (sin importar costo)",
-    descripcion: "Precio fijo por unidad declarado por el modelador, ignora el costo.",
+    descripcion:
+      "Precio fijo por unidad declarado por el modelador, ignora el costo.",
     ejemplo: "Tarjeta personal = $50/u siempre, no importa qué papel use.",
   },
   precio_fijo_para_margen_minimo: {
     label: "Precio fijo si margen ≥ mínimo",
     descripcion:
       "Usa precio fijo solo si garantiza el margen mínimo configurado; sino aplica el margen mínimo.",
-    ejemplo: "Precio $50, margen mín 30%; si no alcanza, se recalcula al precio necesario.",
+    ejemplo:
+      "Precio $50, margen mín 30%; si no alcanza, se recalcula al precio necesario.",
   },
   margen_variable: {
     label: "Margen variable por cantidad (escalonado)",
@@ -326,28 +341,30 @@ export const unidadComercialLabels: DiccionarioLabels = {
 
 export const modoMedidasLabels: DiccionarioLabels = {
   FIJA: {
-    label: "Medida fija del producto",
+    label: "Medida fija",
     descripcion:
       "El modelador declara la medida única del producto. El comercial no la cambia al cotizar.",
     ejemplo: "Tarjeta de visita = 90×50mm siempre.",
   },
   LIBRE: {
-    label: "El comercial ingresa medidas",
+    label: "Medida libre",
     descripcion:
       "El comercial declara las medidas (puede ser una lista de piezas) en cada cotización.",
-    ejemplo: "Vinilo gran formato — cada trabajo tiene sus propias dimensiones.",
+    ejemplo:
+      "Vinilo gran formato — cada trabajo tiene sus propias dimensiones.",
   },
   COMERCIAL_ELIGE: {
-    label: "El comercial elige de una lista",
+    label: "Medidas predefinidas",
     descripcion:
       "El modelador declara opciones de medida y el comercial elige una al cotizar.",
     ejemplo: "Banner: A4 / A3 / SRA3.",
   },
   MIXTA: {
-    label: "Mixta",
+    label: "Predefinida o personalizada",
     descripcion:
       "El modelador declara medidas predefinidas, pero el comercial también puede cargar una medida personalizada al cotizar.",
-    ejemplo: "Carteles con formatos habituales, pero con opción de medida especial.",
+    ejemplo:
+      "Carteles con formatos habituales, pero con opción de medida especial.",
   },
 };
 
@@ -359,7 +376,8 @@ export const modoMedidasLabels: DiccionarioLabels = {
 export const tecnologiaImpresionLabels: DiccionarioLabels = {
   LATEX: {
     label: "Látex",
-    descripcion: "Tinta látex base agua. Apta para vinilo, lonas, papel blueback.",
+    descripcion:
+      "Tinta látex base agua. Apta para vinilo, lonas, papel blueback.",
   },
   SOLVENTE: {
     label: "Solvente",
@@ -392,7 +410,8 @@ export const tecnologiaImpresionLabels: DiccionarioLabels = {
 export const geometriaImpresionLabels: DiccionarioLabels = {
   ROLLO: {
     label: "Rollo",
-    descripcion: "Imprime sobre material continuo en bobina (vinilos, lonas, films).",
+    descripcion:
+      "Imprime sobre material continuo en bobina (vinilos, lonas, films).",
   },
   MESA_EXTENSORA: {
     label: "Mesa extensora",
@@ -418,22 +437,31 @@ export const carasLabels: DiccionarioLabels = {
 export const modoCalidadLabels: DiccionarioLabels = {
   DRAFT: {
     label: "Borrador (rápido)",
-    descripcion: "Calidad baja, alta velocidad. Para pruebas o trabajos express.",
+    descripcion:
+      "Calidad baja, alta velocidad. Para pruebas o trabajos express.",
   },
   NORMAL: {
     label: "Normal",
-    descripcion: "Calidad estándar, balance velocidad/calidad. Default para la mayoría de trabajos.",
+    descripcion:
+      "Calidad estándar, balance velocidad/calidad. Default para la mayoría de trabajos.",
   },
   ALTA: {
     label: "Alta calidad",
-    descripcion: "Calidad fotográfica, máxima resolución. Lento y mayor consumo de tinta.",
+    descripcion:
+      "Calidad fotográfica, máxima resolución. Lento y mayor consumo de tinta.",
   },
 };
 
 /** Modo de operación del plotter (rollo vs hojas). */
 export const modoOperacionPlotterLabels: DiccionarioLabels = {
-  ROLLO: { label: "Rollo continuo", descripcion: "Carga material desde rollo." },
-  HOJAS: { label: "Hojas individuales", descripcion: "Carga material en hojas pre-cortadas." },
+  ROLLO: {
+    label: "Rollo continuo",
+    descripcion: "Carga material desde rollo.",
+  },
+  HOJAS: {
+    label: "Hojas individuales",
+    descripcion: "Carga material en hojas pre-cortadas.",
+  },
 };
 
 /** Tipo de láser (CO2 / Fibra). */
@@ -452,8 +480,14 @@ export const tipoLaserLabels: DiccionarioLabels = {
 
 /** Operaciones del láser. */
 export const operacionLaserLabels: DiccionarioLabels = {
-  CORTE: { label: "Corte", descripcion: "Atraviesa el material para separarlo en piezas." },
-  GRABADO: { label: "Grabado", descripcion: "Marca superficial sin atravesar." },
+  CORTE: {
+    label: "Corte",
+    descripcion: "Atraviesa el material para separarlo en piezas.",
+  },
+  GRABADO: {
+    label: "Grabado",
+    descripcion: "Marca superficial sin atravesar.",
+  },
 };
 
 /** Operaciones del CNC. */
@@ -464,7 +498,8 @@ export const operacionCncLabels: DiccionarioLabels = {
   },
   FRESADO: {
     label: "Fresado",
-    descripcion: "Mecanizado superficial: ranurado, vaciado, formas 3D parciales.",
+    descripcion:
+      "Mecanizado superficial: ranurado, vaciado, formas 3D parciales.",
   },
   PERFORADO: { label: "Perforado", descripcion: "Hace orificios pasantes." },
 };
@@ -485,11 +520,13 @@ export const tipoAnilloLabels: DiccionarioLabels = {
 export const tipoTrabajoCadLabels: DiccionarioLabels = {
   CAD: {
     label: "CAD (técnico)",
-    descripcion: "Planos arquitectónicos, mapas. Bajo consumo de tinta, alta velocidad.",
+    descripcion:
+      "Planos arquitectónicos, mapas. Bajo consumo de tinta, alta velocidad.",
   },
   FOTO: {
     label: "Foto",
-    descripcion: "Fotografía o pósters. Alta densidad de tinta, baja velocidad.",
+    descripcion:
+      "Fotografía o pósters. Alta densidad de tinta, baja velocidad.",
   },
 };
 
@@ -497,11 +534,13 @@ export const tipoTrabajoCadLabels: DiccionarioLabels = {
 export const categoriaFamiliaLabels: DiccionarioLabels = {
   pre_prensa: {
     label: "Pre-prensa",
-    descripcion: "Preparación: armado de imposición, proof, cálculo de pliegos.",
+    descripcion:
+      "Preparación: armado de imposición, proof, cálculo de pliegos.",
   },
   produccion_impresion: {
     label: "Producción / impresión",
-    descripcion: "Pasos de impresión propiamente dicha (por hoja, por área, por pieza).",
+    descripcion:
+      "Pasos de impresión propiamente dicha (por hoja, por área, por pieza).",
   },
   corte_y_formado: {
     label: "Corte y formado",
@@ -521,7 +560,8 @@ export const categoriaFamiliaLabels: DiccionarioLabels = {
   },
   operaciones_manuales: {
     label: "Operaciones manuales",
-    descripcion: "Embalaje, conteo, atado, etiquetado, control calidad, modificaciones.",
+    descripcion:
+      "Embalaje, conteo, atado, etiquetado, control calidad, modificaciones.",
   },
   logistica_instalacion: {
     label: "Logística e instalación",
@@ -570,7 +610,8 @@ export const tipoValidacionLabels: DiccionarioLabels = {
   },
   IN_RANGE: {
     label: "Fuera de rango permitido",
-    descripcion: "Un valor numérico está fuera del rango mín/máx aceptado por el paso.",
+    descripcion:
+      "Un valor numérico está fuera del rango mín/máx aceptado por el paso.",
   },
   ONE_OF: {
     label: "Valor no permitido",
@@ -588,13 +629,28 @@ export const tipoValidacionLabels: DiccionarioLabels = {
 // ════════════════════════════════════════════════════════════════════
 
 export const tipoPerfilOperativoLabels: DiccionarioLabels = {
-  impresion: { label: "Impresión", descripcion: "Perfil de máquina impresora." },
-  corte: { label: "Corte", descripcion: "Perfil para máquinas de corte (guillotina, plotter, láser)." },
+  impresion: {
+    label: "Impresión",
+    descripcion: "Perfil de máquina impresora.",
+  },
+  corte: {
+    label: "Corte",
+    descripcion: "Perfil para máquinas de corte (guillotina, plotter, láser).",
+  },
   laminado: { label: "Laminado", descripcion: "Perfil de laminadora." },
   mecanizado: { label: "Mecanizado", descripcion: "Perfil de CNC o router." },
-  grabado: { label: "Grabado", descripcion: "Perfil para grabado láser superficial." },
-  fabricacion: { label: "Fabricación", descripcion: "Perfil de fabricación aditiva (3D, etc.)." },
-  mixto: { label: "Mixto", descripcion: "Perfil que combina varios tipos de operación." },
+  grabado: {
+    label: "Grabado",
+    descripcion: "Perfil para grabado láser superficial.",
+  },
+  fabricacion: {
+    label: "Fabricación",
+    descripcion: "Perfil de fabricación aditiva (3D, etc.).",
+  },
+  mixto: {
+    label: "Mixto",
+    descripcion: "Perfil que combina varios tipos de operación.",
+  },
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -602,22 +658,45 @@ export const tipoPerfilOperativoLabels: DiccionarioLabels = {
 // ════════════════════════════════════════════════════════════════════
 
 export const unidadProduccionLabels: DiccionarioLabels = {
-  hora: { label: "Hora", descripcion: "Productividad medida en trabajos por hora." },
+  hora: {
+    label: "Hora",
+    descripcion: "Productividad medida en trabajos por hora.",
+  },
   ppm: {
     label: "Páginas A4-eq/min (PPM)",
-    descripcion: "Caras impresas por minuto equivalentes a una página A4. Típico de impresoras láser.",
+    descripcion:
+      "Caras impresas por minuto equivalentes a una página A4. Típico de impresoras láser.",
   },
-  m2_h: { label: "m²/hora", descripcion: "Metros cuadrados por hora. Típico de gran formato." },
-  m_min: { label: "Metros/min", descripcion: "Metros lineales por minuto. Típico de laminadoras." },
-  cortes_min: { label: "Cortes/min", descripcion: "Cortes por minuto. Típico de guillotina." },
-  piezas_h: { label: "Piezas/hora", descripcion: "Piezas terminadas por hora." },
+  m2_h: {
+    label: "m²/hora",
+    descripcion: "Metros cuadrados por hora. Típico de gran formato.",
+  },
+  m_min: {
+    label: "Metros/min",
+    descripcion: "Metros lineales por minuto. Típico de laminadoras.",
+  },
+  cortes_min: {
+    label: "Cortes/min",
+    descripcion: "Cortes por minuto. Típico de guillotina.",
+  },
+  piezas_h: {
+    label: "Piezas/hora",
+    descripcion: "Piezas terminadas por hora.",
+  },
   hoja: { label: "Hojas", descripcion: "Hojas individuales." },
   pieza: { label: "Pieza", descripcion: "Pieza individual." },
   copia: { label: "Copia", descripcion: "Copias impresas (foto-equivalente)." },
   ciclo: { label: "Ciclo", descripcion: "Ciclo completo de la máquina." },
-  golpes_min: { label: "Golpes/min", descripcion: "Golpes/troqueles por minuto." },
+  golpes_min: {
+    label: "Golpes/min",
+    descripcion: "Golpes/troqueles por minuto.",
+  },
   pliegos_min: { label: "Pliegos/min", descripcion: "Pliegos por minuto." },
-  mm_s: { label: "mm/seg", descripcion: "Milímetros por segundo. Típico de velocidades declaradas por fabricantes." },
+  mm_s: {
+    label: "mm/seg",
+    descripcion:
+      "Milímetros por segundo. Típico de velocidades declaradas por fabricantes.",
+  },
   metro_lineal: { label: "Metro lineal", descripcion: "Metros lineales." },
   m2: { label: "m²", descripcion: "Metros cuadrados." },
   a4_equiv: { label: "A4-eq", descripcion: "Cantidad equivalente a hojas A4." },
@@ -628,10 +707,19 @@ export const unidadProduccionLabels: DiccionarioLabels = {
 // ════════════════════════════════════════════════════════════════════
 
 export const estadoMaquinaLabels: DiccionarioLabels = {
-  activa: { label: "Activa", descripcion: "Máquina operativa, disponible para producción." },
+  activa: {
+    label: "Activa",
+    descripcion: "Máquina operativa, disponible para producción.",
+  },
   inactiva: { label: "Inactiva", descripcion: "Apagada o no usada hoy." },
-  mantenimiento: { label: "En mantenimiento", descripcion: "Servicio técnico en curso." },
-  baja: { label: "Dada de baja", descripcion: "Retirada del taller, no se usa más." },
+  mantenimiento: {
+    label: "En mantenimiento",
+    descripcion: "Servicio técnico en curso.",
+  },
+  baja: {
+    label: "Dada de baja",
+    descripcion: "Retirada del taller, no se usa más.",
+  },
 };
 
 export const estadoConfiguracionMaquinaLabels: DiccionarioLabels = {
@@ -645,6 +733,7 @@ export const estadoConfiguracionMaquinaLabels: DiccionarioLabels = {
   },
   lista: {
     label: "Lista",
-    descripcion: "Configuración completa. La máquina puede usarse en cotizaciones.",
+    descripcion:
+      "Configuración completa. La máquina puede usarse en cotizaciones.",
   },
 };

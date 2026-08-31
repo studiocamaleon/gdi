@@ -36,6 +36,7 @@ function productoFixture() {
     activo: true,
     unidadComercial: 'm2',
     modoMedidas: 'LIBRE',
+    dimensionesRequeridas: ['ANCHO', 'ALTO'],
     medidaDefaultAnchoMm: null,
     medidaDefaultAltoMm: null,
     medidasPredefinidasJson: null,
@@ -247,12 +248,21 @@ describe('formulario de cotización', () => {
     ).toBe(true);
   });
 
-  it('bastidor doble sin profundidad fija pregunta profundidadMm', async () => {
+  it('no infiere profundidad desde un paso de bastidor', async () => {
     const form = await servicio(productoFixture()).obtener('t1', 'prod-1');
     const prof = form.preguntas.find((p) => p.tipo === 'profundidad');
-    expect(prof).toBeDefined();
-    expect(prof!.jobContextKey).toBe('profundidadMm');
-    expect(prof!.requerido).toBe(true);
+    expect(prof).toBeUndefined();
+    expect(form.medidas.ejes).toEqual(['ANCHO', 'ALTO']);
+  });
+
+  it('producto 3D publica profundidad aunque la ruta no sea su propietaria', async () => {
+    const fixture = productoFixture();
+    fixture.dimensionesRequeridas = ['ANCHO', 'ALTO', 'PROFUNDIDAD'];
+    const form = await servicio(fixture).obtener('t1', 'prod-1');
+    expect(form.medidas.instruccion).toBe(
+      'pedir_ancho_alto_profundidad',
+    );
+    expect(form.medidas.jobContextKeys).toContain('profundidadMm');
   });
 
   it('medidas LIBRE instruye pedir ancho×alto en mm', async () => {

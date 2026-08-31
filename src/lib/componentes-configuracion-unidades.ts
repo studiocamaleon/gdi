@@ -2,7 +2,7 @@ export type OperadorReglaUnidad =
   "COPIAR" | "SUMAR" | "RESTAR" | "MULTIPLICAR" | "DIVIDIR";
 
 export function esMedidaInternaMm(clave: string): boolean {
-  return /(?:^|\.)(?:anchoMm|altoMm)$/.test(clave);
+  return /(?:^|\.)(?:anchoMm|altoMm|profundidadMm)$/.test(clave);
 }
 
 export function unidadVisibleParametro(

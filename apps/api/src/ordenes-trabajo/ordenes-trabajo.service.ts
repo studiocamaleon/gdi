@@ -488,6 +488,7 @@ type PasoTrazabilidad = {
     maquinaId?: string | null;
   };
   operacionesIncorporacion?: Array<Record<string, unknown>>;
+  operacionesInternas?: Array<Record<string, unknown>>;
   /// Paso tercerizado (compra a proveedor) — ver F2 en el diseño.
   tercerizado?: boolean;
   proveedorId?: string | null;
@@ -4380,10 +4381,17 @@ export class OrdenesTrabajoService {
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
         maquinaId: paso.tiempo?.maquinaId ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
-        operacionesIncorporacionSnapshotJson: paso.operacionesIncorporacion
-          ?.length
-          ? (paso.operacionesIncorporacion as Prisma.InputJsonValue)
-          : undefined,
+        operacionesIncorporacionSnapshotJson: paso.operacionesInternas?.length
+          ? (paso.operacionesInternas.map((operacion) => ({
+              ...operacion,
+              modoTiempo: 'FIJO',
+              cantidadResuelta: 1,
+              unidadCantidad: 'etapa',
+              dotacionOperarios: 1,
+            })) as Prisma.InputJsonValue)
+          : paso.operacionesIncorporacion?.length
+            ? (paso.operacionesIncorporacion as Prisma.InputJsonValue)
+            : undefined,
         modoRegistro: modoRegistroDeFamilia(familiaCodigo),
         // === Tercerización (F2): el paso comprado va al panel de Compras. ===
         tipoEjecucion: esTercerizado ? 'tercerizado' : 'interno',
@@ -4779,42 +4787,80 @@ export class OrdenesTrabajoService {
             paso.clave ? [[paso.clave, paso] as const] : [],
           ),
         );
-        const filasHijas = grafoHijo.nodos.map((nodo) => {
-          const recurso = recursoPorClave.get(nodo.clave);
-          const pasoSnapshot = snapshotPorClave.get(nodo.clave);
-          const familiaCodigo =
-            recurso?.familiaCodigo ??
-            pasoSnapshot?.familiaCodigo ??
-            'trabajo_manual';
-          const familia = resolverFamilia(familiaCodigo);
-          return {
-            tenantId,
-            ordenId: padre.ordenId,
-            itemId: hijo!.id,
-            indice: nodo.indice,
-            nodoClave: nodo.clave,
-            esTerminal: grafoHijo.terminales.includes(nodo.clave),
-            rutaPasoId: nodo.clave.replace(/^(ruta|extra):/, ''),
-            familiaCodigo,
-            categoriaFamilia: familia?.categoria ?? 'operaciones_manuales',
-            nombre:
-              recurso?.pasoNombre ??
-              pasoSnapshot?.nombre ??
-              familia?.nombre ??
-              familiaCodigo,
-            centroCostoId: recurso?.centroCostoId ?? null,
-            centroCostoNombre: recurso?.centroCostoNombre ?? null,
-            maquinaId: recurso?.maquinaId ?? null,
-            duracionEstimadaMin: null,
-            modoRegistro: modoRegistroDeFamilia(familiaCodigo),
-            tipoEjecucion: recurso?.tercerizado ? 'tercerizado' : 'interno',
-            proveedorId: recurso?.proveedorId ?? null,
-            proveedorNombre: recurso?.proveedorNombre ?? null,
-            plazoProveedorDias:
-              pasoSnapshot?.recurso?.plazoProveedorDias ?? null,
-            estadoCompra: recurso?.tercerizado ? 'pendiente' : null,
-          };
-        });
+        const pasosCosteados = Array.isArray(costeado?.pasos)
+          ? (costeado.pasos as PasoTrazabilidad[])
+          : [];
+        const clavesDeclaradas = new Set(
+          grafoHijo.nodos.map((nodo) => nodo.clave),
+        );
+        const claveDePasoCosteado = (paso: PasoTrazabilidad) => {
+          if (!paso.rutaPasoId) return null;
+          const ruta = `ruta:${paso.rutaPasoId}`;
+          const extra = `extra:${paso.rutaPasoId}`;
+          if (clavesDeclaradas.has(ruta)) return ruta;
+          if (clavesDeclaradas.has(extra)) return extra;
+          return null;
+        };
+        const clavesActivasHijas = new Set(
+          pasosCosteados
+            .filter((paso) => paso.activado)
+            .map(claveDePasoCosteado)
+            .filter((clave): clave is string => Boolean(clave)),
+        );
+        const grafoHijoEfectivo =
+          pasosCosteados.length > 0
+            ? reducirGrafoAClaves(grafoHijo, clavesActivasHijas)
+            : grafoHijo;
+        const filasHijas =
+          pasosCosteados.length > 0
+            ? this.pasosDesdeTrazabilidad(
+                tenantId,
+                padre.ordenId,
+                hijo.id,
+                { pasos: pasosCosteados },
+                new Map(),
+                grafoHijoEfectivo,
+              )
+            : grafoHijoEfectivo.nodos.map((nodo) => {
+                const recurso = recursoPorClave.get(nodo.clave);
+                const pasoSnapshot = snapshotPorClave.get(nodo.clave);
+                const familiaCodigo =
+                  recurso?.familiaCodigo ??
+                  pasoSnapshot?.familiaCodigo ??
+                  'trabajo_manual';
+                const familia = resolverFamilia(familiaCodigo);
+                return {
+                  tenantId,
+                  ordenId: padre.ordenId,
+                  itemId: hijo!.id,
+                  indice: nodo.indice,
+                  nodoClave: nodo.clave,
+                  esTerminal: grafoHijoEfectivo.terminales.includes(nodo.clave),
+                  rutaPasoId: nodo.clave.replace(/^(ruta|extra):/, ''),
+                  familiaCodigo,
+                  categoriaFamilia:
+                    familia?.categoria ?? 'operaciones_manuales',
+                  nombre:
+                    recurso?.pasoNombre ??
+                    pasoSnapshot?.nombre ??
+                    familia?.nombre ??
+                    familiaCodigo,
+                  centroCostoId: recurso?.centroCostoId ?? null,
+                  centroCostoNombre: recurso?.centroCostoNombre ?? null,
+                  maquinaId: recurso?.maquinaId ?? null,
+                  duracionEstimadaMin: null,
+                  operacionesIncorporacionSnapshotJson: undefined,
+                  modoRegistro: modoRegistroDeFamilia(familiaCodigo),
+                  tipoEjecucion: recurso?.tercerizado
+                    ? 'tercerizado'
+                    : 'interno',
+                  proveedorId: recurso?.proveedorId ?? null,
+                  proveedorNombre: recurso?.proveedorNombre ?? null,
+                  plazoProveedorDias:
+                    pasoSnapshot?.recurso?.plazoProveedorDias ?? null,
+                  estadoCompra: recurso?.tercerizado ? 'pendiente' : null,
+                };
+              });
         if (filasHijas.length > 0) {
           await tx.ordenTrabajoItemPaso.createMany({
             data: filasHijas,
@@ -4830,7 +4876,7 @@ export class OrdenesTrabajoService {
             paso.nodoClave ? [[paso.nodoClave, paso.id] as const] : [],
           ),
         );
-        const gatesHijos = grafoHijo.nodos.flatMap((nodo) =>
+        const gatesHijos = grafoHijoEfectivo.nodos.flatMap((nodo) =>
           (nodo.gates ?? []).flatMap((tipo) => {
             const pasoId = idPorClave.get(nodo.clave);
             return pasoId
@@ -4844,7 +4890,7 @@ export class OrdenesTrabajoService {
             skipDuplicates: true,
           });
         }
-        const aristasHijas = grafoHijo.aristas.map((arista) => ({
+        const aristasHijas = grafoHijoEfectivo.aristas.map((arista) => ({
           tenantId,
           ordenId: padre.ordenId,
           predecesorPasoId: idPorClave.get(arista.desdeClave)!,
@@ -4863,14 +4909,38 @@ export class OrdenesTrabajoService {
             `No se pudo ubicar el nodo de incorporación de "${componente.nombre}" en la OT.`,
           );
         }
-        const convergencias = grafoHijo.terminales.map((clave) => ({
+        const convergencias = grafoHijoEfectivo.terminales.map((clave) => ({
           tenantId,
           ordenId: padre.ordenId,
           predecesorPasoId: idPorClave.get(clave)!,
           sucesorPasoId: incorporacion.id,
           tipo: 'componente_fabricado',
         }));
-        const dependencias = [...aristasHijas, ...convergencias].filter(
+        const clavesPredecesoras = componente.nodosPredecesoresClaves ?? [];
+        const predecesoresPadre = clavesPredecesoras.length
+          ? await tx.ordenTrabajoItemPaso.findMany({
+              where: {
+                tenantId,
+                itemId: padre.id,
+                nodoClave: { in: clavesPredecesoras },
+              },
+              select: { id: true },
+            })
+          : [];
+        const habilitaciones = predecesoresPadre.flatMap((predecesor) =>
+          grafoHijoEfectivo.raices.map((clave) => ({
+            tenantId,
+            ordenId: padre.ordenId,
+            predecesorPasoId: predecesor.id,
+            sucesorPasoId: idPorClave.get(clave)!,
+            tipo: 'componente_fabricado',
+          })),
+        );
+        const dependencias = [
+          ...aristasHijas,
+          ...habilitaciones,
+          ...convergencias,
+        ].filter(
           (dependencia) =>
             dependencia.predecesorPasoId && dependencia.sucesorPasoId,
         );

@@ -122,7 +122,11 @@ export interface JobContext {
    * describen el material y sí crecen con la demasía.
    * Ver `docs/modificaciones-fisicas-lona-diseno.md` §3.
    */
-  medidaVisibleMm?: { anchoMm: number; altoMm: number };
+  medidaVisibleMm?: {
+    anchoMm: number;
+    altoMm: number;
+    profundidadMm?: number;
+  };
   /**
    * Canon geométrico que PUBLICA un derivador de estructura para los pasos
    * siguientes (Ola #2, docs/estructura-bastidor-outputs-diseno.md §4). Igual
@@ -419,6 +423,10 @@ export interface ComponenteFabricadoCosteado {
   outputsPublicos?: Record<string, unknown>;
   /** Componentes cuyos outputs fueron necesarios para resolver este contexto. */
   dependenciasCalculo?: string[];
+  /** Nodo de la ruta padre en el que esta rama vuelve a incorporarse. */
+  nodoIncorporacionClave?: string | null;
+  /** Subruta productiva real ejecutada para fabricar este componente. */
+  pasos?: PasoEjecutado[];
   operacionesIncorporacion?: OperacionIncorporacionCosteada[];
   componentes?: ComponenteFabricadoCosteado[];
 }
@@ -453,6 +461,14 @@ export interface PasoEjecutado {
   familiaCodigo: string;
   /** Nombre operativo final para propuesta/OT. */
   nombreVisible?: string | null;
+  /** Etapa compuesta a la que pertenece este paso interno. */
+  contenedorClave?: string | null;
+  /** Nombre visible congelado de la etapa compuesta. */
+  contenedorNombre?: string | null;
+  /** Identidad estable dentro del contrato reutilizable de la etapa. */
+  pasoInternoCodigo?: string | null;
+  /** Componentes BOM sobre los que trabaja este paso interno. */
+  componentesCodigos?: string[];
   /** Configuración del producto para este paso. */
   configPasoId: string;
   /** Si se activó (true/false según D.1). */
@@ -529,6 +545,24 @@ export interface PasoEjecutado {
   };
   /** Subtareas aportadas por relaciones BOM al paso compuesto. */
   operacionesIncorporacion?: OperacionIncorporacionCosteada[];
+  /**
+   * Desglose técnico privado de una etapa compuesta. Estas operaciones se
+   * calculan como pasos completos, pero NO se materializan con estado propio
+   * en la OT ni en el Tablero: explican el tiempo, materiales y costo del
+   * único paso operativo consolidado.
+   */
+  operacionesInternas?: Array<{
+    codigo: string;
+    nombre: string;
+    familiaCodigo: string;
+    activada: boolean;
+    duracionMin: number;
+    costoTotal: number;
+    centroCostoId?: string | null;
+    centroCostoNombre?: string | null;
+    materiales?: MaterialEjecutado[];
+    componentesCodigos?: string[];
+  }>;
   /** Materiales consumidos (si activado). */
   materiales?: MaterialEjecutado[];
   /** Cargos directos a nivel paso (si activado). */
@@ -872,9 +906,7 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    | 'MONTO_FIJO_PLANO'
-    | 'PORCENTAJE_SOBRE_BASE'
-    | 'POR_UNIDAD_INPUT';
+    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;
@@ -915,6 +947,7 @@ export interface ProductoCargado {
   productoNombre: string;
   unidadComercial: string;
   modoMedidas: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE' | 'MIXTA';
+  dimensionesRequeridas?: string[];
   minimoComercialPolitica: string;
   minimoComercialCantidad: number | null;
   minimoComercialBase: string;
@@ -927,6 +960,7 @@ export interface ProductoCargado {
    */
   medidaDefaultAnchoMm: number | null;
   medidaDefaultAltoMm: number | null;
+  medidaDefaultProfundidadMm?: number | null;
   precioConfigJson?: unknown;
   rutaAlternativaId: string;
   rutaAlternativaNombre: string;
@@ -958,6 +992,14 @@ export interface PasoCargado {
   rutaPasoOrden: number;
   familiaCodigo: string;
   nombreVisible?: string | null;
+  /**
+   * Fase 4.2 — identifica un paso real materializado dentro de una etapa
+   * compuesta. Estos pasos se ejecutan después de resolver los componentes
+   * BOM, para que puedan consumir sus outputs públicos.
+   */
+  contenedorClave?: string | null;
+  pasoInternoCodigo?: string | null;
+  componentesCodigos?: string[];
   configPasoId: string;
   modoActivacion: string | null;
   condicionActivacionJson: unknown;

@@ -50,6 +50,8 @@ describe('Catálogo de productos', () => {
             ],
           },
         ],
+        recetas: [],
+        componenteEnRecetas: [],
       },
     ]);
     const prisma = {
@@ -95,10 +97,12 @@ describe('Catálogo de productos', () => {
     const update = jest
       .fn()
       .mockImplementation(({ data }) => ({ ...existente, ...data }));
-    const findFirst = jest.fn().mockImplementation(({ where }) => {
-      if (where.id === 'p1') return existente;
-      return null;
-    });
+    const findFirst = jest
+      .fn()
+      .mockImplementation(({ where }: { where: { id?: string } }) => {
+        if (where.id === 'p1') return existente;
+        return null;
+      });
     const prisma = { producto: { findFirst, update } };
     const service = new ProductosService(prisma as never);
 
@@ -148,6 +152,123 @@ describe('Catálogo de productos', () => {
             categoria: { codigo: 'gran_formato_flexible' },
           },
         }),
+      }),
+    );
+  });
+
+  it('filtra simples y compuestos por la estructura explícita del producto', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      producto: { findMany, count: jest.fn().mockResolvedValue(0) },
+      $transaction: jest
+        .fn()
+        .mockImplementation((promises) => Promise.all(promises)),
+    };
+    const service = new ProductosService(prisma as never);
+
+    await service.listarProductos('tenant-1', {
+      pagination: { page: 1, limit: 25, skip: 0 } as never,
+      composicion: 'compuesto',
+    });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ estructuraProducto: 'COMPUESTO' }),
+      }),
+    );
+  });
+
+  it('no permite volver simple un producto que conserva componentes', async () => {
+    const existente = {
+      id: 'p1',
+      tenantId: 'tenant-1',
+      nombre: 'Cartel compuesto',
+      sistemaCodigo: null,
+      estructuraProducto: 'COMPUESTO',
+      unidadComercial: 'unidad',
+      modoMedidas: 'FIJA',
+      dimensionesRequeridas: [],
+      minimoComercialPolitica: 'NONE',
+      minimoComercialCantidad: null,
+      minimoComercialBase: 'cantidad_comercial',
+      medidasPredefinidasJson: null,
+      medidaDefaultAnchoMm: null,
+      medidaDefaultAltoMm: null,
+      medidaDefaultProfundidadMm: null,
+      updatedAt: new Date('2026-08-31T00:00:00.000Z'),
+    };
+    const prisma = {
+      producto: {
+        findFirst: jest.fn().mockResolvedValue(existente),
+        update: jest.fn(),
+      },
+      productoRecetaComponente: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'componente-1' }),
+      },
+    };
+    const service = new ProductosService(prisma as never);
+
+    await expect(
+      service.actualizarProducto('tenant-1', 'p1', {
+        estructuraProducto: 'SIMPLE',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.productoRecetaComponente.findFirst).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        revision: {
+          estado: { in: ['BORRADOR', 'PUBLICADA'] },
+          receta: { productoId: 'p1' },
+        },
+      },
+      select: { id: true },
+    });
+    expect(prisma.producto.update).not.toHaveBeenCalled();
+  });
+
+  it('permite volver simple cuando los componentes sólo existen en versiones históricas', async () => {
+    const existente = {
+      id: 'p1',
+      tenantId: 'tenant-1',
+      nombre: 'Cartel compuesto',
+      sistemaCodigo: null,
+      estructuraProducto: 'COMPUESTO',
+      unidadComercial: 'unidad',
+      modoMedidas: 'FIJA',
+      dimensionesRequeridas: [],
+      minimoComercialPolitica: 'NONE',
+      minimoComercialCantidad: null,
+      minimoComercialBase: 'cantidad_comercial',
+      medidasPredefinidasJson: null,
+      medidaDefaultAnchoMm: null,
+      medidaDefaultAltoMm: null,
+      medidaDefaultProfundidadMm: null,
+      updatedAt: new Date('2026-08-31T00:00:00.000Z'),
+    };
+    const update = jest.fn().mockImplementation(({ data }) => ({
+      ...existente,
+      ...data,
+    }));
+    const prisma = {
+      producto: {
+        findFirst: jest.fn().mockResolvedValue(existente),
+        update,
+      },
+      productoRecetaComponente: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const service = new ProductosService(prisma as never);
+
+    const result = await service.actualizarProducto('tenant-1', 'p1', {
+      estructuraProducto: 'SIMPLE',
+    });
+
+    expect(result).toMatchObject({ estructuraProducto: 'SIMPLE' });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'p1' },
+        data: expect.objectContaining({ estructuraProducto: 'SIMPLE' }),
       }),
     );
   });

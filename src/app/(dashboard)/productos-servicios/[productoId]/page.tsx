@@ -81,11 +81,27 @@ async function ProductoDetalleContent({
       );
     }
 
-    const [rutasDisponibles, catalogoFamilias, lookups, catalogoCargos, recetas, canManage] = await Promise.all([
-      tab === "produccion" && produccionVista === "rutas" ? getRutas() : Promise.resolve(undefined),
-      tab === "produccion" && (produccionVista === "rutas" || produccionVista === "operaciones") ? getCatalogoFamilias() : Promise.resolve(undefined),
-      tab === "produccion" && produccionVista === "operaciones" ? getLookupsConfigPaso() : Promise.resolve(undefined),
-      tab === "cargos" ? getCargosDirectosCatalogo(true) : Promise.resolve(undefined),
+    const [
+      rutasDisponibles,
+      catalogoFamilias,
+      lookups,
+      catalogoCargos,
+      recetas,
+      canManage,
+    ] = await Promise.all([
+      tab === "produccion" && produccionVista === "rutas"
+        ? getRutas()
+        : Promise.resolve(undefined),
+      tab === "produccion" &&
+      (produccionVista === "rutas" || produccionVista === "operaciones")
+        ? getCatalogoFamilias()
+        : Promise.resolve(undefined),
+      tab === "produccion" && produccionVista === "operaciones"
+        ? getLookupsConfigPaso()
+        : Promise.resolve(undefined),
+      tab === "cargos"
+        ? getCargosDirectosCatalogo(true)
+        : Promise.resolve(undefined),
       getRecetasProducto(productoId),
       tienePermiso("costos.gestionar"),
     ]);
@@ -119,6 +135,7 @@ function firstParam(value: string | string[] | undefined) {
 function normalizarTab(value: string | undefined): ProductoWorkspaceTab {
   if (
     value === "identidad" ||
+    value === "comercial" ||
     value === "produccion" ||
     value === "cargos" ||
     value === "herramientas" ||

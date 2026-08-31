@@ -267,6 +267,13 @@ enum ModoMedidasProducto {
   MIXTA
 }
 
+/// Complejidad estructural declarada por el modelador. Ambos tipos usan el
+/// mismo grafo; COMPUESTO habilita nodos que referencian productos fabricados.
+enum EstructuraProducto {
+  SIMPLE
+  COMPUESTO
+}
+
 enum FamiliaMateriaPrima {
   SUSTRATO
   TINTA_COLORANTE
@@ -2615,58 +2622,64 @@ model ProductoSubcategoriaComercial {
 }
 
 model Producto {
-  id                        String                            @id @default(uuid()) @db.Uuid
-  tenantId                  String                            @db.Uuid
-  subcategoriaComercialId   String                            @db.Uuid
-  codigo                    String
-  nombre                    String
-  descripcion               String?
+  id                         String                            @id @default(uuid()) @db.Uuid
+  tenantId                   String                            @db.Uuid
+  subcategoriaComercialId    String                            @db.Uuid
+  codigo                     String
+  nombre                     String
+  descripcion                String?
+  estructuraProducto         EstructuraProducto                @default(SIMPLE)
   /// 'unidad' | 'm2' | 'metro_lineal'
-  unidadComercial           String                            @default("unidad")
-  modoMedidas               ModoMedidasProducto               @default(FIJA)
-  minimoComercialPolitica   String                            @default("NONE")
-  minimoComercialCantidad   Decimal?                          @db.Decimal(12, 4)
-  minimoComercialBase       String                            @default("cantidad_comercial")
-  medidaDefaultAnchoMm      Decimal?                          @db.Decimal(12, 2)
-  medidaDefaultAltoMm       Decimal?                          @db.Decimal(12, 2)
-  medidasPredefinidasJson   Json?
+  unidadComercial            String                            @default("unidad")
+  modoMedidas                ModoMedidasProducto               @default(FIJA)
+  /// Ejes geométricos exigidos por el contrato comercial: ANCHO, ALTO y/o
+  /// PROFUNDIDAD. [] = producto sin medidas. La UI ofrece presets 2D/3D.
+  dimensionesRequeridas      String[]                          @default(["ANCHO", "ALTO"])
+  minimoComercialPolitica    String                            @default("NONE")
+  minimoComercialCantidad    Decimal?                          @db.Decimal(12, 4)
+  minimoComercialBase        String                            @default("cantidad_comercial")
+  medidaDefaultAnchoMm       Decimal?                          @db.Decimal(12, 2)
+  medidaDefaultAltoMm        Decimal?                          @db.Decimal(12, 2)
+  medidaDefaultProfundidadMm Decimal?                          @db.Decimal(12, 2)
+  medidasPredefinidasJson    Json?
   /// Personalizaciones (áreas de decoración) con medida propia: cada una maneja
   /// el costo del film/paso de esa personalización, aparte de la medida base.
   /// Ver docs/personalizaciones-diseno.md
-  personalizacionesJson     Json?
+  personalizacionesJson      Json?
   /// Configuración del Tab Precio (preservado del modelo viejo).
-  precioConfigJson          Json?
-  atributosComercialesJson  Json?
+  precioConfigJson           Json?
+  atributosComercialesJson   Json?
   /// Categoría fiscal del producto para el IVA: 'general' | 'exento' (y a
   /// futuro 'reducida'). Reemplaza al "tildar el IVA por producto": el motor
   /// resuelve la alícuota cruzando esta categoría con el régimen del emisor y
   /// la fila de IVA del catálogo etiquetada con la misma categoría. Default
   /// 'general' ⇒ producto nuevo no requiere acción. Ver
   /// docs/impuestos-modelo-latam-diseno.md.
-  categoriaFiscal           String                            @default("general")
+  categoriaFiscal            String                            @default("general")
   /// Si != null, este producto lo GESTIONA un módulo del sistema (ej.
   /// "centro_copiado"): no se lista en el catálogo, no se edita ni se borra
   /// desde la UI, y lo materializa/regenera el módulo. Reemplaza al acople por
   /// `codigo` mágico. Ver docs/centro-copiado-modulo-configurable-diseno.md.
-  sistemaCodigo             String?
-  activo                    Boolean                           @default(true)
-  createdAt                 DateTime                          @default(now())
-  updatedAt                 DateTime                          @updatedAt
-  tenant                    Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  subcategoriaComercial     ProductoSubcategoriaComercial     @relation(fields: [subcategoriaComercialId], references: [id], onDelete: Restrict)
-  rutasAlternativas         ProductoRutaAlternativa[]
-  pasosExtras               ProductoPasoExtra[]
-  cargosDirectosCotizacion  ProductoCargoDirectoCotizacion[]
-  preciosEspecialesClientes ProductoPrecioEspecialClienteV2[]
-  impuestosAplicados        ProductoImpuestoAplicado[]
-  comisionesAplicadas       ProductoComisionAplicada[]
-  cotizacionItems           CotizacionItem[]
-  archivos                  Archivo[]
-  recetas                   ProductoReceta[]                  @relation("ProductoRecetaProducto")
-  componenteEnRecetas       ProductoRecetaComponente[]        @relation("ProductoRecetaComponenteProducto")
+  sistemaCodigo              String?
+  activo                     Boolean                           @default(true)
+  createdAt                  DateTime                          @default(now())
+  updatedAt                  DateTime                          @updatedAt
+  tenant                     Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subcategoriaComercial      ProductoSubcategoriaComercial     @relation(fields: [subcategoriaComercialId], references: [id], onDelete: Restrict)
+  rutasAlternativas          ProductoRutaAlternativa[]
+  pasosExtras                ProductoPasoExtra[]
+  cargosDirectosCotizacion   ProductoCargoDirectoCotizacion[]
+  preciosEspecialesClientes  ProductoPrecioEspecialClienteV2[]
+  impuestosAplicados         ProductoImpuestoAplicado[]
+  comisionesAplicadas        ProductoComisionAplicada[]
+  cotizacionItems            CotizacionItem[]
+  archivos                   Archivo[]
+  recetas                    ProductoReceta[]                  @relation("ProductoRecetaProducto")
+  componenteEnRecetas        ProductoRecetaComponente[]        @relation("ProductoRecetaComponenteProducto")
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])
+  @@index([tenantId, estructuraProducto])
   @@index([subcategoriaComercialId])
 }
 
@@ -2847,28 +2860,32 @@ model ProductoRecetaRecurso {
 /// Componente fabricado con identidad productiva propia. Los componentes
 /// comprados simples permanecen como materiales con rol COMPONENTE.
 model ProductoRecetaComponente {
-  id                     String                            @id @default(uuid()) @db.Uuid
-  tenantId               String                            @db.Uuid
-  revisionId             String                            @db.Uuid
-  productoComponenteId   String                            @db.Uuid
-  recetaRevisionId       String                            @db.Uuid
-  recetaVersion          Int
-  recetaHuella           String                            @db.VarChar(64)
-  codigo                 String                            @db.VarChar(100)
-  nombre                 String                            @db.VarChar(180)
-  tipo                   TipoProductoRecetaComponente      @default(FABRICADO)
-  politicaEjecucion      PoliticaEjecucionRecetaComponente @default(INDEPENDIENTE)
-  formula                String                            @default("por_unidad") @db.VarChar(60)
-  cantidad               Decimal                           @default(1) @db.Decimal(14, 6)
-  unidad                 String                            @default("unidad") @db.VarChar(40)
-  requerido              Boolean                           @default(true)
+  id                      String                            @id @default(uuid()) @db.Uuid
+  tenantId                String                            @db.Uuid
+  revisionId              String                            @db.Uuid
+  productoComponenteId    String                            @db.Uuid
+  recetaRevisionId        String                            @db.Uuid
+  recetaVersion           Int
+  recetaHuella            String                            @db.VarChar(64)
+  codigo                  String                            @db.VarChar(100)
+  nombre                  String                            @db.VarChar(180)
+  tipo                    TipoProductoRecetaComponente      @default(FABRICADO)
+  politicaEjecucion       PoliticaEjecucionRecetaComponente @default(INDEPENDIENTE)
+  formula                 String                            @default("por_unidad") @db.VarChar(60)
+  cantidad                Decimal                           @default(1) @db.Decimal(14, 6)
+  unidad                  String                            @default("unidad") @db.VarChar(40)
+  requerido               Boolean                           @default(true)
   /// Contrato versionado de parámetros del hijo y origen de cada valor
   /// (default, fijo, padre, fórmula o solicitado al cotizar).
-  configuracionJson      Json?
+  configuracionJson       Json?
   /// Nodo del producto padre al que esta ejecución debe entregar su salida.
-  nodoIncorporacionClave String?                           @db.VarChar(160)
-  orden                  Int                               @default(0)
-  createdAt              DateTime                          @default(now())
+  nodoIncorporacionClave  String?                           @db.VarChar(160)
+  /// Nodos del padre que deben finalizar antes de habilitar las raíces de la
+  /// subruta del componente. Vacío significa que la subruta puede iniciar con
+  /// el trabajo.
+  nodosPredecesoresClaves String[]                          @default([])
+  orden                   Int                               @default(0)
+  createdAt               DateTime                          @default(now())
 
   tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   revision           ProductoRecetaRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)

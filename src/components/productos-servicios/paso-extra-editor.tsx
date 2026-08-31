@@ -63,6 +63,7 @@ interface Props {
   onCreated: (creado: PasoExtra) => void;
   onDeleted: () => void;
   onCancel: () => void;
+  modoHojaRuta?: boolean;
 }
 
 const AL_INICIO = "__inicio__";
@@ -105,6 +106,7 @@ export function PasoExtraEditor({
   onCreated,
   onDeleted,
   onCancel,
+  modoHojaRuta = false,
 }: Props) {
   const esCreacion = extra === null;
   const familias = React.useMemo(
@@ -118,7 +120,10 @@ export function PasoExtraEditor({
     extra?.familiaCodigo ?? "",
   );
   const [posicion, setPosicion] = React.useState(() => {
-    if (!extra) return AL_INICIO;
+    if (!extra)
+      return modoHojaRuta
+        ? (pasosOrdenados.at(-1)?.id ?? AL_INICIO)
+        : AL_INICIO;
     const indice = pasosOrdenados.findIndex((paso) => paso.id === extra.id);
     return indice > 0 ? pasosOrdenados[indice - 1].id : AL_INICIO;
   });
@@ -134,7 +139,9 @@ export function PasoExtraEditor({
   const [recursoTipo, setRecursoTipo] = React.useState<RecursoTipo>(
     extra?.maquinaM1Id ? "maquina" : "centro",
   );
-  const [maquinaM1Id, setMaquinaM1Id] = React.useState(extra?.maquinaM1Id ?? "");
+  const [maquinaM1Id, setMaquinaM1Id] = React.useState(
+    extra?.maquinaM1Id ?? "",
+  );
   const [perfilM1Id, setPerfilM1Id] = React.useState(extra?.perfilM1Id ?? "");
   const [centroCostoId, setCentroCostoId] = React.useState(
     extra?.centroCostoId ?? "",
@@ -225,9 +232,9 @@ export function PasoExtraEditor({
     [lookups.centrosCosto],
   );
 
-  const modoActivacionOptions = (["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"] as const).map(
-    (m) => optionFromLabel(m, modoActivacionLabels),
-  );
+  const modoActivacionOptions = (
+    ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"] as const
+  ).map((m) => optionFromLabel(m, modoActivacionLabels));
 
   const handleGuardar = async () => {
     if (!familiaCodigo) {
@@ -324,8 +331,7 @@ export function PasoExtraEditor({
         await agregarPasoExtra(productoId, {
           familiaCodigo,
           rutaAlternativaId: rutaAlternativa.id,
-          insertarDespuesDeRutaPasoId:
-            posicion === AL_INICIO ? null : posicion,
+          insertarDespuesDeRutaPasoId: posicion === AL_INICIO ? null : posicion,
           modoActivacion,
           condicionActivacionJson:
             modoActivacion === "CONDICIONAL" ? condicion : null,
@@ -371,11 +377,13 @@ export function PasoExtraEditor({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">
-            {extra ? "Editar paso extra" : "Nuevo paso extra"}
+            {extra ? "Editar paso extra" : "Nuevo paso"}
           </h2>
           <p className="text-muted-foreground text-sm">
             {esCreacion
-              ? "Elegí la familia del paso y dónde se inserta en el flujo. El resto se configura después, igual que los demás pasos."
+              ? modoHojaRuta
+                ? "Elegí qué operación querés incorporar. Se agregará al final y después podrás ubicarla arrastrando en la hoja de ruta."
+                : "Elegí la familia del paso y dónde se inserta en el flujo. El resto se configura después, igual que los demás pasos."
               : "Paso puntual solo para este producto en esta ruta. No modifica la ruta base reusable ni a otros productos."}
           </p>
         </div>
@@ -395,7 +403,9 @@ export function PasoExtraEditor({
       </div>
 
       {/* Identidad + posición */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div
+        className={`grid grid-cols-1 gap-4 ${modoHojaRuta ? "" : "md:grid-cols-2"}`}
+      >
         <div className="space-y-1">
           <LabelConTooltip
             label="Familia"
@@ -417,160 +427,170 @@ export function PasoExtraEditor({
             </p>
           ) : null}
         </div>
-        <div className="space-y-1">
-          <LabelConTooltip
-            label="Posición en el flujo"
-            htmlFor="pe-pos"
-            tooltip="Dónde se inserta este paso dentro de la secuencia de la ruta."
-          />
-          <HumanSelect
-            id="pe-pos"
-            value={posicion}
-            onValueChange={(v) => setPosicion(v || AL_INICIO)}
-            options={posicionOptions}
-          />
-        </div>
-      </div>
-
-      {!esCreacion ? (
-        <>
-      {/* Activación */}
-      <div className="space-y-3 rounded-lg border p-4">
-        <Label className="text-sm font-medium">Activación</Label>
-        <div className="space-y-1">
-          <LabelConTooltip
-            label="¿Cuándo se aplica?"
-            htmlFor="pe-modoact"
-            tooltip={getLabel(modoActivacionLabels, modoActivacion).descripcion}
-          />
-          <HumanSelect
-            id="pe-modoact"
-            value={modoActivacion}
-            onValueChange={(v) =>
-              setModoActivacion((v || "OBLIGATORIO") as ModoActivacion)
-            }
-            options={modoActivacionOptions}
-          />
-        </div>
-        {modoActivacion === "CONDICIONAL" ? (
+        {!modoHojaRuta ? (
           <div className="space-y-1">
-            <Label className="text-xs font-medium">Regla de activación</Label>
-            <RuleBuilder
-              value={condicion}
-              includeMeasureFields={includeMeasureFields}
-              extraFields={ruleExtraFields}
-              onChange={(value) => setCondicion(value)}
+            <LabelConTooltip
+              label="Posición en el flujo"
+              htmlFor="pe-pos"
+              tooltip="Dónde se inserta este paso dentro de la secuencia de la ruta."
+            />
+            <HumanSelect
+              id="pe-pos"
+              value={posicion}
+              onValueChange={(v) => setPosicion(v || AL_INICIO)}
+              options={posicionOptions}
             />
           </div>
         ) : null}
       </div>
 
-      {/* Recurso */}
-      <div className="space-y-3 rounded-lg border p-4">
-        <Label className="text-sm font-medium">Recurso que ejecuta el paso</Label>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={recursoTipo === "centro" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setRecursoTipo("centro")}
-          >
-            Centro de costo (manual)
-          </Button>
-          <Button
-            type="button"
-            variant={recursoTipo === "maquina" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setRecursoTipo("maquina")}
-          >
-            Máquina y perfil
-          </Button>
-        </div>
-        {recursoTipo === "centro" ? (
-          <div className="space-y-1">
-            <Label className="text-xs font-medium">Centro de costo</Label>
-            <HumanSelect
-              value={centroCostoId}
-              onValueChange={(v) => setCentroCostoId(v || "")}
-              options={centroOptions}
-              placeholder="Elegí centro de costo"
-            />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {!esCreacion ? (
+        <>
+          {/* Activación */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <Label className="text-sm font-medium">Activación</Label>
             <div className="space-y-1">
-              <Label className="text-xs font-medium">Máquina</Label>
+              <LabelConTooltip
+                label="¿Cuándo se aplica?"
+                htmlFor="pe-modoact"
+                tooltip={
+                  getLabel(modoActivacionLabels, modoActivacion).descripcion
+                }
+              />
               <HumanSelect
-                value={maquinaM1Id}
-                onValueChange={(v) => {
-                  setMaquinaM1Id(v || "");
-                  setPerfilM1Id("");
-                }}
-                options={maquinaOptions}
-                placeholder="Elegí máquina"
+                id="pe-modoact"
+                value={modoActivacion}
+                onValueChange={(v) =>
+                  setModoActivacion((v || "OBLIGATORIO") as ModoActivacion)
+                }
+                options={modoActivacionOptions}
               />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-medium">Perfil</Label>
-              <HumanSelect
-                value={perfilM1Id}
-                onValueChange={(v) => setPerfilM1Id(v || "")}
-                options={perfilOptions}
-                placeholder="Perfil de la máquina"
-                disabled={!maquinaM1Id}
-              />
-            </div>
+            {modoActivacion === "CONDICIONAL" ? (
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">
+                  Regla de activación
+                </Label>
+                <RuleBuilder
+                  value={condicion}
+                  includeMeasureFields={includeMeasureFields}
+                  extraFields={ruleExtraFields}
+                  onChange={(value) => setCondicion(value)}
+                />
+              </div>
+            ) : null}
           </div>
-        )}
-      </div>
 
-      {/* Tiempo */}
-      <div className="space-y-3 rounded-lg border p-4">
-        <Label className="text-sm font-medium">¿Cómo se calcula el tiempo?</Label>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={tiempoModo === "estimado" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTiempoModo("estimado")}
-          >
-            Tiempo estimado fijo
-          </Button>
-          <Button
-            type="button"
-            variant={tiempoModo === "productividad" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTiempoModo("productividad")}
-            disabled={recursoTipo !== "maquina"}
-          >
-            Productividad de la máquina y perfil
-          </Button>
-        </div>
-        {tiempoModo === "estimado" ? (
-          <div className="space-y-1">
-            <LabelConTooltip
-              label="Horas estimadas"
-              htmlFor="pe-horas"
-              tooltip="Duración fija del paso en horas, independiente de la cantidad. Ej: instalación 3 h."
-            />
-            <Input
-              id="pe-horas"
-              type="number"
-              min={0}
-              step="0.25"
-              value={horasEstimadas}
-              onChange={(e) => setHorasEstimadas(e.target.value)}
-              placeholder="Ej: 2"
-              className="max-w-40"
-            />
+          {/* Recurso */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <Label className="text-sm font-medium">
+              Recurso que ejecuta el paso
+            </Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={recursoTipo === "centro" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setRecursoTipo("centro")}
+              >
+                Centro de costo (manual)
+              </Button>
+              <Button
+                type="button"
+                variant={recursoTipo === "maquina" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setRecursoTipo("maquina")}
+              >
+                Máquina y perfil
+              </Button>
+            </div>
+            {recursoTipo === "centro" ? (
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Centro de costo</Label>
+                <HumanSelect
+                  value={centroCostoId}
+                  onValueChange={(v) => setCentroCostoId(v || "")}
+                  options={centroOptions}
+                  placeholder="Elegí centro de costo"
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Máquina</Label>
+                  <HumanSelect
+                    value={maquinaM1Id}
+                    onValueChange={(v) => {
+                      setMaquinaM1Id(v || "");
+                      setPerfilM1Id("");
+                    }}
+                    options={maquinaOptions}
+                    placeholder="Elegí máquina"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium">Perfil</Label>
+                  <HumanSelect
+                    value={perfilM1Id}
+                    onValueChange={(v) => setPerfilM1Id(v || "")}
+                    options={perfilOptions}
+                    placeholder="Perfil de la máquina"
+                    disabled={!maquinaM1Id}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-        ) : (
-          <p className="text-muted-foreground text-xs">
-            El tiempo sale de la productividad del perfil elegido y la cantidad
-            cotizada (igual que un paso de impresión).
-          </p>
-        )}
-      </div>
+
+          {/* Tiempo */}
+          <div className="space-y-3 rounded-lg border p-4">
+            <Label className="text-sm font-medium">
+              ¿Cómo se calcula el tiempo?
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant={tiempoModo === "estimado" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTiempoModo("estimado")}
+              >
+                Tiempo estimado fijo
+              </Button>
+              <Button
+                type="button"
+                variant={tiempoModo === "productividad" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTiempoModo("productividad")}
+                disabled={recursoTipo !== "maquina"}
+              >
+                Productividad de la máquina y perfil
+              </Button>
+            </div>
+            {tiempoModo === "estimado" ? (
+              <div className="space-y-1">
+                <LabelConTooltip
+                  label="Horas estimadas"
+                  htmlFor="pe-horas"
+                  tooltip="Duración fija del paso en horas, independiente de la cantidad. Ej: instalación 3 h."
+                />
+                <Input
+                  id="pe-horas"
+                  type="number"
+                  min={0}
+                  step="0.25"
+                  value={horasEstimadas}
+                  onChange={(e) => setHorasEstimadas(e.target.value)}
+                  placeholder="Ej: 2"
+                  className="max-w-40"
+                />
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                El tiempo sale de la productividad del perfil elegido y la
+                cantidad cotizada (igual que un paso de impresión).
+              </p>
+            )}
+          </div>
         </>
       ) : null}
 

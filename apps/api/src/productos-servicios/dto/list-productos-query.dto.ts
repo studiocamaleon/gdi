@@ -44,4 +44,8 @@ export class ListProductosQueryDto extends PaginationDto {
   @IsOptional()
   @IsEnum(OrdenProductosDto)
   orden: OrdenProductosDto = OrdenProductosDto.recientes;
+
+  @IsOptional()
+  @IsIn(['simple', 'compuesto'])
+  composicion?: 'simple' | 'compuesto';
 }

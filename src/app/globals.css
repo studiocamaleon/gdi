@@ -2142,10 +2142,193 @@
   }
 
   .production-route {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .production-branch-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 2px 0;
+  }
+
+  .production-branch-label > span {
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .production-branch-label small {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .production-component-branches {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px;
+  }
+
+  .production-component {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--hairline));
+    border-radius: var(--r-1);
+    background: color-mix(in srgb, var(--surface) 96%, var(--accent));
+  }
+
+  .production-component-head {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 9px;
+    align-items: center;
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .production-component-head > span {
+    color: var(--accent);
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .production-component-head strong,
+  .production-component-step strong {
+    display: block;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+
+  .production-component-head small,
+  .production-component-step small,
+  .production-component-empty {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+
+  .production-component-steps {
+    display: grid;
+    gap: 0;
+  }
+
+  .production-component-step {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    padding: 9px 12px;
+  }
+
+  .production-component-step + .production-component-step {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .production-component-step > span {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .production-component-empty {
+    padding: 11px 12px;
+  }
+
+  .production-convergence {
+    display: grid;
+    grid-template-columns: minmax(16px, 1fr) auto minmax(16px, 1fr);
+    gap: 10px;
+    align-items: center;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .production-convergence > span {
+    height: 1px;
+    background: var(--hairline);
+  }
+
+  .production-compound {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--hairline));
+    border-radius: var(--r-1);
+    background: var(--surface);
+  }
+
+  .production-compound > summary {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 12px;
+    cursor: pointer;
+    list-style: none;
+    background: linear-gradient(
+      105deg,
+      color-mix(in srgb, var(--ink) 97%, transparent),
+      color-mix(in srgb, var(--accent) 32%, var(--ink))
+    );
+  }
+
+  .production-compound > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .production-compound > summary strong {
+    display: block;
+    color: white;
+    font-size: 13.5px;
+    font-weight: 700;
+  }
+
+  .production-compound > summary small {
+    display: block;
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 11.5px;
+  }
+
+  .production-compound-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 750;
+  }
+
+  .production-compound-toggle {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .production-compound-steps {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 8px;
-    margin-top: 10px;
+    padding: 10px;
+    border-top: 1px solid var(--hairline);
+    background: var(--paper);
   }
 
   .production-step {
@@ -9422,6 +9605,132 @@ body {
     border-top: 1px solid var(--hairline);
   }
 
+  .editor-side .modelo-nodos-side {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 8px;
+    border-top: 1px solid var(--hairline);
+    background: linear-gradient(180deg, #fbfaf8, #f5f2ed);
+  }
+
+  .editor-side .modelo-nodos-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 7px 5px;
+  }
+
+  .editor-side .modelo-nodos-head > span {
+    color: #d95422;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 760;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .editor-side .modelo-nodos-head small {
+    color: var(--muted-text);
+    font-size: 9.5px;
+  }
+
+  .editor-side .modelo-nodo-componente {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 9px;
+    border: 1px solid transparent;
+    border-radius: var(--r-2);
+    color: var(--ink);
+    background: transparent;
+    text-align: left;
+  }
+
+  .editor-side .modelo-nodo-componente:hover,
+  .editor-side .modelo-nodo-componente.active {
+    border-color: #f1c2ad;
+    background: #fff7f2;
+  }
+
+  .editor-side .modelo-nodo-componente .ix {
+    display: grid;
+    width: 25px;
+    height: 25px;
+    place-items: center;
+    border: 1px solid #f0b79d;
+    border-radius: 7px;
+    color: #e75c28;
+    background: #fff;
+  }
+
+  .editor-side .modelo-nodo-componente .ix svg,
+  .editor-side .modelo-config-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .editor-side .modelo-nodo-componente .body,
+  .editor-side .modelo-nodo-componente .ttl,
+  .editor-side .modelo-nodo-componente .sub {
+    display: block;
+    min-width: 0;
+  }
+
+  .editor-side .modelo-nodo-componente .ttl,
+  .editor-side .modelo-nodo-componente .sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .editor-side .modelo-nodo-componente .ttl {
+    font-size: 12.5px;
+    font-weight: 620;
+  }
+
+  .editor-side .modelo-nodo-componente .sub {
+    color: var(--muted-text);
+    font-size: 10.5px;
+  }
+
+  .editor-side .modelo-nodo-componente .status {
+    color: #c54d20;
+    font-size: 9px;
+  }
+
+  .editor-side .modelo-config-btn {
+    display: inline-flex;
+    width: 100%;
+    min-height: 34px;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 9px;
+    border: 1px dashed #e4a78c;
+    border-radius: var(--r-2);
+    color: #b84a21;
+    background: rgb(255 255 255 / 55%);
+    font-size: 11.5px;
+    font-weight: 620;
+  }
+
+  .editor-side .modelo-config-btn:hover,
+  .editor-side .modelo-config-btn.active {
+    border-style: solid;
+    border-color: #ff8f5c;
+    background: #fff4ee;
+  }
+
+  .editor-side .modelo-simple-note {
+    padding: 8px 9px;
+    color: var(--muted-text);
+    font-size: 10.5px;
+    line-height: 1.45;
+  }
+
   .editor-side .pe-side-head {
     padding: 8px 10px 4px;
     color: var(--muted-text);
@@ -9597,6 +9906,11 @@ body {
        container empuja los sticky bottom hacia arriba). */
     padding: 28px 32px 12px;
     background: var(--bg);
+  }
+
+  .editor-main.modelo-activo {
+    padding: 0;
+    background: #1b1a1f;
   }
 
   .mini-graph {
@@ -11036,6 +11350,10 @@ body {
   .ot-v1 .ap-config-section:last-child {
     padding-bottom: 0;
     border-bottom: 0;
+  }
+
+  .ot-v1 .ap-config-section-after-components {
+    padding-top: 18px;
   }
 
   .ot-v1 .ap-cs-head {
@@ -42197,4 +42515,141 @@ body:has(.t-app) {
 .gp-modal [data-slot="field-description"],
 .egr-f .egr-hint {
   font-size: 12px;
+}
+
+/* Navegador común del editor productivo: pasos, etapas y componentes. */
+.editor-main.modelo-activo {
+  padding: 0;
+  background: var(--bg);
+}
+
+.editor-side .modelo-nodos-side {
+  gap: 2px;
+  padding: 0 8px 8px;
+  border-top: 0;
+  background: transparent;
+}
+
+.editor-side .modelo-vista-flujo {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  color: var(--ink);
+  background: var(--surface);
+  text-align: left;
+}
+
+.editor-side .modelo-vista-flujo:hover,
+.editor-side .modelo-vista-flujo.active {
+  border-color: color-mix(in srgb, var(--signal) 45%, white);
+  background: var(--signal-bg);
+}
+
+.editor-side .modelo-vista-flujo .ix {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--signal) 35%, white);
+  border-radius: 7px;
+  color: var(--signal);
+  background: var(--surface);
+}
+
+.editor-side .modelo-vista-flujo .ix svg {
+  width: 14px;
+  height: 14px;
+}
+
+.editor-side .modelo-vista-flujo .body,
+.editor-side .modelo-vista-flujo .ttl,
+.editor-side .modelo-vista-flujo .sub {
+  display: block;
+  min-width: 0;
+}
+
+.editor-side .modelo-vista-flujo .ttl {
+  font-size: 12.5px;
+  font-weight: 680;
+}
+
+.editor-side .modelo-vista-flujo .sub {
+  overflow: hidden;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-side .modelo-vista-flujo .status {
+  color: var(--signal);
+  font-size: 9px;
+  font-weight: 680;
+  text-transform: uppercase;
+}
+
+.editor-side .paso-item.etapa .ix {
+  border-radius: 7px;
+  border-color: color-mix(in srgb, var(--signal) 35%, white);
+  color: var(--signal);
+  background: var(--signal-bg);
+}
+
+.editor-side .paso-item.etapa .status,
+.editor-side .modelo-nodo-componente .status {
+  color: var(--muted-text);
+  font-size: 9px;
+  font-weight: 680;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.editor-side .modelo-nodo-componente {
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.editor-side .modelo-nodo-componente.active {
+  box-shadow: inset 2px 0 0 var(--signal);
+}
+
+/* El editor del modelo productivo usa todo el ancho: la hoja de ruta es el
+   navegador primario y reemplaza temporalmente al sidebar vertical. */
+.editor-shell.modelo-hoja-ruta-activa {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor-shell.modelo-hoja-ruta-activa > .editor-side {
+  display: none;
+}
+
+.editor-shell.modelo-hoja-ruta-activa > .editor-main {
+  min-width: 0;
+}
+
+.editor-side .modelo-add-nodos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.editor-side .modelo-add-nodos .pe-add-btn {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  text-align: center;
+}
+
+.editor-side .modelo-add-nodos .pe-add-btn svg {
+  width: 14px;
+  height: 14px;
 }

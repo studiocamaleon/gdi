@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  BoxesIcon,
   CopyIcon,
   Grid2X2Icon,
   Loader2Icon,
@@ -73,6 +74,7 @@ import styles from "./productos-table.module.css";
 
 type OrdenProductos = "recientes" | "nombre_asc" | "nombre_desc";
 type VistaProductos = "tabla" | "categorias";
+type ComposicionProductos = "" | "simple" | "compuesto";
 
 export interface ProductosQueryInicial {
   page: number;
@@ -83,6 +85,7 @@ export interface ProductosQueryInicial {
   estado: "" | "activo" | "inactivo";
   orden: OrdenProductos;
   vista: VistaProductos;
+  composicion: ComposicionProductos;
 }
 
 interface SelectOption {
@@ -169,6 +172,7 @@ function queryString(query: ProductosQueryInicial) {
   if (query.estado) params.set("estado", query.estado);
   if (query.orden !== "recientes") params.set("orden", query.orden);
   if (query.vista === "categorias") params.set("vista", "categorias");
+  if (query.composicion) params.set("composicion", query.composicion);
   return params.toString();
 }
 
@@ -246,6 +250,7 @@ export function ProductosServiciosTable({
             subcategoriaCodigo: query.subcategoriaCodigo || undefined,
             categoriaCodigo: query.categoriaCodigo || undefined,
             orden: query.orden,
+            composicion: query.composicion || undefined,
           });
           if (id !== requestId.current) return;
           setProductos(response.data);
@@ -351,6 +356,42 @@ export function ProductosServiciosTable({
           </div>
         </article>
       </section>
+
+      <nav className={styles.compositionNav} aria-label="Tipo de producto">
+        <button
+          type="button"
+          data-active={!query.composicion}
+          onClick={() => updateQuery({ composicion: "", page: 1 })}
+        >
+          <PackageIcon aria-hidden="true" />
+          <span>
+            <strong>Todos</strong>
+            <small>Catálogo completo</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          data-active={query.composicion === "simple"}
+          onClick={() => updateQuery({ composicion: "simple", page: 1 })}
+        >
+          <ShapesIcon aria-hidden="true" />
+          <span>
+            <strong>Productos simples</strong>
+            <small>Se fabrican con su propia ruta</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          data-active={query.composicion === "compuesto"}
+          onClick={() => updateQuery({ composicion: "compuesto", page: 1 })}
+        >
+          <BoxesIcon aria-hidden="true" />
+          <span>
+            <strong>Productos compuestos</strong>
+            <small>Integran componentes fabricados</small>
+          </span>
+        </button>
+      </nav>
 
       <section className={styles.filterBar} aria-label="Filtros del catálogo">
         <div className={styles.search}>
@@ -608,8 +649,20 @@ export function ProductosServiciosTable({
         </section>
       ) : total === 0 && !query.search ? (
         <EstadoVacio
-          titulo="Sin productos cargados"
-          descripcion="Empezá creando un producto. Se guardará como borrador hasta que esté listo para publicar."
+          titulo={
+            query.composicion === "compuesto"
+              ? "Todavía no hay productos compuestos"
+              : query.composicion === "simple"
+                ? "Todavía no hay productos simples"
+                : "Sin productos cargados"
+          }
+          descripcion={
+            query.composicion === "compuesto"
+              ? "Un producto aparecerá acá cuando su receta incorpore al menos un componente fabricado."
+              : query.composicion === "simple"
+                ? "Los productos sin componentes fabricados aparecerán en esta sección."
+                : "Empezá creando un producto. Se guardará como borrador hasta que esté listo para publicar."
+          }
           cta={
             canManage
               ? {
@@ -652,8 +705,10 @@ export function ProductosServiciosTable({
                   <TableRow>
                     <TableHead className="w-[34%]">Nombre</TableHead>
                     <TableHead className="w-[14%]">Categoría</TableHead>
-                    <TableHead className="w-[16%]">¿Cómo se cobra?</TableHead>
-                    <TableHead className="w-[19%]">Manejo de medidas</TableHead>
+                    <TableHead className="w-[16%]">Unidad de venta</TableHead>
+                    <TableHead className="w-[19%]">
+                      Definición de medida
+                    </TableHead>
                     <TableHead className="w-[9%]">Estado</TableHead>
                     {canManage ? (
                       <TableHead className="w-[8%] text-right">
@@ -691,6 +746,19 @@ export function ProductosServiciosTable({
                           {producto.tercerizado ? (
                             <span className={styles.outsourcedPill}>
                               Tercerizado
+                            </span>
+                          ) : null}
+                          <span
+                            className={styles.compositionPill}
+                            data-kind={
+                              producto.esCompuesto ? "compuesto" : "simple"
+                            }
+                          >
+                            {producto.esCompuesto ? "Compuesto" : "Simple"}
+                          </span>
+                          {producto.usadoComoComponente ? (
+                            <span className={styles.componentPill}>
+                              Usado como componente
                             </span>
                           ) : null}
                         </TableCell>

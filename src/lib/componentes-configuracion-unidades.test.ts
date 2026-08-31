@@ -12,6 +12,8 @@ describe("unidades visibles de componentes fabricados", () => {
     expect(unidadVisibleParametro("medidaCustomMm.anchoMm", "mm")).toBe("cm");
     expect(valorInternoAVisible("medidaCustomMm.anchoMm", 1250)).toBe(125);
     expect(valorVisibleAInterno("medidaCustomMm.altoMm", 80)).toBe(800);
+    expect(unidadVisibleParametro("profundidadMm", "mm")).toBe("cm");
+    expect(valorVisibleAInterno("profundidadMm", 18)).toBe(180);
   });
 
   it("convierte suma y resta, pero conserva multiplicadores sin unidad", () => {

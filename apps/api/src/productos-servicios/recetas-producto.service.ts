@@ -247,6 +247,7 @@ export class RecetasProductoService {
             ? null
             : jsonSeguro(item.configuracionJson),
         nodoIncorporacionClave: item.nodoIncorporacionClave,
+        nodosPredecesoresClaves: item.nodosPredecesoresClaves,
         orden: item.orden,
       })),
       pasosCompuestos: receta.revisionPublicada.pasosCompuestosJson
@@ -335,21 +336,36 @@ export class RecetasProductoService {
             ? null
             : jsonSeguro(item.configuracionJson),
         nodoIncorporacionClave: item.nodoIncorporacionClave,
+        nodosPredecesoresClaves: item.nodosPredecesoresClaves,
         orden: item.orden,
       })) ??
       [];
+    if (producto.estructuraProducto === 'SIMPLE' && componentes.length > 0) {
+      throw new BadRequestException(
+        'Este producto está definido como simple. Cambialo a compuesto en Identidad antes de agregar componentes fabricados.',
+      );
+    }
     await this.validarReferenciasBorrador(
       auth.tenantId,
       productoId,
       documentos,
       componentes,
     );
+    const nombresPasoVigentes = new Map(
+      configuracion.pasos.map((paso) => [paso.clave, paso.nombre]),
+    );
     const pasosCompuestos = leerConfiguracionesPasosCompuestos(
       dto.pasosCompuestos ??
         borradorExistente?.pasosCompuestosJson ??
         existente?.revisionPublicada?.pasosCompuestosJson ??
         [],
-    );
+    ).map((paso) => ({
+      ...paso,
+      // El nombre es contextual al producto y puede cambiar en el editor de
+      // ruta. La sincronización debe conservar la subruta configurada, pero no
+      // una etiqueta vieja que vuelva a confundir BOM y componentes.
+      pasoNombre: nombresPasoVigentes.get(paso.nodoClave) ?? paso.pasoNombre,
+    }));
     const componentesVersionados = await this.componentesConRevisionActual(
       auth.tenantId,
       componentes,
@@ -371,7 +387,9 @@ export class RecetasProductoService {
         : undefined;
     const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
       existente?.revisionPublicada?.grafoProduccionJson) as
-      (GrafoProduccion & Prisma.JsonObject) | null | undefined;
+      | (GrafoProduccion & Prisma.JsonObject)
+      | null
+      | undefined;
     const gatesFuente = dto.gates
       ? dto.gates
       : (grafoAnterior?.nodos ?? []).flatMap((nodo) =>
@@ -403,6 +421,60 @@ export class RecetasProductoService {
           `El nodo de incorporación de "${componente.nombre}" ya no existe en esta ruta.`,
         );
       }
+      for (const predecesor of componente.nodosPredecesoresClaves ?? []) {
+        if (!clavesNodo.has(predecesor)) {
+          throw new BadRequestException(
+            `La dependencia inicial de "${componente.nombre}" referencia un nodo que ya no existe.`,
+          );
+        }
+      }
+    }
+    try {
+      validarYOrdenarGrafo(
+        [
+          ...grafoProduccion.nodos,
+          ...componentes
+            .filter(
+              (item) =>
+                (item.politicaEjecucion ?? 'INDEPENDIENTE') === 'INDEPENDIENTE',
+            )
+            .map((item, index) => ({
+              clave: `componente:${item.codigo}`,
+              indice: grafoProduccion.nodos.length + index,
+            })),
+        ],
+        [
+          ...grafoProduccion.aristas,
+          ...componentes
+            .filter(
+              (item) =>
+                (item.politicaEjecucion ?? 'INDEPENDIENTE') === 'INDEPENDIENTE',
+            )
+            .flatMap((item) => {
+              const nodoComponente = `componente:${item.codigo}`;
+              return [
+                ...(item.nodosPredecesoresClaves ?? []).map((desdeClave) => ({
+                  desdeClave,
+                  haciaClave: nodoComponente,
+                })),
+                ...(item.nodoIncorporacionClave
+                  ? [
+                      {
+                        desdeClave: nodoComponente,
+                        haciaClave: item.nodoIncorporacionClave,
+                      },
+                    ]
+                  : []),
+              ];
+            }),
+        ],
+      );
+    } catch (error: unknown) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Las dependencias de los componentes no forman un flujo válido.',
+      );
     }
     await this.validarPasosCompuestos(
       auth.tenantId,
@@ -545,6 +617,7 @@ export class RecetasProductoService {
               (item.configuracionJson as Prisma.InputJsonValue | undefined) ??
               undefined,
             nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
+            nodosPredecesoresClaves: item.nodosPredecesoresClaves ?? [],
             orden: item.orden ?? index,
           })),
         });
@@ -654,7 +727,9 @@ export class RecetasProductoService {
       );
     }
     const grafoActual = revision.grafoProduccionJson as
-      GrafoProduccion | null | undefined;
+      | GrafoProduccion
+      | null
+      | undefined;
     await this.validarPasosCompuestos(
       auth.tenantId,
       pasosCompuestosActuales,
@@ -1245,8 +1320,13 @@ export class RecetasProductoService {
         nombre: producto.nombre,
         unidadComercial: producto.unidadComercial,
         modoMedidas: producto.modoMedidas,
+        dimensionesRequeridas: producto.dimensionesRequeridas,
         medidaDefaultAnchoMm: numero(producto.medidaDefaultAnchoMm, 0),
         medidaDefaultAltoMm: numero(producto.medidaDefaultAltoMm, 0),
+        medidaDefaultProfundidadMm: numero(
+          producto.medidaDefaultProfundidadMm,
+          0,
+        ),
         medidasPredefinidasJson: jsonSeguro(producto.medidasPredefinidasJson),
         atributosComercialesJson: jsonSeguro(producto.atributosComercialesJson),
       },
@@ -1267,9 +1347,9 @@ export class RecetasProductoService {
     };
   }
 
-  /** Materializa los hijos de una etapa compuesta como pasos productivos del
-   * snapshot. El grafo principal conserva el contenedor legible; el detalle
-   * completo queda agrupado por `contenedorClave` y participa de BOM/recursos. */
+  /** Materializa las operaciones privadas de una etapa como pasos de cálculo
+   * del snapshot. El motor los evalúa con toda la precisión del editor normal,
+   * pero consolida el resultado antes de exponerlo a la OT y al Tablero. */
   private incorporarPasosInternos(
     configuracion: SnapshotConfiguracion,
     compuestos: ConfiguracionPasoCompuesto[],
@@ -1367,6 +1447,9 @@ export class RecetasProductoService {
             ? null
             : jsonSeguro(item.configuracionJson),
         nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
+        ...((item.nodosPredecesoresClaves?.length ?? 0) > 0
+          ? { nodosPredecesoresClaves: item.nodosPredecesoresClaves }
+          : {}),
         orden: item.orden ?? index,
       }))
       .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo));

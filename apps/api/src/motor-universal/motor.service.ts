@@ -119,6 +119,7 @@ import {
   type NivelCobertura,
 } from '../productos-servicios/cobertura-toner';
 import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
+import { consolidarEtapasCompuestas } from './etapas-compuestas';
 
 export function aplicarMermaAdicional(
   cantidad: number,
@@ -777,7 +778,6 @@ export class MotorUniversalService {
         ),
       };
     }
-
     // JobContext mutable (los pasos PRE pueden mutarlo) + defaults sensatos
     const jobContext: JobContext = {
       caras: 1, // simple faz por defecto (se sobrescribe con input)
@@ -902,6 +902,27 @@ export class MotorUniversalService {
         },
       ];
     }
+    if (
+      (producto.dimensionesRequeridas ?? ['ANCHO', 'ALTO']).includes(
+        'PROFUNDIDAD',
+      ) &&
+      !this.numeroPositivo(jobContext.profundidadMm)
+    ) {
+      if (producto.medidaDefaultProfundidadMm) {
+        jobContext.profundidadMm = producto.medidaDefaultProfundidadMm;
+      } else {
+        return fallar([
+          {
+            codigo: 'profundidad_producto_requerida',
+            severidad: 'ERROR',
+            mensaje:
+              'Este producto es 3D y necesita una profundidad para cotizarse.',
+            sugerencia:
+              'Ingresá la profundidad definida por el contrato comercial del producto.',
+          },
+        ]);
+      }
+    }
     // Congelar la medida VISIBLE antes de que ningún paso PRE la mute. Los
     // pasos que miden sobre el borde terminado (soldadura de bolsillo,
     // colocación de ojales) leen de acá; `piezas[]`/`medidaCustomMm` describen
@@ -997,7 +1018,7 @@ export class MotorUniversalService {
     // activación sobre outputs canónicos (`validacion-pre-pasada.ts`): acá
     // todavía no corrió nadie y ese dato no existe.
     const mutacionesPrePasada = new Map<string, MutacionAplicada>();
-    for (const paso of producto.pasos) {
+    for (const paso of producto.pasos.filter((item) => !item.contenedorClave)) {
       const paramsPaso = this.paramsEfectivosDelPaso(paso, jobContext);
       if (!declaraEfectoDemasia(paramsPaso)) continue;
       const activacion = this.evaluarActivacion(paso, jobContext);
@@ -1044,12 +1065,19 @@ export class MotorUniversalService {
     derivacionesDelJobContext(jobContext);
     let huboErrorEnPasoAnterior = false;
 
-    for (let i = 0; i < producto.pasos.length; i++) {
+    const pasosPrincipales = producto.pasos.filter(
+      (item) => !item.contenedorClave,
+    );
+    const pasosInternosCompuestos = producto.pasos.filter((item) =>
+      Boolean(item.contenedorClave),
+    );
+
+    for (let i = 0; i < pasosPrincipales.length; i++) {
       if (huboErrorEnPasoAnterior) {
         // Si un paso falló, no avanzamos a los siguientes (D.7 multi-error híbrido)
         break;
       }
-      const paso = producto.pasos[i];
+      const paso = pasosPrincipales[i];
 
       const ejecucion = await this.ejecutarPaso(
         input.tenantId,
@@ -1172,7 +1200,7 @@ export class MotorUniversalService {
       (acc, p) => acc + p.costoTotal,
       0,
     );
-    const cargosDirectosCotizacion = this.aplicarCargosCotizacion(
+    let cargosDirectosCotizacion = this.aplicarCargosCotizacion(
       producto.cargosDirectosCotizacion,
       jobContext,
       subtotalSinCargosCotizacion,
@@ -1187,7 +1215,7 @@ export class MotorUniversalService {
       (acc, p) => acc + (p.tiempo?.costo ?? 0),
       0,
     );
-    const materialesTotal = pasosEjecutados.reduce(
+    let materialesTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc + (p.materiales?.reduce((m, mat) => m + mat.costoTotal, 0) ?? 0),
       0,
@@ -1196,23 +1224,23 @@ export class MotorUniversalService {
     // cargos (no son tiempo de trabajo) pero las métricas por centro de costo
     // los leen como lo que son, horas de un centro.
     // Ver docs/cargos-por-paso-analisis-y-plan.md §7.3.
-    const tiempoExtraTotal = pasosEjecutados.reduce(
+    let tiempoExtraTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc + (p.tiempo?.tiemposExtra?.reduce((t, b) => t + b.costo, 0) ?? 0),
       0,
     );
-    const cargosDirectosPasoTotal = pasosEjecutados.reduce(
+    let cargosDirectosPasoTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc + (p.cargosDirectosPaso?.reduce((c, cd) => c + cd.monto, 0) ?? 0),
       0,
     );
-    const cargosDirectosCotizacionTotal = cargosDirectosCotizacion.reduce(
+    let cargosDirectosCotizacionTotal = cargosDirectosCotizacion.reduce(
       (acc, c) => acc + c.monto,
       0,
     );
-    const cargosDirectosTotal =
+    let cargosDirectosTotal =
       cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
-    const cargosSinMargenTotal =
+    let cargosSinMargenTotal =
       pasosEjecutados.reduce(
         (acc, paso) =>
           acc +
@@ -1232,7 +1260,7 @@ export class MotorUniversalService {
     // el costoTotal del paso incluye los materiales del inventario — acá se
     // restan porque `materialesTotal` (arriba) ya los contó: este bucket es
     // SÓLO lo que cobra el proveedor.
-    const tercerizadoTotal = pasosEjecutados.reduce(
+    let tercerizadoTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc +
         (p.tercerizado
@@ -1244,7 +1272,10 @@ export class MotorUniversalService {
     const componentesFabricados: ComponenteFabricadoCosteado[] = [];
     const outputsComponentes: Record<string, Record<string, unknown>> = {};
     let incorporacionComponentesTotal = 0;
-    if (recetaPublicada?.componentes.length) {
+    if (
+      recetaPublicada &&
+      (recetaPublicada.componentes.length || pasosInternosCompuestos.length)
+    ) {
       const camino = opciones?.componentesCamino ?? [input.productoId];
       let componentesOrdenados: typeof recetaPublicada.componentes;
       try {
@@ -1371,9 +1402,249 @@ export class MotorUniversalService {
           dependenciasCalculo: dependenciasCalculoComponente(
             componente.configuracionJson,
           ),
+          nodoIncorporacionClave: componente.nodoIncorporacionClave,
+          pasos: hija.pasos,
           componentes: hija.componentesFabricados,
         });
       }
+
+      // Fase 4.2.2 — las operaciones internas usan el cálculo completo de un
+      // paso, pero son privadas de la etapa. Se resuelven DESPUÉS de fabricar
+      // los componentes y se consolidan antes de emitir la cotización/OT.
+      // Sólo en este punto existen sus outputs públicos. El contexto mantiene
+      // los datos del padre, publica todos los hijos bajo `componentes` y,
+      // cuando el paso se vinculó a un único hijo, expone además sus outputs
+      // en forma plana para reutilizar las reglas controladas del editor normal.
+      const nombresEtapasCompuestas = new Map<string, string>();
+      for (const etapa of recetaPublicada.pasosCompuestos ?? []) {
+        nombresEtapasCompuestas.set(etapa.nodoClave, etapa.pasoNombre);
+        nombresEtapasCompuestas.set(
+          etapa.nodoClave.replace(/^ruta:/, ''),
+          etapa.pasoNombre,
+        );
+      }
+
+      for (const paso of pasosInternosCompuestos) {
+        if (errores.some((error) => error.severidad === 'ERROR')) break;
+
+        const codigosVinculados = paso.componentesCodigos ?? [];
+        const outputsVinculados =
+          codigosVinculados.length === 1
+            ? outputsComponentes[codigosVinculados[0]]
+            : undefined;
+        const contextoPaso = {
+          ...jobContext,
+          ...(outputsVinculados ?? {}),
+          componentes: outputsComponentes,
+        } as JobContext;
+        derivacionesDelJobContext(contextoPaso);
+
+        const paramsPaso = this.paramsEfectivosDelPaso(paso, contextoPaso);
+        if (declaraEfectoDemasia(paramsPaso)) {
+          const activacion = this.evaluarActivacion(paso, contextoPaso);
+          if (activacion.activado) {
+            const efecto = leerEfectoDemasia(paramsPaso);
+            if (!efecto) {
+              errores.push({
+                codigo: 'efecto_demasia_mal_configurado',
+                severidad: 'ERROR',
+                rutaPasoId: paso.rutaPasoId,
+                rutaPasoOrden: paso.rutaPasoOrden,
+                familiaCodigo: paso.familiaCodigo,
+                mensaje: `El paso "${paso.nombreVisible ?? paso.familiaCodigo}" no declara lados afectados ni demasía válida.`,
+                sugerencia:
+                  'Configurar los lados afectados y la demasía por lado en el paso interno.',
+              });
+              break;
+            }
+            const traza = aplicarMutacionPre(contextoPaso, efecto, {
+              rutaPasoId: paso.rutaPasoId,
+              nombrePaso: paso.nombreVisible ?? paso.familiaCodigo,
+            });
+            if (traza) mutacionesPrePasada.set(paso.rutaPasoId, traza);
+          }
+        }
+
+        const ejecucion = await this.ejecutarPaso(
+          input.tenantId,
+          paso,
+          contextoPaso,
+          errores,
+          tarifasMap,
+          periodo,
+          outputsAcumulados,
+        );
+        ejecucion.contenedorClave = paso.contenedorClave ?? null;
+        ejecucion.contenedorNombre = paso.contenedorClave
+          ? (nombresEtapasCompuestas.get(paso.contenedorClave) ?? null)
+          : null;
+        ejecucion.pasoInternoCodigo = paso.pasoInternoCodigo ?? null;
+        ejecucion.componentesCodigos = paso.componentesCodigos ?? [];
+        const arrastrado = arrastrePorConfigPasoId.get(paso.configPasoId);
+        if (arrastrado && ejecucion.activado) {
+          ejecucion.activadoPorDependencia = {
+            requeridoPorNombre: arrastrado.requeridoPorNombre,
+          };
+        }
+        const trazaPre = mutacionesPrePasada.get(paso.rutaPasoId);
+        if (trazaPre) ejecucion.mutacionAplicada = trazaPre;
+        pasosEjecutados.push(ejecucion);
+
+        if (
+          errores.some(
+            (error) =>
+              error.rutaPasoId === paso.rutaPasoId &&
+              error.severidad === 'ERROR',
+          )
+        ) {
+          break;
+        }
+
+        if (ejecucion.outputsCanonicos) {
+          for (const [key, value] of Object.entries(
+            ejecucion.outputsCanonicos,
+          )) {
+            if (value === null || value === undefined) continue;
+            if (
+              outputsAcumulados.has(key) &&
+              !outputsAmbiguosAdvertidos.has(key)
+            ) {
+              outputsAmbiguosAdvertidos.add(key);
+              errores.push({
+                codigo: 'output_canonico_ambiguo',
+                severidad: 'WARNING',
+                mensaje: `Más de un paso publicó el output "${key}"; se conserva el último valor.`,
+                rutaPasoId: paso.rutaPasoId,
+                rutaPasoOrden: paso.rutaPasoOrden,
+                familiaCodigo: paso.familiaCodigo,
+                contexto: { outputCanonico: key },
+                sugerencia:
+                  'Configurar el consumidor con un origen explícito cuando haya más de un emisor.',
+              });
+            }
+            (jobContext as Record<string, unknown>)[key] = value;
+            outputsAcumulados.add(key);
+          }
+        }
+        if (ejecucion.capacidades?.length) {
+          const ctx = jobContext as Record<string, unknown>;
+          const porPaso = (ctx[KEY_CAPACIDADES_POR_PASO] ?? {}) as Record<
+            string,
+            CapacidadEmitida[]
+          >;
+          porPaso[paso.rutaPasoId] = ejecucion.capacidades;
+          ctx[KEY_CAPACIDADES_POR_PASO] = porPaso;
+        }
+
+        const derivadorDecl = resolverFamilia(paso.familiaCodigo)?.derivador;
+        if (derivadorDecl && ejecucion.activado) {
+          const derivacion =
+            derivacionesDelJobContext(contextoPaso)[paso.configPasoId];
+          if (!derivacion) {
+            errores.push({
+              codigo: derivadorDecl.codigoSinDatos ?? 'derivador_sin_datos',
+              severidad: 'ERROR',
+              rutaPasoId: paso.rutaPasoId,
+              rutaPasoOrden: paso.rutaPasoOrden,
+              familiaCodigo: paso.familiaCodigo,
+              mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" ${derivadorDecl.mensajeSinDatos}`,
+              sugerencia: derivadorDecl.sugerenciaSinDatos,
+            });
+          } else {
+            const layout = derivacion.traza?.ojalesLayout as
+              PasoEjecutado['ojalesLayout'] | undefined;
+            if (layout?.length) {
+              ejecucion.ojalesLayout = layout;
+              ejecucion.ojalesConfig = derivacion.traza
+                ?.ojalesConfig as PasoEjecutado['ojalesConfig'];
+            }
+          }
+        }
+
+        if (codigosVinculados.length > 0 && ejecucion.activado) {
+          incorporacionComponentesTotal += ejecucion.costoTotal;
+        }
+      }
+
+      if (errores.some((error) => error.severidad === 'ERROR')) {
+        return fallar(errores);
+      }
+
+      // Los cargos y buckets se recalculan recién ahora: ya incluyen el costo
+      // real de los pasos internos, sus materiales y su tercerización.
+      cargosDirectosCotizacion = this.aplicarCargosCotizacion(
+        producto.cargosDirectosCotizacion,
+        jobContext,
+        pasosEjecutados.reduce((acc, paso) => acc + paso.costoTotal, 0),
+        errores,
+      );
+      if (errores.some((error) => error.severidad === 'ERROR')) {
+        return fallar(errores);
+      }
+      tiempoTotal = pasosEjecutados.reduce(
+        (acc, paso) => acc + (paso.tiempo?.costo ?? 0),
+        0,
+      );
+      materialesTotal = pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.materiales?.reduce(
+            (subtotal, material) => subtotal + material.costoTotal,
+            0,
+          ) ?? 0),
+        0,
+      );
+      tiempoExtraTotal = pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.tiempo?.tiemposExtra?.reduce(
+            (subtotal, bloque) => subtotal + bloque.costo,
+            0,
+          ) ?? 0),
+        0,
+      );
+      cargosDirectosPasoTotal = pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.cargosDirectosPaso?.reduce(
+            (subtotal, cargo) => subtotal + cargo.monto,
+            0,
+          ) ?? 0),
+        0,
+      );
+      cargosDirectosCotizacionTotal = cargosDirectosCotizacion.reduce(
+        (acc, cargo) => acc + cargo.monto,
+        0,
+      );
+      cargosDirectosTotal =
+        cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
+      cargosSinMargenTotal =
+        pasosEjecutados.reduce(
+          (acc, paso) =>
+            acc +
+            (paso.cargosDirectosPaso?.reduce(
+              (subtotal, cargo) =>
+                subtotal + (cargo.aplicaMargen ? 0 : cargo.monto),
+              0,
+            ) ?? 0),
+          0,
+        ) +
+        cargosDirectosCotizacion.reduce(
+          (acc, cargo) => acc + (cargo.aplicaMargen ? 0 : cargo.monto),
+          0,
+        );
+      tercerizadoTotal = pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.tercerizado
+            ? paso.costoTotal -
+              (paso.materiales?.reduce(
+                (subtotal, material) => subtotal + material.costoTotal,
+                0,
+              ) ?? 0)
+            : 0),
+        0,
+      );
 
       const operacionesResueltas: Array<
         | ReturnType<typeof resolverOperacionesIncorporacion>[number]
@@ -1554,6 +1825,11 @@ export class MotorUniversalService {
       ),
     );
 
+    // 4.2.2: las operaciones internas ya aportaron sus tiempos, materiales y
+    // costos a los totales. Desde este límite se exponen como una única etapa
+    // operativa para que OT y Tablero no materialicen estados independientes.
+    const pasosOperativos = consolidarEtapasCompuestas(pasosEjecutados);
+
     const cotizacion: CotizacionResultado = {
       productoId: producto.productoId,
       productoNombre: producto.productoNombre,
@@ -1594,7 +1870,7 @@ export class MotorUniversalService {
       },
       componentesFabricados,
       outputsComposicion,
-      pasos: pasosEjecutados,
+      pasos: pasosOperativos,
       cargosDirectosCotizacion,
     };
 
@@ -9545,6 +9821,7 @@ export class MotorUniversalService {
       productoNombre: producto.nombre,
       unidadComercial: producto.unidadComercial,
       modoMedidas: producto.modoMedidas,
+      dimensionesRequeridas: producto.dimensionesRequeridas,
       minimoComercialPolitica: producto.minimoComercialPolitica,
       minimoComercialCantidad: producto.minimoComercialCantidad
         ? Number(producto.minimoComercialCantidad)
@@ -9558,6 +9835,9 @@ export class MotorUniversalService {
         : null,
       medidaDefaultAltoMm: producto.medidaDefaultAltoMm
         ? Number(producto.medidaDefaultAltoMm)
+        : null,
+      medidaDefaultProfundidadMm: producto.medidaDefaultProfundidadMm
+        ? Number(producto.medidaDefaultProfundidadMm)
         : null,
       precioConfigJson: producto.precioConfigJson,
       rutaAlternativaId: rutaAlt.id,
@@ -10172,6 +10452,19 @@ export class MotorUniversalService {
         return {
           ...cargado,
           rutaPasoOrden: item.orden,
+          contenedorClave:
+            typeof cfg.contenedorClave === 'string'
+              ? cfg.contenedorClave
+              : null,
+          pasoInternoCodigo:
+            typeof cfg.pasoInternoCodigo === 'string'
+              ? cfg.pasoInternoCodigo
+              : null,
+          componentesCodigos: Array.isArray(cfg.componentesCodigos)
+            ? cfg.componentesCodigos.filter(
+                (value): value is string => typeof value === 'string',
+              )
+            : [],
           dotacionOperarios: Number(cfg.dotacionOperarios ?? 1),
           requiereRutaPasoIds: Array.isArray(cfg.requiereCodigos)
             ? cfg.requiereCodigos.filter(

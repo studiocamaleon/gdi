@@ -154,7 +154,7 @@ export function ProductoDetalleView({
         <Card title={unidadLbl.descripcion}>
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1 text-xs">
-              <TagIcon className="size-3" /> ¿Cómo se cobra?
+              <TagIcon className="size-3" /> Unidad de venta
             </CardDescription>
             <CardTitle className="text-base">{unidadLbl.label}</CardTitle>
           </CardHeader>
@@ -162,7 +162,7 @@ export function ProductoDetalleView({
         <Card title={modoMedidasLbl.descripcion}>
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1 text-xs">
-              <RulerIcon className="size-3" /> Manejo de medidas
+              <RulerIcon className="size-3" /> Definición de la medida
             </CardDescription>
             <CardTitle className="text-base">
               {modoMedidasLbl.label}
@@ -170,7 +170,13 @@ export function ProductoDetalleView({
                 producto.medidaDefaultAnchoMm && (
                   <span className="text-muted-foreground ml-2 text-sm font-normal">
                     ({producto.medidaDefaultAnchoMm} ×{" "}
-                    {producto.medidaDefaultAltoMm} mm)
+                    {producto.medidaDefaultAltoMm}
+                    {producto.dimensionesRequeridas?.includes(
+                      "PROFUNDIDAD",
+                    ) && producto.medidaDefaultProfundidadMm
+                      ? ` × ${producto.medidaDefaultProfundidadMm}`
+                      : ""}{" "}
+                    mm)
                   </span>
                 )}
             </CardTitle>

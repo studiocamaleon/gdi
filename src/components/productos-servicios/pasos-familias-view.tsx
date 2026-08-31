@@ -62,6 +62,9 @@ export function PasosFamiliasView({
   const [errorCarga, setErrorCarga] = React.useState(false);
   const [busquedaCatalogo, setBusquedaCatalogo] = React.useState("");
   const [categoriaCatalogo, setCategoriaCatalogo] = React.useState("todas");
+  const [tipoVisible, setTipoVisible] = React.useState<"SIMPLE" | "COMPUESTO">(
+    "SIMPLE",
+  );
 
   const recargar = React.useCallback(async () => {
     setPasos(await getPasosTenant());
@@ -124,6 +127,10 @@ export function PasosFamiliasView({
       ].some((texto) => normalizarBusqueda(texto).includes(query));
     });
   }, [busquedaCatalogo, categoriaCatalogo, sistema]);
+  const pasosVisibles = React.useMemo(
+    () => pasos.filter((paso) => paso.tipoPaso === tipoVisible),
+    [pasos, tipoVisible],
+  );
 
   const toggleActivo = async (paso: PasoTenant) => {
     try {
@@ -164,15 +171,38 @@ export function PasosFamiliasView({
         ) : null}
       </div>
 
+      <nav className={s.tipoNav} aria-label="Tipo de paso">
+        <button
+          type="button"
+          data-active={tipoVisible === "SIMPLE"}
+          onClick={() => setTipoVisible("SIMPLE")}
+        >
+          <strong>Pasos simples</strong>
+          <span>Operaciones reales con tiempo, materiales y recursos</span>
+        </button>
+        <button
+          type="button"
+          data-active={tipoVisible === "COMPUESTO"}
+          onClick={() => setTipoVisible("COMPUESTO")}
+        >
+          <strong>Etapas compuestas</strong>
+          <span>Subrutas reutilizables que agrupan pasos reales</span>
+        </button>
+      </nav>
+
       <div className={s.wrap}>
         <section className={s.seccion}>
           <div className={s.seccionHead}>
             <div>
-              <div className={s.seccionTitulo}>Tus pasos</div>
+              <div className={s.seccionTitulo}>
+                {tipoVisible === "COMPUESTO"
+                  ? "Tus etapas compuestas"
+                  : "Tus pasos simples"}
+              </div>
               <div className={s.seccionSub}>
-                Creados por tu empresa a partir de una plantilla del catálogo:
-                heredan cómo se calculan y agregan la configuración base de tu
-                taller.
+                {tipoVisible === "COMPUESTO"
+                  ? "Subrutas reutilizables que definen qué pasos reales contiene una etapa; se configuran en el contexto de cada producto."
+                  : "Creados por tu empresa a partir de una plantilla del catálogo: heredan cómo se calculan y agregan la configuración base de tu taller."}
               </div>
             </div>
           </div>
@@ -189,10 +219,14 @@ export function PasosFamiliasView({
                 onClick: () => window.location.reload(),
               }}
             />
-          ) : pasos.length === 0 ? (
+          ) : pasosVisibles.length === 0 ? (
             <EstadoVacio
               variant="compacto"
-              titulo="Todavía no creaste pasos propios"
+              titulo={
+                tipoVisible === "COMPUESTO"
+                  ? "Todavía no creaste etapas compuestas"
+                  : "Todavía no creaste pasos simples"
+              }
               cta={
                 puedeGestionar
                   ? {
@@ -216,7 +250,7 @@ export function PasosFamiliasView({
                   </tr>
                 </thead>
                 <tbody>
-                  {pasos.map((paso) => (
+                  {pasosVisibles.map((paso) => (
                     <tr
                       key={paso.id}
                       className={paso.activo ? undefined : s.inactiva}
@@ -308,6 +342,7 @@ export function PasosFamiliasView({
           )}
         </section>
 
+        {tipoVisible === "SIMPLE" ? (
         <section className={s.seccion}>
           <div className={s.seccionHead}>
             <div>
@@ -399,6 +434,7 @@ export function PasosFamiliasView({
             </p>
           ) : null}
         </section>
+        ) : null}
       </div>
 
       {puedeGestionar ? (

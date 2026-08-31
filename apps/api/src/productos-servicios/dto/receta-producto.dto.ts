@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -110,6 +111,15 @@ export class RecetaComponenteDto {
   @IsString()
   @Length(1, 160)
   nodoIncorporacionClave?: string | null;
+
+  /** Pasos del padre que habilitan el inicio de la subruta hija. */
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(160, { each: true })
+  nodosPredecesoresClaves?: string[];
 
   @IsOptional()
   @Type(() => Number)

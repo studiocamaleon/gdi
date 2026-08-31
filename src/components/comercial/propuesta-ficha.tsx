@@ -1775,6 +1775,10 @@ function formatMinutos(min: number) {
   return `${min.toLocaleString("es-AR", { maximumFractionDigits: 1 })} min`;
 }
 
+function normalizarNodoRuta(value?: string | null) {
+  return (value ?? "").replace(/^ruta:/, "");
+}
+
 function formatTiempoPaso(paso: PasoCosteo) {
   if (!paso.tiempo) return "-";
   return formatMinutos(paso.tiempo.totalMin);
@@ -2075,6 +2079,48 @@ function ProduccionItemView({
   const tieneBrief = briefDisenoTieneContenido(briefDiseno);
   const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
   const pasosActivos = pasosCosteoActivos;
+  const componentesFabricados = item.cotizacion.componentesFabricados ?? [];
+  const bloquesRuta = React.useMemo(() => {
+    const bloques: Array<
+      | { tipo: "paso"; clave: string; pasos: PasoCosteo[] }
+      | {
+          tipo: "compuesto";
+          clave: string;
+          nombre: string;
+          pasos: PasoCosteo[];
+        }
+    > = [];
+    const compuestos = new Map<
+      string,
+      Extract<(typeof bloques)[number], { tipo: "compuesto" }>
+    >();
+
+    for (const paso of pasosActivos) {
+      if (!paso.contenedorClave) {
+        bloques.push({
+          tipo: "paso",
+          clave:
+            paso.rutaPasoId ?? `${paso.familiaCodigo}-${paso.rutaPasoOrden}`,
+          pasos: [paso],
+        });
+        continue;
+      }
+      const clave = normalizarNodoRuta(paso.contenedorClave);
+      let bloque = compuestos.get(clave);
+      if (!bloque) {
+        bloque = {
+          tipo: "compuesto",
+          clave,
+          nombre: paso.contenedorNombre?.trim() || "Etapa compuesta",
+          pasos: [],
+        };
+        compuestos.set(clave, bloque);
+        bloques.push(bloque);
+      }
+      bloque.pasos.push(paso);
+    }
+    return bloques;
+  }, [pasosActivos]);
   // Cartelería con estructura de bastidor: se muestra el visor 3D del marco a
   // fabricar. El visor pide la estructura del snapshot y se auto-oculta si no
   // la hay (ítem sin OT emitida todavía).
@@ -2178,7 +2224,133 @@ function ProduccionItemView({
           ) : null}
         </div>
         <div className="production-route">
-          {pasosActivos.map((paso, index) => {
+          {bloquesRuta.map((bloque, bloqueIndex) => {
+            const componentesDelBloque = componentesFabricados.filter(
+              (componente) =>
+                normalizarNodoRuta(componente.nodoIncorporacionClave) ===
+                normalizarNodoRuta(bloque.clave),
+            );
+            const componenteCards = componentesDelBloque.length ? (
+              <>
+                <div className="production-branch-label">
+                  <span>Fabricación en paralelo</span>
+                  <small>
+                    Cada componente conserva su propia ruta antes de
+                    incorporarse.
+                  </small>
+                </div>
+                <div className="production-component-branches">
+                  {componentesDelBloque.map((componente) => {
+                    const pasosComponente = (componente.pasos ?? []).filter(
+                      (paso) =>
+                        paso.activado &&
+                        (paso.costoTotal > 0 ||
+                          (paso.tiempo?.totalMin ?? 0) > 0),
+                    );
+                    return (
+                      <div
+                        className="production-component"
+                        key={componente.codigo}
+                      >
+                        <div className="production-component-head">
+                          <span aria-hidden="true">◇</span>
+                          <div>
+                            <strong>{componente.nombre}</strong>
+                            <small>
+                              {componente.cantidad} {componente.unidad}
+                            </small>
+                          </div>
+                        </div>
+                        <div className="production-component-steps">
+                          {pasosComponente.length ? (
+                            pasosComponente.map((paso, index) => (
+                              <div
+                                className="production-component-step"
+                                key={`${componente.codigo}-${paso.rutaPasoId ?? index}`}
+                              >
+                                <span>
+                                  {String(index + 1).padStart(2, "0")}
+                                </span>
+                                <div>
+                                  <strong>
+                                    {paso.nombreVisible?.trim() ||
+                                      humanizeCodigo(paso.familiaCodigo)}
+                                  </strong>
+                                  <small>
+                                    {paso.tiempo
+                                      ? `${formatMinutos(paso.tiempo.totalMin)} · ${paso.tiempo.centroCostoNombre ?? "Producción"}`
+                                      : "Proceso tercerizado"}
+                                  </small>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <small className="production-component-empty">
+                              Sin pasos productivos activos.
+                            </small>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="production-convergence" aria-hidden="true">
+                  <span />
+                  <strong>Se incorporan en</strong>
+                  <span />
+                </div>
+              </>
+            ) : null;
+
+            if (bloque.tipo === "compuesto") {
+              return (
+                <React.Fragment key={`compuesto-${bloque.clave}`}>
+                  {componenteCards}
+                  <details className="production-compound" open>
+                    <summary>
+                      <span className="production-compound-index">
+                        {String(bloqueIndex + 1).padStart(2, "0")}
+                      </span>
+                      <div>
+                        <strong>{bloque.nombre}</strong>
+                        <small>
+                          Etapa compuesta · {bloque.pasos.length} pasos internos
+                        </small>
+                      </div>
+                      <span className="production-compound-toggle">
+                        Ver detalle
+                      </span>
+                    </summary>
+                    <div className="production-compound-steps">
+                      {bloque.pasos.map((paso, index) => {
+                        const title =
+                          paso.nombreVisible?.trim() ||
+                          humanizeCodigo(paso.familiaCodigo);
+                        return (
+                          <div
+                            className="production-step"
+                            key={`${bloque.clave}-${paso.rutaPasoId ?? index}`}
+                          >
+                            <span>{index + 1}</span>
+                            <div>
+                              <strong>{title}</strong>
+                              <small>
+                                {paso.tiempo
+                                  ? `${formatTiempoPaso(paso)} · ${getCentroCostoLabel(paso)}`
+                                  : getCentroCostoLabel(paso)}
+                              </small>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                </React.Fragment>
+              );
+            }
+
+            const paso = bloque.pasos[0];
+            const index = bloqueIndex;
             const title =
               paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
             const esTiempoManual =
@@ -2188,23 +2360,69 @@ function ProduccionItemView({
                   esTiempoManual ? " (estimado por el comercial)" : ""
                 } · ${getCentroCostoLabel(paso)}`
               : getCentroCostoLabel(paso);
+            if (paso.operacionesInternas?.length) {
+              return (
+                <React.Fragment key={`${title}-${index}`}>
+                  {componenteCards}
+                  <details className="production-compound">
+                    <summary>
+                      <span className="production-compound-index">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <div>
+                        <strong>{title}</strong>
+                        <small>
+                          {detail} · {paso.operacionesInternas.length}{" "}
+                          {paso.operacionesInternas.length === 1
+                            ? "operación interna"
+                            : "operaciones internas"}
+                        </small>
+                      </div>
+                      <span className="production-compound-toggle">
+                        Ver desglose
+                      </span>
+                    </summary>
+                    <div className="production-compound-steps">
+                      {paso.operacionesInternas.map((operacion, opIndex) => (
+                        <div
+                          className="production-step"
+                          key={`${operacion.codigo}-${opIndex}`}
+                        >
+                          <span>{opIndex + 1}</span>
+                          <div>
+                            <strong>{operacion.nombre}</strong>
+                            <small>
+                              {formatMinutos(operacion.duracionMin)} ·{" "}
+                              {operacion.centroCostoNombre ?? "Sin centro"}
+                            </small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </React.Fragment>
+              );
+            }
             return (
-              <div className="production-step" key={`${title}-${index}`}>
-                <span>{index + 1}</span>
-                <div>
-                  <strong>{title}</strong>
-                  <small>{detail}</small>
-                  {paso.familiaCodigo === "diseno_grafico" &&
-                  tieneBrief &&
-                  onOpenBrief ? (
-                    <BriefDisenoProduccion
-                      brief={briefDiseno}
-                      caras={carasBrief}
-                      onOpen={onOpenBrief}
-                    />
-                  ) : null}
+              <React.Fragment key={`${title}-${index}`}>
+                {componenteCards}
+                <div className="production-step">
+                  <span>{index + 1}</span>
+                  <div>
+                    <strong>{title}</strong>
+                    <small>{detail}</small>
+                    {paso.familiaCodigo === "diseno_grafico" &&
+                    tieneBrief &&
+                    onOpenBrief ? (
+                      <BriefDisenoProduccion
+                        brief={briefDiseno}
+                        caras={carasBrief}
+                        onOpen={onOpenBrief}
+                      />
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              </React.Fragment>
             );
           })}
         </div>

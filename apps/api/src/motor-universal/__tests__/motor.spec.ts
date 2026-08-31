@@ -8,6 +8,7 @@
 
 import {
   EstadoTarifaCentroCostoPeriodo,
+  EstructuraProducto,
   EtapaDesarrolloDocumento,
   FamiliaMateriaPrima,
   Prisma,
@@ -4467,9 +4468,14 @@ describe('MotorUniversalService — smoke tests', () => {
       data: { slotRol: 'SUSTRATO' },
     });
     const rigido = await productos.obtenerProducto(tenantId, rigidoInicial.id);
+    const estructuraRigidoOriginal = rigido.estructuraProducto;
 
     await prisma.productoReceta.deleteMany({
       where: { tenantId, productoId: { in: [rigido.id, tarjetas.id] } },
+    });
+    await prisma.producto.update({
+      where: { id: rigido.id },
+      data: { estructuraProducto: EstructuraProducto.COMPUESTO },
     });
     try {
       const rutaTarjetas =
@@ -4720,6 +4726,10 @@ describe('MotorUniversalService — smoke tests', () => {
     } finally {
       await prisma.productoReceta.deleteMany({
         where: { tenantId, productoId: { in: [rigido.id, tarjetas.id] } },
+      });
+      await prisma.producto.update({
+        where: { id: rigido.id },
+        data: { estructuraProducto: estructuraRigidoOriginal },
       });
       await prisma.productoConfigPasoSlotMaterial.deleteMany({
         where: {

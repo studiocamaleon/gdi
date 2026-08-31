@@ -119,6 +119,7 @@ import {
   getMedidaDefault,
   getMedidasPredefinidas,
   medidaLabel,
+  productoEs3D,
 } from "@/lib/producto-medidas";
 import { resolverPlanchaUtil } from "@/lib/medida-plancha";
 import {
@@ -738,13 +739,24 @@ function getCantidadDefault(producto: ProductoListItem) {
 function formatDefaultMedidas(producto: ProductoListItem) {
   const medidaDefault = getMedidaDefault(producto);
   if (medidaDefault) {
-    return formatMedidasCm(medidaDefault.anchoMm, medidaDefault.altoMm);
+    return formatMedidasCm(
+      medidaDefault.anchoMm,
+      medidaDefault.altoMm,
+      medidaDefault.profundidadMm,
+    );
   }
   if (producto.medidaDefaultAnchoMm && producto.medidaDefaultAltoMm) {
     const ancho = Number(producto.medidaDefaultAnchoMm);
     const alto = Number(producto.medidaDefaultAltoMm);
+    const profundidad = Number(producto.medidaDefaultProfundidadMm);
     if (Number.isFinite(ancho) && Number.isFinite(alto)) {
-      return formatMedidasCm(ancho, alto);
+      return formatMedidasCm(
+        ancho,
+        alto,
+        Number.isFinite(profundidad) && profundidad > 0
+          ? profundidad
+          : undefined,
+      );
     }
   }
   return modoMedidasPermitePersonalizada(producto.modoMedidas)
@@ -884,7 +896,11 @@ function formatMedidaPredefinidaSpec(
   medida: ReturnType<typeof getSelectedPredefinedMeasure>,
 ) {
   if (!medida) return "";
-  const size = formatMedidasCm(medida.anchoMm, medida.altoMm);
+  const size = formatMedidasCm(
+    medida.anchoMm,
+    medida.altoMm,
+    medida.profundidadMm,
+  );
   const label = medidaLabel(medida);
   if (
     !label ||
@@ -1229,30 +1245,6 @@ function getImposicionCaballeteDeRuta(
       const def = Number(imposicion.paginasDefault);
       return { paginasDefault: Number.isFinite(def) && def > 0 ? def : null };
     }
-  }
-  return null;
-}
-
-/**
- * Cartelería (backlight/light box): si la ruta tiene un bastidor DOBLE sin
- * profundidad fija en el paso, el comercial carga la profundidad del cajón.
- * Ver docs/carteleria-configurador-diseno.md §4.3.
- */
-function getProfundidadDeRuta(
-  ruta: RutaAlternativaDetalle | null,
-  includeConfig: (config: ConfigPasoDetalle) => boolean,
-): { profundidadDefaultMm: number | null } | null {
-  for (const config of ruta?.configPasos ?? []) {
-    if (!includeConfig(config)) continue;
-    if (config.rutaPaso?.familiaCodigo !== "estructura_bastidor") continue;
-    const params = asRecord(config.paramsPasoJson);
-    if (String(params.tipoBastidor ?? "doble").toLowerCase() === "simple") {
-      continue;
-    }
-    const fija = Number(params.profundidadMm);
-    return {
-      profundidadDefaultMm: Number.isFinite(fija) && fija > 0 ? fija : null,
-    };
   }
   return null;
 }
@@ -2274,8 +2266,14 @@ function formatCmInputFromMm(value: number) {
   return formatNumberForSpec(mmToCm(mm));
 }
 
-function formatMedidasCm(anchoMm: number, altoMm: number) {
-  return `${formatCmFromMm(anchoMm)} x ${formatCmFromMm(altoMm)} cm`;
+function formatMedidasCm(
+  anchoMm: number,
+  altoMm: number,
+  profundidadMm?: number,
+) {
+  return profundidadMm && profundidadMm > 0
+    ? `${formatCmFromMm(anchoMm)} x ${formatCmFromMm(altoMm)} x ${formatCmFromMm(profundidadMm)} cm`
+    : `${formatCmFromMm(anchoMm)} x ${formatCmFromMm(altoMm)} cm`;
 }
 
 function parseDecimalInput(value: string) {
@@ -3180,16 +3178,6 @@ function usaPiezasParaCotizar(
   );
 }
 
-function usaCantidadComercialParaPiezas(
-  productoDetalle: ProductoDetalle | null,
-) {
-  return (
-    productoDetalle?.unidadComercial === "unidad" &&
-    modoMedidasPermitePersonalizada(productoDetalle.modoMedidas) &&
-    !isMetroLinealConMedidasVariables(productoDetalle)
-  );
-}
-
 /**
  * `true` cuando el producto cotiza por piezas con medida personalizada pero
  * todavía no hay una medida válida ingresada (ancho/alto <= 0).
@@ -3360,21 +3348,17 @@ function buildJobContext(
   const cotizaLinealDirecto =
     isMetroLinealConMedidasVariables(productoDetalle) &&
     config.modoCotizacionLineal === "directo";
-  const piezasUsanCantidadComercial =
-    cotizaConPiezas && usaCantidadComercialParaPiezas(productoDetalle);
   const usaMedidaPersonalizadaReal =
     cotizaConPiezas && config.piezas.length > 0;
   const cantidadTrabajo = cotizaLinealDirecto
     ? 1
-    : piezasUsanCantidadComercial
-      ? qty
-      : cotizaConPiezas
-        ? config.piezas.reduce(
-            (total, pieza) =>
-              total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
-            0,
-          ) || 1
-        : qty;
+    : cotizaConPiezas
+      ? config.piezas.reduce(
+          (total, pieza) =>
+            total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
+          0,
+        ) || 1
+      : qty;
   const ctx: Record<string, unknown> = {
     cantidad: cantidadTrabajo,
     caras: config.caras,
@@ -3393,17 +3377,16 @@ function buildJobContext(
     const paginas = config.paginas ?? imposicionRuta.paginasDefault;
     if (paginas && paginas > 0) ctx.paginas = paginas;
   }
-  // Cartelería: la profundidad del cajón viaja al motor en mm (lo cargado por
-  // el comercial, o la fija del paso de bastidor).
-  const profundidadRuta = getProfundidadDeRuta(
-    getRutaSeleccionada(productoDetalle, config.rutaAlternativaId ?? ""),
-    includeConfig,
-  );
-  if (profundidadRuta) {
-    const profundidadMm =
-      config.profundidadCm != null && config.profundidadCm > 0
+  // La profundidad pertenece al contrato del producto. Los pasos pueden
+  // consumirla, pero el sheet nunca la infiere inspeccionando una familia.
+  if (productoDetalle && productoEs3D(productoDetalle)) {
+    const profundidadMm = usaMedidaPersonalizadaReal
+      ? config.profundidadCm != null && config.profundidadCm > 0
         ? config.profundidadCm * 10
-        : profundidadRuta.profundidadDefaultMm;
+        : null
+      : (medidaPredefinida?.profundidadMm ??
+        Number(productoDetalle.medidaDefaultProfundidadMm) ??
+        null);
     if (profundidadMm && profundidadMm > 0) ctx.profundidadMm = profundidadMm;
   }
   // Avanzado: caras por paso — el override gana sobre `caras` global en el
@@ -3475,7 +3458,7 @@ function buildJobContext(
 
   if (piezasContexto.length > 0) {
     ctx.piezas = piezasContexto.map((pieza) => ({
-      cantidad: piezasUsanCantidadComercial ? qty : pieza.cantidad,
+      cantidad: pieza.cantidad,
       anchoMm: pieza.anchoMm,
       altoMm: pieza.altoMm,
     }));
@@ -3487,17 +3470,12 @@ function buildJobContext(
     );
     ctx.piezaAreaTotalM2 = piezasContexto.reduce(
       (total, pieza) =>
-        total +
-        ((piezasUsanCantidadComercial ? qty : pieza.cantidad) *
-          pieza.anchoMm *
-          pieza.altoMm) /
-          1_000_000,
+        total + (pieza.cantidad * pieza.anchoMm * pieza.altoMm) / 1_000_000,
       0,
     );
     ctx.piezaPerimetroTotalM = piezasContexto.reduce((total, pieza) => {
-      const cantidadPieza = piezasUsanCantidadComercial ? qty : pieza.cantidad;
       const perimetroMm = 2 * (pieza.anchoMm + pieza.altoMm);
-      return total + (cantidadPieza * perimetroMm) / 1000;
+      return total + (pieza.cantidad * perimetroMm) / 1000;
     }, 0);
     if (piezasContexto.length === 1) {
       ctx.medidaCustomMm = {
@@ -3802,6 +3780,7 @@ function buildJobContext(
       nombre: string;
       anchoMm: number;
       altoMm: number;
+      profundidadMm?: number;
       areaM2: number;
     }> = [];
     for (const p of personalizaciones) {
@@ -3838,10 +3817,6 @@ function calcularCantidadComercial(
     usaPiezasParaCotizar(productoDetalle, config) &&
     config.piezas.length
   ) {
-    if (usaCantidadComercialParaPiezas(productoDetalle)) {
-      return qty;
-    }
-
     const totalPiezas = config.piezas.reduce(
       (total, pieza) =>
         total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
@@ -4042,18 +4017,10 @@ function buildPresentableSpecs(
     // Sin esto, dos piezas del mismo tamaño (frecuente al leer varios PDF)
     // colapsaban a una sola línea perdiendo la cantidad. La cantidad lleva
     // "u." para que no se lea como una dimensión más ("100 × 2 × 2 cm").
-    // Espejo de buildJobContext: para productos por unidad la cantidad que
-    // cotiza el motor es la comercial (qty), no la de la fila de pieza.
-    const piezasUsanCantidadComercial =
-      usaCantidadComercialParaPiezas(productoDetalle);
     const grupos = new Map<string, number>();
     for (const pieza of config.piezas) {
       const medida = formatMedidasCm(pieza.anchoMm, pieza.altoMm);
-      const cantidad = piezasUsanCantidadComercial
-        ? qty
-        : Number.isFinite(pieza.cantidad)
-          ? pieza.cantidad
-          : 0;
+      const cantidad = Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0;
       grupos.set(medida, (grupos.get(medida) ?? 0) + cantidad);
     }
     const medidas = Array.from(grupos.entries())
@@ -4269,16 +4236,20 @@ function buildPresentableSpecs(
       setSpec("paginas", `${paginasSpec} páginas`);
     }
   }
-  // Cartelería: la profundidad del cajón queda en la ficha/OT.
-  const profundidadSpec = getProfundidadDeRuta(
-    rutaSeleccionada,
-    isExecutableConfigPaso,
-  );
-  if (profundidadSpec) {
+  // Dimensión 3D del producto: queda visible y congelada en ficha/OT.
+  if (productoDetalle && productoEs3D(productoDetalle)) {
+    const medidaSeleccionada = getSelectedPredefinedMeasure(
+      productoDetalle,
+      config.medidaPredefinidaId,
+    );
     const profundidadMmSpec =
-      config.profundidadCm != null && config.profundidadCm > 0
-        ? config.profundidadCm * 10
-        : profundidadSpec.profundidadDefaultMm;
+      usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length > 0
+        ? config.profundidadCm != null && config.profundidadCm > 0
+          ? config.profundidadCm * 10
+          : null
+        : (medidaSeleccionada?.profundidadMm ??
+          Number(productoDetalle.medidaDefaultProfundidadMm) ??
+          null);
     if (profundidadMmSpec && profundidadMmSpec > 0) {
       setSpec("profundidad", `${profundidadMmSpec / 10} cm de profundidad`);
     }
@@ -5457,8 +5428,6 @@ function ApConfigStep({
   const usaMedidaPersonalizada =
     modoMedidasPermitePersonalizada(productoDetalle?.modoMedidas) &&
     (productoDetalle?.modoMedidas !== "MIXTA" || motorConfig.piezas.length > 0);
-  const piezasUsanCantidadComercial =
-    usaCantidadComercialParaPiezas(productoDetalle);
   const piezaFocusRefs = React.useRef<Record<string, HTMLInputElement | null>>(
     {},
   );
@@ -6080,6 +6049,7 @@ function ApConfigStep({
       nombre: string;
       anchoMm: number;
       altoMm: number;
+      profundidadMm?: number;
       tipo?: MedidaPredefinidaProducto["tipo"];
     }>,
     onSelect: (id: string) => void,
@@ -6092,7 +6062,7 @@ function ApConfigStep({
         // Plancha sin resolver: falta máquina o papel en el paso de impresión.
         // Se muestra deshabilitada en vez de esconderse (que se sepa que existe).
         const size = resuelta
-          ? formatMedidasCm(medida.anchoMm, medida.altoMm)
+          ? formatMedidasCm(medida.anchoMm, medida.altoMm, medida.profundidadMm)
           : "se resuelve al elegir papel y máquina";
         const rawLabel = medidaLabel(medida);
         const isMmFallback = rawLabel.includes(" mm");
@@ -6794,15 +6764,26 @@ function ApConfigStep({
     rutaSel,
     isExecutableConfigPaso,
   );
-  const profundidadCartel = getProfundidadDeRuta(
-    rutaSel,
-    isExecutableConfigPaso,
+  const profundidadProducto = productoDetalle
+    ? productoEs3D(productoDetalle)
+    : false;
+  const debeIngresarProfundidad =
+    profundidadProducto &&
+    (productoDetalle?.modoMedidas === "LIBRE" ||
+      (productoDetalle?.modoMedidas === "MIXTA" &&
+        motorConfig.piezas.length > 0));
+  const medidaPredefinidaSeleccionada = getSelectedPredefinedMeasure(
+    productoDetalle,
+    motorConfig.medidaPredefinidaId,
+    medidasPredefinidas,
   );
-  // Con una sola pieza, la profundidad se muestra INLINE como tercer input
-  // junto a Ancho × Alto (deja de ser un campo colgado). Con varias piezas cae
-  // al bloque aparte (es product-level, no per-pieza).
+  const profundidadDefaultMm =
+    medidaPredefinidaSeleccionada?.profundidadMm ??
+    (Number(productoDetalle?.medidaDefaultProfundidadMm) || null);
+  // En una medida personalizada única se muestra como tercer input junto a
+  // ancho y alto. Con varias piezas permanece como dimensión global del job.
   const profundidadInline =
-    Boolean(profundidadCartel) && motorConfig.piezas.length === 1;
+    debeIngresarProfundidad && motorConfig.piezas.length === 1;
   // Configurador 3D de cartelería (herramienta estilo sello): edita EN VIVO el
   // motorConfig (medidas, profundidad, params comerciales de los dos pasos) y
   // el precio se re-cotiza solo con el debounce del sheet.
@@ -6832,7 +6813,7 @@ function ApConfigStep({
       profundidadCm:
         motorConfig.profundidadCm ??
         (num(base.profundidadMm, 0) / 10 ||
-          (profundidadCartel?.profundidadDefaultMm ?? 180) / 10),
+          (profundidadDefaultMm ? profundidadDefaultMm / 10 : 18)),
       sepRefuerzoVcm: num(overrides.sepRefuerzoVcm ?? base.sepRefuerzoVcm, 100),
       sepRefuerzoHcm: num(overrides.sepRefuerzoHcm ?? base.sepRefuerzoHcm, 0),
       // §15: los toggles activan PASOS OPCIONALES de la ruta real.
@@ -6860,7 +6841,7 @@ function ApConfigStep({
         1,
       ),
     };
-  }, [carteleriaInfo, motorConfig, profundidadCartel]);
+  }, [carteleriaInfo, motorConfig, profundidadDefaultMm]);
   const aplicarCarteleria = React.useCallback(
     (valor: CarteleriaValor) => {
       if (!carteleriaInfo) return;
@@ -7135,7 +7116,6 @@ function ApConfigStep({
   };
 
   const renderPiezasEditor = (options?: {
-    hideCantidad?: boolean;
     /** Título de la card. En medida MIXTA la card de arriba ya se llama
      *  "Medida" (la elección): este editor pasa a llamarse "A medida" para
      *  no repetir el mismo título dos veces (feedback del usuario). */
@@ -7143,9 +7123,8 @@ function ApConfigStep({
   }) => {
     const mostrarProf = profundidadInline;
     // Override del grid (sin tocar globals ni sumar clases): suma "× [prof]".
-    const gridConProf = options?.hideCantidad
-      ? "minmax(80px, 1fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) 38px"
-      : "minmax(60px, 0.8fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) 38px";
+    const gridConProf =
+      "minmax(60px, 0.8fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) 38px";
     const estiloGrid = mostrarProf
       ? { gridTemplateColumns: gridConProf }
       : undefined;
@@ -7157,11 +7136,6 @@ function ApConfigStep({
             type="text"
             inputMode="decimal"
             value={motorConfig.profundidadCm ?? ""}
-            placeholder={
-              profundidadCartel?.profundidadDefaultMm
-                ? String(profundidadCartel.profundidadDefaultMm / 10)
-                : "Prof."
-            }
             onChange={(event) => {
               const value = Number(event.target.value);
               updateMotorConfig({
@@ -7181,23 +7155,19 @@ function ApConfigStep({
         <div className={seC.body}>
           <div className="ap-piezas">
             <div
-              className={`ap-pieza-head${options?.hideCantidad ? " ap-pieza-head-medidas" : ""}`}
+              className="ap-pieza-head"
               style={estiloGrid}
               aria-hidden="true"
             >
-              {options?.hideCantidad ? null : (
-                <>
-                  <span>Cantidad</span>
-                  <span />
-                </>
-              )}
+              <span>Cantidad</span>
+              <span />
               <span>Ancho</span>
               <span />
               <span>Alto</span>
               <span />
               {mostrarProf ? (
                 <>
-                  <span>Prof.</span>
+                  <span>Profundidad</span>
                   <span />
                 </>
               ) : null}
@@ -7209,35 +7179,24 @@ function ApConfigStep({
                   pieza.altoMm !== pieza.origen.altoDetectadoMm);
               return (
                 <React.Fragment key={pieza.uiKey}>
-                  <div
-                    className={`ap-pieza-row${options?.hideCantidad ? " ap-pieza-row-medidas" : ""}`}
-                    style={estiloGrid}
-                  >
-                    {options?.hideCantidad ? null : (
-                      <>
-                        <input
-                          ref={(node) => {
-                            piezaFocusRefs.current[pieza.uiKey] = node;
-                          }}
-                          type="number"
-                          min="1"
-                          value={pieza.cantidad}
-                          onChange={(event) =>
-                            updatePieza(index, {
-                              cantidad: Number(event.target.value) || 0,
-                            })
-                          }
-                          aria-label="Cantidad de piezas"
-                        />
-                        <span>x</span>
-                      </>
-                    )}
+                  <div className="ap-pieza-row" style={estiloGrid}>
+                    <input
+                      ref={(node) => {
+                        piezaFocusRefs.current[pieza.uiKey] = node;
+                      }}
+                      type="number"
+                      min="1"
+                      value={pieza.cantidad}
+                      onChange={(event) =>
+                        updatePieza(index, {
+                          cantidad: Number(event.target.value) || 0,
+                        })
+                      }
+                      aria-label="Cantidad de piezas"
+                    />
+                    <span>x</span>
                     <label className="ap-input-unit">
                       <input
-                        ref={(node) => {
-                          if (options?.hideCantidad)
-                            piezaFocusRefs.current[pieza.uiKey] = node;
-                        }}
                         type="text"
                         inputMode="decimal"
                         value={getPiezaMeasureValue(pieza, "anchoCm")}
@@ -7389,12 +7348,6 @@ function ApConfigStep({
               Agregar pieza
             </button>
           </div>
-          {mostrarProf ? (
-            <span className="ap-section-hint">
-              La profundidad define los metros de perfil, la cenefa y los
-              conectores del bastidor.
-            </span>
-          ) : null}
         </div>
       </div>
     );
@@ -7402,14 +7355,7 @@ function ApConfigStep({
 
   const renderMedidasProducto = () => {
     if (usaMedidaPersonalizada && !usaMedidaMixta) {
-      return (
-        <>
-          {renderPiezasEditor({
-            hideCantidad: piezasUsanCantidadComercial,
-          })}
-          {piezasUsanCantidadComercial ? renderCantidadCard() : null}
-        </>
-      );
+      return <>{renderPiezasEditor()}</>;
     }
     return (
       <>
@@ -7448,10 +7394,7 @@ function ApConfigStep({
           </div>
         ) : null}
         {usaMedidaMixta && motorConfig.piezas.length > 0
-          ? renderPiezasEditor({
-              hideCantidad: piezasUsanCantidadComercial,
-              titulo: "A medida",
-            })
+          ? renderPiezasEditor({ titulo: "A medida" })
           : null}
         {renderCantidadCard()}
         {entranPorPliego ? (
@@ -7625,20 +7568,6 @@ function ApConfigStep({
                     }),
                 )}
               </div>
-            ) : null}
-
-            {product.id && motorConfig.rutaAlternativaId ? (
-              <ComponentesFabricadosCotizacion
-                productoId={product.id}
-                rutaAlternativaId={motorConfig.rutaAlternativaId}
-                values={motorConfig.componentesConfiguracion}
-                onChange={(componentesConfiguracion) =>
-                  setMotorConfig((current) => ({
-                    ...current,
-                    componentesConfiguracion,
-                  }))
-                }
-              />
             ) : null}
 
             {rutaSel ? (
@@ -8107,19 +8036,15 @@ function ApConfigStep({
               </div>
             ) : null}
 
-            {/* Cartelería (patrón `paginas`): la ruta tiene un bastidor doble
-                sin profundidad fija — el comercial la carga acá. En cm (el
-                motor la recibe en mm). Volvió al flujo genérico cuando el
-                configurador 3D quedó a un costado (§17 derivadores). */}
-            {profundidadCartel && !profundidadInline ? (
+            {debeIngresarProfundidad && !profundidadInline ? (
               <div className="ap-spec">
-                <label>Profundidad del cajón</label>
+                <label>Profundidad</label>
                 <input
                   type="number"
                   min="1"
                   placeholder={
-                    profundidadCartel.profundidadDefaultMm
-                      ? String(profundidadCartel.profundidadDefaultMm / 10)
+                    profundidadDefaultMm
+                      ? String(profundidadDefaultMm / 10)
                       : "18"
                   }
                   value={motorConfig.profundidadCm ?? ""}
@@ -8132,8 +8057,7 @@ function ApConfigStep({
                   }}
                 />
                 <span className="ap-section-hint">
-                  En cm. Define los metros de perfil, la cenefa y los conectores
-                  del bastidor.
+                  En cm. Es una dimensión exigida por el producto.
                 </span>
               </div>
             ) : null}
@@ -8486,7 +8410,21 @@ function ApConfigStep({
         )}
       </div>
 
-      <div className="ap-config-section">
+      {product.id && motorConfig.rutaAlternativaId ? (
+        <ComponentesFabricadosCotizacion
+          productoId={product.id}
+          rutaAlternativaId={motorConfig.rutaAlternativaId}
+          values={motorConfig.componentesConfiguracion}
+          onChange={(componentesConfiguracion) =>
+            setMotorConfig((current) => ({
+              ...current,
+              componentesConfiguracion,
+            }))
+          }
+        />
+      ) : null}
+
+      <div className="ap-config-section ap-config-section-after-components">
         <div className="ap-cs-head">
           <div className="ttl">Opcionales</div>
           <div className="sub">
@@ -9259,6 +9197,10 @@ export function AgregarProductoSheet({
       rutaAlternativaId: rutaPreferida?.id ?? "",
       medidaPredefinidaId: medidaDefault?.id ?? "",
       piezas: iniciaConPiezas ? [createDefaultPiezaInput()] : [],
+      profundidadCm:
+        medidaDefault?.profundidadMm && medidaDefault.profundidadMm > 0
+          ? medidaDefault.profundidadMm / 10
+          : null,
       modoCotizacionVectorial: modoVectorialInicial(pasoVectorialInicial),
       numerosXTalonario:
         next.subcategoriaComercialCodigo === "talonarios" ? 50 : 50,

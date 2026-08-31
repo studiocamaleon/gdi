@@ -149,6 +149,7 @@ export class ProductosServiciosController {
       subcategoriaCodigo: query.subcategoriaCodigo?.trim() || undefined,
       categoriaCodigo: query.categoriaCodigo?.trim() || undefined,
       orden: query.orden,
+      composicion: query.composicion,
     });
   }
 

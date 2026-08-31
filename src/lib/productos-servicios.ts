@@ -17,10 +17,19 @@ export const unidadComercialProductoItems: Array<{
 ];
 
 export type ModoMedidasProducto =
-  "FIJA" | "LIBRE" | "COMERCIAL_ELIGE" | "MIXTA";
+  | "FIJA"
+  | "LIBRE"
+  | "COMERCIAL_ELIGE"
+  | "MIXTA";
+
+export type DimensionProducto = "ANCHO" | "ALTO" | "PROFUNDIDAD";
+
+export type EstructuraProducto = "SIMPLE" | "COMPUESTO";
 
 export type MinimoComercialPolitica =
-  "NONE" | "ADVERTIR_FACTURAR_MINIMO" | "BLOQUEAR";
+  | "NONE"
+  | "ADVERTIR_FACTURAR_MINIMO"
+  | "BLOQUEAR";
 
 export type MinimoComercialBase = "cantidad_comercial" | "pliegos_impresos";
 
@@ -30,6 +39,7 @@ export interface MedidaPredefinidaProducto {
   /** Para tipo "pliego_util" es 0 hasta que el sheet la resuelve en runtime. */
   anchoMm: number;
   altoMm: number;
+  profundidadMm?: number;
   esDefault: boolean;
   /**
    * Origen del valor. Ausente/"fija" = la pieza la declara el modelador.
@@ -94,9 +104,12 @@ export interface ProductoListItem {
   codigo: string;
   nombre: string;
   descripcion: string | null;
+  estructuraProducto: EstructuraProducto;
   atributosComercialesJson: Record<string, unknown> | null;
   medidaDefaultAnchoMm: string | null;
   medidaDefaultAltoMm: string | null;
+  medidaDefaultProfundidadMm?: string | null;
+  dimensionesRequeridas?: DimensionProducto[];
   medidasPredefinidasJson: MedidaPredefinidaProducto[] | null;
   /** Personalizaciones (áreas de decoración) con medida propia. Raw JSON: usar
    *  getPersonalizaciones() de producto-personalizaciones.ts para parsear. */
@@ -112,6 +125,10 @@ export interface ProductoListItem {
   estadoCatalogo?: "activo" | "incompleto" | "listo" | "borrador";
   /** Derivado: algún paso de alguna ruta es tercerizado (para el badge). */
   tercerizado?: boolean;
+  /** Alias de compatibilidad de `estructuraProducto === \"COMPUESTO\"`. */
+  esCompuesto?: boolean;
+  /** El producto participa como hijo en al menos una BOM. */
+  usadoComoComponente?: boolean;
   subcategoriaComercial: ProductoSubcategoriaComercial & {
     categoria: Omit<ProductoCategoriaComercial, "subcategorias">;
   };

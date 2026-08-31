@@ -7,6 +7,41 @@
   background: rgb(28 26 32 / 62%);
   place-items: center;
 }
+
+.embedded {
+  min-height: 100%;
+  background: #f7f5f2;
+}
+
+.workspaceEmbedded {
+  width: 100%;
+  min-height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.workspaceEmbedded .header {
+  color: var(--ink, #1d1b20);
+  border-bottom: 1px solid var(--border, #dedad4);
+  background: var(--surface, #fff);
+}
+
+.workspaceEmbedded .header button {
+  border-color: var(--border, #dedad4);
+  color: var(--ink-2, #49464d);
+  background: var(--surface, #fff);
+}
+
+.workspaceEmbedded .header span {
+  color: var(--signal, #e85f2a);
+}
+
+.workspaceEmbedded .header p {
+  color: var(--muted-text, #77736d);
+}
+
 .workspace {
   --inc-accent: #ef6338;
   --inc-ink: #252227;

@@ -16,11 +16,43 @@ describe('materialización de componentes fabricados', () => {
             nombre: 'Frente de acrílico',
             politicaEjecucion: 'INDEPENDIENTE',
             nodoIncorporacionClave: 'ruta:armado',
+            nodosPredecesoresClaves: ['ruta:preparacion'],
             recetaRevisionId: 'revision-hija',
             cantidad: 3,
             unidad: 'unidad',
           },
         ],
+      },
+      cotizacionItem: {
+        jobContextJson: { cantidad: 2 },
+        trazabilidadJson: {
+          componentesFabricados: [
+            {
+              codigo: 'acrilico',
+              jobContext: { cantidad: 6 },
+              pasos: [
+                {
+                  rutaPasoId: 'corte',
+                  familiaCodigo: 'corte_laser',
+                  nombreVisible: 'Corte láser',
+                  activado: true,
+                },
+                {
+                  rutaPasoId: 'diseno',
+                  familiaCodigo: 'diseno_grafico',
+                  nombreVisible: 'Diseño gráfico',
+                  activado: false,
+                },
+                {
+                  rutaPasoId: 'control',
+                  familiaCodigo: 'control_calidad',
+                  nombreVisible: 'Control del frente',
+                  activado: true,
+                },
+              ],
+            },
+          ],
+        },
       },
     };
     const revisionHija = {
@@ -36,10 +68,16 @@ describe('materialización de componentes fabricados', () => {
             orden: 0,
           },
           {
+            clave: 'ruta:diseno',
+            nombre: 'Diseño gráfico',
+            familiaCodigo: 'diseno_grafico',
+            orden: 1,
+          },
+          {
             clave: 'ruta:control',
             nombre: 'Control del frente',
             familiaCodigo: 'control_calidad',
-            orden: 1,
+            orden: 2,
           },
         ],
       },
@@ -48,9 +86,13 @@ describe('materialización de componentes fabricados', () => {
         topologia: 'LINEAL',
         nodos: [
           { clave: 'ruta:corte', indice: 0 },
-          { clave: 'ruta:control', indice: 1, gates: ['CALIDAD'] },
+          { clave: 'ruta:diseno', indice: 1 },
+          { clave: 'ruta:control', indice: 2, gates: ['CALIDAD'] },
         ],
-        aristas: [{ desdeClave: 'ruta:corte', haciaClave: 'ruta:control' }],
+        aristas: [
+          { desdeClave: 'ruta:corte', haciaClave: 'ruta:diseno' },
+          { desdeClave: 'ruta:diseno', haciaClave: 'ruta:control' },
+        ],
         raices: ['ruta:corte'],
         terminales: ['ruta:control'],
       },
@@ -80,10 +122,15 @@ describe('materialización de componentes fabricados', () => {
       },
       ordenTrabajoItemPaso: {
         createMany: pasosCreateMany,
-        findMany: jest.fn().mockResolvedValue([
-          { id: 'paso-corte', nodoClave: 'ruta:corte' },
-          { id: 'paso-control', nodoClave: 'ruta:control' },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            { id: 'paso-corte', nodoClave: 'ruta:corte' },
+            { id: 'paso-control', nodoClave: 'ruta:control' },
+          ])
+          .mockResolvedValueOnce([
+            { id: 'paso-preparacion', nodoClave: 'ruta:preparacion' },
+          ]),
         findFirst: pasoFindFirst,
       },
       ordenTrabajoPasoDependencia: {
@@ -126,11 +173,26 @@ describe('materialización de componentes fabricados', () => {
       ]),
       skipDuplicates: true,
     });
+    expect(pasosCreateMany).not.toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({ nodoClave: 'ruta:diseno' }),
+      ]),
+      skipDuplicates: true,
+    });
     expect(dependenciasCreateMany).toHaveBeenCalledWith({
       data: expect.arrayContaining([
         expect.objectContaining({
+          predecesorPasoId: 'paso-corte',
+          sucesorPasoId: 'paso-control',
+        }),
+        expect.objectContaining({
           predecesorPasoId: 'paso-control',
           sucesorPasoId: 'paso-armado',
+          tipo: 'componente_fabricado',
+        }),
+        expect.objectContaining({
+          predecesorPasoId: 'paso-preparacion',
+          sucesorPasoId: 'paso-corte',
           tipo: 'componente_fabricado',
         }),
       ]),

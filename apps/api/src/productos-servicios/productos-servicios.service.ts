@@ -57,6 +57,7 @@ export class ProductosServiciosService {
       subcategoriaCodigo?: string;
       categoriaCodigo?: string;
       orden?: OrdenProductosDto;
+      composicion?: 'simple' | 'compuesto';
     },
   ) {
     return this.productos.listarProductos(tenantId, opts);

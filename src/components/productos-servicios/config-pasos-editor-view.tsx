@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircleIcon,
   ArrowLeftIcon,
+  BoxesIcon,
   CheckIcon,
   ClockIcon,
   DropletIcon,
@@ -184,6 +185,29 @@ interface Props {
       rutaPasoId: string,
       configuracion: UpsertConfigPasoPayload,
     ) => Promise<void> | void;
+  };
+  modeloProductivo?: {
+    active: boolean;
+    estructura: "SIMPLE" | "COMPUESTO";
+    componentes: Array<{
+      codigo: string;
+      nombre: string;
+      nodoIncorporacionClave?: string | null;
+    }>;
+    etapas: Array<{
+      nodoClave: string;
+      pasoNombre: string;
+      pasos?: Array<{ activa: boolean }>;
+      operaciones: Array<{ activa: boolean }>;
+    }>;
+    nodoSeleccionado: string;
+    panel:
+      | React.ReactNode
+      | ((acciones: {
+          onEditarPaso: (nodoClave: string) => void;
+        }) => React.ReactNode);
+    onOpen: (nodoClave?: string) => void;
+    onClose: () => void;
   };
 }
 
@@ -2912,6 +2936,7 @@ export function ConfigPasosEditorView({
   embedded = false,
   configuracionBase,
   configuracionContextual,
+  modeloProductivo,
 }: Props) {
   const router = useRouter();
   const familiasMap = React.useMemo(
@@ -4719,7 +4744,9 @@ export function ConfigPasosEditorView({
           : "pasos-editor-root flex flex-1 flex-col"
       }
     >
-      <div className="editor-shell">
+      <div
+        className={`editor-shell ${modeloProductivo?.active ? "modelo-hoja-ruta-activa" : ""}`}
+      >
         <aside className="editor-side">
           <div className="side-head">
             <Link
@@ -4768,18 +4795,20 @@ export function ConfigPasosEditorView({
                 ? doneCount === activeStepCount
                   ? "Configuración completa"
                   : "Configuración pendiente"
-                : `${(() => {
-                    // El "Paso X de Y" vive acá (feedback 2026-08-06): antes
-                    // estaba arriba de las preguntas y duplicaba este sidebar.
-                    const n = pasosUnificados.indexOf(activePasoId);
-                    return n >= 0
-                      ? `Paso ${n + 1} de ${pasosUnificados.length} · `
-                      : "";
-                  })()}${doneCount}/${activeStepCount} activos${
-                    skippedCount > 0
-                      ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}`
-                      : ""
-                  }`}
+                : modeloProductivo?.active
+                  ? `${pasosUnificados.length + modeloProductivo.componentes.length} nodos · ${modeloProductivo.etapas.length} etapa${modeloProductivo.etapas.length === 1 ? "" : "s"} · ${modeloProductivo.componentes.length} componente${modeloProductivo.componentes.length === 1 ? "" : "s"}`
+                  : `${(() => {
+                      // El "Paso X de Y" vive acá (feedback 2026-08-06): antes
+                      // estaba arriba de las preguntas y duplicaba este sidebar.
+                      const n = pasosUnificados.indexOf(activePasoId);
+                      return n >= 0
+                        ? `Paso ${n + 1} de ${pasosUnificados.length} · `
+                        : "";
+                    })()}${doneCount}/${activeStepCount} activos${
+                      skippedCount > 0
+                        ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}`
+                        : ""
+                    }`}
             </span>
             <div className="bar">
               <span
@@ -4790,11 +4819,41 @@ export function ConfigPasosEditorView({
             </div>
           </div>
           <div className="pasos">
+            {modeloProductivo ? (
+              <button
+                type="button"
+                className={`modelo-vista-flujo ${modeloProductivo.active && modeloProductivo.nodoSeleccionado === "ruta" ? "active" : ""}`}
+                onClick={() => modeloProductivo.onOpen("ruta")}
+              >
+                <span className="ix" aria-hidden>
+                  <Share2Icon />
+                </span>
+                <span className="body">
+                  <span className="ttl">Hoja de ruta</span>
+                  <span className="sub">
+                    {pasosUnificados.length +
+                      modeloProductivo.componentes.length}{" "}
+                    nodos en esta vía
+                  </span>
+                </span>
+                <span className="status">Ruta</span>
+              </button>
+            ) : null}
             {pasosUnificados.map((pasoId) => {
               const extra = pasosExtras.find((item) => item.id === pasoId);
               if (extra) {
                 const familiaExtra = familiasMap.get(extra.familiaCodigo);
-                const activo = extra.id === activePasoId;
+                const nodoClave = `extra:${extra.id}`;
+                const etapa = modeloProductivo?.etapas.find(
+                  (item) => item.nodoClave === nodoClave,
+                );
+                const activo = etapa
+                  ? Boolean(
+                      modeloProductivo?.active &&
+                      modeloProductivo.nodoSeleccionado ===
+                        `etapa:${nodoClave}`,
+                    )
+                  : extra.id === activePasoId && !modeloProductivo?.active;
                 const nombreExtra =
                   configs[extra.id]?.nombreVisible?.trim() ||
                   familiaExtra?.nombre ||
@@ -4843,12 +4902,22 @@ export function ConfigPasosEditorView({
                       );
                     }}
                     onClick={() => {
+                      if (etapa && modeloProductivo) {
+                        modeloProductivo.onOpen(`etapa:${nodoClave}`);
+                        setEditingExtra(null);
+                        return;
+                      }
+                      modeloProductivo?.onClose();
                       setActivePasoId(extra.id);
                       setEditingExtra(null);
                     }}
                   >
                     <span className="ix" aria-hidden>
-                      <GripVerticalIcon className="size-3.5" />
+                      {etapa ? (
+                        <Grid2X2Icon className="size-3.5" />
+                      ) : (
+                        <GripVerticalIcon className="size-3.5" />
+                      )}
                     </span>
                     <span className="body">
                       <span className="ttl">{nombreExtra}</span>
@@ -4858,7 +4927,7 @@ export function ConfigPasosEditorView({
                           "Sin recurso"}
                       </span>
                     </span>
-                    <span className="status">Extra</span>
+                    <span className="status">{etapa ? "Etapa" : "Paso"}</span>
                   </button>
                 );
               }
@@ -4868,6 +4937,10 @@ export function ConfigPasosEditorView({
               );
               if (!paso) return null;
               const summary = getPasoSummary(paso);
+              const nodoClave = `ruta:${paso.id}`;
+              const etapa = modeloProductivo?.etapas.find(
+                (item) => item.nodoClave === nodoClave,
+              );
               const pasoLabel =
                 configs[paso.id]?.nombreVisible?.trim() ||
                 summary.familia?.nombre ||
@@ -4884,7 +4957,7 @@ export function ConfigPasosEditorView({
                   type="button"
                   key={paso.id}
                   draggable={!guardandoOrden && !configuracionBase}
-                  className={`paso-item ${summary.status} ${summary.optional ? "optional" : ""} ${paso.id === activePasoId ? "active" : ""}`}
+                  className={`paso-item ${etapa ? "etapa" : ""} ${summary.status} ${summary.optional ? "optional" : ""} ${etapa ? (modeloProductivo?.active && modeloProductivo.nodoSeleccionado === `etapa:${nodoClave}` ? "active" : "") : paso.id === activePasoId && !modeloProductivo?.active ? "active" : ""}`}
                   style={{
                     cursor: guardandoOrden ? "wait" : "grab",
                     opacity: pasoArrastradoId === paso.id ? 0.55 : 1,
@@ -4922,6 +4995,12 @@ export function ConfigPasosEditorView({
                     );
                   }}
                   onClick={() => {
+                    if (etapa && modeloProductivo) {
+                      modeloProductivo.onOpen(`etapa:${nodoClave}`);
+                      setEditingExtra(null);
+                      return;
+                    }
+                    modeloProductivo?.onClose();
                     setActivePasoId(paso.id);
                     setEditingExtra(null);
                   }}
@@ -4938,7 +5017,9 @@ export function ConfigPasosEditorView({
                           }
                     }
                   >
-                    {summary.skipped ? (
+                    {etapa ? (
+                      <Grid2X2Icon className="size-3" />
+                    ) : summary.skipped ? (
                       "—"
                     ) : completo ? (
                       <CheckIcon className="size-3" />
@@ -5007,55 +5088,66 @@ export function ConfigPasosEditorView({
                         })()
                       : null}
                   </span>
-                  <span
-                    className="status"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                    }}
-                    title={
-                      !summary.optional && !summary.skipped
-                        ? "Paso obligatorio"
-                        : "Paso opcional"
-                    }
-                  >
-                    {!configuracionBase ? (
-                      <GripVerticalIcon
-                        className="size-3.5"
-                        aria-label="Arrastrar para cambiar posición"
-                      />
-                    ) : null}
-                    {!summary.optional && !summary.skipped ? (
-                      // Cerrado (OBLIGATORIO) en ámbar para diferenciarlo a
-                      // simple vista del abierto (opcional), que queda gris.
-                      // El color NO habla del estado del paso (eso es el check).
-                      <LockIcon
-                        className="size-3.5"
-                        style={{ color: "#e0a11b" }}
-                        aria-label="Paso obligatorio"
-                      />
-                    ) : (
-                      <LockOpenIcon
-                        className="size-3.5"
-                        style={{ color: "var(--muted-text, #8a857b)" }}
-                        aria-label="Paso opcional"
-                      />
-                    )}
-                  </span>
+                  <span className="status">{etapa ? "Etapa" : "Paso"}</span>
                 </button>
               );
             })}
           </div>
+          {modeloProductivo ? (
+            <div className="modelo-nodos-side">
+              {modeloProductivo.estructura === "COMPUESTO" ? (
+                <>
+                  {modeloProductivo.componentes.map((componente) => {
+                    const nodoClave = `componente:${componente.codigo}`;
+                    return (
+                      <button
+                        type="button"
+                        className={`modelo-nodo-componente ${modeloProductivo.active && modeloProductivo.nodoSeleccionado === nodoClave ? "active" : ""}`}
+                        key={componente.codigo}
+                        onClick={() => modeloProductivo.onOpen(nodoClave)}
+                      >
+                        <span className="ix">
+                          <BoxesIcon />
+                        </span>
+                        <span className="body">
+                          <span className="ttl">{componente.nombre}</span>
+                          <span className="sub">
+                            {componente.nodoIncorporacionClave
+                              ? "Subruta conectada"
+                              : "Falta definir convergencia"}
+                          </span>
+                        </span>
+                        <span className="status">Componente</span>
+                      </button>
+                    );
+                  })}
+                </>
+              ) : (
+                <div className="modelo-simple-note">
+                  Los componentes se habilitan al elegir Producto compuesto en
+                  Identidad.
+                </div>
+              )}
+            </div>
+          ) : null}
           {!configuracionBase ? (
-            <div className="pasos-extras-side">
+            <div className="pasos-extras-side modelo-add-nodos">
               <button
                 type="button"
                 className={`pe-add-btn ${editingExtra === "new" ? "active" : ""}`}
                 onClick={() => setEditingExtra("new")}
               >
-                + Agregar paso extra
+                <PlusIcon /> Paso
               </button>
+              {modeloProductivo?.estructura === "COMPUESTO" ? (
+                <button
+                  type="button"
+                  className="pe-add-btn"
+                  onClick={() => modeloProductivo.onOpen("nuevo-componente")}
+                >
+                  <BoxesIcon /> Componente
+                </button>
+              ) : null}
             </div>
           ) : null}
           {!configuracionBase ? (
@@ -5068,10 +5160,25 @@ export function ConfigPasosEditorView({
           ) : null}
         </aside>
 
-        <main className="editor-main">
+        <main
+          className={`editor-main ${modeloProductivo?.active ? "modelo-activo" : ""}`}
+        >
           {/* G-F3: el alta mínima (familia + posición) usa un form aparte; la
               configuración del extra usa el mismo panel que los demás pasos. */}
-          {editingExtra ? (
+          {modeloProductivo?.active && !editingExtra ? (
+            typeof modeloProductivo.panel === "function" ? (
+              modeloProductivo.panel({
+                onEditarPaso: (nodoClave) => {
+                  const pasoId = nodoClave.replace(/^(ruta|extra):/, "");
+                  setActivePasoId(pasoId);
+                  setEditingExtra(null);
+                  modeloProductivo.onClose();
+                },
+              })
+            ) : (
+              modeloProductivo.panel
+            )
+          ) : editingExtra ? (
             <PasoExtraEditor
               productoId={producto.id}
               rutaAlternativa={rutaAlternativa}
@@ -5082,6 +5189,7 @@ export function ConfigPasosEditorView({
                 producto.modoMedidas === "MIXTA"
               }
               ruleExtraFields={technologyRuleFields}
+              modoHojaRuta={Boolean(modeloProductivo?.active)}
               extra={editingExtra === "new" ? null : editingExtra}
               pasosOrdenados={pasosAsistente.map((paso) => ({
                 id: paso.id,

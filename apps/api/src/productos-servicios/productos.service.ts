@@ -4,7 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  EstadoProductoRecetaRevision,
+  EstructuraProducto,
+  Prisma,
+} from '@prisma/client';
 import { buildModoColorOptionsFromProfiles } from './modo-color-comercial';
 import { PrismaService } from '../prisma/prisma.service';
 import { MAQUINA_DISPONIBLE_WHERE } from '../maquinaria/maquinaria-disponibilidad';
@@ -20,12 +24,14 @@ import type {
   DuplicarProductoDto,
   MedidaPredefinidaDto,
 } from './dto/producto.dto';
+import { EstructuraProductoDto } from './dto/producto.dto';
 
 type MedidaPredefinidaNormalizada = {
   id: string;
   nombre: string;
   anchoMm: number;
   altoMm: number;
+  profundidadMm?: number;
   esDefault: boolean;
   /** "pliego_util" = plancha completa (pieza derivada del pliego al cotizar). */
   tipo?: 'pliego_util';
@@ -45,6 +51,7 @@ export class ProductosService {
       subcategoriaCodigo?: string;
       categoriaCodigo?: string;
       orden?: OrdenProductosDto;
+      composicion?: 'simple' | 'compuesto';
     },
   ) {
     const {
@@ -55,6 +62,7 @@ export class ProductosService {
       subcategoriaCodigo,
       categoriaCodigo,
       orden = OrdenProductosDto.recientes,
+      composicion,
     } = opts;
     const where: Prisma.ProductoWhereInput = {
       tenantId,
@@ -69,6 +77,11 @@ export class ProductosService {
           ? {
               subcategoriaComercial: { categoria: { codigo: categoriaCodigo } },
             }
+          : {}),
+      ...(composicion === 'compuesto'
+        ? { estructuraProducto: 'COMPUESTO' }
+        : composicion === 'simple'
+          ? { estructuraProducto: 'SIMPLE' }
           : {}),
       // Búsqueda por título (nombre) y código, no por la descripción.
       ...(search
@@ -117,6 +130,20 @@ export class ProductosService {
             },
             orderBy: { orden: 'asc' },
           },
+          recetas: {
+            where: { activo: true },
+            select: {
+              revisiones: {
+                orderBy: { numero: 'desc' },
+                take: 1,
+                select: { _count: { select: { componentes: true } } },
+              },
+            },
+          },
+          componenteEnRecetas: {
+            take: 1,
+            select: { id: true },
+          },
         },
       }),
       this.prisma.producto.count({ where }),
@@ -144,6 +171,10 @@ export class ProductosService {
 
       return {
         ...producto,
+        // Compatibilidad del contrato anterior: `esCompuesto` se mantiene
+        // mientras los consumidores migran al campo explícito.
+        esCompuesto: producto.estructuraProducto === 'COMPUESTO',
+        usadoComoComponente: producto.componenteEnRecetas.length > 0,
         tercerizado: producto.rutasAlternativas.some((ra) =>
           ra.configPasos.some((paso) => paso.tercerizado),
         ),
@@ -165,11 +196,24 @@ export class ProductosService {
     const subcategoriaComercial = await this.assertSubcategoriaComercial(
       dto.subcategoriaComercialCodigo,
     );
+    const dimensionesRequeridas = this.normalizarDimensionesRequeridas(
+      dto.dimensionesRequeridas ??
+        this.inferirDimensionesLegacy({
+          modoMedidas: dto.modoMedidas,
+          unidadComercial: dto.unidadComercial,
+          medidas: dto.medidasPredefinidasJson,
+          anchoDefault: dto.medidaDefaultAnchoMm,
+          altoDefault: dto.medidaDefaultAltoMm,
+        }),
+      dto.unidadComercial,
+    );
     const medidas = this.normalizarMedidasPredefinidas({
       modoMedidas: dto.modoMedidas,
+      dimensionesRequeridas,
       medidas: dto.medidasPredefinidasJson,
       anchoDefault: dto.medidaDefaultAnchoMm,
       altoDefault: dto.medidaDefaultAltoMm,
+      profundidadDefault: dto.medidaDefaultProfundidadMm,
       unidadComercial: dto.unidadComercial,
     });
     const medidaDefault = medidas.find((medida) => medida.esDefault);
@@ -187,8 +231,10 @@ export class ProductosService {
             codigo,
             nombre: dto.nombre,
             descripcion: dto.descripcion ?? null,
+            estructuraProducto: dto.estructuraProducto ?? 'SIMPLE',
             unidadComercial: dto.unidadComercial,
             modoMedidas: dto.modoMedidas,
+            dimensionesRequeridas,
             minimoComercialPolitica: this.normalizarMinimoPolitica(
               dto.minimoComercialPolitica,
               dto.minimoComercialCantidad,
@@ -206,6 +252,9 @@ export class ProductosService {
               : null,
             medidaDefaultAltoMm: medidaDefault
               ? new Prisma.Decimal(medidaDefault.altoMm)
+              : null,
+            medidaDefaultProfundidadMm: medidaDefault?.profundidadMm
+              ? new Prisma.Decimal(medidaDefault.profundidadMm)
               : null,
             medidasPredefinidasJson:
               medidas.length > 0
@@ -271,12 +320,19 @@ export class ProductosService {
     const data: Prisma.ProductoUpdateInput = {};
     const touchedMedidas =
       dto.modoMedidas !== undefined ||
+      dto.dimensionesRequeridas !== undefined ||
       dto.medidaDefaultAnchoMm !== undefined ||
       dto.medidaDefaultAltoMm !== undefined ||
+      dto.medidaDefaultProfundidadMm !== undefined ||
       dto.medidasPredefinidasJson !== undefined;
+    const dimensionesRequeridas = this.normalizarDimensionesRequeridas(
+      dto.dimensionesRequeridas ?? existente.dimensionesRequeridas,
+      dto.unidadComercial ?? existente.unidadComercial,
+    );
     const medidas = touchedMedidas
       ? this.normalizarMedidasPredefinidas({
           modoMedidas: dto.modoMedidas ?? existente.modoMedidas,
+          dimensionesRequeridas,
           medidas:
             dto.medidasPredefinidasJson !== undefined
               ? dto.medidasPredefinidasJson
@@ -289,6 +345,10 @@ export class ProductosService {
             dto.medidaDefaultAltoMm !== undefined
               ? dto.medidaDefaultAltoMm
               : this.decimalToNumber(existente.medidaDefaultAltoMm),
+          profundidadDefault:
+            dto.medidaDefaultProfundidadMm !== undefined
+              ? dto.medidaDefaultProfundidadMm
+              : this.decimalToNumber(existente.medidaDefaultProfundidadMm),
           unidadComercial: dto.unidadComercial ?? existente.unidadComercial,
         })
       : [];
@@ -310,10 +370,42 @@ export class ProductosService {
       }
     }
     if (dto.descripcion !== undefined) data.descripcion = dto.descripcion;
+    if (dto.estructuraProducto !== undefined) {
+      if (
+        dto.estructuraProducto === EstructuraProductoDto.SIMPLE &&
+        existente.estructuraProducto === EstructuraProducto.COMPUESTO
+      ) {
+        const componenteExistente =
+          await this.prisma.productoRecetaComponente.findFirst({
+            where: {
+              tenantId,
+              revision: {
+                estado: {
+                  in: [
+                    EstadoProductoRecetaRevision.BORRADOR,
+                    EstadoProductoRecetaRevision.PUBLICADA,
+                  ],
+                },
+                receta: { productoId: id },
+              },
+            },
+            select: { id: true },
+          });
+        if (componenteExistente) {
+          throw new BadRequestException(
+            'Quitá primero los componentes fabricados de todas las vías antes de convertir el producto en simple.',
+          );
+        }
+      }
+      data.estructuraProducto = dto.estructuraProducto;
+    }
     if (dto.unidadComercial !== undefined) {
       data.unidadComercial = dto.unidadComercial;
     }
     if (dto.modoMedidas !== undefined) data.modoMedidas = dto.modoMedidas;
+    if (dto.dimensionesRequeridas !== undefined) {
+      data.dimensionesRequeridas = dimensionesRequeridas;
+    }
     if (
       dto.minimoComercialPolitica !== undefined ||
       dto.minimoComercialCantidad !== undefined ||
@@ -343,6 +435,9 @@ export class ProductosService {
         : null;
       data.medidaDefaultAltoMm = medidaDefault
         ? new Prisma.Decimal(medidaDefault.altoMm)
+        : null;
+      data.medidaDefaultProfundidadMm = medidaDefault?.profundidadMm
+        ? new Prisma.Decimal(medidaDefault.profundidadMm)
         : null;
       data.medidasPredefinidasJson =
         medidas.length > 0
@@ -446,13 +541,16 @@ export class ProductosService {
             codigo,
             nombre,
             descripcion: origen.descripcion,
+            estructuraProducto: origen.estructuraProducto ?? 'SIMPLE',
             unidadComercial: origen.unidadComercial,
             modoMedidas: origen.modoMedidas,
+            dimensionesRequeridas: origen.dimensionesRequeridas,
             minimoComercialPolitica: origen.minimoComercialPolitica,
             minimoComercialCantidad: origen.minimoComercialCantidad,
             minimoComercialBase: origen.minimoComercialBase,
             medidaDefaultAnchoMm: origen.medidaDefaultAnchoMm,
             medidaDefaultAltoMm: origen.medidaDefaultAltoMm,
+            medidaDefaultProfundidadMm: origen.medidaDefaultProfundidadMm,
             medidasPredefinidasJson: this.jsonOrNull(
               origen.medidasPredefinidasJson,
             ),
@@ -830,12 +928,27 @@ export class ProductosService {
 
   private normalizarMedidasPredefinidas(input: {
     modoMedidas: string;
+    dimensionesRequeridas?: string[];
     medidas?: MedidaPredefinidaDto[] | null;
     anchoDefault?: number | null;
     altoDefault?: number | null;
+    profundidadDefault?: number | null;
     unidadComercial?: string | null;
   }): MedidaPredefinidaNormalizada[] {
-    if (input.modoMedidas === 'LIBRE') return [];
+    const dimensionesRequeridas =
+      input.dimensionesRequeridas ??
+      this.inferirDimensionesLegacy({
+        modoMedidas: input.modoMedidas,
+        unidadComercial: input.unidadComercial ?? 'unidad',
+        medidas: input.medidas,
+        anchoDefault: input.anchoDefault,
+        altoDefault: input.altoDefault,
+      });
+    if (input.modoMedidas === 'LIBRE' || dimensionesRequeridas.length === 0) {
+      return [];
+    }
+
+    const requiereProfundidad = dimensionesRequeridas.includes('PROFUNDIDAD');
 
     const fuente =
       input.medidas && input.medidas.length > 0
@@ -847,6 +960,7 @@ export class ProductosService {
                 nombre: `${input.anchoDefault} x ${input.altoDefault} mm`,
                 anchoMm: input.anchoDefault,
                 altoMm: input.altoDefault,
+                profundidadMm: input.profundidadDefault ?? undefined,
                 esDefault: true,
               },
             ]
@@ -855,11 +969,7 @@ export class ProductosService {
     // Los productos por unidad (merchandising comprado: taza, remera) pueden no
     // tener medida: se cotizan por unidad y la estampa la maneja la
     // personalización. Ver docs/productos-comprados-merchandising-diseno.md
-    if (
-      input.modoMedidas === 'FIJA' &&
-      fuente.length === 0 &&
-      input.unidadComercial !== 'unidad'
-    ) {
+    if (input.modoMedidas === 'FIJA' && fuente.length === 0) {
       throw new BadRequestException(
         'Los productos con medida fija deben tener al menos una medida predefinida.',
       );
@@ -872,6 +982,11 @@ export class ProductosService {
       const esPliegoUtil = medida.tipo === 'pliego_util';
       const anchoMm = esPliegoUtil ? 0 : Number(medida.anchoMm);
       const altoMm = esPliegoUtil ? 0 : Number(medida.altoMm);
+      const profundidadMm = esPliegoUtil
+        ? 0
+        : Number(
+            medida.profundidadMm ?? input.profundidadDefault ?? Number.NaN,
+          );
       if (!esPliegoUtil && (!Number.isFinite(anchoMm) || anchoMm <= 0)) {
         throw new BadRequestException(
           'Cada medida debe tener ancho mayor a 0.',
@@ -879,6 +994,14 @@ export class ProductosService {
       }
       if (!esPliegoUtil && (!Number.isFinite(altoMm) || altoMm <= 0)) {
         throw new BadRequestException('Cada medida debe tener alto mayor a 0.');
+      }
+      if (
+        requiereProfundidad &&
+        (!Number.isFinite(profundidadMm) || profundidadMm <= 0)
+      ) {
+        throw new BadRequestException(
+          'Cada medida 3D debe tener profundidad mayor a 0.',
+        );
       }
       return {
         id:
@@ -890,9 +1013,12 @@ export class ProductosService {
             ? medida.nombre.trim()
             : esPliegoUtil
               ? 'Plancha completa'
-              : `${anchoMm} x ${altoMm} mm`,
+              : requiereProfundidad
+                ? `${anchoMm} x ${altoMm} x ${profundidadMm} mm`
+                : `${anchoMm} x ${altoMm} mm`,
         anchoMm,
         altoMm,
+        ...(requiereProfundidad ? { profundidadMm } : {}),
         esDefault: medida.esDefault === true,
         ...(esPliegoUtil ? { tipo: 'pliego_util' as const } : {}),
       };
@@ -909,6 +1035,51 @@ export class ProductosService {
     }
 
     return medidas;
+  }
+
+  private normalizarDimensionesRequeridas(
+    dimensiones: string[] | null | undefined,
+    unidadComercial: string | null | undefined,
+  ): string[] {
+    const unicas = [...new Set(dimensiones ?? [])];
+    const validas = new Set(['ANCHO', 'ALTO', 'PROFUNDIDAD']);
+    if (unicas.some((dimension) => !validas.has(dimension))) {
+      throw new BadRequestException('El contrato dimensional no es válido.');
+    }
+    const tieneAncho = unicas.includes('ANCHO');
+    const tieneAlto = unicas.includes('ALTO');
+    const tieneProfundidad = unicas.includes('PROFUNDIDAD');
+    if (tieneAncho !== tieneAlto || (tieneProfundidad && !tieneAncho)) {
+      throw new BadRequestException(
+        'Usá una geometría 2D (ancho y alto), 3D (ancho, alto y profundidad) o sin medidas.',
+      );
+    }
+    if (unidadComercial === 'm2' && (!tieneAncho || !tieneAlto)) {
+      throw new BadRequestException(
+        'Un producto vendido por m² debe declarar ancho y alto.',
+      );
+    }
+    return tieneProfundidad
+      ? ['ANCHO', 'ALTO', 'PROFUNDIDAD']
+      : tieneAncho
+        ? ['ANCHO', 'ALTO']
+        : [];
+  }
+
+  private inferirDimensionesLegacy(input: {
+    modoMedidas: string;
+    unidadComercial: string;
+    medidas?: MedidaPredefinidaDto[] | null;
+    anchoDefault?: number | null;
+    altoDefault?: number | null;
+  }): string[] {
+    const sinMedidaHistorico =
+      input.unidadComercial === 'unidad' &&
+      input.modoMedidas === 'FIJA' &&
+      !(input.medidas && input.medidas.length > 0) &&
+      !input.anchoDefault &&
+      !input.altoDefault;
+    return sinMedidaHistorico ? [] : ['ANCHO', 'ALTO'];
   }
 
   async obtenerProducto(tenantId: string, id: string) {

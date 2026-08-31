@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
   BanknoteIcon,
+  BoxIcon,
+  BoxesIcon,
   CheckIcon,
   CircleAlertIcon,
   CogIcon,
@@ -17,6 +19,7 @@ import {
   PlusIcon,
   PackageCheckIcon,
   SaveIcon,
+  ShoppingCartIcon,
   StarIcon,
   TagIcon,
   Trash2Icon,
@@ -64,6 +67,8 @@ import {
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
+  DimensionProducto,
+  EstructuraProducto,
   MedidaPredefinidaProducto,
   MinimoComercialPolitica,
   MinimoComercialBase,
@@ -73,6 +78,7 @@ import type {
   RutaListItem,
 } from "@/lib/productos-servicios";
 import {
+  getDimensionesRequeridas,
   getMedidasPredefinidas,
   medidaLabel,
   normalizeMedidasDraft,
@@ -92,6 +98,7 @@ import styles from "./producto-workspace.module.css";
 
 export type ProductoWorkspaceTab =
   | "identidad"
+  | "comercial"
   | "produccion"
   | "cargos"
   | "herramientas"
@@ -148,9 +155,15 @@ function modoMedidasUsaPredefinidas(modo: string) {
 function normalizarMedidasPorModo(
   modo: string,
   medidas: MedidaPredefinidaProducto[],
+  es3D = false,
 ) {
   if (!modoMedidasUsaPredefinidas(modo)) return [];
-  const normalizadas = normalizeMedidasDraft(medidas);
+  const normalizadas = normalizeMedidasDraft(medidas).map((medida) => ({
+    ...medida,
+    ...(es3D
+      ? { profundidadMm: medida.profundidadMm }
+      : { profundidadMm: undefined }),
+  }));
   if (modo !== "FIJA") return normalizadas;
   const defaultMedida =
     normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
@@ -159,11 +172,23 @@ function normalizarMedidasPorModo(
 
 function MedidasPredefinidasEditor({
   medidas,
+  modo,
+  es3D,
   onChange,
 }: {
   medidas: MedidaPredefinidaProducto[];
+  modo: ModoMedidasProducto;
+  es3D: boolean;
   onChange: (medidas: MedidaPredefinidaProducto[]) => void;
 }) {
+  const esMedidaFija = modo === "FIJA";
+  const medidaDefault =
+    medidas.find((medida) => medida.esDefault) ?? medidas[0] ?? null;
+  const medidasVisibles = esMedidaFija
+    ? medidaDefault
+      ? [medidaDefault]
+      : []
+    : medidas;
   const updateMedida = (
     id: string,
     patch: Partial<MedidaPredefinidaProducto>,
@@ -197,39 +222,45 @@ function MedidasPredefinidasEditor({
           gap: 12,
         }}
       >
-        <label>Medidas disponibles</label>
-        <div style={{ display: "flex", gap: 4 }}>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() =>
-              onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])
-            }
-          >
-            <PlusIcon />
-            Agregar medida
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() =>
-              onChange([...medidas, nuevaMedidaPlancha(medidas.length)])
-            }
-            disabled={medidas.some((medida) => medida.tipo === "pliego_util")}
-            title="La pieza es toda el área útil del pliego: se calcula al cotizar con el papel y la máquina del paso de impresión"
-          >
-            <PlusIcon />
-            Plancha completa
-          </button>
-        </div>
+        <label>
+          {esMedidaFija ? "Medida del producto" : "Medidas disponibles"}
+        </label>
+        {!esMedidaFija && (
+          <div style={{ display: "flex", gap: 4 }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() =>
+                onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])
+              }
+            >
+              <PlusIcon />
+              Agregar medida
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() =>
+                onChange([...medidas, nuevaMedidaPlancha(medidas.length)])
+              }
+              disabled={medidas.some((medida) => medida.tipo === "pliego_util")}
+              title="La pieza es toda el área útil del pliego: se calcula al cotizar con el papel y la máquina del paso de impresión"
+            >
+              <PlusIcon />
+              Plancha completa
+            </button>
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {medidas.map((medida, index) => (
+        {medidasVisibles.map((medida, index) => (
           <div
             key={medida.id}
             style={{
               display: "grid",
-              gridTemplateColumns: "1.4fr 0.8fr 0.8fr auto auto",
+              gridTemplateColumns: es3D
+                ? "1.25fr 0.7fr 0.7fr 0.7fr auto auto"
+                : "1.4fr 0.8fr 0.8fr auto auto",
               gap: 8,
               alignItems: "center",
             }}
@@ -258,60 +289,83 @@ function MedidasPredefinidasEditor({
                 <input
                   type="number"
                   min="0"
-                  value={medida.anchoMm || ""}
+                  value={medida.anchoMm ? medida.anchoMm / 10 : ""}
                   onChange={(event) =>
                     updateMedida(medida.id, {
-                      anchoMm: Number(event.target.value) || 0,
+                      anchoMm: (Number(event.target.value) || 0) * 10,
                     })
                   }
-                  placeholder="Ancho mm"
+                  placeholder="Ancho cm"
                   aria-label={`Ancho de medida ${index + 1}`}
                 />
                 <input
                   type="number"
                   min="0"
-                  value={medida.altoMm || ""}
+                  value={medida.altoMm ? medida.altoMm / 10 : ""}
                   onChange={(event) =>
                     updateMedida(medida.id, {
-                      altoMm: Number(event.target.value) || 0,
+                      altoMm: (Number(event.target.value) || 0) * 10,
                     })
                   }
-                  placeholder="Alto mm"
+                  placeholder="Alto cm"
                   aria-label={`Alto de medida ${index + 1}`}
                 />
+                {es3D && (
+                  <input
+                    type="number"
+                    min="0"
+                    value={
+                      medida.profundidadMm ? medida.profundidadMm / 10 : ""
+                    }
+                    onChange={(event) =>
+                      updateMedida(medida.id, {
+                        profundidadMm: (Number(event.target.value) || 0) * 10,
+                      })
+                    }
+                    placeholder="Profundidad cm"
+                    aria-label={`Profundidad de medida ${index + 1}`}
+                  />
+                )}
               </>
             )}
-            <button
-              type="button"
-              className={`icon-action medida-default-btn ${medida.esDefault ? "on" : ""}`}
-              onClick={() => setDefault(medida.id)}
-              aria-pressed={medida.esDefault}
-              title={
-                medida.esDefault
-                  ? "Medida predeterminada"
-                  : "Marcar como predeterminada"
-              }
-            >
-              <StarIcon
-                size={13}
-                fill={medida.esDefault ? "currentColor" : "none"}
-              />
-            </button>
-            <button
-              type="button"
-              className="icon-action danger"
-              onClick={() => removeMedida(medida.id)}
-              disabled={medidas.length <= 1}
-              title="Eliminar medida"
-            >
-              <Trash2Icon size={13} />
-            </button>
+            {!esMedidaFija ? (
+              <>
+                <button
+                  type="button"
+                  className={`icon-action medida-default-btn ${medida.esDefault ? "on" : ""}`}
+                  onClick={() => setDefault(medida.id)}
+                  aria-pressed={medida.esDefault}
+                  title={
+                    medida.esDefault
+                      ? "Medida predeterminada"
+                      : "Marcar como predeterminada"
+                  }
+                >
+                  <StarIcon
+                    size={13}
+                    fill={medida.esDefault ? "currentColor" : "none"}
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="icon-action danger"
+                  onClick={() => removeMedida(medida.id)}
+                  disabled={medidas.length <= 1}
+                  title="Eliminar medida"
+                >
+                  <Trash2Icon size={13} />
+                </button>
+              </>
+            ) : (
+              <span style={{ gridColumn: "span 2" }} />
+            )}
           </div>
         ))}
       </div>
       <span className="help">
-        La medida con estrella se usa por defecto al cotizar y mantiene la
-        compatibilidad con el motor.
+        {esMedidaFija
+          ? "Esta medida se aplicará automáticamente; el comercial no tendrá que elegirla ni ingresarla."
+          : "La medida con estrella aparecerá seleccionada inicialmente al cotizar."}
       </span>
     </div>
   );
@@ -471,6 +525,7 @@ const TABS: Array<{
   icon: React.ComponentType<{ className?: string }>;
 }> = [
   { id: "identidad", label: "Identidad", icon: TagIcon },
+  { id: "comercial", label: "Comercial", icon: ShoppingCartIcon },
   { id: "produccion", label: "Producción", icon: FactoryIcon },
   { id: "herramientas", label: "Herramientas", icon: WrenchIcon },
   { id: "pricing", label: "Pricing", icon: BanknoteIcon },
@@ -487,12 +542,27 @@ function tabValidaciones(
     (r) => r.configPasos.length < r.ruta.pasos.length,
   );
   const precioConfig = producto.precioConfigJson as TabPrecioConfig | null;
+  const dimensiones = getDimensionesRequeridas(producto);
+  const medidas = getMedidasPredefinidas(producto);
+  const comercialCompleto =
+    dimensiones.length === 0
+      ? producto.unidadComercial === "unidad"
+      : producto.modoMedidas === "LIBRE" ||
+        (medidas.length > 0 &&
+          (!dimensiones.includes("PROFUNDIDAD") ||
+            medidas.every(
+              (medida) =>
+                medida.profundidadMm != null && medida.profundidadMm > 0,
+            )));
 
   return {
     identidad:
       producto.codigo && producto.nombre
         ? { estado: "ok", label: "Completo" }
         : { estado: "error", label: "Faltan datos" },
+    comercial: comercialCompleto
+      ? { estado: "ok", label: "Completo" }
+      : { estado: "error", label: "Falta configuración" },
     produccion: sinRutas
       ? { estado: "error", label: "Sin rutas" }
       : sinPreferida
@@ -602,24 +672,12 @@ export function ProductoWorkspace({
                 Configurá su identidad, producción y precio antes de publicarlo.
               </p>
             )}
-            <div className={styles.meta}>
-              {producto.subcategoriaComercial?.nombre ? (
-                <span>{producto.subcategoriaComercial.nombre}</span>
-              ) : null}
-              <span>
-                {producto.unidadComercial === "m2"
-                  ? "Venta por metro cuadrado"
-                  : producto.unidadComercial === "metro_lineal"
-                    ? "Venta por metro lineal"
-                    : "Venta por unidad"}
-              </span>
-            </div>
           </div>
+          <ProductoValidacionPanel
+            productoId={producto.id}
+            variante="compacta"
+          />
         </header>
-
-        <div className={styles.validation}>
-          <ProductoValidacionPanel productoId={producto.id} />
-        </div>
         {!canManage ? (
           <Alert className="mb-4">
             <CircleAlertIcon />
@@ -660,7 +718,10 @@ export function ProductoWorkspace({
           <TabsContent value={activeTab}>
             <fieldset disabled={!canManage} className="contents">
               {activeTab === "identidad" && (
-                <IdentidadTab producto={producto} />
+                <IdentidadTab producto={producto} seccion="identidad" />
+              )}
+              {activeTab === "comercial" && (
+                <IdentidadTab producto={producto} seccion="comercial" />
               )}
               {activeTab === "produccion" && (
                 <ProduccionTab
@@ -691,23 +752,31 @@ export function ProductoWorkspace({
   );
 }
 
-function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
+function IdentidadTab({
+  producto,
+  seccion,
+}: {
+  producto: ProductoDetalle;
+  seccion: "identidad" | "comercial";
+}) {
   const router = useRouter();
   const identidadInicial = React.useMemo(
     () => ({
       nombre: producto.nombre,
       descripcion: producto.descripcion ?? "",
+      estructuraProducto:
+        producto.estructuraProducto ??
+        (producto.esCompuesto ? "COMPUESTO" : "SIMPLE"),
       subcategoriaComercialCodigo:
         producto.subcategoriaComercial?.codigo ?? "producto_a_medida",
       unidadComercial: producto.unidadComercial,
       modoMedidas: producto.modoMedidas,
+      dimensionesRequeridas: getDimensionesRequeridas(producto),
       minimoComercialPolitica: producto.minimoComercialPolitica ?? "NONE",
       minimoComercialCantidad: producto.minimoComercialCantidad ?? "",
       minimoComercialBase: producto.minimoComercialBase ?? "cantidad_comercial",
       medidas: getMedidasPredefinidas(producto),
-      sinMedida:
-        (producto.modoMedidas ?? "FIJA") === "FIJA" &&
-        getMedidasPredefinidas(producto).length === 0,
+      sinMedida: getDimensionesRequeridas(producto).length === 0,
       personalizaciones: getPersonalizaciones(producto.personalizacionesJson),
       activo: producto.activo,
     }),
@@ -719,6 +788,11 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   const [descripcion, setDescripcion] = React.useState(
     producto.descripcion ?? "",
   );
+  const [estructuraProducto, setEstructuraProducto] =
+    React.useState<EstructuraProducto>(
+      producto.estructuraProducto ??
+        (producto.esCompuesto ? "COMPUESTO" : "SIMPLE"),
+    );
   const [catalogoComercial, setCatalogoComercial] = React.useState<
     ProductoCategoriaComercial[]
   >([]);
@@ -731,6 +805,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   );
   const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(
     producto.modoMedidas,
+  );
+  const [geometria, setGeometria] = React.useState<"2D" | "3D">(() =>
+    getDimensionesRequeridas(producto).includes("PROFUNDIDAD") ? "3D" : "2D",
   );
   const [minimoComercialPolitica, setMinimoComercialPolitica] =
     React.useState<MinimoComercialPolitica>(
@@ -753,22 +830,31 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   // Producto por unidad sin medida (merchandising: taza, remera). Se persiste
   // como FIJA + medidas vacías. Ver docs/productos-comprados-merchandising-diseno.md
   const [sinMedida, setSinMedida] = React.useState<boolean>(
-    () =>
-      (producto.modoMedidas ?? "FIJA") === "FIJA" &&
-      getMedidasPredefinidas(producto).length === 0,
+    () => getDimensionesRequeridas(producto).length === 0,
   );
   React.useEffect(() => {
-    if (unidadComercial !== "unidad" && sinMedida) setSinMedida(false);
-  }, [unidadComercial, sinMedida]);
+    if (unidadComercial !== "unidad" && sinMedida) {
+      setSinMedida(false);
+      if (medidas.length === 0) {
+        setMedidas([nuevaMedidaPredefinida(0)]);
+      }
+    }
+  }, [medidas.length, unidadComercial, sinMedida]);
   const [guardando, setGuardando] = React.useState(false);
 
   const identidadActual = React.useMemo(
     () => ({
       nombre,
       descripcion,
+      estructuraProducto,
       subcategoriaComercialCodigo,
       unidadComercial,
       modoMedidas: sinMedida ? "FIJA" : modoMedidas,
+      dimensionesRequeridas: sinMedida
+        ? ([] as DimensionProducto[])
+        : geometria === "3D"
+          ? (["ANCHO", "ALTO", "PROFUNDIDAD"] as DimensionProducto[])
+          : (["ANCHO", "ALTO"] as DimensionProducto[]),
       minimoComercialPolitica,
       minimoComercialCantidad:
         minimoComercialPolitica === "NONE" ? "" : minimoComercialCantidad,
@@ -776,7 +862,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         minimoComercialPolitica === "NONE"
           ? "cantidad_comercial"
           : minimoComercialBase,
-      medidas: sinMedida ? [] : normalizarMedidasPorModo(modoMedidas, medidas),
+      medidas: sinMedida
+        ? []
+        : normalizarMedidasPorModo(modoMedidas, medidas, geometria === "3D"),
       sinMedida,
       personalizaciones: normalizePersonalizaciones(personalizaciones),
       activo,
@@ -784,7 +872,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     [
       activo,
       descripcion,
+      estructuraProducto,
       medidas,
+      geometria,
       sinMedida,
       personalizaciones,
       minimoComercialCantidad,
@@ -802,6 +892,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       medidas: normalizarMedidasPorModo(
         identidadPersistida.modoMedidas,
         identidadPersistida.medidas,
+        identidadPersistida.dimensionesRequeridas.includes("PROFUNDIDAD"),
       ),
       personalizaciones: normalizePersonalizaciones(
         identidadPersistida.personalizaciones,
@@ -809,12 +900,33 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     }),
     [identidadPersistida],
   );
-  const dirty = React.useMemo(
-    () =>
-      JSON.stringify(identidadActual) !==
-      JSON.stringify(identidadPersistidaNormalizada),
-    [identidadActual, identidadPersistidaNormalizada],
-  );
+  const dirty = React.useMemo(() => {
+    const campos =
+      seccion === "identidad"
+        ? ([
+            "nombre",
+            "descripcion",
+            "estructuraProducto",
+            "subcategoriaComercialCodigo",
+            "activo",
+          ] as const)
+        : ([
+            "unidadComercial",
+            "modoMedidas",
+            "dimensionesRequeridas",
+            "minimoComercialPolitica",
+            "minimoComercialCantidad",
+            "minimoComercialBase",
+            "medidas",
+            "sinMedida",
+            "personalizaciones",
+          ] as const);
+    return campos.some(
+      (campo) =>
+        JSON.stringify(identidadActual[campo]) !==
+        JSON.stringify(identidadPersistidaNormalizada[campo]),
+    );
+  }, [identidadActual, identidadPersistidaNormalizada, seccion]);
 
   React.useEffect(() => {
     getCatalogoComercial()
@@ -833,12 +945,20 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       .catch(() => setCatalogoComercial([]));
   }, []);
 
-  const subcategoriaOptions = catalogoComercial.flatMap((categoria) =>
-    categoria.subcategorias.map((subcategoria) => ({
-      value: subcategoria.codigo,
-      label: `${categoria.nombre} · ${subcategoria.nombre}`,
-    })),
+  const categoriaSeleccionada = catalogoComercial.find((categoria) =>
+    categoria.subcategorias.some(
+      (subcategoria) => subcategoria.codigo === subcategoriaComercialCodigo,
+    ),
   );
+  const categoriaOptions = catalogoComercial.map((categoria) => ({
+    value: categoria.codigo,
+    label: categoria.nombre,
+  }));
+  const subcategoriaOptions =
+    categoriaSeleccionada?.subcategorias.map((subcategoria) => ({
+      value: subcategoria.codigo,
+      label: subcategoria.nombre,
+    })) ?? [];
   const minimoUnidadLabel =
     minimoComercialBase === "pliegos_impresos"
       ? "pliegos"
@@ -849,54 +969,92 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           : "u.";
 
   const guardar = async () => {
-    if (!nombre.trim()) {
+    if (seccion === "identidad" && !nombre.trim()) {
       toast.error("Falta nombre");
       return;
     }
     const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
     const medidasNormalizadas = sinMedida
       ? []
-      : normalizarMedidasPorModo(modoMedidas, medidas);
+      : normalizarMedidasPorModo(modoMedidas, medidas, geometria === "3D");
     const medidaDefault = medidasNormalizadas.find(
       (medida) => medida.esDefault,
     );
-    if (!sinMedida && modoMedidas === "FIJA" && !medidaDefault) {
+    if (
+      seccion === "comercial" &&
+      !sinMedida &&
+      modoMedidas === "FIJA" &&
+      !medidaDefault
+    ) {
       toast.error("Agregá al menos una medida predefinida.");
       return;
     }
+    if (
+      !sinMedida &&
+      seccion === "comercial" &&
+      geometria === "3D" &&
+      modoMedidas !== "LIBRE" &&
+      medidasNormalizadas.some(
+        (medida) => !medida.profundidadMm || medida.profundidadMm <= 0,
+      )
+    ) {
+      toast.error("Completá la profundidad de cada medida 3D.");
+      return;
+    }
+    const dimensionesRequeridas: DimensionProducto[] = sinMedida
+      ? []
+      : geometria === "3D"
+        ? ["ANCHO", "ALTO", "PROFUNDIDAD"]
+        : ["ANCHO", "ALTO"];
     const personalizacionesNormalizadas =
       normalizePersonalizaciones(personalizaciones);
     setGuardando(true);
     try {
       await actualizarProducto(producto.id, {
         expectedUpdatedAt: producto.updatedAt,
-        nombre,
-        descripcion: descripcion || undefined,
-        subcategoriaComercialCodigo,
-        unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
-        modoMedidas: modoMedidasEfectivo,
-        minimoComercialPolitica,
-        minimoComercialCantidad:
-          minimoComercialPolitica === "NONE"
-            ? null
-            : Number(minimoComercialCantidad) || null,
-        minimoComercialBase:
-          minimoComercialPolitica === "NONE"
-            ? "cantidad_comercial"
-            : minimoComercialBase,
-        medidaDefaultAnchoMm: medidaDefault?.anchoMm ?? null,
-        medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
-        medidasPredefinidasJson: medidasNormalizadas,
-        personalizacionesJson:
-          personalizacionesNormalizadas as unknown as Record<string, unknown>[],
-        activo,
+        ...(seccion === "identidad"
+          ? {
+              nombre,
+              descripcion: descripcion || undefined,
+              estructuraProducto,
+              subcategoriaComercialCodigo,
+              activo,
+            }
+          : {
+              unidadComercial: unidadComercial as
+                | "unidad"
+                | "m2"
+                | "metro_lineal",
+              modoMedidas: modoMedidasEfectivo,
+              dimensionesRequeridas,
+              minimoComercialPolitica,
+              minimoComercialCantidad:
+                minimoComercialPolitica === "NONE"
+                  ? null
+                  : Number(minimoComercialCantidad) || null,
+              minimoComercialBase:
+                minimoComercialPolitica === "NONE"
+                  ? "cantidad_comercial"
+                  : minimoComercialBase,
+              medidaDefaultAnchoMm: medidaDefault?.anchoMm ?? null,
+              medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
+              medidaDefaultProfundidadMm: medidaDefault?.profundidadMm ?? null,
+              medidasPredefinidasJson: medidasNormalizadas,
+              personalizacionesJson:
+                personalizacionesNormalizadas as unknown as Record<
+                  string,
+                  unknown
+                >[],
+            }),
       });
       setIdentidadPersistida({
         nombre,
         descripcion,
+        estructuraProducto,
         subcategoriaComercialCodigo,
         unidadComercial,
         modoMedidas: modoMedidasEfectivo,
+        dimensionesRequeridas,
         minimoComercialPolitica,
         minimoComercialCantidad:
           minimoComercialPolitica === "NONE" ? "" : minimoComercialCantidad,
@@ -909,7 +1067,11 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         personalizaciones: personalizacionesNormalizadas,
         activo,
       });
-      toast.success("Identidad guardada");
+      toast.success(
+        seccion === "identidad"
+          ? "Identidad guardada"
+          : "Configuración comercial guardada",
+      );
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error guardando");
@@ -920,304 +1082,423 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
 
   return (
     <div className="wiz-cols">
-      <div className="wiz-section">
-        <div className="wiz-section-head">
-          <div className="body">
-            <h2>Identidad</h2>
-            <div className="helptext">
-              Cómo se llama y se reconoce el producto en el catálogo.
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div className="field">
-            <label>
-              Nombre <span className="req">*</span>
-            </label>
-            <input
-              type="text"
-              value={nombre}
-              onChange={(event) => setNombre(event.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label>Descripción</label>
-            <textarea
-              value={descripcion}
-              onChange={(event) => setDescripcion(event.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label>Categoría comercial</label>
-            <HumanSelect
-              value={subcategoriaComercialCodigo}
-              onValueChange={(value) =>
-                setSubcategoriaComercialCodigo(value || "producto_a_medida")
-              }
-              options={subcategoriaOptions}
-            />
-            <span className="help">
-              Agrupa reportes y define specs visibles en propuestas.
-            </span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingTop: 6,
-              borderTop: "1px solid var(--hairline)",
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>Publicado</div>
-              <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
-                Al publicar, el backend valida que esté listo para cotizar.
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`toggle ${activo ? "on" : ""}`}
-              onClick={() => setActivo((current) => !current)}
-              aria-pressed={activo}
-            >
-              <span className="switch" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="wiz-section">
-        <div className="wiz-section-head">
-          <div className="body">
-            <h2>Comercial y medidas</h2>
-            <div className="helptext">
-              Cómo se cobra y cómo se manejan las medidas al cotizar.
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div className="field">
-            <label>¿Cómo se cobra?</label>
-            <div className="segmented" style={{ width: "100%" }}>
-              <button
-                type="button"
-                className={unidadComercial === "unidad" ? "on" : ""}
-                onClick={() => setUnidadComercial("unidad")}
-                style={{ flex: 1 }}
-              >
-                Por unidad
-              </button>
-              <button
-                type="button"
-                className={unidadComercial === "m2" ? "on" : ""}
-                onClick={() => setUnidadComercial("m2")}
-                style={{ flex: 1 }}
-              >
-                Por m²
-              </button>
-              <button
-                type="button"
-                className={unidadComercial === "metro_lineal" ? "on" : ""}
-                onClick={() => setUnidadComercial("metro_lineal")}
-                style={{ flex: 1 }}
-              >
-                Por metro lineal
-              </button>
-            </div>
-          </div>
-          {unidadComercial === "unidad" && (
-            <div className="field">
-              <label>¿El producto tiene medida?</label>
-              <div className="segmented" style={{ width: "100%" }}>
-                <button
-                  type="button"
-                  className={!sinMedida ? "on" : ""}
-                  onClick={() => setSinMedida(false)}
-                  style={{ flex: 1 }}
-                >
-                  Con medida
-                </button>
-                <button
-                  type="button"
-                  className={sinMedida ? "on" : ""}
-                  onClick={() => setSinMedida(true)}
-                  style={{ flex: 1 }}
-                >
-                  Sin medida (por unidad)
-                </button>
-              </div>
+      {seccion === "identidad" ? (
+        <div className="wiz-section" style={{ gridColumn: "1 / -1" }}>
+          <div className="wiz-section-head">
+            <div className="body">
+              <h2>Identidad</h2>
               <div className="helptext">
-                Merchandising comprado (taza, remera, lapicera) va «sin medida»:
-                se cotiza por unidad y la estampa la maneja la personalización.
+                Cómo se llama y se reconoce el producto en el catálogo.
               </div>
             </div>
-          )}
-          {!sinMedida && (
-            <div className="field">
-              <label>Manejo de medidas</label>
-              <div className="segmented" style={{ width: "100%" }}>
-                <button
-                  type="button"
-                  className={modoMedidas === "FIJA" ? "on" : ""}
-                  onClick={() => setModoMedidas("FIJA")}
-                  style={{ flex: 1 }}
-                >
-                  Fija
-                </button>
-                <button
-                  type="button"
-                  className={modoMedidas === "LIBRE" ? "on" : ""}
-                  onClick={() => setModoMedidas("LIBRE")}
-                  style={{ flex: 1 }}
-                >
-                  Libre
-                </button>
-                <button
-                  type="button"
-                  className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""}
-                  onClick={() => setModoMedidas("COMERCIAL_ELIGE")}
-                  style={{ flex: 1 }}
-                >
-                  Comercial elige
-                </button>
-                <button
-                  type="button"
-                  className={modoMedidas === "MIXTA" ? "on" : ""}
-                  onClick={() => setModoMedidas("MIXTA")}
-                  style={{ flex: 1 }}
-                >
-                  Mixta
-                </button>
-              </div>
-            </div>
-          )}
-          {!sinMedida && modoMedidasUsaPredefinidas(modoMedidas) && (
-            <MedidasPredefinidasEditor
-              medidas={medidas}
-              onChange={setMedidas}
-            />
-          )}
-          <div className="field">
-            <label>Mínimo comercial</label>
-            <div className="segmented" style={{ width: "100%" }}>
-              <button
-                type="button"
-                className={minimoComercialPolitica === "NONE" ? "on" : ""}
-                onClick={() => setMinimoComercialPolitica("NONE")}
-                style={{ flex: 1 }}
-              >
-                Sin mínimo
-              </button>
-              <button
-                type="button"
-                className={
-                  minimoComercialPolitica === "ADVERTIR_FACTURAR_MINIMO"
-                    ? "on"
-                    : ""
-                }
-                onClick={() =>
-                  setMinimoComercialPolitica("ADVERTIR_FACTURAR_MINIMO")
-                }
-                style={{ flex: 1 }}
-              >
-                Advertir
-              </button>
-              <button
-                type="button"
-                className={minimoComercialPolitica === "BLOQUEAR" ? "on" : ""}
-                onClick={() => setMinimoComercialPolitica("BLOQUEAR")}
-                style={{ flex: 1 }}
-              >
-                Bloquear
-              </button>
-            </div>
-            <span className="help">
-              Advertir cobra el mínimo solo en precio; la producción conserva la
-              cantidad real.
-            </span>
           </div>
-          {minimoComercialPolitica !== "NONE" && (
-            <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="field">
+              <label>
+                Nombre <span className="req">*</span>
+              </label>
+              <input
+                type="text"
+                value={nombre}
+                onChange={(event) => setNombre(event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Descripción</label>
+              <textarea
+                value={descripcion}
+                onChange={(event) => setDescripcion(event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Estructura del producto</label>
+              <div
+                className={styles.structureChoiceGrid}
+                role="radiogroup"
+                aria-label="Estructura del producto"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={estructuraProducto === "SIMPLE"}
+                  data-active={estructuraProducto === "SIMPLE"}
+                  onClick={() => setEstructuraProducto("SIMPLE")}
+                >
+                  <span className={styles.structureChoiceIcon}>
+                    <BoxIcon />
+                  </span>
+                  <span>
+                    <strong>Producto simple</strong>
+                    <small>Se fabrica con pasos propios.</small>
+                  </span>
+                  <span className={styles.structureChoiceMark}>
+                    {estructuraProducto === "SIMPLE" ? <CheckIcon /> : null}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={estructuraProducto === "COMPUESTO"}
+                  data-active={estructuraProducto === "COMPUESTO"}
+                  onClick={() => setEstructuraProducto("COMPUESTO")}
+                >
+                  <span className={styles.structureChoiceIcon}>
+                    <BoxesIcon />
+                  </span>
+                  <span>
+                    <strong>Producto compuesto</strong>
+                    <small>
+                      Combina componentes fabricados y pasos propios.
+                    </small>
+                  </span>
+                  <span className={styles.structureChoiceMark}>
+                    {estructuraProducto === "COMPUESTO" ? <CheckIcon /> : null}
+                  </span>
+                </button>
+              </div>
+            </div>
+            <div className={styles.classificationGrid}>
               <div className="field">
-                <label>Base del mínimo</label>
+                <label>Categoría comercial</label>
+                <HumanSelect
+                  value={categoriaSeleccionada?.codigo ?? ""}
+                  onValueChange={(value) => {
+                    const categoria = catalogoComercial.find(
+                      (item) => item.codigo === value,
+                    );
+                    const primeraSubcategoria = categoria?.subcategorias[0];
+                    if (primeraSubcategoria) {
+                      setSubcategoriaComercialCodigo(
+                        primeraSubcategoria.codigo,
+                      );
+                    }
+                  }}
+                  options={categoriaOptions}
+                />
+              </div>
+              <div className="field">
+                <label>Subcategoría</label>
+                <HumanSelect
+                  value={subcategoriaComercialCodigo}
+                  onValueChange={(value) =>
+                    setSubcategoriaComercialCodigo(
+                      value ||
+                        categoriaSeleccionada?.subcategorias[0]?.codigo ||
+                        "producto_a_medida",
+                    )
+                  }
+                  options={subcategoriaOptions}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingTop: 6,
+                borderTop: "1px solid var(--hairline)",
+              }}
+            >
+              <div style={{ fontWeight: 500, fontSize: 13 }}>Publicado</div>
+              <button
+                type="button"
+                className={`toggle ${activo ? "on" : ""}`}
+                onClick={() => setActivo((current) => !current)}
+                aria-pressed={activo}
+              >
+                <span className="switch" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {seccion === "comercial" ? (
+        <>
+          <div className="wiz-section">
+            <div className="wiz-section-head">
+              <div className="body">
+                <h2>Comercial y medidas</h2>
+                <div className="helptext">
+                  Definí cómo se vende el producto y qué datos deberá completar
+                  el comercial al cotizarlo.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div className="field">
+                <label>Unidad de venta</label>
                 <div className="segmented" style={{ width: "100%" }}>
                   <button
                     type="button"
-                    className={
-                      minimoComercialBase === "cantidad_comercial" ? "on" : ""
-                    }
-                    onClick={() => setMinimoComercialBase("cantidad_comercial")}
+                    className={unidadComercial === "unidad" ? "on" : ""}
+                    onClick={() => setUnidadComercial("unidad")}
                     style={{ flex: 1 }}
                   >
-                    Cantidad comercial
+                    Por unidad
+                  </button>
+                  <button
+                    type="button"
+                    className={unidadComercial === "m2" ? "on" : ""}
+                    onClick={() => setUnidadComercial("m2")}
+                    style={{ flex: 1 }}
+                  >
+                    Por m²
+                  </button>
+                  <button
+                    type="button"
+                    className={unidadComercial === "metro_lineal" ? "on" : ""}
+                    onClick={() => setUnidadComercial("metro_lineal")}
+                    style={{ flex: 1 }}
+                  >
+                    Por metro lineal
+                  </button>
+                </div>
+              </div>
+              {unidadComercial === "unidad" && (
+                <div className="field">
+                  <label>¿El producto se define por medidas?</label>
+                  <div className="segmented" style={{ width: "100%" }}>
+                    <button
+                      type="button"
+                      className={!sinMedida ? "on" : ""}
+                      onClick={() => {
+                        setSinMedida(false);
+                        if (medidas.length === 0) {
+                          setMedidas([nuevaMedidaPredefinida(0)]);
+                        }
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      Sí, utiliza medidas
+                    </button>
+                    <button
+                      type="button"
+                      className={sinMedida ? "on" : ""}
+                      onClick={() => setSinMedida(true)}
+                      style={{ flex: 1 }}
+                    >
+                      No utiliza medidas
+                    </button>
+                  </div>
+                  <div className="helptext">
+                    Elegí «No utiliza medidas» cuando la cantidad de unidades
+                    sea suficiente para cotizar el producto.
+                  </div>
+                </div>
+              )}
+              {!sinMedida && (
+                <div className="field">
+                  <label>Geometría del producto</label>
+                  <div className="segmented" style={{ width: "100%" }}>
+                    <button
+                      type="button"
+                      className={geometria === "2D" ? "on" : ""}
+                      onClick={() => setGeometria("2D")}
+                      style={{ flex: 1 }}
+                    >
+                      2D · Ancho y alto
+                    </button>
+                    <button
+                      type="button"
+                      className={geometria === "3D" ? "on" : ""}
+                      onClick={() => setGeometria("3D")}
+                      style={{ flex: 1 }}
+                    >
+                      3D · Ancho, alto y profundidad
+                    </button>
+                  </div>
+                  <div className="helptext">
+                    El sheet solicitará exactamente estas dimensiones cuando el
+                    comercial deba definir una medida.
+                  </div>
+                </div>
+              )}
+              {!sinMedida && (
+                <div className="field">
+                  <label>¿Cómo se define la medida?</label>
+                  <div className="segmented" style={{ width: "100%" }}>
+                    <button
+                      type="button"
+                      className={modoMedidas === "FIJA" ? "on" : ""}
+                      onClick={() => {
+                        setModoMedidas("FIJA");
+                        if (medidas.length === 0) {
+                          setMedidas([nuevaMedidaPredefinida(0)]);
+                        }
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      Medida fija
+                    </button>
+                    <button
+                      type="button"
+                      className={modoMedidas === "LIBRE" ? "on" : ""}
+                      onClick={() => setModoMedidas("LIBRE")}
+                      style={{ flex: 1 }}
+                    >
+                      Medida libre
+                    </button>
+                    <button
+                      type="button"
+                      className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""}
+                      onClick={() => setModoMedidas("COMERCIAL_ELIGE")}
+                      style={{ flex: 1 }}
+                    >
+                      Medidas predefinidas
+                    </button>
+                    <button
+                      type="button"
+                      className={modoMedidas === "MIXTA" ? "on" : ""}
+                      onClick={() => setModoMedidas("MIXTA")}
+                      style={{ flex: 1 }}
+                    >
+                      Predefinida o personalizada
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!sinMedida && modoMedidasUsaPredefinidas(modoMedidas) && (
+                <MedidasPredefinidasEditor
+                  medidas={medidas}
+                  modo={modoMedidas}
+                  es3D={geometria === "3D"}
+                  onChange={setMedidas}
+                />
+              )}
+              <div className="field">
+                <label>Mínimo comercial</label>
+                <div className="segmented" style={{ width: "100%" }}>
+                  <button
+                    type="button"
+                    className={minimoComercialPolitica === "NONE" ? "on" : ""}
+                    onClick={() => setMinimoComercialPolitica("NONE")}
+                    style={{ flex: 1 }}
+                  >
+                    Sin mínimo
                   </button>
                   <button
                     type="button"
                     className={
-                      minimoComercialBase === "pliegos_impresos" ? "on" : ""
+                      minimoComercialPolitica === "ADVERTIR_FACTURAR_MINIMO"
+                        ? "on"
+                        : ""
                     }
-                    onClick={() => setMinimoComercialBase("pliegos_impresos")}
+                    onClick={() =>
+                      setMinimoComercialPolitica("ADVERTIR_FACTURAR_MINIMO")
+                    }
                     style={{ flex: 1 }}
                   >
-                    Pliegos impresos
+                    Advertir
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      minimoComercialPolitica === "BLOQUEAR" ? "on" : ""
+                    }
+                    onClick={() => setMinimoComercialPolitica("BLOQUEAR")}
+                    style={{ flex: 1 }}
+                  >
+                    Bloquear
                   </button>
                 </div>
                 <span className="help">
-                  Pliegos impresos se calcula después del nesting de impresión
-                  por hoja.
+                  Advertir cobra el mínimo solo en precio; la producción
+                  conserva la cantidad real.
                 </span>
               </div>
-              <div className="field">
-                <label>Cantidad mínima</label>
-                <div className="input-with-unit">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.0001"
-                    value={minimoComercialCantidad}
-                    onChange={(event) =>
-                      setMinimoComercialCantidad(event.target.value)
-                    }
-                    placeholder={
-                      minimoComercialBase === "pliegos_impresos"
-                        ? "3"
-                        : unidadComercial === "unidad"
-                          ? "100"
-                          : "1"
-                    }
-                  />
-                  <span>{minimoUnidadLabel}</span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="wiz-section">
-        <div className="wiz-section-head">
-          <div className="body">
-            <h2>Personalizaciones</h2>
-            <div className="helptext">
-              Áreas de decoración con medida propia (ej. la impresión DTF de una
-              taza o remera). La medida de cada personalización maneja el costo
-              de su material y proceso, aparte de la medida del producto base.
-              Luego, en <em>Pasos</em>, indicás qué paso alimenta cada
-              personalización.
+              {minimoComercialPolitica !== "NONE" && (
+                <>
+                  <div className="field">
+                    <label>Base del mínimo</label>
+                    <div className="segmented" style={{ width: "100%" }}>
+                      <button
+                        type="button"
+                        className={
+                          minimoComercialBase === "cantidad_comercial"
+                            ? "on"
+                            : ""
+                        }
+                        onClick={() =>
+                          setMinimoComercialBase("cantidad_comercial")
+                        }
+                        style={{ flex: 1 }}
+                      >
+                        Cantidad comercial
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          minimoComercialBase === "pliegos_impresos" ? "on" : ""
+                        }
+                        onClick={() =>
+                          setMinimoComercialBase("pliegos_impresos")
+                        }
+                        style={{ flex: 1 }}
+                      >
+                        Pliegos impresos
+                      </button>
+                    </div>
+                    <span className="help">
+                      Pliegos impresos se calcula después del nesting de
+                      impresión por hoja.
+                    </span>
+                  </div>
+                  <div className="field">
+                    <label>Cantidad mínima</label>
+                    <div className="input-with-unit">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        value={minimoComercialCantidad}
+                        onChange={(event) =>
+                          setMinimoComercialCantidad(event.target.value)
+                        }
+                        placeholder={
+                          minimoComercialBase === "pliegos_impresos"
+                            ? "3"
+                            : unidadComercial === "unidad"
+                              ? "100"
+                              : "1"
+                        }
+                      />
+                      <span>{minimoUnidadLabel}</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </div>
-        <PersonalizacionesEditor
-          personalizaciones={personalizaciones}
-          onChange={setPersonalizaciones}
-        />
-      </div>
+
+          <div className="wiz-section">
+            <div className="wiz-section-head">
+              <div className="body">
+                <h2>Personalizaciones</h2>
+                <div className="helptext">
+                  Áreas de decoración con medida propia (ej. la impresión DTF de
+                  una taza o remera). La medida de cada personalización maneja
+                  el costo de su material y proceso, aparte de la medida del
+                  producto base. Luego, en <em>Pasos</em>, indicás qué paso
+                  alimenta cada personalización.
+                </div>
+              </div>
+            </div>
+            <PersonalizacionesEditor
+              personalizaciones={personalizaciones}
+              onChange={setPersonalizaciones}
+            />
+          </div>
+        </>
+      ) : null}
 
       {(dirty || guardando) && (
         <div className="save-sticky-footer">
           <div className="pricing-sticky-footer-copy">
-            Hay cambios sin guardar en identidad.
+            {seccion === "identidad"
+              ? "Hay cambios sin guardar en identidad."
+              : "Hay cambios sin guardar en la configuración comercial."}
           </div>
           <button
             type="button"
@@ -1234,39 +1515,8 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   );
 }
 
-const PRODUCCION_VISTAS: Array<{
-  id: ProductoProduccionVista;
-  numero: string;
-  label: string;
-  descripcion: string;
-  icon: React.ComponentType<{ className?: string }>;
-}> = [
-  {
-    id: "rutas",
-    numero: "01",
-    label: "Rutas y flujo",
-    descripcion: "Elegí las vías posibles y su recorrido.",
-    icon: GitBranchIcon,
-  },
-  {
-    id: "operaciones",
-    numero: "02",
-    label: "Pasos y recursos",
-    descripcion: "Configurá operaciones, máquinas y materiales.",
-    icon: FootprintsIcon,
-  },
-  {
-    id: "bom",
-    numero: "03",
-    label: "BOM y versiones",
-    descripcion: "Revisá la composición y publicá el contrato.",
-    icon: PackageCheckIcon,
-  },
-];
-
 function ProduccionTab({
   producto,
-  vista,
   rutaAltId,
   rutasDisponibles,
   catalogoFamilias,
@@ -1281,72 +1531,147 @@ function ProduccionTab({
   recetas: ProductoReceta[];
   canManage: boolean;
 }) {
+  const router = useRouter();
+  const [mostrarRutas, setMostrarRutas] = React.useState(false);
   const rutaSeleccionada =
     producto.rutasAlternativas.find((ruta) => ruta.id === rutaAltId) ??
     producto.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
     producto.rutasAlternativas[0];
-  const hrefVista = (destino: ProductoProduccionVista) => {
-    const params = new URLSearchParams({ tab: "produccion", vista: destino });
-    if (rutaSeleccionada?.id) params.set("rutaAltId", rutaSeleccionada.id);
-    return `/productos-servicios/${producto.id}?${params.toString()}`;
+  const cambiarRuta = (rutaId: string) => {
+    const params = new URLSearchParams({
+      tab: "produccion",
+      vista: "operaciones",
+      rutaAltId: rutaId,
+    });
+    router.push(`/productos-servicios/${producto.id}?${params.toString()}`);
   };
+  const recetaSeleccionada = recetas.find(
+    (receta) => receta.rutaAlternativa.id === rutaSeleccionada?.id,
+  );
+  const borrador = recetaSeleccionada?.revisiones.find(
+    (revision) => revision.estado === "BORRADOR",
+  );
+  const publicada = recetaSeleccionada?.revisionPublicada;
 
   return (
-    <div className={styles.productionWorkspace}>
-      <nav
-        className={styles.productionNav}
-        aria-label="Etapas de configuración productiva"
-      >
-        {PRODUCCION_VISTAS.map((item, index) => {
-          const Icon = item.icon;
-          const active = vista === item.id;
-          return (
-            <React.Fragment key={item.id}>
-              <Link
-                href={hrefVista(item.id)}
-                className={styles.productionNavItem}
-                data-active={active || undefined}
-                aria-current={active ? "step" : undefined}
-              >
-                <span className={styles.productionNavNumber}>{item.numero}</span>
-                <span className={styles.productionNavIcon}>
-                  <Icon />
-                </span>
-                <span className={styles.productionNavCopy}>
-                  <strong>{item.label}</strong>
-                  <small>{item.descripcion}</small>
-                </span>
-              </Link>
-              {index < PRODUCCION_VISTAS.length - 1 ? (
-                <span className={styles.productionConnector} aria-hidden="true" />
-              ) : null}
-            </React.Fragment>
-          );
-        })}
-      </nav>
+    <div className={styles.productionUnified}>
+      <header className={styles.productionUnifiedHeader}>
+        <div className={styles.productionUnifiedTitle}>
+          <span className={styles.productionUnifiedIcon} aria-hidden="true">
+            <FactoryIcon />
+          </span>
+          <div>
+            <span>MODELO PRODUCTIVO</span>
+            <h2>Editor de producción</h2>
+            <p>
+              Flujo, componentes fabricados, operaciones y versiones en un único
+              lugar.
+            </p>
+          </div>
+        </div>
+        <div className={styles.productionUnifiedControls}>
+          {rutaSeleccionada ? (
+            <div className={styles.productionRouteSelect}>
+              <label>Vía de fabricación</label>
+              <HumanSelect
+                value={rutaSeleccionada.id}
+                onValueChange={(value) => value && cambiarRuta(value)}
+                options={producto.rutasAlternativas.map((ruta) => ({
+                  value: ruta.id,
+                  label: ruta.nombre,
+                  code: ruta.ruta.codigo,
+                  description: `${ruta.ruta.pasos.length} pasos`,
+                }))}
+                triggerClassName={styles.productionRouteTrigger}
+              />
+            </div>
+          ) : null}
+          <div className={styles.productionUnifiedActions}>
+            <span
+              className={styles.productionVersionStatus}
+              data-state={
+                borrador ? "draft" : publicada ? "published" : "empty"
+              }
+            >
+              <PackageCheckIcon />
+              {borrador
+                ? `V${borrador.numero} sin publicar`
+                : publicada
+                  ? `V${publicada.numero} publicada`
+                  : "Sin versión"}
+            </span>
+            <button
+              type="button"
+              className={styles.productionManageRoutes}
+              aria-expanded={mostrarRutas}
+              onClick={() => setMostrarRutas((actual) => !actual)}
+            >
+              <GitBranchIcon />
+              Gestionar vías
+            </button>
+          </div>
+        </div>
+      </header>
 
-      <div className={styles.productionContent}>
-        {vista === "rutas" ? (
-          <RutasTab
-            producto={producto}
-            rutasDisponibles={rutasDisponibles}
-          />
-        ) : null}
-        {vista === "operaciones" ? (
+      {mostrarRutas ? (
+        <section className={styles.productionUnifiedSection}>
+          <div className={styles.productionUnifiedSectionHead}>
+            <span>VÍAS</span>
+            <div>
+              <strong>Vías de fabricación</strong>
+              <small>
+                Agregá alternativas, elegí la preferida o duplicá una vía.
+              </small>
+            </div>
+          </div>
+          <RutasTab producto={producto} rutasDisponibles={rutasDisponibles} />
+        </section>
+      ) : null}
+
+      <section className={styles.productionUnifiedSection}>
+        <div className={styles.productionUnifiedSectionHead}>
+          <span>01</span>
+          <div>
+            <strong>Flujo principal</strong>
+            <small>
+              {producto.estructuraProducto === "COMPUESTO"
+                ? "Pasos, subrutas fabricadas y dependencias de la vía."
+                : "Pasos operativos, recursos, materiales y dependencias de la vía."}
+            </small>
+          </div>
+        </div>
+        <div className={styles.productionUnifiedSectionBody}>
           <PasosTab
             producto={producto}
             rutaAltId={rutaSeleccionada?.id}
             catalogoFamilias={catalogoFamilias}
+            mostrarSelector={false}
+            componentes={(borrador ?? publicada)?.componentes ?? []}
           />
-        ) : null}
-        {vista === "bom" ? (
+        </div>
+      </section>
+
+      <section className={styles.productionUnifiedSection}>
+        <div className={styles.productionUnifiedSectionHead}>
+          <span>02</span>
+          <div>
+            <strong>BOM consolidada y versiones</strong>
+            <small>
+              Resultado calculado desde el modelo productivo y sus revisiones
+              publicables.
+            </small>
+          </div>
+        </div>
+        <div className={styles.productionUnifiedSectionBody}>
           <RecetaProductoTab
             producto={producto}
             recetas={recetas}
             canManage={canManage}
+            rutaAlternativaId={rutaSeleccionada?.id}
+            projectionOnly
           />
-        ) : null}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1567,7 +1892,7 @@ function RutasTab({
                 href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}
               >
                 <CogIcon className="size-4" />
-                Configurar pasos
+                Configurar modelo
               </Link>
               <button
                 className="icon-btn"
@@ -1688,10 +2013,20 @@ function PasosTab({
   producto,
   rutaAltId,
   catalogoFamilias,
+  mostrarSelector = true,
+  componentes = [],
 }: {
   producto: ProductoDetalle;
   rutaAltId?: string;
   catalogoFamilias?: CatalogoFamilias;
+  mostrarSelector?: boolean;
+  componentes?: Array<{
+    id: string;
+    nombre: string;
+    codigo: string;
+    nodoIncorporacionClave?: string | null;
+    nodosPredecesoresClaves?: string[];
+  }>;
 }) {
   const router = useRouter();
   const rutaSeleccionada =
@@ -1722,27 +2057,29 @@ function PasosTab({
 
   return (
     <>
-      <div className="ruta-selector">
-        <div style={{ flex: 1 }}>
-          <div className="lbl">Ruta a configurar</div>
-          <div className="help">
-            Cada alternativa mantiene su propia configuración de pasos.
+      {mostrarSelector ? (
+        <div className="ruta-selector">
+          <div style={{ flex: 1 }}>
+            <div className="lbl">Ruta a configurar</div>
+            <div className="help">
+              Cada alternativa mantiene su propia configuración de pasos.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <HumanSelect
+              value={rutaSeleccionada?.id ?? ""}
+              onValueChange={(v) => v && cambiarRuta(v)}
+              options={producto.rutasAlternativas.map((r) => ({
+                value: r.id,
+                label: r.nombre,
+                code: r.ruta.codigo,
+                description: `${r.ruta.pasos.length} pasos · ${r.configPasos.length} configurados`,
+              }))}
+              triggerClassName="w-[280px]"
+            />
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <HumanSelect
-            value={rutaSeleccionada?.id ?? ""}
-            onValueChange={(v) => v && cambiarRuta(v)}
-            options={producto.rutasAlternativas.map((r) => ({
-              value: r.id,
-              label: r.nombre,
-              code: r.ruta.codigo,
-              description: `${r.ruta.pasos.length} pasos · ${r.configPasos.length} configurados`,
-            }))}
-            triggerClassName="w-[280px]"
-          />
-        </div>
-      </div>
+      ) : null}
 
       {rutaSeleccionada ? (
         <div className="wiz-section">
@@ -1750,9 +2087,9 @@ function PasosTab({
             <div className="body">
               <h2>{rutaSeleccionada.nombre}</h2>
               <div className="helptext">
-                Para cada paso configurás la máquina, perfil, modos y slots de
-                materiales. Los pasos OPCIONALES no se ejecutan a menos que el
-                comercial los active.
+                {producto.estructuraProducto === "COMPUESTO"
+                  ? "Configurá pasos, subrutas fabricadas, materiales y dependencias desde un único editor."
+                  : "Configurá los pasos, recursos, materiales y dependencias desde un único editor."}
               </div>
             </div>
             <Link
@@ -1760,7 +2097,7 @@ function PasosTab({
               className="btn btn-primary"
             >
               <CogIcon className="size-4" />
-              Abrir editor enfocado
+              Abrir editor productivo
             </Link>
           </div>
 
@@ -1779,8 +2116,8 @@ function PasosTab({
                 marginBottom: 12,
               }}
             >
-              {rutaSeleccionada.ruta.pasos.length} pasos · click en cualquiera
-              para editarlo
+              {rutaSeleccionada.ruta.pasos.length + componentes.length} nodos ·
+              click en cualquiera para abrir el editor
             </div>
             <div className="graph">
               {rutaSeleccionada.ruta.pasos.map((paso, index) => {
@@ -1813,6 +2150,47 @@ function PasosTab({
                 );
               })}
             </div>
+            {componentes.length ? (
+              <div className={styles.componentPreviewGrid}>
+                {componentes.map((componente, index) => {
+                  const incorporacion = componente.nodoIncorporacionClave
+                    ? rutaSeleccionada.ruta.pasos.find(
+                        (paso) =>
+                          `ruta:${paso.id}` ===
+                          componente.nodoIncorporacionClave,
+                      )
+                    : null;
+                  const configIncorporacion = incorporacion
+                    ? rutaSeleccionada.configPasos.find(
+                        (item) => item.rutaPasoId === incorporacion.id,
+                      )
+                    : null;
+                  return (
+                    <Link
+                      key={componente.id}
+                      href={`/productos-servicios/${producto.id}/rutas/${rutaSeleccionada.id}`}
+                      className={styles.componentPreviewNode}
+                    >
+                      <span>C{String(index + 1).padStart(2, "0")}</span>
+                      <div>
+                        <strong>{componente.nombre}</strong>
+                        <small>
+                          {incorporacion
+                            ? `Converge en ${
+                                configIncorporacion?.nombreVisible ||
+                                incorporacion.nombreVisible ||
+                                incorporacion.familiaNombre ||
+                                incorporacion.familiaCodigo
+                              }`
+                            : "Falta definir convergencia"}
+                        </small>
+                      </div>
+                      <BoxesIcon />
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
             <div
               style={{
                 display: "flex",
@@ -1842,6 +2220,9 @@ function PasosTab({
                 />
                 {rutaSeleccionada.configPasos.length}/
                 {rutaSeleccionada.ruta.pasos.length} pasos configurados
+                {producto.estructuraProducto === "COMPUESTO"
+                  ? ` · ${componentes.length} componentes`
+                  : ""}
               </div>
             </div>
           </div>
