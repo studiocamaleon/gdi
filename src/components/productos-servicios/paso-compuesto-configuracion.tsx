@@ -4,10 +4,15 @@ import * as React from "react";
 import { BoxesIcon, CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import type {
-  DefinicionOperacionCompuesta,
+  DefinicionPasoInternoCompuesto,
+  FamiliaListItem,
   PasoTenant,
 } from "@/lib/productos-servicios";
-import { actualizarPasoTenant } from "@/lib/productos-servicios-api";
+import {
+  actualizarPasoTenant,
+  getCatalogoFamilias,
+  getPasosTenant,
+} from "@/lib/productos-servicios-api";
 import styles from "./paso-compuesto-configuracion.module.css";
 
 function slug(value: string) {
@@ -20,7 +25,9 @@ function slug(value: string) {
     .slice(0, 80);
 }
 
-function siguienteCodigoOperacion(operaciones: DefinicionOperacionCompuesta[]) {
+function siguienteCodigoOperacion(
+  operaciones: DefinicionPasoInternoCompuesto[],
+) {
   let numero = operaciones.length + 1;
   while (operaciones.some((item) => item.codigo === `operacion_${numero}`)) {
     numero += 1;
@@ -30,13 +37,40 @@ function siguienteCodigoOperacion(operaciones: DefinicionOperacionCompuesta[]) {
 
 export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
   const [operaciones, setOperaciones] = React.useState<
-    DefinicionOperacionCompuesta[]
-  >(paso.operacionesCompuestas ?? []);
+    DefinicionPasoInternoCompuesto[]
+  >(() =>
+    (paso.pasosInternos ?? paso.operacionesCompuestas ?? []).map((item) => ({
+      ...item,
+      familiaCodigo: item.familiaCodigo ?? "",
+      requiereCodigos: item.requiereCodigos ?? [],
+    })),
+  );
+  const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
   const [guardando, setGuardando] = React.useState(false);
+
+  React.useEffect(() => {
+    Promise.all([getCatalogoFamilias(), getPasosTenant()])
+      .then(([catalogo, pasos]) => {
+        const compuestos = new Set(
+          pasos
+            .filter((item) => item.tipoPaso === "COMPUESTO")
+            .map((item) => item.id),
+        );
+        setFamilias(
+          catalogo.familias.filter(
+            (item) =>
+              item.visibleEnSelector !== false &&
+              item.codigo !== paso.id &&
+              !compuestos.has(item.codigo),
+          ),
+        );
+      })
+      .catch(() => toast.error("No se pudo cargar el catálogo de pasos."));
+  }, [paso.id]);
 
   const cambiar = (
     index: number,
-    patch: Partial<DefinicionOperacionCompuesta>,
+    patch: Partial<DefinicionPasoInternoCompuesto>,
   ) =>
     setOperaciones((current) =>
       current.map((item, itemIndex) =>
@@ -45,26 +79,30 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
     );
 
   const guardar = async () => {
-    if (operaciones.some((item) => !item.nombre.trim())) {
-      toast.error("Todas las operaciones necesitan un nombre.");
+    if (
+      operaciones.some((item) => !item.familiaCodigo || !item.nombre.trim())
+    ) {
+      toast.error(
+        "Todos los pasos internos deben elegir un paso real y un nombre.",
+      );
       return;
     }
     setGuardando(true);
     try {
       await actualizarPasoTenant(paso.id, {
         tipoPaso: "COMPUESTO",
-        operacionesCompuestas: operaciones.map((item, index) => ({
+        pasosInternos: operaciones.map((item, index) => ({
           ...item,
           codigo: item.codigo || slug(item.nombre),
           orden: index,
         })),
       });
-      toast.success("Operaciones del paso actualizadas");
+      toast.success("Subruta del paso actualizada");
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "No se pudieron guardar las operaciones.",
+          : "No se pudo guardar la subruta.",
       );
     } finally {
       setGuardando(false);
@@ -79,8 +117,9 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
           <span className={styles.eyebrow}>Paso compuesto reutilizable</span>
           <h1>{paso.nombre}</h1>
           <p>
-            Definí qué operaciones puede contener. Los componentes, outputs,
-            cantidades y tiempos se configurarán en la BOM de cada producto.
+            Definí qué pasos reales contiene esta etapa. Sus materiales,
+            parámetros, recursos y tiempos se configurarán en la BOM de cada
+            producto con el editor habitual.
           </p>
         </div>
       </header>
@@ -88,9 +127,9 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
       <section className={styles.panel}>
         <div className={styles.panelHead}>
           <div>
-            <strong>Operaciones posibles</strong>
+            <strong>Pasos internos</strong>
             <span>
-              Son el contrato reutilizable del paso, no una cotización.
+              Cada fila es un paso productivo completo, no una etiqueta.
             </span>
           </div>
           <button
@@ -102,29 +141,30 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                 {
                   codigo: siguienteCodigoOperacion(current),
                   nombre: "",
+                  familiaCodigo: "",
                   descripcion: null,
                   dimension: "CANTIDAD",
                   requerida: true,
+                  requiereCodigos: [],
                   orden: current.length,
                 },
               ])
             }
           >
             <PlusIcon />
-            <span>Agregar operación</span>
+            <span>Agregar paso</span>
           </button>
         </div>
         {!operaciones.length ? (
           <div className={styles.empty}>
-            Agregá la primera operación que podrá configurarse al usar este
-            paso.
+            Agregá el primer paso real que formará parte de esta etapa.
           </div>
         ) : (
           <div className={styles.rows}>
             <div className={styles.rowHead} aria-hidden="true">
               <span />
-              <span>Operación</span>
-              <span>Magnitud esperada</span>
+              <span>Paso real</span>
+              <span>Nombre en la etapa</span>
               <span />
               <span />
             </div>
@@ -134,36 +174,38 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <label>
-                  <span className={styles.rowLabel}>Operación</span>
-                  <input
-                    aria-label={`Nombre de la operación ${index + 1}`}
-                    value={operacion.nombre}
-                    placeholder="Ej. Tensar lona"
-                    onChange={(event) =>
+                  <span className={styles.rowLabel}>Paso real</span>
+                  <select
+                    aria-label={`Paso real ${index + 1}`}
+                    value={operacion.familiaCodigo}
+                    onChange={(event) => {
+                      const familia = familias.find(
+                        (item) => item.codigo === event.target.value,
+                      );
                       cambiar(index, {
-                        nombre: event.target.value,
-                      })
-                    }
-                  />
+                        familiaCodigo: event.target.value,
+                        nombre: operacion.nombre || familia?.nombre || "",
+                      });
+                    }}
+                  >
+                    <option value="">Elegir paso…</option>
+                    {familias.map((familia) => (
+                      <option key={familia.codigo} value={familia.codigo}>
+                        {familia.nombre}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
-                  <span className={styles.rowLabel}>Magnitud esperada</span>
-                  <select
-                    aria-label={`Magnitud esperada de la operación ${index + 1}`}
-                    value={operacion.dimension}
+                  <span className={styles.rowLabel}>Nombre en la etapa</span>
+                  <input
+                    aria-label={`Nombre del paso ${index + 1}`}
+                    value={operacion.nombre}
+                    placeholder="Ej. Tensado de lona"
                     onChange={(event) =>
-                      cambiar(index, {
-                        dimension: event.target
-                          .value as DefinicionOperacionCompuesta["dimension"],
-                      })
+                      cambiar(index, { nombre: event.target.value })
                     }
-                  >
-                    <option value="FIJO">Tiempo fijo</option>
-                    <option value="UNIDAD">Unidades</option>
-                    <option value="CANTIDAD">Cantidad publicada</option>
-                    <option value="LONGITUD">Longitud</option>
-                    <option value="SUPERFICIE">Superficie</option>
-                  </select>
+                  />
                 </label>
                 <button
                   type="button"
@@ -181,7 +223,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                 <button
                   type="button"
                   className={styles.remove}
-                  aria-label={`Quitar ${operacion.nombre || "operación"}`}
+                  aria-label={`Quitar ${operacion.nombre || "paso"}`}
                   onClick={() =>
                     setOperaciones((current) =>
                       current.filter((_, itemIndex) => itemIndex !== index),
@@ -199,7 +241,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
             Volver
           </button>
           <button type="button" disabled={guardando} onClick={guardar}>
-            {guardando ? "Guardando…" : "Guardar operaciones"}
+            {guardando ? "Guardando…" : "Guardar subruta"}
           </button>
         </footer>
       </section>

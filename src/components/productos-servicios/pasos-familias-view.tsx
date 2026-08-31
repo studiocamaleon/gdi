@@ -228,9 +228,8 @@ export function PasosFamiliasView({
                         ) : null}
                         {paso.tipoPaso === "COMPUESTO" ? (
                           <span className="tag warm">
-                            Paso compuesto ·{" "}
-                            {paso.operacionesCompuestas?.length ?? 0}{" "}
-                            operaciones
+                            Paso compuesto · {paso.pasosInternos?.length ?? 0}{" "}
+                            pasos internos
                           </span>
                         ) : null}
                       </td>
@@ -242,7 +241,7 @@ export function PasosFamiliasView({
                         ) : (
                           <span className={s.formaChip}>
                             {paso.tipoPaso === "COMPUESTO"
-                              ? "Operaciones configurables"
+                              ? "Subruta reutilizable"
                               : (paso.plantillaNombre ?? paso.plantillaCodigo)}
                           </span>
                         )}

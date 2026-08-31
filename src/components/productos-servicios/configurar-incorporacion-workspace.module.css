@@ -8,6 +8,10 @@
   place-items: center;
 }
 .workspace {
+  --inc-accent: #ef6338;
+  --inc-ink: #252227;
+  --inc-muted: #746d6a;
+  --inc-line: #ded8d2;
   display: grid;
   width: min(1180px, 100%);
   max-height: calc(100dvh - 44px);
@@ -17,6 +21,121 @@
   background: #f7f5f2;
   box-shadow: 0 32px 90px rgb(0 0 0 / 32%);
   grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.editorWorkspace {
+  width: min(1540px, 100%);
+}
+.fullEditor {
+  min-height: 0;
+  overflow: auto;
+  background: #f7f5f2;
+}
+.stepList {
+  display: grid;
+  gap: 12px;
+}
+.stepCard {
+  display: grid;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--inc-line);
+  border-radius: 14px;
+  background: #fff;
+  grid-template-columns: minmax(240px, 1fr) auto minmax(260px, 1fr) auto;
+}
+.stepIdentity {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: auto auto 1fr;
+}
+.stepIdentity > span {
+  color: #9b928d;
+  font: 700 11px var(--font-mono);
+}
+.stepIdentity > svg {
+  width: 18px;
+  color: var(--inc-accent);
+}
+.stepIdentity div {
+  display: grid;
+  gap: 3px;
+}
+.stepIdentity strong {
+  color: var(--inc-ink);
+  font-size: 14px;
+}
+.stepIdentity small,
+.componentLinks small {
+  color: var(--inc-muted);
+}
+.activeButton,
+.configureButton {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--inc-line);
+  border-radius: 9px;
+  color: var(--inc-ink);
+  background: #fff;
+  font-weight: 700;
+}
+.activeButton > span {
+  display: inline-flex;
+  width: 19px;
+  height: 19px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfc7c1;
+  border-radius: 5px;
+}
+.activeButton[aria-pressed="true"] > span {
+  border-color: var(--inc-accent);
+  color: #fff;
+  background: var(--inc-accent);
+}
+.activeButton svg,
+.configureButton svg {
+  width: 15px;
+}
+.componentLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.componentLinks > span {
+  width: 100%;
+  color: var(--inc-muted);
+  font: 700 9px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.componentLinks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--inc-line);
+  border-radius: 999px;
+  color: var(--inc-ink);
+  font-size: 11px;
+  font-weight: 650;
+}
+.componentLinks input {
+  accent-color: var(--inc-accent);
+}
+.configureButton {
+  color: #d94b28;
+  border-color: #edb7a8;
+  background: #fff8f5;
+}
+.configureButton:disabled,
+.activeButton:disabled {
+  opacity: 0.55;
 }
 .header {
   display: grid;
@@ -306,6 +425,12 @@ fieldset.sourceField legend {
   opacity: 0.45;
 }
 @media (max-width: 900px) {
+  .stepCard {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .componentLinks {
+    grid-column: 1 / -1;
+  }
   .fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -329,6 +454,13 @@ fieldset.sourceField legend {
   }
   .fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .stepCard {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .componentLinks {
+    grid-column: auto;
   }
   .sourceField {
     grid-column: auto;

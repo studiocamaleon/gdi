@@ -178,6 +178,13 @@ interface Props {
     origen: "sistema" | "tenant";
     volverHref: string;
   };
+  configuracionContextual?: {
+    iniciales: Record<string, UpsertConfigPasoPayload>;
+    guardar: (
+      rutaPasoId: string,
+      configuracion: UpsertConfigPasoPayload,
+    ) => Promise<void> | void;
+  };
 }
 
 type ConfigState = Record<string, UpsertConfigPasoPayload>;
@@ -361,7 +368,6 @@ const PANEL_WIDTH_INTERPRETATION_OPTIONS = optionsFromLabels(
 );
 const MIN_PANEL_MAX_WIDTH_MM = 300;
 
-
 function optionLabel(options: HumanSelectOption[], value: string) {
   return options.find((option) => option.value === value)?.label ?? value;
 }
@@ -497,7 +503,9 @@ function matChipStyle(nombre: string, familia?: string | null) {
 }
 
 /** Swatches de tinta para las pills de modo de color (visual only). */
-function modoColorSwatches(value: string): Array<{ bg: string; borde?: boolean }> {
+function modoColorSwatches(
+  value: string,
+): Array<{ bg: string; borde?: boolean }> {
   const v = value.toUpperCase();
   if (v.includes("SIN_IMPRESION") || v === "SIN IMPRESIÓN") return [];
   const sw: Array<{ bg: string; borde?: boolean }> = [];
@@ -715,18 +723,17 @@ function materialVariantToBusquedaItem(
     subfamilia: materialVariante.materiaPrima.subfamilia,
     tipoTecnico: "",
     templateId: materialVariante.materiaPrima.templateId,
-    variantes:
-      materialVariante.materiaPrima.variantes?.length
-        ? materialVariante.materiaPrima.variantes
-        : [
-            {
-              id: materialVariante.id,
-              sku: materialVariante.sku,
-              nombreVariante: materialVariante.nombreVariante,
-              precioReferencia: materialVariante.precioReferencia,
-              atributosVarianteJson: materialVariante.atributosVarianteJson,
-            },
-          ],
+    variantes: materialVariante.materiaPrima.variantes?.length
+      ? materialVariante.materiaPrima.variantes
+      : [
+          {
+            id: materialVariante.id,
+            sku: materialVariante.sku,
+            nombreVariante: materialVariante.nombreVariante,
+            precioReferencia: materialVariante.precioReferencia,
+            atributosVarianteJson: materialVariante.atributosVarianteJson,
+          },
+        ],
   };
 }
 
@@ -972,9 +979,7 @@ function buildExtraJsonText(extra: PasoExtra): {
     ),
     mecanismo: jsonToText(
       extra.mecanismoCantidadConfigJson as
-        | Record<string, unknown>
-        | null
-        | undefined,
+        Record<string, unknown> | null | undefined,
     ),
   };
 }
@@ -1202,7 +1207,8 @@ function sanitizeNestingConfigForFamilia(
 }
 
 function defaultNestingSeparationForFamily(
-  familia: Pick<FamiliaListItem, "separacionNestingDefaultMm"> | null | undefined,
+  familia:
+    Pick<FamiliaListItem, "separacionNestingDefaultMm"> | null | undefined,
 ) {
   // [Tanda B] La ficha declara la separación default; antes 5 mm cableados.
   return familia?.separacionNestingDefaultMm ?? 0;
@@ -1893,10 +1899,7 @@ function MaterialSearchSelect({
                     <CheckIcon className="size-2.5" strokeWidth={3.4} />
                   ) : null}
                 </span>
-                <span
-                  className="ps-mat-chip"
-                  style={{ background: chip.bg }}
-                >
+                <span className="ps-mat-chip" style={{ background: chip.bg }}>
                   {chip.ini}
                 </span>
                 <span className="ps-mat-info">
@@ -1912,9 +1915,7 @@ function MaterialSearchSelect({
                     </span>
                   ))}
                 </span>
-                <span
-                  className={`ps-mat-add ${selected ? "sel" : ""}`}
-                >
+                <span className={`ps-mat-add ${selected ? "sel" : ""}`}>
                   {selected ? (
                     <>
                       <CheckIcon className="size-3" strokeWidth={2.4} />
@@ -1951,7 +1952,8 @@ function materialRowSpecChips(item: MateriaPrimaBusquedaItem): string[] {
   const chips: string[] = [];
   const medida = getVariantMeasureLabel(variante, item.templateId);
   if (medida) chips.push(medida);
-  if (summary.espesor != null) chips.push(`${formatNumber(summary.espesor)} mm`);
+  if (summary.espesor != null)
+    chips.push(`${formatNumber(summary.espesor)} mm`);
   if (summary.color) chips.push(summary.color);
   if (item.variantes.length > 1) {
     chips.push(`${item.variantes.length} variantes`);
@@ -2214,7 +2216,10 @@ function ColorThicknessVariantSelector({
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {visibleVariants.map(({ variante, summary }) => {
             const checked = enabledVariantIds.has(variante.id);
-            const medida = getVariantMeasureLabel(variante, materiaPrima.templateId);
+            const medida = getVariantMeasureLabel(
+              variante,
+              materiaPrima.templateId,
+            );
             const esDefault = candidate.defaultVarianteId === variante.id;
             return (
               <button
@@ -2906,6 +2911,7 @@ export function ConfigPasosEditorView({
   catalogoCargos = [],
   embedded = false,
   configuracionBase,
+  configuracionContextual,
 }: Props) {
   const router = useRouter();
   const familiasMap = React.useMemo(
@@ -3054,7 +3060,8 @@ export function ConfigPasosEditorView({
           existente?.slotsMateriales.map<UpsertSlotMaterialPayload>((s) => ({
             slotCodigo: s.slotCodigo,
             slotNombre: s.slotNombre ?? null,
-            slotRol: (s.slotRol as UpsertSlotMaterialPayload["slotRol"]) ?? null,
+            slotRol:
+              (s.slotRol as UpsertSlotMaterialPayload["slotRol"]) ?? null,
             modoSeleccion: s.modoSeleccion as
               | "HARDCODED"
               | "COMERCIAL_ELIGE"
@@ -3101,9 +3108,7 @@ export function ConfigPasosEditorView({
             : (familia?.defaults?.fuenteCostoTercerizado ?? null)),
         tercerizadoConfigJson:
           (existente?.tercerizadoConfigJson as
-            | Record<string, unknown>
-            | null
-            | undefined) ??
+            Record<string, unknown> | null | undefined) ??
           base?.tercerizadoConfigJson ??
           null,
         plazoProveedorDias:
@@ -3119,6 +3124,14 @@ export function ConfigPasosEditorView({
           base?.tercerizadoEntradas ??
           [],
       };
+      const contextual = configuracionContextual?.iniciales[paso.id];
+      if (contextual) {
+        initial[paso.id] = {
+          ...initial[paso.id],
+          ...contextual,
+          rutaPasoId: paso.id,
+        };
+      }
     }
     // G-F3 sub-fase 2 — borradores para los pasos extras (mismo panel).
     for (const extra of rutaAlternativa.pasosExtras ?? []) {
@@ -3230,12 +3243,15 @@ export function ConfigPasosEditorView({
       const base = !existente
         ? (familia?.configBase as Partial<UpsertConfigPasoPayload> | null)
         : null;
-      const params = (existente?.paramsPasoJson ?? base?.paramsPasoJson) as
-        Record<string, unknown> | null | undefined;
+      const contextual = configuracionContextual?.iniciales[paso.id];
+      const params = (contextual?.paramsPasoJson ??
+        existente?.paramsPasoJson ??
+        base?.paramsPasoJson) as Record<string, unknown> | null | undefined;
       map[paso.id] = {
         params: jsonToText(stripNestingConfig(params)),
         mecanismo: jsonToText(
-          (existente?.mecanismoCantidadConfigJson ??
+          (contextual?.mecanismoCantidadConfigJson ??
+            existente?.mecanismoCantidadConfigJson ??
             base?.mecanismoCantidadConfigJson) as
             Record<string, unknown> | null | undefined,
         ),
@@ -3253,7 +3269,7 @@ export function ConfigPasosEditorView({
         const existente = rutaAlternativa.configPasos.find(
           (cp) => cp.rutaPasoId === paso.id,
         );
-        if (existente) {
+        if (existente || configuracionContextual?.iniciales[paso.id]) {
           snapshots[paso.id] = configSnapshot(configs[paso.id]);
         }
       }
@@ -3537,8 +3553,7 @@ export function ConfigPasosEditorView({
           else delete mapa[modo];
           return {
             ...candidata,
-            perfilDefaultPorModo:
-              Object.keys(mapa).length > 0 ? mapa : null,
+            perfilDefaultPorModo: Object.keys(mapa).length > 0 ? mapa : null,
           };
         }),
       );
@@ -3825,15 +3840,14 @@ export function ConfigPasosEditorView({
     const pliego = getPliegoImpresionConfig(cfg?.paramsPasoJson);
     const current = getPliegoCandidatos(pliego);
     const presetCandidate = buildPliegoCandidateFromPreset(presetValue);
-    const candidate =
-      presetCandidate ?? {
-        id: `personalizado-${Date.now()}`,
-        preset: "personalizado",
-        nombre: "Personalizado",
-        anchoMm: 0,
-        altoMm: 0,
-        activo: true,
-      };
+    const candidate = presetCandidate ?? {
+      id: `personalizado-${Date.now()}`,
+      preset: "personalizado",
+      nombre: "Personalizado",
+      anchoMm: 0,
+      altoMm: 0,
+      activo: true,
+    };
     updateNestingPliegoImpresion(rutaPasoId, {
       modo: "automatico",
       preset: "automatico",
@@ -4370,7 +4384,11 @@ export function ConfigPasosEditorView({
             );
           }
         } else {
-          await upsertConfigPaso(rutaAlternativa.id, payload);
+          if (configuracionContextual) {
+            await configuracionContextual.guardar(rutaPasoId, payload);
+          } else {
+            await upsertConfigPaso(rutaAlternativa.id, payload);
+          }
         }
       }
       setSavedConfigSnapshots((prev) => ({
@@ -4751,12 +4769,12 @@ export function ConfigPasosEditorView({
                   ? "Configuración completa"
                   : "Configuración pendiente"
                 : `${(() => {
-                // El "Paso X de Y" vive acá (feedback 2026-08-06): antes
-                // estaba arriba de las preguntas y duplicaba este sidebar.
-                const n = pasosUnificados.indexOf(activePasoId);
-                return n >= 0
-                  ? `Paso ${n + 1} de ${pasosUnificados.length} · `
-                  : "";
+                    // El "Paso X de Y" vive acá (feedback 2026-08-06): antes
+                    // estaba arriba de las preguntas y duplicaba este sidebar.
+                    const n = pasosUnificados.indexOf(activePasoId);
+                    return n >= 0
+                      ? `Paso ${n + 1} de ${pasosUnificados.length} · `
+                      : "";
                   })()}${doneCount}/${activeStepCount} activos${
                     skippedCount > 0
                       ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}`
@@ -4954,9 +4972,7 @@ export function ConfigPasosEditorView({
                           };
                           if (summary.totalErrores > 0) {
                             return (
-                              <span
-                                style={{ ...lineaBase, color: "#b3412c" }}
-                              >
+                              <span style={{ ...lineaBase, color: "#b3412c" }}>
                                 {summary.totalErrores} error
                                 {summary.totalErrores === 1 ? "" : "es"} por
                                 corregir
@@ -5031,21 +5047,25 @@ export function ConfigPasosEditorView({
               );
             })}
           </div>
-          {!configuracionBase ? <div className="pasos-extras-side">
-            <button
-              type="button"
-              className={`pe-add-btn ${editingExtra === "new" ? "active" : ""}`}
-              onClick={() => setEditingExtra("new")}
-            >
-              + Agregar paso extra
-            </button>
-          </div> : null}
-          {!configuracionBase ? <div className="kbd-panel">
-            <span className="kbd-hint">
-              Arrastrá para ordenar · Navegá con <span className="k">↑</span>{" "}
-              <span className="k">↓</span>
-            </span>
-          </div> : null}
+          {!configuracionBase ? (
+            <div className="pasos-extras-side">
+              <button
+                type="button"
+                className={`pe-add-btn ${editingExtra === "new" ? "active" : ""}`}
+                onClick={() => setEditingExtra("new")}
+              >
+                + Agregar paso extra
+              </button>
+            </div>
+          ) : null}
+          {!configuracionBase ? (
+            <div className="kbd-panel">
+              <span className="kbd-hint">
+                Arrastrá para ordenar · Navegá con <span className="k">↑</span>{" "}
+                <span className="k">↓</span>
+              </span>
+            </div>
+          ) : null}
         </aside>
 
         <main className="editor-main">
@@ -5087,1687 +5107,1864 @@ export function ConfigPasosEditorView({
               onCancel={() => setEditingExtra(null)}
             />
           ) : (
-          <>
-          {/* El stepper horizontal (mini-graph) se quitó 2026-08-06:
+            <>
+              {/* El stepper horizontal (mini-graph) se quitó 2026-08-06:
               duplicaba la lista del sidebar (feedback del usuario). */}
-          {activePaso && configs[activePaso.id]
-            ? [activePaso]
-                .map((paso) => {
-                  const idx = pasosUnificados.indexOf(paso.id);
-                  const esExtra = Boolean(activeExtra);
-                  const familia = familiasMap.get(paso.familiaCodigo);
-                  const cfg = configs[paso.id];
-                  const pasoLabel =
-                    cfg.nombreVisible?.trim() ||
-                    familia?.nombre ||
-                    paso.familiaCodigo;
-                  const jsonText = jsonTexts[paso.id];
-                  const configExistente = rutaAlternativa.configPasos.find(
-                    (cp) => cp.rutaPasoId === paso.id,
-                  );
-                  const maquinasCompatibles = lookups.maquinas.filter((m) =>
-                    maquinaCompatibleConFamilia(
-                      familia,
-                      familia?.plantillasCompatibles,
-                      m,
-                    ),
-                  );
-                  const soportaM2 =
-                    familia?.relacionMaquinaSoportada.includes("M-2") ?? false;
-                  const maquinasCandidatasCompatibles = lookups.maquinas.filter(
-                    (m) =>
-                      maquinaCandidataCompatibleConFamilia(
+              {activePaso && configs[activePaso.id]
+                ? [activePaso].map((paso) => {
+                    const idx = pasosUnificados.indexOf(paso.id);
+                    const esExtra = Boolean(activeExtra);
+                    const familia = familiasMap.get(paso.familiaCodigo);
+                    const cfg = configs[paso.id];
+                    const pasoLabel =
+                      cfg.nombreVisible?.trim() ||
+                      familia?.nombre ||
+                      paso.familiaCodigo;
+                    const jsonText = jsonTexts[paso.id];
+                    const configExistente = rutaAlternativa.configPasos.find(
+                      (cp) => cp.rutaPasoId === paso.id,
+                    );
+                    const maquinasCompatibles = lookups.maquinas.filter((m) =>
+                      maquinaCompatibleConFamilia(
                         familia,
                         familia?.plantillasCompatibles,
                         m,
                       ),
-                  );
-                  const candidatasCfg = normalizeMaquinasCandidatas(
-                    cfg.maquinasCandidatas ?? [],
-                  );
-                  const maquinaSel = lookups.maquinas.find(
-                    (m) => m.id === cfg.maquinaM1Id,
-                  );
-                  const maquinaGuardada =
-                    maquinaSel ?? configExistente?.maquinaM1 ?? null;
-                  const maquinaOptions = ensureSelectedOption(
-                    maquinasCompatibles.map((m) => machineOption(m)),
-                    cfg.maquinaM1Id,
-                    maquinaGuardada
-                      ? machineOption(maquinaGuardada, "guardada/no compatible")
-                      : undefined,
-                  );
-                  const perfilGuardado =
-                    maquinaSel?.perfilesOperativos.find(
-                      (p) => p.id === cfg.perfilM1Id,
-                    ) ??
-                    configExistente?.perfilM1 ??
-                    null;
-                  const perfilOptions = ensureSelectedOption(
-                    (maquinaSel?.perfilesOperativos ?? [])
-                      .filter((p) =>
-                        perfilCompatibleConFamilia(familia, p),
-                      )
-                      .map((p) => profileOption(p)),
-                    cfg.perfilM1Id,
-                    perfilGuardado
-                      ? profileOption(perfilGuardado, "guardado/no disponible")
-                      : undefined,
-                  );
-                  const opcionesActivacion = Array.from(
-                    new Set([
-                      ...(familia?.modosActivacionSoportados ??
-                        MODOS_ACTIVACION),
-                      "NO_EJECUTAR",
-                    ]),
-                  ).map((m) => optionFromLabel(m, modoActivacionLabels));
-                  const opcionesTiempo = (
-                    familia?.modosTiempoSoportados ?? [
-                      "T-1",
-                      "T-2",
-                      "T-3",
-                      "T-4",
-                    ]
-                  ).map((m) => optionFromLabel(m, modoTiempoLabels));
-                  const opcionesCantidad = (
-                    familia?.mecanismosCantidadSoportados ?? [
-                      "DIRECT_FROM_JOBCONTEXT",
-                      "HEREDAR_DEL_OUTPUT_CANONICO",
-                      "CALCULADO_POR_PASO",
-                      "CONVERSION",
-                    ]
-                  ).map((m) => {
-                    const option = optionFromLabel(m, mecanismoCantidadLabels);
-                    // [Tanda B] Si la ficha declara qué hereda por default
-                    // (`outputHeredadoDefault`), la opción lo nombra — antes
-                    // sólo corte_manual tenía este copy, cableado.
-                    if (
-                      m === "HEREDAR_DEL_OUTPUT_CANONICO" &&
-                      familia?.outputHeredadoDefault
-                    ) {
-                      return {
-                        ...option,
-                        label: `${humanizarOutputCanonico(
-                          familia.outputHeredadoDefault,
-                        )} del paso anterior`,
-                        description:
-                          "Usa lo que publicó el paso anterior, no la cantidad final del pedido.",
-                      };
-                    }
-                    return option;
-                  });
-                  const centroGuardado = configExistente?.centroCosto ?? null;
-                  const centroCostoOptions = ensureSelectedOption(
-                    lookups.centrosCosto.map((centro) =>
-                      centroCostoOption(centro),
-                    ),
-                    cfg.centroCostoId,
-                    centroGuardado
-                      ? centroCostoOption(centroGuardado)
-                      : undefined,
-                  );
-
-                  const slotsManuales =
-                    familia?.slotsRequeridos.filter(
-                      (slot) => !isConsumibleMaquinaSlot(slot),
-                    ) ?? [];
-                  const slotsAutomaticos =
-                    familia?.slotsRequeridos.filter(isConsumibleMaquinaSlot) ??
-                    [];
-                  const requiereMateriales =
-                    slotsManuales.length > 0 ||
-                    slotsAutomaticos.length > 0 ||
-                    Boolean(familia?.permiteSlotsAdicionales);
-                  const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
-                  const cantidadRelevante =
-                    !noEjecutar && requiereMecanismoCantidad(cfg, familia);
-                  const mostrarNesting = nestingAplica(familia, cfg);
-                  const mostrarSetupCleanupOverrides = Boolean(cfg.maquinaM1Id);
-                  const mostrarTiempoFijoOverride =
-                    cfg.modoTiempo === "T-1" && !cfg.maquinaM1Id;
-                  const mostrarProductividadPropia = cfg.modoTiempo === "T-2";
-                  const paramsPaso = asRecord(cfg.paramsPasoJson);
-                  const productividadPropia = readOptionalNumber(
-                    paramsPaso.productivityValue,
-                  );
-                  const horasEstimadasPaso = readOptionalNumber(
-                    paramsPaso.horasEstimadas,
-                  );
-                  const batchTimeMin = readOptionalNumber(
-                    paramsPaso.batchTimeMin,
-                  );
-                  const batchSize = readOptionalNumber(paramsPaso.batchSize);
-                  const timeCalculationModeRaw =
-                    typeof paramsPaso.timeCalculationMode === "string"
-                      ? paramsPaso.timeCalculationMode
-                      : getDefaultT2TimeCalculationMode(familia);
-                  const timeCalculationMode =
-                    T2_TIME_CALCULATION_MODE_OPTIONS.some(
-                      (option) => option.value === timeCalculationModeRaw,
-                    )
-                      ? timeCalculationModeRaw
-                      : getDefaultT2TimeCalculationMode(familia);
-                  const productivityUnit =
-                    typeof paramsPaso.productivityUnit === "string"
-                      ? paramsPaso.productivityUnit
-                      : getDefaultT2ProductivityUnit(familia);
-                  const productivityQuantitySourceRaw =
-                    typeof paramsPaso.productivityQuantitySource === "string"
-                      ? paramsPaso.productivityQuantitySource
-                      : getDefaultT2QuantitySource(familia, productivityUnit);
-                  const normalizedProductivityQuantitySourceRaw =
-                    familia?.codigo === "montaje_sobre_sustrato" &&
-                    productivityUnit === "unidades_h" &&
-                    productivityQuantitySourceRaw === "cantidad"
-                      ? "cantidad_montaje"
-                      : productivityQuantitySourceRaw;
-                  const productivityQuantitySourceOptions =
-                    getT2QuantitySourceOptions(
-                      productivityUnit,
-                      familia,
-                      paramsPaso,
                     );
-                  const productivityQuantitySource =
-                    productivityQuantitySourceOptions.some(
-                      (option) =>
-                        option.value === normalizedProductivityQuantitySourceRaw,
-                    )
-                      ? normalizedProductivityQuantitySourceRaw
-                      : getDefaultT2QuantitySource(familia, productivityUnit);
-                  const productivityUnitSuffix = getT2ProductivityUnitSuffix(
-                    productivityUnit,
-                    productivityQuantitySource,
-                  );
-                  const batchUnitSuffix = getT2BatchUnitSuffix(
-                    productivityUnit,
-                    productivityQuantitySource,
-                  );
-                  const soportaPasoManual =
-                    familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
-                  const requiereMaquinaPrincipal =
-                    cfg.modoTiempo === "T-3" ||
-                    ((familia?.relacionMaquinaSoportada.includes("M-1") ??
-                      false) &&
-                      !soportaPasoManual);
-                  const mostrarOverridesTiempo =
-                    mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
-                  const multiplicadoresSoportados =
-                    familia?.multiplicadoresSoportados ?? [];
-                  const maquinaParaDefaults = maquinaSel?.parametrosTecnicosJson
-                    ? maquinaSel
-                    : configExistente?.maquinaM1?.id === cfg.maquinaM1Id &&
-                        configExistente?.maquinaM1?.parametrosTecnicosJson
-                      ? configExistente.maquinaM1
-                      : (maquinaSel ?? configExistente?.maquinaM1);
-                  const mostrarModoColor = modoColorAplica(familia, cfg);
-                  const modoColorOptions = buildModoColorOptions(
-                    maquinaGuardada,
-                    configExistente,
-                    familia?.esImpresion === true,
-                  );
-                  const modoColorPerfilDefault =
-                    modosColorFromPerfil(perfilGuardado)[0] ?? "";
-                  const valBasico =
-                    noEjecutar || cfg.tercerizado
-                      ? { errores: [], warnings: [] }
-                      : validarBasico(cfg, familia, {
-                          familiaCodigo: paso.familiaCodigo,
-                        });
-                  const valMateriales = noEjecutar
-                    ? { errores: [], warnings: [] }
-                    : validarMateriales(cfg, familia);
-                  const valAvanzado = noEjecutar
-                    ? { errores: [], warnings: [] }
-                    : validarAvanzado(
-                        jsonText.params,
-                        cantidadRelevante ? jsonText.mecanismo : "",
-                        cfg,
-                        familia,
+                    const soportaM2 =
+                      familia?.relacionMaquinaSoportada.includes("M-2") ??
+                      false;
+                    const maquinasCandidatasCompatibles =
+                      lookups.maquinas.filter((m) =>
+                        maquinaCandidataCompatibleConFamilia(
+                          familia,
+                          familia?.plantillasCompatibles,
+                          m,
+                        ),
                       );
-                  // Un paso tercerizado no usa máquina/material: su validez es
-                  // la de su fuente de costo (la chequea el backend), no estas
-                  // validaciones de producción.
-                  const totalErrores = cfg.tercerizado
-                    ? 0
-                    : valBasico.errores.length +
-                      valMateriales.errores.length +
-                      valAvanzado.errores.length;
-                  const totalWarnings = cfg.tercerizado
-                    ? 0
-                    : valBasico.warnings.length +
-                      valMateriales.warnings.length +
-                      valAvanzado.warnings.length;
-                  const pasoTieneCambios = hasUnsavedChanges(paso.id);
+                    const candidatasCfg = normalizeMaquinasCandidatas(
+                      cfg.maquinasCandidatas ?? [],
+                    );
+                    const maquinaSel = lookups.maquinas.find(
+                      (m) => m.id === cfg.maquinaM1Id,
+                    );
+                    const maquinaGuardada =
+                      maquinaSel ?? configExistente?.maquinaM1 ?? null;
+                    const maquinaOptions = ensureSelectedOption(
+                      maquinasCompatibles.map((m) => machineOption(m)),
+                      cfg.maquinaM1Id,
+                      maquinaGuardada
+                        ? machineOption(
+                            maquinaGuardada,
+                            "guardada/no compatible",
+                          )
+                        : undefined,
+                    );
+                    const perfilGuardado =
+                      maquinaSel?.perfilesOperativos.find(
+                        (p) => p.id === cfg.perfilM1Id,
+                      ) ??
+                      configExistente?.perfilM1 ??
+                      null;
+                    const perfilOptions = ensureSelectedOption(
+                      (maquinaSel?.perfilesOperativos ?? [])
+                        .filter((p) => perfilCompatibleConFamilia(familia, p))
+                        .map((p) => profileOption(p)),
+                      cfg.perfilM1Id,
+                      perfilGuardado
+                        ? profileOption(
+                            perfilGuardado,
+                            "guardado/no disponible",
+                          )
+                        : undefined,
+                    );
+                    const opcionesActivacion = Array.from(
+                      new Set([
+                        ...(familia?.modosActivacionSoportados ??
+                          MODOS_ACTIVACION),
+                        "NO_EJECUTAR",
+                      ]),
+                    ).map((m) => optionFromLabel(m, modoActivacionLabels));
+                    const opcionesTiempo = (
+                      familia?.modosTiempoSoportados ?? [
+                        "T-1",
+                        "T-2",
+                        "T-3",
+                        "T-4",
+                      ]
+                    ).map((m) => optionFromLabel(m, modoTiempoLabels));
+                    const opcionesCantidad = (
+                      familia?.mecanismosCantidadSoportados ?? [
+                        "DIRECT_FROM_JOBCONTEXT",
+                        "HEREDAR_DEL_OUTPUT_CANONICO",
+                        "CALCULADO_POR_PASO",
+                        "CONVERSION",
+                      ]
+                    ).map((m) => {
+                      const option = optionFromLabel(
+                        m,
+                        mecanismoCantidadLabels,
+                      );
+                      // [Tanda B] Si la ficha declara qué hereda por default
+                      // (`outputHeredadoDefault`), la opción lo nombra — antes
+                      // sólo corte_manual tenía este copy, cableado.
+                      if (
+                        m === "HEREDAR_DEL_OUTPUT_CANONICO" &&
+                        familia?.outputHeredadoDefault
+                      ) {
+                        return {
+                          ...option,
+                          label: `${humanizarOutputCanonico(
+                            familia.outputHeredadoDefault,
+                          )} del paso anterior`,
+                          description:
+                            "Usa lo que publicó el paso anterior, no la cantidad final del pedido.",
+                        };
+                      }
+                      return option;
+                    });
+                    const centroGuardado = configExistente?.centroCosto ?? null;
+                    const centroCostoOptions = ensureSelectedOption(
+                      lookups.centrosCosto.map((centro) =>
+                        centroCostoOption(centro),
+                      ),
+                      cfg.centroCostoId,
+                      centroGuardado
+                        ? centroCostoOption(centroGuardado)
+                        : undefined,
+                    );
 
-                  return (
-                    <React.Fragment key={paso.id}>
-                      {/* Header mínimo (feedback 2026-08-06): el número de
+                    const slotsManuales =
+                      familia?.slotsRequeridos.filter(
+                        (slot) => !isConsumibleMaquinaSlot(slot),
+                      ) ?? [];
+                    const slotsAutomaticos =
+                      familia?.slotsRequeridos.filter(
+                        isConsumibleMaquinaSlot,
+                      ) ?? [];
+                    const requiereMateriales =
+                      slotsManuales.length > 0 ||
+                      slotsAutomaticos.length > 0 ||
+                      Boolean(familia?.permiteSlotsAdicionales);
+                    const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
+                    const cantidadRelevante =
+                      !noEjecutar && requiereMecanismoCantidad(cfg, familia);
+                    const mostrarNesting = nestingAplica(familia, cfg);
+                    const mostrarSetupCleanupOverrides = Boolean(
+                      cfg.maquinaM1Id,
+                    );
+                    const mostrarTiempoFijoOverride =
+                      cfg.modoTiempo === "T-1" && !cfg.maquinaM1Id;
+                    const mostrarProductividadPropia = cfg.modoTiempo === "T-2";
+                    const paramsPaso = asRecord(cfg.paramsPasoJson);
+                    const productividadPropia = readOptionalNumber(
+                      paramsPaso.productivityValue,
+                    );
+                    const horasEstimadasPaso = readOptionalNumber(
+                      paramsPaso.horasEstimadas,
+                    );
+                    const batchTimeMin = readOptionalNumber(
+                      paramsPaso.batchTimeMin,
+                    );
+                    const batchSize = readOptionalNumber(paramsPaso.batchSize);
+                    const timeCalculationModeRaw =
+                      typeof paramsPaso.timeCalculationMode === "string"
+                        ? paramsPaso.timeCalculationMode
+                        : getDefaultT2TimeCalculationMode(familia);
+                    const timeCalculationMode =
+                      T2_TIME_CALCULATION_MODE_OPTIONS.some(
+                        (option) => option.value === timeCalculationModeRaw,
+                      )
+                        ? timeCalculationModeRaw
+                        : getDefaultT2TimeCalculationMode(familia);
+                    const productivityUnit =
+                      typeof paramsPaso.productivityUnit === "string"
+                        ? paramsPaso.productivityUnit
+                        : getDefaultT2ProductivityUnit(familia);
+                    const productivityQuantitySourceRaw =
+                      typeof paramsPaso.productivityQuantitySource === "string"
+                        ? paramsPaso.productivityQuantitySource
+                        : getDefaultT2QuantitySource(familia, productivityUnit);
+                    const normalizedProductivityQuantitySourceRaw =
+                      familia?.codigo === "montaje_sobre_sustrato" &&
+                      productivityUnit === "unidades_h" &&
+                      productivityQuantitySourceRaw === "cantidad"
+                        ? "cantidad_montaje"
+                        : productivityQuantitySourceRaw;
+                    const productivityQuantitySourceOptions =
+                      getT2QuantitySourceOptions(
+                        productivityUnit,
+                        familia,
+                        paramsPaso,
+                      );
+                    const productivityQuantitySource =
+                      productivityQuantitySourceOptions.some(
+                        (option) =>
+                          option.value ===
+                          normalizedProductivityQuantitySourceRaw,
+                      )
+                        ? normalizedProductivityQuantitySourceRaw
+                        : getDefaultT2QuantitySource(familia, productivityUnit);
+                    const productivityUnitSuffix = getT2ProductivityUnitSuffix(
+                      productivityUnit,
+                      productivityQuantitySource,
+                    );
+                    const batchUnitSuffix = getT2BatchUnitSuffix(
+                      productivityUnit,
+                      productivityQuantitySource,
+                    );
+                    const soportaPasoManual =
+                      familia?.relacionMaquinaSoportada.includes("M-0") ??
+                      false;
+                    const requiereMaquinaPrincipal =
+                      cfg.modoTiempo === "T-3" ||
+                      ((familia?.relacionMaquinaSoportada.includes("M-1") ??
+                        false) &&
+                        !soportaPasoManual);
+                    const mostrarOverridesTiempo =
+                      mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
+                    const multiplicadoresSoportados =
+                      familia?.multiplicadoresSoportados ?? [];
+                    const maquinaParaDefaults =
+                      maquinaSel?.parametrosTecnicosJson
+                        ? maquinaSel
+                        : configExistente?.maquinaM1?.id === cfg.maquinaM1Id &&
+                            configExistente?.maquinaM1?.parametrosTecnicosJson
+                          ? configExistente.maquinaM1
+                          : (maquinaSel ?? configExistente?.maquinaM1);
+                    const mostrarModoColor = modoColorAplica(familia, cfg);
+                    const modoColorOptions = buildModoColorOptions(
+                      maquinaGuardada,
+                      configExistente,
+                      familia?.esImpresion === true,
+                    );
+                    const modoColorPerfilDefault =
+                      modosColorFromPerfil(perfilGuardado)[0] ?? "";
+                    const valBasico =
+                      noEjecutar || cfg.tercerizado
+                        ? { errores: [], warnings: [] }
+                        : validarBasico(cfg, familia, {
+                            familiaCodigo: paso.familiaCodigo,
+                          });
+                    const valMateriales = noEjecutar
+                      ? { errores: [], warnings: [] }
+                      : validarMateriales(cfg, familia);
+                    const valAvanzado = noEjecutar
+                      ? { errores: [], warnings: [] }
+                      : validarAvanzado(
+                          jsonText.params,
+                          cantidadRelevante ? jsonText.mecanismo : "",
+                          cfg,
+                          familia,
+                        );
+                    // Un paso tercerizado no usa máquina/material: su validez es
+                    // la de su fuente de costo (la chequea el backend), no estas
+                    // validaciones de producción.
+                    const totalErrores = cfg.tercerizado
+                      ? 0
+                      : valBasico.errores.length +
+                        valMateriales.errores.length +
+                        valAvanzado.errores.length;
+                    const totalWarnings = cfg.tercerizado
+                      ? 0
+                      : valBasico.warnings.length +
+                        valMateriales.warnings.length +
+                        valAvanzado.warnings.length;
+                    const pasoTieneCambios = hasUnsavedChanges(paso.id);
+
+                    return (
+                      <React.Fragment key={paso.id}>
+                        {/* Header mínimo (feedback 2026-08-06): el número de
                           paso, el estado Configurado y el "Listo para cotizar"
                           viven en el sidebar; el centro de costo ya se lee ahí.
                           Los botones Siguiente/Guardar flotan al pie del scroll
                           (barra sticky al final del paso). */}
-                      {/* Header sin badge de activación (vive en "Cuándo se
+                        {/* Header sin badge de activación (vive en "Cuándo se
                           ejecuta"), sin nombre (vive resaltado en el sidebar)
                           y sin "Perfil: X" (es un default — el motor suele
                           elegir otro compatible; nombrarlo lo hacía parecer
                           fijo). Queda sólo el toggle de vista (feedback del
                           usuario, 2026-08-11). */}
-                      <div className="step-head">
-                        <div style={{ flex: 1 }}>
-                          {activeExtra ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditingExtra(activeExtra)}
-                            >
-                              Editar ubicación o eliminar
-                            </Button>
-                          ) : null}
-                        </div>
-                        {/* Re-habilitado 2026-08-11 (pedido del usuario):
+                        <div className="step-head">
+                          <div style={{ flex: 1 }}>
+                            {activeExtra ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingExtra(activeExtra)}
+                              >
+                                Editar ubicación o eliminar
+                              </Button>
+                            ) : null}
+                          </div>
+                          {/* Re-habilitado 2026-08-11 (pedido del usuario):
                             el toggle Detallado/Guiado vuelve para comparar
                             vistas. OJO: el detallado está CONGELADO — las
                             mejoras nuevas (panel de geometría, criterios
                             como params, tercerizado manual) viven sólo en
                             el guiado. El Asistente flotante sigue oculto. */}
-                        <div className="pill-row">
-                          <button
-                            className="btn"
-                            type="button"
-                            aria-pressed={vistaEditor === "detallado"}
-                            style={
-                              vistaEditor === "detallado"
-                                ? { fontWeight: 650 }
-                                : { opacity: 0.6 }
-                            }
-                            onClick={() => setVistaEditor("detallado")}
-                          >
-                            Detallado
-                          </button>
-                          <button
-                            className="btn"
-                            type="button"
-                            aria-pressed={vistaEditor === "guiado"}
-                            style={
-                              vistaEditor === "guiado"
-                                ? { fontWeight: 650 }
-                                : { opacity: 0.6 }
-                            }
-                            onClick={() => setVistaEditor("guiado")}
-                          >
-                            Guiado
-                          </button>
-                          {false && (
+                          <div className="pill-row">
                             <button
                               className="btn"
                               type="button"
-                              onClick={() => setAsistenteAbierto(true)}
+                              aria-pressed={vistaEditor === "detallado"}
+                              style={
+                                vistaEditor === "detallado"
+                                  ? { fontWeight: 650 }
+                                  : { opacity: 0.6 }
+                              }
+                              onClick={() => setVistaEditor("detallado")}
                             >
-                              Asistente guiado
+                              Detallado
                             </button>
-                          )}
+                            <button
+                              className="btn"
+                              type="button"
+                              aria-pressed={vistaEditor === "guiado"}
+                              style={
+                                vistaEditor === "guiado"
+                                  ? { fontWeight: 650 }
+                                  : { opacity: 0.6 }
+                              }
+                              onClick={() => setVistaEditor("guiado")}
+                            >
+                              Guiado
+                            </button>
+                            {false && (
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={() => setAsistenteAbierto(true)}
+                              >
+                                Asistente guiado
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="config-step-content pasos-sections">
-                        {vistaEditor === "guiado" ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 14,
-                              maxWidth: 980,
-                            }}
-                          >
-                            <SeccionesEsquemaPaso
-                              configuracionBase={Boolean(configuracionBase)}
-                              pasoActual={{
-                                id: paso.id,
-                                nombre:
-                                  cfg.nombreVisible?.trim() ||
-                                  familia?.nombre ||
-                                  paso.familiaCodigo,
-                                familiaCodigo: paso.familiaCodigo,
-                                esExtra,
-                                orden: paso.orden,
+                        <div className="config-step-content pasos-sections">
+                          {vistaEditor === "guiado" ? (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 14,
+                                maxWidth: 980,
                               }}
+                            >
+                              <SeccionesEsquemaPaso
+                                configuracionBase={Boolean(configuracionBase)}
+                                pasoActual={{
+                                  id: paso.id,
+                                  nombre:
+                                    cfg.nombreVisible?.trim() ||
+                                    familia?.nombre ||
+                                    paso.familiaCodigo,
+                                  familiaCodigo: paso.familiaCodigo,
+                                  esExtra,
+                                  orden: paso.orden,
+                                }}
                                 cfg={cfg}
                                 configs={configs}
                                 familia={familia}
-                              pasos={pasosAsistente}
-                              familiasMap={familiasMap}
-                              lookups={lookups}
-                              jsonTexts={jsonTexts}
-                              vivos={pendientesDePaso(cfg, familia)}
-                              onPatch={(pasoId, patch) => updateConfig(pasoId, patch)}
-                              onParams={(pasoId, patch) => updateStepParams(pasoId, patch)}
-                              onHerencia={onHerenciaEsquema}
-                              onAddSlotFamilia={(pasoId, slotCodigo) =>
-                                addSlotFromFamilia(pasoId, slotCodigo)
-                              }
-                              reglaProps={reglaPropsEsquema}
-                              updateTiempoManualConfig={updateTiempoManualConfig}
-                              updateModoColorConfig={updateModoColorConfig}
-                              toggleMaquinaCandidata={toggleMaquinaCandidata}
-                              setMaquinaCandidataPreferida={setMaquinaCandidataPreferida}
-                              setMaquinaCandidataPerfilDefault={setMaquinaCandidataPerfilDefault}
-                              setMaquinaCandidataModoColorAllowed={
-                                setMaquinaCandidataModoColorAllowed
-                              }
-                              setMaquinaCandidataPerfilPorModo={
-                                setMaquinaCandidataPerfilPorModo
-                              }
-                              setCoberturaPaso={setCoberturaPaso}
-                              materialesApi={materialesApiEsquema}
-                              nestingApi={nestingApiEsquema}
-                              panelEditorPasoId={panelEditorPasoId}
-                              setPanelEditorPasoId={setPanelEditorPasoId}
-                              panelMeasures={panelMeasuresProducto}
-                            />
-                          </div>
-                        ) : (
-                          <>
-                        <section className="section-block open">
-                          <div className="sb-head">
-                            <span className="num">T</span>
-                            <span className="ttl">Tercerización</span>
-                            <span className="hint">
-                              ¿Este paso lo compra un proveedor?
-                            </span>
-                          </div>
-                          <div className="sb-body">
-                            <PasoTercerizadoPanel
-                              value={cfg}
-                              esImpresion={
-                                familiasMap.get(paso.familiaCodigo)
-                                  ?.esImpresion === true
-                              }
-                              onChange={(patch) => updateConfig(paso.id, patch)}
-                              onToggle={(tercerizado) =>
-                                updateConfig(
-                                  paso.id,
-                                  tercerizado
-                                    ? {
-                                        tercerizado: true,
-                                        // Fuente por default (el panel muestra
-                                        // matriz): hay que persistirla, no dejarla
-                                        // sólo en el display.
-                                        fuenteCostoTercerizado:
-                                          cfg.fuenteCostoTercerizado ?? "matriz",
-                                        maquinaM1Id: null,
-                                        perfilM1Id: null,
-                                        // No se produce internamente: los
-                                        // multiplicadores (caras, tipoCopia) no
-                                        // aplican y no deben quedar persistidos.
-                                        multiplicadoresActivos: [],
-                                      }
-                                    : { tercerizado: false },
-                                )
-                              }
-                            />
-                          </div>
-                        </section>
-                        <section className="section-block open">
-                          <div className="sb-head">
-                            <span className="num">01</span>
-                            <span className="ttl">Activación</span>
-                            <span className="hint">
-                              Cuándo se ejecuta este paso al cotizar
-                            </span>
-                          </div>
-                          <div className="sb-body">
-                            <div className="wiz-grid">
-                              <div className="field md:col-span-full">
-                                <LabelConTooltip
-                                  label={
-                                    configuracionBase
-                                      ? "Nombre visible por defecto"
-                                      : "Nombre visible del paso"
-                                  }
-                                  tooltip={
-                                    configuracionBase
-                                      ? "Nombre que se propondrá al usar este paso en un producto. Cada producto puede personalizarlo después."
-                                      : "Nombre operativo que verá comercial y producción. Si lo dejás vacío, se usa el nombre técnico de la familia."
-                                  }
-                                />
-                                <Input
-                                  value={cfg.nombreVisible ?? ""}
-                                  placeholder={
-                                    familia?.nombre ?? paso.familiaCodigo
-                                  }
-                                  onChange={(event) =>
-                                    updateConfig(paso.id, {
-                                      nombreVisible: event.target.value || null,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div className="field">
-                                <label>Cuándo se ejecuta</label>
-                                <div className="segmented">
-                                  {opcionesActivacion.map((option) => (
-                                    <button
-                                      key={option.value}
-                                      type="button"
-                                      className={
-                                        cfg.modoActivacion === option.value
-                                          ? "on"
-                                          : ""
-                                      }
-                                      onClick={() =>
-                                        updateConfig(paso.id, {
-                                          modoActivacion: option.value,
-                                        })
-                                      }
-                                    >
-                                      {configuracionBase &&
-                                      option.value === "NO_EJECUTAR"
-                                        ? "No usar por defecto"
-                                        : option.label}
-                                    </button>
-                                  ))}
+                                pasos={pasosAsistente}
+                                familiasMap={familiasMap}
+                                lookups={lookups}
+                                jsonTexts={jsonTexts}
+                                vivos={pendientesDePaso(cfg, familia)}
+                                onPatch={(pasoId, patch) =>
+                                  updateConfig(pasoId, patch)
+                                }
+                                onParams={(pasoId, patch) =>
+                                  updateStepParams(pasoId, patch)
+                                }
+                                onHerencia={onHerenciaEsquema}
+                                onAddSlotFamilia={(pasoId, slotCodigo) =>
+                                  addSlotFromFamilia(pasoId, slotCodigo)
+                                }
+                                reglaProps={reglaPropsEsquema}
+                                updateTiempoManualConfig={
+                                  updateTiempoManualConfig
+                                }
+                                updateModoColorConfig={updateModoColorConfig}
+                                toggleMaquinaCandidata={toggleMaquinaCandidata}
+                                setMaquinaCandidataPreferida={
+                                  setMaquinaCandidataPreferida
+                                }
+                                setMaquinaCandidataPerfilDefault={
+                                  setMaquinaCandidataPerfilDefault
+                                }
+                                setMaquinaCandidataModoColorAllowed={
+                                  setMaquinaCandidataModoColorAllowed
+                                }
+                                setMaquinaCandidataPerfilPorModo={
+                                  setMaquinaCandidataPerfilPorModo
+                                }
+                                setCoberturaPaso={setCoberturaPaso}
+                                materialesApi={materialesApiEsquema}
+                                nestingApi={nestingApiEsquema}
+                                panelEditorPasoId={panelEditorPasoId}
+                                setPanelEditorPasoId={setPanelEditorPasoId}
+                                panelMeasures={panelMeasuresProducto}
+                              />
+                            </div>
+                          ) : (
+                            <>
+                              <section className="section-block open">
+                                <div className="sb-head">
+                                  <span className="num">T</span>
+                                  <span className="ttl">Tercerización</span>
+                                  <span className="hint">
+                                    ¿Este paso lo compra un proveedor?
+                                  </span>
                                 </div>
-                                <span className="help">
-                                  No ejecutar apaga este paso solo para esta
-                                  ruta del producto.
-                                </span>
-                              </div>
-                              {!cfg.tercerizado && (
-                              <div className="field">
-                                <label>Multiplicadores</label>
-                                <div className="chip-row">
-                                  {multiplicadoresSoportados.length > 0 ? (
-                                    multiplicadoresSoportados.map(
-                                      (multiplicador) => {
-                                        const activo =
-                                          cfg.multiplicadoresActivos?.includes(
-                                            multiplicador,
-                                          );
-                                        return (
-                                          <button
-                                            key={multiplicador}
-                                            type="button"
-                                            className={`tag mono ${activo ? "active" : "muted dashed"}`}
-                                            onClick={() =>
-                                              toggleMultiplicador(
-                                                paso.id,
-                                                multiplicador,
-                                              )
-                                            }
-                                            title={
-                                              multiplicador === "caras"
-                                                ? "Duplica tiempo y consumibles de máquina cuando el comercial elige doble faz. Los materiales se duplican por slot."
-                                                : "Activa o desactiva este multiplicador para el paso."
-                                            }
-                                          >
-                                            {multiplicador}
-                                          </button>
-                                        );
-                                      },
-                                    )
-                                  ) : (
-                                    <span className="tag muted dashed">
-                                      Sin multiplicadores
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="help">
-                                  Variables que multiplican el tiempo del paso.
-                                  En materiales, caras se define por slot.
-                                </span>
-                              </div>
-                              )}
-                              {/* Arrastre entre opcionales: este paso puede
-                                  exigir que otros se ejecuten. Ver
-                                  docs/modificaciones-fisicas-lona-diseno.md */}
-                              <div className="field md:col-span-full">
-                                <LabelConTooltip
-                                  label="Este paso necesita que también se ejecuten"
-                                  tooltip="Al activarse, enciende esos pasos aunque sean OPCIONALES y el comercial no los haya tildado. Ej: colocar ojales necesita el refuerzo perimetral. Los pasos elegidos siguen pudiendo activarse por su cuenta."
-                                />
-                                <div className="flex flex-wrap gap-2">
-                                  {rutaAlternativa.ruta.pasos
-                                    .filter((otro) => otro.id !== paso.id)
-                                    .map((otro) => {
-                                      const requeridos =
-                                        cfg.requiereRutaPasoIds ?? [];
-                                      const elegido = requeridos.includes(
-                                        otro.id,
-                                      );
-                                      // El nombre real de la familia antes de
-                                      // humanizar el código: para una familia
-                                      // tenant el código es un UUID (mismo bug
-                                      // que tuvo el motor en la Etapa C).
-                                      const nombreOtro =
-                                        configs[otro.id]?.nombreVisible?.trim() ||
-                                        familiasMap.get(otro.familiaCodigo)
-                                          ?.nombre ||
-                                        humanizeCode(otro.familiaCodigo);
-                                      return (
-                                        <label
-                                          key={otro.id}
-                                          className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            checked={elegido}
-                                            onChange={(e) =>
-                                              updateConfig(paso.id, {
-                                                requiereRutaPasoIds: e.target
-                                                  .checked
-                                                  ? [...requeridos, otro.id]
-                                                  : requeridos.filter(
-                                                      (id) => id !== otro.id,
-                                                    ),
-                                              })
-                                            }
-                                          />
-                                          <span>{nombreOtro}</span>
-                                        </label>
-                                      );
-                                    })}
-                                </div>
-                              </div>
-                              {cfg.modoActivacion === "CONDICIONAL" && (
-                                <div className="md:col-span-full">
-                                  <RuleBuilder
-                                    value={
-                                      cfg.condicionActivacionJson as
-                                        | Record<string, unknown>
-                                        | null
-                                        | undefined
+                                <div className="sb-body">
+                                  <PasoTercerizadoPanel
+                                    value={cfg}
+                                    esImpresion={
+                                      familiasMap.get(paso.familiaCodigo)
+                                        ?.esImpresion === true
                                     }
-                                    includeMeasureFields={
-                                      producto.modoMedidas === "LIBRE" ||
-                                      producto.modoMedidas === "MIXTA"
+                                    onChange={(patch) =>
+                                      updateConfig(paso.id, patch)
                                     }
-                                    extraFields={technologyRuleFields}
-                                    onChange={(value) =>
-                                      updateConfig(paso.id, {
-                                        condicionActivacionJson: value,
-                                      })
+                                    onToggle={(tercerizado) =>
+                                      updateConfig(
+                                        paso.id,
+                                        tercerizado
+                                          ? {
+                                              tercerizado: true,
+                                              // Fuente por default (el panel muestra
+                                              // matriz): hay que persistirla, no dejarla
+                                              // sólo en el display.
+                                              fuenteCostoTercerizado:
+                                                cfg.fuenteCostoTercerizado ??
+                                                "matriz",
+                                              maquinaM1Id: null,
+                                              perfilM1Id: null,
+                                              // No se produce internamente: los
+                                              // multiplicadores (caras, tipoCopia) no
+                                              // aplican y no deben quedar persistidos.
+                                              multiplicadoresActivos: [],
+                                            }
+                                          : { tercerizado: false },
+                                      )
                                     }
                                   />
                                 </div>
-                              )}
-                            </div>
-                            {(valBasico.errores.length > 0 ||
-                              valBasico.warnings.length > 0) && (
-                              <ListaValidacion validacion={valBasico} />
-                            )}
-                          </div>
-                        </section>
-
-                        {/* Un paso tercerizado no se produce internamente: no tiene
-                            tiempo/costo, máquina, materiales ni overrides. Sólo se
-                            configura su Activación (sin multiplicadores). */}
-                        {!noEjecutar && !cfg.tercerizado && (
-                          <>
-                            <section className="section-block open">
-                              <div className="sb-head">
-                                <span className="num">02</span>
-                                <span className="ttl">Tiempo y costo</span>
-                                <span className="chev">›</span>
-                              </div>
-                              <div className="sb-body">
-                                <div className="wiz-grid">
-                                  <div className="field">
-                                    <LabelConTooltip
-                                      label="¿Cómo se calcula el tiempo?"
-                                      tooltip="Define la base del cálculo: tiempo fijo, productividad propia, productividad de máquina, o input manual del comercial."
-                                    />
-                                    <HumanSelect
-                                      value={cfg.modoTiempo ?? ""}
-                                      onValueChange={(v) =>
-                                        updateConfig(paso.id, {
-                                          modoTiempo: v || null,
-                                        })
-                                      }
-                                      options={opcionesTiempo}
-                                      placeholder="Elegir"
-                                    />
-                                  </div>
-                                  <div className="field">
-                                    <LabelConTooltip
-                                      label="Centro de costo"
-                                      tooltip="Centro horario usado para calcular la tarifa de este paso."
-                                    />
-                                    {cfg.maquinaM1Id ? (
-                                      <div className="control select">
-                                        <span>
-                                          {maquinaGuardada?.centroCostoPrincipal
-                                            ?.nombre ??
-                                            "Centro heredado de máquina"}
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <HumanSelect
-                                        value={cfg.centroCostoId ?? ""}
-                                        onValueChange={(v) =>
-                                          updateConfig(paso.id, {
-                                            centroCostoId: v || null,
-                                          })
-                                        }
-                                        options={centroCostoOptions}
-                                        placeholder={
-                                          lookups.centrosCosto.length === 0
-                                            ? "No hay centros horarios activos"
-                                            : familia?.defaults?.centroCostoId
-                                              ? `Usando el del paso: ${
-                                                  lookups.centrosCosto.find(
-                                                    (c) =>
-                                                      c.id ===
-                                                      familia?.defaults
-                                                        ?.centroCostoId,
-                                                  )?.nombre ?? "default"
-                                                }`
-                                              : "Elegir centro horario"
-                                        }
-                                      />
-                                    )}
-                                  </div>
-                                  {mostrarTiempoFijoOverride && (
-                                    <div className="field">
+                              </section>
+                              <section className="section-block open">
+                                <div className="sb-head">
+                                  <span className="num">01</span>
+                                  <span className="ttl">Activación</span>
+                                  <span className="hint">
+                                    Cuándo se ejecuta este paso al cotizar
+                                  </span>
+                                </div>
+                                <div className="sb-body">
+                                  <div className="wiz-grid">
+                                    <div className="field md:col-span-full">
                                       <LabelConTooltip
                                         label={
-                                          <>
-                                            Tiempo fijo override{" "}
-                                            <span className="hint">
-                                              opcional
-                                            </span>
-                                          </>
+                                          configuracionBase
+                                            ? "Nombre visible por defecto"
+                                            : "Nombre visible del paso"
                                         }
-                                        tooltip="Sólo aplica en pasos sin máquina con tiempo fijo."
-                                        iconSize="sm"
+                                        tooltip={
+                                          configuracionBase
+                                            ? "Nombre que se propondrá al usar este paso en un producto. Cada producto puede personalizarlo después."
+                                            : "Nombre operativo que verá comercial y producción. Si lo dejás vacío, se usa el nombre técnico de la familia."
+                                        }
                                       />
                                       <Input
-                                        type="number"
-                                        min={0}
-                                        step={0.5}
-                                        value={cfg.tiempoFijoOverrideMin ?? ""}
-                                        onChange={(e) =>
+                                        value={cfg.nombreVisible ?? ""}
+                                        placeholder={
+                                          familia?.nombre ?? paso.familiaCodigo
+                                        }
+                                        onChange={(event) =>
                                           updateConfig(paso.id, {
-                                            tiempoFijoOverrideMin:
-                                              e.target.value === ""
-                                                ? null
-                                                : Number(e.target.value),
+                                            nombreVisible:
+                                              event.target.value || null,
                                           })
                                         }
-                                        placeholder="—"
                                       />
                                     </div>
-                                  )}
-                                  <div className="field">
-                                    <LabelConTooltip
-                                      label={
-                                        <>
-                                          Operarios{" "}
-                                          <span className="hint">dotación</span>
-                                        </>
-                                      }
-                                      tooltip="Cuántas personas ocupa el paso. Multiplica sólo el costo de mano de obra (un paso a 2 personas consume el doble de horas-hombre); la máquina no cambia."
-                                      iconSize="sm"
-                                    />
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      step={1}
-                                      value={cfg.dotacionOperarios ?? 1}
-                                      onChange={(e) =>
-                                        updateConfig(paso.id, {
-                                          dotacionOperarios: Math.max(
-                                            1,
-                                            Math.round(
-                                              Number(e.target.value) || 1,
-                                            ),
-                                          ),
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  {personalizaciones.length > 0 &&
-                                    (() => {
-                                      const params = asRecord(
-                                        cfg.paramsPasoJson,
-                                      );
-                                      const legacy =
-                                        typeof params.fuenteMedida === "string" &&
-                                        params.fuenteMedida.startsWith(
-                                          FUENTE_MEDIDA_PERSONALIZACION_PREFIX,
-                                        )
-                                          ? [
-                                              params.fuenteMedida.slice(
-                                                FUENTE_MEDIDA_PERSONALIZACION_PREFIX.length,
-                                              ),
-                                            ]
-                                          : [];
-                                      const seleccionadas = Array.isArray(
-                                        params.fuenteMedidaPersonalizaciones,
-                                      )
-                                        ? (
-                                            params.fuenteMedidaPersonalizaciones as unknown[]
-                                          ).filter(
-                                            (c): c is string =>
-                                              typeof c === "string",
-                                          )
-                                        : legacy;
-                                      const toggle = (
-                                        codigo: string,
-                                        checked: boolean,
-                                      ) => {
-                                        const next = checked
-                                          ? [...seleccionadas, codigo]
-                                          : seleccionadas.filter(
-                                              (c) => c !== codigo,
+                                    <div className="field">
+                                      <label>Cuándo se ejecuta</label>
+                                      <div className="segmented">
+                                        {opcionesActivacion.map((option) => (
+                                          <button
+                                            key={option.value}
+                                            type="button"
+                                            className={
+                                              cfg.modoActivacion ===
+                                              option.value
+                                                ? "on"
+                                                : ""
+                                            }
+                                            onClick={() =>
+                                              updateConfig(paso.id, {
+                                                modoActivacion: option.value,
+                                              })
+                                            }
+                                          >
+                                            {configuracionBase &&
+                                            option.value === "NO_EJECUTAR"
+                                              ? "No usar por defecto"
+                                              : option.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <span className="help">
+                                        No ejecutar apaga este paso solo para
+                                        esta ruta del producto.
+                                      </span>
+                                    </div>
+                                    {!cfg.tercerizado && (
+                                      <div className="field">
+                                        <label>Multiplicadores</label>
+                                        <div className="chip-row">
+                                          {multiplicadoresSoportados.length >
+                                          0 ? (
+                                            multiplicadoresSoportados.map(
+                                              (multiplicador) => {
+                                                const activo =
+                                                  cfg.multiplicadoresActivos?.includes(
+                                                    multiplicador,
+                                                  );
+                                                return (
+                                                  <button
+                                                    key={multiplicador}
+                                                    type="button"
+                                                    className={`tag mono ${activo ? "active" : "muted dashed"}`}
+                                                    onClick={() =>
+                                                      toggleMultiplicador(
+                                                        paso.id,
+                                                        multiplicador,
+                                                      )
+                                                    }
+                                                    title={
+                                                      multiplicador === "caras"
+                                                        ? "Duplica tiempo y consumibles de máquina cuando el comercial elige doble faz. Los materiales se duplican por slot."
+                                                        : "Activa o desactiva este multiplicador para el paso."
+                                                    }
+                                                  >
+                                                    {multiplicador}
+                                                  </button>
+                                                );
+                                              },
+                                            )
+                                          ) : (
+                                            <span className="tag muted dashed">
+                                              Sin multiplicadores
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span className="help">
+                                          Variables que multiplican el tiempo
+                                          del paso. En materiales, caras se
+                                          define por slot.
+                                        </span>
+                                      </div>
+                                    )}
+                                    {/* Arrastre entre opcionales: este paso puede
+                                  exigir que otros se ejecuten. Ver
+                                  docs/modificaciones-fisicas-lona-diseno.md */}
+                                    <div className="field md:col-span-full">
+                                      <LabelConTooltip
+                                        label="Este paso necesita que también se ejecuten"
+                                        tooltip="Al activarse, enciende esos pasos aunque sean OPCIONALES y el comercial no los haya tildado. Ej: colocar ojales necesita el refuerzo perimetral. Los pasos elegidos siguen pudiendo activarse por su cuenta."
+                                      />
+                                      <div className="flex flex-wrap gap-2">
+                                        {rutaAlternativa.ruta.pasos
+                                          .filter((otro) => otro.id !== paso.id)
+                                          .map((otro) => {
+                                            const requeridos =
+                                              cfg.requiereRutaPasoIds ?? [];
+                                            const elegido = requeridos.includes(
+                                              otro.id,
                                             );
-                                        updateStepParams(paso.id, {
-                                          fuenteMedidaPersonalizaciones:
-                                            next.length ? next : undefined,
-                                          fuenteMedida: "",
-                                        });
-                                      };
-                                      return (
+                                            // El nombre real de la familia antes de
+                                            // humanizar el código: para una familia
+                                            // tenant el código es un UUID (mismo bug
+                                            // que tuvo el motor en la Etapa C).
+                                            const nombreOtro =
+                                              configs[
+                                                otro.id
+                                              ]?.nombreVisible?.trim() ||
+                                              familiasMap.get(
+                                                otro.familiaCodigo,
+                                              )?.nombre ||
+                                              humanizeCode(otro.familiaCodigo);
+                                            return (
+                                              <label
+                                                key={otro.id}
+                                                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={elegido}
+                                                  onChange={(e) =>
+                                                    updateConfig(paso.id, {
+                                                      requiereRutaPasoIds: e
+                                                        .target.checked
+                                                        ? [
+                                                            ...requeridos,
+                                                            otro.id,
+                                                          ]
+                                                        : requeridos.filter(
+                                                            (id) =>
+                                                              id !== otro.id,
+                                                          ),
+                                                    })
+                                                  }
+                                                />
+                                                <span>{nombreOtro}</span>
+                                              </label>
+                                            );
+                                          })}
+                                      </div>
+                                    </div>
+                                    {cfg.modoActivacion === "CONDICIONAL" && (
+                                      <div className="md:col-span-full">
+                                        <RuleBuilder
+                                          value={
+                                            cfg.condicionActivacionJson as
+                                              | Record<string, unknown>
+                                              | null
+                                              | undefined
+                                          }
+                                          includeMeasureFields={
+                                            producto.modoMedidas === "LIBRE" ||
+                                            producto.modoMedidas === "MIXTA"
+                                          }
+                                          extraFields={technologyRuleFields}
+                                          onChange={(value) =>
+                                            updateConfig(paso.id, {
+                                              condicionActivacionJson: value,
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                  {(valBasico.errores.length > 0 ||
+                                    valBasico.warnings.length > 0) && (
+                                    <ListaValidacion validacion={valBasico} />
+                                  )}
+                                </div>
+                              </section>
+
+                              {/* Un paso tercerizado no se produce internamente: no tiene
+                            tiempo/costo, máquina, materiales ni overrides. Sólo se
+                            configura su Activación (sin multiplicadores). */}
+                              {!noEjecutar && !cfg.tercerizado && (
+                                <>
+                                  <section className="section-block open">
+                                    <div className="sb-head">
+                                      <span className="num">02</span>
+                                      <span className="ttl">
+                                        Tiempo y costo
+                                      </span>
+                                      <span className="chev">›</span>
+                                    </div>
+                                    <div className="sb-body">
+                                      <div className="wiz-grid">
+                                        <div className="field">
+                                          <LabelConTooltip
+                                            label="¿Cómo se calcula el tiempo?"
+                                            tooltip="Define la base del cálculo: tiempo fijo, productividad propia, productividad de máquina, o input manual del comercial."
+                                          />
+                                          <HumanSelect
+                                            value={cfg.modoTiempo ?? ""}
+                                            onValueChange={(v) =>
+                                              updateConfig(paso.id, {
+                                                modoTiempo: v || null,
+                                              })
+                                            }
+                                            options={opcionesTiempo}
+                                            placeholder="Elegir"
+                                          />
+                                        </div>
+                                        <div className="field">
+                                          <LabelConTooltip
+                                            label="Centro de costo"
+                                            tooltip="Centro horario usado para calcular la tarifa de este paso."
+                                          />
+                                          {cfg.maquinaM1Id ? (
+                                            <div className="control select">
+                                              <span>
+                                                {maquinaGuardada
+                                                  ?.centroCostoPrincipal
+                                                  ?.nombre ??
+                                                  "Centro heredado de máquina"}
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <HumanSelect
+                                              value={cfg.centroCostoId ?? ""}
+                                              onValueChange={(v) =>
+                                                updateConfig(paso.id, {
+                                                  centroCostoId: v || null,
+                                                })
+                                              }
+                                              options={centroCostoOptions}
+                                              placeholder={
+                                                lookups.centrosCosto.length ===
+                                                0
+                                                  ? "No hay centros horarios activos"
+                                                  : familia?.defaults
+                                                        ?.centroCostoId
+                                                    ? `Usando el del paso: ${
+                                                        lookups.centrosCosto.find(
+                                                          (c) =>
+                                                            c.id ===
+                                                            familia?.defaults
+                                                              ?.centroCostoId,
+                                                        )?.nombre ?? "default"
+                                                      }`
+                                                    : "Elegir centro horario"
+                                              }
+                                            />
+                                          )}
+                                        </div>
+                                        {mostrarTiempoFijoOverride && (
+                                          <div className="field">
+                                            <LabelConTooltip
+                                              label={
+                                                <>
+                                                  Tiempo fijo override{" "}
+                                                  <span className="hint">
+                                                    opcional
+                                                  </span>
+                                                </>
+                                              }
+                                              tooltip="Sólo aplica en pasos sin máquina con tiempo fijo."
+                                              iconSize="sm"
+                                            />
+                                            <Input
+                                              type="number"
+                                              min={0}
+                                              step={0.5}
+                                              value={
+                                                cfg.tiempoFijoOverrideMin ?? ""
+                                              }
+                                              onChange={(e) =>
+                                                updateConfig(paso.id, {
+                                                  tiempoFijoOverrideMin:
+                                                    e.target.value === ""
+                                                      ? null
+                                                      : Number(e.target.value),
+                                                })
+                                              }
+                                              placeholder="—"
+                                            />
+                                          </div>
+                                        )}
                                         <div className="field">
                                           <LabelConTooltip
                                             label={
                                               <>
-                                                Fuente de medida{" "}
+                                                Operarios{" "}
                                                 <span className="hint">
-                                                  personalización
+                                                  dotación
                                                 </span>
                                               </>
                                             }
-                                            tooltip="Elegí qué estampas imprime/costea este paso. Si se imprimen juntas (ej. varias estampas en un mismo DTF), marcá todas: el paso suma sus áreas. Sin ninguna marcada, usa la medida global del producto."
+                                            tooltip="Cuántas personas ocupa el paso. Multiplica sólo el costo de mano de obra (un paso a 2 personas consume el doble de horas-hombre); la máquina no cambia."
                                             iconSize="sm"
                                           />
-                                          <div
-                                            style={{
-                                              display: "flex",
-                                              flexDirection: "column",
-                                              gap: 6,
-                                              border: "1px solid var(--hairline, #e5e7eb)",
-                                              borderRadius: 8,
-                                              padding: "8px 10px",
-                                            }}
-                                          >
-                                            {personalizaciones.map((p) => (
-                                              <label
-                                                key={p.codigo}
-                                                style={{
-                                                  display: "flex",
-                                                  alignItems: "center",
-                                                  gap: 8,
-                                                  cursor: "pointer",
-                                                  fontSize: 13,
-                                                }}
-                                              >
-                                                <input
-                                                  type="checkbox"
-                                                  checked={seleccionadas.includes(
-                                                    p.codigo,
-                                                  )}
-                                                  onChange={(e) =>
-                                                    toggle(
-                                                      p.codigo,
-                                                      e.target.checked,
-                                                    )
-                                                  }
-                                                />
-                                                <span style={{ fontWeight: 500 }}>
-                                                  {p.nombre}
-                                                </span>
-                                                <span
-                                                  style={{
-                                                    color: "var(--muted, #6b7280)",
-                                                    fontSize: 11,
-                                                  }}
-                                                >
-                                                  {p.modoMedida === "FIJA"
-                                                    ? `${p.anchoMm}×${p.altoMm} mm (fija)`
-                                                    : "medida del cliente"}
-                                                </span>
-                                              </label>
-                                            ))}
-                                          </div>
-                                          <div
-                                            className="hint"
-                                            style={{ marginTop: 4 }}
-                                          >
-                                            {seleccionadas.length === 0
-                                              ? "Sin estampas marcadas → usa la medida del producto (global)."
-                                              : seleccionadas.length > 1
-                                                ? `Se costean juntas: el paso suma las ${seleccionadas.length} áreas.`
-                                                : "El paso costea el área de esa estampa."}
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
-                                  {mostrarProductividadPropia && (
-                                    <div className="field md:col-span-full">
-                                      <LabelConTooltip
-                                        label="Ritmo de trabajo manual"
-                                        tooltip="Usalo para pasos manuales o externos que no dependen de una máquina. Podés cargar una productividad por hora o un tiempo por lote, por ejemplo 2 pliegos cada 1 minuto."
-                                        iconSize="sm"
-                                      />
-                                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                                        <div className="space-y-1">
-                                          <span className="text-muted-foreground text-xs">
-                                            Cómo querés cargar el ritmo
-                                          </span>
-                                          <HumanSelect
-                                            value={timeCalculationMode}
-                                            onValueChange={(value) =>
-                                              updateStepParams(paso.id, {
-                                                timeCalculationMode:
-                                                  value ||
-                                                  getDefaultT2TimeCalculationMode(
-                                                    familia,
+                                          <Input
+                                            type="number"
+                                            min={1}
+                                            step={1}
+                                            value={cfg.dotacionOperarios ?? 1}
+                                            onChange={(e) =>
+                                              updateConfig(paso.id, {
+                                                dotacionOperarios: Math.max(
+                                                  1,
+                                                  Math.round(
+                                                    Number(e.target.value) || 1,
                                                   ),
+                                                ),
                                               })
                                             }
-                                            options={
-                                              T2_TIME_CALCULATION_MODE_OPTIONS
-                                            }
-                                            placeholder="Elegir forma"
                                           />
                                         </div>
-                                        <div className="space-y-1">
-                                          <LabelConTooltip
-                                            label="Tiempo fijo estimado"
-                                            tooltip="Si completás este campo, el motor usa ese tiempo y no calcula por ritmo."
-                                            iconSize="sm"
-                                          />
-                                          <div className="flex items-center gap-2">
-                                            <Input
-                                              type="number"
-                                              min={0}
-                                              step={0.25}
-                                              value={horasEstimadasPaso ?? ""}
-                                              onChange={(event) =>
-                                                updateStepParams(paso.id, {
-                                                  horasEstimadas:
-                                                    event.target.value === ""
-                                                      ? null
-                                                      : Number(
-                                                          event.target.value,
-                                                        ),
-                                                })
-                                              }
-                                              placeholder="Opcional"
-                                            />
-                                            <span className="text-muted-foreground whitespace-nowrap text-xs">
-                                              h
-                                            </span>
-                                          </div>
-                                        </div>
-                                        {timeCalculationMode ===
-                                        "batch_time" ? (
-                                          <>
-                                            <div className="space-y-1">
-                                              <span className="text-muted-foreground text-xs">
-                                                Tiempo del lote
-                                              </span>
-                                              <div className="flex items-center gap-2">
-                                                <Input
-                                                  type="number"
-                                                  min={0}
-                                                  step={0.25}
-                                                  value={batchTimeMin ?? ""}
-                                                  onChange={(event) =>
-                                                    updateStepParams(paso.id, {
-                                                      batchTimeMin:
-                                                        event.target.value ===
-                                                        ""
-                                                          ? null
-                                                          : Number(
-                                                              event.target
-                                                                .value,
-                                                            ),
-                                                    })
-                                                  }
-                                                  placeholder="Ej. 1"
-                                                />
-                                                <span className="text-muted-foreground whitespace-nowrap text-xs">
-                                                  min
-                                                </span>
-                                              </div>
-                                            </div>
-                                            <div className="space-y-1">
-                                              <span className="text-muted-foreground text-xs">
-                                                Tamaño del lote
-                                              </span>
-                                              <div className="flex items-center gap-2">
-                                                <Input
-                                                  type="number"
-                                                  min={0}
-                                                  step={
-                                                    productivityUnit ===
-                                                    "unidades_h"
-                                                      ? 1
-                                                      : 0.25
-                                                  }
-                                                  value={batchSize ?? ""}
-                                                  onChange={(event) =>
-                                                    updateStepParams(paso.id, {
-                                                      batchSize:
-                                                        event.target.value ===
-                                                        ""
-                                                          ? null
-                                                          : Number(
-                                                              event.target
-                                                                .value,
-                                                            ),
-                                                    })
-                                                  }
-                                                  placeholder={
-                                                    productivityUnit ===
-                                                    "unidades_h"
-                                                      ? "Ej. 1"
-                                                      : "Ej. 2"
-                                                  }
-                                                />
-                                                <span className="text-muted-foreground whitespace-nowrap text-xs">
-                                                  {batchUnitSuffix}
-                                                </span>
-                                              </div>
-                                            </div>
-                                          </>
-                                        ) : (
-                                          <div className="space-y-1 md:col-span-full">
-                                              <span className="text-muted-foreground text-xs">
-                                              Productividad por hora
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                              <Input
-                                                type="number"
-                                                min={0}
-                                                step={1}
-                                                value={
-                                                  productividadPropia ?? ""
-                                                }
-                                                onChange={(event) =>
-                                                  updateStepParams(paso.id, {
-                                                    productivityValue:
-                                                      event.target.value === ""
-                                                        ? null
-                                                        : Number(
-                                                            event.target.value,
-                                                          ),
-                                                  })
-                                                }
-                                                placeholder={
-                                                  familia?.defaults
-                                                    ?.productividadHora
-                                                    ? `Usando el ritmo del paso: ${familia.defaults.productividadHora}/h`
-                                                    : "Ej. 500"
-                                                }
-                                              />
-                                              <span className="text-muted-foreground whitespace-nowrap text-xs">
-                                                {productivityUnitSuffix}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        )}
-                                        <div className="space-y-1">
-                                          <span className="text-muted-foreground text-xs">
-                                            Unidad de productividad
-                                          </span>
-                                          <HumanSelect
-                                            value={productivityUnit}
-                                            onValueChange={(value) => {
-                                              const nextUnit =
-                                                value ||
-                                                getDefaultT2ProductivityUnit(
-                                                  familia,
-                                                );
+                                        {personalizaciones.length > 0 &&
+                                          (() => {
+                                            const params = asRecord(
+                                              cfg.paramsPasoJson,
+                                            );
+                                            const legacy =
+                                              typeof params.fuenteMedida ===
+                                                "string" &&
+                                              params.fuenteMedida.startsWith(
+                                                FUENTE_MEDIDA_PERSONALIZACION_PREFIX,
+                                              )
+                                                ? [
+                                                    params.fuenteMedida.slice(
+                                                      FUENTE_MEDIDA_PERSONALIZACION_PREFIX.length,
+                                                    ),
+                                                  ]
+                                                : [];
+                                            const seleccionadas = Array.isArray(
+                                              params.fuenteMedidaPersonalizaciones,
+                                            )
+                                              ? (
+                                                  params.fuenteMedidaPersonalizaciones as unknown[]
+                                                ).filter(
+                                                  (c): c is string =>
+                                                    typeof c === "string",
+                                                )
+                                              : legacy;
+                                            const toggle = (
+                                              codigo: string,
+                                              checked: boolean,
+                                            ) => {
+                                              const next = checked
+                                                ? [...seleccionadas, codigo]
+                                                : seleccionadas.filter(
+                                                    (c) => c !== codigo,
+                                                  );
                                               updateStepParams(paso.id, {
-                                                productivityUnit: nextUnit,
-                                                productivityQuantitySource:
-                                                  getDefaultT2QuantitySource(familia, nextUnit),
+                                                fuenteMedidaPersonalizaciones:
+                                                  next.length
+                                                    ? next
+                                                    : undefined,
+                                                fuenteMedida: "",
                                               });
-                                            }}
-                                            options={
-                                              T2_PRODUCTIVITY_UNIT_OPTIONS
-                                            }
-                                            placeholder="Elegir unidad"
-                                          />
-                                        </div>
-                                        {cantidadRelevante && (
-                                          <div className="space-y-1">
-                                            <span className="text-muted-foreground text-xs">
-                                              Cantidad operativa del paso
-                                            </span>
+                                            };
+                                            return (
+                                              <div className="field">
+                                                <LabelConTooltip
+                                                  label={
+                                                    <>
+                                                      Fuente de medida{" "}
+                                                      <span className="hint">
+                                                        personalización
+                                                      </span>
+                                                    </>
+                                                  }
+                                                  tooltip="Elegí qué estampas imprime/costea este paso. Si se imprimen juntas (ej. varias estampas en un mismo DTF), marcá todas: el paso suma sus áreas. Sin ninguna marcada, usa la medida global del producto."
+                                                  iconSize="sm"
+                                                />
+                                                <div
+                                                  style={{
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    gap: 6,
+                                                    border:
+                                                      "1px solid var(--hairline, #e5e7eb)",
+                                                    borderRadius: 8,
+                                                    padding: "8px 10px",
+                                                  }}
+                                                >
+                                                  {personalizaciones.map(
+                                                    (p) => (
+                                                      <label
+                                                        key={p.codigo}
+                                                        style={{
+                                                          display: "flex",
+                                                          alignItems: "center",
+                                                          gap: 8,
+                                                          cursor: "pointer",
+                                                          fontSize: 13,
+                                                        }}
+                                                      >
+                                                        <input
+                                                          type="checkbox"
+                                                          checked={seleccionadas.includes(
+                                                            p.codigo,
+                                                          )}
+                                                          onChange={(e) =>
+                                                            toggle(
+                                                              p.codigo,
+                                                              e.target.checked,
+                                                            )
+                                                          }
+                                                        />
+                                                        <span
+                                                          style={{
+                                                            fontWeight: 500,
+                                                          }}
+                                                        >
+                                                          {p.nombre}
+                                                        </span>
+                                                        <span
+                                                          style={{
+                                                            color:
+                                                              "var(--muted, #6b7280)",
+                                                            fontSize: 11,
+                                                          }}
+                                                        >
+                                                          {p.modoMedida ===
+                                                          "FIJA"
+                                                            ? `${p.anchoMm}×${p.altoMm} mm (fija)`
+                                                            : "medida del cliente"}
+                                                        </span>
+                                                      </label>
+                                                    ),
+                                                  )}
+                                                </div>
+                                                <div
+                                                  className="hint"
+                                                  style={{ marginTop: 4 }}
+                                                >
+                                                  {seleccionadas.length === 0
+                                                    ? "Sin estampas marcadas → usa la medida del producto (global)."
+                                                    : seleccionadas.length > 1
+                                                      ? `Se costean juntas: el paso suma las ${seleccionadas.length} áreas.`
+                                                      : "El paso costea el área de esa estampa."}
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+                                        {mostrarProductividadPropia && (
+                                          <div className="field md:col-span-full">
+                                            <LabelConTooltip
+                                              label="Ritmo de trabajo manual"
+                                              tooltip="Usalo para pasos manuales o externos que no dependen de una máquina. Podés cargar una productividad por hora o un tiempo por lote, por ejemplo 2 pliegos cada 1 minuto."
+                                              iconSize="sm"
+                                            />
+                                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                              <div className="space-y-1">
+                                                <span className="text-muted-foreground text-xs">
+                                                  Cómo querés cargar el ritmo
+                                                </span>
+                                                <HumanSelect
+                                                  value={timeCalculationMode}
+                                                  onValueChange={(value) =>
+                                                    updateStepParams(paso.id, {
+                                                      timeCalculationMode:
+                                                        value ||
+                                                        getDefaultT2TimeCalculationMode(
+                                                          familia,
+                                                        ),
+                                                    })
+                                                  }
+                                                  options={
+                                                    T2_TIME_CALCULATION_MODE_OPTIONS
+                                                  }
+                                                  placeholder="Elegir forma"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Tiempo fijo estimado"
+                                                  tooltip="Si completás este campo, el motor usa ese tiempo y no calcula por ritmo."
+                                                  iconSize="sm"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                  <Input
+                                                    type="number"
+                                                    min={0}
+                                                    step={0.25}
+                                                    value={
+                                                      horasEstimadasPaso ?? ""
+                                                    }
+                                                    onChange={(event) =>
+                                                      updateStepParams(
+                                                        paso.id,
+                                                        {
+                                                          horasEstimadas:
+                                                            event.target
+                                                              .value === ""
+                                                              ? null
+                                                              : Number(
+                                                                  event.target
+                                                                    .value,
+                                                                ),
+                                                        },
+                                                      )
+                                                    }
+                                                    placeholder="Opcional"
+                                                  />
+                                                  <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                                    h
+                                                  </span>
+                                                </div>
+                                              </div>
+                                              {timeCalculationMode ===
+                                              "batch_time" ? (
+                                                <>
+                                                  <div className="space-y-1">
+                                                    <span className="text-muted-foreground text-xs">
+                                                      Tiempo del lote
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                      <Input
+                                                        type="number"
+                                                        min={0}
+                                                        step={0.25}
+                                                        value={
+                                                          batchTimeMin ?? ""
+                                                        }
+                                                        onChange={(event) =>
+                                                          updateStepParams(
+                                                            paso.id,
+                                                            {
+                                                              batchTimeMin:
+                                                                event.target
+                                                                  .value === ""
+                                                                  ? null
+                                                                  : Number(
+                                                                      event
+                                                                        .target
+                                                                        .value,
+                                                                    ),
+                                                            },
+                                                          )
+                                                        }
+                                                        placeholder="Ej. 1"
+                                                      />
+                                                      <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                                        min
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                  <div className="space-y-1">
+                                                    <span className="text-muted-foreground text-xs">
+                                                      Tamaño del lote
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                      <Input
+                                                        type="number"
+                                                        min={0}
+                                                        step={
+                                                          productivityUnit ===
+                                                          "unidades_h"
+                                                            ? 1
+                                                            : 0.25
+                                                        }
+                                                        value={batchSize ?? ""}
+                                                        onChange={(event) =>
+                                                          updateStepParams(
+                                                            paso.id,
+                                                            {
+                                                              batchSize:
+                                                                event.target
+                                                                  .value === ""
+                                                                  ? null
+                                                                  : Number(
+                                                                      event
+                                                                        .target
+                                                                        .value,
+                                                                    ),
+                                                            },
+                                                          )
+                                                        }
+                                                        placeholder={
+                                                          productivityUnit ===
+                                                          "unidades_h"
+                                                            ? "Ej. 1"
+                                                            : "Ej. 2"
+                                                        }
+                                                      />
+                                                      <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                                        {batchUnitSuffix}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                </>
+                                              ) : (
+                                                <div className="space-y-1 md:col-span-full">
+                                                  <span className="text-muted-foreground text-xs">
+                                                    Productividad por hora
+                                                  </span>
+                                                  <div className="flex items-center gap-2">
+                                                    <Input
+                                                      type="number"
+                                                      min={0}
+                                                      step={1}
+                                                      value={
+                                                        productividadPropia ??
+                                                        ""
+                                                      }
+                                                      onChange={(event) =>
+                                                        updateStepParams(
+                                                          paso.id,
+                                                          {
+                                                            productivityValue:
+                                                              event.target
+                                                                .value === ""
+                                                                ? null
+                                                                : Number(
+                                                                    event.target
+                                                                      .value,
+                                                                  ),
+                                                          },
+                                                        )
+                                                      }
+                                                      placeholder={
+                                                        familia?.defaults
+                                                          ?.productividadHora
+                                                          ? `Usando el ritmo del paso: ${familia.defaults.productividadHora}/h`
+                                                          : "Ej. 500"
+                                                      }
+                                                    />
+                                                    <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                                      {productivityUnitSuffix}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              )}
+                                              <div className="space-y-1">
+                                                <span className="text-muted-foreground text-xs">
+                                                  Unidad de productividad
+                                                </span>
+                                                <HumanSelect
+                                                  value={productivityUnit}
+                                                  onValueChange={(value) => {
+                                                    const nextUnit =
+                                                      value ||
+                                                      getDefaultT2ProductivityUnit(
+                                                        familia,
+                                                      );
+                                                    updateStepParams(paso.id, {
+                                                      productivityUnit:
+                                                        nextUnit,
+                                                      productivityQuantitySource:
+                                                        getDefaultT2QuantitySource(
+                                                          familia,
+                                                          nextUnit,
+                                                        ),
+                                                    });
+                                                  }}
+                                                  options={
+                                                    T2_PRODUCTIVITY_UNIT_OPTIONS
+                                                  }
+                                                  placeholder="Elegir unidad"
+                                                />
+                                              </div>
+                                              {cantidadRelevante && (
+                                                <div className="space-y-1">
+                                                  <span className="text-muted-foreground text-xs">
+                                                    Cantidad operativa del paso
+                                                  </span>
+                                                  <HumanSelect
+                                                    value={
+                                                      cfg.mecanismoCantidad ??
+                                                      ""
+                                                    }
+                                                    onValueChange={(v) =>
+                                                      updateConfig(paso.id, {
+                                                        mecanismoCantidad:
+                                                          v || null,
+                                                      })
+                                                    }
+                                                    options={opcionesCantidad}
+                                                    placeholder="Elegir"
+                                                  />
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                        {cantidadRelevante &&
+                                          cfg.mecanismoCantidad ===
+                                            "HEREDAR_DEL_OUTPUT_CANONICO" &&
+                                          (() => {
+                                            // B.3.3 — herencia explícita: señalar
+                                            // el paso origen y qué capacidad usa.
+                                            const pasosPrevios =
+                                              rutaAlternativa.ruta.pasos.filter(
+                                                (p) => p.orden < paso.orden,
+                                              );
+                                            const origen = leerOrigenHerencia(
+                                              jsonTexts[paso.id]?.mecanismo ??
+                                                "",
+                                            );
+                                            const origenPasoId =
+                                              typeof origen?.rutaPasoId ===
+                                              "string"
+                                                ? origen.rutaPasoId
+                                                : null;
+                                            const origenCapacidad =
+                                              typeof origen?.capacidad ===
+                                              "string"
+                                                ? origen.capacidad
+                                                : "unidades_procesadas";
+                                            const setOrigen = (
+                                              o: OrigenHerencia | null,
+                                            ) =>
+                                              aplicarOrigenHerencia(paso.id, o);
+                                            const nombrePaso = (p: {
+                                              id: string;
+                                              familiaCodigo: string;
+                                            }) =>
+                                              configs[
+                                                p.id
+                                              ]?.nombreVisible?.trim() ||
+                                              familiasMap.get(p.familiaCodigo)
+                                                ?.nombre ||
+                                              humanizeCode(p.familiaCodigo);
+                                            const heredablesDe = (
+                                              familiaCodigo: string,
+                                            ) =>
+                                              (
+                                                familiasMap.get(familiaCodigo)
+                                                  ?.capacidades ?? []
+                                              ).filter((c) => c.heredable);
+                                            const familiaOrigenCodigo =
+                                              pasosPrevios.find(
+                                                (p) => p.id === origenPasoId,
+                                              )?.familiaCodigo;
+                                            const capacidadesOrigen =
+                                              familiaOrigenCodigo
+                                                ? heredablesDe(
+                                                    familiaOrigenCodigo,
+                                                  )
+                                                : [];
+                                            return (
+                                              <div className="field">
+                                                <LabelConTooltip
+                                                  label="¿De qué paso hereda la cantidad?"
+                                                  tooltip="Señalá el paso origen: la cantidad de este paso sale de lo que ese paso dejó. En Automático el sistema usa la regla histórica (el output natural del paso anterior)."
+                                                />
+                                                <div className="grid gap-2 sm:grid-cols-2">
+                                                  <HumanSelect
+                                                    value={
+                                                      origenPasoId ?? "auto"
+                                                    }
+                                                    onValueChange={(v) => {
+                                                      if (!v || v === "auto") {
+                                                        setOrigen(null);
+                                                        return;
+                                                      }
+                                                      setOrigen({
+                                                        rutaPasoId: v,
+                                                        capacidad:
+                                                          origenCapacidad,
+                                                      });
+                                                    }}
+                                                    options={[
+                                                      {
+                                                        value: "auto",
+                                                        label:
+                                                          "Automático (regla histórica)",
+                                                        description:
+                                                          "Como hasta ahora: el output natural del paso anterior.",
+                                                      },
+                                                      ...pasosPrevios.map(
+                                                        (p) => {
+                                                          const deja =
+                                                            heredablesDe(
+                                                              p.familiaCodigo,
+                                                            )
+                                                              .map((c) =>
+                                                                c.nombre.toLowerCase(),
+                                                              )
+                                                              .join(", ");
+                                                          return {
+                                                            value: p.id,
+                                                            label:
+                                                              nombrePaso(p),
+                                                            description: deja
+                                                              ? `Deja: ${deja}`
+                                                              : undefined,
+                                                          };
+                                                        },
+                                                      ),
+                                                    ]}
+                                                    placeholder="Elegir paso"
+                                                  />
+                                                  {origenPasoId ? (
+                                                    <HumanSelect
+                                                      value={origenCapacidad}
+                                                      onValueChange={(v) =>
+                                                        setOrigen({
+                                                          rutaPasoId:
+                                                            origenPasoId,
+                                                          capacidad:
+                                                            v ||
+                                                            "unidades_procesadas",
+                                                        })
+                                                      }
+                                                      options={capacidadesOrigen.map(
+                                                        (c) => ({
+                                                          value: c.key,
+                                                          label: c.nombre,
+                                                        }),
+                                                      )}
+                                                      placeholder="Qué número usa"
+                                                    />
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+                                        {mostrarProductividadPropia && (
+                                          <div className="field">
+                                            <LabelConTooltip
+                                              label="Calcular tiempo según"
+                                              tooltip="Define qué magnitud cronometra la productividad: cantidad efectiva, área, metros lineales o perímetro."
+                                            />
                                             <HumanSelect
-                                              value={cfg.mecanismoCantidad ?? ""}
-                                              onValueChange={(v) =>
-                                                updateConfig(paso.id, {
-                                                  mecanismoCantidad: v || null,
+                                              value={productivityQuantitySource}
+                                              onValueChange={(value) =>
+                                                updateStepParams(paso.id, {
+                                                  productivityQuantitySource:
+                                                    value ||
+                                                    getDefaultT2QuantitySource(
+                                                      familia,
+                                                      productivityUnit,
+                                                    ),
                                                 })
                                               }
-                                              options={opcionesCantidad}
-                                              placeholder="Elegir"
+                                              options={
+                                                productivityQuantitySourceOptions
+                                              }
+                                              placeholder="Elegir fuente"
                                             />
                                           </div>
                                         )}
+                                        {familia?.codigo === "pre_prensa" && (
+                                          <div className="field">
+                                            <LabelConTooltip
+                                              label="Modo talonario"
+                                              tooltip="Para talonarios: agrupa los talonarios de a N poses por pliego (mismo número lado a lado, sale apilado en orden) y define qué hacer con los talonarios sueltos que no completan el pliego: compartirlo entre sus números (menos papel, más armado manual) o imprimirlos con poses vacías (más papel, listo para abrochar)."
+                                            />
+                                            <HumanSelect
+                                              value={String(
+                                                paramsPaso.modoTalonarioIncompleto ??
+                                                  "off",
+                                              )}
+                                              onValueChange={(value) =>
+                                                updateStepParams(paso.id, {
+                                                  modoTalonarioIncompleto:
+                                                    value === "off"
+                                                      ? null
+                                                      : value,
+                                                })
+                                              }
+                                              options={TALONARIO_MODE_OPTIONS}
+                                              placeholder="Elegir modo"
+                                            />
+                                          </div>
+                                        )}
+                                        {familia ? (
+                                          <ParamsFamiliaFields
+                                            familia={familia}
+                                            params={paramsPaso}
+                                            onChange={(patch) =>
+                                              updateStepParams(paso.id, patch)
+                                            }
+                                          />
+                                        ) : null}
+                                        <TiempoComercialDetalladoEditor
+                                          pasoId={paso.id}
+                                          cfg={cfg}
+                                          familia={familia}
+                                          conSwitch
+                                          updateTiempoManualConfig={
+                                            updateTiempoManualConfig
+                                          }
+                                        />
                                       </div>
                                     </div>
-                                  )}
-                                  {cantidadRelevante &&
-                                    cfg.mecanismoCantidad ===
-                                      "HEREDAR_DEL_OUTPUT_CANONICO" &&
-                                    (() => {
-                                      // B.3.3 — herencia explícita: señalar
-                                      // el paso origen y qué capacidad usa.
-                                      const pasosPrevios =
-                                        rutaAlternativa.ruta.pasos.filter(
-                                          (p) => p.orden < paso.orden,
-                                        );
-                                      const origen = leerOrigenHerencia(
-                                        jsonTexts[paso.id]?.mecanismo ?? "",
-                                      );
-                                      const origenPasoId =
-                                        typeof origen?.rutaPasoId === "string"
-                                          ? origen.rutaPasoId
-                                          : null;
-                                      const origenCapacidad =
-                                        typeof origen?.capacidad === "string"
-                                          ? origen.capacidad
-                                          : "unidades_procesadas";
-                                      const setOrigen = (
-                                        o: OrigenHerencia | null,
-                                      ) => aplicarOrigenHerencia(paso.id, o);
-                                      const nombrePaso = (p: {
-                                        id: string;
-                                        familiaCodigo: string;
-                                      }) =>
-                                        configs[p.id]?.nombreVisible?.trim() ||
-                                        familiasMap.get(p.familiaCodigo)
-                                          ?.nombre ||
-                                        humanizeCode(p.familiaCodigo);
-                                      const heredablesDe = (
-                                        familiaCodigo: string,
-                                      ) =>
-                                        (
-                                          familiasMap.get(familiaCodigo)
-                                            ?.capacidades ?? []
-                                        ).filter((c) => c.heredable);
-                                      const familiaOrigenCodigo =
-                                        pasosPrevios.find(
-                                          (p) => p.id === origenPasoId,
-                                        )?.familiaCodigo;
-                                      const capacidadesOrigen =
-                                        familiaOrigenCodigo
-                                          ? heredablesDe(familiaOrigenCodigo)
-                                          : [];
-                                      return (
-                                        <div className="field">
-                                          <LabelConTooltip
-                                            label="¿De qué paso hereda la cantidad?"
-                                            tooltip="Señalá el paso origen: la cantidad de este paso sale de lo que ese paso dejó. En Automático el sistema usa la regla histórica (el output natural del paso anterior)."
-                                          />
-                                          <div className="grid gap-2 sm:grid-cols-2">
-                                            <HumanSelect
-                                              value={origenPasoId ?? "auto"}
-                                              onValueChange={(v) => {
-                                                if (!v || v === "auto") {
-                                                  setOrigen(null);
-                                                  return;
+                                  </section>
+
+                                  {familia &&
+                                    familia.relacionMaquinaSoportada.includes(
+                                      "M-1",
+                                    ) && (
+                                      <section className="section-block open">
+                                        <div className="sb-head">
+                                          <span className="num">03</span>
+                                          <span className="ttl">
+                                            Máquina y perfil
+                                          </span>
+                                          <span className="chev">›</span>
+                                        </div>
+                                        <div className="sb-body">
+                                          <div className="wiz-grid">
+                                            <div className="field">
+                                              <LabelConTooltip
+                                                label={
+                                                  <>
+                                                    Máquina principal{" "}
+                                                    {requiereMaquinaPrincipal ? (
+                                                      <span className="req">
+                                                        *
+                                                      </span>
+                                                    ) : null}
+                                                  </>
                                                 }
-                                                setOrigen({
-                                                  rutaPasoId: v,
-                                                  capacidad: origenCapacidad,
-                                                });
-                                              }}
-                                              options={[
-                                                {
-                                                  value: "auto",
-                                                  label:
-                                                    "Automático (regla histórica)",
-                                                  description:
-                                                    "Como hasta ahora: el output natural del paso anterior.",
-                                                },
-                                                ...pasosPrevios.map((p) => {
-                                                  const deja = heredablesDe(
-                                                    p.familiaCodigo,
-                                                  )
-                                                    .map((c) =>
-                                                      c.nombre.toLowerCase(),
-                                                    )
-                                                    .join(", ");
-                                                  return {
-                                                    value: p.id,
-                                                    label: nombrePaso(p),
-                                                    description: deja
-                                                      ? `Deja: ${deja}`
-                                                      : undefined,
-                                                  };
-                                                }),
-                                              ]}
-                                              placeholder="Elegir paso"
-                                            />
-                                            {origenPasoId ? (
+                                                tooltip={
+                                                  requiereMaquinaPrincipal
+                                                    ? "Máquina del taller que ejecuta este paso. La lista filtra por compatibilidad con la familia."
+                                                    : "Opcional. Dejala sin asignar si este paso se ejecuta manualmente y usa centro de costo."
+                                                }
+                                                required={
+                                                  requiereMaquinaPrincipal
+                                                }
+                                              />
                                               <HumanSelect
-                                                value={origenCapacidad}
+                                                value={cfg.maquinaM1Id ?? ""}
                                                 onValueChange={(v) =>
-                                                  setOrigen({
-                                                    rutaPasoId: origenPasoId,
-                                                    capacidad:
-                                                      v ||
-                                                      "unidades_procesadas",
+                                                  updateConfig(paso.id, {
+                                                    maquinaM1Id: v || null,
+                                                    perfilM1Id: null,
+                                                    centroCostoId: null,
                                                   })
                                                 }
-                                                options={capacidadesOrigen.map(
-                                                  (c) => ({
-                                                    value: c.key,
-                                                    label: c.nombre,
-                                                  }),
-                                                )}
-                                                placeholder="Qué número usa"
+                                                options={maquinaOptions}
+                                                placeholder={
+                                                  maquinasCompatibles.length ===
+                                                  0
+                                                    ? "No hay máquinas compatibles"
+                                                    : "Sin asignar"
+                                                }
+                                              />
+                                            </div>
+                                            {maquinaSel || perfilGuardado ? (
+                                              <div className="field">
+                                                <LabelConTooltip
+                                                  label="Perfil default de la máquina"
+                                                  tooltip="Perfil operativo base. Si el modo de color comercial está activo, el motor usa automáticamente un perfil compatible con el color elegido o default."
+                                                />
+                                                <HumanSelect
+                                                  value={cfg.perfilM1Id ?? ""}
+                                                  onValueChange={(v) =>
+                                                    updateConfig(paso.id, {
+                                                      perfilM1Id: v || null,
+                                                    })
+                                                  }
+                                                  disabled={!maquinaSel}
+                                                  options={perfilOptions}
+                                                  placeholder={
+                                                    maquinaSel
+                                                      ? "Elegir"
+                                                      : "Elegí máquina primero"
+                                                  }
+                                                />
+                                              </div>
+                                            ) : null}
+                                            {soportaM2 ? (
+                                              <CandidatasDetalladoEditor
+                                                pasoId={paso.id}
+                                                cfg={cfg}
+                                                familia={familia}
+                                                lookups={lookups}
+                                                maquinasCandidatasCompatibles={
+                                                  maquinasCandidatasCompatibles
+                                                }
+                                                mostrarModoColor={
+                                                  mostrarModoColor
+                                                }
+                                                toggleMaquinaCandidata={
+                                                  toggleMaquinaCandidata
+                                                }
+                                                setMaquinaCandidataPreferida={
+                                                  setMaquinaCandidataPreferida
+                                                }
+                                                setMaquinaCandidataPerfilDefault={
+                                                  setMaquinaCandidataPerfilDefault
+                                                }
+                                                setMaquinaCandidataModoColorAllowed={
+                                                  setMaquinaCandidataModoColorAllowed
+                                                }
+                                                setMaquinaCandidataPerfilPorModo={
+                                                  setMaquinaCandidataPerfilPorModo
+                                                }
+                                              />
+                                            ) : null}
+                                            {mostrarModoColor &&
+                                            (!soportaM2 ||
+                                              candidatasCfg.length === 0) ? (
+                                              <ModoColorDetalladoEditor
+                                                pasoId={paso.id}
+                                                cfg={cfg}
+                                                modoColorOptions={
+                                                  modoColorOptions
+                                                }
+                                                modoColorPerfilDefault={
+                                                  modoColorPerfilDefault
+                                                }
+                                                updateModoColorConfig={
+                                                  updateModoColorConfig
+                                                }
                                               />
                                             ) : null}
                                           </div>
                                         </div>
-                                      );
-                                    })()}
-                                  {mostrarProductividadPropia && (
-                                    <div className="field">
-                                      <LabelConTooltip
-                                        label="Calcular tiempo según"
-                                        tooltip="Define qué magnitud cronometra la productividad: cantidad efectiva, área, metros lineales o perímetro."
-                                      />
-                                      <HumanSelect
-                                        value={productivityQuantitySource}
-                                        onValueChange={(value) =>
-                                          updateStepParams(paso.id, {
-                                            productivityQuantitySource:
-                                              value ||
-                                              getDefaultT2QuantitySource(familia, productivityUnit),
-                                          })
-                                        }
-                                        options={productivityQuantitySourceOptions}
-                                        placeholder="Elegir fuente"
-                                      />
-                                    </div>
-                                  )}
-                                  {familia?.codigo === "pre_prensa" && (
-                                    <div className="field">
-                                      <LabelConTooltip
-                                        label="Modo talonario"
-                                        tooltip="Para talonarios: agrupa los talonarios de a N poses por pliego (mismo número lado a lado, sale apilado en orden) y define qué hacer con los talonarios sueltos que no completan el pliego: compartirlo entre sus números (menos papel, más armado manual) o imprimirlos con poses vacías (más papel, listo para abrochar)."
-                                      />
-                                      <HumanSelect
-                                        value={String(
-                                          paramsPaso.modoTalonarioIncompleto ??
-                                            "off",
-                                        )}
-                                        onValueChange={(value) =>
-                                          updateStepParams(paso.id, {
-                                            modoTalonarioIncompleto:
-                                              value === "off" ? null : value,
-                                          })
-                                        }
-                                        options={TALONARIO_MODE_OPTIONS}
-                                        placeholder="Elegir modo"
-                                      />
-                                    </div>
-                                  )}
-                                  {familia ? (
-                                    <ParamsFamiliaFields
-                                      familia={familia}
-                                      params={paramsPaso}
-                                      onChange={(patch) =>
-                                        updateStepParams(paso.id, patch)
-                                      }
-                                    />
-                                  ) : null}
-                                  <TiempoComercialDetalladoEditor
-                                    pasoId={paso.id}
-                                    cfg={cfg}
-                                    familia={familia}
-                                    conSwitch
-                                    updateTiempoManualConfig={updateTiempoManualConfig}
-                                  />
-                                </div>
-                              </div>
-                            </section>
+                                      </section>
+                                    )}
 
-                            {familia &&
-                              familia.relacionMaquinaSoportada.includes(
-                                "M-1",
-                              ) && (
-                                <section className="section-block open">
-                                  <div className="sb-head">
-                                    <span className="num">03</span>
-                                    <span className="ttl">
-                                      Máquina y perfil
-                                    </span>
-                                    <span className="chev">›</span>
-                                  </div>
-                                  <div className="sb-body">
-                                    <div className="wiz-grid">
-                                      <div className="field">
-                                        <LabelConTooltip
-                                          label={
-                                            <>
-                                              Máquina principal{" "}
-                                              {requiereMaquinaPrincipal ? (
-                                                <span className="req">*</span>
-                                              ) : null}
-                                            </>
-                                          }
-                                          tooltip={
-                                            requiereMaquinaPrincipal
-                                              ? "Máquina del taller que ejecuta este paso. La lista filtra por compatibilidad con la familia."
-                                              : "Opcional. Dejala sin asignar si este paso se ejecuta manualmente y usa centro de costo."
-                                          }
-                                          required={requiereMaquinaPrincipal}
-                                        />
-                                        <HumanSelect
-                                          value={cfg.maquinaM1Id ?? ""}
-                                          onValueChange={(v) =>
-                                            updateConfig(paso.id, {
-                                              maquinaM1Id: v || null,
-                                              perfilM1Id: null,
-                                              centroCostoId: null,
-                                            })
-                                          }
-                                          options={maquinaOptions}
-                                          placeholder={
-                                            maquinasCompatibles.length === 0
-                                              ? "No hay máquinas compatibles"
-                                              : "Sin asignar"
-                                          }
-                                        />
+                                  {/* ── TAB MATERIALES ───────────────────────────────────── */}
+                                  {/* Sub-fase 3: los extras persisten slots en configSlotsMaterialesJson. */}
+                                  {familia && (
+                                    <section className="section-block open">
+                                      <div className="sb-head">
+                                        <span className="num">
+                                          {familia.relacionMaquinaSoportada.includes(
+                                            "M-1",
+                                          )
+                                            ? "04"
+                                            : "03"}
+                                        </span>
+                                        <span className="ttl">Materiales</span>
+                                        <span className="hint">
+                                          {!requiereMateriales
+                                            ? "Sin materiales en este paso"
+                                            : slotsManuales.length === 0
+                                              ? "Automáticos por máquina"
+                                              : `${slotsManuales.length} slot(s)`}
+                                        </span>
                                       </div>
-                                      {maquinaSel || perfilGuardado ? (
-                                        <div className="field">
-                                          <LabelConTooltip
-                                            label="Perfil default de la máquina"
-                                            tooltip="Perfil operativo base. Si el modo de color comercial está activo, el motor usa automáticamente un perfil compatible con el color elegido o default."
-                                          />
-                                          <HumanSelect
-                                            value={cfg.perfilM1Id ?? ""}
-                                            onValueChange={(v) =>
-                                              updateConfig(paso.id, {
-                                                perfilM1Id: v || null,
-                                              })
-                                            }
-                                            disabled={!maquinaSel}
-                                            options={perfilOptions}
-                                            placeholder={
-                                              maquinaSel
-                                                ? "Elegir"
-                                                : "Elegí máquina primero"
-                                            }
-                                          />
-                                        </div>
-                                      ) : null}
-                                      {soportaM2 ? (
-                                        <CandidatasDetalladoEditor
-                                          pasoId={paso.id}
-                                          cfg={cfg}
-                                          familia={familia}
-                                          lookups={lookups}
-                                          maquinasCandidatasCompatibles={maquinasCandidatasCompatibles}
-                                          mostrarModoColor={mostrarModoColor}
-                                          toggleMaquinaCandidata={toggleMaquinaCandidata}
-                                          setMaquinaCandidataPreferida={setMaquinaCandidataPreferida}
-                                          setMaquinaCandidataPerfilDefault={setMaquinaCandidataPerfilDefault}
-                                          setMaquinaCandidataModoColorAllowed={setMaquinaCandidataModoColorAllowed}
-                                          setMaquinaCandidataPerfilPorModo={setMaquinaCandidataPerfilPorModo}
-                                        />
-                                      ) : null}
-                                      {mostrarModoColor &&
-                                      (!soportaM2 ||
-                                        candidatasCfg.length === 0) ? (
-                                        <ModoColorDetalladoEditor
-                                          pasoId={paso.id}
-                                          cfg={cfg}
-                                          modoColorOptions={modoColorOptions}
-                                          modoColorPerfilDefault={modoColorPerfilDefault}
-                                          updateModoColorConfig={updateModoColorConfig}
-                                        />
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                </section>
-                              )}
-
-                            {/* ── TAB MATERIALES ───────────────────────────────────── */}
-                            {/* Sub-fase 3: los extras persisten slots en configSlotsMaterialesJson. */}
-                            {familia && (
-                              <section className="section-block open">
-                                <div className="sb-head">
-                                  <span className="num">
-                                    {familia.relacionMaquinaSoportada.includes(
-                                      "M-1",
-                                    )
-                                      ? "04"
-                                      : "03"}
-                                  </span>
-                                  <span className="ttl">Materiales</span>
-                                  <span className="hint">
-                                    {!requiereMateriales
-                                      ? "Sin materiales en este paso"
-                                      : slotsManuales.length === 0
-                                        ? "Automáticos por máquina"
-                                        : `${slotsManuales.length} slot(s)`}
-                                  </span>
-                                </div>
-                                <div className="sb-body space-y-3">
-                                  {!requiereMateriales ? (
-                                    <p className="material-empty">
-                                      Este paso no requiere materiales.{" "}
-                                      <button
-                                        type="button"
-                                        className="slot-link"
-                                      >
-                                        Agregar slot
-                                      </button>
-                                    </p>
-                                  ) : (
-                                    <>
-                                      <div className="flex items-center justify-between gap-2">
-                                        <LabelConTooltip
-                                          label={
-                                            <>
-                                              <PackageIcon className="mr-1 inline size-3" />
-                                              Materiales que consume el paso
-                                            </>
-                                          }
-                                          tooltip="Cada slot es un tipo de material que el paso necesita (papel, tinta, film, etc.). Podés definir si el material es fijo, lo elige el comercial, o lo elige el sistema automáticamente."
-                                        />
-                                        <div className="flex flex-wrap gap-1">
-                                          {slotsManuales.map((slot) => {
-                                            const yaExiste =
-                                              cfg.slotsMateriales?.some(
-                                                (s) =>
-                                                  s.slotCodigo === slot.codigo,
-                                              );
-                                            if (yaExiste) return null;
-                                            return (
-                                              <Button
-                                                key={slot.codigo}
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() =>
-                                                  addSlotFromFamilia(
-                                                    paso.id,
-                                                    slot.codigo,
-                                                  )
+                                      <div className="sb-body space-y-3">
+                                        {!requiereMateriales ? (
+                                          <p className="material-empty">
+                                            Este paso no requiere materiales.{" "}
+                                            <button
+                                              type="button"
+                                              className="slot-link"
+                                            >
+                                              Agregar slot
+                                            </button>
+                                          </p>
+                                        ) : (
+                                          <>
+                                            <div className="flex items-center justify-between gap-2">
+                                              <LabelConTooltip
+                                                label={
+                                                  <>
+                                                    <PackageIcon className="mr-1 inline size-3" />
+                                                    Materiales que consume el
+                                                    paso
+                                                  </>
                                                 }
-                                                className="h-7 text-xs"
-                                              >
-                                                + {slot.nombre}
-                                                {slot.requerido && (
-                                                  <span className="text-red-500">
-                                                    *
-                                                  </span>
-                                                )}
-                                              </Button>
-                                            );
-                                          })}
-                                          {familia?.permiteSlotsAdicionales ? (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() =>
-                                                addSlotAdicional(paso.id)
-                                              }
-                                              className="h-7 text-xs"
-                                            >
-                                              + Agregar componente
-                                            </Button>
-                                          ) : null}
-                                        </div>
-                                      </div>
-
-                                      {slotsAutomaticos.length > 0 && (
-                                        <div className="ps-auto">
-                                          <span className="ps-auto-ic">
-                                            <DropletIcon className="size-4" />
-                                          </span>
-                                          <div className="min-w-0">
-                                            <div className="ps-auto-tt">
-                                              Consumibles automáticos ·{" "}
-                                              {slotsAutomaticos
-                                                .map((slot) =>
-                                                  slotNombre(
-                                                    slot.codigo,
-                                                    familia,
-                                                  ),
-                                                )
-                                                .join(" · ")}
-                                            </div>
-                                            <div className="ps-auto-ss">
-                                              Se toman de la máquina y el
-                                              perfil seleccionado. Se
-                                              configuran en Maquinaria.
-                                            </div>
-                                          </div>
-                                          <span className="ps-badge-auto">
-                                            auto
-                                          </span>
-                                        </div>
-                                      )}
-
-                                      {(cfg.slotsMateriales ?? []).length ===
-                                        0 && (
-                                        <p className="text-muted-foreground py-4 text-center text-xs italic">
-                                          {slotsManuales.length > 0
-                                            ? "Sin slots configurados. Agregá uno con los botones de arriba."
-                                            : familia?.permiteSlotsAdicionales
-                                              ? "Sin componentes configurados. Agregá uno con el botón de arriba."
-                                              : "No hay materiales manuales para configurar en este paso."}
-                                        </p>
-                                      )}
-
-                                      {(cfg.slotsMateriales ?? []).map(
-                                        (slot, slotIdx) => {
-                                          const slotDecl =
-                                            familia.slotsRequeridos.find(
-                                              (sr) =>
-                                                sr.codigo === slot.slotCodigo,
-                                            );
-                                          const esSlotAdicional = !slotDecl;
-                                          if (
-                                            slotDecl &&
-                                            isConsumibleMaquinaSlot(slotDecl)
-                                          ) {
-                                            return (
-                                              <div
-                                                key={slotIdx}
-                                                className="rounded border border-dashed bg-muted/20 p-2 text-xs text-muted-foreground"
-                                              >
-                                                {slotNombre(
-                                                  slot.slotCodigo,
-                                                  familia,
-                                                )}{" "}
-                                                se resolverá automáticamente
-                                                desde Maquinaria.
-                                              </div>
-                                            );
-                                          }
-                                          const persistedSlot =
-                                            configExistente?.slotsMateriales.find(
-                                              (storedSlot) =>
-                                                storedSlot.slotCodigo ===
-                                                slot.slotCodigo,
-                                            );
-                                          const opcionesHerencia =
-                                            rutaAlternativa.ruta.pasos
-                                              .filter(
-                                                (origen) =>
-                                                  (rutaAlternativa.configPasos.find(
-                                                    (candidate) =>
-                                                      candidate.rutaPasoId ===
-                                                      origen.id,
-                                                  )?.ordenFlujo ??
-                                                    origen.orden) <
-                                                  (configExistente?.ordenFlujo ??
-                                                    paso.orden),
-                                              )
-                                              .flatMap((origen) => {
-                                                const cfgOrigen =
-                                                  configs[origen.id];
-                                                const nombreOrigen =
-                                                  cfgOrigen?.nombreVisible?.trim() ||
-                                                  familiasMap.get(
-                                                    origen.familiaCodigo,
-                                                  )?.nombre ||
-                                                  humanizeCode(
-                                                    origen.familiaCodigo,
+                                                tooltip="Cada slot es un tipo de material que el paso necesita (papel, tinta, film, etc.). Podés definir si el material es fijo, lo elige el comercial, o lo elige el sistema automáticamente."
+                                              />
+                                              <div className="flex flex-wrap gap-1">
+                                                {slotsManuales.map((slot) => {
+                                                  const yaExiste =
+                                                    cfg.slotsMateriales?.some(
+                                                      (s) =>
+                                                        s.slotCodigo ===
+                                                        slot.codigo,
+                                                    );
+                                                  if (yaExiste) return null;
+                                                  return (
+                                                    <Button
+                                                      key={slot.codigo}
+                                                      variant="outline"
+                                                      size="sm"
+                                                      onClick={() =>
+                                                        addSlotFromFamilia(
+                                                          paso.id,
+                                                          slot.codigo,
+                                                        )
+                                                      }
+                                                      className="h-7 text-xs"
+                                                    >
+                                                      + {slot.nombre}
+                                                      {slot.requerido && (
+                                                        <span className="text-red-500">
+                                                          *
+                                                        </span>
+                                                      )}
+                                                    </Button>
                                                   );
-                                                return (
-                                                  cfgOrigen?.slotsMateriales ??
-                                                  []
-                                                )
-                                                  .filter(
-                                                    (sourceSlot) =>
-                                                      sourceSlot.modoSeleccion !==
-                                                      "HEREDA_DE_PASO",
-                                                  )
-                                                  .map((sourceSlot) => ({
-                                                    value: `${origen.id}::${sourceSlot.slotCodigo}`,
-                                                    label: `Hereda de: ${nombreOrigen} · ${sourceSlot.slotNombre || sourceSlot.slotCodigo}`,
-                                                  }));
-                                              });
-                                          return (
-                                            <div
-                                              key={slotIdx}
-                                              className="ps-slot"
-                                            >
-                                              <div className="ps-slot-head">
-                                                <span
-                                                  className="ps-slot-tag"
-                                                  title={slot.slotCodigo}
-                                                >
-                                                  {slotDisplayName(slot, familia)}
-                                                </span>
-                                                <button
-                                                  type="button"
-                                                  className="ps-x"
-                                                  title="Quitar slot"
-                                                  onClick={() =>
-                                                    removeSlot(paso.id, slotIdx)
-                                                  }
-                                                >
-                                                  <XIcon className="size-3.5" />
-                                                </button>
+                                                })}
+                                                {familia?.permiteSlotsAdicionales ? (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                      addSlotAdicional(paso.id)
+                                                    }
+                                                    className="h-7 text-xs"
+                                                  >
+                                                    + Agregar componente
+                                                  </Button>
+                                                ) : null}
                                               </div>
-                                              <div className="ps-slot-body space-y-4">
-                                              {esSlotAdicional ? (
-                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                                                  <div className="space-y-1">
-                                                    <LabelConTooltip
-                                                      label="Nombre del componente"
-                                                      tooltip="Nombre operativo que identifica este componente o accesorio dentro del paso."
-                                                    />
-                                                    <Input
-                                                      value={
-                                                        slot.slotNombre ?? ""
-                                                      }
-                                                      onChange={(event) =>
-                                                        updateSlot(
-                                                          paso.id,
-                                                          slotIdx,
-                                                          {
-                                                            slotNombre:
-                                                              event.target
-                                                                .value || null,
-                                                          },
-                                                        )
-                                                      }
-                                                      placeholder="Ej. Portabanner, Solapa, Ojales"
-                                                      className="h-9 text-xs"
-                                                    />
+                                            </div>
+
+                                            {slotsAutomaticos.length > 0 && (
+                                              <div className="ps-auto">
+                                                <span className="ps-auto-ic">
+                                                  <DropletIcon className="size-4" />
+                                                </span>
+                                                <div className="min-w-0">
+                                                  <div className="ps-auto-tt">
+                                                    Consumibles automáticos ·{" "}
+                                                    {slotsAutomaticos
+                                                      .map((slot) =>
+                                                        slotNombre(
+                                                          slot.codigo,
+                                                          familia,
+                                                        ),
+                                                      )
+                                                      .join(" · ")}
                                                   </div>
-                                                  <div className="space-y-1">
-                                                    <LabelConTooltip
-                                                      label="Rol"
-                                                      tooltip="Clasifica el material para mostrarlo y agruparlo correctamente en cotización y costos."
-                                                    />
-                                                    <HumanSelect
-                                                      value={
-                                                        slot.slotRol ??
-                                                        "COMPONENTE"
-                                                      }
-                                                      onValueChange={(v) =>
-                                                        updateSlot(
-                                                          paso.id,
-                                                          slotIdx,
-                                                          {
-                                                            slotRol:
-                                                              (v as UpsertSlotMaterialPayload["slotRol"]) ||
-                                                              "COMPONENTE",
-                                                          },
-                                                        )
-                                                      }
-                                                      options={SLOT_ROL_OPTIONS}
-                                                      triggerClassName="min-h-9 text-xs"
-                                                    />
+                                                  <div className="ps-auto-ss">
+                                                    Se toman de la máquina y el
+                                                    perfil seleccionado. Se
+                                                    configuran en Maquinaria.
                                                   </div>
                                                 </div>
-                                              ) : null}
-                                              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                                                <div className="space-y-1">
-                                                  <LabelConTooltip
-                                                    label="¿Quién elige el material?"
-                                                    tooltip="Material fijo (modelador), el comercial elige al cotizar, o el sistema elige automáticamente con un criterio."
-                                                  />
-                                                  <HumanSelect
-                                                    value={slot.modoSeleccion}
-                                                    onValueChange={(v) =>
-                                                      updateSlot(
-                                                        paso.id,
-                                                        slotIdx,
-                                                        {
-                                                          modoSeleccion: (v ||
-                                                            "HARDCODED") as UpsertSlotMaterialPayload["modoSeleccion"],
-                                                          heredaDeRutaPasoId:
-                                                            v === "HEREDA_DE_PASO"
-                                                              ? slot.heredaDeRutaPasoId ?? null
-                                                              : null,
-                                                          heredaDeSlotCodigo:
-                                                            v === "HEREDA_DE_PASO"
-                                                              ? slot.heredaDeSlotCodigo ?? null
-                                                              : null,
-                                                        },
+                                                <span className="ps-badge-auto">
+                                                  auto
+                                                </span>
+                                              </div>
+                                            )}
+
+                                            {(cfg.slotsMateriales ?? [])
+                                              .length === 0 && (
+                                              <p className="text-muted-foreground py-4 text-center text-xs italic">
+                                                {slotsManuales.length > 0
+                                                  ? "Sin slots configurados. Agregá uno con los botones de arriba."
+                                                  : familia?.permiteSlotsAdicionales
+                                                    ? "Sin componentes configurados. Agregá uno con el botón de arriba."
+                                                    : "No hay materiales manuales para configurar en este paso."}
+                                              </p>
+                                            )}
+
+                                            {(cfg.slotsMateriales ?? []).map(
+                                              (slot, slotIdx) => {
+                                                const slotDecl =
+                                                  familia.slotsRequeridos.find(
+                                                    (sr) =>
+                                                      sr.codigo ===
+                                                      slot.slotCodigo,
+                                                  );
+                                                const esSlotAdicional =
+                                                  !slotDecl;
+                                                if (
+                                                  slotDecl &&
+                                                  isConsumibleMaquinaSlot(
+                                                    slotDecl,
+                                                  )
+                                                ) {
+                                                  return (
+                                                    <div
+                                                      key={slotIdx}
+                                                      className="rounded border border-dashed bg-muted/20 p-2 text-xs text-muted-foreground"
+                                                    >
+                                                      {slotNombre(
+                                                        slot.slotCodigo,
+                                                        familia,
+                                                      )}{" "}
+                                                      se resolverá
+                                                      automáticamente desde
+                                                      Maquinaria.
+                                                    </div>
+                                                  );
+                                                }
+                                                const persistedSlot =
+                                                  configExistente?.slotsMateriales.find(
+                                                    (storedSlot) =>
+                                                      storedSlot.slotCodigo ===
+                                                      slot.slotCodigo,
+                                                  );
+                                                const opcionesHerencia =
+                                                  rutaAlternativa.ruta.pasos
+                                                    .filter(
+                                                      (origen) =>
+                                                        (rutaAlternativa.configPasos.find(
+                                                          (candidate) =>
+                                                            candidate.rutaPasoId ===
+                                                            origen.id,
+                                                        )?.ordenFlujo ??
+                                                          origen.orden) <
+                                                        (configExistente?.ordenFlujo ??
+                                                          paso.orden),
+                                                    )
+                                                    .flatMap((origen) => {
+                                                      const cfgOrigen =
+                                                        configs[origen.id];
+                                                      const nombreOrigen =
+                                                        cfgOrigen?.nombreVisible?.trim() ||
+                                                        familiasMap.get(
+                                                          origen.familiaCodigo,
+                                                        )?.nombre ||
+                                                        humanizeCode(
+                                                          origen.familiaCodigo,
+                                                        );
+                                                      return (
+                                                        cfgOrigen?.slotsMateriales ??
+                                                        []
                                                       )
-                                                    }
-                                                    options={
-                                                      SELECCION_MATERIAL_OPTIONS
-                                                    }
-                                                    triggerClassName="min-h-9 text-xs"
-                                                  />
-                                                </div>
-                                                {slot.modoSeleccion !== "HEREDA_DE_PASO" && <div className="space-y-1">
-                                                  <LabelConTooltip
-                                                    label="¿Cómo se calcula el consumo?"
-                                                    tooltip="Fórmula que el motor usa para calcular cuánto material se consume (por pieza, por m², por metro lineal, etc.)."
-                                                  />
-                                                  <HumanSelect
-                                                    value={
-                                                      slot.formula ??
-                                                      "por_unidad_productiva"
-                                                    }
-                                                    onValueChange={(v) =>
-                                                      updateSlot(
-                                                        paso.id,
-                                                        slotIdx,
-                                                        {
-                                                          formula:
-                                                            v ||
-                                                            "por_unidad_productiva",
-                                                        },
-                                                      )
-                                                    }
-                                                    options={FORMULA_OPTIONS}
-                                                    triggerClassName="min-h-9 text-xs"
-                                                  />
-                                                </div>}
-                                                {/* [Costeo del sustrato → nesting]
+                                                        .filter(
+                                                          (sourceSlot) =>
+                                                            sourceSlot.modoSeleccion !==
+                                                            "HEREDA_DE_PASO",
+                                                        )
+                                                        .map((sourceSlot) => ({
+                                                          value: `${origen.id}::${sourceSlot.slotCodigo}`,
+                                                          label: `Hereda de: ${nombreOrigen} · ${sourceSlot.slotNombre || sourceSlot.slotCodigo}`,
+                                                        }));
+                                                    });
+                                                return (
+                                                  <div
+                                                    key={slotIdx}
+                                                    className="ps-slot"
+                                                  >
+                                                    <div className="ps-slot-head">
+                                                      <span
+                                                        className="ps-slot-tag"
+                                                        title={slot.slotCodigo}
+                                                      >
+                                                        {slotDisplayName(
+                                                          slot,
+                                                          familia,
+                                                        )}
+                                                      </span>
+                                                      <button
+                                                        type="button"
+                                                        className="ps-x"
+                                                        title="Quitar slot"
+                                                        onClick={() =>
+                                                          removeSlot(
+                                                            paso.id,
+                                                            slotIdx,
+                                                          )
+                                                        }
+                                                      >
+                                                        <XIcon className="size-3.5" />
+                                                      </button>
+                                                    </div>
+                                                    <div className="ps-slot-body space-y-4">
+                                                      {esSlotAdicional ? (
+                                                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                                          <div className="space-y-1">
+                                                            <LabelConTooltip
+                                                              label="Nombre del componente"
+                                                              tooltip="Nombre operativo que identifica este componente o accesorio dentro del paso."
+                                                            />
+                                                            <Input
+                                                              value={
+                                                                slot.slotNombre ??
+                                                                ""
+                                                              }
+                                                              onChange={(
+                                                                event,
+                                                              ) =>
+                                                                updateSlot(
+                                                                  paso.id,
+                                                                  slotIdx,
+                                                                  {
+                                                                    slotNombre:
+                                                                      event
+                                                                        .target
+                                                                        .value ||
+                                                                      null,
+                                                                  },
+                                                                )
+                                                              }
+                                                              placeholder="Ej. Portabanner, Solapa, Ojales"
+                                                              className="h-9 text-xs"
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-1">
+                                                            <LabelConTooltip
+                                                              label="Rol"
+                                                              tooltip="Clasifica el material para mostrarlo y agruparlo correctamente en cotización y costos."
+                                                            />
+                                                            <HumanSelect
+                                                              value={
+                                                                slot.slotRol ??
+                                                                "COMPONENTE"
+                                                              }
+                                                              onValueChange={(
+                                                                v,
+                                                              ) =>
+                                                                updateSlot(
+                                                                  paso.id,
+                                                                  slotIdx,
+                                                                  {
+                                                                    slotRol:
+                                                                      (v as UpsertSlotMaterialPayload["slotRol"]) ||
+                                                                      "COMPONENTE",
+                                                                  },
+                                                                )
+                                                              }
+                                                              options={
+                                                                SLOT_ROL_OPTIONS
+                                                              }
+                                                              triggerClassName="min-h-9 text-xs"
+                                                            />
+                                                          </div>
+                                                        </div>
+                                                      ) : null}
+                                                      <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                                                        <div className="space-y-1">
+                                                          <LabelConTooltip
+                                                            label="¿Quién elige el material?"
+                                                            tooltip="Material fijo (modelador), el comercial elige al cotizar, o el sistema elige automáticamente con un criterio."
+                                                          />
+                                                          <HumanSelect
+                                                            value={
+                                                              slot.modoSeleccion
+                                                            }
+                                                            onValueChange={(
+                                                              v,
+                                                            ) =>
+                                                              updateSlot(
+                                                                paso.id,
+                                                                slotIdx,
+                                                                {
+                                                                  modoSeleccion:
+                                                                    (v ||
+                                                                      "HARDCODED") as UpsertSlotMaterialPayload["modoSeleccion"],
+                                                                  heredaDeRutaPasoId:
+                                                                    v ===
+                                                                    "HEREDA_DE_PASO"
+                                                                      ? (slot.heredaDeRutaPasoId ??
+                                                                        null)
+                                                                      : null,
+                                                                  heredaDeSlotCodigo:
+                                                                    v ===
+                                                                    "HEREDA_DE_PASO"
+                                                                      ? (slot.heredaDeSlotCodigo ??
+                                                                        null)
+                                                                      : null,
+                                                                },
+                                                              )
+                                                            }
+                                                            options={
+                                                              SELECCION_MATERIAL_OPTIONS
+                                                            }
+                                                            triggerClassName="min-h-9 text-xs"
+                                                          />
+                                                        </div>
+                                                        {slot.modoSeleccion !==
+                                                          "HEREDA_DE_PASO" && (
+                                                          <div className="space-y-1">
+                                                            <LabelConTooltip
+                                                              label="¿Cómo se calcula el consumo?"
+                                                              tooltip="Fórmula que el motor usa para calcular cuánto material se consume (por pieza, por m², por metro lineal, etc.)."
+                                                            />
+                                                            <HumanSelect
+                                                              value={
+                                                                slot.formula ??
+                                                                "por_unidad_productiva"
+                                                              }
+                                                              onValueChange={(
+                                                                v,
+                                                              ) =>
+                                                                updateSlot(
+                                                                  paso.id,
+                                                                  slotIdx,
+                                                                  {
+                                                                    formula:
+                                                                      v ||
+                                                                      "por_unidad_productiva",
+                                                                  },
+                                                                )
+                                                              }
+                                                              options={
+                                                                FORMULA_OPTIONS
+                                                              }
+                                                              triggerClassName="min-h-9 text-xs"
+                                                            />
+                                                          </div>
+                                                        )}
+                                                        {/* [Costeo del sustrato → nesting]
                                                     El control de "Costeo" por slot
                                                     se removió: el costeo lo posee el
                                                     nesting (Acomodo), fuente única
@@ -6775,510 +6972,611 @@ export function ConfigPasosEditorView({
                                                     material define qué/cuánto/precio,
                                                     no cómo se cobra el desperdicio.
                                                     Ver docs/editor-pasos-preguntas-orden.md §10.5. */}
-                                              </div>
-                                              {slot.modoSeleccion === "HEREDA_DE_PASO" && (
-                                                <div className="space-y-1">
-                                                  <LabelConTooltip
-                                                    label="Material de origen"
-                                                    tooltip="Usa el material ya resuelto en un paso anterior, sin volver a sumarlo al costo."
-                                                  />
-                                                  <HumanSelect
-                                                    value={
-                                                      slot.heredaDeRutaPasoId &&
-                                                      slot.heredaDeSlotCodigo
-                                                        ? `${slot.heredaDeRutaPasoId}::${slot.heredaDeSlotCodigo}`
-                                                        : ""
-                                                    }
-                                                    onValueChange={(value) => {
-                                                      const [rutaPasoId, slotCodigo] =
-                                                        value.split("::");
-                                                      updateSlot(paso.id, slotIdx, {
-                                                        heredaDeRutaPasoId: rutaPasoId || null,
-                                                        heredaDeSlotCodigo: slotCodigo || null,
-                                                      });
-                                                    }}
-                                                    options={opcionesHerencia}
-                                                    placeholder="Elegí un material de un paso anterior"
-                                                    triggerClassName="min-h-9 text-xs"
-                                                  />
-                                                </div>
-                                              )}
-                                              {slot.modoSeleccion !== "HEREDA_DE_PASO" && (esSlotAdicional ||
-                                              slotDecl?.tipo ===
-                                                "INSUMO_PASO") ? (
-                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                                                  <div className="space-y-1">
-                                                    <LabelConTooltip
-                                                      label="Base de consumo"
-                                                      tooltip="Cantidad operativa sobre la que se aplica el factor. Ej: broches por talonario (cantidad pedida), cartón por pila de talonario."
-                                                    />
-                                                    <HumanSelect
-                                                      value={
-                                                        slot.cantidadBase ??
-                                                        (esSlotAdicional
-                                                          ? "cantidad_pedida"
-                                                          : "formula")
-                                                      }
-                                                      onValueChange={(v) =>
-                                                        updateSlot(
-                                                          paso.id,
-                                                          slotIdx,
-                                                          {
-                                                            cantidadBase:
-                                                              v === "formula"
-                                                                ? null
-                                                                : v ||
-                                                                  (esSlotAdicional
-                                                                    ? "cantidad_pedida"
-                                                                    : null),
-                                                          },
-                                                        )
-                                                      }
-                                                      options={
-                                                        esSlotAdicional
-                                                          ? CANTIDAD_BASE_SLOT_OPTIONS
-                                                          : CANTIDAD_BASE_SLOT_OPTIONS_INSUMO
-                                                      }
-                                                      triggerClassName="min-h-9 text-xs"
-                                                    />
+                                                      </div>
+                                                      {slot.modoSeleccion ===
+                                                        "HEREDA_DE_PASO" && (
+                                                        <div className="space-y-1">
+                                                          <LabelConTooltip
+                                                            label="Material de origen"
+                                                            tooltip="Usa el material ya resuelto en un paso anterior, sin volver a sumarlo al costo."
+                                                          />
+                                                          <HumanSelect
+                                                            value={
+                                                              slot.heredaDeRutaPasoId &&
+                                                              slot.heredaDeSlotCodigo
+                                                                ? `${slot.heredaDeRutaPasoId}::${slot.heredaDeSlotCodigo}`
+                                                                : ""
+                                                            }
+                                                            onValueChange={(
+                                                              value,
+                                                            ) => {
+                                                              const [
+                                                                rutaPasoId,
+                                                                slotCodigo,
+                                                              ] =
+                                                                value.split(
+                                                                  "::",
+                                                                );
+                                                              updateSlot(
+                                                                paso.id,
+                                                                slotIdx,
+                                                                {
+                                                                  heredaDeRutaPasoId:
+                                                                    rutaPasoId ||
+                                                                    null,
+                                                                  heredaDeSlotCodigo:
+                                                                    slotCodigo ||
+                                                                    null,
+                                                                },
+                                                              );
+                                                            }}
+                                                            options={
+                                                              opcionesHerencia
+                                                            }
+                                                            placeholder="Elegí un material de un paso anterior"
+                                                            triggerClassName="min-h-9 text-xs"
+                                                          />
+                                                        </div>
+                                                      )}
+                                                      {slot.modoSeleccion !==
+                                                        "HEREDA_DE_PASO" &&
+                                                      (esSlotAdicional ||
+                                                        slotDecl?.tipo ===
+                                                          "INSUMO_PASO") ? (
+                                                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                                          <div className="space-y-1">
+                                                            <LabelConTooltip
+                                                              label="Base de consumo"
+                                                              tooltip="Cantidad operativa sobre la que se aplica el factor. Ej: broches por talonario (cantidad pedida), cartón por pila de talonario."
+                                                            />
+                                                            <HumanSelect
+                                                              value={
+                                                                slot.cantidadBase ??
+                                                                (esSlotAdicional
+                                                                  ? "cantidad_pedida"
+                                                                  : "formula")
+                                                              }
+                                                              onValueChange={(
+                                                                v,
+                                                              ) =>
+                                                                updateSlot(
+                                                                  paso.id,
+                                                                  slotIdx,
+                                                                  {
+                                                                    cantidadBase:
+                                                                      v ===
+                                                                      "formula"
+                                                                        ? null
+                                                                        : v ||
+                                                                          (esSlotAdicional
+                                                                            ? "cantidad_pedida"
+                                                                            : null),
+                                                                  },
+                                                                )
+                                                              }
+                                                              options={
+                                                                esSlotAdicional
+                                                                  ? CANTIDAD_BASE_SLOT_OPTIONS
+                                                                  : CANTIDAD_BASE_SLOT_OPTIONS_INSUMO
+                                                              }
+                                                              triggerClassName="min-h-9 text-xs"
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-1">
+                                                            <LabelConTooltip
+                                                              label="Cantidad por base"
+                                                              tooltip="Multiplicador de consumo. Ej: 2 broches por talonario, 4 ojales por pieza."
+                                                            />
+                                                            <Input
+                                                              type="number"
+                                                              min="0"
+                                                              step="0.0001"
+                                                              disabled={
+                                                                !esSlotAdicional &&
+                                                                !slot.cantidadBase
+                                                              }
+                                                              value={
+                                                                slot.cantidadFactor ??
+                                                                1
+                                                              }
+                                                              onChange={(
+                                                                event,
+                                                              ) =>
+                                                                updateSlot(
+                                                                  paso.id,
+                                                                  slotIdx,
+                                                                  {
+                                                                    cantidadFactor:
+                                                                      event
+                                                                        .target
+                                                                        .value ===
+                                                                      ""
+                                                                        ? null
+                                                                        : Number(
+                                                                            event
+                                                                              .target
+                                                                              .value,
+                                                                          ),
+                                                                  },
+                                                                )
+                                                              }
+                                                              className="h-9 text-xs"
+                                                            />
+                                                          </div>
+                                                        </div>
+                                                      ) : null}
+                                                      {slot.modoSeleccion ===
+                                                        "HARDCODED" && (
+                                                        <MaterialFijoSlotDetalladoEditor
+                                                          pasoId={paso.id}
+                                                          slotIdx={slotIdx}
+                                                          slot={slot}
+                                                          slotDecl={slotDecl}
+                                                          persistedSlot={
+                                                            persistedSlot
+                                                          }
+                                                          candidateMaterials={
+                                                            candidateMaterials
+                                                          }
+                                                          setCandidateMaterials={
+                                                            setCandidateMaterials
+                                                          }
+                                                          hardcodedMaterialSelections={
+                                                            hardcodedMaterialSelections
+                                                          }
+                                                          setHardcodedMaterialSelections={
+                                                            setHardcodedMaterialSelections
+                                                          }
+                                                          updateSlot={
+                                                            updateSlot
+                                                          }
+                                                        />
+                                                      )}
+                                                      {slot.modoSeleccion !==
+                                                        "HARDCODED" &&
+                                                        slot.modoSeleccion !==
+                                                          "HEREDA_DE_PASO" && (
+                                                          <CandidatosSlotDetalladoEditor
+                                                            pasoId={paso.id}
+                                                            slotIdx={slotIdx}
+                                                            slot={slot}
+                                                            slotDecl={slotDecl}
+                                                            candidateMaterials={
+                                                              candidateMaterials
+                                                            }
+                                                            addSlotCandidate={
+                                                              addSlotCandidate
+                                                            }
+                                                            removeSlotCandidate={
+                                                              removeSlotCandidate
+                                                            }
+                                                            updateSlotCandidate={
+                                                              updateSlotCandidate
+                                                            }
+                                                          />
+                                                        )}
+                                                      {slot.modoSeleccion ===
+                                                        "MOTOR_ELIGE_AUTO" && (
+                                                        <div className="space-y-1">
+                                                          <LabelConTooltip
+                                                            label="Criterio del sistema"
+                                                            tooltip="Cómo elige el sistema entre los candidatos: el más barato, el de mejor aprovechamiento, o el de capacidad mínima que cumpla."
+                                                          />
+                                                          <HumanSelect
+                                                            value={
+                                                              slot.criterioMotorAuto ??
+                                                              ""
+                                                            }
+                                                            onValueChange={(
+                                                              v,
+                                                            ) =>
+                                                              updateSlot(
+                                                                paso.id,
+                                                                slotIdx,
+                                                                {
+                                                                  criterioMotorAuto:
+                                                                    v || null,
+                                                                },
+                                                              )
+                                                            }
+                                                            options={
+                                                              CRITERIO_AUTO_OPTIONS
+                                                            }
+                                                            placeholder="Elegí criterio"
+                                                            triggerClassName="min-h-9 text-xs"
+                                                          />
+                                                        </div>
+                                                      )}
+                                                      {slot.modoSeleccion !==
+                                                        "HEREDA_DE_PASO" && (
+                                                        <label
+                                                          className={`ps-multi ${
+                                                            slot.aplicaMultiCaras
+                                                              ? "on"
+                                                              : ""
+                                                          }`}
+                                                        >
+                                                          <input
+                                                            type="checkbox"
+                                                            checked={
+                                                              !!slot.aplicaMultiCaras
+                                                            }
+                                                            onChange={(e) =>
+                                                              updateSlot(
+                                                                paso.id,
+                                                                slotIdx,
+                                                                {
+                                                                  aplicaMultiCaras:
+                                                                    e.target
+                                                                      .checked,
+                                                                },
+                                                              )
+                                                            }
+                                                          />
+                                                          <span className="ps-cb">
+                                                            <CheckIcon
+                                                              strokeWidth={3.4}
+                                                            />
+                                                          </span>
+                                                          <span>
+                                                            Multiplicar consumo
+                                                            por caras{" "}
+                                                            <span className="text-muted-foreground">
+                                                              (doble faz)
+                                                            </span>
+                                                          </span>
+                                                        </label>
+                                                      )}
+                                                    </div>
                                                   </div>
-                                                  <div className="space-y-1">
-                                                    <LabelConTooltip
-                                                      label="Cantidad por base"
-                                                      tooltip="Multiplicador de consumo. Ej: 2 broches por talonario, 4 ojales por pieza."
-                                                    />
-                                                    <Input
-                                                      type="number"
-                                                      min="0"
-                                                      step="0.0001"
-                                                      disabled={
-                                                        !esSlotAdicional &&
-                                                        !slot.cantidadBase
-                                                      }
-                                                      value={
-                                                        slot.cantidadFactor ??
-                                                        1
-                                                      }
-                                                      onChange={(event) =>
-                                                        updateSlot(
-                                                          paso.id,
-                                                          slotIdx,
-                                                          {
-                                                            cantidadFactor:
-                                                              event.target
-                                                                .value === ""
-                                                                ? null
-                                                                : Number(
-                                                                    event
-                                                                      .target
-                                                                      .value,
-                                                                  ),
-                                                          },
-                                                        )
-                                                      }
-                                                      className="h-9 text-xs"
-                                                    />
-                                                  </div>
-                                                </div>
-                                              ) : null}
-                                              {slot.modoSeleccion === "HARDCODED" && (
-                                                <MaterialFijoSlotDetalladoEditor
-                                                  pasoId={paso.id}
-                                                  slotIdx={slotIdx}
-                                                  slot={slot}
-                                                  slotDecl={slotDecl}
-                                                  persistedSlot={persistedSlot}
-                                                  candidateMaterials={candidateMaterials}
-                                                  setCandidateMaterials={setCandidateMaterials}
-                                                  hardcodedMaterialSelections={hardcodedMaterialSelections}
-                                                  setHardcodedMaterialSelections={setHardcodedMaterialSelections}
-                                                  updateSlot={updateSlot}
-                                                />
-                                              )}
-                                              {slot.modoSeleccion !== "HARDCODED" && slot.modoSeleccion !== "HEREDA_DE_PASO" && (
-                                                <CandidatosSlotDetalladoEditor
-                                                  pasoId={paso.id}
-                                                  slotIdx={slotIdx}
-                                                  slot={slot}
-                                                  slotDecl={slotDecl}
-                                                  candidateMaterials={candidateMaterials}
-                                                  addSlotCandidate={addSlotCandidate}
-                                                  removeSlotCandidate={removeSlotCandidate}
-                                                  updateSlotCandidate={updateSlotCandidate}
-                                                />
-                                              )}
-                                              {slot.modoSeleccion ===
-                                                "MOTOR_ELIGE_AUTO" && (
-                                                <div className="space-y-1">
-                                                  <LabelConTooltip
-                                                    label="Criterio del sistema"
-                                                    tooltip="Cómo elige el sistema entre los candidatos: el más barato, el de mejor aprovechamiento, o el de capacidad mínima que cumpla."
-                                                  />
-                                                  <HumanSelect
-                                                    value={
-                                                      slot.criterioMotorAuto ??
-                                                      ""
-                                                    }
-                                                    onValueChange={(v) =>
-                                                      updateSlot(
-                                                        paso.id,
-                                                        slotIdx,
-                                                        {
-                                                          criterioMotorAuto:
-                                                            v || null,
-                                                        },
-                                                      )
-                                                    }
-                                                    options={
-                                                      CRITERIO_AUTO_OPTIONS
-                                                    }
-                                                    placeholder="Elegí criterio"
-                                                    triggerClassName="min-h-9 text-xs"
-                                                  />
-                                                </div>
-                                              )}
-                                              {slot.modoSeleccion !== "HEREDA_DE_PASO" && <label
-                                                className={`ps-multi ${
-                                                  slot.aplicaMultiCaras
-                                                    ? "on"
-                                                    : ""
-                                                }`}
-                                              >
-                                                <input
-                                                  type="checkbox"
-                                                  checked={
-                                                    !!slot.aplicaMultiCaras
-                                                  }
-                                                  onChange={(e) =>
-                                                    updateSlot(
-                                                      paso.id,
-                                                      slotIdx,
-                                                      {
-                                                        aplicaMultiCaras:
-                                                          e.target.checked,
-                                                      },
-                                                    )
-                                                  }
-                                                />
-                                                <span className="ps-cb">
-                                                  <CheckIcon strokeWidth={3.4} />
-                                                </span>
-                                                <span>
-                                                  Multiplicar consumo por caras{" "}
-                                                  <span className="text-muted-foreground">
-                                                    (doble faz)
-                                                  </span>
-                                                </span>
-                                              </label>}
-                                              </div>
-                                            </div>
-                                          );
-                                        },
-                                      )}
+                                                );
+                                              },
+                                            )}
 
-                                      {(valMateriales.errores.length > 0 ||
-                                        valMateriales.warnings.length > 0) && (
-                                        <ListaValidacion
-                                          validacion={valMateriales}
-                                        />
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              </section>
-                            )}
-
-                            {/* ── TAB AVANZADO ─────────────────────────────────────── */}
-                            <section
-                              className={`section-block ${advancedOpen ? "open" : "closed"}`}
-                            >
-                              <button
-                                type="button"
-                                className="sb-head"
-                                onClick={() => setAdvancedOpen((open) => !open)}
-                              >
-                                <span className="num">
-                                  {familia?.relacionMaquinaSoportada.includes(
-                                    "M-1",
-                                  )
-                                    ? "05"
-                                    : "04"}
-                                </span>
-                                <span className="ttl">Avanzado</span>
-                                <span className="hint">
-                                  Overrides y notas internas
-                                </span>
-                                <span className="chev">›</span>
-                              </button>
-                              {advancedOpen && (
-                                <div className="sb-body space-y-4">
-                                  <p className="text-muted-foreground text-xs">
-                                    Ajustes operativos del paso. Los parámetros
-                                    técnicos internos se preservan, pero no se
-                                    editan desde esta vista.
-                                  </p>
-
-                                  {/* Overrides de tiempo */}
-                                  {mostrarOverridesTiempo && (
-                                    <div className="ps-card">
-                                      <div className="ps-card-head">
-                                        <span className="ps-ic">
-                                          <ClockIcon />
-                                        </span>
-                                        <span className="ps-tt">
-                                          Overrides de tiempo
-                                        </span>
-                                        <span className="ps-hint">
-                                          Vacío = hereda del perfil
-                                        </span>
-                                      </div>
-                                      <div className="ps-card-body ps-grid2">
-                                        {mostrarSetupCleanupOverrides && (
-                                          <>
-                                            <div className="space-y-2">
-                                              <LabelConTooltip
-                                                label="Setup override"
-                                                tooltip="Sobrescribe el tiempo de preparación del perfil de máquina. Vacío = usar el del perfil."
-                                                iconSize="sm"
+                                            {(valMateriales.errores.length >
+                                              0 ||
+                                              valMateriales.warnings.length >
+                                                0) && (
+                                              <ListaValidacion
+                                                validacion={valMateriales}
                                               />
-                                              <div className="ps-inp">
-                                                <Input
-                                                  type="number"
-                                                  min={0}
-                                                  step={0.5}
-                                                  value={
-                                                    cfg.setupOverrideMin ?? ""
-                                                  }
-                                                  onChange={(e) =>
-                                                    updateConfig(paso.id, {
-                                                      setupOverrideMin:
-                                                        e.target.value === ""
-                                                          ? null
-                                                          : Number(
-                                                              e.target.value,
-                                                            ),
-                                                    })
-                                                  }
-                                                  placeholder="Hereda del perfil"
-                                                />
-                                                <span className="ps-u">
-                                                  min
-                                                </span>
-                                              </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                              <LabelConTooltip
-                                                label="Cleanup override"
-                                                tooltip="Sobrescribe el tiempo de cierre/post-proceso del perfil de máquina. Vacío = usar el del perfil."
-                                                iconSize="sm"
-                                              />
-                                              <div className="ps-inp">
-                                                <Input
-                                                  type="number"
-                                                  min={0}
-                                                  step={0.5}
-                                                  value={
-                                                    cfg.cleanupOverrideMin ?? ""
-                                                  }
-                                                  onChange={(e) =>
-                                                    updateConfig(paso.id, {
-                                                      cleanupOverrideMin:
-                                                        e.target.value === ""
-                                                          ? null
-                                                          : Number(
-                                                              e.target.value,
-                                                            ),
-                                                    })
-                                                  }
-                                                  placeholder="Hereda del perfil"
-                                                />
-                                                <span className="ps-u">
-                                                  min
-                                                </span>
-                                              </div>
-                                            </div>
+                                            )}
                                           </>
                                         )}
-                                        {mostrarTiempoFijoOverride && (
-                                          <div className="space-y-2">
-                                            <LabelConTooltip
-                                              label="Tiempo fijo override"
-                                              tooltip="Sólo aplica en pasos sin máquina con tiempo fijo."
-                                              iconSize="sm"
-                                            />
-                                            <div className="ps-inp">
-                                              <Input
-                                                type="number"
-                                                min={0}
-                                                step={0.5}
-                                                value={
-                                                  cfg.tiempoFijoOverrideMin ??
-                                                  ""
-                                                }
-                                                onChange={(e) =>
-                                                  updateConfig(paso.id, {
-                                                    tiempoFijoOverrideMin:
-                                                      e.target.value === ""
-                                                        ? null
-                                                        : Number(
-                                                            e.target.value,
-                                                          ),
-                                                  })
-                                                }
-                                                placeholder="Hereda del perfil"
-                                              />
-                                              <span className="ps-u">min</span>
+                                      </div>
+                                    </section>
+                                  )}
+
+                                  {/* ── TAB AVANZADO ─────────────────────────────────────── */}
+                                  <section
+                                    className={`section-block ${advancedOpen ? "open" : "closed"}`}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="sb-head"
+                                      onClick={() =>
+                                        setAdvancedOpen((open) => !open)
+                                      }
+                                    >
+                                      <span className="num">
+                                        {familia?.relacionMaquinaSoportada.includes(
+                                          "M-1",
+                                        )
+                                          ? "05"
+                                          : "04"}
+                                      </span>
+                                      <span className="ttl">Avanzado</span>
+                                      <span className="hint">
+                                        Overrides y notas internas
+                                      </span>
+                                      <span className="chev">›</span>
+                                    </button>
+                                    {advancedOpen && (
+                                      <div className="sb-body space-y-4">
+                                        <p className="text-muted-foreground text-xs">
+                                          Ajustes operativos del paso. Los
+                                          parámetros técnicos internos se
+                                          preservan, pero no se editan desde
+                                          esta vista.
+                                        </p>
+
+                                        {/* Overrides de tiempo */}
+                                        {mostrarOverridesTiempo && (
+                                          <div className="ps-card">
+                                            <div className="ps-card-head">
+                                              <span className="ps-ic">
+                                                <ClockIcon />
+                                              </span>
+                                              <span className="ps-tt">
+                                                Overrides de tiempo
+                                              </span>
+                                              <span className="ps-hint">
+                                                Vacío = hereda del perfil
+                                              </span>
+                                            </div>
+                                            <div className="ps-card-body ps-grid2">
+                                              {mostrarSetupCleanupOverrides && (
+                                                <>
+                                                  <div className="space-y-2">
+                                                    <LabelConTooltip
+                                                      label="Setup override"
+                                                      tooltip="Sobrescribe el tiempo de preparación del perfil de máquina. Vacío = usar el del perfil."
+                                                      iconSize="sm"
+                                                    />
+                                                    <div className="ps-inp">
+                                                      <Input
+                                                        type="number"
+                                                        min={0}
+                                                        step={0.5}
+                                                        value={
+                                                          cfg.setupOverrideMin ??
+                                                          ""
+                                                        }
+                                                        onChange={(e) =>
+                                                          updateConfig(
+                                                            paso.id,
+                                                            {
+                                                              setupOverrideMin:
+                                                                e.target
+                                                                  .value === ""
+                                                                  ? null
+                                                                  : Number(
+                                                                      e.target
+                                                                        .value,
+                                                                    ),
+                                                            },
+                                                          )
+                                                        }
+                                                        placeholder="Hereda del perfil"
+                                                      />
+                                                      <span className="ps-u">
+                                                        min
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                    <LabelConTooltip
+                                                      label="Cleanup override"
+                                                      tooltip="Sobrescribe el tiempo de cierre/post-proceso del perfil de máquina. Vacío = usar el del perfil."
+                                                      iconSize="sm"
+                                                    />
+                                                    <div className="ps-inp">
+                                                      <Input
+                                                        type="number"
+                                                        min={0}
+                                                        step={0.5}
+                                                        value={
+                                                          cfg.cleanupOverrideMin ??
+                                                          ""
+                                                        }
+                                                        onChange={(e) =>
+                                                          updateConfig(
+                                                            paso.id,
+                                                            {
+                                                              cleanupOverrideMin:
+                                                                e.target
+                                                                  .value === ""
+                                                                  ? null
+                                                                  : Number(
+                                                                      e.target
+                                                                        .value,
+                                                                    ),
+                                                            },
+                                                          )
+                                                        }
+                                                        placeholder="Hereda del perfil"
+                                                      />
+                                                      <span className="ps-u">
+                                                        min
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                </>
+                                              )}
+                                              {mostrarTiempoFijoOverride && (
+                                                <div className="space-y-2">
+                                                  <LabelConTooltip
+                                                    label="Tiempo fijo override"
+                                                    tooltip="Sólo aplica en pasos sin máquina con tiempo fijo."
+                                                    iconSize="sm"
+                                                  />
+                                                  <div className="ps-inp">
+                                                    <Input
+                                                      type="number"
+                                                      min={0}
+                                                      step={0.5}
+                                                      value={
+                                                        cfg.tiempoFijoOverrideMin ??
+                                                        ""
+                                                      }
+                                                      onChange={(e) =>
+                                                        updateConfig(paso.id, {
+                                                          tiempoFijoOverrideMin:
+                                                            e.target.value ===
+                                                            ""
+                                                              ? null
+                                                              : Number(
+                                                                  e.target
+                                                                    .value,
+                                                                ),
+                                                        })
+                                                      }
+                                                      placeholder="Hereda del perfil"
+                                                    />
+                                                    <span className="ps-u">
+                                                      min
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
                                         )}
-                                      </div>
-                                    </div>
-                                  )}
 
-                                  {familia?.codigo ===
-                                    "montaje_sobre_sustrato" &&
-                                    (() => {
-                                      // Fuente de medida del CONSUMO de material:
-                                      // qué piezas nestea el montaje. Es material,
-                                      // no tiempo — por eso vive acá, junto al
-                                      // nesting, y NO dentro de la rama de tiempo
-                                      // (antes se ocultaba al elegir "por lote").
-                                      // Además de las opciones fijas ofrece los
-                                      // outputs GEOMÉTRICOS de los pasos anteriores
-                                      // (el bastidor: tiras de cenefa, chapa…).
-                                      // docs/fuente-de-medida-de-consumo-diseno.md §6.
-                                      const nombreDe = (p: {
-                                        id: string;
-                                        familiaCodigo: string;
-                                      }) =>
-                                        configs[p.id]?.nombreVisible?.trim() ||
-                                        familiasMap.get(p.familiaCodigo)
-                                          ?.nombre ||
-                                        humanizeCode(p.familiaCodigo);
-                                      const fuentesGeometricas =
-                                        rutaAlternativa.ruta.pasos
-                                          .filter((p) => p.orden < paso.orden)
-                                          .flatMap((p) =>
-                                            (
+                                        {familia?.codigo ===
+                                          "montaje_sobre_sustrato" &&
+                                          (() => {
+                                            // Fuente de medida del CONSUMO de material:
+                                            // qué piezas nestea el montaje. Es material,
+                                            // no tiempo — por eso vive acá, junto al
+                                            // nesting, y NO dentro de la rama de tiempo
+                                            // (antes se ocultaba al elegir "por lote").
+                                            // Además de las opciones fijas ofrece los
+                                            // outputs GEOMÉTRICOS de los pasos anteriores
+                                            // (el bastidor: tiras de cenefa, chapa…).
+                                            // docs/fuente-de-medida-de-consumo-diseno.md §6.
+                                            const nombreDe = (p: {
+                                              id: string;
+                                              familiaCodigo: string;
+                                            }) =>
+                                              configs[
+                                                p.id
+                                              ]?.nombreVisible?.trim() ||
                                               familiasMap.get(p.familiaCodigo)
-                                                ?.outputsGeometricos ?? []
-                                            ).map((o) => ({
-                                              value: `output:${o.key}`,
-                                              label: `${o.etiqueta} · ${nombreDe(p)}`,
-                                              description: `Mide sobre "${o.etiqueta}" que publica el paso "${nombreDe(p)}".`,
-                                            })),
-                                          );
-                                      return (
-                                        <div className="field">
-                                          <LabelConTooltip
-                                            label="Piezas a montar"
-                                            tooltip="Define qué medidas usa el paso para calcular el nesting del material de montaje."
-                                          />
-                                          <HumanSelect
-                                            value={String(
-                                              paramsPaso.fuentePiezasMontaje ??
-                                                "piezas_jobcontext",
-                                            )}
-                                            onValueChange={(value) =>
-                                              updateStepParams(paso.id, {
-                                                fuentePiezasMontaje:
-                                                  value || "piezas_jobcontext",
-                                              })
+                                                ?.nombre ||
+                                              humanizeCode(p.familiaCodigo);
+                                            const fuentesGeometricas =
+                                              rutaAlternativa.ruta.pasos
+                                                .filter(
+                                                  (p) => p.orden < paso.orden,
+                                                )
+                                                .flatMap((p) =>
+                                                  (
+                                                    familiasMap.get(
+                                                      p.familiaCodigo,
+                                                    )?.outputsGeometricos ?? []
+                                                  ).map((o) => ({
+                                                    value: `output:${o.key}`,
+                                                    label: `${o.etiqueta} · ${nombreDe(p)}`,
+                                                    description: `Mide sobre "${o.etiqueta}" que publica el paso "${nombreDe(p)}".`,
+                                                  })),
+                                                );
+                                            return (
+                                              <div className="field">
+                                                <LabelConTooltip
+                                                  label="Piezas a montar"
+                                                  tooltip="Define qué medidas usa el paso para calcular el nesting del material de montaje."
+                                                />
+                                                <HumanSelect
+                                                  value={String(
+                                                    paramsPaso.fuentePiezasMontaje ??
+                                                      "piezas_jobcontext",
+                                                  )}
+                                                  onValueChange={(value) =>
+                                                    updateStepParams(paso.id, {
+                                                      fuentePiezasMontaje:
+                                                        value ||
+                                                        "piezas_jobcontext",
+                                                    })
+                                                  }
+                                                  options={[
+                                                    ...MONTAJE_SOURCE_OPTIONS,
+                                                    ...fuentesGeometricas,
+                                                  ]}
+                                                  placeholder="Elegir origen"
+                                                />
+                                              </div>
+                                            );
+                                          })()}
+                                        {mostrarNesting && (
+                                          <AcomodadoDetalladoEditor
+                                            pasoId={paso.id}
+                                            cfg={cfg}
+                                            familia={familia}
+                                            lookups={lookups}
+                                            maquinaParaDefaults={
+                                              maquinaParaDefaults
                                             }
-                                            options={[
-                                              ...MONTAJE_SOURCE_OPTIONS,
-                                              ...fuentesGeometricas,
-                                            ]}
-                                            placeholder="Elegir origen"
+                                            candidateMaterials={
+                                              candidateMaterials
+                                            }
+                                            panelEditorPasoId={
+                                              panelEditorPasoId
+                                            }
+                                            setPanelEditorPasoId={
+                                              setPanelEditorPasoId
+                                            }
+                                            panelMeasures={
+                                              panelMeasuresProducto
+                                            }
+                                            nestingApi={{
+                                              updateNestingConfig,
+                                              updateNestingPieceBleed,
+                                              updateNestingMargins,
+                                              updateNestingExtraMargins,
+                                              updateNestingCosting,
+                                              updateNestingPanelizado,
+                                              updateNestingPliegoImpresion,
+                                              updateNestingPliegoPreset,
+                                              updateNestingPliegoCandidato,
+                                              addNestingPliegoCandidato,
+                                              removeNestingPliegoCandidato,
+                                            }}
+                                            onParams={updateStepParams}
                                           />
-                                        </div>
-                                      );
-                                    })()}
-                                  {mostrarNesting && (
-                                    <AcomodadoDetalladoEditor
-                                      pasoId={paso.id}
-                                      cfg={cfg}
-                                      familia={familia}
-                                      lookups={lookups}
-                                      maquinaParaDefaults={maquinaParaDefaults}
-                                      candidateMaterials={candidateMaterials}
-                                      panelEditorPasoId={panelEditorPasoId}
-                                      setPanelEditorPasoId={setPanelEditorPasoId}
-                                      panelMeasures={panelMeasuresProducto}
-                                      nestingApi={{
-                                        updateNestingConfig,
-                                        updateNestingPieceBleed,
-                                        updateNestingMargins,
-                                        updateNestingExtraMargins,
-                                        updateNestingCosting,
-                                        updateNestingPanelizado,
-                                        updateNestingPliegoImpresion,
-                                        updateNestingPliegoPreset,
-                                        updateNestingPliegoCandidato,
-                                        addNestingPliegoCandidato,
-                                        removeNestingPliegoCandidato,
-                                      }}
-                                      onParams={updateStepParams}
-                                    />
-                                  )}
+                                        )}
 
-                                  {valAvanzado.errores.length > 0 && (
-                                    <ListaValidacion validacion={valAvanzado} />
-                                  )}
-                                </div>
+                                        {valAvanzado.errores.length > 0 && (
+                                          <ListaValidacion
+                                            validacion={valAvanzado}
+                                          />
+                                        )}
+                                      </div>
+                                    )}
+                                  </section>
+                                </>
                               )}
-                            </section>
-                          </>
-                        )}
-                          </>
-                        )}
+                            </>
+                          )}
 
-                        {!configuracionBase ? (
-                          <CostosDirectosPasoPanel
-                            configPaso={esExtra ? null : (configExistente ?? null)}
-                            pasoExtra={esExtra ? activeExtra : null}
-                            catalogoCargos={catalogoCargos}
-                            // Los niveles se editan primero en `configs`; el
-                            // detalle persistido sólo cambia al guardar. Leer
-                            // de `cfg` mantiene esta sección sincronizada en
-                            // el mismo render, sin guardar ni recargar.
-                            niveles={leerNivelesPaso(cfg?.paramsPasoJson)}
-                            onBeforeMutate={
-                              pasoTieneCambios
-                                ? () => guardarPaso(paso.id)
-                                : undefined
-                            }
-                            includeMeasureFields={
-                              producto.modoMedidas === "LIBRE" ||
-                              producto.modoMedidas === "MIXTA"
-                            }
-                            ruleExtraFields={technologyRuleFields}
-                          />
-                        ) : null}
-                      </div>
+                          {!configuracionBase && !configuracionContextual ? (
+                            <CostosDirectosPasoPanel
+                              configPaso={
+                                esExtra ? null : (configExistente ?? null)
+                              }
+                              pasoExtra={esExtra ? activeExtra : null}
+                              catalogoCargos={catalogoCargos}
+                              // Los niveles se editan primero en `configs`; el
+                              // detalle persistido sólo cambia al guardar. Leer
+                              // de `cfg` mantiene esta sección sincronizada en
+                              // el mismo render, sin guardar ni recargar.
+                              niveles={leerNivelesPaso(cfg?.paramsPasoJson)}
+                              onBeforeMutate={
+                                pasoTieneCambios
+                                  ? () => guardarPaso(paso.id)
+                                  : undefined
+                              }
+                              includeMeasureFields={
+                                producto.modoMedidas === "LIBRE" ||
+                                producto.modoMedidas === "MIXTA"
+                              }
+                              ruleExtraFields={technologyRuleFields}
+                            />
+                          ) : null}
+                        </div>
 
-                      {/* Botonera flotante (feedback 2026-08-06): sólo los
+                        {/* Botonera flotante (feedback 2026-08-06): sólo los
                           botones quedan siempre visibles — sticky al borde
                           inferior de .editor-main (el contenedor con scroll),
                           no un header entero que tape contenido. */}
-                      <div
-                        style={{
-                          position: "sticky",
-                          bottom: 12,
-                          zIndex: 30,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          width: "fit-content",
-                          marginLeft: "auto",
-                          marginTop: 14,
-                          padding: "8px 10px",
-                          borderRadius: 12,
-                          background: "var(--surface, #fff)",
-                          border: "1px solid var(--hairline, #e6e2dc)",
-                          boxShadow: "0 8px 24px rgba(20, 16, 12, 0.14)",
-                        }}
-                      >
+                        <div
+                          style={{
+                            position: "sticky",
+                            bottom: 12,
+                            zIndex: 30,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            width: "fit-content",
+                            marginLeft: "auto",
+                            marginTop: 14,
+                            padding: "8px 10px",
+                            borderRadius: 12,
+                            background: "var(--surface, #fff)",
+                            border: "1px solid var(--hairline, #e6e2dc)",
+                            boxShadow: "0 8px 24px rgba(20, 16, 12, 0.14)",
+                          }}
+                        >
                           {!configuracionBase ? (
                             <>
                               <button
@@ -7299,33 +7597,33 @@ export function ConfigPasosEditorView({
                               </button>
                             </>
                           ) : null}
-                        <button
-                          className="btn btn-primary"
-                          type="button"
-                          onClick={() => guardarPaso(paso.id)}
-                          disabled={
-                            guardando === paso.id ||
-                            totalErrores > 0 ||
-                            !pasoTieneCambios
-                          }
-                        >
-                          {pasoTieneCambios ? (
-                            <SaveIcon className="size-4" />
-                          ) : (
-                            <CheckIcon className="size-4" />
-                          )}
-                          {guardando === paso.id
-                            ? "Guardando..."
-                            : pasoTieneCambios
-                              ? "Guardar paso"
-                              : "Guardado"}
-                        </button>
-                      </div>
-                    </React.Fragment>
-                  );
-                })
-            : null}
-          </>
+                          <button
+                            className="btn btn-primary"
+                            type="button"
+                            onClick={() => guardarPaso(paso.id)}
+                            disabled={
+                              guardando === paso.id ||
+                              totalErrores > 0 ||
+                              !pasoTieneCambios
+                            }
+                          >
+                            {pasoTieneCambios ? (
+                              <SaveIcon className="size-4" />
+                            ) : (
+                              <CheckIcon className="size-4" />
+                            )}
+                            {guardando === paso.id
+                              ? "Guardando..."
+                              : pasoTieneCambios
+                                ? "Guardar paso"
+                                : "Guardado"}
+                          </button>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })
+                : null}
+            </>
           )}
         </main>
       </div>
@@ -7370,9 +7668,6 @@ export function ConfigPasosEditorView({
   );
 }
 
-
-
-
 // ─── Acomodado / nesting: LA card del detallado, extraída (sub-fase D) ──
 // Algoritmo, demasía, pliego de impresión, panelizado, márgenes extra y
 // costeo del sustrato — una sola card cohesiva. La usan el detallado y
@@ -7389,7 +7684,10 @@ interface NestingApi {
     pasoId: string,
     patch: Record<string, number | null>,
   ) => void;
-  updateNestingCosting: (pasoId: string, patch: Record<string, unknown>) => void;
+  updateNestingCosting: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
   updateNestingPanelizado: (
     pasoId: string,
     patch: Record<string, unknown>,
@@ -7429,8 +7727,7 @@ function EscalonesChips({
     if (!Number.isFinite(n) || n <= 0 || n > 100 || steps.includes(n)) return;
     onChange([...steps, n].sort((a, b) => a - b));
   };
-  const removeAt = (idx: number) =>
-    onChange(steps.filter((_, i) => i !== idx));
+  const removeAt = (idx: number) => onChange(steps.filter((_, i) => i !== idx));
 
   return (
     <span
@@ -7584,9 +7881,7 @@ function AcomodadoDetalladoEditor({
   );
   const varianteSustrato = lookups.materiasPrimas
     .flatMap((materia) => materia.variantes)
-    .find(
-      (variante) => variante.id === sustratoPrincipal?.materialVarianteId,
-    );
+    .find((variante) => variante.id === sustratoPrincipal?.materialVarianteId);
   const attrsSustrato = asRecord(varianteSustrato?.atributosVarianteJson);
   const sustratoRolloDisponible =
     varianteLooksLikeRoll(varianteSustrato) ||
@@ -7624,43 +7919,26 @@ function AcomodadoDetalladoEditor({
     readOptionalNumber(
       maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxRolloMm,
     ) ??
-    readOptionalNumber(
-      maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxMm,
-    );
-  const panelizadoConfig = getPanelizadoConfig(
-    cfg.paramsPasoJson,
-  );
-  const pliegoImpresionConfig = getPliegoImpresionConfig(
-    cfg.paramsPasoJson,
-  );
-  const nestingExtraMargins = getExtraMarginsConfig(
-    cfg.paramsPasoJson,
-  );
-  const pliegoImpresionPreset = getPliegoPresetValue(
-    pliegoImpresionConfig,
-  );
+    readOptionalNumber(maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxMm);
+  const panelizadoConfig = getPanelizadoConfig(cfg.paramsPasoJson);
+  const pliegoImpresionConfig = getPliegoImpresionConfig(cfg.paramsPasoJson);
+  const nestingExtraMargins = getExtraMarginsConfig(cfg.paramsPasoJson);
+  const pliegoImpresionPreset = getPliegoPresetValue(pliegoImpresionConfig);
   const pliegoImpresionEsPersonalizado =
     pliegoImpresionPreset === "personalizado";
-  const pliegoImpresionEsAutomatico =
-    pliegoImpresionPreset === "automatico";
-  const pliegoCandidatos =
-    getPliegoCandidatos(pliegoImpresionConfig);
-  const pliegoOrigenCosto = getPliegoOrigenCosto(
-    pliegoImpresionConfig,
-  );
+  const pliegoImpresionEsAutomatico = pliegoImpresionPreset === "automatico";
+  const pliegoCandidatos = getPliegoCandidatos(pliegoImpresionConfig);
+  const pliegoOrigenCosto = getPliegoOrigenCosto(pliegoImpresionConfig);
   const pliegoPorCandidato =
-    pliegoImpresionEsAutomatico &&
-    pliegoOrigenCosto === "por_candidato";
-  const sustratoCompatibilidad =
-    familia?.slotsRequeridos?.find(
-      (slot) => slot.codigo === "sustrato_principal",
-    )?.compatibilidadMaterial;
-  const variantesLookup = lookups.materiasPrimas.flatMap(
-    (materia) =>
-      materia.variantes.map((variante) => ({
-        materia,
-        variante,
-      })),
+    pliegoImpresionEsAutomatico && pliegoOrigenCosto === "por_candidato";
+  const sustratoCompatibilidad = familia?.slotsRequeridos?.find(
+    (slot) => slot.codigo === "sustrato_principal",
+  )?.compatibilidadMaterial;
+  const variantesLookup = lookups.materiasPrimas.flatMap((materia) =>
+    materia.variantes.map((variante) => ({
+      materia,
+      variante,
+    })),
   );
   const nestingMargins = asRecord(nestingConfig.margins);
   const nestingCosting = asRecord(nestingConfig.costing);
@@ -7668,9 +7946,7 @@ function AcomodadoDetalladoEditor({
     attrsSustrato.anchoMm ?? attrsSustrato.widthMm,
   );
   const sustratoAltoLabel = formatMm(
-    attrsSustrato.largoMm ??
-      attrsSustrato.altoMm ??
-      attrsSustrato.heightMm,
+    attrsSustrato.largoMm ?? attrsSustrato.altoMm ?? attrsSustrato.heightMm,
   );
   const machineMargins = getMachineMargins(maquinaParaDefaults);
   const resolvedPieceBleed = getResolvedNestingNumber(
@@ -7704,12 +7980,8 @@ function AcomodadoDetalladoEditor({
           ? "vertical"
           : "automatic";
   const panelizadoWidthInterpretation =
-    panelizadoConfig.widthInterpretation === "util"
-      ? "util"
-      : "total";
-  const panelManualLayout = readManualLayout(
-    panelizadoConfig.manualLayout,
-  );
+    panelizadoConfig.widthInterpretation === "util" ? "util" : "total";
+  const panelManualLayout = readManualLayout(panelizadoConfig.manualLayout);
   const printableWidthForPanelMm =
     rollWidthForPanelMm != null
       ? Math.max(
@@ -7736,1421 +8008,973 @@ function AcomodadoDetalladoEditor({
       : "";
   return (
     <>
-                                    <>
-                                    <div className={trab.root}>
-                                      <div className={trab.sec}>
-                                        <h4 className={trab.h4}>
-                                          Acomodado de las piezas
-                                        </h4>
-                                        <p className={trab.hint}>
-                                          Cómo entra cada pieza en el material y
-                                          cuánto se cobra por ella.
-                                        </p>
-                                        <div className="space-y-4">
-                                      {/* El selector de Algoritmo se retiró: la física
+      <>
+        <div className={trab.root}>
+          <div className={trab.sec}>
+            <h4 className={trab.h4}>Acomodado de las piezas</h4>
+            <p className={trab.hint}>
+              Cómo entra cada pieza en el material y cuánto se cobra por ella.
+            </p>
+            <div className="space-y-4">
+              {/* El selector de Algoritmo se retiró: la física
                                           (superficie del paso, geometría de máquina y
                                           material) ya determina cuál corre, y de 116 pasos
                                           uno solo lo había tocado. El motor sigue
                                           respetando `nestingConfig.algorithm` si viniera
                                           de una config antigua. */}
-                                      <div
-                                        className={trab.frow}
-                                        style={{ marginBottom: 13 }}
+              <div className={trab.frow} style={{ marginBottom: 13 }}>
+                <span className={trab.frowlb}>Demasía por lado</span>
+                <span className={trab.ctl} style={{ width: 104 }}>
+                  <input
+                    className={trab.num}
+                    inputMode="decimal"
+                    value={String(resolvedPieceBleed)}
+                    onChange={(e) =>
+                      updateNestingPieceBleed(
+                        pasoId,
+                        e.target.value === "" ? 0 : Number(e.target.value),
+                      )
+                    }
+                  />
+                  <span className={trab.u}>mm</span>
+                </span>
+                <span className={trab.frowlb}>
+                  de material extra alrededor de cada pieza, para el corte
+                </span>
+              </div>
+              {familia?.codigo === "impresion_por_hoja" ? (
+                <ImposicionCuadernilloEditor
+                  pasoId={pasoId}
+                  nestingConfig={nestingConfig}
+                  updateNestingConfig={updateNestingConfig}
+                  modoTalonario={String(
+                    asRecord(cfg.paramsPasoJson).modoTalonarioIncompleto ??
+                      "off",
+                  )}
+                  onModoTalonario={(modo) =>
+                    onParams(pasoId, {
+                      modoTalonarioIncompleto: modo === "off" ? null : modo,
+                    })
+                  }
+                />
+              ) : null}
+              {familia?.codigo === "impresion_por_hoja" && (
+                <div className={trab.pliego}>
+                  <div className={trab.pliegoHead}>
+                    <span className={trab.pliegoT}>Pliego de impresión</span>
+                    {sustratoAnchoLabel && sustratoAltoLabel ? (
+                      <span className={trab.pliegoSust}>
+                        sustrato {sustratoAnchoLabel} × {sustratoAltoLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className={trab.grid3}>
+                    <span className={trab.fl}>
+                      <span className={trab.k}>Tamaño</span>
+                      <span className={`${trab.ctl} ${trab.sel}`}>
+                        <select
+                          value={pliegoImpresionPreset}
+                          onChange={(e) =>
+                            updateNestingPliegoPreset(
+                              pasoId,
+                              e.target.value || "materia_prima",
+                            )
+                          }
+                        >
+                          {PLIEGO_IMPRESION_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </span>
+                    </span>
+                    <span className={trab.fl}>
+                      <span className={trab.k}>Ancho del pliego</span>
+                      <span className={trab.ctl}>
+                        <input
+                          className={trab.num}
+                          inputMode="decimal"
+                          disabled={!pliegoImpresionEsPersonalizado}
+                          placeholder="usar sustrato"
+                          value={String(pliegoImpresionConfig.anchoMm ?? "")}
+                          onChange={(e) =>
+                            updateNestingPliegoImpresion(pasoId, {
+                              anchoMm:
+                                e.target.value === ""
+                                  ? null
+                                  : Number(e.target.value),
+                            })
+                          }
+                        />
+                        <span className={trab.u}>mm</span>
+                      </span>
+                    </span>
+                    <span className={trab.fl}>
+                      <span className={trab.k}>Alto del pliego</span>
+                      <span className={trab.ctl}>
+                        <input
+                          className={trab.num}
+                          inputMode="decimal"
+                          disabled={!pliegoImpresionEsPersonalizado}
+                          placeholder="usar sustrato"
+                          value={String(pliegoImpresionConfig.altoMm ?? "")}
+                          onChange={(e) =>
+                            updateNestingPliegoImpresion(pasoId, {
+                              altoMm:
+                                e.target.value === ""
+                                  ? null
+                                  : Number(e.target.value),
+                            })
+                          }
+                        />
+                        <span className={trab.u}>mm</span>
+                      </span>
+                    </span>
+                  </div>
+                  {pliegoImpresionEsAutomatico && (
+                    <div className={trab.cand}>
+                      <span className={trab.fl} style={{ maxWidth: 320 }}>
+                        <span className={trab.k}>Origen del costo</span>
+                        <span className={`${trab.ctl} ${trab.sel}`}>
+                          <select
+                            value={pliegoOrigenCosto}
+                            onChange={(e) =>
+                              updateNestingPliegoImpresion(pasoId, {
+                                origenCosto:
+                                  e.target.value === "por_candidato"
+                                    ? "por_candidato"
+                                    : "derivado",
+                              })
+                            }
+                          >
+                            {PLIEGO_ORIGEN_COSTO_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </span>
+                      </span>
+                      <div className={trab.candHead}>
+                        <span className={trab.candTitle}>
+                          Candidatos activos
+                        </span>
+                        <button
+                          type="button"
+                          className={trab.addcand}
+                          onClick={() =>
+                            addNestingPliegoCandidato(pasoId, "A4")
+                          }
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          >
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                          Agregar candidato
+                        </button>
+                      </div>
+                      {pliegoCandidatos.length === 0 ? (
+                        <div className={trab.candEmpty}>
+                          Agregá al menos un tamaño para que el motor pueda
+                          comparar.
+                        </div>
+                      ) : (
+                        <div className={trab.candList}>
+                          {pliegoCandidatos.map((candidato, index) => {
+                            const candidatoPreset =
+                              typeof candidato.preset === "string"
+                                ? candidato.preset
+                                : "personalizado";
+                            const candidatoKey = `${pasoId}:${index}`;
+                            const candidatoMpVarianteId =
+                              getCandidatoMateriaPrimaVarianteId(candidato);
+                            const candidatoMpLookup = candidatoMpVarianteId
+                              ? variantesLookup.find(
+                                  (item) =>
+                                    item.variante.id === candidatoMpVarianteId,
+                                )
+                              : undefined;
+                            const candidatoMpMateria =
+                              mpMateriaPorCandidato[candidatoKey];
+                            return (
+                              <React.Fragment
+                                key={`${candidato.id ?? index}-${index}`}
+                              >
+                                <div className={trab.crow}>
+                                  <label className={trab.cx}>
+                                    <input
+                                      type="checkbox"
+                                      checked={candidato.activo !== false}
+                                      onChange={(e) =>
+                                        updateNestingPliegoCandidato(
+                                          pasoId,
+                                          index,
+                                          {
+                                            activo: e.target.checked,
+                                          },
+                                        )
+                                      }
+                                    />
+                                    Activa
+                                  </label>
+                                  <span className={trab.fl}>
+                                    <span className={trab.k}>Nombre</span>
+                                    <span className={trab.ctl}>
+                                      <input
+                                        value={String(candidato.nombre ?? "")}
+                                        onChange={(e) =>
+                                          updateNestingPliegoCandidato(
+                                            pasoId,
+                                            index,
+                                            {
+                                              nombre: e.target.value,
+                                            },
+                                          )
+                                        }
+                                        style={{
+                                          border: 0,
+                                          outline: 0,
+                                          background: "transparent",
+                                          font: "inherit",
+                                          fontSize: "12.5px",
+                                          width: "100%",
+                                          minWidth: 0,
+                                          color: "var(--c-ink)",
+                                        }}
+                                      />
+                                    </span>
+                                  </span>
+                                  <span className={trab.fl}>
+                                    <span className={trab.k}>Preset</span>
+                                    <span className={`${trab.ctl} ${trab.sel}`}>
+                                      <select
+                                        value={
+                                          PLIEGO_IMPRESION_PRESETS.some(
+                                            (preset) =>
+                                              preset.value === candidatoPreset,
+                                          )
+                                            ? candidatoPreset
+                                            : "personalizado"
+                                        }
+                                        onChange={(e) => {
+                                          const v = e.target.value;
+                                          const preset =
+                                            PLIEGO_IMPRESION_PRESETS.find(
+                                              (item) => item.value === v,
+                                            );
+                                          if (
+                                            !preset ||
+                                            preset.value === "personalizado" ||
+                                            !preset.anchoMm ||
+                                            !preset.altoMm
+                                          ) {
+                                            updateNestingPliegoCandidato(
+                                              pasoId,
+                                              index,
+                                              {
+                                                preset: "personalizado",
+                                              },
+                                            );
+                                            return;
+                                          }
+                                          updateNestingPliegoCandidato(
+                                            pasoId,
+                                            index,
+                                            {
+                                              preset: preset.value,
+                                              nombre: preset.label,
+                                              anchoMm: preset.anchoMm,
+                                              altoMm: preset.altoMm,
+                                            },
+                                          );
+                                        }}
                                       >
-                                        <span className={trab.frowlb}>
-                                          Demasía por lado
-                                        </span>
-                                        <span
-                                          className={trab.ctl}
-                                          style={{ width: 104 }}
-                                        >
-                                          <input
-                                            className={trab.num}
-                                            inputMode="decimal"
-                                            value={String(resolvedPieceBleed)}
-                                            onChange={(e) =>
-                                              updateNestingPieceBleed(
-                                                pasoId,
+                                        {PLIEGO_IMPRESION_OPTIONS.filter(
+                                          (option) =>
+                                            ![
+                                              "materia_prima",
+                                              "automatico",
+                                            ].includes(option.value),
+                                        ).map((o) => (
+                                          <option key={o.value} value={o.value}>
+                                            {o.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </span>
+                                  </span>
+                                  <span className={trab.fl}>
+                                    <span className={trab.k}>Ancho</span>
+                                    <span className={trab.ctl}>
+                                      <input
+                                        className={trab.num}
+                                        inputMode="decimal"
+                                        value={String(candidato.anchoMm ?? "")}
+                                        onChange={(e) =>
+                                          updateNestingPliegoCandidato(
+                                            pasoId,
+                                            index,
+                                            {
+                                              preset: "personalizado",
+                                              anchoMm:
                                                 e.target.value === ""
-                                                  ? 0
+                                                  ? ""
                                                   : Number(e.target.value),
-                                              )
-                                            }
-                                          />
-                                          <span className={trab.u}>mm</span>
+                                            },
+                                          )
+                                        }
+                                      />
+                                      <span className={trab.u}>mm</span>
+                                    </span>
+                                  </span>
+                                  <span className={trab.fl}>
+                                    <span className={trab.k}>Alto</span>
+                                    <span className={trab.ctl}>
+                                      <input
+                                        className={trab.num}
+                                        inputMode="decimal"
+                                        value={String(candidato.altoMm ?? "")}
+                                        onChange={(e) =>
+                                          updateNestingPliegoCandidato(
+                                            pasoId,
+                                            index,
+                                            {
+                                              preset: "personalizado",
+                                              altoMm:
+                                                e.target.value === ""
+                                                  ? ""
+                                                  : Number(e.target.value),
+                                            },
+                                          )
+                                        }
+                                      />
+                                      <span className={trab.u}>mm</span>
+                                    </span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className={trab.del}
+                                    title="Quitar candidato"
+                                    onClick={() =>
+                                      removeNestingPliegoCandidato(
+                                        pasoId,
+                                        index,
+                                      )
+                                    }
+                                  >
+                                    <Trash2Icon className="h-4 w-4" />
+                                  </button>
+                                </div>
+                                {pliegoPorCandidato && (
+                                  <div className={trab.cmp}>
+                                    <div className={trab.cmpRow}>
+                                      <span>Materia prima propia</span>
+                                      {candidatoMpVarianteId ? (
+                                        <span className={trab.cmpChip}>
+                                          {candidatoMpLookup
+                                            ? `${candidatoMpLookup.materia.nombre} · ${candidatoMpLookup.variante.sku}`
+                                            : typeof candidato.materiaPrimaSku ===
+                                                "string"
+                                              ? candidato.materiaPrimaSku
+                                              : "Variante seleccionada"}
+                                          {candidatoMpLookup?.variante
+                                            .precioReferencia
+                                            ? ` · ${formatearMoneda(Number(candidatoMpLookup.variante.precioReferencia), monedaDe(candidatoMpLookup.variante.moneda))}`
+                                            : ""}
                                         </span>
-                                        <span className={trab.frowlb}>
-                                          de material extra alrededor de cada
-                                          pieza, para el corte
+                                      ) : (
+                                        <span>
+                                          Sin asignar: compite con el costo
+                                          derivado del material del paso.
                                         </span>
-                                      </div>
-                                      {familia?.codigo ===
-                                      "impresion_por_hoja" ? (
-                                        <ImposicionCuadernilloEditor
-                                          pasoId={pasoId}
-                                          nestingConfig={nestingConfig}
-                                          updateNestingConfig={
-                                            updateNestingConfig
-                                          }
-                                          modoTalonario={String(
-                                            asRecord(cfg.paramsPasoJson)
-                                              .modoTalonarioIncompleto ?? "off",
-                                          )}
-                                          onModoTalonario={(modo) =>
-                                            onParams(pasoId, {
-                                              modoTalonarioIncompleto:
-                                                modo === "off" ? null : modo,
-                                            })
-                                          }
-                                        />
-                                      ) : null}
-                                      {familia?.codigo ===
-                                        "impresion_por_hoja" && (
-                                        <div className={trab.pliego}>
-                                          <div className={trab.pliegoHead}>
-                                            <span className={trab.pliegoT}>
-                                              Pliego de impresión
-                                            </span>
-                                            {sustratoAnchoLabel &&
-                                            sustratoAltoLabel ? (
-                                              <span className={trab.pliegoSust}>
-                                                sustrato {sustratoAnchoLabel} ×{" "}
-                                                {sustratoAltoLabel}
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                          <div className={trab.grid3}>
-                                            <span className={trab.fl}>
-                                              <span className={trab.k}>
-                                                Tamaño
-                                              </span>
-                                              <span
-                                                className={`${trab.ctl} ${trab.sel}`}
-                                              >
-                                                <select
-                                                  value={pliegoImpresionPreset}
-                                                  onChange={(e) =>
-                                                    updateNestingPliegoPreset(
-                                                      pasoId,
-                                                      e.target.value ||
-                                                        "materia_prima",
-                                                    )
-                                                  }
-                                                >
-                                                  {PLIEGO_IMPRESION_OPTIONS.map(
-                                                    (o) => (
-                                                      <option
-                                                        key={o.value}
-                                                        value={o.value}
-                                                      >
-                                                        {o.label}
-                                                      </option>
-                                                    ),
-                                                  )}
-                                                </select>
-                                              </span>
-                                            </span>
-                                            <span className={trab.fl}>
-                                              <span className={trab.k}>
-                                                Ancho del pliego
-                                              </span>
-                                              <span className={trab.ctl}>
-                                                <input
-                                                  className={trab.num}
-                                                  inputMode="decimal"
-                                                  disabled={
-                                                    !pliegoImpresionEsPersonalizado
-                                                  }
-                                                  placeholder="usar sustrato"
-                                                  value={String(
-                                                    pliegoImpresionConfig.anchoMm ??
-                                                      "",
-                                                  )}
-                                                  onChange={(e) =>
-                                                    updateNestingPliegoImpresion(
-                                                      pasoId,
-                                                      {
-                                                        anchoMm:
-                                                          e.target.value === ""
-                                                            ? null
-                                                            : Number(
-                                                                e.target.value,
-                                                              ),
-                                                      },
-                                                    )
-                                                  }
-                                                />
-                                                <span className={trab.u}>mm</span>
-                                              </span>
-                                            </span>
-                                            <span className={trab.fl}>
-                                              <span className={trab.k}>
-                                                Alto del pliego
-                                              </span>
-                                              <span className={trab.ctl}>
-                                                <input
-                                                  className={trab.num}
-                                                  inputMode="decimal"
-                                                  disabled={
-                                                    !pliegoImpresionEsPersonalizado
-                                                  }
-                                                  placeholder="usar sustrato"
-                                                  value={String(
-                                                    pliegoImpresionConfig.altoMm ??
-                                                      "",
-                                                  )}
-                                                  onChange={(e) =>
-                                                    updateNestingPliegoImpresion(
-                                                      pasoId,
-                                                      {
-                                                        altoMm:
-                                                          e.target.value === ""
-                                                            ? null
-                                                            : Number(
-                                                                e.target.value,
-                                                              ),
-                                                      },
-                                                    )
-                                                  }
-                                                />
-                                                <span className={trab.u}>mm</span>
-                                              </span>
-                                            </span>
-                                          </div>
-                                          {pliegoImpresionEsAutomatico && (
-                                            <div className={trab.cand}>
-                                              <span
-                                                className={trab.fl}
-                                                style={{ maxWidth: 320 }}
-                                              >
-                                                <span className={trab.k}>
-                                                  Origen del costo
-                                                </span>
-                                                <span
-                                                  className={`${trab.ctl} ${trab.sel}`}
-                                                >
-                                                  <select
-                                                    value={pliegoOrigenCosto}
-                                                    onChange={(e) =>
-                                                      updateNestingPliegoImpresion(
-                                                        pasoId,
-                                                        {
-                                                          origenCosto:
-                                                            e.target.value ===
-                                                            "por_candidato"
-                                                              ? "por_candidato"
-                                                              : "derivado",
-                                                        },
-                                                      )
-                                                    }
-                                                  >
-                                                    {PLIEGO_ORIGEN_COSTO_OPTIONS.map(
-                                                      (o) => (
-                                                        <option
-                                                          key={o.value}
-                                                          value={o.value}
-                                                        >
-                                                          {o.label}
-                                                        </option>
-                                                      ),
-                                                    )}
-                                                  </select>
-                                                </span>
-                                              </span>
-                                              <div className={trab.candHead}>
-                                                <span className={trab.candTitle}>
-                                                  Candidatos activos
-                                                </span>
-                                                <button
-                                                  type="button"
-                                                  className={trab.addcand}
-                                                  onClick={() =>
-                                                    addNestingPliegoCandidato(
-                                                      pasoId,
-                                                      "A4",
-                                                    )
-                                                  }
-                                                >
-                                                  <svg
-                                                    width="12"
-                                                    height="12"
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="2"
-                                                    strokeLinecap="round"
-                                                  >
-                                                    <path d="M12 5v14M5 12h14" />
-                                                  </svg>
-                                                  Agregar candidato
-                                                </button>
-                                              </div>
-                                              {pliegoCandidatos.length === 0 ? (
-                                                <div className={trab.candEmpty}>
-                                                  Agregá al menos un tamaño para
-                                                  que el motor pueda comparar.
-                                                </div>
-                                              ) : (
-                                                <div className={trab.candList}>
-                                                  {pliegoCandidatos.map(
-                                                    (candidato, index) => {
-                                                      const candidatoPreset =
-                                                        typeof candidato.preset ===
-                                                        "string"
-                                                          ? candidato.preset
-                                                          : "personalizado";
-                                                      const candidatoKey = `${pasoId}:${index}`;
-                                                      const candidatoMpVarianteId =
-                                                        getCandidatoMateriaPrimaVarianteId(
-                                                          candidato,
-                                                        );
-                                                      const candidatoMpLookup =
-                                                        candidatoMpVarianteId
-                                                          ? variantesLookup.find(
-                                                              (item) =>
-                                                                item.variante
-                                                                  .id ===
-                                                                candidatoMpVarianteId,
-                                                            )
-                                                          : undefined;
-                                                      const candidatoMpMateria =
-                                                        mpMateriaPorCandidato[
-                                                          candidatoKey
-                                                        ];
-                                                      return (
-                                                        <React.Fragment
-                                                          key={`${candidato.id ?? index}-${index}`}
-                                                        >
-                                                          <div
-                                                            className={trab.crow}
-                                                          >
-                                                            <label
-                                                              className={trab.cx}
-                                                            >
-                                                              <input
-                                                                type="checkbox"
-                                                                checked={
-                                                                  candidato.activo !==
-                                                                  false
-                                                                }
-                                                                onChange={(e) =>
-                                                                  updateNestingPliegoCandidato(
-                                                                    pasoId,
-                                                                    index,
-                                                                    {
-                                                                      activo:
-                                                                        e.target
-                                                                          .checked,
-                                                                    },
-                                                                  )
-                                                                }
-                                                              />
-                                                              Activa
-                                                            </label>
-                                                            <span
-                                                              className={trab.fl}
-                                                            >
-                                                              <span
-                                                                className={
-                                                                  trab.k
-                                                                }
-                                                              >
-                                                                Nombre
-                                                              </span>
-                                                              <span
-                                                                className={
-                                                                  trab.ctl
-                                                                }
-                                                              >
-                                                                <input
-                                                                  value={String(
-                                                                    candidato.nombre ??
-                                                                      "",
-                                                                  )}
-                                                                  onChange={(e) =>
-                                                                    updateNestingPliegoCandidato(
-                                                                      pasoId,
-                                                                      index,
-                                                                      {
-                                                                        nombre:
-                                                                          e.target
-                                                                            .value,
-                                                                      },
-                                                                    )
-                                                                  }
-                                                                  style={{
-                                                                    border: 0,
-                                                                    outline: 0,
-                                                                    background:
-                                                                      "transparent",
-                                                                    font: "inherit",
-                                                                    fontSize:
-                                                                      "12.5px",
-                                                                    width: "100%",
-                                                                    minWidth: 0,
-                                                                    color:
-                                                                      "var(--c-ink)",
-                                                                  }}
-                                                                />
-                                                              </span>
-                                                            </span>
-                                                            <span
-                                                              className={trab.fl}
-                                                            >
-                                                              <span
-                                                                className={
-                                                                  trab.k
-                                                                }
-                                                              >
-                                                                Preset
-                                                              </span>
-                                                              <span
-                                                                className={`${trab.ctl} ${trab.sel}`}
-                                                              >
-                                                                <select
-                                                                  value={
-                                                                    PLIEGO_IMPRESION_PRESETS.some(
-                                                                      (preset) =>
-                                                                        preset.value ===
-                                                                        candidatoPreset,
-                                                                    )
-                                                                      ? candidatoPreset
-                                                                      : "personalizado"
-                                                                  }
-                                                                  onChange={(
-                                                                    e,
-                                                                  ) => {
-                                                                    const v =
-                                                                      e.target
-                                                                        .value;
-                                                                    const preset =
-                                                                      PLIEGO_IMPRESION_PRESETS.find(
-                                                                        (item) =>
-                                                                          item.value ===
-                                                                          v,
-                                                                      );
-                                                                    if (
-                                                                      !preset ||
-                                                                      preset.value ===
-                                                                        "personalizado" ||
-                                                                      !preset.anchoMm ||
-                                                                      !preset.altoMm
-                                                                    ) {
-                                                                      updateNestingPliegoCandidato(
-                                                                        pasoId,
-                                                                        index,
-                                                                        {
-                                                                          preset:
-                                                                            "personalizado",
-                                                                        },
-                                                                      );
-                                                                      return;
-                                                                    }
-                                                                    updateNestingPliegoCandidato(
-                                                                      pasoId,
-                                                                      index,
-                                                                      {
-                                                                        preset:
-                                                                          preset.value,
-                                                                        nombre:
-                                                                          preset.label,
-                                                                        anchoMm:
-                                                                          preset.anchoMm,
-                                                                        altoMm:
-                                                                          preset.altoMm,
-                                                                      },
-                                                                    );
-                                                                  }}
-                                                                >
-                                                                  {PLIEGO_IMPRESION_OPTIONS.filter(
-                                                                    (option) =>
-                                                                      ![
-                                                                        "materia_prima",
-                                                                        "automatico",
-                                                                      ].includes(
-                                                                        option.value,
-                                                                      ),
-                                                                  ).map((o) => (
-                                                                    <option
-                                                                      key={
-                                                                        o.value
-                                                                      }
-                                                                      value={
-                                                                        o.value
-                                                                      }
-                                                                    >
-                                                                      {o.label}
-                                                                    </option>
-                                                                  ))}
-                                                                </select>
-                                                              </span>
-                                                            </span>
-                                                            <span
-                                                              className={trab.fl}
-                                                            >
-                                                              <span
-                                                                className={
-                                                                  trab.k
-                                                                }
-                                                              >
-                                                                Ancho
-                                                              </span>
-                                                              <span
-                                                                className={
-                                                                  trab.ctl
-                                                                }
-                                                              >
-                                                                <input
-                                                                  className={
-                                                                    trab.num
-                                                                  }
-                                                                  inputMode="decimal"
-                                                                  value={String(
-                                                                    candidato.anchoMm ??
-                                                                      "",
-                                                                  )}
-                                                                  onChange={(e) =>
-                                                                    updateNestingPliegoCandidato(
-                                                                      pasoId,
-                                                                      index,
-                                                                      {
-                                                                        preset:
-                                                                          "personalizado",
-                                                                        anchoMm:
-                                                                          e.target
-                                                                            .value ===
-                                                                          ""
-                                                                            ? ""
-                                                                            : Number(
-                                                                                e
-                                                                                  .target
-                                                                                  .value,
-                                                                              ),
-                                                                      },
-                                                                    )
-                                                                  }
-                                                                />
-                                                                <span
-                                                                  className={
-                                                                    trab.u
-                                                                  }
-                                                                >
-                                                                  mm
-                                                                </span>
-                                                              </span>
-                                                            </span>
-                                                            <span
-                                                              className={trab.fl}
-                                                            >
-                                                              <span
-                                                                className={
-                                                                  trab.k
-                                                                }
-                                                              >
-                                                                Alto
-                                                              </span>
-                                                              <span
-                                                                className={
-                                                                  trab.ctl
-                                                                }
-                                                              >
-                                                                <input
-                                                                  className={
-                                                                    trab.num
-                                                                  }
-                                                                  inputMode="decimal"
-                                                                  value={String(
-                                                                    candidato.altoMm ??
-                                                                      "",
-                                                                  )}
-                                                                  onChange={(e) =>
-                                                                    updateNestingPliegoCandidato(
-                                                                      pasoId,
-                                                                      index,
-                                                                      {
-                                                                        preset:
-                                                                          "personalizado",
-                                                                        altoMm:
-                                                                          e.target
-                                                                            .value ===
-                                                                          ""
-                                                                            ? ""
-                                                                            : Number(
-                                                                                e
-                                                                                  .target
-                                                                                  .value,
-                                                                              ),
-                                                                      },
-                                                                    )
-                                                                  }
-                                                                />
-                                                                <span
-                                                                  className={
-                                                                    trab.u
-                                                                  }
-                                                                >
-                                                                  mm
-                                                                </span>
-                                                              </span>
-                                                            </span>
-                                                            <button
-                                                              type="button"
-                                                              className={
-                                                                trab.del
-                                                              }
-                                                              title="Quitar candidato"
-                                                              onClick={() =>
-                                                                removeNestingPliegoCandidato(
-                                                                  pasoId,
-                                                                  index,
-                                                                )
-                                                              }
-                                                            >
-                                                              <Trash2Icon className="h-4 w-4" />
-                                                            </button>
-                                                          </div>
-                                                          {pliegoPorCandidato && (
-                                                            <div
-                                                              className={
-                                                                trab.cmp
-                                                              }
-                                                            >
-                                                              <div
-                                                                className={
-                                                                  trab.cmpRow
-                                                                }
-                                                              >
-                                                                <span>
-                                                                  Materia prima
-                                                                  propia
-                                                                </span>
-                                                                {candidatoMpVarianteId ? (
-                                                                  <span
-                                                                    className={
-                                                                      trab.cmpChip
-                                                                    }
-                                                                  >
-                                                                    {candidatoMpLookup
-                                                                      ? `${candidatoMpLookup.materia.nombre} · ${candidatoMpLookup.variante.sku}`
-                                                                      : typeof candidato.materiaPrimaSku ===
-                                                                          "string"
-                                                                        ? candidato.materiaPrimaSku
-                                                                        : "Variante seleccionada"}
-                                                                    {candidatoMpLookup
-                                                                      ?.variante
-                                                                      .precioReferencia
-                                                                      ? ` · ${formatearMoneda(Number(candidatoMpLookup.variante.precioReferencia), monedaDe(candidatoMpLookup.variante.moneda))}`
-                                                                      : ""}
-                                                                  </span>
-                                                                ) : (
-                                                                  <span>
-                                                                    Sin asignar:
-                                                                    compite con el
-                                                                    costo derivado
-                                                                    del material
-                                                                    del paso.
-                                                                  </span>
-                                                                )}
-                                                                <button
-                                                                  type="button"
-                                                                  className={
-                                                                    trab.cmpBtn
-                                                                  }
-                                                                  onClick={() =>
-                                                                    setMpPickerCandidatoAbierto(
-                                                                      mpPickerCandidatoAbierto ===
-                                                                        candidatoKey
-                                                                        ? null
-                                                                        : candidatoKey,
-                                                                    )
-                                                                  }
-                                                                >
-                                                                  {candidatoMpVarianteId
-                                                                    ? "Cambiar"
-                                                                    : "Elegir"}
-                                                                </button>
-                                                                {candidatoMpVarianteId && (
-                                                                  <button
-                                                                    type="button"
-                                                                    className={`${trab.cmpBtn} ${trab.cmpBtnDel}`}
-                                                                    onClick={() => {
-                                                                      updateNestingPliegoCandidato(
-                                                                        pasoId,
-                                                                        index,
-                                                                        {
-                                                                          materiaPrimaVarianteId:
-                                                                            null,
-                                                                          materiaPrimaSku:
-                                                                            null,
-                                                                        },
-                                                                      );
-                                                                      setMpMateriaPorCandidato(
-                                                                        (
-                                                                          prev,
-                                                                        ) => {
-                                                                          const next =
-                                                                            {
-                                                                              ...prev,
-                                                                            };
-                                                                          delete next[
-                                                                            candidatoKey
-                                                                          ];
-                                                                          return next;
-                                                                        },
-                                                                      );
-                                                                    }}
-                                                                  >
-                                                                    Quitar
-                                                                  </button>
-                                                                )}
-                                                              </div>
-                                                              {mpPickerCandidatoAbierto ===
-                                                                candidatoKey && (
-                                                                <div className="space-y-2">
-                                                                  <MaterialSearchSelect
-                                                                    compatibilidad={
-                                                                      sustratoCompatibilidad
-                                                                    }
-                                                                    placeholder="Buscar materia prima para este candidato..."
-                                                                    selectedIds={
-                                                                      candidatoMpLookup
-                                                                        ? [
-                                                                            candidatoMpLookup
-                                                                              .materia
-                                                                              .id,
-                                                                          ]
-                                                                        : []
-                                                                    }
-                                                                    onSelect={(
-                                                                      materiaPrima,
-                                                                    ) => {
-                                                                      if (
-                                                                        materiaPrima
-                                                                          .variantes
-                                                                          .length ===
-                                                                        1
-                                                                      ) {
-                                                                        const variante =
-                                                                          materiaPrima
-                                                                            .variantes[0];
-                                                                        updateNestingPliegoCandidato(
-                                                                          pasoId,
-                                                                          index,
-                                                                          {
-                                                                            materiaPrimaVarianteId:
-                                                                              variante.id,
-                                                                            materiaPrimaSku:
-                                                                              variante.sku,
-                                                                          },
-                                                                        );
-                                                                        setMpPickerCandidatoAbierto(
-                                                                          null,
-                                                                        );
-                                                                        setMpMateriaPorCandidato(
-                                                                          (
-                                                                            prev,
-                                                                          ) => {
-                                                                            const next =
-                                                                              {
-                                                                                ...prev,
-                                                                              };
-                                                                            delete next[
-                                                                              candidatoKey
-                                                                            ];
-                                                                            return next;
-                                                                          },
-                                                                        );
-                                                                        return;
-                                                                      }
-                                                                      setMpMateriaPorCandidato(
-                                                                        (
-                                                                          prev,
-                                                                        ) => ({
-                                                                          ...prev,
-                                                                          [candidatoKey]:
-                                                                            materiaPrima,
-                                                                        }),
-                                                                      );
-                                                                    }}
-                                                                  />
-                                                                  {candidatoMpMateria &&
-                                                                    candidatoMpMateria
-                                                                      .variantes
-                                                                      .length >
-                                                                      1 && (
-                                                                      <HumanSelect
-                                                                        value=""
-                                                                        onValueChange={(
-                                                                          varianteId,
-                                                                        ) => {
-                                                                          const variante =
-                                                                            candidatoMpMateria.variantes.find(
-                                                                              (
-                                                                                item,
-                                                                              ) =>
-                                                                                item.id ===
-                                                                                varianteId,
-                                                                            );
-                                                                          if (
-                                                                            !variante
-                                                                          )
-                                                                            return;
-                                                                          updateNestingPliegoCandidato(
-                                                                            pasoId,
-                                                                            index,
-                                                                            {
-                                                                              materiaPrimaVarianteId:
-                                                                                variante.id,
-                                                                              materiaPrimaSku:
-                                                                                variante.sku,
-                                                                            },
-                                                                          );
-                                                                          setMpPickerCandidatoAbierto(
-                                                                            null,
-                                                                          );
-                                                                          setMpMateriaPorCandidato(
-                                                                            (
-                                                                              prev,
-                                                                            ) => {
-                                                                              const next =
-                                                                                {
-                                                                                  ...prev,
-                                                                                };
-                                                                              delete next[
-                                                                                candidatoKey
-                                                                              ];
-                                                                              return next;
-                                                                            },
-                                                                          );
-                                                                        }}
-                                                                        options={candidatoMpMateria.variantes.map(
-                                                                          (
-                                                                            variante,
-                                                                          ) => ({
-                                                                            value:
-                                                                              variante.id,
-                                                                            label:
-                                                                              variante.nombreVariante?.trim() ||
-                                                                              variante.sku,
-                                                                            description:
-                                                                              variante.precioReferencia
-                                                                                ? `${formatearMoneda(Number(variante.precioReferencia), monedaDe(variante.moneda))} · ${variante.sku}`
-                                                                                : variante.sku,
-                                                                          }),
-                                                                        )}
-                                                                        placeholder="Elegir variante"
-                                                                      />
-                                                                    )}
-                                                                </div>
-                                                              )}
-                                                            </div>
-                                                          )}
-                                                        </React.Fragment>
-                                                      );
-                                                    },
-                                                  )}
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-                                          <p className={trab.hint}>
-                                            La imposición, el tiempo y los
-                                            consumibles se calculan sobre este
-                                            pliego; el sustrato principal se
-                                            convierte contra el tamaño comprado
-                                            cuando corresponde.
-                                          </p>
-                                        </div>
                                       )}
                                       <button
                                         type="button"
-                                        className={trab.sw2}
-                                        aria-pressed={
-                                          nestingConfig.allowRotation !== false
-                                        }
+                                        className={trab.cmpBtn}
                                         onClick={() =>
-                                          updateNestingConfig(pasoId, {
-                                            allowRotation:
-                                              nestingConfig.allowRotation ===
-                                              false,
-                                          })
+                                          setMpPickerCandidatoAbierto(
+                                            mpPickerCandidatoAbierto ===
+                                              candidatoKey
+                                              ? null
+                                              : candidatoKey,
+                                          )
                                         }
                                       >
-                                        <span className={trab.tr} />
-                                        <span>
-                                          <span className={trab.sw2t}>
-                                            Permitir rotar piezas
-                                          </span>
-                                          <span className={trab.sw2d}>
-                                            El nesting puede girar la pieza 90°
-                                            si así entra mejor. Apagalo cuando el
-                                            material tiene veta o dirección de
-                                            impresión.
-                                          </span>
-                                        </span>
+                                        {candidatoMpVarianteId
+                                          ? "Cambiar"
+                                          : "Elegir"}
                                       </button>
-
-                                      {mostrarPanelizado && (
-                                        <>
-                                            <button
-                                              type="button"
-                                              className={trab.sw2}
-                                              aria-pressed={
-                                                panelizadoConfig.enabled === true
-                                              }
-                                              onClick={() => {
-                                                const next =
-                                                  panelizadoConfig.enabled !==
-                                                  true;
-                                                updateNestingPanelizado(pasoId, {
-                                                  enabled: next,
-                                                  mode: next
-                                                    ? panelizadoMode
-                                                    : "automatic",
-                                                  axis: next
-                                                    ? panelizadoAxis
-                                                    : "automatic",
-                                                  manualLayout: next
-                                                    ? panelizadoConfig.manualLayout
-                                                    : null,
-                                                });
-                                              }}
-                                            >
-                                              <span className={trab.tr} />
-                                              <span>
-                                                <span className={trab.sw2t}>
-                                                  Panelizar piezas grandes
-                                                </span>
-                                                <span className={trab.sw2d}>
-                                                  Si la pieza no entra en el
-                                                  ancho del material, se corta en
-                                                  paneles que después se
-                                                  empalman.
-                                                </span>
-                                              </span>
-                                            </button>
-                                          {panelizadoConfig.enabled ===
-                                            true && (
-                                            <div className={trab.subtog}>
-                                              <div className={trab.prow2}>
-                                                <span>
-                                                  <span className={trab.p2a}>
-                                                    Modo
-                                                  </span>
-                                                  <span className={trab.p2b}>
-                                                    Automático corta la cantidad
-                                                    mínima de paneles que entren
-                                                    en el ancho útil.
-                                                  </span>
-                                                </span>
-                                                <HumanSelect
-                                                  value={panelizadoMode}
-                                                  onValueChange={(v) =>
-                                                    updateNestingPanelizado(
-                                                      pasoId,
-                                                      {
-                                                        mode:
-                                                          v === "manual"
-                                                            ? "manual"
-                                                            : "automatic",
-                                                        axis:
-                                                          v === "manual" &&
-                                                          panelizadoAxis ===
-                                                            "automatic"
-                                                            ? "vertical"
-                                                            : panelizadoAxis,
-                                                        manualLayout:
-                                                          v === "manual"
-                                                            ? (panelizadoConfig.manualLayout ??
-                                                              null)
-                                                            : null,
-                                                      },
-                                                    )
-                                                  }
-                                                  options={PANEL_MODE_OPTIONS}
-                                                  triggerClassName="min-h-9 text-xs"
-                                                />
-                                              </div>
-                                              <div className={trab.prow2}>
-                                                <span>
-                                                  <span className={trab.p2a}>
-                                                    Dirección
-                                                  </span>
-                                                  <span className={trab.p2b}>
-                                                    Por dónde se parte la pieza.
-                                                    Automática elige la que
-                                                    genere menos paneles.
-                                                  </span>
-                                                </span>
-                                                <HumanSelect
-                                                  value={
-                                                    panelizadoMode ===
-                                                      "manual" &&
-                                                    panelizadoAxis ===
-                                                      "automatic"
-                                                      ? "vertical"
-                                                      : panelizadoAxis
-                                                  }
-                                                  onValueChange={(v) =>
-                                                    updateNestingPanelizado(
-                                                      pasoId,
-                                                      {
-                                                        axis:
-                                                          panelizadoMode ===
-                                                            "manual" &&
-                                                          v === "automatic"
-                                                            ? "vertical"
-                                                            : v || "vertical",
-                                                        manualLayout:
-                                                          panelizadoMode ===
-                                                          "manual"
-                                                            ? null
-                                                            : panelizadoConfig.manualLayout,
-                                                      },
-                                                    )
-                                                  }
-                                                  options={
-                                                    panelizadoMode === "manual"
-                                                      ? PANEL_MANUAL_AXIS_OPTIONS
-                                                      : PANEL_AXIS_OPTIONS
-                                                  }
-                                                  triggerClassName="min-h-9 text-xs"
-                                                />
-                                              </div>
-                                              <div className={trab.prow2}>
-                                                <span>
-                                                  <span className={trab.p2a}>
-                                                    Solape
-                                                  </span>
-                                                  <span className={trab.p2b}>
-                                                    Material compartido entre
-                                                    paneles contiguos para
-                                                    empalmar. Se suma al consumo.
-                                                  </span>
-                                                </span>
-                                                <span className={trab.ctl}>
-                                                  <input
-                                                    className={trab.num}
-                                                    inputMode="decimal"
-                                                    value={String(
-                                                      resolvedPanelOverlap,
-                                                    )}
-                                                    onChange={(e) =>
-                                                      updateNestingPanelizado(
-                                                        pasoId,
-                                                        {
-                                                          overlapMm:
-                                                            e.target.value === ""
-                                                              ? 0
-                                                              : Number(
-                                                                  e.target.value,
-                                                                ),
-                                                        },
-                                                      )
-                                                    }
-                                                  />
-                                                  <span className={trab.u}>
-                                                    mm
-                                                  </span>
-                                                </span>
-                                              </div>
-                                              <div className={trab.prow2}>
-                                                <span>
-                                                  <span className={trab.p2a}>
-                                                    Ancho máx. por panel
-                                                  </span>
-                                                  <span className={trab.p2b}>
-                                                    Vacío = el ancho imprimible
-                                                    de la máquina.
-                                                  </span>
-                                                </span>
-                                                <span className={trab.ctl}>
-                                                  {/* Se edita en cm y se guarda en mm. La regla
-                                                      "<30 cm se trata como 0" se aplica al blur. */}
-                                                  <input
-                                                    className={trab.num}
-                                                    inputMode="decimal"
-                                                    placeholder="ancho imprimible"
-                                                    value={mmToCmInput(
-                                                      getResolvedNestingNumber(
-                                                        panelizadoConfig.maxPanelWidthMm,
-                                                        undefined,
-                                                        0,
-                                                      ),
-                                                    )}
-                                                    onChange={(e) =>
-                                                      updateNestingPanelizado(
-                                                        pasoId,
-                                                        {
-                                                          maxPanelWidthMm:
-                                                            cmInputToMm(
-                                                              e.target.value,
-                                                            ) ?? 0,
-                                                        },
-                                                      )
-                                                    }
-                                                    onBlur={(e) => {
-                                                      const valorMm =
-                                                        cmInputToMm(
-                                                          e.target.value,
-                                                        ) ?? 0;
-                                                      if (
-                                                        valorMm > 0 &&
-                                                        valorMm <
-                                                          MIN_PANEL_MAX_WIDTH_MM
-                                                      ) {
-                                                        updateNestingPanelizado(
-                                                          pasoId,
-                                                          { maxPanelWidthMm: 0 },
-                                                        );
-                                                      }
-                                                    }}
-                                                  />
-                                                  <span className={trab.u}>
-                                                    cm
-                                                  </span>
-                                                </span>
-                                              </div>
-                                              <div className={trab.prow2}>
-                                                <span>
-                                                  <span className={trab.p2a}>
-                                                    Distribución
-                                                  </span>
-                                                  <span className={trab.p2b}>
-                                                    Equilibrada reparte el ancho
-                                                    en paneles iguales; llenar
-                                                    deja el resto en el último.
-                                                  </span>
-                                                </span>
-                                                <HumanSelect
-                                                  value={String(
-                                                    panelizadoConfig.distribution ??
-                                                      "equilibrada",
-                                                  )}
-                                                  onValueChange={(v) =>
-                                                    updateNestingPanelizado(
-                                                      pasoId,
-                                                      {
-                                                        distribution:
-                                                          v || "equilibrada",
-                                                      },
-                                                    )
-                                                  }
-                                                  options={
-                                                    PANEL_DISTRIBUTION_OPTIONS
-                                                  }
-                                                  triggerClassName="min-h-9 text-xs"
-                                                />
-                                              </div>
-                                              <div className={trab.prow2}>
-                                                <span>
-                                                  <span className={trab.p2a}>
-                                                    Interpretación del ancho
-                                                  </span>
-                                                  <span className={trab.p2b}>
-                                                    Si el máximo de arriba
-                                                    incluye el solape o es el
-                                                    ancho neto visible.
-                                                  </span>
-                                                </span>
-                                                <HumanSelect
-                                                  value={String(
-                                                    panelizadoConfig.widthInterpretation ??
-                                                      "total",
-                                                  )}
-                                                  onValueChange={(v) =>
-                                                    updateNestingPanelizado(
-                                                      pasoId,
-                                                      {
-                                                        widthInterpretation:
-                                                          v || "total",
-                                                      },
-                                                    )
-                                                  }
-                                                  options={
-                                                    PANEL_WIDTH_INTERPRETATION_OPTIONS
-                                                  }
-                                                  triggerClassName="min-h-9 text-xs"
-                                                />
-                                              </div>
-                                              {panelizadoMode === "manual" ? (
-                                                <div className={trab.prow2}>
-                                                  <span>
-                                                    <span className={trab.p2a}>
-                                                      Layout manual de paneles
-                                                    </span>
-                                                    <span className={trab.p2b}>
-                                                      {panelManualLayout
-                                                        ? `${panelManualLayout.items.length} medida${panelManualLayout.items.length === 1 ? "" : "s"} con layout manual`
-                                                        : "Sin layout manual guardado"}
-                                                    </span>
-                                                  </span>
-                                                  <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    disabled={
-                                                      panelMeasures.length === 0
-                                                    }
-                                                    onClick={() =>
-                                                      setPanelEditorPasoId(
-                                                        pasoId,
-                                                      )
-                                                    }
-                                                  >
-                                                    Editar paneles
-                                                  </Button>
-                                                </div>
-                                              ) : null}
-                                            </div>
-                                          )}
-                                          <PanelManualEditorSheet
-                                            open={panelEditorPasoId === pasoId}
-                                            onOpenChange={(open) =>
-                                              setPanelEditorPasoId(
-                                                open ? pasoId : null,
-                                              )
-                                            }
-                                            measures={panelMeasures}
-                                            layout={panelManualLayout}
-                                            axis={
-                                              panelizadoAxis === "horizontal"
-                                                ? "horizontal"
-                                                : "vertical"
-                                            }
-                                            overlapMm={resolvedPanelOverlap}
-                                            maxPanelWidthMm={
-                                              resolvedPanelMaxWidth > 0
-                                                ? resolvedPanelMaxWidth
-                                                : null
-                                            }
-                                            printableWidthMm={
-                                              printableWidthForPanelMm
-                                            }
-                                            widthInterpretation={
-                                              panelizadoWidthInterpretation
-                                            }
-                                            onApply={(layout) =>
-                                              updateNestingPanelizado(pasoId, {
-                                                mode: "manual",
-                                                axis:
-                                                  layout.items[0]?.axis ??
-                                                  (panelizadoAxis ===
-                                                  "horizontal"
-                                                    ? "horizontal"
-                                                    : "vertical"),
-                                                manualLayout: layout,
-                                              })
-                                            }
-                                          />
-                                        </>
+                                      {candidatoMpVarianteId && (
+                                        <button
+                                          type="button"
+                                          className={`${trab.cmpBtn} ${trab.cmpBtnDel}`}
+                                          onClick={() => {
+                                            updateNestingPliegoCandidato(
+                                              pasoId,
+                                              index,
+                                              {
+                                                materiaPrimaVarianteId: null,
+                                                materiaPrimaSku: null,
+                                              },
+                                            );
+                                            setMpMateriaPorCandidato((prev) => {
+                                              const next = {
+                                                ...prev,
+                                              };
+                                              delete next[candidatoKey];
+                                              return next;
+                                            });
+                                          }}
+                                        >
+                                          Quitar
+                                        </button>
                                       )}
-
+                                    </div>
+                                    {mpPickerCandidatoAbierto ===
+                                      candidatoKey && (
+                                      <div className="space-y-2">
+                                        <MaterialSearchSelect
+                                          compatibilidad={
+                                            sustratoCompatibilidad
+                                          }
+                                          placeholder="Buscar materia prima para este candidato..."
+                                          selectedIds={
+                                            candidatoMpLookup
+                                              ? [candidatoMpLookup.materia.id]
+                                              : []
+                                          }
+                                          onSelect={(materiaPrima) => {
+                                            if (
+                                              materiaPrima.variantes.length ===
+                                              1
+                                            ) {
+                                              const variante =
+                                                materiaPrima.variantes[0];
+                                              updateNestingPliegoCandidato(
+                                                pasoId,
+                                                index,
+                                                {
+                                                  materiaPrimaVarianteId:
+                                                    variante.id,
+                                                  materiaPrimaSku: variante.sku,
+                                                },
+                                              );
+                                              setMpPickerCandidatoAbierto(null);
+                                              setMpMateriaPorCandidato(
+                                                (prev) => {
+                                                  const next = {
+                                                    ...prev,
+                                                  };
+                                                  delete next[candidatoKey];
+                                                  return next;
+                                                },
+                                              );
+                                              return;
+                                            }
+                                            setMpMateriaPorCandidato(
+                                              (prev) => ({
+                                                ...prev,
+                                                [candidatoKey]: materiaPrima,
+                                              }),
+                                            );
+                                          }}
+                                        />
+                                        {candidatoMpMateria &&
+                                          candidatoMpMateria.variantes.length >
+                                            1 && (
+                                            <HumanSelect
+                                              value=""
+                                              onValueChange={(varianteId) => {
+                                                const variante =
+                                                  candidatoMpMateria.variantes.find(
+                                                    (item) =>
+                                                      item.id === varianteId,
+                                                  );
+                                                if (!variante) return;
+                                                updateNestingPliegoCandidato(
+                                                  pasoId,
+                                                  index,
+                                                  {
+                                                    materiaPrimaVarianteId:
+                                                      variante.id,
+                                                    materiaPrimaSku:
+                                                      variante.sku,
+                                                  },
+                                                );
+                                                setMpPickerCandidatoAbierto(
+                                                  null,
+                                                );
+                                                setMpMateriaPorCandidato(
+                                                  (prev) => {
+                                                    const next = {
+                                                      ...prev,
+                                                    };
+                                                    delete next[candidatoKey];
+                                                    return next;
+                                                  },
+                                                );
+                                              }}
+                                              options={candidatoMpMateria.variantes.map(
+                                                (variante) => ({
+                                                  value: variante.id,
+                                                  label:
+                                                    variante.nombreVariante?.trim() ||
+                                                    variante.sku,
+                                                  description:
+                                                    variante.precioReferencia
+                                                      ? `${formatearMoneda(Number(variante.precioReferencia), monedaDe(variante.moneda))} · ${variante.sku}`
+                                                      : variante.sku,
+                                                }),
+                                              )}
+                                              placeholder="Elegir variante"
+                                            />
+                                          )}
                                       </div>
-                                    </div>
-                                    </div>
+                                    )}
+                                  </div>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <p className={trab.hint}>
+                    La imposición, el tiempo y los consumibles se calculan sobre
+                    este pliego; el sustrato principal se convierte contra el
+                    tamaño comprado cuando corresponde.
+                  </p>
+                </div>
+              )}
+              <button
+                type="button"
+                className={trab.sw2}
+                aria-pressed={nestingConfig.allowRotation !== false}
+                onClick={() =>
+                  updateNestingConfig(pasoId, {
+                    allowRotation: nestingConfig.allowRotation === false,
+                  })
+                }
+              >
+                <span className={trab.tr} />
+                <span>
+                  <span className={trab.sw2t}>Permitir rotar piezas</span>
+                  <span className={trab.sw2d}>
+                    El nesting puede girar la pieza 90° si así entra mejor.
+                    Apagalo cuando el material tiene veta o dirección de
+                    impresión.
+                  </span>
+                </span>
+              </button>
 
-                                    {/* Bloque propio: su primer .sec pierde el
+              {mostrarPanelizado && (
+                <>
+                  <button
+                    type="button"
+                    className={trab.sw2}
+                    aria-pressed={panelizadoConfig.enabled === true}
+                    onClick={() => {
+                      const next = panelizadoConfig.enabled !== true;
+                      updateNestingPanelizado(pasoId, {
+                        enabled: next,
+                        mode: next ? panelizadoMode : "automatic",
+                        axis: next ? panelizadoAxis : "automatic",
+                        manualLayout: next
+                          ? panelizadoConfig.manualLayout
+                          : null,
+                      });
+                    }}
+                  >
+                    <span className={trab.tr} />
+                    <span>
+                      <span className={trab.sw2t}>
+                        Panelizar piezas grandes
+                      </span>
+                      <span className={trab.sw2d}>
+                        Si la pieza no entra en el ancho del material, se corta
+                        en paneles que después se empalman.
+                      </span>
+                    </span>
+                  </button>
+                  {panelizadoConfig.enabled === true && (
+                    <div className={trab.subtog}>
+                      <div className={trab.prow2}>
+                        <span>
+                          <span className={trab.p2a}>Modo</span>
+                          <span className={trab.p2b}>
+                            Automático corta la cantidad mínima de paneles que
+                            entren en el ancho útil.
+                          </span>
+                        </span>
+                        <HumanSelect
+                          value={panelizadoMode}
+                          onValueChange={(v) =>
+                            updateNestingPanelizado(pasoId, {
+                              mode: v === "manual" ? "manual" : "automatic",
+                              axis:
+                                v === "manual" && panelizadoAxis === "automatic"
+                                  ? "vertical"
+                                  : panelizadoAxis,
+                              manualLayout:
+                                v === "manual"
+                                  ? (panelizadoConfig.manualLayout ?? null)
+                                  : null,
+                            })
+                          }
+                          options={PANEL_MODE_OPTIONS}
+                          triggerClassName="min-h-9 text-xs"
+                        />
+                      </div>
+                      <div className={trab.prow2}>
+                        <span>
+                          <span className={trab.p2a}>Dirección</span>
+                          <span className={trab.p2b}>
+                            Por dónde se parte la pieza. Automática elige la que
+                            genere menos paneles.
+                          </span>
+                        </span>
+                        <HumanSelect
+                          value={
+                            panelizadoMode === "manual" &&
+                            panelizadoAxis === "automatic"
+                              ? "vertical"
+                              : panelizadoAxis
+                          }
+                          onValueChange={(v) =>
+                            updateNestingPanelizado(pasoId, {
+                              axis:
+                                panelizadoMode === "manual" && v === "automatic"
+                                  ? "vertical"
+                                  : v || "vertical",
+                              manualLayout:
+                                panelizadoMode === "manual"
+                                  ? null
+                                  : panelizadoConfig.manualLayout,
+                            })
+                          }
+                          options={
+                            panelizadoMode === "manual"
+                              ? PANEL_MANUAL_AXIS_OPTIONS
+                              : PANEL_AXIS_OPTIONS
+                          }
+                          triggerClassName="min-h-9 text-xs"
+                        />
+                      </div>
+                      <div className={trab.prow2}>
+                        <span>
+                          <span className={trab.p2a}>Solape</span>
+                          <span className={trab.p2b}>
+                            Material compartido entre paneles contiguos para
+                            empalmar. Se suma al consumo.
+                          </span>
+                        </span>
+                        <span className={trab.ctl}>
+                          <input
+                            className={trab.num}
+                            inputMode="decimal"
+                            value={String(resolvedPanelOverlap)}
+                            onChange={(e) =>
+                              updateNestingPanelizado(pasoId, {
+                                overlapMm:
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value),
+                              })
+                            }
+                          />
+                          <span className={trab.u}>mm</span>
+                        </span>
+                      </div>
+                      <div className={trab.prow2}>
+                        <span>
+                          <span className={trab.p2a}>Ancho máx. por panel</span>
+                          <span className={trab.p2b}>
+                            Vacío = el ancho imprimible de la máquina.
+                          </span>
+                        </span>
+                        <span className={trab.ctl}>
+                          {/* Se edita en cm y se guarda en mm. La regla
+                                                      "<30 cm se trata como 0" se aplica al blur. */}
+                          <input
+                            className={trab.num}
+                            inputMode="decimal"
+                            placeholder="ancho imprimible"
+                            value={mmToCmInput(
+                              getResolvedNestingNumber(
+                                panelizadoConfig.maxPanelWidthMm,
+                                undefined,
+                                0,
+                              ),
+                            )}
+                            onChange={(e) =>
+                              updateNestingPanelizado(pasoId, {
+                                maxPanelWidthMm:
+                                  cmInputToMm(e.target.value) ?? 0,
+                              })
+                            }
+                            onBlur={(e) => {
+                              const valorMm = cmInputToMm(e.target.value) ?? 0;
+                              if (
+                                valorMm > 0 &&
+                                valorMm < MIN_PANEL_MAX_WIDTH_MM
+                              ) {
+                                updateNestingPanelizado(pasoId, {
+                                  maxPanelWidthMm: 0,
+                                });
+                              }
+                            }}
+                          />
+                          <span className={trab.u}>cm</span>
+                        </span>
+                      </div>
+                      <div className={trab.prow2}>
+                        <span>
+                          <span className={trab.p2a}>Distribución</span>
+                          <span className={trab.p2b}>
+                            Equilibrada reparte el ancho en paneles iguales;
+                            llenar deja el resto en el último.
+                          </span>
+                        </span>
+                        <HumanSelect
+                          value={String(
+                            panelizadoConfig.distribution ?? "equilibrada",
+                          )}
+                          onValueChange={(v) =>
+                            updateNestingPanelizado(pasoId, {
+                              distribution: v || "equilibrada",
+                            })
+                          }
+                          options={PANEL_DISTRIBUTION_OPTIONS}
+                          triggerClassName="min-h-9 text-xs"
+                        />
+                      </div>
+                      <div className={trab.prow2}>
+                        <span>
+                          <span className={trab.p2a}>
+                            Interpretación del ancho
+                          </span>
+                          <span className={trab.p2b}>
+                            Si el máximo de arriba incluye el solape o es el
+                            ancho neto visible.
+                          </span>
+                        </span>
+                        <HumanSelect
+                          value={String(
+                            panelizadoConfig.widthInterpretation ?? "total",
+                          )}
+                          onValueChange={(v) =>
+                            updateNestingPanelizado(pasoId, {
+                              widthInterpretation: v || "total",
+                            })
+                          }
+                          options={PANEL_WIDTH_INTERPRETATION_OPTIONS}
+                          triggerClassName="min-h-9 text-xs"
+                        />
+                      </div>
+                      {panelizadoMode === "manual" ? (
+                        <div className={trab.prow2}>
+                          <span>
+                            <span className={trab.p2a}>
+                              Layout manual de paneles
+                            </span>
+                            <span className={trab.p2b}>
+                              {panelManualLayout
+                                ? `${panelManualLayout.items.length} medida${panelManualLayout.items.length === 1 ? "" : "s"} con layout manual`
+                                : "Sin layout manual guardado"}
+                            </span>
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={panelMeasures.length === 0}
+                            onClick={() => setPanelEditorPasoId(pasoId)}
+                          >
+                            Editar paneles
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                  <PanelManualEditorSheet
+                    open={panelEditorPasoId === pasoId}
+                    onOpenChange={(open) =>
+                      setPanelEditorPasoId(open ? pasoId : null)
+                    }
+                    measures={panelMeasures}
+                    layout={panelManualLayout}
+                    axis={
+                      panelizadoAxis === "horizontal"
+                        ? "horizontal"
+                        : "vertical"
+                    }
+                    overlapMm={resolvedPanelOverlap}
+                    maxPanelWidthMm={
+                      resolvedPanelMaxWidth > 0 ? resolvedPanelMaxWidth : null
+                    }
+                    printableWidthMm={printableWidthForPanelMm}
+                    widthInterpretation={panelizadoWidthInterpretation}
+                    onApply={(layout) =>
+                      updateNestingPanelizado(pasoId, {
+                        mode: "manual",
+                        axis:
+                          layout.items[0]?.axis ??
+                          (panelizadoAxis === "horizontal"
+                            ? "horizontal"
+                            : "vertical"),
+                        manualLayout: layout,
+                      })
+                    }
+                  />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bloque propio: su primer .sec pierde el
                                         padding-top por .sec:first-child y quedaba
                                         pegado a la línea de arriba. Se separa con
                                         un margen (pedido del usuario 2026-08-13). */}
-                                    <div
-                                      className={trab.root}
-                                      style={{ marginTop: 16 }}
-                                    >
-                                      <div
-                                        className={`${trab.sec} ${trab.secLast}`}
-                                      >
-                                        <h4 className={trab.h4}>
-                                          Márgenes del pliego
-                                        </h4>
-                                        <p className={trab.hint}>
-                                          Bordes del material que el nesting no
-                                          puede usar. Se acumulan: primero el de
-                                          la máquina, después el de este paso.
-                                        </p>
-                                        <div className={trab.marg}>
-                                          {(() => {
-                                            const lados = [
-                                              ["topMm", "Sup."],
-                                              ["rightMm", "Der."],
-                                              ["bottomMm", "Inf."],
-                                              ["leftMm", "Izq."],
-                                            ] as const;
-                                            const marginOverride = lados.some(
-                                              ([k]) => nestingMargins[k] != null,
-                                            );
-                                            const cm = (k: string) =>
-                                              formatNumber(
-                                                (Number(
-                                                  (
-                                                    machineMargins as Record<
-                                                      string,
-                                                      unknown
-                                                    >
-                                                  )[k],
-                                                ) || 0) / 10,
-                                              );
-                                            return (
-                                              <div className={trab.mgrp}>
-                                                <span>
-                                                  <span className={trab.mgrpa}>
-                                                    No imprimible
-                                                    <span
-                                                      className={trab.pill}
-                                                    >
-                                                      heredado {cm("topMm")} ·{" "}
-                                                      {cm("rightMm")} ·{" "}
-                                                      {cm("bottomMm")} ·{" "}
-                                                      {cm("leftMm")} cm
-                                                    </span>
-                                                  </span>
-                                                  <span className={trab.mgrpb}>
-                                                    Lo impone el cabezal:
-                                                    ninguna máquina imprime al
-                                                    ras del borde. Viene de la
-                                                    máquina preferida — editá
-                                                    solo si esta ruta usa un
-                                                    borde distinto.
-                                                  </span>
-                                                  {marginOverride ? (
-                                                    <span
-                                                      className={trab.inhrow}
-                                                    >
-                                                      <span>
-                                                        Sobrescribís el margen
-                                                        de la máquina.
-                                                      </span>
-                                                      <button
-                                                        type="button"
-                                                        className={trab.lnk}
-                                                        onClick={() =>
-                                                          updateNestingMargins(
-                                                            pasoId,
-                                                            {
-                                                              topMm: null,
-                                                              rightMm: null,
-                                                              bottomMm: null,
-                                                              leftMm: null,
-                                                            },
-                                                          )
-                                                        }
-                                                      >
-                                                        Volver al heredado
-                                                      </button>
-                                                    </span>
-                                                  ) : null}
-                                                </span>
-                                                <span className={trab.mfields}>
-                                                  {lados.map(([key, label]) => (
-                                                    <span
-                                                      key={key}
-                                                      className={trab.mf}
-                                                    >
-                                                      <span
-                                                        className={trab.mfk}
-                                                      >
-                                                        {label}
-                                                      </span>
-                                                      <span
-                                                        className={trab.ctl}
-                                                      >
-                                                        <DecimalDraftInput
-                                                          className={trab.num}
-                                                          value={mmToCmInput(
-                                                            getResolvedNestingNumber(
-                                                              nestingMargins[
-                                                                key
-                                                              ],
-                                                              machineMargins[
-                                                                key as keyof typeof machineMargins
-                                                              ],
-                                                              0,
-                                                            ),
-                                                          )}
-                                                          onValueChange={(value) =>
-                                                            updateNestingMargins(
-                                                              pasoId,
-                                                              {
-                                                                [key]: value == null
-                                                                  ? null
-                                                                  : value * 10,
-                                                              },
-                                                            )
-                                                          }
-                                                        />
-                                                        <span
-                                                          className={trab.u}
-                                                        >
-                                                          cm
-                                                        </span>
-                                                      </span>
-                                                    </span>
-                                                  ))}
-                                                </span>
-                                              </div>
-                                            );
-                                          })()}
-                                          <div className={trab.mgrp}>
-                                            <span>
-                                              <span className={trab.mgrpa}>
-                                                Extra de este paso
-                                              </span>
-                                              <span className={trab.mgrpb}>
-                                                Se suma al anterior y sale del
-                                                área útil, pero no cambia la
-                                                separación entre piezas. Sirve
-                                                para pinza, agarre o refilado
-                                                posterior.
-                                              </span>
-                                            </span>
-                                            <span className={trab.mfields}>
-                                              {(
-                                                [
-                                                  ["topMm", "Sup."],
-                                                  ["rightMm", "Der."],
-                                                  ["bottomMm", "Inf."],
-                                                  ["leftMm", "Izq."],
-                                                ] as const
-                                              ).map(([key, label]) => (
-                                                <span
-                                                  key={key}
-                                                  className={trab.mf}
-                                                >
-                                                  <span className={trab.mfk}>
-                                                    {label}
-                                                  </span>
-                                                  <span className={trab.ctl}>
-                                                    <DecimalDraftInput
-                                                      className={trab.num}
-                                                      value={decimalInputText(
-                                                        nestingExtraMargins[
-                                                          key
-                                                        ],
-                                                      )}
-                                                      onValueChange={(value) =>
-                                                        updateNestingExtraMargins(
-                                                          pasoId,
-                                                          {
-                                                            [key]: value,
-                                                          },
-                                                        )
-                                                      }
-                                                      placeholder="0"
-                                                    />
-                                                    <span className={trab.u}>
-                                                      mm
-                                                    </span>
-                                                  </span>
-                                                </span>
-                                              ))}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
+        <div className={trab.root} style={{ marginTop: 16 }}>
+          <div className={`${trab.sec} ${trab.secLast}`}>
+            <h4 className={trab.h4}>Márgenes del pliego</h4>
+            <p className={trab.hint}>
+              Bordes del material que el nesting no puede usar. Se acumulan:
+              primero el de la máquina, después el de este paso.
+            </p>
+            <div className={trab.marg}>
+              {(() => {
+                const lados = [
+                  ["topMm", "Sup."],
+                  ["rightMm", "Der."],
+                  ["bottomMm", "Inf."],
+                  ["leftMm", "Izq."],
+                ] as const;
+                const marginOverride = lados.some(
+                  ([k]) => nestingMargins[k] != null,
+                );
+                const cm = (k: string) =>
+                  formatNumber(
+                    (Number((machineMargins as Record<string, unknown>)[k]) ||
+                      0) / 10,
+                  );
+                return (
+                  <div className={trab.mgrp}>
+                    <span>
+                      <span className={trab.mgrpa}>
+                        No imprimible
+                        <span className={trab.pill}>
+                          heredado {cm("topMm")} · {cm("rightMm")} ·{" "}
+                          {cm("bottomMm")} · {cm("leftMm")} cm
+                        </span>
+                      </span>
+                      <span className={trab.mgrpb}>
+                        Lo impone el cabezal: ninguna máquina imprime al ras del
+                        borde. Viene de la máquina preferida — editá solo si
+                        esta ruta usa un borde distinto.
+                      </span>
+                      {marginOverride ? (
+                        <span className={trab.inhrow}>
+                          <span>Sobrescribís el margen de la máquina.</span>
+                          <button
+                            type="button"
+                            className={trab.lnk}
+                            onClick={() =>
+                              updateNestingMargins(pasoId, {
+                                topMm: null,
+                                rightMm: null,
+                                bottomMm: null,
+                                leftMm: null,
+                              })
+                            }
+                          >
+                            Volver al heredado
+                          </button>
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className={trab.mfields}>
+                      {lados.map(([key, label]) => (
+                        <span key={key} className={trab.mf}>
+                          <span className={trab.mfk}>{label}</span>
+                          <span className={trab.ctl}>
+                            <DecimalDraftInput
+                              className={trab.num}
+                              value={mmToCmInput(
+                                getResolvedNestingNumber(
+                                  nestingMargins[key],
+                                  machineMargins[
+                                    key as keyof typeof machineMargins
+                                  ],
+                                  0,
+                                ),
+                              )}
+                              onValueChange={(value) =>
+                                updateNestingMargins(pasoId, {
+                                  [key]: value == null ? null : value * 10,
+                                })
+                              }
+                            />
+                            <span className={trab.u}>cm</span>
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })()}
+              <div className={trab.mgrp}>
+                <span>
+                  <span className={trab.mgrpa}>Extra de este paso</span>
+                  <span className={trab.mgrpb}>
+                    Se suma al anterior y sale del área útil, pero no cambia la
+                    separación entre piezas. Sirve para pinza, agarre o refilado
+                    posterior.
+                  </span>
+                </span>
+                <span className={trab.mfields}>
+                  {(
+                    [
+                      ["topMm", "Sup."],
+                      ["rightMm", "Der."],
+                      ["bottomMm", "Inf."],
+                      ["leftMm", "Izq."],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <span key={key} className={trab.mf}>
+                      <span className={trab.mfk}>{label}</span>
+                      <span className={trab.ctl}>
+                        <DecimalDraftInput
+                          className={trab.num}
+                          value={decimalInputText(nestingExtraMargins[key])}
+                          onValueChange={(value) =>
+                            updateNestingExtraMargins(pasoId, {
+                              [key]: value,
+                            })
+                          }
+                          placeholder="0"
+                        />
+                        <span className={trab.u}>mm</span>
+                      </span>
+                    </span>
+                  ))}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                                    {/* El costeo del sustrato se muestra SIEMPRE, para que Acomodo
+        {/* El costeo del sustrato se muestra SIEMPRE, para que Acomodo
                                         sea consistente en todos los pasos que lo tienen. En SHEET
                                         (placa/pliego) es un selector de estrategia. En ROLLO hoy hay
                                         una sola forma —largo consumido × ancho útil, incluido el
@@ -9159,122 +8983,97 @@ function AcomodadoDetalladoEditor({
                                         un valor que ignoraría (sería dato muerto). Cuando se modelen
                                         distintas estrategias de rollo, esto pasa a selector.
                                         Ver docs/editor-pasos-preguntas-orden.md §10.5. */}
-                                    {(
-                                      <div className={trab.root}>
-                                      <div className={trab.pliego}>
-                                        <div className={trab.pliegoHead}>
-                                          <span className={trab.pliegoT}>
-                                            Costeo del sustrato
-                                          </span>
-                                        </div>
-                                        <p
-                                          className={trab.hint}
-                                          style={{ margin: "-4px 0 0" }}
-                                        >
-                                          {sustratoRolloDisponible
-                                            ? ROLLO_COSTEO_OPTIONS[0].description
-                                            : "Cómo se cobra el material cuando hay resultado de nesting."}
-                                        </p>
-                                        <div
-                                          style={{
-                                            display: "grid",
-                                            gridTemplateColumns:
-                                              "repeat(auto-fit, minmax(220px, 1fr))",
-                                            gap: 12,
-                                            alignItems: "end",
-                                          }}
-                                        >
-                                          {sustratoRolloDisponible ? (
-                                            <span className={trab.fl}>
-                                              <span className={trab.k}>
-                                                Estrategia
-                                              </span>
-                                              <span
-                                                className={trab.ctl}
-                                                style={{
-                                                  alignItems: "center",
-                                                  fontWeight: 500,
-                                                  color: "var(--fg, #14141a)",
-                                                }}
-                                              >
-                                                {ROLLO_COSTEO_OPTIONS[0].label}
-                                              </span>
-                                            </span>
-                                          ) : (
-                                          <>
-                                          <span className={trab.fl}>
-                                            <span className={trab.k}>
-                                              Estrategia
-                                            </span>
-                                            <span
-                                              className={`${trab.ctl} ${trab.sel}`}
-                                            >
-                                              <select
-                                                value={String(
-                                                  nestingCosting.strategy ??
-                                                    "simple",
-                                                )}
-                                                onChange={(e) =>
-                                                  updateNestingCosting(pasoId, {
-                                                    strategy:
-                                                      e.target.value || "simple",
-                                                  })
-                                                }
-                                              >
-                                                {costingStrategyOptions(
-                                                  familia?.codigo ===
-                                                    "impresion_por_hoja"
-                                                    ? "pliego"
-                                                    : "placa",
-                                                ).map((o) => (
-                                                  <option
-                                                    key={o.value}
-                                                    value={o.value}
-                                                  >
-                                                    {o.label}
-                                                  </option>
-                                                ))}
-                                              </select>
-                                            </span>
-                                          </span>
-                                          {nestingCosting.strategy ===
-                                            "plate-segments" && (
-                                            <span className={trab.fl}>
-                                              <span className={trab.k}>
-                                                Escalones de ocupación{" "}
-                                                <span
-                                                  style={{
-                                                    color:
-                                                      "var(--muted-text-2, #92929b)",
-                                                  }}
-                                                >
-                                                  · % de placa, ej 25, 50, 75,
-                                                  100
-                                                </span>
-                                              </span>
-                                              <EscalonesChips
-                                                value={
-                                                  Array.isArray(
-                                                    nestingCosting.segmentSteps,
-                                                  )
-                                                    ? (nestingCosting.segmentSteps as number[])
-                                                    : [25, 50, 75, 100]
-                                                }
-                                                onChange={(steps) =>
-                                                  updateNestingCosting(pasoId, {
-                                                    segmentSteps: steps,
-                                                  })
-                                                }
-                                              />
-                                            </span>
-                                          )}
-                                          </>
-                                          )}
-                                        </div>
-                                      </div>
-                                      </div>
-                                    )}
-                                    </>
+        {
+          <div className={trab.root}>
+            <div className={trab.pliego}>
+              <div className={trab.pliegoHead}>
+                <span className={trab.pliegoT}>Costeo del sustrato</span>
+              </div>
+              <p className={trab.hint} style={{ margin: "-4px 0 0" }}>
+                {sustratoRolloDisponible
+                  ? ROLLO_COSTEO_OPTIONS[0].description
+                  : "Cómo se cobra el material cuando hay resultado de nesting."}
+              </p>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: 12,
+                  alignItems: "end",
+                }}
+              >
+                {sustratoRolloDisponible ? (
+                  <span className={trab.fl}>
+                    <span className={trab.k}>Estrategia</span>
+                    <span
+                      className={trab.ctl}
+                      style={{
+                        alignItems: "center",
+                        fontWeight: 500,
+                        color: "var(--fg, #14141a)",
+                      }}
+                    >
+                      {ROLLO_COSTEO_OPTIONS[0].label}
+                    </span>
+                  </span>
+                ) : (
+                  <>
+                    <span className={trab.fl}>
+                      <span className={trab.k}>Estrategia</span>
+                      <span className={`${trab.ctl} ${trab.sel}`}>
+                        <select
+                          value={String(nestingCosting.strategy ?? "simple")}
+                          onChange={(e) =>
+                            updateNestingCosting(pasoId, {
+                              strategy: e.target.value || "simple",
+                            })
+                          }
+                        >
+                          {costingStrategyOptions(
+                            familia?.codigo === "impresion_por_hoja"
+                              ? "pliego"
+                              : "placa",
+                          ).map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </span>
+                    </span>
+                    {nestingCosting.strategy === "plate-segments" && (
+                      <span className={trab.fl}>
+                        <span className={trab.k}>
+                          Escalones de ocupación{" "}
+                          <span
+                            style={{
+                              color: "var(--muted-text-2, #92929b)",
+                            }}
+                          >
+                            · % de placa, ej 25, 50, 75, 100
+                          </span>
+                        </span>
+                        <EscalonesChips
+                          value={
+                            Array.isArray(nestingCosting.segmentSteps)
+                              ? (nestingCosting.segmentSteps as number[])
+                              : [25, 50, 75, 100]
+                          }
+                          onChange={(steps) =>
+                            updateNestingCosting(pasoId, {
+                              segmentSteps: steps,
+                            })
+                          }
+                        />
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        }
+      </>
     </>
   );
 }
@@ -9315,74 +9114,52 @@ function MaterialFijoSlotDetalladoEditor({
   ) => void;
 }) {
   const slotUiKey = `${pasoId}:${slot.slotCodigo}:${slotIdx}`;
-const persistedHardcoded =
-                                            getPersistedCandidateMaterialVariant(
-                                              persistedSlot?.candidatos ?? [],
-                                              slot.materialVarianteId,
-                                            );
-                                          const storedMaterialVariante =
-                                            persistedSlot?.materialVariante ?? null;
-                                          const persistedMaterialVariante =
-                                            storedMaterialVariante?.id ===
-                                            slot.materialVarianteId
-                                              ? storedMaterialVariante
-                                              : null;
-                                          const persistedMaterialMateria =
-                                            persistedMaterialVariante
-                                              ? materialVariantToBusquedaItem(
-                                                  persistedMaterialVariante,
-                                                )
-                                              : null;
-                                          const selectedHardcodedMaterialId =
-                                            hardcodedMaterialSelections[
-                                              slotUiKey
-                                            ] ??
-                                            persistedMaterialMateria?.id ??
-                                            persistedHardcoded?.materiaPrima.id ??
-                                            null;
-                                          const hardcodedMateria =
-                                            Object.values(candidateMaterials).find(
-                                              (materiaPrima) =>
-                                                materiaPrima.variantes.some(
-                                                  (variante) =>
-                                                    variante.id ===
-                                                    slot.materialVarianteId,
-                                                ),
-                                            ) ??
-                                            (selectedHardcodedMaterialId
-                                              ? (candidateMaterials[
-                                                  selectedHardcodedMaterialId
-                                                ] ?? null)
-                                              : null) ??
-                                            persistedMaterialMateria ??
-                                            persistedHardcoded?.materiaPrima ??
-                                            null;
-                                          const hardcodedVariante =
-                                            hardcodedMateria?.variantes.find(
-                                              (variante) =>
-                                                variante.id ===
-                                                slot.materialVarianteId,
-                                            ) ??
-                                            (persistedMaterialMateria
-                                              ?.variantes[0] ??
-                                              null) ??
-                                            persistedHardcoded?.variante ??
-                                            null;
-                                          const hardcodedVarianteLabel =
-                                            hardcodedMateria &&
-                                            hardcodedVariante
-                                              ? varianteOptionFromBusqueda(
-                                                  hardcodedMateria,
-                                                  hardcodedVariante,
-                                                ).label
-                                              : (getPersistedCandidateVariantLabel(
-                                                  persistedSlot?.candidatos ??
-                                                    [],
-                                                  slot.materialVarianteId,
-                                                ) ??
-                                                (slot.materialVarianteId
-                                                  ? slot.materialVarianteId
-                                                  : "Sin seleccionar"));
+  const persistedHardcoded = getPersistedCandidateMaterialVariant(
+    persistedSlot?.candidatos ?? [],
+    slot.materialVarianteId,
+  );
+  const storedMaterialVariante = persistedSlot?.materialVariante ?? null;
+  const persistedMaterialVariante =
+    storedMaterialVariante?.id === slot.materialVarianteId
+      ? storedMaterialVariante
+      : null;
+  const persistedMaterialMateria = persistedMaterialVariante
+    ? materialVariantToBusquedaItem(persistedMaterialVariante)
+    : null;
+  const selectedHardcodedMaterialId =
+    hardcodedMaterialSelections[slotUiKey] ??
+    persistedMaterialMateria?.id ??
+    persistedHardcoded?.materiaPrima.id ??
+    null;
+  const hardcodedMateria =
+    Object.values(candidateMaterials).find((materiaPrima) =>
+      materiaPrima.variantes.some(
+        (variante) => variante.id === slot.materialVarianteId,
+      ),
+    ) ??
+    (selectedHardcodedMaterialId
+      ? (candidateMaterials[selectedHardcodedMaterialId] ?? null)
+      : null) ??
+    persistedMaterialMateria ??
+    persistedHardcoded?.materiaPrima ??
+    null;
+  const hardcodedVariante =
+    hardcodedMateria?.variantes.find(
+      (variante) => variante.id === slot.materialVarianteId,
+    ) ??
+    persistedMaterialMateria?.variantes[0] ??
+    persistedHardcoded?.variante ??
+    null;
+  const hardcodedVarianteLabel =
+    hardcodedMateria && hardcodedVariante
+      ? varianteOptionFromBusqueda(hardcodedMateria, hardcodedVariante).label
+      : (getPersistedCandidateVariantLabel(
+          persistedSlot?.candidatos ?? [],
+          slot.materialVarianteId,
+        ) ??
+        (slot.materialVarianteId
+          ? slot.materialVarianteId
+          : "Sin seleccionar"));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div>
@@ -9636,8 +9413,8 @@ function CandidatosSlotDetalladoEditor({
               padding: "7px 10px",
             }}
           >
-            Sin variantes habilitadas, este material no se puede usar. Activá
-            al menos una.
+            Sin variantes habilitadas, este material no se puede usar. Activá al
+            menos una.
           </div>
         ) : null}
 
@@ -9913,9 +9690,9 @@ function ConsumoReglaGuiado({
   // que el motor ignora — la confusión de raíz del caso LED.
   const derivado = Boolean(
     decl &&
-      (decl.magnitudDerivada ||
-        decl.cantidadFija !== undefined ||
-        decl.codigo === "modulos_led"),
+    (decl.magnitudDerivada ||
+      decl.cantidadFija !== undefined ||
+      decl.codigo === "modulos_led"),
   );
   const forzada = Boolean(decl?.formulaForzada) && !derivado;
   const reglaPropia = Boolean(slot.cantidadBase);
@@ -10111,7 +9888,9 @@ function ConsumoReglaGuiado({
           }
         >
           <ArrowLeftIcon size={13} />{" "}
-          {derivado ? "Volver a lo que deriva la geometría" : "Volver a lo que mide el paso"}
+          {derivado
+            ? "Volver a lo que deriva la geometría"
+            : "Volver a lo que mide el paso"}
         </EnlaceForma>
         {mermaAdicional}
       </FormaConsumoSeccion>
@@ -10170,7 +9949,8 @@ function ConsumoReglaGuiado({
         <EnlaceForma
           onClick={() => onSlotPatch({ cantidadBase: "cantidad_pedida" })}
         >
-          <SlidersHorizontalIcon size={13} /> …o usá una regla propia (N por base)
+          <SlidersHorizontalIcon size={13} /> …o usá una regla propia (N por
+          base)
         </EnlaceForma>
       ) : null}
       {mermaAdicional}
@@ -10219,7 +9999,6 @@ interface MaterialesApiAsistente {
     slotCodigo: string,
   ) => SlotMaterialDetalle | null;
 }
-
 
 /** Ritmo T-2 del asistente guiado (tiempo.productividad / tiempo.batch):
  *  mismos params que el detallado, con estado local para tipeo a medias. */
@@ -10676,8 +10455,7 @@ function ImposicionCuadernilloEditor({
   onModoTalonario: (modo: string) => void;
 }) {
   const imposicion = asRecord(nestingConfig.imposicion);
-  const activa =
-    String(imposicion.esquema ?? "").toLowerCase() === "caballete";
+  const activa = String(imposicion.esquema ?? "").toLowerCase() === "caballete";
   const modoImposicion = activa
     ? "caballete"
     : modoTalonario === "aprovechar_pliego"
@@ -10782,7 +10560,8 @@ function ImposicionCuadernilloEditor({
               {
                 value: "tapa",
                 label: "Solo la tapa (hoja 1)",
-                description: "La hoja exterior: tapa, contratapa y sus retiros.",
+                description:
+                  "La hoja exterior: tapa, contratapa y sus retiros.",
               },
               {
                 value: "interior",
@@ -10835,7 +10614,9 @@ function ImposicionCuadernilloEditor({
             </div>
           ) : null}
           {traduccion ? (
-            <p className="ps-hint text-xs text-muted-foreground">{traduccion}</p>
+            <p className="ps-hint text-xs text-muted-foreground">
+              {traduccion}
+            </p>
           ) : null}
         </div>
       ) : null}
@@ -10929,7 +10710,11 @@ function HerenciaOrigenGuiada({
     for (const o of pubs) {
       if (vistas.has(o.key)) continue;
       vistas.add(o.key);
-      magnitudes.push({ key: o.key, etiqueta: o.etiqueta, pasoNombre: p.nombre });
+      magnitudes.push({
+        key: o.key,
+        etiqueta: o.etiqueta,
+        pasoNombre: p.nombre,
+      });
     }
   }
 
@@ -10976,7 +10761,8 @@ const CANTIDAD_METODO_LABEL: Record<string, string> = {
   CONVERSION: "Conversión por empaque",
 };
 const CANTIDAD_METODO_DESC: Record<string, string> = {
-  DIRECT_FROM_JOBCONTEXT: "La que pide el comercial al cotizar (ej: 30 carteles).",
+  DIRECT_FROM_JOBCONTEXT:
+    "La que pide el comercial al cotizar (ej: 30 carteles).",
   CALCULADO_POR_PASO: "El paso la calcula solo (acomodo de piezas, geometría).",
   CONVERSION: "Convierte la cantidad a otra unidad (ej: piezas por caja).",
 };
@@ -11013,7 +10799,9 @@ function opcionesCantidadUnificada(
     cfg.mecanismoCantidad ??
     getDefaultMecanismoCantidad(familia, mecanismos) ??
     mecanismos[0];
-  const campoActual = leerCampoOutputHerencia(jsonTexts[pasoId]?.mecanismo ?? "");
+  const campoActual = leerCampoOutputHerencia(
+    jsonTexts[pasoId]?.mecanismo ?? "",
+  );
 
   // Las magnitudes que dejan los pasos anteriores, con su nombre real.
   const previos = pasos.filter(
@@ -11033,7 +10821,8 @@ function opcionesCantidadUnificada(
     // avisar en el selector.
     const opcional =
       p.modoActivacion === "OPCIONAL" || p.modoActivacion === "CONDICIONAL";
-    for (const o of familiasMap.get(p.familiaCodigo)?.outputsPublicables ?? []) {
+    for (const o of familiasMap.get(p.familiaCodigo)?.outputsPublicables ??
+      []) {
       if (vistas.has(o.key)) continue;
       vistas.add(o.key);
       magnitudes.push({
@@ -11071,7 +10860,9 @@ function opcionesCantidadUnificada(
         : null;
     options.push({
       value: `m:${m}`,
-      label: unidadCalculada ? cap(unidadCalculada) : (CANTIDAD_METODO_LABEL[m] ?? m),
+      label: unidadCalculada
+        ? cap(unidadCalculada)
+        : (CANTIDAD_METODO_LABEL[m] ?? m),
       description: CANTIDAD_METODO_DESC[m],
     });
   }
@@ -11252,9 +11043,7 @@ function TiempoComercialDetalladoEditor({
           fontVariantNumeric: "tabular-nums",
         }}
       />
-      <span
-        style={{ fontSize: 11, color: "var(--muted-text-2, #92929b)" }}
-      >
+      <span style={{ fontSize: 11, color: "var(--muted-text-2, #92929b)" }}>
         min
       </span>
     </div>
@@ -11280,95 +11069,97 @@ function TiempoComercialDetalladoEditor({
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* La pregunta y su unidad van en la misma fila: el input de texto solo
+          {/* La pregunta y su unidad van en la misma fila: el input de texto solo
           ocupaba un renglón entero sin necesitarlo. */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) 168px",
-          gap: 12,
-          alignItems: "end",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          <label style={labelStyle}>Pregunta</label>
-          <Input
-            type="text"
-            value={
-              typeof tiempoManualConfig.etiqueta === "string"
-                ? tiempoManualConfig.etiqueta
-                : ""
-            }
-            onChange={(e) =>
-              updateTiempoManualConfig(pasoId, {
-                etiqueta: e.target.value || null,
-              })
-            }
-            placeholder={`Ej. "Tiempo estimado de ${(cfg.nombreVisible?.trim() || familia?.nombre || "trabajo").toLowerCase()}"`}
-          />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          <label style={labelStyle}>Carga el tiempo en</label>
-          {/* Nota para quien lea el código: el motor toma lo que carga el
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) 168px",
+              gap: 12,
+              alignItems: "end",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <label style={labelStyle}>Pregunta</label>
+              <Input
+                type="text"
+                value={
+                  typeof tiempoManualConfig.etiqueta === "string"
+                    ? tiempoManualConfig.etiqueta
+                    : ""
+                }
+                onChange={(e) =>
+                  updateTiempoManualConfig(pasoId, {
+                    etiqueta: e.target.value || null,
+                  })
+                }
+                placeholder={`Ej. "Tiempo estimado de ${(cfg.nombreVisible?.trim() || familia?.nombre || "trabajo").toLowerCase()}"`}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <label style={labelStyle}>Carga el tiempo en</label>
+              {/* Nota para quien lea el código: el motor toma lo que carga el
               comercial como el tiempo TOTAL del paso
               (`runMin = tiempoManualMin`), sin multiplicarlo por la cantidad.
               Ver docs/editor-pasos-preguntas-orden.md. */}
-          <HumanSelect
-            value={tiempoManualUnidad}
-            onValueChange={(value) =>
-              updateTiempoManualConfig(pasoId, {
-                unidadInput: value === "h" ? "h" : "min",
-              })
-            }
-            options={TIEMPO_MANUAL_UNIDAD_OPTIONS}
-            placeholder="Elegir unidad"
-          />
-        </div>
-      </div>
-      {/* Va con la pregunta, no con las ayudas: no es una pista para contestar
+              <HumanSelect
+                value={tiempoManualUnidad}
+                onValueChange={(value) =>
+                  updateTiempoManualConfig(pasoId, {
+                    unidadInput: value === "h" ? "h" : "min",
+                  })
+                }
+                options={TIEMPO_MANUAL_UNIDAD_OPTIONS}
+                placeholder="Elegir unidad"
+              />
+            </div>
+          </div>
+          {/* Va con la pregunta, no con las ayudas: no es una pista para contestar
           mejor, es si se puede seguir sin contestar — el motor corta la
           cotización con `tiempo_manual_requerido`. Interruptor y no checkbox:
           es una política que se prende o se apaga. */}
-      <label
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 10,
-          cursor: "pointer",
-        }}
-      >
-        <Switch
-          checked={tiempoManualConfig.obligatorio === true}
-          onCheckedChange={(valor) =>
-            updateTiempoManualConfig(pasoId, { obligatorio: valor || null })
-          }
-          style={{ marginTop: 2, flexShrink: 0 }}
-        />
-        <span>
-          <span style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}>
-            Obligatorio para presupuestar
-          </span>
-          <span
+          <label
             style={{
-              display: "block",
-              fontSize: 11.5,
-              color: "var(--muted-text, #6e6e76)",
-              marginTop: 2,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              cursor: "pointer",
             }}
           >
-            Sin este tiempo cargado, el ítem no se puede agregar a la OT. Típico
-            en corte láser.
-          </span>
-        </span>
-      </label>
-      {tiempoManualConfig.obligatorio === true &&
-      tiempoManualDefaultMin == null ? (
-        <div style={{ fontSize: 11.5, color: "#b7791f" }}>
-          Sin valor sugerido, la cotización queda bloqueada hasta que el
-          comercial cargue el tiempo. Es lo esperable en pasos tipo láser —
-          confirmá que es lo que querés.
-        </div>
-      ) : null}
+            <Switch
+              checked={tiempoManualConfig.obligatorio === true}
+              onCheckedChange={(valor) =>
+                updateTiempoManualConfig(pasoId, { obligatorio: valor || null })
+              }
+              style={{ marginTop: 2, flexShrink: 0 }}
+            />
+            <span>
+              <span
+                style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}
+              >
+                Obligatorio para presupuestar
+              </span>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: 11.5,
+                  color: "var(--muted-text, #6e6e76)",
+                  marginTop: 2,
+                }}
+              >
+                Sin este tiempo cargado, el ítem no se puede agregar a la OT.
+                Típico en corte láser.
+              </span>
+            </span>
+          </label>
+          {tiempoManualConfig.obligatorio === true &&
+          tiempoManualDefaultMin == null ? (
+            <div style={{ fontSize: 11.5, color: "#b7791f" }}>
+              Sin valor sugerido, la cotización queda bloqueada hasta que el
+              comercial cargue el tiempo. Es lo esperable en pasos tipo láser —
+              confirmá que es lo que querés.
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -11722,191 +11513,129 @@ function ModoColorDetalladoEditor({
         }.`;
   return (
     <>
-
-                                        <div className="field md:col-span-full">
-                                          <LabelConTooltip
-                                            label="Modo de color del producto"
-                                            tooltip="Define si este producto usa todos los modos compatibles de la ruta/máquina o si limita modos específicos para cotizar."
-                                          />
-                                          <div className="space-y-3 rounded border bg-background/70 p-3">
-                                            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                                              {modoColorConfig.enabled ===
-                                              true ? (
-                                                <span>
-                                                  Este producto{" "}
-                                                  <strong className="text-foreground">
-                                                    limita
-                                                  </strong>{" "}
-                                                  los modos de color que se
-                                                  pueden cotizar. Si queda más
-                                                  de un modo permitido, el
-                                                  comercial deberá elegir al
-                                                  agregar el producto.
-                                                </span>
-                                              ) : (
-                                                <span>
-                                                  Sin configuración propia: el
-                                                  comercial verá todos los modos
-                                                  de color compatibles con la
-                                                  ruta, máquina y perfiles
-                                                  disponibles.
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
-                                              <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
-                                                <input
-                                                  className="mt-0.5"
-                                                  type="checkbox"
-                                                  checked={
-                                                    modoColorConfig.enabled ===
-                                                    true
-                                                  }
-                                                  onChange={(e) =>
-                                                    updateModoColorConfig(
-                                                      pasoId,
-                                                      {
-                                                        enabled:
-                                                          e.target.checked,
-                                                        comercialElige: e.target
-                                                          .checked
-                                                          ? modoColorDefaultOptions.length >
-                                                            1
-                                                          : null,
-                                                        defaultMode:
-                                                          e.target.checked &&
-                                                          !modoColorDefault
-                                                            ? (modoColorDefaultOptions[0]
-                                                                ?.value ?? null)
-                                                            : modoColorDefault ||
-                                                              null,
-                                                      },
-                                                    )
-                                                  }
-                                                />
-                                                <span className="space-y-0.5">
-                                                  <span className="block font-medium text-foreground">
-                                                    Definir modos para este
-                                                    producto
-                                                  </span>
-                                                  <span className="block text-muted-foreground">
-                                                    Restringe las opciones
-                                                    disponibles en Agregar
-                                                    producto.
-                                                  </span>
-                                                </span>
-                                              </label>
-                                              <div className="space-y-2 rounded-md border bg-white px-3 py-2">
-                                                <LabelConTooltip
-                                                  label="Modos de color"
-                                                  tooltip="Los modos salen de los perfiles de la máquina. Si hay más de uno permitido, el comercial elegirá al cotizar."
-                                                  iconSize="sm"
-                                                />
-                                                {modoColorOptions.length ===
-                                                0 ? (
-                                                  <p className="text-xs text-muted-foreground">
-                                                    La máquina/perfil todavía no
-                                                    declara modos de color.
-                                                  </p>
-                                                ) : (
-                                                  <div
-                                                    className={`segmented w-full ${
-                                                      modoColorOptions.length >
-                                                      2
-                                                        ? "segmented-grid-2"
-                                                        : ""
-                                                    }`}
-                                                  >
-                                                    {modoColorOptions.map(
-                                                      (option) => {
-                                                        const selected =
-                                                          modoColorEffectiveAllowed.includes(
-                                                            option.value,
-                                                          );
-                                                        const nextAllowed =
-                                                          selected
-                                                            ? modoColorEffectiveAllowed.filter(
-                                                                (item) =>
-                                                                  item !==
-                                                                  option.value,
-                                                              )
-                                                            : [
-                                                                ...modoColorEffectiveAllowed,
-                                                                option.value,
-                                                              ];
-                                                        const safeNextAllowed =
-                                                          nextAllowed.length > 0
-                                                            ? nextAllowed
-                                                            : [option.value];
-                                                        const nextDefault =
-                                                          safeNextAllowed.includes(
-                                                            modoColorPerfilDefault,
-                                                          )
-                                                            ? modoColorPerfilDefault
-                                                            : safeNextAllowed[0];
-                                                        return (
-                                                          <button
-                                                            key={option.value}
-                                                            type="button"
-                                                            className={
-                                                              selected
-                                                                ? "on"
-                                                                : ""
-                                                            }
-                                                            disabled={
-                                                              !modoColorEnabled
-                                                            }
-                                                            onClick={() => {
-                                                              updateModoColorConfig(
-                                                                pasoId,
-                                                                {
-                                                                  enabled: true,
-                                                                  allowedModes:
-                                                                    safeNextAllowed.length ===
-                                                                      modoColorOptions.length &&
-                                                                    !safeNextAllowed.includes(
-                                                                      "SIN_IMPRESION",
-                                                                    )
-                                                                      ? null
-                                                                      : safeNextAllowed,
-                                                                  defaultMode:
-                                                                    nextDefault,
-                                                                  comercialElige:
-                                                                    safeNextAllowed.length >
-                                                                    1,
-                                                                },
-                                                              );
-                                                            }}
-                                                            title={option.code}
-                                                          >
-                                                            {option.label}
-                                                          </button>
-                                                        );
-                                                      },
-                                                    )}
-                                                  </div>
-                                                )}
-                                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                                  <span>
-                                                    {modoColorSummary}
-                                                  </span>
-                                                  {modoColorDefault ? (
-                                                    <span className="tag muted">
-                                                      Default por perfil:{" "}
-                                                      {modoColorOptions.find(
-                                                        (option) =>
-                                                          option.value ===
-                                                          modoColorDefault,
-                                                      )?.label ??
-                                                        modoColorDefault}
-                                                    </span>
-                                                  ) : null}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      
+      <div className="field md:col-span-full">
+        <LabelConTooltip
+          label="Modo de color del producto"
+          tooltip="Define si este producto usa todos los modos compatibles de la ruta/máquina o si limita modos específicos para cotizar."
+        />
+        <div className="space-y-3 rounded border bg-background/70 p-3">
+          <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            {modoColorConfig.enabled === true ? (
+              <span>
+                Este producto{" "}
+                <strong className="text-foreground">limita</strong> los modos de
+                color que se pueden cotizar. Si queda más de un modo permitido,
+                el comercial deberá elegir al agregar el producto.
+              </span>
+            ) : (
+              <span>
+                Sin configuración propia: el comercial verá todos los modos de
+                color compatibles con la ruta, máquina y perfiles disponibles.
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
+            <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
+              <input
+                className="mt-0.5"
+                type="checkbox"
+                checked={modoColorConfig.enabled === true}
+                onChange={(e) =>
+                  updateModoColorConfig(pasoId, {
+                    enabled: e.target.checked,
+                    comercialElige: e.target.checked
+                      ? modoColorDefaultOptions.length > 1
+                      : null,
+                    defaultMode:
+                      e.target.checked && !modoColorDefault
+                        ? (modoColorDefaultOptions[0]?.value ?? null)
+                        : modoColorDefault || null,
+                  })
+                }
+              />
+              <span className="space-y-0.5">
+                <span className="block font-medium text-foreground">
+                  Definir modos para este producto
+                </span>
+                <span className="block text-muted-foreground">
+                  Restringe las opciones disponibles en Agregar producto.
+                </span>
+              </span>
+            </label>
+            <div className="space-y-2 rounded-md border bg-white px-3 py-2">
+              <LabelConTooltip
+                label="Modos de color"
+                tooltip="Los modos salen de los perfiles de la máquina. Si hay más de uno permitido, el comercial elegirá al cotizar."
+                iconSize="sm"
+              />
+              {modoColorOptions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  La máquina/perfil todavía no declara modos de color.
+                </p>
+              ) : (
+                <div
+                  className={`segmented w-full ${
+                    modoColorOptions.length > 2 ? "segmented-grid-2" : ""
+                  }`}
+                >
+                  {modoColorOptions.map((option) => {
+                    const selected = modoColorEffectiveAllowed.includes(
+                      option.value,
+                    );
+                    const nextAllowed = selected
+                      ? modoColorEffectiveAllowed.filter(
+                          (item) => item !== option.value,
+                        )
+                      : [...modoColorEffectiveAllowed, option.value];
+                    const safeNextAllowed =
+                      nextAllowed.length > 0 ? nextAllowed : [option.value];
+                    const nextDefault = safeNextAllowed.includes(
+                      modoColorPerfilDefault,
+                    )
+                      ? modoColorPerfilDefault
+                      : safeNextAllowed[0];
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={selected ? "on" : ""}
+                        disabled={!modoColorEnabled}
+                        onClick={() => {
+                          updateModoColorConfig(pasoId, {
+                            enabled: true,
+                            allowedModes:
+                              safeNextAllowed.length ===
+                                modoColorOptions.length &&
+                              !safeNextAllowed.includes("SIN_IMPRESION")
+                                ? null
+                                : safeNextAllowed,
+                            defaultMode: nextDefault,
+                            comercialElige: safeNextAllowed.length > 1,
+                          });
+                        }}
+                        title={option.code}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>{modoColorSummary}</span>
+                {modoColorDefault ? (
+                  <span className="tag muted">
+                    Default por perfil:{" "}
+                    {modoColorOptions.find(
+                      (option) => option.value === modoColorDefault,
+                    )?.label ?? modoColorDefault}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </>
   );
 }
@@ -11935,10 +11664,22 @@ function CandidatasDetalladoEditor({
   lookups: LookupsConfigPaso;
   maquinasCandidatasCompatibles: LookupsConfigPaso["maquinas"];
   mostrarModoColor: boolean;
-  toggleMaquinaCandidata: (pasoId: string, maquinaId: string, checked: boolean) => void;
+  toggleMaquinaCandidata: (
+    pasoId: string,
+    maquinaId: string,
+    checked: boolean,
+  ) => void;
   setMaquinaCandidataPreferida: (pasoId: string, maquinaId: string) => void;
-  setMaquinaCandidataPerfilDefault: (pasoId: string, maquinaId: string, perfilId: string | null) => void;
-  setMaquinaCandidataModoColorAllowed: (pasoId: string, maquinaId: string, modes: string[]) => void;
+  setMaquinaCandidataPerfilDefault: (
+    pasoId: string,
+    maquinaId: string,
+    perfilId: string | null,
+  ) => void;
+  setMaquinaCandidataModoColorAllowed: (
+    pasoId: string,
+    maquinaId: string,
+    modes: string[],
+  ) => void;
   setMaquinaCandidataPerfilPorModo: (
     pasoId: string,
     maquinaId: string,
@@ -11999,186 +11740,192 @@ function CandidatasDetalladoEditor({
           ) : (
             <div className={maq.list}>
               {maquinasSeleccionadas.map((maquina) => {
-            const selected = candidatasSeleccionadas.has(maquina.id);
-            const isPreferida =
-              selected && candidataPreferidaId === maquina.id;
-            const chip = techChipStyle(getMachineTechnology(maquina));
-            const cfgCand = candidatasCfg.find(
-              (item) => item.maquinaId === maquina.id,
-            );
-            const perfilesCompatibles = maquina.perfilesOperativos.filter(
-              (perfil) => perfilCompatibleConFamilia(familia, perfil),
-            );
-            const candidateModoOptions = mostrarModoColor
-              ? buildModoColorOptions(maquina, null, true)
-              : [];
-            const candidateAllowed = resolveModoColorAllowedModes(
-              cfgCand?.modoColorAllowedModes,
-              candidateModoOptions,
-            );
-            return (
-              <React.Fragment key={maquina.id}>
-                <div className={`${maq.mrow} ${maq.on}`}>
-                  <span className={maq.av}>{chip.ini}</span>
-                  <span className={maq.nm}>
-                    <span className={maq.a}>
-                      <span className={maq.txt}>{maquina.nombre}</span>
-                      {isPreferida ? (
-                        <span className={maq.badge}>
+                const selected = candidatasSeleccionadas.has(maquina.id);
+                const isPreferida =
+                  selected && candidataPreferidaId === maquina.id;
+                const chip = techChipStyle(getMachineTechnology(maquina));
+                const cfgCand = candidatasCfg.find(
+                  (item) => item.maquinaId === maquina.id,
+                );
+                const perfilesCompatibles = maquina.perfilesOperativos.filter(
+                  (perfil) => perfilCompatibleConFamilia(familia, perfil),
+                );
+                const candidateModoOptions = mostrarModoColor
+                  ? buildModoColorOptions(maquina, null, true)
+                  : [];
+                const candidateAllowed = resolveModoColorAllowedModes(
+                  cfgCand?.modoColorAllowedModes,
+                  candidateModoOptions,
+                );
+                return (
+                  <React.Fragment key={maquina.id}>
+                    <div className={`${maq.mrow} ${maq.on}`}>
+                      <span className={maq.av}>{chip.ini}</span>
+                      <span className={maq.nm}>
+                        <span className={maq.a}>
+                          <span className={maq.txt}>{maquina.nombre}</span>
+                          {isPreferida ? (
+                            <span className={maq.badge}>
+                              <svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                stroke="none"
+                              >
+                                <path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8L12 3.6Z" />
+                              </svg>
+                              Preferida
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                      <span className={maq.sp} />
+                      <span className={maq.tag}>
+                        {machineTechnologyLabel(maquina)}
+                      </span>
+                      {selected && !isPreferida ? (
+                        <button
+                          type="button"
+                          className={maq.pref}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setMaquinaCandidataPreferida(pasoId, maquina.id);
+                          }}
+                        >
                           <svg
                             width="11"
                             height="11"
                             viewBox="0 0 24 24"
-                            fill="currentColor"
-                            stroke="none"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinejoin="round"
                           >
                             <path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8L12 3.6Z" />
                           </svg>
-                          Preferida
-                        </span>
+                          Preferir
+                        </button>
                       ) : null}
-                    </span>
-                  </span>
-                  <span className={maq.sp} />
-                  <span className={maq.tag}>
-                    {machineTechnologyLabel(maquina)}
-                  </span>
-                  {selected && !isPreferida ? (
-                    <button
-                      type="button"
-                      className={maq.pref}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setMaquinaCandidataPreferida(pasoId, maquina.id);
-                      }}
-                    >
-                      <svg
-                        width="11"
-                        height="11"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
+                      <button
+                        type="button"
+                        className={maq.quitar}
+                        onClick={() =>
+                          toggleMaquinaCandidata(pasoId, maquina.id, false)
+                        }
+                        aria-label={`Quitar ${maquina.nombre} del paso`}
+                        title="Quitar del paso"
                       >
-                        <path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8L12 3.6Z" />
-                      </svg>
-                      Preferir
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={maq.quitar}
-                    onClick={() =>
-                      toggleMaquinaCandidata(pasoId, maquina.id, false)
-                    }
-                    aria-label={`Quitar ${maquina.nombre} del paso`}
-                    title="Quitar del paso"
-                  >
-                    <XIcon size={14} />
-                  </button>
-                </div>
+                        <XIcon size={14} />
+                      </button>
+                    </div>
 
-                {selected ? (
-                  <div className={maq.det}>
-                    <div className={maq.frow}>
-                      {/* El "Perfil por defecto" general es el único control de
+                    {selected ? (
+                      <div className={maq.det}>
+                        <div className={maq.frow}>
+                          {/* El "Perfil por defecto" general es el único control de
                           perfil cuando el paso NO tiene modos de color. Con
                           modos, cada modo lleva su propio "Perfil para <modo>"
                           (abajo) y este default general se maneja solo — sin un
                           título "por defecto" que no dice a qué modo pertenece
                           (pedido del usuario 2026-08-13). */}
-                      {!(
-                        mostrarModoColor && candidateModoOptions.length > 0
-                      ) ? (
-                        <span className={maq.fl}>
-                          <span className={maq.k}>Perfil por defecto</span>
-                          <span
-                            className={`${maq.ctl} ${maq.sel}`}
-                            style={{ minWidth: 210 }}
-                          >
-                            <select
-                              value={cfgCand?.perfilDefaultId ?? ""}
-                              onClick={(event) => event.stopPropagation()}
-                              onChange={(event) =>
-                                setMaquinaCandidataPerfilDefault(
-                                  pasoId,
-                                  maquina.id,
-                                  event.target.value || null,
-                                )
-                              }
-                            >
-                              <option value="">Primer perfil compatible</option>
-                              {perfilesCompatibles.map((perfil) => (
-                                <option key={perfil.id} value={perfil.id}>
-                                  {perfil.nombre}
-                                </option>
-                              ))}
-                            </select>
-                          </span>
-                        </span>
-                      ) : null}
-                      {mostrarModoColor && candidateModoOptions.length > 0 ? (
-                        <span
-                          className={maq.fl}
-                          style={{ flex: 1, minWidth: 280 }}
-                        >
-                          <span className={maq.k}>
-                            Modos de color habilitados
-                          </span>
-                          <span className={maq.modes}>
-                            {candidateModoOptions.map((option) => {
-                              const optionSelected = candidateAllowed.includes(
-                                option.value,
-                              );
-                              const nextAllowed = optionSelected
-                                ? candidateAllowed.filter(
-                                    (item) => item !== option.value,
-                                  )
-                                : [...candidateAllowed, option.value];
-                              const safeNextAllowed =
-                                nextAllowed.length > 0
-                                  ? nextAllowed
-                                  : [option.value];
-                              const swatches = modoColorSwatches(option.value);
-                              return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  className={maq.mchip}
-                                  aria-pressed={optionSelected}
-                                  title={option.code ?? undefined}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setMaquinaCandidataModoColorAllowed(
+                          {!(
+                            mostrarModoColor && candidateModoOptions.length > 0
+                          ) ? (
+                            <span className={maq.fl}>
+                              <span className={maq.k}>Perfil por defecto</span>
+                              <span
+                                className={`${maq.ctl} ${maq.sel}`}
+                                style={{ minWidth: 210 }}
+                              >
+                                <select
+                                  value={cfgCand?.perfilDefaultId ?? ""}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onChange={(event) =>
+                                    setMaquinaCandidataPerfilDefault(
                                       pasoId,
                                       maquina.id,
-                                      safeNextAllowed,
-                                    );
-                                  }}
+                                      event.target.value || null,
+                                    )
+                                  }
                                 >
-                                  {swatches.length > 0 ? (
-                                    <span className={maq.ink}>
-                                      {swatches.map((sw, swIdx) => (
-                                        <i
-                                          key={swIdx}
-                                          className={sw.borde ? maq.w : undefined}
-                                          style={{ background: sw.bg }}
-                                        />
-                                      ))}
-                                    </span>
-                                  ) : (
-                                    <span className={maq.none} />
-                                  )}
-                                  {option.label}
-                                </button>
-                              );
-                            })}
-                          </span>
-                        </span>
-                      ) : null}
-                    </div>
-                    {/* Perfil POR MODO: cada modo habilitado que imprime lleva
+                                  <option value="">
+                                    Primer perfil compatible
+                                  </option>
+                                  {perfilesCompatibles.map((perfil) => (
+                                    <option key={perfil.id} value={perfil.id}>
+                                      {perfil.nombre}
+                                    </option>
+                                  ))}
+                                </select>
+                              </span>
+                            </span>
+                          ) : null}
+                          {mostrarModoColor &&
+                          candidateModoOptions.length > 0 ? (
+                            <span
+                              className={maq.fl}
+                              style={{ flex: 1, minWidth: 280 }}
+                            >
+                              <span className={maq.k}>
+                                Modos de color habilitados
+                              </span>
+                              <span className={maq.modes}>
+                                {candidateModoOptions.map((option) => {
+                                  const optionSelected =
+                                    candidateAllowed.includes(option.value);
+                                  const nextAllowed = optionSelected
+                                    ? candidateAllowed.filter(
+                                        (item) => item !== option.value,
+                                      )
+                                    : [...candidateAllowed, option.value];
+                                  const safeNextAllowed =
+                                    nextAllowed.length > 0
+                                      ? nextAllowed
+                                      : [option.value];
+                                  const swatches = modoColorSwatches(
+                                    option.value,
+                                  );
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      className={maq.mchip}
+                                      aria-pressed={optionSelected}
+                                      title={option.code ?? undefined}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setMaquinaCandidataModoColorAllowed(
+                                          pasoId,
+                                          maquina.id,
+                                          safeNextAllowed,
+                                        );
+                                      }}
+                                    >
+                                      {swatches.length > 0 ? (
+                                        <span className={maq.ink}>
+                                          {swatches.map((sw, swIdx) => (
+                                            <i
+                                              key={swIdx}
+                                              className={
+                                                sw.borde ? maq.w : undefined
+                                              }
+                                              style={{ background: sw.bg }}
+                                            />
+                                          ))}
+                                        </span>
+                                      ) : (
+                                        <span className={maq.none} />
+                                      )}
+                                      {option.label}
+                                    </button>
+                                  );
+                                })}
+                              </span>
+                            </span>
+                          ) : null}
+                        </div>
+                        {/* Perfil POR MODO: cada modo habilitado que imprime lleva
                         su propio "Perfil para <modo>", apilados y en el orden de
                         los modos (rediseño 2026-08-13). Reemplaza al viejo
                         "default general + desempate sólo para ambiguos", que
@@ -12186,82 +11933,83 @@ function CandidatasDetalladoEditor({
                         servía. La opción "Automático" cae al fallback interno
                         del motor (default general → primer perfil compatible).
                         "Sin impresión" no aparece: no tiene perfil. */}
-                    {mostrarModoColor
-                      ? (() => {
-                          const perfilesDelModo = (modo: string) =>
-                            maquina.perfilesOperativos.filter((perfil) =>
-                              modosColorFromPerfil(perfil).includes(modo),
-                            );
-                          const modosConPerfil = candidateModoOptions.filter(
-                            (option) =>
-                              candidateAllowed.includes(option.value) &&
-                              perfilesDelModo(option.value).length > 0,
-                          );
-                          if (modosConPerfil.length === 0) return null;
-                          const mapa = cfgCand?.perfilDefaultPorModo ?? {};
-                          return (
-                            <div
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns:
-                                  "repeat(auto-fit, minmax(210px, 260px))",
-                                gap: "10px 12px",
-                              }}
-                            >
-                              {modosConPerfil.map((option) => (
-                                <span className={maq.fl} key={option.value}>
-                                  <span className={maq.k}>
-                                    Perfil para {option.label}
-                                  </span>
-                                  <span
-                                    className={`${maq.ctl} ${maq.sel}`}
-                                    style={{ minWidth: 0 }}
-                                  >
-                                    <select
-                                      value={mapa[option.value] ?? ""}
-                                      onClick={(event) =>
-                                        event.stopPropagation()
-                                      }
-                                      onChange={(event) =>
-                                        setMaquinaCandidataPerfilPorModo(
-                                          pasoId,
-                                          maquina.id,
-                                          option.value,
-                                          event.target.value || null,
-                                        )
-                                      }
-                                    >
-                                      <option value="">Automático</option>
-                                      {perfilesDelModo(option.value).map(
-                                        (perfil) => (
-                                          <option
-                                            key={perfil.id}
-                                            value={perfil.id}
-                                          >
-                                            {perfil.nombre}
-                                          </option>
-                                        ),
-                                      )}
-                                    </select>
-                                  </span>
-                                </span>
-                              ))}
-                            </div>
-                          );
-                        })()
-                      : null}
-                    {mostrarModoColor &&
-                    candidateModoOptions.length > 0 &&
-                    candidateAllowed.length === 0 ? (
-                      <div className={maq.warnmsg}>
-                        Sin modos habilitados esta máquina no puede correr el
-                        paso. Habilitá al menos uno.
+                        {mostrarModoColor
+                          ? (() => {
+                              const perfilesDelModo = (modo: string) =>
+                                maquina.perfilesOperativos.filter((perfil) =>
+                                  modosColorFromPerfil(perfil).includes(modo),
+                                );
+                              const modosConPerfil =
+                                candidateModoOptions.filter(
+                                  (option) =>
+                                    candidateAllowed.includes(option.value) &&
+                                    perfilesDelModo(option.value).length > 0,
+                                );
+                              if (modosConPerfil.length === 0) return null;
+                              const mapa = cfgCand?.perfilDefaultPorModo ?? {};
+                              return (
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns:
+                                      "repeat(auto-fit, minmax(210px, 260px))",
+                                    gap: "10px 12px",
+                                  }}
+                                >
+                                  {modosConPerfil.map((option) => (
+                                    <span className={maq.fl} key={option.value}>
+                                      <span className={maq.k}>
+                                        Perfil para {option.label}
+                                      </span>
+                                      <span
+                                        className={`${maq.ctl} ${maq.sel}`}
+                                        style={{ minWidth: 0 }}
+                                      >
+                                        <select
+                                          value={mapa[option.value] ?? ""}
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          onChange={(event) =>
+                                            setMaquinaCandidataPerfilPorModo(
+                                              pasoId,
+                                              maquina.id,
+                                              option.value,
+                                              event.target.value || null,
+                                            )
+                                          }
+                                        >
+                                          <option value="">Automático</option>
+                                          {perfilesDelModo(option.value).map(
+                                            (perfil) => (
+                                              <option
+                                                key={perfil.id}
+                                                value={perfil.id}
+                                              >
+                                                {perfil.nombre}
+                                              </option>
+                                            ),
+                                          )}
+                                        </select>
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            })()
+                          : null}
+                        {mostrarModoColor &&
+                        candidateModoOptions.length > 0 &&
+                        candidateAllowed.length === 0 ? (
+                          <div className={maq.warnmsg}>
+                            Sin modos habilitados esta máquina no puede correr
+                            el paso. Habilitá al menos uno.
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
-                  </div>
-                ) : null}
-              </React.Fragment>
-            );
+                  </React.Fragment>
+                );
               })}
             </div>
           )}
@@ -12467,7 +12215,10 @@ function EjeGuiado({
       grupo,
       items: opciones.filter((op) => op.grupo === grupo.id).sort(porOrden),
     })),
-    { grupo: { id: "__resto" } as GrupoEje, items: opciones.filter((op) => !op.grupo) },
+    {
+      grupo: { id: "__resto" } as GrupoEje,
+      items: opciones.filter((op) => !op.grupo),
+    },
   ].filter((g) => g.items.length > 0);
 
   const etiquetaDe = (op: OpcionPaso) =>
@@ -12485,22 +12236,22 @@ function EjeGuiado({
               flexDirection: "column",
             }
           : fijo
-          ? {
-              // Patrón "Materiales que consume": el encabezado va SIN fondo y
-              // sólo la parte que se parametriza lleva card. Ver más abajo.
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-            }
-          : {
-              border: "1px solid var(--hairline, #e6e2dc)",
-              borderRadius: 12,
-              background: "var(--surface-1, #fff)",
-              padding: abierto ? "14px 16px 16px" : "10px 14px",
-              display: "flex",
-              flexDirection: "column",
-              gap: abierto ? 16 : 4,
-            }
+            ? {
+                // Patrón "Materiales que consume": el encabezado va SIN fondo y
+                // sólo la parte que se parametriza lleva card. Ver más abajo.
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }
+            : {
+                border: "1px solid var(--hairline, #e6e2dc)",
+                borderRadius: 12,
+                background: "var(--surface-1, #fff)",
+                padding: abierto ? "14px 16px 16px" : "10px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: abierto ? 16 : 4,
+              }
       }
     >
       <div
@@ -12511,9 +12262,7 @@ function EjeGuiado({
           alignItems: enLista ? "center" : "flex-start",
           gap: 10,
           ...(fijo ? { padding: "2px 2px 0" } : {}),
-          ...(enLista
-            ? { padding: "11px 13px", cursor: "pointer" }
-            : {}),
+          ...(enLista ? { padding: "11px 13px", cursor: "pointer" } : {}),
         }}
       >
         <div style={{ minWidth: 0 }}>
@@ -12560,10 +12309,10 @@ function EjeGuiado({
             const texto = fijo
               ? subtitulo
               : enLista && abierto
-              ? null
-              : abierto
-              ? (subtitulo ?? linea)
-              : linea;
+                ? null
+                : abierto
+                  ? (subtitulo ?? linea)
+                  : linea;
             if (!texto) return null;
             return (
               <div
@@ -12642,13 +12391,13 @@ function EjeGuiado({
             ...(enLista
               ? { padding: "2px 13px 14px" }
               : fijo
-              ? {
-                  border: "1px solid var(--hairline, #e6e2dc)",
-                  borderRadius: 12,
-                  background: "var(--surface-1, #fff)",
-                  padding: "14px 16px",
-                }
-              : {}),
+                ? {
+                    border: "1px solid var(--hairline, #e6e2dc)",
+                    borderRadius: 12,
+                    background: "var(--surface-1, #fff)",
+                    padding: "14px 16px",
+                  }
+                : {}),
           }}
         >
           {gruposConOpciones.map(({ grupo, items }, idx) => (
@@ -12691,7 +12440,8 @@ function EjeGuiado({
                   grupo.titulo && grupo.encabezado !== "arriba"
                     ? {
                         display: "grid",
-                        gridTemplateColumns: "minmax(140px, 200px) minmax(0, 1fr)",
+                        gridTemplateColumns:
+                          "minmax(140px, 200px) minmax(0, 1fr)",
                         gap: 18,
                         alignItems: "start",
                       }
@@ -12737,55 +12487,55 @@ function EjeGuiado({
                     alignItems: grupo.alinearItems ?? "start",
                   }}
                 >
-              {items.map((opcion) => (
-                <div
-                  key={opcion.clave}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 5,
-                    ...(opcion.anchoCompleto || grupo.estilo !== "campos"
-                      ? { gridColumn: "1 / -1" }
-                      : {}),
-                  }}
-                >
-                  {grupo.estilo === "bifurcacion" ||
-                  etiquetaDe(opcion).trim() === "" ? null : (
-                    <label
+                  {items.map((opcion) => (
+                    <div
+                      key={opcion.clave}
                       style={{
-                        fontSize: 11.5,
-                        fontWeight: 450,
-                        color: "var(--fg-2, #2c2c33)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 5,
+                        ...(opcion.anchoCompleto || grupo.estilo !== "campos"
+                          ? { gridColumn: "1 / -1" }
+                          : {}),
                       }}
                     >
-                      {etiquetaDe(opcion)}
-                    </label>
-                  )}
-                  {/* La ayuda de la opción sólo donde el grupo no la cubre y
+                      {grupo.estilo === "bifurcacion" ||
+                      etiquetaDe(opcion).trim() === "" ? null : (
+                        <label
+                          style={{
+                            fontSize: 11.5,
+                            fontWeight: 450,
+                            color: "var(--fg-2, #2c2c33)",
+                          }}
+                        >
+                          {etiquetaDe(opcion)}
+                        </label>
+                      )}
+                      {/* La ayuda de la opción sólo donde el grupo no la cubre y
                       todavía no hay respuesta: si ya está contestada, el texto
                       estira la card y hace perder el hilo. */}
-                  {sinResolver(opcion) && opcion.ayuda ? (
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "var(--muted-text, #6e6e76)",
-                        maxWidth: 560,
-                      }}
-                    >
-                      {typeof opcion.ayuda === "function"
-                        ? opcion.ayuda(ctx)
-                        : opcion.ayuda}
+                      {sinResolver(opcion) && opcion.ayuda ? (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--muted-text, #6e6e76)",
+                            maxWidth: 560,
+                          }}
+                        >
+                          {typeof opcion.ayuda === "function"
+                            ? opcion.ayuda(ctx)
+                            : opcion.ayuda}
+                        </div>
+                      ) : null}
+                      <ControlGuiado
+                        opcion={opcion}
+                        ctx={ctx}
+                        onAplicar={onAplicar}
+                        renderComponente={renderComponente}
+                        variante="eje"
+                      />
                     </div>
-                  ) : null}
-                  <ControlGuiado
-                    opcion={opcion}
-                    ctx={ctx}
-                    onAplicar={onAplicar}
-                    renderComponente={renderComponente}
-                    variante="eje"
-                  />
-                </div>
-              ))}
+                  ))}
                 </div>
               </div>
             </div>
@@ -12897,8 +12647,7 @@ function OpcionGuiadaFila({
                   style={{
                     marginLeft: 6,
                     fontSize: 11,
-                    color:
-                      origen === "sin-definir" ? "#8a6d3b" : "#7a7a80",
+                    color: origen === "sin-definir" ? "#8a6d3b" : "#7a7a80",
                   }}
                 >
                   · {badge}
@@ -12968,7 +12717,11 @@ function ControlGuiado({
 
   // Segmented: dos o tres opciones excluyentes que en el eje se leen mejor
   // como un solo control que como botones sueltos.
-  if (control.tipo === "pills" && enEje && control.presentacion === "tarjetas") {
+  if (
+    control.tipo === "pills" &&
+    enEje &&
+    control.presentacion === "tarjetas"
+  ) {
     // Tarjetas con radio: una decisión importante (quién elige el material),
     // no un toggle de pasada. Como la bifurcación del tiempo.
     const actual = control.valor(ctx);
@@ -13131,7 +12884,9 @@ function ControlGuiado({
             onChange={(e) => {
               const n = Number(e.target.value);
               if (Number.isFinite(n)) {
-                onAplicar(control.aplicar(ctx, Math.min(max, Math.max(min, n))));
+                onAplicar(
+                  control.aplicar(ctx, Math.min(max, Math.max(min, n))),
+                );
               }
             }}
             style={{
@@ -13165,7 +12920,10 @@ function ControlGuiado({
           onChange={(e) => {
             const n = Number(e.target.value);
             onAplicar(
-              control.aplicar(ctx, e.target.value === "" || !Number.isFinite(n) ? null : n),
+              control.aplicar(
+                ctx,
+                e.target.value === "" || !Number.isFinite(n) ? null : n,
+              ),
             );
           }}
           style={{
@@ -13277,9 +13035,7 @@ function ControlGuiado({
           style={{ maxWidth: 160 }}
         />
         {control.sufijo ? (
-          <span
-            style={{ fontSize: 12.5, color: "var(--muted-text, #6e6e76)" }}
-          >
+          <span style={{ fontSize: 12.5, color: "var(--muted-text, #6e6e76)" }}>
             {control.sufijo(ctx)}
           </span>
         ) : null}
@@ -13553,9 +13309,7 @@ function SeccionesEsquemaPaso({
               <RuleBuilder
                 value={
                   cfg.condicionActivacionJson as
-                    | Record<string, unknown>
-                    | null
-                    | undefined
+                    Record<string, unknown> | null | undefined
                 }
                 includeMeasureFields={reglaProps.includeMeasureFields}
                 extraFields={reglaProps.extraFields}
@@ -13602,9 +13356,7 @@ function SeccionesEsquemaPaso({
               );
             };
             return (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 9 }}
-              >
+              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                 <div
                   style={{
                     display: "inline-flex",
@@ -13656,9 +13408,7 @@ function SeccionesEsquemaPaso({
             const corresSiempre =
               (cfg.modoActivacion ?? "OBLIGATORIO") === "OBLIGATORIO";
             return (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 9 }}
-              >
+              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                 {/* El encabezado lo dibuja el control y no el grupo: el
                     contador y el "Ninguno" van en esa misma línea. */}
                 <div
@@ -13855,9 +13605,7 @@ function SeccionesEsquemaPaso({
               <HumanSelect
                 value={cfg.maquinaM1Id ?? ""}
                 onValueChange={(id2) => {
-                  const maq = maquinasCompatibles.find(
-                    (m) => m.id === id2,
-                  );
+                  const maq = maquinasCompatibles.find((m) => m.id === id2);
                   onPatch(pasoActual.id, {
                     maquinaM1Id: id2 || null,
                     perfilM1Id: maq?.perfilesOperativos[0]?.id ?? null,
@@ -13898,13 +13646,12 @@ function SeccionesEsquemaPaso({
                 cfg={cfg}
                 familia={familia}
                 lookups={lookups}
-                maquinasCandidatasCompatibles={lookups.maquinas.filter(
-                  (m) =>
-                    maquinaCandidataCompatibleConFamilia(
-                      familia,
-                      familia?.plantillasCompatibles,
-                      m,
-                    ),
+                maquinasCandidatasCompatibles={lookups.maquinas.filter((m) =>
+                  maquinaCandidataCompatibleConFamilia(
+                    familia,
+                    familia?.plantillasCompatibles,
+                    m,
+                  ),
                 )}
                 mostrarModoColor={modoColorAplica(familia, cfg)}
                 toggleMaquinaCandidata={toggleMaquinaCandidata}
@@ -13960,9 +13707,7 @@ function SeccionesEsquemaPaso({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() =>
-                        onAddSlotFamilia(pasoActual.id, s.codigo)
-                      }
+                      onClick={() => onAddSlotFamilia(pasoActual.id, s.codigo)}
                     >
                       + {s.nombre}
                       {s.requerido ? (
@@ -14177,8 +13922,11 @@ function SeccionesEsquemaPaso({
                 salen de nuestro inventario. */}
             {!noEjecutar &&
             (!cfg.tercerizado ||
-              (cfg.tercerizadoConfigJson as { materialesPropios?: boolean } | null)
-                ?.materialesPropios === true) ? (
+              (
+                cfg.tercerizadoConfigJson as {
+                  materialesPropios?: boolean;
+                } | null
+              )?.materialesPropios === true) ? (
               <>
                 {/* Dónde se hace: justo después de "Ejecución de este paso"
                     (feedback del usuario). Sólo interno y sin máquina: con
@@ -14292,227 +14040,235 @@ function SeccionesEsquemaPaso({
                       }}
                     >
                       {visiblesSlots.map(({ slot, slotIdx }, filaIdx) => {
-                  const decl =
-                    familia?.slotsRequeridos.find(
-                      (sr) => sr.codigo === slot.slotCodigo,
-                    ) ?? null;
-                  const ctxSlot = {
-                    ...ctx,
-                    slot: {
-                      payload: slot,
-                      decl,
-                      esAdicional: !decl,
-                    },
-                  };
-                  const pendSlot = new Set(
-                    vivos
-                      .filter(
-                        (p) =>
-                          !p.slotCodigo ||
-                          p.slotCodigo === slot.slotCodigo,
-                      )
-                      .map((p) => p.tipo),
-                  );
-                  const onAplicarSlot = (patch: PatchOpcion) => {
-                    if (patch.tipo === "slot") {
-                      materialesApi.updateSlot(
-                        pasoActual.id,
-                        slotIdx,
-                        patch.patch,
-                      );
-                    } else onAplicar(patch);
-                  };
-                  const renderComponenteSlot = (
-                    id: string,
-                  ): React.ReactNode => {
-                    if (id === "material-heredado-detallado") {
-                      const indiceActual = pasos.findIndex(
-                        (candidate) => candidate.id === pasoActual.id,
-                      );
-                      const opciones = pasos
-                        .filter((_, sourceIndex) => sourceIndex < indiceActual)
-                        .flatMap((origen) => {
-                          const cfgOrigen = configs[origen.id];
-                          return (cfgOrigen?.slotsMateriales ?? [])
+                        const decl =
+                          familia?.slotsRequeridos.find(
+                            (sr) => sr.codigo === slot.slotCodigo,
+                          ) ?? null;
+                        const ctxSlot = {
+                          ...ctx,
+                          slot: {
+                            payload: slot,
+                            decl,
+                            esAdicional: !decl,
+                          },
+                        };
+                        const pendSlot = new Set(
+                          vivos
                             .filter(
-                              (sourceSlot) =>
-                                sourceSlot.modoSeleccion !== "HEREDA_DE_PASO",
+                              (p) =>
+                                !p.slotCodigo ||
+                                p.slotCodigo === slot.slotCodigo,
                             )
-                            .map((sourceSlot) => ({
-                              value: `${origen.id}::${sourceSlot.slotCodigo}`,
-                              label: `Hereda de: ${origen.nombre} · ${sourceSlot.slotNombre || sourceSlot.slotCodigo}`,
-                            }));
-                        });
-                      return (
-                        <div className="space-y-2">
-                          <HumanSelect
-                            value={
-                              slot.heredaDeRutaPasoId &&
-                              slot.heredaDeSlotCodigo
-                                ? `${slot.heredaDeRutaPasoId}::${slot.heredaDeSlotCodigo}`
-                                : ""
-                            }
-                            onValueChange={(value) => {
-                              const [rutaPasoId, slotCodigo] = value.split("::");
-                              materialesApi.updateSlot(
-                                pasoActual.id,
-                                slotIdx,
-                                {
-                                  heredaDeRutaPasoId: rutaPasoId || null,
-                                  heredaDeSlotCodigo: slotCodigo || null,
-                                },
-                              );
-                            }}
-                            options={opciones}
-                            placeholder="Elegí un material de un paso anterior"
-                          />
-                          <p className="text-muted-foreground text-xs">
-                            Se usa para formato, nesting y operación; el costo
-                            permanece únicamente en el paso de origen.
-                          </p>
-                        </div>
-                      );
-                    }
-                    if (id === "material-fijo-detallado") {
-                      return (
-                        <div className="pasos-sections">
-                          <MaterialFijoSlotDetalladoEditor
-                            pasoId={pasoActual.id}
-                            slotIdx={slotIdx}
-                            slot={slot}
-                            slotDecl={decl}
-                            persistedSlot={materialesApi.getPersistedSlot(
-                              pasoActual.id,
-                              slot.slotCodigo,
-                            )}
-                            candidateMaterials={
-                              materialesApi.candidateMaterials
-                            }
-                            setCandidateMaterials={
-                              materialesApi.setCandidateMaterials
-                            }
-                            hardcodedMaterialSelections={
-                              materialesApi.hardcodedMaterialSelections
-                            }
-                            setHardcodedMaterialSelections={
-                              materialesApi.setHardcodedMaterialSelections
-                            }
-                            updateSlot={materialesApi.updateSlot}
-                          />
-                        </div>
-                      );
-                    }
-                    if (id === "candidatos-slot-detallado") {
-                      return (
-                        <div className="pasos-sections">
-                          <CandidatosSlotDetalladoEditor
-                            pasoId={pasoActual.id}
-                            slotIdx={slotIdx}
-                            slot={slot}
-                            slotDecl={decl}
-                            candidateMaterials={
-                              materialesApi.candidateMaterials
-                            }
-                            addSlotCandidate={
-                              materialesApi.addSlotCandidate
-                            }
-                            removeSlotCandidate={
-                              materialesApi.removeSlotCandidate
-                            }
-                            updateSlotCandidate={
-                              materialesApi.updateSlotCandidate
-                            }
-                          />
-                        </div>
-                      );
-                    }
-                    if (id === "base-consumo") {
-                      // Plegado dentro de "consumo-formula" (las 3 formas).
-                      return null;
-                    }
-                    if (id === "consumo-formula") {
-                      // Opción B: mostrar la fuente inline sólo cuando NO es la
-                      // default ("las piezas del trabajo"): en un sustrato común
-                      // agregar "de las piezas…" es ruido; en cenefa/bastidor
-                      // (fuente = output geométrico) sí aporta.
-                      const fuenteLabel =
-                        slot.fuenteMedida &&
-                        slot.fuenteMedida !== "piezas_jobcontext"
-                          ? (opcionesPiezasMontar(ctxSlot).find(
-                              (o) => o.value === slot.fuenteMedida,
-                            )?.label ?? null)
-                          : null;
-                      return (
-                        <ConsumoReglaGuiado
-                          slot={slot}
-                          decl={decl}
-                          familia={familia}
-                          paramsPaso={asRecord(cfg.paramsPasoJson)}
-                          esAdicional={!decl}
-                          materialLabel={null}
-                          magnitudProduceLabel={magnitudProducePaso(
-                            cfg,
-                            familia,
-                          )}
-                          fuenteLabel={fuenteLabel}
-                          onSlotPatch={(patch) =>
+                            .map((p) => p.tipo),
+                        );
+                        const onAplicarSlot = (patch: PatchOpcion) => {
+                          if (patch.tipo === "slot") {
                             materialesApi.updateSlot(
                               pasoActual.id,
                               slotIdx,
-                              patch,
-                            )
+                              patch.patch,
+                            );
+                          } else onAplicar(patch);
+                        };
+                        const renderComponenteSlot = (
+                          id: string,
+                        ): React.ReactNode => {
+                          if (id === "material-heredado-detallado") {
+                            const indiceActual = pasos.findIndex(
+                              (candidate) => candidate.id === pasoActual.id,
+                            );
+                            const opciones = pasos
+                              .filter(
+                                (_, sourceIndex) => sourceIndex < indiceActual,
+                              )
+                              .flatMap((origen) => {
+                                const cfgOrigen = configs[origen.id];
+                                return (cfgOrigen?.slotsMateriales ?? [])
+                                  .filter(
+                                    (sourceSlot) =>
+                                      sourceSlot.modoSeleccion !==
+                                      "HEREDA_DE_PASO",
+                                  )
+                                  .map((sourceSlot) => ({
+                                    value: `${origen.id}::${sourceSlot.slotCodigo}`,
+                                    label: `Hereda de: ${origen.nombre} · ${sourceSlot.slotNombre || sourceSlot.slotCodigo}`,
+                                  }));
+                              });
+                            return (
+                              <div className="space-y-2">
+                                <HumanSelect
+                                  value={
+                                    slot.heredaDeRutaPasoId &&
+                                    slot.heredaDeSlotCodigo
+                                      ? `${slot.heredaDeRutaPasoId}::${slot.heredaDeSlotCodigo}`
+                                      : ""
+                                  }
+                                  onValueChange={(value) => {
+                                    const [rutaPasoId, slotCodigo] =
+                                      value.split("::");
+                                    materialesApi.updateSlot(
+                                      pasoActual.id,
+                                      slotIdx,
+                                      {
+                                        heredaDeRutaPasoId: rutaPasoId || null,
+                                        heredaDeSlotCodigo: slotCodigo || null,
+                                      },
+                                    );
+                                  }}
+                                  options={opciones}
+                                  placeholder="Elegí un material de un paso anterior"
+                                />
+                                <p className="text-muted-foreground text-xs">
+                                  Se usa para formato, nesting y operación; el
+                                  costo permanece únicamente en el paso de
+                                  origen.
+                                </p>
+                              </div>
+                            );
                           }
-                        />
-                      );
-                    }
-                    return renderComponente(id);
-                  };
-                  return (
-                    <div
-                      key={`${slot.slotCodigo}:${slotIdx}`}
-                      style={{
-                        borderTop:
-                          filaIdx > 0
-                            ? "1px solid var(--hairline, #eee7de)"
-                            : undefined,
-                      }}
-                    >
-                      <EjeGuiado
-                        titulo={
-                          familia
-                            ? slotDisplayName(slot, familia)
-                            : (slot.slotNombre ?? slot.slotCodigo)
-                        }
-                        opciones={opcionesDeMaterial(ctxSlot)}
-                        grupos={GRUPOS_MATERIAL}
-                        resumenPrincipal={[
-                          "materiales.material",
-                          "materiales.candidatos",
-                          "materiales.quien",
-                          "materiales.consumo",
-                        ]}
-                        ctx={ctxSlot}
-                        pendientesVivos={pendSlot}
-                        onAplicar={onAplicarSlot}
-                        renderComponente={renderComponenteSlot}
-                        ocultarCheck
-                        enLista
-                        accionExtra={
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() =>
-                              materialesApi.removeSlot(pasoActual.id, slotIdx)
-                            }
+                          if (id === "material-fijo-detallado") {
+                            return (
+                              <div className="pasos-sections">
+                                <MaterialFijoSlotDetalladoEditor
+                                  pasoId={pasoActual.id}
+                                  slotIdx={slotIdx}
+                                  slot={slot}
+                                  slotDecl={decl}
+                                  persistedSlot={materialesApi.getPersistedSlot(
+                                    pasoActual.id,
+                                    slot.slotCodigo,
+                                  )}
+                                  candidateMaterials={
+                                    materialesApi.candidateMaterials
+                                  }
+                                  setCandidateMaterials={
+                                    materialesApi.setCandidateMaterials
+                                  }
+                                  hardcodedMaterialSelections={
+                                    materialesApi.hardcodedMaterialSelections
+                                  }
+                                  setHardcodedMaterialSelections={
+                                    materialesApi.setHardcodedMaterialSelections
+                                  }
+                                  updateSlot={materialesApi.updateSlot}
+                                />
+                              </div>
+                            );
+                          }
+                          if (id === "candidatos-slot-detallado") {
+                            return (
+                              <div className="pasos-sections">
+                                <CandidatosSlotDetalladoEditor
+                                  pasoId={pasoActual.id}
+                                  slotIdx={slotIdx}
+                                  slot={slot}
+                                  slotDecl={decl}
+                                  candidateMaterials={
+                                    materialesApi.candidateMaterials
+                                  }
+                                  addSlotCandidate={
+                                    materialesApi.addSlotCandidate
+                                  }
+                                  removeSlotCandidate={
+                                    materialesApi.removeSlotCandidate
+                                  }
+                                  updateSlotCandidate={
+                                    materialesApi.updateSlotCandidate
+                                  }
+                                />
+                              </div>
+                            );
+                          }
+                          if (id === "base-consumo") {
+                            // Plegado dentro de "consumo-formula" (las 3 formas).
+                            return null;
+                          }
+                          if (id === "consumo-formula") {
+                            // Opción B: mostrar la fuente inline sólo cuando NO es la
+                            // default ("las piezas del trabajo"): en un sustrato común
+                            // agregar "de las piezas…" es ruido; en cenefa/bastidor
+                            // (fuente = output geométrico) sí aporta.
+                            const fuenteLabel =
+                              slot.fuenteMedida &&
+                              slot.fuenteMedida !== "piezas_jobcontext"
+                                ? (opcionesPiezasMontar(ctxSlot).find(
+                                    (o) => o.value === slot.fuenteMedida,
+                                  )?.label ?? null)
+                                : null;
+                            return (
+                              <ConsumoReglaGuiado
+                                slot={slot}
+                                decl={decl}
+                                familia={familia}
+                                paramsPaso={asRecord(cfg.paramsPasoJson)}
+                                esAdicional={!decl}
+                                materialLabel={null}
+                                magnitudProduceLabel={magnitudProducePaso(
+                                  cfg,
+                                  familia,
+                                )}
+                                fuenteLabel={fuenteLabel}
+                                onSlotPatch={(patch) =>
+                                  materialesApi.updateSlot(
+                                    pasoActual.id,
+                                    slotIdx,
+                                    patch,
+                                  )
+                                }
+                              />
+                            );
+                          }
+                          return renderComponente(id);
+                        };
+                        return (
+                          <div
+                            key={`${slot.slotCodigo}:${slotIdx}`}
+                            style={{
+                              borderTop:
+                                filaIdx > 0
+                                  ? "1px solid var(--hairline, #eee7de)"
+                                  : undefined,
+                            }}
                           >
-                            <Trash2Icon className="size-3.5" />
-                            Quitar
-                          </Button>
-                        }
-                      />
-                    </div>
-                  );
+                            <EjeGuiado
+                              titulo={
+                                familia
+                                  ? slotDisplayName(slot, familia)
+                                  : (slot.slotNombre ?? slot.slotCodigo)
+                              }
+                              opciones={opcionesDeMaterial(ctxSlot)}
+                              grupos={GRUPOS_MATERIAL}
+                              resumenPrincipal={[
+                                "materiales.material",
+                                "materiales.candidatos",
+                                "materiales.quien",
+                                "materiales.consumo",
+                              ]}
+                              ctx={ctxSlot}
+                              pendientesVivos={pendSlot}
+                              onAplicar={onAplicarSlot}
+                              renderComponente={renderComponenteSlot}
+                              ocultarCheck
+                              enLista
+                              accionExtra={
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() =>
+                                    materialesApi.removeSlot(
+                                      pasoActual.id,
+                                      slotIdx,
+                                    )
+                                  }
+                                >
+                                  <Trash2Icon className="size-3.5" />
+                                  Quitar
+                                </Button>
+                              }
+                            />
+                          </div>
+                        );
                       })}
                     </div>
                   );
@@ -14587,7 +14343,6 @@ function SeccionesEsquemaPaso({
                     renderComponente={renderComponente}
                   />
                 ) : null}
-
               </>
             ) : null}
           </>
@@ -14611,7 +14366,6 @@ function SeccionesEsquemaPaso({
     </>
   );
 }
-
 
 function AsistenteGuiado({
   pasos,
@@ -14727,12 +14481,15 @@ function AsistenteGuiado({
         style={{ maxWidth: 760 }}
       >
         <SheetHeader
-          style={{ padding: "18px 24px 10px", borderBottom: "1px solid var(--hairline, #eee)" }}
+          style={{
+            padding: "18px 24px 10px",
+            borderBottom: "1px solid var(--hairline, #eee)",
+          }}
         >
           <SheetTitle>Asistente de configuración</SheetTitle>
           <SheetDescription>
-            Recorre los pasos de la ruta y pregunta sólo lo que falta; lo que
-            el paso ya declara no se vuelve a preguntar.
+            Recorre los pasos de la ruta y pregunta sólo lo que falta; lo que el
+            paso ya declara no se vuelve a preguntar.
           </SheetDescription>
           <div
             style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}

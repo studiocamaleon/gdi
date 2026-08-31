@@ -83,6 +83,10 @@ export class CrearPasoTenantDto {
   operacionesCompuestas?: unknown[];
 
   @IsOptional()
+  @IsArray()
+  pasosInternos?: unknown[];
+
+  @IsOptional()
   @IsString()
   @MaxLength(300)
   descripcion?: string | null;
@@ -115,6 +119,10 @@ export class ActualizarPasoTenantDto {
   @IsOptional()
   @IsArray()
   operacionesCompuestas?: unknown[];
+
+  @IsOptional()
+  @IsArray()
+  pasosInternos?: unknown[];
 
   @IsOptional()
   @IsString()

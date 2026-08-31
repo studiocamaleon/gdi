@@ -65,6 +65,9 @@ export interface UpsertPasoTenantInput extends PasoTenantInput {
   activo?: boolean;
   tipoPaso?: TipoPasoTenant;
   operacionesCompuestas?: unknown[];
+  /** Nombre público desde 4.2.1. Se guarda en la columna JSON histórica para
+   * no romper recetas ni exigir una migración destructiva. */
+  pasosInternos?: unknown[];
 }
 
 @Injectable()
@@ -141,6 +144,10 @@ export class PasosTenantService implements OnModuleInit {
           fila.tipoPaso === 'COMPUESTO'
             ? leerDefinicionesPasoCompuesto(fila.operacionesCompuestasJson)
             : [],
+        pasosInternos:
+          fila.tipoPaso === 'COMPUESTO'
+            ? leerDefinicionesPasoCompuesto(fila.operacionesCompuestasJson)
+            : [],
       };
     });
   }
@@ -154,7 +161,9 @@ export class PasosTenantService implements OnModuleInit {
     const tipoPaso = input.tipoPaso ?? 'SIMPLE';
     const operacionesCompuestas =
       tipoPaso === 'COMPUESTO'
-        ? leerDefinicionesPasoCompuesto(input.operacionesCompuestas ?? [])
+        ? leerDefinicionesPasoCompuesto(
+            input.pasosInternos ?? input.operacionesCompuestas ?? [],
+          )
         : [];
 
     try {
@@ -330,7 +339,9 @@ export class PasosTenantService implements OnModuleInit {
     const operacionesCompuestas =
       tipoPaso === 'COMPUESTO'
         ? leerDefinicionesPasoCompuesto(
-            input.operacionesCompuestas ?? existente.operacionesCompuestasJson,
+            input.pasosInternos ??
+              input.operacionesCompuestas ??
+              existente.operacionesCompuestasJson,
           )
         : [];
 
@@ -461,6 +472,10 @@ export class PasosTenantService implements OnModuleInit {
       configBase: fila.configBaseJson ?? null,
       tipoPaso: fila.tipoPaso,
       operacionesCompuestas:
+        fila.tipoPaso === 'COMPUESTO'
+          ? leerDefinicionesPasoCompuesto(fila.operacionesCompuestasJson)
+          : [],
+      pasosInternos:
         fila.tipoPaso === 'COMPUESTO'
           ? leerDefinicionesPasoCompuesto(fila.operacionesCompuestasJson)
           : [],

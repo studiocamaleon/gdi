@@ -649,6 +649,7 @@ export interface PasoTenant {
   configBase?: Record<string, unknown> | null;
   tipoPaso: "SIMPLE" | "COMPUESTO";
   operacionesCompuestas?: DefinicionOperacionCompuesta[];
+  pasosInternos?: DefinicionPasoInternoCompuesto[];
 }
 
 export interface DefinicionOperacionCompuesta {
@@ -658,7 +659,14 @@ export interface DefinicionOperacionCompuesta {
   dimension: "FIJO" | "UNIDAD" | "LONGITUD" | "SUPERFICIE" | "CANTIDAD";
   requerida: boolean;
   orden: number;
+  familiaCodigo?: string | null;
+  requiereCodigos?: string[];
 }
+
+export type DefinicionPasoInternoCompuesto = DefinicionOperacionCompuesta & {
+  familiaCodigo: string;
+  requiereCodigos: string[];
+};
 
 /** Plantilla instanciable que ofrece el modal de alta. */
 export interface PlantillaPaso {
@@ -678,6 +686,7 @@ export interface UpsertPasoTenantInput {
   defaults?: Partial<DefaultsFamiliaPaso> | null;
   tipoPaso?: "SIMPLE" | "COMPUESTO";
   operacionesCompuestas?: DefinicionOperacionCompuesta[];
+  pasosInternos?: DefinicionPasoInternoCompuesto[];
 }
 
 export interface PreviewCosteoFamilia {

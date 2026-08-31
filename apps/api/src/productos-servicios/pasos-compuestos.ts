@@ -11,6 +11,22 @@ export type DefinicionOperacionCompuesta = {
   dimension: DimensionOperacionCompuesta;
   requerida: boolean;
   orden: number;
+  /** 4.2.1: una operación nueva siempre referencia una familia real. Los
+   * registros sin familia son borradores legacy y sólo se leen para migrar. */
+  familiaCodigo?: string | null;
+  requiereCodigos?: string[];
+};
+
+export type ConfiguracionPasoInternoCompuesto = {
+  codigo: string;
+  familiaCodigo: string;
+  nombre: string;
+  activa: boolean;
+  componentesCodigos: string[];
+  requiereCodigos: string[];
+  /** Mismo payload del editor estándar de ProductoConfigPaso. */
+  configuracion: Record<string, unknown>;
+  orden: number;
 };
 
 export type ConfiguracionOperacionCompuesta = {
@@ -29,11 +45,12 @@ export type ConfiguracionOperacionCompuesta = {
 };
 
 export type ConfiguracionPasoCompuesto = {
-  version: 1;
+  version: 1 | 2;
   nodoClave: string;
   pasoTenantId: string;
   pasoNombre: string;
   operaciones: ConfiguracionOperacionCompuesta[];
+  pasos?: ConfiguracionPasoInternoCompuesto[];
 };
 
 export type OperacionCompuestaResuelta = ConfiguracionOperacionCompuesta & {
@@ -95,6 +112,22 @@ export function leerDefinicionesPasoCompuesto(
       codigo: item.codigo.trim(),
       nombre: item.nombre.trim(),
       descripcion: item.descripcion?.trim() || null,
+      familiaCodigo:
+        typeof item.familiaCodigo === 'string' && item.familiaCodigo.trim()
+          ? item.familiaCodigo.trim()
+          : null,
+      requiereCodigos: Array.isArray(item.requiereCodigos)
+        ? [
+            ...new Set(
+              item.requiereCodigos
+                .filter(
+                  (codigo): codigo is string =>
+                    typeof codigo === 'string' && Boolean(codigo.trim()),
+                )
+                .map((codigo) => codigo.trim()),
+            ),
+          ]
+        : [],
       orden: Number.isFinite(Number(item.orden)) ? Number(item.orden) : index,
     }))
     .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo));
@@ -108,20 +141,23 @@ export function leerConfiguracionesPasosCompuestos(
   for (const raw of value) {
     if (
       !esRegistro(raw) ||
-      Number(raw.version) !== 1 ||
+      ![1, 2].includes(Number(raw.version)) ||
       typeof raw.nodoClave !== 'string' ||
       !raw.nodoClave.trim() ||
       typeof raw.pasoTenantId !== 'string' ||
       !raw.pasoTenantId.trim() ||
       typeof raw.pasoNombre !== 'string' ||
       !raw.pasoNombre.trim() ||
-      !Array.isArray(raw.operaciones)
+      (!Array.isArray(raw.operaciones) && !Array.isArray(raw.pasos))
     ) {
       throw new BadRequestException(
         'La configuración de pasos compuestos es inválida.',
       );
     }
-    const operaciones: ConfiguracionOperacionCompuesta[] = raw.operaciones.map(
+    const operacionesRaw = Array.isArray(raw.operaciones)
+      ? raw.operaciones
+      : [];
+    const operaciones: ConfiguracionOperacionCompuesta[] = operacionesRaw.map(
       (item, index) => {
         if (
           !esRegistro(item) ||
@@ -192,12 +228,58 @@ export function leerConfiguracionesPasosCompuestos(
         };
       },
     );
+    const pasos: ConfiguracionPasoInternoCompuesto[] = Array.isArray(raw.pasos)
+      ? raw.pasos.map((item, index) => {
+          if (
+            !esRegistro(item) ||
+            typeof item.codigo !== 'string' ||
+            !item.codigo.trim() ||
+            typeof item.familiaCodigo !== 'string' ||
+            !item.familiaCodigo.trim() ||
+            typeof item.nombre !== 'string' ||
+            !item.nombre.trim() ||
+            typeof item.activa !== 'boolean' ||
+            !Array.isArray(item.componentesCodigos) ||
+            !Array.isArray(item.requiereCodigos) ||
+            !esRegistro(item.configuracion)
+          ) {
+            throw new BadRequestException(
+              `El paso interno ${index + 1} de "${raw.pasoNombre}" es inválido.`,
+            );
+          }
+          return {
+            codigo: item.codigo.trim(),
+            familiaCodigo: item.familiaCodigo.trim(),
+            nombre: item.nombre.trim(),
+            activa: item.activa,
+            componentesCodigos: [
+              ...new Set(
+                item.componentesCodigos.filter(
+                  (codigo): codigo is string => typeof codigo === 'string',
+                ),
+              ),
+            ],
+            requiereCodigos: [
+              ...new Set(
+                item.requiereCodigos.filter(
+                  (codigo): codigo is string => typeof codigo === 'string',
+                ),
+              ),
+            ],
+            configuracion: item.configuracion,
+            orden: Number.isFinite(Number(item.orden))
+              ? Number(item.orden)
+              : index,
+          };
+        })
+      : [];
     resultado.push({
-      version: 1,
+      version: pasos.length || Number(raw.version) === 2 ? 2 : 1,
       nodoClave: raw.nodoClave.trim(),
       pasoTenantId: raw.pasoTenantId.trim(),
       pasoNombre: raw.pasoNombre.trim(),
       operaciones,
+      pasos,
     });
   }
   return resultado;

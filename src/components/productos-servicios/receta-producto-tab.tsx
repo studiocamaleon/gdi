@@ -93,20 +93,20 @@ function nombreHumano(value?: string | null) {
 }
 
 function EditorDefiniciones({
-  productoId,
-  productoNombre,
+  producto,
   rutaAlternativaId,
   ruta,
   revision,
   onClose,
 }: {
-  productoId: string;
-  productoNombre: string;
+  producto: ProductoDetalle;
   rutaAlternativaId: string;
   ruta: ProductoDetalle["rutasAlternativas"][number];
   revision: ProductoRecetaRevision;
   onClose: () => void;
 }) {
+  const productoId = producto.id;
+  const productoNombre = producto.nombre;
   const router = useRouter();
   const [saving, setSaving] = React.useState(false);
   const [productos, setProductos] = React.useState<
@@ -240,11 +240,12 @@ function EditorDefiniciones({
             return plantilla
               ? [
                   {
-                    version: 1 as const,
+                    version: 2 as const,
                     nodoClave: nodo.value,
                     pasoTenantId: plantilla.id,
                     pasoNombre: nodo.label,
                     operaciones: [],
+                    pasos: [],
                   },
                 ]
               : [];
@@ -723,10 +724,10 @@ function EditorDefiniciones({
           >
             <div className={styles.editorTitle}>
               <div>
-                <strong>Pasos compuestos</strong>
+                <strong>Etapas compuestas</strong>
                 <span>
-                  Configurá el trabajo que estos nodos realizan con los
-                  componentes y outputs de esta receta.
+                  Configurá los pasos reales que estos contenedores ejecutan con
+                  los componentes de la receta.
                 </span>
               </div>
             </div>
@@ -747,27 +748,24 @@ function EditorDefiniciones({
                     <div>
                       <strong>{paso.pasoNombre}</strong>
                       <span>
-                        {plantilla?.operacionesCompuestas?.length ?? 0}{" "}
-                        operaciones declaradas · {vinculados.length} componentes
-                        vinculados
+                        {plantilla?.pasosInternos?.length ?? 0} pasos declarados
+                        · {vinculados.length} componentes vinculados
                       </span>
                       <small>
-                        {activas
-                          ? `${activas} operaciones configuradas`
+                        {(paso.pasos?.filter((item) => item.activa).length ??
+                        activas)
+                          ? `${paso.pasos?.filter((item) => item.activa).length ?? activas} pasos configurados`
                           : "Pendiente de configuración"}
                       </small>
                     </div>
                     <button
                       type="button"
-                      disabled={
-                        !vinculados.length ||
-                        !plantilla?.operacionesCompuestas?.length
-                      }
+                      disabled={!plantilla?.pasosInternos?.length}
                       onClick={() =>
                         setPasoCompuestoConfigurando(paso.nodoClave)
                       }
                     >
-                      <Settings2Icon /> Configurar operaciones
+                      <Settings2Icon /> Configurar etapa
                     </button>
                   </div>
                 );
@@ -822,10 +820,9 @@ function EditorDefiniciones({
                 pasosCompuestos.find(
                   (paso) => paso.nodoClave === pasoCompuestoConfigurando,
                 )?.pasoTenantId,
-            )?.operacionesCompuestas ?? []
+            )?.pasosInternos ?? []
           }
-          productoPadreId={productoId}
-          productoPadreNombre={productoNombre}
+          producto={producto}
           componentes={componentes}
           onCancel={() => setPasoCompuestoConfigurando(null)}
           onSave={(configuracion) => {
@@ -893,10 +890,15 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
               const previos = grafo.aristas
                 .filter((arista) => arista.haciaClave === nodo.clave)
                 .map((arista) => arista.desdeClave);
-              const operaciones =
-                revision.pasosCompuestosJson
-                  ?.find((paso) => paso.nodoClave === nodo.clave)
-                  ?.operaciones.filter((operacion) => operacion.activa) ?? [];
+              const compuesto = revision.pasosCompuestosJson?.find(
+                (paso) => paso.nodoClave === nodo.clave,
+              );
+              const pasosInternos =
+                compuesto?.pasos?.filter((paso) => paso.activa) ?? [];
+              const operacionesLegacy =
+                compuesto?.operaciones.filter(
+                  (operacion) => operacion.activa,
+                ) ?? [];
               return (
                 <div key={nodo.clave}>
                   <b>{String(index + 1).padStart(2, "0")}</b>
@@ -905,8 +907,8 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                     {previos.length
                       ? `Después de ${previos.map(nombreNodo).join(" + ")}`
                       : "Inicio disponible"}
-                    {operaciones.length
-                      ? ` · Paso compuesto con ${operaciones.length} ${operaciones.length === 1 ? "operación" : "operaciones"}`
+                    {pasosInternos.length || operacionesLegacy.length
+                      ? ` · Etapa compuesta con ${pasosInternos.length || operacionesLegacy.length} ${pasosInternos.length === 1 || (!pasosInternos.length && operacionesLegacy.length === 1) ? "paso" : "pasos"}`
                       : ""}
                   </span>
                 </div>
@@ -1360,8 +1362,7 @@ export function RecetaProductoTab({
                   <>
                     {draft && editing === draft.id ? (
                       <EditorDefiniciones
-                        productoId={producto.id}
-                        productoNombre={producto.nombre}
+                        producto={producto}
                         rutaAlternativaId={ruta.id}
                         ruta={ruta}
                         revision={draft}

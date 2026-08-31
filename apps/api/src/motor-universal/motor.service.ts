@@ -750,6 +750,34 @@ export class MotorUniversalService {
             )
           : null;
 
+    // Fase 4.2.1: una etapa compuesta no se costea como un pseudopaso. Se
+    // reemplaza en memoria por sus hijos reales, cargados desde el snapshot
+    // publicado, para que atraviesen exactamente el mismo motor universal.
+    if (recetaPublicada?.pasosCompuestos?.some((item) => item.version === 2)) {
+      const internos = await this.cargarPasosInternosCompuestos(
+        input.tenantId,
+        recetaPublicada.snapshot,
+      );
+      const contenedores = new Set(
+        recetaPublicada.pasosCompuestos
+          .filter((item) => item.version === 2)
+          .map((item) => item.nodoClave.replace(/^ruta:/, '')),
+      );
+      producto = {
+        ...producto,
+        pasos: [
+          ...producto.pasos.filter(
+            (item) => !contenedores.has(item.rutaPasoId),
+          ),
+          ...internos,
+        ].sort(
+          (a, b) =>
+            a.rutaPasoOrden - b.rutaPasoOrden ||
+            a.rutaPasoId.localeCompare(b.rutaPasoId),
+        ),
+      };
+    }
+
     // JobContext mutable (los pasos PRE pueden mutarlo) + defaults sensatos
     const jobContext: JobContext = {
       caras: 1, // simple faz por defecto (se sobrescribe con input)
@@ -1124,8 +1152,7 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            | PasoEjecutado['ojalesLayout']
-            | undefined;
+            PasoEjecutado['ojalesLayout'] | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -3916,9 +3943,7 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          | 'MONTO_FIJO_PLANO'
-          | 'PORCENTAJE_SOBRE_BASE'
-          | 'POR_UNIDAD_INPUT',
+          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -4396,8 +4421,7 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        | { tarifa: unknown }
-        | undefined;
+        { tarifa: unknown } | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -4529,8 +4553,7 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          | { tarifa: unknown; nombre?: string | null }
-          | undefined;
+          { tarifa: unknown; nombre?: string | null } | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -5785,9 +5808,7 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          | 'HARDCODED'
-          | 'COMERCIAL_ELIGE'
-          | 'MOTOR_ELIGE_AUTO',
+          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -7296,19 +7317,16 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -7411,16 +7429,14 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              | Record<string, unknown>
-              | undefined;
+              Record<string, unknown> | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -8617,9 +8633,7 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          | 'MONTO_FIJO_PLANO'
-          | 'PORCENTAJE_SOBRE_BASE'
-          | 'POR_UNIDAD_INPUT',
+          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -8679,8 +8693,7 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        | Array<{ codigo: string; monto: number }>
-        | undefined;
+        Array<{ codigo: string; monto: number }> | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');
@@ -9999,6 +10012,190 @@ export class MotorUniversalService {
       slots,
       cargosDirectosPaso,
     });
+  }
+
+  private async cargarPasosInternosCompuestos(
+    tenantId: string,
+    snapshot: unknown,
+  ): Promise<PasoCargado[]> {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+      return [];
+    }
+    const raw = (snapshot as Record<string, unknown>).pasos;
+    if (!Array.isArray(raw)) return [];
+    const pasos = raw.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+      const paso = item as Record<string, unknown>;
+      const configuracion = paso.configuracion;
+      if (
+        !configuracion ||
+        typeof configuracion !== 'object' ||
+        Array.isArray(configuracion) ||
+        typeof (configuracion as Record<string, unknown>).contenedorClave !==
+          'string' ||
+        typeof paso.clave !== 'string' ||
+        typeof paso.familiaCodigo !== 'string'
+      ) {
+        return [];
+      }
+      return [
+        {
+          clave: paso.clave,
+          nombre: typeof paso.nombre === 'string' ? paso.nombre : paso.clave,
+          familiaCodigo: paso.familiaCodigo,
+          orden: Number(paso.orden ?? 0),
+          configuracion: configuracion as Record<string, unknown>,
+          slots: Array.isArray(paso.slots) ? paso.slots : [],
+        },
+      ];
+    });
+    if (!pasos.length) return [];
+
+    const maquinaInclude = {
+      centroCostoPrincipal: { select: { id: true, nombre: true } },
+      perfilesOperativos: true,
+      componentesDesgaste: {
+        where: { activo: true },
+        include: {
+          materiaPrimaVariante: {
+            include: { materiaPrima: { select: { activo: true } } },
+          },
+        },
+      },
+      consumibles: {
+        where: { activo: true },
+        include: {
+          materiaPrimaVariante: {
+            include: {
+              materiaPrima: {
+                select: {
+                  nombre: true,
+                  activo: true,
+                  unidadStock: true,
+                  templateId: true,
+                  tipoTecnico: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    } satisfies Prisma.MaquinaInclude;
+
+    return Promise.all(
+      pasos.map(async (item) => {
+        const cfg = item.configuracion;
+        const maquinaM1Id =
+          typeof cfg.maquinaM1Id === 'string' ? cfg.maquinaM1Id : null;
+        const perfilM1Id =
+          typeof cfg.perfilM1Id === 'string' ? cfg.perfilM1Id : null;
+        const centroCostoId =
+          typeof cfg.centroCostoId === 'string' ? cfg.centroCostoId : null;
+        const candidatas = Array.isArray(cfg.maquinasCandidatas)
+          ? cfg.maquinasCandidatas
+          : [];
+        const candidataIds = candidatas.flatMap((candidate) => {
+          if (!candidate || typeof candidate !== 'object') return [];
+          const id = (candidate as Record<string, unknown>).maquinaId;
+          return typeof id === 'string' ? [id] : [];
+        });
+        const [maquinaM1, perfilM1, centroCosto, maquinasCandidatas] =
+          await Promise.all([
+            maquinaM1Id
+              ? this.prisma.maquina.findFirst({
+                  where: { id: maquinaM1Id, tenantId },
+                  include: maquinaInclude,
+                })
+              : null,
+            perfilM1Id
+              ? this.prisma.maquinaPerfilOperativo.findFirst({
+                  where: { id: perfilM1Id, tenantId },
+                })
+              : null,
+            centroCostoId
+              ? this.prisma.centroCosto.findFirst({
+                  where: { id: centroCostoId, tenantId },
+                  select: { id: true, codigo: true, nombre: true },
+                })
+              : null,
+            candidataIds.length
+              ? this.prisma.maquina.findMany({
+                  where: { id: { in: candidataIds }, tenantId },
+                  include: maquinaInclude,
+                })
+              : [],
+          ]);
+        const candidataMap = new Map(
+          maquinasCandidatas.map((maquina) => [maquina.id, maquina]),
+        );
+        const row = {
+          id: item.clave,
+          familiaCodigo: item.familiaCodigo,
+          nombreVisible: item.nombre,
+          modoActivacion:
+            typeof cfg.modoActivacion === 'string'
+              ? cfg.modoActivacion
+              : 'OBLIGATORIO',
+          condicionActivacionJson: cfg.condicionActivacionJson ?? null,
+          modoTiempo:
+            typeof cfg.modoTiempo === 'string' ? cfg.modoTiempo : null,
+          mecanismoCantidad:
+            typeof cfg.mecanismoCantidad === 'string'
+              ? cfg.mecanismoCantidad
+              : null,
+          mecanismoCantidadConfigJson: cfg.mecanismoCantidadConfigJson ?? null,
+          multiplicadoresActivos: Array.isArray(cfg.multiplicadoresActivos)
+            ? cfg.multiplicadoresActivos.filter(
+                (value): value is string => typeof value === 'string',
+              )
+            : [],
+          paramsPasoJson: cfg.paramsPasoJson ?? null,
+          maquinaM1Id,
+          perfilM1Id,
+          centroCostoId,
+          setupOverrideMin: cfg.setupOverrideMin ?? null,
+          cleanupOverrideMin: cfg.cleanupOverrideMin ?? null,
+          tiempoFijoOverrideMin: cfg.tiempoFijoOverrideMin ?? null,
+          configSlotsMaterialesJson: item.slots,
+          configMaquinasCandidatasJson: candidatas,
+          configCargosDirectosJson: [],
+          maquinaM1,
+          perfilM1,
+          centroCosto,
+        };
+        const cargado = await this.mapPasoExtraToPasoCargado(
+          row as never,
+          tenantId,
+          new Map(),
+          candidataMap,
+        );
+        return {
+          ...cargado,
+          rutaPasoOrden: item.orden,
+          dotacionOperarios: Number(cfg.dotacionOperarios ?? 1),
+          requiereRutaPasoIds: Array.isArray(cfg.requiereCodigos)
+            ? cfg.requiereCodigos.filter(
+                (value): value is string => typeof value === 'string',
+              )
+            : [],
+          tercerizado: cfg.tercerizado === true,
+          proveedorId:
+            typeof cfg.proveedorId === 'string' ? cfg.proveedorId : null,
+          fuenteCostoTercerizado:
+            typeof cfg.fuenteCostoTercerizado === 'string'
+              ? cfg.fuenteCostoTercerizado
+              : null,
+          tercerizadoConfigJson: cfg.tercerizadoConfigJson ?? null,
+          plazoProveedorDias:
+            cfg.plazoProveedorDias == null
+              ? null
+              : Number(cfg.plazoProveedorDias),
+          tercerizadoEntradas: Array.isArray(cfg.tercerizadoEntradas)
+            ? (cfg.tercerizadoEntradas as PasoCargado['tercerizadoEntradas'])
+            : [],
+        };
+      }),
+    );
   }
 
   /**

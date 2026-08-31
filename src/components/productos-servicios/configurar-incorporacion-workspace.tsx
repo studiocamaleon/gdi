@@ -1,189 +1,218 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeftIcon, BoxesIcon, WorkflowIcon } from "lucide-react";
-import type { DefinicionOperacionCompuesta } from "@/lib/productos-servicios";
 import {
-  getFormularioCotizacionProducto,
-  type ConfiguracionOperacionCompuesta,
+  ArrowLeftIcon,
+  BoxesIcon,
+  CheckIcon,
+  Settings2Icon,
+  WorkflowIcon,
+} from "lucide-react";
+import { toast } from "sonner";
+import { ConfigPasosEditorView } from "@/components/productos-servicios/config-pasos-editor-view";
+import type {
+  CatalogoFamilias,
+  DefinicionPasoInternoCompuesto,
+  ProductoDetalle,
+  RutaAlternativaDetalle,
+} from "@/lib/productos-servicios";
+import {
+  getCatalogoFamilias,
+  getLookupsConfigPaso,
   type ConfiguracionPasoCompuesto,
-  type FuenteOperacionIncorporacion,
+  type ConfiguracionPasoInternoCompuesto,
+  type LookupsConfigPaso,
   type ProductoRecetaComponenteInput,
+  type UpsertConfigPasoPayload,
 } from "@/lib/productos-servicios-api";
 import styles from "./configurar-incorporacion-workspace.module.css";
 
-type FuenteVisible = {
-  id: string;
-  etiqueta: string;
-  fuente: FuenteOperacionIncorporacion;
-  unidadVisible: string | null;
-  factor: number;
-};
-
-function factorUnidad(tecnica: string | null, visible: string | null) {
-  if (tecnica === "mm" && visible === "cm") return 0.1;
-  if (tecnica === "mm" && visible === "m") return 0.001;
-  if (tecnica === "mm2" && visible === "m2") return 0.000001;
-  return 1;
-}
-
-function idFuente(fuente?: FuenteOperacionIncorporacion | null) {
-  if (!fuente) return "";
-  return fuente.tipo === "COMPONENTE"
-    ? `COMPONENTE:${fuente.componenteCodigo}:${fuente.campo}`
-    : `PADRE:${fuente.campo}`;
+function configuracionInicial(
+  codigo: string,
+  familiaCodigo: string,
+): UpsertConfigPasoPayload {
+  return {
+    rutaPasoId: codigo,
+    modoActivacion: "OBLIGATORIO",
+    condicionActivacionJson: null,
+    modoTiempo: null,
+    mecanismoCantidad: null,
+    mecanismoCantidadConfigJson: null,
+    multiplicadoresActivos: [],
+    paramsPasoJson: null,
+    nombreVisible: null,
+    maquinaM1Id: null,
+    perfilM1Id: null,
+    centroCostoId: null,
+    setupOverrideMin: null,
+    cleanupOverrideMin: null,
+    tiempoFijoOverrideMin: null,
+    dotacionOperarios: 1,
+    requiereRutaPasoIds: [],
+    maquinasCandidatas: [],
+    slotsMateriales: [],
+    tercerizado: false,
+    proveedorId: null,
+    fuenteCostoTercerizado: null,
+    tercerizadoConfigJson: null,
+    plazoProveedorDias: null,
+    tercerizadoEntradas: [],
+    familiaCodigo,
+  } as UpsertConfigPasoPayload;
 }
 
 export function ConfigurarIncorporacionWorkspace({
   paso,
   definiciones,
-  productoPadreId,
-  productoPadreNombre,
+  producto,
   componentes,
   onCancel,
   onSave,
 }: {
   paso: ConfiguracionPasoCompuesto;
-  definiciones: DefinicionOperacionCompuesta[];
-  productoPadreId: string;
-  productoPadreNombre: string;
+  definiciones: DefinicionPasoInternoCompuesto[];
+  producto: ProductoDetalle;
   componentes: ProductoRecetaComponenteInput[];
   onCancel: () => void;
   onSave: (configuracion: ConfiguracionPasoCompuesto) => void;
 }) {
-  const [fuentes, setFuentes] = React.useState<FuenteVisible[]>([]);
-  const [operaciones, setOperaciones] = React.useState<
-    ConfiguracionOperacionCompuesta[]
-  >(() =>
-    definiciones.map((definicion, index) => {
-      const existente = paso.operaciones.find(
-        (item) => item.codigo === definicion.codigo,
-      );
-      return (
-        existente ?? {
-          codigo: definicion.codigo,
-          nombre: definicion.nombre,
-          activa: definicion.requerida,
-          componentesCodigos: [],
-          modoTiempo: definicion.dimension === "FIJO" ? "FIJO" : "POR_UNIDAD",
-          minutosFijos: definicion.dimension === "FIJO" ? 1 : null,
-          minutosPorUnidad: definicion.dimension === "FIJO" ? null : 1,
-          dotacionOperarios: 1,
-          orden: index,
-        }
-      );
-    }),
-  );
-  const [loading, setLoading] = React.useState(true);
+  const [catalogo, setCatalogo] = React.useState<CatalogoFamilias | null>(null);
+  const [lookups, setLookups] = React.useState<LookupsConfigPaso | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [editando, setEditando] = React.useState<string | null>(null);
+  const [pasos, setPasos] = React.useState<ConfiguracionPasoInternoCompuesto[]>(
+    () =>
+      definiciones.map((definicion, index) => {
+        const existente = paso.pasos?.find(
+          (item) => item.codigo === definicion.codigo,
+        );
+        return (
+          existente ?? {
+            codigo: definicion.codigo,
+            familiaCodigo: definicion.familiaCodigo,
+            nombre: definicion.nombre,
+            activa: definicion.requerida,
+            componentesCodigos: [],
+            requiereCodigos: definicion.requiereCodigos ?? [],
+            configuracion: configuracionInicial(
+              definicion.codigo,
+              definicion.familiaCodigo,
+            ),
+            orden: index,
+          }
+        );
+      }),
+  );
 
   React.useEffect(() => {
-    let active = true;
-    Promise.all([
-      getFormularioCotizacionProducto(productoPadreId),
-      Promise.all(
-        componentes.map(async (item) => ({
-          item,
-          formulario: await getFormularioCotizacionProducto(
-            item.productoComponenteId,
-          ),
-        })),
-      ),
-    ])
-      .then(([padre, hijos]) => {
-        if (!active) return;
-        const disponibles: FuenteVisible[] = [
-          {
-            id: "PADRE:cantidad",
-            etiqueta: `Cantidad de ${productoPadreNombre}`,
-            fuente: { tipo: "PADRE", campo: "cantidad" },
-            unidadVisible: padre.cantidad.unidad,
-            factor: 1,
-          },
-          {
-            id: "PADRE:medidaCustomMm.anchoMm",
-            etiqueta: `Ancho de ${productoPadreNombre}`,
-            fuente: { tipo: "PADRE", campo: "medidaCustomMm.anchoMm" },
-            unidadVisible: "cm",
-            factor: 0.1,
-          },
-          {
-            id: "PADRE:medidaCustomMm.altoMm",
-            etiqueta: `Alto de ${productoPadreNombre}`,
-            fuente: { tipo: "PADRE", campo: "medidaCustomMm.altoMm" },
-            unidadVisible: "cm",
-            factor: 0.1,
-          },
-          ...padre.outputsPublicos.map((output) => ({
-            id: `PADRE:${output.clave}`,
-            etiqueta: `${productoPadreNombre} · ${output.etiqueta}`,
-            fuente: { tipo: "PADRE" as const, campo: output.clave },
-            unidadVisible: output.unidadVisible ?? output.unidad,
-            factor: factorUnidad(
-              output.unidad,
-              output.unidadVisible ?? output.unidad,
-            ),
-          })),
-          ...hijos.flatMap(({ item, formulario }) =>
-            formulario.outputsPublicos.map((output) => ({
-              id: `COMPONENTE:${item.codigo}:${output.clave}`,
-              etiqueta: `${item.nombre} · ${output.etiqueta}`,
-              fuente: {
-                tipo: "COMPONENTE" as const,
-                componenteCodigo: item.codigo,
-                campo: output.clave,
-              },
-              unidadVisible: output.unidadVisible ?? output.unidad,
-              factor: factorUnidad(
-                output.unidad,
-                output.unidadVisible ?? output.unidad,
-              ),
-            })),
-          ),
-        ];
-        setFuentes(
-          disponibles.filter(
-            (item, index, all) =>
-              all.findIndex((candidate) => candidate.id === item.id) === index,
-          ),
-        );
+    let activo = true;
+    Promise.all([getCatalogoFamilias(), getLookupsConfigPaso()])
+      .then(([catalogoCargado, lookupsCargados]) => {
+        if (!activo) return;
+        setCatalogo(catalogoCargado);
+        setLookups(lookupsCargados);
       })
-      .catch(
-        (reason) =>
-          active &&
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "No se pudieron cargar los datos disponibles.",
-          ),
-      )
-      .finally(() => active && setLoading(false));
+      .catch((reason) => {
+        if (!activo) return;
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "No se pudo cargar el editor de pasos.",
+        );
+      });
     return () => {
-      active = false;
+      activo = false;
     };
-  }, [componentes, productoPadreId, productoPadreNombre]);
+  }, []);
 
-  const cambiar = (
-    index: number,
-    patch: Partial<ConfiguracionOperacionCompuesta>,
+  const cambiarPaso = (
+    codigo: string,
+    patch: Partial<ConfiguracionPasoInternoCompuesto>,
   ) =>
-    setOperaciones((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, ...patch } : item,
+    setPasos((actuales) =>
+      actuales.map((item) =>
+        item.codigo === codigo ? { ...item, ...patch } : item,
       ),
     );
 
-  const requeridas = new Set(
-    definiciones.filter((item) => item.requerida).map((item) => item.codigo),
+  const pasoActivo = pasos.find((item) => item.codigo === editando) ?? null;
+  const definicionActiva = definiciones.find(
+    (item) => item.codigo === editando,
   );
-  const puedeGuardar = operaciones.every(
-    (item) =>
-      !item.activa ||
-      (item.componentesCodigos.length > 0 &&
-        (item.modoTiempo === "FIJO"
-          ? Number(item.minutosFijos) > 0
-          : Boolean(item.fuenteCantidad) && Number(item.minutosPorUnidad) > 0)),
-  );
+
+  if (pasoActivo && definicionActiva && catalogo && lookups) {
+    const rutaSintetica: RutaAlternativaDetalle = {
+      id: `compuesto:${paso.nodoClave}`,
+      nombre: paso.pasoNombre,
+      esPreferida: true,
+      rutaVersion: 1,
+      reglaAutoSeleccionJson: null,
+      ruta: {
+        id: `compuesto:${paso.nodoClave}`,
+        codigo: "SUBRUTA_COMPUESTA",
+        nombre: paso.pasoNombre,
+        pasos: [
+          {
+            id: pasoActivo.codigo,
+            orden: 1,
+            familiaCodigo: pasoActivo.familiaCodigo,
+            familiaNombre:
+              catalogo.familias.find(
+                (item) => item.codigo === pasoActivo.familiaCodigo,
+              )?.nombre ?? pasoActivo.nombre,
+            nombreVisible: pasoActivo.nombre,
+            activo: true,
+          },
+        ],
+      },
+      configPasos: [],
+      pasosExtras: [],
+    };
+    return (
+      <div className={styles.backdrop} role="dialog" aria-modal="true">
+        <div className={`${styles.workspace} ${styles.editorWorkspace}`}>
+          <header className={styles.header}>
+            <button
+              type="button"
+              onClick={() => setEditando(null)}
+              aria-label="Volver a la etapa"
+            >
+              <ArrowLeftIcon />
+            </button>
+            <div>
+              <span>Producción · BOM · {paso.pasoNombre}</span>
+              <h2>{pasoActivo.nombre}</h2>
+              <p>
+                Paso productivo completo: configurá parámetros, materiales,
+                recursos, tiempos o tercerización como en una ruta normal.
+              </p>
+            </div>
+          </header>
+          <div className={styles.fullEditor}>
+            <ConfigPasosEditorView
+              embedded
+              producto={producto}
+              rutaAlternativa={rutaSintetica}
+              catalogoFamilias={catalogo}
+              lookups={lookups}
+              configuracionContextual={{
+                iniciales: {
+                  [pasoActivo.codigo]: {
+                    ...pasoActivo.configuracion,
+                    rutaPasoId: pasoActivo.codigo,
+                  },
+                },
+                guardar: async (_, configuracion) => {
+                  cambiarPaso(pasoActivo.codigo, { configuracion });
+                  toast.success("Paso guardado dentro de la etapa");
+                },
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.backdrop} role="dialog" aria-modal="true">
@@ -193,202 +222,147 @@ export function ConfigurarIncorporacionWorkspace({
             <ArrowLeftIcon />
           </button>
           <div>
-            <span>Producción · BOM · Paso compuesto</span>
+            <span>Producción · BOM · Etapa compuesta</span>
             <h2>{paso.pasoNombre}</h2>
             <p>
-              Vinculá los componentes y outputs de este producto con las
-              operaciones declaradas por el paso reutilizable.
+              Configurá pasos internos reales. La etapa no agrega tiempo ni
+              materiales: consolida el trabajo de sus hijos.
             </p>
           </div>
         </header>
-
         <main className={styles.body}>
           <div className={styles.contextCard}>
             <BoxesIcon />
             <div>
-              <strong>Configuración contextual del producto</strong>
+              <strong>Subruta contextual del producto</strong>
               <span>
-                {operaciones.filter((item) => item.activa).length} operaciones
-                activas · {componentes.length} componentes disponibles
+                {pasos.filter((item) => item.activa).length} pasos activos ·{" "}
+                {componentes.length} componentes disponibles
               </span>
             </div>
           </div>
-          {loading ? <p className={styles.message}>Cargando outputs…</p> : null}
           {error ? <p className={styles.error}>{error}</p> : null}
-
-          <div className={styles.operations}>
-            {operaciones.map((operacion, index) => {
-              const fuente = fuentes.find(
-                (item) => item.id === idFuente(operacion.fuenteCantidad),
+          {!catalogo && !error ? (
+            <p className={styles.message}>Cargando editor productivo…</p>
+          ) : null}
+          <div className={styles.stepList}>
+            {pasos.map((item, index) => {
+              const definicion = definiciones.find(
+                (candidate) => candidate.codigo === item.codigo,
               );
-              const obligatoria = requeridas.has(operacion.codigo);
+              const obligatoria = definicion?.requerida === true;
               return (
-                <section className={styles.operation} key={operacion.codigo}>
-                  <div className={styles.operationHead}>
+                <section className={styles.stepCard} key={item.codigo}>
+                  <div className={styles.stepIdentity}>
                     <span>{String(index + 1).padStart(2, "0")}</span>
                     <WorkflowIcon />
-                    <strong>{operacion.nombre}</strong>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={operacion.activa}
-                        disabled={obligatoria}
-                        onChange={(event) =>
-                          cambiar(index, { activa: event.target.checked })
-                        }
-                      />
-                      {obligatoria ? "Obligatoria" : "Usar operación"}
-                    </label>
-                  </div>
-                  {operacion.activa ? (
-                    <div className={styles.fields}>
-                      <fieldset className={styles.sourceField}>
-                        <legend>Componentes involucrados</legend>
-                        <div className={styles.componentChecks}>
-                          {componentes.map((componente) => (
-                            <label key={componente.codigo}>
-                              <input
-                                type="checkbox"
-                                checked={operacion.componentesCodigos.includes(
-                                  componente.codigo,
-                                )}
-                                onChange={(event) =>
-                                  cambiar(index, {
-                                    componentesCodigos: event.target.checked
-                                      ? [
-                                          ...operacion.componentesCodigos,
-                                          componente.codigo,
-                                        ]
-                                      : operacion.componentesCodigos.filter(
-                                          (codigo) =>
-                                            codigo !== componente.codigo,
-                                        ),
-                                  })
-                                }
-                              />
-                              {componente.nombre}
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
-                      <label>
-                        <span>Forma de estimar</span>
-                        <select
-                          value={operacion.modoTiempo}
-                          onChange={(event) =>
-                            cambiar(index, {
-                              modoTiempo: event.target.value as
-                                "FIJO" | "POR_UNIDAD",
-                            })
-                          }
-                        >
-                          <option value="POR_UNIDAD">Según una cantidad</option>
-                          <option value="FIJO">Tiempo fijo</option>
-                        </select>
-                      </label>
-                      {operacion.modoTiempo === "POR_UNIDAD" ? (
-                        <>
-                          <label className={styles.sourceField}>
-                            <span>Dato que determina el trabajo</span>
-                            <select
-                              value={idFuente(operacion.fuenteCantidad)}
-                              onChange={(event) => {
-                                const elegida = fuentes.find(
-                                  (item) => item.id === event.target.value,
-                                );
-                                if (!elegida) return;
-                                cambiar(index, {
-                                  fuenteCantidad: elegida.fuente,
-                                  factorConversionFuente: elegida.factor,
-                                  unidadCantidad:
-                                    elegida.unidadVisible ?? "unidad",
-                                });
-                              }}
-                            >
-                              <option value="">Elegir dato publicado…</option>
-                              {fuentes.map((item) => (
-                                <option value={item.id} key={item.id}>
-                                  {item.etiqueta}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>Ritmo</span>
-                            <div className={styles.numberWithUnit}>
-                              <input
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                value={operacion.minutosPorUnidad ?? ""}
-                                onChange={(event) =>
-                                  cambiar(index, {
-                                    minutosPorUnidad: Number(
-                                      event.target.value,
-                                    ),
-                                  })
-                                }
-                              />
-                              <em>min / {fuente?.unidadVisible ?? "unidad"}</em>
-                            </div>
-                          </label>
-                        </>
-                      ) : (
-                        <label className={styles.sourceField}>
-                          <span>Duración</span>
-                          <div className={styles.numberWithUnit}>
-                            <input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              value={operacion.minutosFijos ?? ""}
-                              onChange={(event) =>
-                                cambiar(index, {
-                                  minutosFijos: Number(event.target.value),
-                                })
-                              }
-                            />
-                            <em>minutos</em>
-                          </div>
-                        </label>
-                      )}
-                      <label>
-                        <span>Personas</span>
-                        <input
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={operacion.dotacionOperarios ?? 1}
-                          onChange={(event) =>
-                            cambiar(index, {
-                              dotacionOperarios: Number(event.target.value),
-                            })
-                          }
-                        />
-                      </label>
+                    <div>
+                      <strong>{item.nombre}</strong>
+                      <small>
+                        {catalogo?.familias.find(
+                          (familia) => familia.codigo === item.familiaCodigo,
+                        )?.nombre ??
+                          (item.familiaCodigo
+                            ? "Paso real"
+                            : "Falta elegir el paso real")}
+                      </small>
                     </div>
-                  ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.activeButton}
+                    aria-pressed={item.activa}
+                    disabled={obligatoria}
+                    onClick={() =>
+                      cambiarPaso(item.codigo, { activa: !item.activa })
+                    }
+                  >
+                    <span>{item.activa ? <CheckIcon /> : null}</span>
+                    {obligatoria
+                      ? "Obligatorio"
+                      : item.activa
+                        ? "Incluido"
+                        : "No incluido"}
+                  </button>
+                  <div className={styles.componentLinks}>
+                    <span>Componentes involucrados</span>
+                    {componentes.length ? (
+                      componentes.map((componente) => (
+                        <label key={componente.codigo}>
+                          <input
+                            type="checkbox"
+                            checked={item.componentesCodigos.includes(
+                              componente.codigo,
+                            )}
+                            onChange={(event) =>
+                              cambiarPaso(item.codigo, {
+                                componentesCodigos: event.target.checked
+                                  ? [
+                                      ...item.componentesCodigos,
+                                      componente.codigo,
+                                    ]
+                                  : item.componentesCodigos.filter(
+                                      (codigo) => codigo !== componente.codigo,
+                                    ),
+                              })
+                            }
+                          />
+                          {componente.nombre}
+                        </label>
+                      ))
+                    ) : (
+                      <small>
+                        Trabajo general del producto, sin componente.
+                      </small>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.configureButton}
+                    disabled={
+                      !item.activa ||
+                      !item.familiaCodigo ||
+                      !catalogo ||
+                      !lookups
+                    }
+                    onClick={() => setEditando(item.codigo)}
+                  >
+                    <Settings2Icon /> Configurar paso
+                  </button>
                 </section>
               );
             })}
           </div>
         </main>
-
         <footer className={styles.footer}>
           <p>
-            Las reglas quedan versionadas en la receta. La cotización resolverá
-            sus valores y la OT conservará el snapshot resultante.
+            Los pasos se versionarán con la receta y la OT conservará su
+            configuración, materiales y recursos.
           </p>
-          <button type="button" onClick={onCancel}>
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={loading || !puedeGuardar}
-            onClick={() => onSave({ ...paso, operaciones })}
-          >
-            Aplicar operaciones
-          </button>
+          <div>
+            <button type="button" onClick={onCancel}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={
+                !pasos.length || pasos.some((item) => !item.familiaCodigo)
+              }
+              onClick={() =>
+                onSave({
+                  ...paso,
+                  version: 2,
+                  operaciones: [],
+                  pasos: pasos.map((item, index) => ({
+                    ...item,
+                    orden: index,
+                  })),
+                })
+              }
+            >
+              Aplicar etapa
+            </button>
+          </div>
         </footer>
       </div>
     </div>

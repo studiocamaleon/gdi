@@ -279,11 +279,23 @@ export type ConfiguracionOperacionCompuesta = OperacionIncorporacion & {
 };
 
 export type ConfiguracionPasoCompuesto = {
-  version: 1;
+  version: 1 | 2;
   nodoClave: string;
   pasoTenantId: string;
   pasoNombre: string;
   operaciones: ConfiguracionOperacionCompuesta[];
+  pasos?: ConfiguracionPasoInternoCompuesto[];
+};
+
+export type ConfiguracionPasoInternoCompuesto = {
+  codigo: string;
+  familiaCodigo: string;
+  nombre: string;
+  activa: boolean;
+  componentesCodigos: string[];
+  requiereCodigos: string[];
+  configuracion: UpsertConfigPasoPayload;
+  orden: number;
 };
 
 export type FormularioCotizacionProducto = {

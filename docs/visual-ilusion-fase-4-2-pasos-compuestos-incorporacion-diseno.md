@@ -1,6 +1,15 @@
 # Fase 4.2 — Pasos compuestos y operaciones de incorporación
 
-**Estado:** IMPLEMENTADA · PENDIENTE DE VALIDACIÓN FUNCIONAL DEL USUARIO
+**Estado:** EN DESARROLLO · CORRECCIÓN ESTRUCTURAL 4.2.1
+
+> Revisión del 30/08/2026: la validación con un caso real demostró que una
+> “operación” reducida a nombre, magnitud y tiempo no alcanza. Tensar una lona,
+> colocar una chapa o cablear iluminación son pasos productivos completos:
+> pueden consumir materiales, usar máquinas/centros de costo, ser
+> tercerizados, declarar parámetros y publicar outputs. Desde esta revisión,
+> toda mención histórica a “operaciones hijas” debe leerse como **pasos
+> internos reales**. El modelo reducido queda deprecado y sólo se conserva
+> para migrar borradores existentes.
 
 > Corrección del 30/08/2026: la validación funcional determinó que las
 > operaciones no pertenecen a cada componente fabricado. Pertenecen a la
@@ -41,19 +50,24 @@ Ensamblaje final
 
 ## 2. Decisión de dominio
 
-### 2.1 El paso compuesto es un contenedor productivo
+### 2.1 El paso compuesto es una etapa o subruta reutilizable
 
 Un nodo de la ruta padre puede actuar como **paso compuesto**. Continúa siendo
-el nodo visible de convergencia en la ruta principal, pero reúne operaciones
-hijas calculables y trazables.
+el nodo visible de convergencia en la ruta principal, pero reúne pasos internos
+reales, calculables y trazables.
 
-Las operaciones hijas:
+Los pasos internos:
 
 - no son productos ni componentes de BOM;
-- no tienen receta propia;
+- son instancias de las mismas familias de paso que usa una ruta normal;
 - pertenecen al trabajo de incorporación del componente al padre;
-- pueden tener cantidad, unidad, tiempo, centro de costo y recurso propios;
+- conservan parámetros, materiales, máquinas, tercerización, tiempos,
+  recursos, costos, documentos y outputs del editor estándar;
 - se congelan con la revisión y se materializan con la OT.
+
+El contenedor no tiene tiempo, materiales ni costo propios. Su duración y costo
+son el agregado de sus hijos según el DAG interno. No se crea un pseudopaso
+paralelo al modelo productivo existente.
 
 ### 2.2 La incorporación pertenece al paso compuesto de la receta padre
 
@@ -94,66 +108,60 @@ Una referencia de cálculo no crea por sí sola una precedencia física. La
 operación queda físicamente contenida en el nodo compuesto elegido, y ese nodo
 sólo se habilita cuando sus predecesores y componentes requeridos terminaron.
 
-## 4. Contrato versionado
+## 4. Contrato versionado corregido
 
-El catálogo declara el contrato reusable del paso compuesto:
+El catálogo declara una plantilla reusable de subruta. Cada hijo referencia
+una familia de paso real; su código sólo identifica esa ocurrencia dentro del
+contenedor:
 
 ```ts
-type DefinicionOperacionCompuesta = {
+type DefinicionPasoInternoCompuesto = {
   codigo: string;
-  nombre: string;
-  descripcion?: string;
-  magnitudEsperada?: string;
+  familiaCodigo: string;
+  nombreVisible?: string;
   requerida: boolean;
   orden: number;
+  requiereCodigos: string[];
 };
 ```
 
-Cada revisión de receta guarda la configuración contextual de esas
-operaciones:
+Cada revisión de receta guarda la configuración contextual completa de esos
+pasos. `configuracion` usa el mismo contrato que `ProductoConfigPaso`, incluidos
+los slots de materiales y los datos de tercerización:
 
 ```ts
-type ConfiguracionOperacionCompuesta = {
-  operacionCodigo: string;
+type ConfiguracionPasoInternoCompuesto = {
+  pasoCodigo: string;
+  familiaCodigo: string;
+  nombreVisible: string;
   activa: boolean;
   componentesCodigos: string[];
-  modoTiempo: "FIJO" | "POR_UNIDAD";
-  fuenteCantidad?: {
-    tipo: "PADRE" | "COMPONENTE";
-    componenteCodigo?: string;
-    campo: string;
-  };
-  minutosFijos?: number;
-  minutosPorUnidad?: number;
-  dotacionOperarios: number;
+  requiereCodigos: string[];
+  configuracion: UpsertProductoConfigPasoDto;
 };
 ```
 
-La persistencia queda en `ProductoRecetaRevision.pasosCompuestosJson`, separada
-de `ProductoRecetaComponente.configuracionJson`. La API valida que el paso, la
-operación, los componentes y los outputs públicos existan y no ejecuta
-expresiones libres.
+La persistencia versionada queda en
+`ProductoRecetaRevision.pasosCompuestosJson`, separada de
+`ProductoRecetaComponente.configuracionJson`. La API valida con el mismo
+validador del editor de pasos que la familia, materiales, máquina, proveedor,
+parámetros y dependencias existan. No se ejecutan expresiones libres.
 
 ## 5. Cálculo de tiempo y costo
 
-### 5.1 Tiempo de trabajo
-
-- `FIJO`: `minutosFijos`.
-- `POR_UNIDAD`: `cantidad resuelta × minutosPorUnidad`.
-- Horas-persona: `duración × dotación`.
-- Costo: horas-persona por costo horario del centro/recurso congelado.
-
-La cantidad se resuelve desde fuentes controladas. Las unidades visibles usan
-las mismas convenciones del sheet comercial; las conversiones técnicas se
-hacen internamente.
+Cada hijo se calcula con el motor universal exactamente como un paso normal.
+Esto incluye T-1/T-2/T-3/T-4, mecanismos de cantidad, materiales y mermas,
+máquinas, centro de costo, dotación y tercerización. Los componentes vinculados
+y sus outputs públicos amplían el `JobContext` disponible, pero no crean un
+lenguaje de fórmulas alternativo.
 
 ### 5.2 Duración del paso compuesto
 
-En la primera versión, las operaciones dentro de un mismo paso compuesto son
-secuenciales. Su duración es:
+La duración del contenedor es la ruta crítica de su DAG interno. Si no se
+declaran dependencias, se conserva el orden lineal como fallback seguro:
 
 ```text
-tiempo base del paso + suma de duraciones de incorporación
+ruta crítica de los pasos internos activos
 ```
 
 Las ramas que fabrican componentes sí continúan en paralelo. El ETA del
@@ -173,34 +181,32 @@ Cada componente fabricado conserva:
 - acción **Configurar uso**, que contiene parámetros y modo de seguimiento;
 - acción de eliminación.
 
-La BOM presenta además una sección **Pasos compuestos**. Su workspace muestra
-las operaciones declaradas en el catálogo y permite configurarlas mediante
-controles humanos:
+La BOM presenta además una sección **Etapas compuestas**. Su workspace muestra
+los pasos internos declarados en el catálogo y abre el mismo editor técnico de
+un paso normal, contextualizado al producto:
 
-1. nombre de la tarea (`Tensar lona`);
-2. componentes que participan (`Lona`, `Cenefas`, `Iluminación`);
-3. forma de cálculo (`Tiempo fijo` o `Según una cantidad`);
-4. dato público que determina la cantidad (`Perímetro del bastidor`, `Cantidad de
-módulos`, `Superficie de chapa`, etc.);
-5. ritmo y unidad visibles (`5 min por m`, `0,7 min por módulo`);
-6. recurso/centro de costo cuando corresponda.
+1. paso real (`Tensado de lona`);
+2. componentes que participan (`Lona`);
+3. parámetros y forma de cálculo;
+4. materiales (`Tornillo T1 cada 20 cm de perímetro`);
+5. máquina, recurso/centro de costo o proveedor;
+6. outputs públicos y dependencias internas.
 
 No se muestran claves técnicas ni fórmulas editables.
 
 ### 6.2 En Rutas y flujo
 
 La ruta principal continúa legible. Un paso compuesto muestra un resumen como
-`Ensamblaje final · 5 operaciones`. Al expandirlo se ven sus operaciones hijas,
+`Ensamblaje final · 5 pasos`. Al expandirlo se ven sus pasos internos,
 los componentes vinculados y su regla de tiempo. No se duplican como nodos
 principales ni ensucian el editor general de pasos.
 
 ### 6.3 En cotización y OT
 
-La cotización muestra el tiempo y costo de incorporación separado de la
-fabricación de componentes. La OT materializa las operaciones bajo el paso
-compuesto para que puedan consultarse y auditarse. El estado operativo inicial
-continúa gobernado por el paso padre; no se introduce un segundo workflow
-independiente hasta que exista una necesidad real de captura por subtarea.
+La cotización muestra el tiempo, materiales y costo de incorporación separado
+de la fabricación de componentes. La OT materializa los hijos bajo el
+contenedor, con sus consumos y recursos, para ejecutarlos y auditarlos sin
+aplanarlos ni duplicarlos.
 
 ## 7. Validaciones e invariantes
 
@@ -245,17 +251,18 @@ revisión del hijo, del padre o de las operaciones no altera trabajos emitidos.
 
 1. Configurar `Ensamblaje final` como paso compuesto sin alterar el orden de la
    ruta principal.
-2. Configurar las operaciones declaradas por el paso compuesto y vincular uno
+2. Configurar los pasos internos reales declarados por la etapa y vincular uno
    o varios componentes mediante selectores controlados.
 3. Resolver tiempos desde datos del padre y outputs públicos de componentes.
-4. Separar claramente costo/tiempo de fabricación e incorporación.
+4. Separar claramente materiales, costo y tiempo de fabricación e
+   incorporación.
 5. Congelar el desglose completo en cotización y OT.
 6. Mantener ramas hijas paralelas y bloquear el paso compuesto hasta su
    convergencia.
 7. Incorporar la duración del paso compuesto al ETA y progreso sin duplicarla.
-8. Rechazar fuentes inexistentes, unidades incompatibles y operaciones
-   inválidas antes de publicar.
-9. Demostrar equivalencia en rutas y recetas históricas sin operaciones.
+8. Rechazar familias, materiales, recursos, fuentes o dependencias inválidas
+   antes de publicar.
+9. Demostrar equivalencia en rutas y recetas históricas sin etapas compuestas.
 10. Aprobar pruebas backend/frontend, builds y QA desktop/mobile.
 
 ## 11. Caso rector de aceptación
@@ -273,7 +280,7 @@ paralelo. `Ensamblaje final` se bloquea hasta recibirlas, muestra el detalle de
 sus cuatro operaciones, calcula duración y costo trazables y luego libera
 `Control final`.
 
-## 12. Evidencia técnica de implementación
+## 12. Evidencia histórica de la implementación reemplazada
 
 - Migraciones aplicadas: `20260830190000_fase_4_2_pasos_compuestos` y
   `20260830203000_fase_4_2_autoria_pasos_compuestos`, tanto en desarrollo como
@@ -292,7 +299,15 @@ sus cuatro operaciones, calcula duración y costo trazables y luego libera
 - Pendiente: recorrido funcional del usuario con un producto real y QA final
   desktop/mobile antes de declarar cerrada la ampliación.
 
+La evidencia anterior corresponde al modelo reducido y no habilita el cierre
+de 4.2.1. Se conserva para trazabilidad, no como aceptación vigente.
+
 ## 13. Corrección obligatoria del modelo de autoría
+
+> **Registro histórico, reemplazado por 4.2.1:** esta fue la primera
+> corrección de autoría (sacar operaciones del componente), pero todavía
+> trataba esas operaciones como objetos reducidos. La sección 14 es la decisión
+> vigente: la autoría pertenece a la etapa y sus hijos son pasos reales.
 
 ### 13.1 Propiedad de las operaciones
 
@@ -344,3 +359,31 @@ La BOM agrega una sección `Pasos compuestos`. Cada nodo compuesto presenta sus
 operaciones declaradas y un acceso `Configurar operaciones`. Ese workspace
 permite activar operaciones, vincular uno o varios componentes y seleccionar
 fuentes públicas controladas del padre o de los hijos, sin fórmulas libres.
+
+## 14. Implementación 4.2.1
+
+- El catálogo de la etapa ahora selecciona familias/pasos reales y guarda una
+  subruta reusable; los nombres libres sólo son etiquetas visibles de una
+  ocurrencia real.
+- La BOM abre el editor estándar para cada hijo, incluyendo parámetros del
+  oficio, materiales, máquinas, centros, dotación y tercerización.
+- La receta persiste `version: 2`, configuraciones completas y dependencias
+  internas; la versión 1 se sigue leyendo para migrar borradores existentes.
+- El snapshot materializa los hijos con `contenedorClave`, slots y recursos.
+- Al cotizar, el motor reemplaza el contenedor por esos pasos y los procesa con
+  el motor universal, evitando sumar un tiempo propio del contenedor.
+- Los borradores creados con operaciones reducidas muestran explícitamente que
+  falta elegir el paso real antes de aplicar la nueva etapa; no se inventa una
+  equivalencia que pueda alterar materiales o costos.
+
+Validación técnica de esta corrección:
+
+- builds de API y frontend aprobados;
+- TypeScript frontend aprobado;
+- 99 pruebas focalizadas de recetas, pasos compuestos y motor aprobadas;
+- lint de los archivos nuevos/modificados de UI aprobado; el editor reutilizado
+  conserva observaciones históricas fuera del alcance de esta corrección;
+- QA en navegador aprobado para el catálogo, selección controlada, edición sin
+  pérdida de foco y apertura de la etapa sin componentes vinculados;
+- el guard de CSS conserva diez observaciones globales preexistentes; los
+  estilos nuevos viven en CSS Modules.

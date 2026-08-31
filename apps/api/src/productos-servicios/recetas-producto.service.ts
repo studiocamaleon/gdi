@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   EstadoProductoRecetaRevision,
@@ -24,6 +25,8 @@ import type {
 } from './dto/receta-producto.dto';
 import { ProductoValidacionService } from './producto-validacion.service';
 import { ProductosService } from './productos.service';
+import { ConfigPasosService } from './config-pasos.service';
+import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import {
   compilarRutaLineal,
   validarYOrdenarGrafo,
@@ -123,6 +126,7 @@ export class RecetasProductoService {
     private readonly productos: ProductosService,
     private readonly validacionProducto: ProductoValidacionService,
     private readonly eventos: EventosSistemaService,
+    @Optional() private readonly configPasos?: ConfigPasosService,
   ) {}
 
   async obtener(auth: CurrentAuth, productoId: string) {
@@ -182,8 +186,17 @@ export class RecetasProductoService {
 
     const producto = await this.productos.obtenerProducto(tenantId, productoId);
     const ruta = this.encontrarRuta(producto, rutaAlternativaId);
+    const pasosCompuestosPublicados = receta.revisionPublicada
+      .pasosCompuestosJson
+      ? leerConfiguracionesPasosCompuestos(
+          receta.revisionPublicada.pasosCompuestosJson,
+        )
+      : [];
     const snapshot = {
-      ...this.snapshotConfiguracion(producto, ruta),
+      ...this.incorporarPasosInternos(
+        this.snapshotConfiguracion(producto, ruta),
+        pasosCompuestosPublicados,
+      ),
       ...(receta.revisionPublicada.grafoProduccionJson
         ? {
             grafoProduccion: receta.revisionPublicada.grafoProduccionJson,
@@ -197,13 +210,12 @@ export class RecetasProductoService {
             ...item,
             cantidad: Number(item.cantidad),
           })),
+          pasosCompuestosPublicados,
         ),
       ),
       ...(receta.revisionPublicada.pasosCompuestosJson
         ? {
-            pasosCompuestos: leerConfiguracionesPasosCompuestos(
-              receta.revisionPublicada.pasosCompuestosJson,
-            ),
+            pasosCompuestos: pasosCompuestosPublicados,
           }
         : {}),
     };
@@ -401,8 +413,12 @@ export class RecetasProductoService {
       false,
     );
 
+    const configuracionConInternos = this.incorporarPasosInternos(
+      configuracion,
+      pasosCompuestos,
+    );
     const snapshot = {
-      ...configuracion,
+      ...configuracionConInternos,
       grafoProduccion,
       documentos: this.documentosCanonicos(documentos),
       componentes: this.componentesCanonicos(componentesVersionados),
@@ -615,8 +631,12 @@ export class RecetasProductoService {
       })),
       pasosCompuestosActuales,
     );
+    const configuracionConInternos = this.incorporarPasosInternos(
+      configuracion,
+      pasosCompuestosActuales,
+    );
     const snapshotActual = {
-      ...configuracion,
+      ...configuracionConInternos,
       ...(revision.grafoProduccionJson
         ? { grafoProduccion: revision.grafoProduccionJson }
         : {}),
@@ -982,7 +1002,7 @@ export class RecetasProductoService {
           !pasosCompuestos.some((item) => item.nodoClave === nodo.clave)
         ) {
           throw new BadRequestException(
-            `El paso compuesto "${nodo.nombre}" todavía no tiene sus operaciones configuradas en la BOM.`,
+            `La etapa compuesta "${nodo.nombre}" todavía no tiene sus pasos internos configurados en la BOM.`,
           );
         }
       }
@@ -1020,6 +1040,60 @@ export class RecetasProductoService {
       const definicionesPorCodigo = new Map(
         definiciones.map((item) => [item.codigo, item]),
       );
+      if (paso.version === 2) {
+        const internos = paso.pasos ?? [];
+        for (const requerida of definiciones.filter((item) => item.requerida)) {
+          if (
+            !internos.some(
+              (item) => item.codigo === requerida.codigo && item.activa,
+            )
+          ) {
+            throw new BadRequestException(
+              `El paso obligatorio "${requerida.nombre}" de "${paso.pasoNombre}" todavía no está configurado.`,
+            );
+          }
+        }
+        const codigosInternos = new Set(internos.map((item) => item.codigo));
+        for (const interno of internos) {
+          const definicion = definicionesPorCodigo.get(interno.codigo);
+          if (
+            !definicion ||
+            definicion.familiaCodigo !== interno.familiaCodigo
+          ) {
+            throw new BadRequestException(
+              `El paso interno "${interno.nombre}" ya no coincide con la subruta reutilizable de "${paso.pasoNombre}".`,
+            );
+          }
+          for (const codigo of interno.componentesCodigos) {
+            if (!codigosComponentes.has(codigo)) {
+              throw new BadRequestException(
+                `El paso "${interno.nombre}" referencia un componente que ya no existe.`,
+              );
+            }
+          }
+          if (
+            interno.requiereCodigos.some(
+              (codigo) => !codigosInternos.has(codigo),
+            )
+          ) {
+            throw new BadRequestException(
+              `El paso "${interno.nombre}" depende de otro paso interno que ya no existe.`,
+            );
+          }
+          if (exigirTodos && interno.activa && this.configPasos) {
+            await this.configPasos.validarConfiguracionBase(
+              tenantId,
+              interno.familiaCodigo,
+              {
+                ...(interno.configuracion as unknown as UpsertProductoConfigPasoDto),
+                rutaPasoId: interno.codigo,
+                requiereRutaPasoIds: [],
+              },
+            );
+          }
+        }
+        continue;
+      }
       for (const requerida of definiciones.filter((item) => item.requerida)) {
         if (
           !paso.operaciones.some(
@@ -1190,6 +1264,63 @@ export class RecetasProductoService {
       cargosCotizacion: jsonSeguro(
         producto.cargosDirectosCotizacion,
       ) as unknown[],
+    };
+  }
+
+  /** Materializa los hijos de una etapa compuesta como pasos productivos del
+   * snapshot. El grafo principal conserva el contenedor legible; el detalle
+   * completo queda agrupado por `contenedorClave` y participa de BOM/recursos. */
+  private incorporarPasosInternos(
+    configuracion: SnapshotConfiguracion,
+    compuestos: ConfiguracionPasoCompuesto[],
+  ): SnapshotConfiguracion {
+    const internos: PasoSnapshot[] = [];
+    for (const compuesto of compuestos) {
+      if (compuesto.version !== 2) continue;
+      const contenedor = configuracion.pasos.find(
+        (item) => item.clave === compuesto.nodoClave,
+      );
+      for (const [index, paso] of (compuesto.pasos ?? [])
+        .filter((item) => item.activa)
+        .entries()) {
+        const cfg = paso.configuracion;
+        internos.push({
+          clave: `${compuesto.nodoClave}:interno:${paso.codigo}`,
+          nombre: paso.nombre,
+          familiaCodigo: paso.familiaCodigo,
+          orden: (contenedor?.orden ?? 10000) + (index + 1) / 1000,
+          configuracion: jsonSeguro({
+            ...cfg,
+            contenedorClave: compuesto.nodoClave,
+            pasoInternoCodigo: paso.codigo,
+            componentesCodigos: paso.componentesCodigos,
+            requiereCodigos: paso.requiereCodigos,
+          }) as Record<string, unknown>,
+          slots: Array.isArray(cfg.slotsMateriales)
+            ? cfg.slotsMateriales.map(
+                (slot) => jsonSeguro(slot) as Record<string, unknown>,
+              )
+            : [],
+          recurso: jsonSeguro({
+            maquina: cfg.maquinaM1Id ? { id: cfg.maquinaM1Id } : null,
+            perfil: cfg.perfilM1Id ? { id: cfg.perfilM1Id } : null,
+            centroCosto: cfg.centroCostoId ? { id: cfg.centroCostoId } : null,
+            maquinasCandidatas: cfg.maquinasCandidatas ?? [],
+            dotacionOperarios: cfg.dotacionOperarios ?? 1,
+            tercerizado: cfg.tercerizado ?? false,
+            proveedorId: cfg.proveedorId ?? null,
+            fuenteCostoTercerizado: cfg.fuenteCostoTercerizado ?? null,
+            tercerizadoConfigJson: cfg.tercerizadoConfigJson ?? null,
+            plazoProveedorDias: cfg.plazoProveedorDias ?? null,
+          }) as Record<string, unknown>,
+        });
+      }
+    }
+    return {
+      ...configuracion,
+      pasos: [...configuracion.pasos, ...internos].sort(
+        (a, b) => a.orden - b.orden || a.clave.localeCompare(b.clave),
+      ),
     };
   }
 
