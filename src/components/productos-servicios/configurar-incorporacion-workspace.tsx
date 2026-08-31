@@ -30,6 +30,7 @@ import styles from "./configurar-incorporacion-workspace.module.css";
 function configuracionInicial(
   codigo: string,
   familiaCodigo: string,
+  nombreVisible: string,
 ): UpsertConfigPasoPayload {
   return {
     rutaPasoId: codigo,
@@ -40,7 +41,7 @@ function configuracionInicial(
     mecanismoCantidadConfigJson: null,
     multiplicadoresActivos: [],
     paramsPasoJson: null,
-    nombreVisible: null,
+    nombreVisible,
     maquinaM1Id: null,
     perfilM1Id: null,
     centroCostoId: null,
@@ -97,6 +98,7 @@ export function ConfigurarIncorporacionWorkspace({
             configuracion: configuracionInicial(
               definicion.codigo,
               definicion.familiaCodigo,
+              definicion.nombre,
             ),
             orden: index,
           }
@@ -200,6 +202,9 @@ export function ConfigurarIncorporacionWorkspace({
                   [pasoActivo.codigo]: {
                     ...pasoActivo.configuracion,
                     rutaPasoId: pasoActivo.codigo,
+                    nombreVisible:
+                      pasoActivo.configuracion.nombreVisible?.trim() ||
+                      pasoActivo.nombre,
                   },
                 },
                 guardar: async (_, configuracion) => {
