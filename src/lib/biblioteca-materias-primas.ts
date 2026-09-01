@@ -160,6 +160,11 @@ export const bibliotecaFamilias: Record<
     key: "iman_ceramico_flexible",
     parent: "magnetico_fijacion",
   },
+  fijacion_auxiliar: {
+    nm: "Tornillos y fijaciones",
+    key: "fijacion_auxiliar",
+    parent: "magnetico_fijacion",
+  },
   sellos_automaticos: {
     nm: "Sellos automáticos",
     key: "sellos_automaticos",

@@ -34,10 +34,15 @@ function Acciones({ acciones }: { acciones: AccionNodoProductivo[] }) {
               <ContextMenu.Separator className={styles.separator} />
             ) : null}
             <ContextMenu.Item
+              nativeButton
+              render={<button type="button" />}
               className={styles.item}
               data-destructive={accion.destructive || undefined}
               disabled={accion.disabled}
-              onClick={accion.onSelect}
+              onClickCapture={accion.onSelect}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
             >
               <Icono />
               {accion.etiqueta}
@@ -60,10 +65,15 @@ function AccionesDropdown({ acciones }: { acciones: AccionNodoProductivo[] }) {
               <DropdownMenuSeparator className={styles.separator} />
             ) : null}
             <DropdownMenuItem
+              nativeButton
+              render={<button type="button" />}
               className={styles.item}
               variant={accion.destructive ? "destructive" : "default"}
               disabled={accion.disabled}
-              onClick={accion.onSelect}
+              onClickCapture={accion.onSelect}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
             >
               <Icono />
               {accion.etiqueta}

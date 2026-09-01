@@ -16,6 +16,13 @@ La BOM pasa a ser una proyección consolidada y versionada, no una segunda
 fuente de autoría. Contrato completo en
 `docs/editor-modelo-productivo-unificado-diseno.md`.
 
+**Decisión de lectura BOM multinivel (2026-09-01):** la proyección conserva la
+jerarquía completa de revisiones hijas y diferencia consumos directos de
+acumulados. El Workflow continúa siendo la representación de secuencia y
+paralelismo; la BOM muestra composición, reglas de cantidad y vínculos con el
+paso consumidor o nodo de incorporación. La ficha de producto muestra reglas
+maestras y cotización/OT podrán mostrar la explosión con cantidades resueltas.
+
 ---
 
 ## 1. Propósito y autoridad de este documento

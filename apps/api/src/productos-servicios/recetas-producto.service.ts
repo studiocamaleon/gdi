@@ -44,6 +44,10 @@ import {
   leerDefinicionesPasoCompuesto,
   type ConfiguracionPasoCompuesto,
 } from './pasos-compuestos';
+import {
+  construirBomMultinivel,
+  type BomRevisionFuente,
+} from './bom-multinivel';
 
 type ProductoDetalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaDetalle = ProductoDetalle['rutasAlternativas'][number];
@@ -64,6 +68,12 @@ type SnapshotConfiguracion = {
   ruta: Record<string, unknown>;
   pasos: PasoSnapshot[];
   cargosCotizacion: unknown[];
+};
+
+type VarianteMaterialReferencia = {
+  unidad: UnidadMateriaPrima | null;
+  sku: string;
+  nombre: string;
 };
 
 function jsonSeguro(valor: unknown): unknown {
@@ -158,6 +168,30 @@ export class RecetasProductoService {
         },
       },
     });
+  }
+
+  /**
+   * Proyección de lectura del BOM completo. Sigue las revisiones exactas que
+   * quedaron congeladas en cada componente; nunca reemplaza un hijo por su
+   * publicación más reciente.
+   */
+  async obtenerBomMultinivel(auth: CurrentAuth, revisionId: string) {
+    try {
+      const bom = await construirBomMultinivel(revisionId, (id) =>
+        this.cargarRevisionBom(auth.tenantId, id),
+      );
+      if (!bom) {
+        throw new NotFoundException('La revisión de receta no existe.');
+      }
+      return bom;
+    } catch (error: unknown) {
+      if (error instanceof NotFoundException) throw error;
+      throw new ConflictException(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo proyectar el BOM multinivel.',
+      );
+    }
   }
 
   /** Contrato consumido por el motor: null mantiene el flujo legacy. */
@@ -1007,6 +1041,114 @@ export class RecetasProductoService {
     });
   }
 
+  private async cargarRevisionBom(
+    tenantId: string,
+    revisionId: string,
+  ): Promise<BomRevisionFuente | null> {
+    const revision = await this.prisma.productoRecetaRevision.findFirst({
+      where: { id: revisionId, tenantId },
+      include: {
+        receta: {
+          include: {
+            producto: {
+              select: {
+                id: true,
+                codigo: true,
+                nombre: true,
+                unidadComercial: true,
+              },
+            },
+          },
+        },
+        rutaAlternativa: { select: { id: true, nombre: true } },
+        materiales: { orderBy: { orden: 'asc' } },
+        recursos: { orderBy: { orden: 'asc' } },
+        componentes: { orderBy: { orden: 'asc' } },
+        documentos: { orderBy: { orden: 'asc' } },
+      },
+    });
+    if (!revision) return null;
+
+    return {
+      id: revision.id,
+      numero: revision.numero,
+      estado: revision.estado,
+      huellaConfiguracion: revision.huellaConfiguracion,
+      recetaId: revision.recetaId,
+      rutaAlternativaId: revision.rutaAlternativaId,
+      rutaNombre: revision.rutaAlternativa.nombre,
+      productoId: revision.receta.producto.id,
+      productoCodigo: revision.receta.producto.codigo,
+      productoNombre: revision.receta.producto.nombre,
+      unidadComercial: revision.receta.producto.unidadComercial,
+      materiales: revision.materiales.map((material) => ({
+        id: material.id,
+        pasoClave: material.pasoClave,
+        pasoNombre: material.pasoNombre,
+        slotCodigo: material.slotCodigo,
+        slotNombre: material.slotNombre,
+        rol: material.rol,
+        modoSeleccion: material.modoSeleccion,
+        materialVarianteId: material.materialVarianteId,
+        materialSku: material.materialSku,
+        materialNombre: material.materialNombre,
+        unidad: material.unidad,
+        formula: material.formula,
+        cantidadBase: material.cantidadBase,
+        cantidadFactor:
+          material.cantidadFactor === null
+            ? null
+            : Number(material.cantidadFactor),
+        fuenteMedida: material.fuenteMedida,
+        mermaAdicionalPct: Number(material.mermaAdicionalPct),
+        aplicaMultiCaras: material.aplicaMultiCaras,
+        orden: material.orden,
+      })),
+      recursos: revision.recursos.map((recurso) => ({
+        id: recurso.id,
+        pasoClave: recurso.pasoClave,
+        pasoNombre: recurso.pasoNombre,
+        familiaCodigo: recurso.familiaCodigo,
+        maquinaNombre: recurso.maquinaNombre,
+        estacionNombre: recurso.estacionNombre,
+        perfilNombre: recurso.perfilNombre,
+        centroCostoNombre: recurso.centroCostoNombre,
+        dotacionOperarios: recurso.dotacionOperarios,
+        tercerizado: recurso.tercerizado,
+        proveedorNombre: recurso.proveedorNombre,
+        orden: recurso.orden,
+      })),
+      documentos: revision.documentos.map((documento) => ({
+        id: documento.id,
+        alcance: documento.alcance,
+        pasoClave: documento.pasoClave,
+        codigo: documento.codigo,
+        nombre: documento.nombre,
+        proposito: documento.proposito,
+        etapa: documento.etapa,
+        requerido: documento.requerido,
+        orden: documento.orden,
+      })),
+      componentes: revision.componentes.map((componente) => ({
+        id: componente.id,
+        productoComponenteId: componente.productoComponenteId,
+        recetaRevisionId: componente.recetaRevisionId,
+        recetaVersion: componente.recetaVersion,
+        recetaHuella: componente.recetaHuella,
+        codigo: componente.codigo,
+        nombre: componente.nombre,
+        politicaEjecucion: componente.politicaEjecucion,
+        formula: componente.formula,
+        cantidad: Number(componente.cantidad),
+        unidad: componente.unidad,
+        requerido: componente.requerido,
+        configuracionJson: jsonSeguro(componente.configuracionJson),
+        nodoIncorporacionClave: componente.nodoIncorporacionClave,
+        orden: componente.orden,
+      })),
+    };
+  }
+
   private pasosCompuestosDesdeLegacy(
     componentes: Array<{
       codigo: string;
@@ -1679,7 +1821,7 @@ export class RecetasProductoService {
       documentos: unknown[];
       componentes: unknown[];
     },
-    unidades: Map<string, UnidadMateriaPrima | null>,
+    variantes: Map<string, VarianteMaterialReferencia>,
   ) {
     return snapshot.pasos.flatMap((paso) =>
       paso.slots.map((slot, index) => {
@@ -1696,6 +1838,9 @@ export class RecetasProductoService {
           typeof slot.materialVarianteId === 'string'
             ? slot.materialVarianteId
             : null;
+        const varianteCatalogo = varianteId
+          ? (variantes.get(varianteId) ?? null)
+          : null;
         return {
           pasoClave: paso.clave,
           pasoNombre: paso.nombre,
@@ -1706,16 +1851,18 @@ export class RecetasProductoService {
           modoSeleccion: String(slot.modoSeleccion ?? 'HARDCODED'),
           materialVarianteId: varianteId,
           materialSku:
-            typeof materialVariante?.sku === 'string'
+            varianteCatalogo?.sku ??
+            (typeof materialVariante?.sku === 'string'
               ? materialVariante.sku
-              : null,
+              : null),
           materialNombre:
-            typeof materiaPrima?.nombre === 'string'
+            varianteCatalogo?.nombre ??
+            (typeof materiaPrima?.nombre === 'string'
               ? materiaPrima.nombre
               : typeof materialVariante?.nombreVariante === 'string'
                 ? materialVariante.nombreVariante
-                : null,
-          unidad: varianteId ? (unidades.get(varianteId) ?? null) : null,
+                : null),
+          unidad: varianteCatalogo?.unidad ?? null,
           formula: String(slot.formula ?? 'por_unidad_productiva'),
           cantidadBase:
             typeof slot.cantidadBase === 'string' ? slot.cantidadBase : null,
@@ -1891,7 +2038,7 @@ export class RecetasProductoService {
         for (const id of this.idsVariantesSlot(slot)) ids.add(id);
       }
     }
-    if (!ids.size) return new Map<string, UnidadMateriaPrima | null>();
+    if (!ids.size) return new Map<string, VarianteMaterialReferencia>();
     const variantes = await this.prisma.materiaPrimaVariante.findMany({
       where: {
         tenantId,
@@ -1900,14 +2047,22 @@ export class RecetasProductoService {
       },
       select: {
         id: true,
+        sku: true,
+        nombreVariante: true,
         unidadStock: true,
-        materiaPrima: { select: { unidadStock: true } },
+        materiaPrima: { select: { nombre: true, unidadStock: true } },
       },
     });
     return new Map(
       variantes.map((item) => [
         item.id,
-        item.unidadStock ?? item.materiaPrima.unidadStock,
+        {
+          unidad: item.unidadStock ?? item.materiaPrima.unidadStock,
+          sku: item.sku,
+          nombre: item.nombreVariante
+            ? `${item.materiaPrima.nombre} · ${item.nombreVariante}`
+            : item.materiaPrima.nombre,
+        },
       ]),
     );
   }
@@ -2021,14 +2176,14 @@ export class RecetasProductoService {
 
   private validarUnidades(
     snapshot: SnapshotConfiguracion,
-    unidades: Map<string, UnidadMateriaPrima | null>,
+    variantes: Map<string, VarianteMaterialReferencia>,
   ) {
     for (const paso of snapshot.pasos) {
       for (const slot of paso.slots) {
         const formula = String(slot.formula ?? '');
         const unidadesSlot = new Set(
           this.idsVariantesSlot(slot)
-            .map((id) => unidades.get(id))
+            .map((id) => variantes.get(id)?.unidad)
             .filter((item): item is UnidadMateriaPrima => Boolean(item)),
         );
         const esperada =

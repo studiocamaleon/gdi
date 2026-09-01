@@ -14,10 +14,17 @@ export const dynamic = "force-dynamic";
 
 export default async function ConfigPasosFocusedPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ productoId: string; rutaAltId: string }>;
+  searchParams: Promise<{ nodo?: string | string[] }>;
 }) {
   const { productoId, rutaAltId } = await params;
+  const query = await searchParams;
+  const nodoInicial =
+    typeof query.nodo === "string" && query.nodo.trim()
+      ? query.nodo
+      : undefined;
   if (!(await tienePermiso("costos.gestionar"))) {
     redirect(
       `/productos-servicios/${productoId}?tab=produccion&vista=operaciones&rutaAltId=${rutaAltId}`,
@@ -48,6 +55,7 @@ export default async function ConfigPasosFocusedPage({
         lookups={lookups}
         catalogoCargos={catalogoCargos}
         recetas={recetas}
+        nodoInicial={nodoInicial}
       />
     </div>
   );

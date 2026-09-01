@@ -192,6 +192,13 @@ interface Props {
       configuracion: UpsertConfigPasoPayload,
     ) => Promise<void> | void;
   };
+  /**
+   * Se ejecuta después de persistir un paso real de la ruta. Permite que el
+   * editor productivo reconstruya la revisión/BOM que proyecta esa ruta.
+   * Los pasos internos de una etapa no lo usan: se consolidan al aplicar la
+   * etapa y guardar el modelo.
+   */
+  onPasoPersistido?: (rutaPasoId: string) => Promise<void> | void;
   modeloProductivo?: {
     active: boolean;
     estructura: "SIMPLE" | "COMPUESTO";
@@ -2993,6 +3000,7 @@ export function ConfigPasosEditorView({
   modoFocoNodo = false,
   configuracionBase,
   configuracionContextual,
+  onPasoPersistido,
   modeloProductivo,
 }: Props) {
   const router = useRouter();
@@ -4236,8 +4244,8 @@ export function ConfigPasosEditorView({
     const erroresBorrador = sinValidacionProduccion
       ? 0
       : validarBasico(configs[rutaPasoId], familia, {
-            familiaCodigo: familiaCodigoGuardar ?? "",
-          }).errores.length +
+          familiaCodigo: familiaCodigoGuardar ?? "",
+        }).errores.length +
         validarMateriales(configs[rutaPasoId], familia).errores.length +
         validarAvanzado(
           jsonTexts[rutaPasoId].params,
@@ -4245,8 +4253,7 @@ export function ConfigPasosEditorView({
           configs[rutaPasoId],
           familia,
         ).errores.length;
-    const guardarComoBorrador =
-      opciones?.comoBorrador ?? erroresBorrador > 0;
+    const guardarComoBorrador = opciones?.comoBorrador ?? erroresBorrador > 0;
     const paramsRes = textToJson(jsonText.params);
     const mecanismoRes = cantidadRelevante
       ? textToJson(jsonText.mecanismo)
@@ -4466,6 +4473,9 @@ export function ConfigPasosEditorView({
             await upsertConfigPaso(rutaAlternativa.id, payload);
           }
         }
+      }
+      if (!configuracionBase && !configuracionContextual) {
+        await onPasoPersistido?.(rutaPasoId);
       }
       setSavedConfigSnapshots((prev) => ({
         ...prev,
@@ -4887,11 +4897,11 @@ export function ConfigPasosEditorView({
                   <Share2Icon />
                 </span>
                 <span className="body">
-                  <span className="ttl">Hoja de ruta</span>
+                  <span className="ttl">Ruta de producción</span>
                   <span className="sub">
                     {pasosUnificados.length +
                       modeloProductivo.componentes.length}{" "}
-                    nodos en esta vía
+                    nodos en esta ruta
                   </span>
                 </span>
                 <span className="status">Ruta</span>
@@ -5559,7 +5569,7 @@ export function ConfigPasosEditorView({
                             <button
                               type="button"
                               onClick={() => modeloProductivo.onOpen("ruta")}
-                              aria-label="Volver a la hoja de ruta"
+                              aria-label="Volver a la ruta de producción"
                             >
                               <ArrowLeftIcon />
                             </button>
@@ -7786,8 +7796,7 @@ export function ConfigPasosEditorView({
                                       })
                                     }
                                     disabled={
-                                      guardando === paso.id ||
-                                      !pasoTieneCambios
+                                      guardando === paso.id || !pasoTieneCambios
                                     }
                                   >
                                     {pasoTieneCambios ? (
@@ -7817,8 +7826,7 @@ export function ConfigPasosEditorView({
                                   type="button"
                                   onClick={() => guardarPaso(paso.id)}
                                   disabled={
-                                    guardando === paso.id ||
-                                    !pasoTieneCambios
+                                    guardando === paso.id || !pasoTieneCambios
                                   }
                                 >
                                   {pasoTieneCambios ? (

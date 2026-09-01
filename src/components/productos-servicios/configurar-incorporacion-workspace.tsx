@@ -218,8 +218,9 @@ export function ConfigurarIncorporacionWorkspace({
       titulo={paso.pasoNombre}
       descripcion="Configurá las operaciones que determinan el tiempo, los materiales y el costo. En producción se ejecutará una sola etapa."
       onBack={onCancel}
-      backLabel="Volver a la hoja de ruta"
+      backLabel="Volver a la ruta de producción"
       embedded={embedded}
+      pinFooterToViewport
       contentClassName={styles.body}
       footerNote="El desglose se versionará con la receta. La OT recibirá una sola etapa con tiempo, materiales y costo consolidados."
       primaryLabel="Aplicar etapa"
@@ -241,10 +242,10 @@ export function ConfigurarIncorporacionWorkspace({
       <div className={styles.contextCard}>
         <BoxesIcon />
         <div>
-          <strong>Subruta contextual del producto</strong>
+          <strong>Desglose interno de la etapa</strong>
           <span>
             {pasos.filter((item) => item.activa).length} operaciones activas ·{" "}
-            {componentes.length} componentes disponibles
+            {componentes.length} componentes disponibles en este producto
           </span>
         </div>
       </div>
@@ -292,7 +293,7 @@ export function ConfigurarIncorporacionWorkspace({
                     : "No incluido"}
               </button>
               <div className={styles.componentLinks}>
-                <span>Componentes involucrados</span>
+                <span>Componentes sobre los que trabaja</span>
                 {componentes.length ? (
                   componentes.map((componente) => (
                     <label key={componente.codigo}>
@@ -315,7 +316,9 @@ export function ConfigurarIncorporacionWorkspace({
                     </label>
                   ))
                 ) : (
-                  <small>Trabajo general del producto, sin componente.</small>
+                  <small>
+                    Trabajo general de la etapa, sin componente específico.
+                  </small>
                 )}
               </div>
               <button

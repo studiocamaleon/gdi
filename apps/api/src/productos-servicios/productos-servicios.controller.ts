@@ -89,6 +89,14 @@ export class ProductosServiciosController {
     return this.recetas.obtener(auth, id);
   }
 
+  @Get('recetas/revisiones/:revisionId/bom-multinivel')
+  obtenerBomMultinivel(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+  ) {
+    return this.recetas.obtenerBomMultinivel(auth, revisionId);
+  }
+
   @Permiso('costos.gestionar')
   @Post('productos/:id/receta/borrador')
   guardarBorradorReceta(

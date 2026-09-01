@@ -164,7 +164,7 @@ export function DocumentosRequeridosDialog({
             </span>
             <DialogTitle>
               {general
-                ? "Requisitos generales de la Hoja de ruta"
+                ? "Requisitos generales de la ruta de producción"
                 : `Documentos antes de ${contexto.nodoNombre}`}
             </DialogTitle>
             <DialogDescription>
@@ -479,7 +479,8 @@ export function DocumentosHeredadosDialog({
                 <FileCheck2Icon />
                 <strong>Este componente no exige documentos</strong>
                 <span>
-                  Podés agregarlos desde la Hoja de ruta de {componenteNombre}.
+                  Podés agregarlos desde la ruta de producción de{" "}
+                  {componenteNombre}.
                 </span>
               </div>
             </div>

@@ -8,37 +8,57 @@ import {
   BanknoteIcon,
   BoxIcon,
   BoxesIcon,
+  BriefcaseBusinessIcon,
   CheckIcon,
   CircleAlertIcon,
   CogIcon,
   CopyIcon,
+  CopyPlusIcon,
   Edit3Icon,
-  FactoryIcon,
-  FootprintsIcon,
   GitBranchIcon,
+  IdCardIcon,
+  MoreHorizontalIcon,
   PlusIcon,
   PackageCheckIcon,
+  RouteIcon,
   SaveIcon,
-  ShoppingCartIcon,
   StarIcon,
   TagIcon,
   Trash2Icon,
   WrenchIcon,
-  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { HumanSelect } from "@/components/ui/human-select";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
 import {
@@ -54,10 +74,12 @@ import {
   duplicarProductoRutaAlt,
   eliminarProductoRutaAlt,
   getCatalogoComercial,
+  guardarBorradorReceta,
   type LookupsConfigPaso,
   type ProductoReceta,
 } from "@/lib/productos-servicios-api";
 import { RecetaProductoTab } from "@/components/productos-servicios/receta-producto-tab";
+import { ModeloProductivoPreview } from "@/components/productos-servicios/modelo-productivo-preview";
 import {
   getHerramientaMedidasArchivo,
   setHerramientaMedidasArchivo,
@@ -524,9 +546,9 @@ const TABS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: "identidad", label: "Identidad", icon: TagIcon },
-  { id: "comercial", label: "Comercial", icon: ShoppingCartIcon },
-  { id: "produccion", label: "Producción", icon: FactoryIcon },
+  { id: "identidad", label: "Identidad", icon: IdCardIcon },
+  { id: "comercial", label: "Comercial", icon: BriefcaseBusinessIcon },
+  { id: "produccion", label: "Routing", icon: RouteIcon },
   { id: "herramientas", label: "Herramientas", icon: WrenchIcon },
   { id: "pricing", label: "Pricing", icon: BanknoteIcon },
 ];
@@ -1022,9 +1044,7 @@ function IdentidadTab({
             }
           : {
               unidadComercial: unidadComercial as
-                | "unidad"
-                | "m2"
-                | "metro_lineal",
+                "unidad" | "m2" | "metro_lineal",
               modoMedidas: modoMedidasEfectivo,
               dimensionesRequeridas,
               minimoComercialPolitica,
@@ -1532,7 +1552,10 @@ function ProduccionTab({
   canManage: boolean;
 }) {
   const router = useRouter();
-  const [mostrarRutas, setMostrarRutas] = React.useState(false);
+  const [confirmarRevisionOpen, setConfirmarRevisionOpen] =
+    React.useState(false);
+  const [preparandoRevision, setPreparandoRevision] = React.useState(false);
+  const [nodoEditorPendiente, setNodoEditorPendiente] = React.useState("ruta");
   const rutaSeleccionada =
     producto.rutasAlternativas.find((ruta) => ruta.id === rutaAltId) ??
     producto.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
@@ -1552,117 +1575,115 @@ function ProduccionTab({
     (revision) => revision.estado === "BORRADOR",
   );
   const publicada = recetaSeleccionada?.revisionPublicada;
+  const editorHref = rutaSeleccionada
+    ? `/productos-servicios/${producto.id}/rutas/${rutaSeleccionada.id}`
+    : null;
+
+  const hrefEditorParaNodo = (nodoSeleccionado = "ruta") => {
+    if (!editorHref) return null;
+    const params = new URLSearchParams({ nodo: nodoSeleccionado });
+    return `${editorHref}?${params.toString()}`;
+  };
+
+  const abrirEditorRuta = (nodoSeleccionado = "ruta") => {
+    if (!editorHref) return;
+    setNodoEditorPendiente(nodoSeleccionado);
+    if (borrador) {
+      router.push(hrefEditorParaNodo(nodoSeleccionado) ?? editorHref);
+      return;
+    }
+    setConfirmarRevisionOpen(true);
+  };
+
+  const prepararRevisionYEditar = async () => {
+    if (!rutaSeleccionada || !editorHref) return;
+    setPreparandoRevision(true);
+    try {
+      await guardarBorradorReceta(producto.id, {
+        rutaAlternativaId: rutaSeleccionada.id,
+        cambios: publicada
+          ? `Revisión del modelo productivo V${publicada.numero + 1}`
+          : "Definición inicial del modelo productivo",
+      });
+      const siguienteVersion = publicada ? publicada.numero + 1 : 1;
+      toast.success(`El borrador V${siguienteVersion} está listo para editar.`);
+      setConfirmarRevisionOpen(false);
+      router.push(hrefEditorParaNodo(nodoEditorPendiente) ?? editorHref);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo preparar la nueva revisión.",
+      );
+    } finally {
+      setPreparandoRevision(false);
+    }
+  };
 
   return (
     <div className={styles.productionUnified}>
-      <header className={styles.productionUnifiedHeader}>
-        <div className={styles.productionUnifiedTitle}>
-          <span className={styles.productionUnifiedIcon} aria-hidden="true">
-            <FactoryIcon />
-          </span>
-          <div>
-            <span>MODELO PRODUCTIVO</span>
-            <h2>Editor de producción</h2>
-            <p>
-              Flujo, componentes fabricados, operaciones y versiones en un único
-              lugar.
-            </p>
-          </div>
-        </div>
-        <div className={styles.productionUnifiedControls}>
-          {rutaSeleccionada ? (
-            <div className={styles.productionRouteSelect}>
-              <label>Vía de fabricación</label>
-              <HumanSelect
-                value={rutaSeleccionada.id}
-                onValueChange={(value) => value && cambiarRuta(value)}
-                options={producto.rutasAlternativas.map((ruta) => ({
-                  value: ruta.id,
-                  label: ruta.nombre,
-                  code: ruta.ruta.codigo,
-                  description: `${ruta.ruta.pasos.length} pasos`,
-                }))}
-                triggerClassName={styles.productionRouteTrigger}
-              />
-            </div>
-          ) : null}
-          <div className={styles.productionUnifiedActions}>
-            <span
-              className={styles.productionVersionStatus}
-              data-state={
-                borrador ? "draft" : publicada ? "published" : "empty"
-              }
-            >
-              <PackageCheckIcon />
-              {borrador
-                ? `V${borrador.numero} sin publicar`
-                : publicada
-                  ? `V${publicada.numero} publicada`
-                  : "Sin versión"}
-            </span>
-            <button
-              type="button"
-              className={styles.productionManageRoutes}
-              aria-expanded={mostrarRutas}
-              onClick={() => setMostrarRutas((actual) => !actual)}
-            >
-              <GitBranchIcon />
-              Gestionar vías
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {mostrarRutas ? (
+      <RutasTab
+        producto={producto}
+        rutasDisponibles={rutasDisponibles}
+        rutaSeleccionadaId={rutaSeleccionada?.id}
+        onRutaChange={cambiarRuta}
+      >
         <section className={styles.productionUnifiedSection}>
           <div className={styles.productionUnifiedSectionHead}>
-            <span>VÍAS</span>
-            <div>
-              <strong>Vías de fabricación</strong>
+            <div className={styles.productionUnifiedSectionCopy}>
+              <strong>Workflow</strong>
               <small>
-                Agregá alternativas, elegí la preferida o duplicá una vía.
+                {producto.estructuraProducto === "COMPUESTO"
+                  ? "Pasos, etapas y componentes forman un único recorrido."
+                  : "Pasos operativos y dependencias de esta ruta de producción."}
               </small>
             </div>
+            {rutaSeleccionada ? (
+              <div className={styles.productionRouteHeadActions}>
+                <span
+                  className={styles.productionVersionStatus}
+                  data-state={
+                    borrador ? "draft" : publicada ? "published" : "empty"
+                  }
+                >
+                  <PackageCheckIcon />
+                  {borrador
+                    ? `Borrador V${borrador.numero}`
+                    : publicada
+                      ? `Publicada V${publicada.numero}`
+                      : "Sin versión"}
+                </span>
+                <button
+                  type="button"
+                  className={styles.productionEditRoute}
+                  onClick={() => abrirEditorRuta("ruta")}
+                >
+                  <CogIcon />
+                  Editar ruta
+                </button>
+              </div>
+            ) : null}
           </div>
-          <RutasTab producto={producto} rutasDisponibles={rutasDisponibles} />
+          <div className={styles.productionUnifiedSectionBody}>
+            {rutaSeleccionada ? (
+              <ModeloProductivoPreview
+                ruta={rutaSeleccionada}
+                revision={(borrador ?? publicada) || undefined}
+                catalogoFamilias={catalogoFamilias}
+                editorHref={`/productos-servicios/${producto.id}/rutas/${rutaSeleccionada.id}`}
+                onOpenEditor={abrirEditorRuta}
+              />
+            ) : (
+              <SectionMissing title="No hay una ruta de producción para visualizar." />
+            )}
+          </div>
         </section>
-      ) : null}
+      </RutasTab>
 
       <section className={styles.productionUnifiedSection}>
-        <div className={styles.productionUnifiedSectionHead}>
-          <span>01</span>
-          <div>
-            <strong>Flujo principal</strong>
-            <small>
-              {producto.estructuraProducto === "COMPUESTO"
-                ? "Pasos, subrutas fabricadas y dependencias de la vía."
-                : "Pasos operativos, recursos, materiales y dependencias de la vía."}
-            </small>
-          </div>
-        </div>
-        <div className={styles.productionUnifiedSectionBody}>
-          <PasosTab
-            producto={producto}
-            rutaAltId={rutaSeleccionada?.id}
-            catalogoFamilias={catalogoFamilias}
-            mostrarSelector={false}
-            componentes={(borrador ?? publicada)?.componentes ?? []}
-          />
-        </div>
-      </section>
-
-      <section className={styles.productionUnifiedSection}>
-        <div className={styles.productionUnifiedSectionHead}>
-          <span>02</span>
-          <div>
-            <strong>BOM consolidada y versiones</strong>
-            <small>
-              Resultado calculado desde el modelo productivo y sus revisiones
-              publicables.
-            </small>
-          </div>
-        </div>
-        <div className={styles.productionUnifiedSectionBody}>
+        <div
+          className={`${styles.productionUnifiedSectionBody} ${styles.productionBomBody}`}
+        >
           <RecetaProductoTab
             producto={producto}
             recetas={recetas}
@@ -1672,6 +1693,68 @@ function ProduccionTab({
           />
         </div>
       </section>
+
+      <Dialog
+        open={confirmarRevisionOpen}
+        onOpenChange={(open) => {
+          if (!preparandoRevision) setConfirmarRevisionOpen(open);
+        }}
+      >
+        <DialogContent className={styles.prepareRevisionDialog}>
+          <DialogHeader>
+            <span className={styles.prepareRevisionEyebrow}>
+              ROUTING · NUEVA REVISIÓN
+            </span>
+            <DialogTitle>
+              {publicada
+                ? `Crear borrador V${publicada.numero + 1} para editar`
+                : "Crear el primer borrador para editar"}
+            </DialogTitle>
+            <DialogDescription>
+              {publicada
+                ? `La V${publicada.numero} está publicada y no se modificará. El editor trabajará sobre una copia versionada.`
+                : "La configuración se guardará como borrador antes de abrir el editor de la ruta."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Alert className={styles.prepareRevisionNotice}>
+            <CopyPlusIcon />
+            <AlertTitle>
+              {publicada
+                ? `La V${publicada.numero} seguirá activa`
+                : "La ruta todavía no tiene una versión"}
+            </AlertTitle>
+            <AlertDescription>
+              {publicada
+                ? `Se copiarán sus pasos, componentes, dependencias y documentos al borrador V${publicada.numero + 1}.`
+                : "Se conservarán los pasos actuales y se creará la base versionada del modelo productivo."}
+            </AlertDescription>
+          </Alert>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={preparandoRevision}
+              onClick={() => setConfirmarRevisionOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={preparandoRevision}
+              onClick={() => void prepararRevisionYEditar()}
+            >
+              <CopyPlusIcon data-icon="inline-start" />
+              {preparandoRevision
+                ? "Preparando…"
+                : publicada
+                  ? `Crear V${publicada.numero + 1} y editar`
+                  : "Crear borrador y editar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1679,12 +1762,23 @@ function ProduccionTab({
 function RutasTab({
   producto,
   rutasDisponibles,
+  rutaSeleccionadaId,
+  onRutaChange,
+  children,
 }: {
   producto: ProductoDetalle;
   rutasDisponibles: RutaListItem[];
+  rutaSeleccionadaId?: string;
+  onRutaChange: (rutaId: string) => void;
+  children: React.ReactNode;
 }) {
   const router = useRouter();
   const [agregando, setAgregando] = React.useState(false);
+  const [nuevaViaOpen, setNuevaViaOpen] = React.useState(false);
+  const [modoNuevaVia, setModoNuevaVia] = React.useState<
+    "duplicar" | "catalogo"
+  >("duplicar");
+  const [viaOrigenId, setViaOrigenId] = React.useState("");
   const [rutaEditandoId, setRutaEditandoId] = React.useState<string | null>(
     null,
   );
@@ -1705,28 +1799,94 @@ function RutasTab({
   const rutasParaAgregar = rutasDisponibles.filter(
     (ruta) => !yaUsadas.has(ruta.id),
   );
+  const rutaSeleccionada =
+    producto.rutasAlternativas.find((ruta) => ruta.id === rutaSeleccionadaId) ??
+    producto.rutasAlternativas[0];
 
-  const agregarRuta = async () => {
-    if (!nuevaRutaId || !nuevoNombre.trim()) {
-      toast.error("Faltan datos");
+  const abrirNuevaVia = () => {
+    const viaOrigen =
+      producto.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+      producto.rutasAlternativas[0];
+    const rutaCatalogo = rutasParaAgregar[0];
+    const modoInicial = viaOrigen ? "duplicar" : "catalogo";
+
+    setModoNuevaVia(modoInicial);
+    setViaOrigenId(viaOrigen?.id ?? "");
+    setNuevaRutaId(rutaCatalogo?.id ?? "");
+    setNuevoNombre(
+      viaOrigen
+        ? `${viaOrigen.nombre} alternativa`
+        : (rutaCatalogo?.nombre ?? ""),
+    );
+    setNuevaViaOpen(true);
+  };
+
+  const cambiarModoNuevaVia = (modo: "duplicar" | "catalogo") => {
+    setModoNuevaVia(modo);
+    if (modo === "duplicar") {
+      const viaOrigen =
+        producto.rutasAlternativas.find((ruta) => ruta.id === viaOrigenId) ??
+        producto.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+        producto.rutasAlternativas[0];
+      setViaOrigenId(viaOrigen?.id ?? "");
+      setNuevoNombre(
+        viaOrigen ? `${viaOrigen.nombre} alternativa` : "Nueva ruta",
+      );
       return;
     }
+
+    const rutaCatalogo =
+      rutasParaAgregar.find((ruta) => ruta.id === nuevaRutaId) ??
+      rutasParaAgregar[0];
+    setNuevaRutaId(rutaCatalogo?.id ?? "");
+    setNuevoNombre(rutaCatalogo?.nombre ?? "");
+  };
+
+  const crearNuevaVia = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nombre = nuevoNombre.trim();
+    if (!nombre) {
+      toast.error("Ingresá un nombre para la ruta de producción");
+      return;
+    }
+
+    if (modoNuevaVia === "duplicar" && !viaOrigenId) {
+      toast.error("Elegí la ruta que querés tomar como punto de partida");
+      return;
+    }
+
+    if (modoNuevaVia === "catalogo" && !nuevaRutaId) {
+      toast.error("Elegí una ruta del catálogo");
+      return;
+    }
+
     setAgregando(true);
     try {
-      const ruta = rutasDisponibles.find((item) => item.id === nuevaRutaId);
-      await crearProductoRutaAlt(producto.id, {
-        rutaId: nuevaRutaId,
-        rutaVersion: ruta?.versionActual ?? 1,
-        nombre: nuevoNombre,
-        esPreferida: producto.rutasAlternativas.length === 0,
-        orden: producto.rutasAlternativas.length,
-      });
-      toast.success("Ruta agregada");
+      const nuevaVia =
+        modoNuevaVia === "duplicar"
+          ? await duplicarProductoRutaAlt(viaOrigenId, { nombre })
+          : await crearProductoRutaAlt(producto.id, {
+              rutaId: nuevaRutaId,
+              rutaVersion:
+                rutasDisponibles.find((item) => item.id === nuevaRutaId)
+                  ?.versionActual ?? 1,
+              nombre,
+              esPreferida: producto.rutasAlternativas.length === 0,
+              orden: producto.rutasAlternativas.length,
+            });
+
+      toast.success(`Ruta de producción "${nombre}" creada`);
+      setNuevaViaOpen(false);
+      setViaOrigenId("");
       setNuevaRutaId("");
       setNuevoNombre("");
-      router.refresh();
+      router.push(`/productos-servicios/${producto.id}/rutas/${nuevaVia.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error agregando ruta");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Error creando la ruta de producción",
+      );
     } finally {
       setAgregando(false);
     }
@@ -1776,7 +1936,9 @@ function RutasTab({
       toast.success("Ruta duplicada");
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error duplicando ruta");
+      toast.error(
+        err instanceof Error ? err.message : "Error duplicando la ruta",
+      );
     } finally {
       setDuplicandoRutaId(null);
     }
@@ -1788,207 +1950,375 @@ function RutasTab({
 
   return (
     <>
-      <div className="wiz-section">
-        <div className="wiz-section-head">
-          <div className="body">
-            <h2>Rutas alternativas</h2>
-            <div className="helptext">
-              Asociá/quitá rutas reusables a este producto. La ruta preferida es
-              la default al cotizar.
+      <Tabs
+        value={rutaSeleccionada?.id ?? ""}
+        onValueChange={onRutaChange}
+        className={styles.productionRoutesTabs}
+      >
+        <section className={styles.productionRoutesSelector}>
+          <div className={styles.productionRoutesSelectorHead}>
+            <div className={styles.productionRoutesSelectorTitle}>
+              <div>
+                <h2>Rutas de producción</h2>
+                <p>
+                  Elegí la ruta que querés consultar o creá una alternativa.
+                </p>
+              </div>
             </div>
-          </div>
-          <button
-            className="btn btn-primary"
-            type="button"
-            onClick={agregarRuta}
-            disabled={agregando || !nuevaRutaId || !nuevoNombre.trim()}
-          >
-            <PlusIcon className="size-4" />
-            Agregar ruta
-          </button>
-        </div>
-
-        {producto.rutasAlternativas.map((ra) => (
-          <div className="route-tab" key={ra.id}>
-            <span className="star">{ra.esPreferida ? "★" : "☆"}</span>
-            <div className="body">
-              <div className="ttl">
-                {rutaEditandoId === ra.id ? (
-                  <>
-                    <input
-                      type="text"
-                      value={nombreEditado}
-                      onChange={(event) => setNombreEditado(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") guardarNombreRuta(ra.id);
-                        if (event.key === "Escape") {
-                          setRutaEditandoId(null);
-                          setNombreEditado("");
+            <div className={styles.productionRoutesSelectorActions}>
+              <button
+                className={styles.productionAddRoute}
+                type="button"
+                onClick={abrirNuevaVia}
+              >
+                <PlusIcon />
+                Ruta de producción
+              </button>
+              {rutaSeleccionada ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className={styles.productionRouteMenuTrigger}
+                    aria-label={`Acciones de ${rutaSeleccionada.nombre}`}
+                  >
+                    <MoreHorizontalIcon />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className={styles.productionRouteMenu}
+                  >
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          iniciarEdicionNombre(
+                            rutaSeleccionada.id,
+                            rutaSeleccionada.nombre,
+                          )
                         }
-                      }}
-                      autoFocus
-                      className="route-name-input"
-                      aria-label={`Nombre de la ruta ${ra.nombre}`}
-                    />
-                    <button
-                      className="icon-btn"
-                      type="button"
-                      title="Guardar nombre"
-                      disabled={guardandoNombreId === ra.id}
-                      onClick={() => guardarNombreRuta(ra.id)}
-                    >
-                      <CheckIcon className="size-4" />
-                    </button>
-                    <button
-                      className="icon-btn"
-                      type="button"
-                      title="Cancelar"
-                      onClick={() => {
-                        setRutaEditandoId(null);
-                        setNombreEditado("");
-                      }}
-                    >
-                      <XIcon className="size-4" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {ra.nombre}
-                    <button
-                      className="icon-btn"
-                      type="button"
-                      title="Editar nombre"
-                      onClick={() => iniciarEdicionNombre(ra.id, ra.nombre)}
-                    >
-                      <Edit3Icon className="size-4" />
-                    </button>
-                  </>
-                )}
-                {ra.esPreferida ? (
-                  <span className="tag ok">
-                    <span className="d" />
-                    Preferida
-                  </span>
-                ) : null}
-              </div>
-              <div className="sub" style={{ marginTop: 8 }}>
-                <strong style={{ color: "var(--ink)", fontWeight: 500 }}>
-                  Ruta:
-                </strong>{" "}
-                {ra.ruta.nombre} · v{ra.rutaVersion}
-                <span style={{ margin: "0 6px" }}>·</span>
-                <strong style={{ color: "var(--ink)", fontWeight: 500 }}>
-                  Pasos:
-                </strong>{" "}
-                {ra.ruta.pasos.length} ·{" "}
-                <span style={{ color: "var(--ok)" }}>
-                  Configurados {ra.configPasos.length}/{ra.ruta.pasos.length}
-                </span>
-              </div>
-            </div>
-            <div className="route-tab-actions">
-              <Link
-                className="btn btn-primary"
-                href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}
-              >
-                <CogIcon className="size-4" />
-                Configurar modelo
-              </Link>
-              <button
-                className="icon-btn"
-                type="button"
-                title="Duplicar ruta"
-                disabled={duplicandoRutaId === ra.id}
-                onClick={() => duplicarRuta(ra.id, ra.nombre)}
-              >
-                <CopyIcon className="size-4" />
-              </button>
-              {!ra.esPreferida ? (
-                <button
-                  className="icon-btn"
-                  type="button"
-                  title="Marcar preferida"
-                  onClick={() => marcarPreferida(ra.id)}
-                >
-                  <StarIcon className="size-4" />
-                </button>
+                      >
+                        <Edit3Icon />
+                        Renombrar ruta
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={duplicandoRutaId === rutaSeleccionada.id}
+                        onClick={() =>
+                          duplicarRuta(
+                            rutaSeleccionada.id,
+                            rutaSeleccionada.nombre,
+                          )
+                        }
+                      >
+                        <CopyIcon />
+                        Duplicar ruta
+                      </DropdownMenuItem>
+                      {!rutaSeleccionada.esPreferida ? (
+                        <DropdownMenuItem
+                          onClick={() => marcarPreferida(rutaSeleccionada.id)}
+                        >
+                          <StarIcon />
+                          Marcar como preferida
+                        </DropdownMenuItem>
+                      ) : null}
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() =>
+                          quitarRuta(
+                            rutaSeleccionada.id,
+                            rutaSeleccionada.nombre,
+                          )
+                        }
+                      >
+                        <Trash2Icon />
+                        Quitar del producto
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : null}
-              <button
-                className="icon-btn"
-                type="button"
-                title="Quitar ruta"
-                onClick={() => quitarRuta(ra.id, ra.nombre)}
+            </div>
+          </div>
+
+          {producto.rutasAlternativas.length > 0 ? (
+            <div className={styles.productionRouteTabsScroller}>
+              <TabsList
+                variant="line"
+                className={styles.productionRouteTabsList}
+                aria-label="Rutas de producción"
               >
-                <Trash2Icon className="size-4" />
-              </button>
+                {producto.rutasAlternativas.map((ruta) => (
+                  <TabsTrigger
+                    key={ruta.id}
+                    value={ruta.id}
+                    className={styles.productionRouteTab}
+                  >
+                    <GitBranchIcon />
+                    <span>{ruta.nombre}</span>
+                    {ruta.esPreferida ? <i>Preferida</i> : null}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
             </div>
-          </div>
-        ))}
-
-        {producto.rutasAlternativas.length === 0 ? (
-          <div className="section-empty">
-            <div className="ttl">Sin rutas asociadas</div>
-            <div className="sub">
-              Agregá una ruta reusable para poder configurar pasos y cotizar
-              este producto.
+          ) : (
+            <div className={styles.productionRoutesEmpty}>
+              Todavía no hay rutas de producción configuradas.
             </div>
-          </div>
-        ) : null}
+          )}
+        </section>
 
-        {rutasParaAgregar.length > 0 ? (
-          <div
-            style={{
-              marginTop: 16,
-              padding: 16,
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--r-2)",
+        {rutaSeleccionada ? (
+          <TabsContent
+            value={rutaSeleccionada.id}
+            className={styles.productionRouteTabContent}
+          >
+            {children}
+          </TabsContent>
+        ) : (
+          children
+        )}
+      </Tabs>
+
+      <Dialog
+        open={rutaEditandoId !== null}
+        onOpenChange={(open) => {
+          if (!open && guardandoNombreId === null) {
+            setRutaEditandoId(null);
+            setNombreEditado("");
+          }
+        }}
+      >
+        <DialogContent className="gp-modal" overlayClassName="gp-modal-overlay">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (rutaEditandoId) guardarNombreRuta(rutaEditandoId);
             }}
           >
-            <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 12 }}>
-              Agregar nueva ruta alternativa
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
-              }}
-            >
-              <div className="field">
-                <label>Ruta del catálogo</label>
-                <HumanSelect
-                  value={nuevaRutaId}
-                  onValueChange={(value) => setNuevaRutaId(value || "")}
-                  options={rutasParaAgregar.map((ruta) => ({
-                    value: ruta.id,
-                    label: ruta.nombre,
-                    code: ruta.codigo,
-                    description: `v${ruta.versionActual} · ${ruta.pasos.length} pasos`,
-                  }))}
-                  placeholder="Elegí una ruta..."
+            <DialogHeader>
+              <DialogTitle>Renombrar ruta de producción</DialogTitle>
+              <DialogDescription>
+                Este nombre identifica la alternativa dentro de este producto.
+              </DialogDescription>
+            </DialogHeader>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="nombre-ruta-produccion">
+                  Nombre de la ruta
+                </FieldLabel>
+                <Input
+                  id="nombre-ruta-produccion"
+                  value={nombreEditado}
+                  onChange={(event) => setNombreEditado(event.target.value)}
+                  autoFocus
+                  disabled={guardandoNombreId !== null}
                 />
-              </div>
-              <div className="field">
-                <label>Nombre humano</label>
-                <input
-                  type="text"
+              </Field>
+            </FieldGroup>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={guardandoNombreId !== null}
+                onClick={() => {
+                  setRutaEditandoId(null);
+                  setNombreEditado("");
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                loading={guardandoNombreId !== null}
+                loadingText="Guardando…"
+                disabled={!nombreEditado.trim()}
+              >
+                Guardar nombre
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={nuevaViaOpen}
+        onOpenChange={(open) => {
+          if (!agregando) setNuevaViaOpen(open);
+        }}
+      >
+        <DialogContent
+          className="gp-modal gp-modal-wide"
+          overlayClassName="gp-modal-overlay"
+        >
+          <form onSubmit={crearNuevaVia}>
+            <DialogHeader>
+              <DialogTitle>Nueva ruta de producción</DialogTitle>
+              <DialogDescription>
+                Creá una alternativa a partir de una ruta existente o vinculá
+                otra ruta reutilizable del catálogo.
+              </DialogDescription>
+            </DialogHeader>
+
+            <FieldGroup>
+              <Field>
+                <FieldLabel>Cómo querés comenzar</FieldLabel>
+                <ToggleGroup
+                  multiple={false}
+                  value={[modoNuevaVia]}
+                  onValueChange={(values) => {
+                    const modo = values.at(-1) as
+                      "duplicar" | "catalogo" | undefined;
+                    if (modo) cambiarModoNuevaVia(modo);
+                  }}
+                  variant="outline"
+                  spacing={8}
+                  className={styles.newRouteModeGroup}
+                  aria-label="Origen de la nueva ruta de producción"
+                >
+                  <ToggleGroupItem
+                    value="duplicar"
+                    disabled={producto.rutasAlternativas.length === 0}
+                    className={styles.newRouteMode}
+                  >
+                    <CopyIcon />
+                    <span>
+                      <strong>Partir de una ruta actual</strong>
+                      <small>
+                        Copia la configuración de sus pasos como punto de
+                        partida.
+                      </small>
+                    </span>
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="catalogo"
+                    disabled={rutasParaAgregar.length === 0}
+                    className={styles.newRouteMode}
+                  >
+                    <GitBranchIcon />
+                    <span>
+                      <strong>Usar otra ruta del catálogo</strong>
+                      <small>
+                        {rutasParaAgregar.length > 0
+                          ? "Comienza con la estructura reusable de otra ruta."
+                          : "No hay otra ruta reusable disponible."}
+                      </small>
+                    </span>
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </Field>
+
+              {modoNuevaVia === "duplicar" ? (
+                <Field>
+                  <FieldLabel>Ruta de origen</FieldLabel>
+                  <HumanSelect
+                    value={viaOrigenId}
+                    onValueChange={(value) => {
+                      const id = value || "";
+                      const via = producto.rutasAlternativas.find(
+                        (item) => item.id === id,
+                      );
+                      setViaOrigenId(id);
+                      if (via) setNuevoNombre(`${via.nombre} alternativa`);
+                    }}
+                    options={producto.rutasAlternativas.map((ruta) => ({
+                      value: ruta.id,
+                      label: ruta.nombre,
+                      code: ruta.esPreferida ? "Preferida" : undefined,
+                      description: `${ruta.ruta.nombre} · v${ruta.rutaVersion}`,
+                    }))}
+                    placeholder="Elegí una ruta..."
+                  />
+                  <FieldDescription>
+                    La nueva ruta tendrá su propia configuración y podrás
+                    adaptarla sin alterar la original.
+                  </FieldDescription>
+                </Field>
+              ) : rutasParaAgregar.length > 0 ? (
+                <Field>
+                  <FieldLabel>Ruta reutilizable</FieldLabel>
+                  <HumanSelect
+                    value={nuevaRutaId}
+                    onValueChange={(value) => {
+                      const id = value || "";
+                      const ruta = rutasParaAgregar.find(
+                        (item) => item.id === id,
+                      );
+                      setNuevaRutaId(id);
+                      if (ruta) setNuevoNombre(ruta.nombre);
+                    }}
+                    options={rutasParaAgregar.map((ruta) => ({
+                      value: ruta.id,
+                      label: ruta.nombre,
+                      code: ruta.codigo,
+                      description: `v${ruta.versionActual} · ${ruta.pasos.length} pasos`,
+                    }))}
+                    placeholder="Elegí una ruta..."
+                  />
+                </Field>
+              ) : (
+                <Alert>
+                  <CircleAlertIcon />
+                  <AlertTitle>No hay otras rutas disponibles</AlertTitle>
+                  <AlertDescription>
+                    Todas las rutas del catálogo ya están vinculadas. Podés
+                    partir de una ruta actual o crear una nueva ruta reusable en
+                    el catálogo de rutas.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <Field>
+                <FieldLabel htmlFor="nombre-nueva-via">
+                  Nombre de la ruta
+                </FieldLabel>
+                <Input
+                  id="nombre-nueva-via"
                   value={nuevoNombre}
                   onChange={(event) => setNuevoNombre(event.target.value)}
-                  placeholder="Standard / Vía láser / Vía offset"
+                  placeholder="Ej. Producción interna, Producción tercerizada"
+                  autoFocus
+                  disabled={agregando}
                 />
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
+                <FieldDescription>
+                  Es el nombre que se verá al elegir cómo fabricar este
+                  producto.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={agregando}
+                onClick={() => setNuevaViaOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                loading={agregando}
+                loadingText="Creando ruta…"
+                disabled={
+                  !nuevoNombre.trim() ||
+                  (modoNuevaVia === "duplicar" && !viaOrigenId) ||
+                  (modoNuevaVia === "catalogo" && !nuevaRutaId)
+                }
+              >
+                <PlusIcon data-icon="inline-start" />
+                Crear ruta
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmacionDestructiva
         open={rutaAQuitar !== null}
         onOpenChange={(open) => {
           if (!open) setRutaAQuitar(null);
         }}
-        titulo="Quitar ruta"
+        titulo="Quitar ruta de producción"
         descripcion={`¿Quitar la ruta "${rutaAQuitar?.nombre ?? ""}" de este producto?`}
         nombreItem={rutaAQuitar?.nombre}
         requiereTipear={false}
@@ -2005,231 +2335,6 @@ function RutasTab({
           setRutaAQuitar(null);
         }}
       />
-    </>
-  );
-}
-
-function PasosTab({
-  producto,
-  rutaAltId,
-  catalogoFamilias,
-  mostrarSelector = true,
-  componentes = [],
-}: {
-  producto: ProductoDetalle;
-  rutaAltId?: string;
-  catalogoFamilias?: CatalogoFamilias;
-  mostrarSelector?: boolean;
-  componentes?: Array<{
-    id: string;
-    nombre: string;
-    codigo: string;
-    nodoIncorporacionClave?: string | null;
-    nodosPredecesoresClaves?: string[];
-  }>;
-}) {
-  const router = useRouter();
-  const rutaSeleccionada =
-    producto.rutasAlternativas.find((r) => r.id === rutaAltId) ??
-    producto.rutasAlternativas.find((r) => r.esPreferida) ??
-    producto.rutasAlternativas[0];
-
-  if (producto.rutasAlternativas.length === 0) {
-    return (
-      <Card className="wiz-section">
-        <CardHeader>
-          <CardTitle>Sin rutas para configurar</CardTitle>
-          <CardDescription>
-            Primero asociá una ruta alternativa en la pestaña Rutas.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  const cambiarRuta = (value: string) => {
-    const params = new URLSearchParams();
-    params.set("tab", "produccion");
-    params.set("vista", "operaciones");
-    params.set("rutaAltId", value);
-    router.push(`/productos-servicios/${producto.id}?${params.toString()}`);
-  };
-
-  return (
-    <>
-      {mostrarSelector ? (
-        <div className="ruta-selector">
-          <div style={{ flex: 1 }}>
-            <div className="lbl">Ruta a configurar</div>
-            <div className="help">
-              Cada alternativa mantiene su propia configuración de pasos.
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <HumanSelect
-              value={rutaSeleccionada?.id ?? ""}
-              onValueChange={(v) => v && cambiarRuta(v)}
-              options={producto.rutasAlternativas.map((r) => ({
-                value: r.id,
-                label: r.nombre,
-                code: r.ruta.codigo,
-                description: `${r.ruta.pasos.length} pasos · ${r.configPasos.length} configurados`,
-              }))}
-              triggerClassName="w-[280px]"
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {rutaSeleccionada ? (
-        <div className="wiz-section">
-          <div className="wiz-section-head">
-            <div className="body">
-              <h2>{rutaSeleccionada.nombre}</h2>
-              <div className="helptext">
-                {producto.estructuraProducto === "COMPUESTO"
-                  ? "Configurá pasos, subrutas fabricadas, materiales y dependencias desde un único editor."
-                  : "Configurá los pasos, recursos, materiales y dependencias desde un único editor."}
-              </div>
-            </div>
-            <Link
-              href={`/productos-servicios/${producto.id}/rutas/${rutaSeleccionada.id}`}
-              className="btn btn-primary"
-            >
-              <CogIcon className="size-4" />
-              Abrir editor productivo
-            </Link>
-          </div>
-
-          <div
-            style={{
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--r-2)",
-              padding: "16px 18px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 12.5,
-                color: "var(--muted-text)",
-                marginBottom: 12,
-              }}
-            >
-              {rutaSeleccionada.ruta.pasos.length + componentes.length} nodos ·
-              click en cualquiera para abrir el editor
-            </div>
-            <div className="graph">
-              {rutaSeleccionada.ruta.pasos.map((paso, index) => {
-                const config = rutaSeleccionada.configPasos.find(
-                  (item) => item.rutaPasoId === paso.id,
-                );
-                const familia = catalogoFamilias?.familias.find(
-                  (item) => item.codigo === paso.familiaCodigo,
-                );
-                const machine =
-                  config?.maquinaM1?.nombre ??
-                  config?.centroCosto?.nombre ??
-                  "Sin centro asignado";
-                const optional = config?.modoActivacion === "OPCIONAL";
-                return (
-                  <Link
-                    key={paso.id}
-                    href={`/productos-servicios/${producto.id}/rutas/${rutaSeleccionada.id}`}
-                    className={`gnode done ${optional ? "optional" : ""}`}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <div className="dot">{index + 1}</div>
-                    <div className="ttl">
-                      {config?.nombreVisible?.trim() ||
-                        familia?.nombre ||
-                        paso.familiaCodigo}
-                    </div>
-                    <div className="sub">{machine}</div>
-                  </Link>
-                );
-              })}
-            </div>
-            {componentes.length ? (
-              <div className={styles.componentPreviewGrid}>
-                {componentes.map((componente, index) => {
-                  const incorporacion = componente.nodoIncorporacionClave
-                    ? rutaSeleccionada.ruta.pasos.find(
-                        (paso) =>
-                          `ruta:${paso.id}` ===
-                          componente.nodoIncorporacionClave,
-                      )
-                    : null;
-                  const configIncorporacion = incorporacion
-                    ? rutaSeleccionada.configPasos.find(
-                        (item) => item.rutaPasoId === incorporacion.id,
-                      )
-                    : null;
-                  return (
-                    <Link
-                      key={componente.id}
-                      href={`/productos-servicios/${producto.id}/rutas/${rutaSeleccionada.id}`}
-                      className={styles.componentPreviewNode}
-                    >
-                      <span>C{String(index + 1).padStart(2, "0")}</span>
-                      <div>
-                        <strong>{componente.nombre}</strong>
-                        <small>
-                          {incorporacion
-                            ? `Converge en ${
-                                configIncorporacion?.nombreVisible ||
-                                incorporacion.nombreVisible ||
-                                incorporacion.familiaNombre ||
-                                incorporacion.familiaCodigo
-                              }`
-                            : "Falta definir convergencia"}
-                        </small>
-                      </div>
-                      <BoxesIcon />
-                    </Link>
-                  );
-                })}
-              </div>
-            ) : null}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginTop: 14,
-                paddingTop: 14,
-                borderTop: "1px solid var(--border)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "var(--muted-text)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: "var(--ok)",
-                  }}
-                />
-                {rutaSeleccionada.configPasos.length}/
-                {rutaSeleccionada.ruta.pasos.length} pasos configurados
-                {producto.estructuraProducto === "COMPUESTO"
-                  ? ` · ${componentes.length} componentes`
-                  : ""}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <SectionMissing title="No se pudieron cargar los datos para configurar pasos." />
-      )}
     </>
   );
 }

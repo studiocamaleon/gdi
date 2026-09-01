@@ -1,19 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeftIcon,
   ArrowRightIcon,
   ArchiveXIcon,
   BadgeCheckIcon,
   BlocksIcon,
   BoxesIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   CopyPlusIcon,
   FactoryIcon,
   FileCheck2Icon,
   FilePlus2Icon,
   GitCommitHorizontalIcon,
   GripVerticalIcon,
+  Maximize2Icon,
+  MinusIcon,
   MoreHorizontalIcon,
   PencilLineIcon,
   PlusIcon,
@@ -61,6 +67,7 @@ import {
   eliminarPasoExtra,
   guardarBorradorReceta,
   getProductos,
+  getBomMultinivelRevision,
   getRecetasProducto,
   getPasosTenant,
   publicarReceta,
@@ -69,6 +76,8 @@ import {
   type ProductoReceta,
   type ProductoRecetaRevision,
   type ConfiguracionPasoCompuesto,
+  type BomMultinivel,
+  type BomNodoMultinivel,
 } from "@/lib/productos-servicios-api";
 import { ConfigurarComponenteWorkspace } from "./configurar-componente-workspace";
 import { ConfigurarIncorporacionWorkspace } from "./configurar-incorporacion-workspace";
@@ -110,6 +119,20 @@ type DocumentosHeredadosComponente = {
   rutaAlternativaId: string | null;
   loading: boolean;
 };
+
+type CamaraHojaRuta = {
+  x: number;
+  y: number;
+  zoom: number;
+};
+
+const ZOOM_MINIMO_HOJA_RUTA = 0.45;
+const ZOOM_MAXIMO_HOJA_RUTA = 1.4;
+const PASO_ZOOM_HOJA_RUTA = 0.1;
+
+function limitarNumero(valor: number, minimo: number, maximo: number) {
+  return Math.min(maximo, Math.max(minimo, valor));
+}
 
 function fecha(value?: string | null) {
   if (!value) return "—";
@@ -167,6 +190,7 @@ export function EditorDefiniciones({
   nodoSeleccionado = "ruta",
   onSeleccionarNodo,
   onEditarPaso,
+  onRevisionGuardada,
 }: {
   producto: ProductoDetalle;
   catalogoFamilias?: CatalogoFamilias;
@@ -178,10 +202,34 @@ export function EditorDefiniciones({
   nodoSeleccionado?: string;
   onSeleccionarNodo?: (nodoClave: string) => void;
   onEditarPaso?: (nodoClave: string) => void;
+  onRevisionGuardada?: (revision: ProductoRecetaRevision) => void;
 }) {
   const productoId = producto.id;
   const productoNombre = producto.nombre;
   const router = useRouter();
+  const revisionActualRef = React.useRef(revision);
+  React.useEffect(() => {
+    if (revisionActualRef.current.updatedAt === revision.updatedAt) return;
+    revisionActualRef.current = revision;
+  }, [revision]);
+  const guardarRevisionActual = React.useCallback(
+    async (
+      payload: Omit<
+        Parameters<typeof guardarBorradorReceta>[1],
+        "rutaAlternativaId" | "expectedUpdatedAt"
+      >,
+    ) => {
+      const guardada = await guardarBorradorReceta(productoId, {
+        ...payload,
+        rutaAlternativaId,
+        expectedUpdatedAt: revisionActualRef.current.updatedAt,
+      });
+      revisionActualRef.current = guardada;
+      onRevisionGuardada?.(guardada);
+      return guardada;
+    },
+    [onRevisionGuardada, productoId, rutaAlternativaId],
+  );
   const [saving, setSaving] = React.useState(false);
   const [productos, setProductos] = React.useState<
     Array<{ id: string; codigo: string; nombre: string }>
@@ -236,6 +284,25 @@ export function EditorDefiniciones({
   const [destinoArrastre, setDestinoArrastre] = React.useState<string | null>(
     null,
   );
+  const roadmapViewportRef = React.useRef<HTMLDivElement>(null);
+  const [roadmapViewportElement, setRoadmapViewportElement] =
+    React.useState<HTMLDivElement | null>(null);
+  const roadmapCanvasRef = React.useRef<HTMLDivElement>(null);
+  const camaraInicializadaRef = React.useRef(false);
+  const paneoRef = React.useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    cameraX: number;
+    cameraY: number;
+  } | null>(null);
+  const [camaraHojaRuta, setCamaraHojaRuta] = React.useState<CamaraHojaRuta>({
+    x: 0,
+    y: 0,
+    zoom: 1,
+  });
+  const camaraHojaRutaRef = React.useRef(camaraHojaRuta);
+  const [desplazandoLienzo, setDesplazandoLienzo] = React.useState(false);
   const [contextoAltaNodo, setContextoAltaNodo] =
     React.useState<ContextoAltaNodo | null>(null);
   const [tipoAltaNodo, setTipoAltaNodo] = React.useState<TipoAltaNodo | null>(
@@ -386,6 +453,235 @@ export function EditorDefiniciones({
     () => construirColumnasProductivas(nodosHojaRuta, aristasHojaRuta),
     [aristasHojaRuta, nodosHojaRuta],
   );
+
+  const limitarCamaraHojaRuta = React.useCallback(
+    (siguiente: CamaraHojaRuta): CamaraHojaRuta => {
+      const viewport = roadmapViewportRef.current;
+      const canvas = roadmapCanvasRef.current;
+      const zoom = limitarNumero(
+        siguiente.zoom,
+        ZOOM_MINIMO_HOJA_RUTA,
+        ZOOM_MAXIMO_HOJA_RUTA,
+      );
+      if (!viewport || !canvas) return { ...siguiente, zoom };
+
+      const limitarEje = (
+        posicion: number,
+        medidaViewport: number,
+        medidaContenido: number,
+      ) => {
+        const contenidoEscalado = medidaContenido * zoom;
+        const margen = Math.min(140, medidaViewport * 0.22);
+        if (contenidoEscalado <= medidaViewport) {
+          const centro = (medidaViewport - contenidoEscalado) / 2;
+          return limitarNumero(posicion, centro - margen, centro + margen);
+        }
+        return limitarNumero(
+          posicion,
+          medidaViewport - contenidoEscalado - margen,
+          margen,
+        );
+      };
+
+      return {
+        zoom,
+        x: limitarEje(siguiente.x, viewport.clientWidth, canvas.offsetWidth),
+        y: limitarEje(siguiente.y, viewport.clientHeight, canvas.offsetHeight),
+      };
+    },
+    [],
+  );
+
+  const actualizarCamaraHojaRuta = React.useCallback(
+    (siguiente: CamaraHojaRuta) => {
+      const limitada = limitarCamaraHojaRuta(siguiente);
+      camaraHojaRutaRef.current = limitada;
+      setCamaraHojaRuta(limitada);
+    },
+    [limitarCamaraHojaRuta],
+  );
+
+  const establecerZoomHojaRuta = React.useCallback(
+    (zoomSolicitado: number, ancla?: { x: number; y: number }) => {
+      const viewport = roadmapViewportRef.current;
+      if (!viewport) return;
+      const actual = camaraHojaRutaRef.current;
+      const zoom = limitarNumero(
+        zoomSolicitado,
+        ZOOM_MINIMO_HOJA_RUTA,
+        ZOOM_MAXIMO_HOJA_RUTA,
+      );
+      const punto = ancla ?? {
+        x: viewport.clientWidth / 2,
+        y: viewport.clientHeight / 2,
+      };
+      const mundoX = (punto.x - actual.x) / actual.zoom;
+      const mundoY = (punto.y - actual.y) / actual.zoom;
+      actualizarCamaraHojaRuta({
+        zoom,
+        x: punto.x - mundoX * zoom,
+        y: punto.y - mundoY * zoom,
+      });
+    },
+    [actualizarCamaraHojaRuta],
+  );
+
+  const ajustarHojaRuta = React.useCallback(() => {
+    const viewport = roadmapViewportRef.current;
+    const canvas = roadmapCanvasRef.current;
+    if (!viewport || !canvas) return;
+    const margen = 52;
+    const zoom = limitarNumero(
+      Math.min(
+        (viewport.clientWidth - margen * 2) / canvas.offsetWidth,
+        (viewport.clientHeight - margen * 2) / canvas.offsetHeight,
+        1,
+      ),
+      ZOOM_MINIMO_HOJA_RUTA,
+      ZOOM_MAXIMO_HOJA_RUTA,
+    );
+    actualizarCamaraHojaRuta({
+      zoom,
+      x: (viewport.clientWidth - canvas.offsetWidth * zoom) / 2,
+      y: (viewport.clientHeight - canvas.offsetHeight * zoom) / 2,
+    });
+  }, [actualizarCamaraHojaRuta]);
+
+  React.useEffect(() => {
+    if (camaraInicializadaRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (!roadmapViewportRef.current || !roadmapCanvasRef.current) return;
+      camaraInicializadaRef.current = true;
+      ajustarHojaRuta();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [ajustarHojaRuta, columnasHojaRuta.length]);
+
+  const iniciarPaneoHojaRuta = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 && event.button !== 1) return;
+    const objetivo = event.target as HTMLElement;
+    if (
+      event.button === 0 &&
+      objetivo.closest(
+        "button, a, input, select, textarea, [role='button'], [draggable='true']",
+      )
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.currentTarget.focus({ preventScroll: true });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const actual = camaraHojaRutaRef.current;
+    paneoRef.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      cameraX: actual.x,
+      cameraY: actual.y,
+    };
+    setDesplazandoLienzo(true);
+  };
+
+  const moverHojaRuta = (event: React.PointerEvent<HTMLDivElement>) => {
+    const inicio = paneoRef.current;
+    if (!inicio || inicio.pointerId !== event.pointerId) return;
+    const actual = camaraHojaRutaRef.current;
+    actualizarCamaraHojaRuta({
+      zoom: actual.zoom,
+      x: inicio.cameraX + event.clientX - inicio.clientX,
+      y: inicio.cameraY + event.clientY - inicio.clientY,
+    });
+  };
+
+  const terminarPaneoHojaRuta = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (paneoRef.current?.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    paneoRef.current = null;
+    setDesplazandoLienzo(false);
+  };
+
+  const asignarRoadmapViewport = React.useCallback(
+    (elemento: HTMLDivElement | null) => {
+      roadmapViewportRef.current = elemento;
+      setRoadmapViewportElement(elemento);
+    },
+    [],
+  );
+
+  const manejarRuedaHojaRuta = React.useCallback(
+    (event: WheelEvent) => {
+      event.preventDefault();
+      const viewport = roadmapViewportRef.current;
+      if (!viewport) return;
+      const actual = camaraHojaRutaRef.current;
+      if (event.ctrlKey || event.metaKey) {
+        const bounds = viewport.getBoundingClientRect();
+        const factor = Math.exp(-event.deltaY * 0.002);
+        establecerZoomHojaRuta(actual.zoom * factor, {
+          x: event.clientX - bounds.left,
+          y: event.clientY - bounds.top,
+        });
+        return;
+      }
+      actualizarCamaraHojaRuta({
+        ...actual,
+        x: actual.x - event.deltaX - (event.shiftKey ? event.deltaY : 0),
+        y: actual.y - (event.shiftKey ? 0 : event.deltaY),
+      });
+    },
+    [actualizarCamaraHojaRuta, establecerZoomHojaRuta],
+  );
+
+  React.useEffect(() => {
+    const viewport = roadmapViewportElement;
+    if (!viewport) return;
+    viewport.addEventListener("wheel", manejarRuedaHojaRuta, {
+      passive: false,
+    });
+    return () => viewport.removeEventListener("wheel", manejarRuedaHojaRuta);
+  }, [manejarRuedaHojaRuta, roadmapViewportElement]);
+
+  const manejarTecladoHojaRuta = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (event.target !== event.currentTarget) return;
+    const actual = camaraHojaRutaRef.current;
+    const desplazamiento = event.shiftKey ? 90 : 42;
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      establecerZoomHojaRuta(actual.zoom + PASO_ZOOM_HOJA_RUTA);
+    } else if (event.key === "-") {
+      event.preventDefault();
+      establecerZoomHojaRuta(actual.zoom - PASO_ZOOM_HOJA_RUTA);
+    } else if (event.key === "0") {
+      event.preventDefault();
+      establecerZoomHojaRuta(1);
+    } else if (event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      ajustarHojaRuta();
+    } else if (event.key.startsWith("Arrow")) {
+      event.preventDefault();
+      actualizarCamaraHojaRuta({
+        ...actual,
+        x:
+          actual.x +
+          (event.key === "ArrowLeft"
+            ? desplazamiento
+            : event.key === "ArrowRight"
+              ? -desplazamiento
+              : 0),
+        y:
+          actual.y +
+          (event.key === "ArrowUp"
+            ? desplazamiento
+            : event.key === "ArrowDown"
+              ? -desplazamiento
+              : 0),
+      });
+    }
+  };
 
   const resolverOrdenHojaRuta = (
     columnas: string[][],
@@ -605,7 +901,7 @@ export function EditorDefiniciones({
     acciones.push({
       id: "eliminar",
       etiqueta: removible
-        ? "Eliminar de la vía"
+        ? "Eliminar de la ruta"
         : "Eliminar desde la ruta base",
       icono: Trash2Icon,
       destructive: true,
@@ -655,10 +951,8 @@ export function EditorDefiniciones({
         (gate) => gate.nodoClave !== nodo.clave,
       );
 
-      await guardarBorradorReceta(productoId, {
-        rutaAlternativaId,
-        expectedUpdatedAt: revision.updatedAt,
-        cambios: `${nodo.nombre} eliminado de la hoja de ruta`,
+      await guardarRevisionActual({
+        cambios: `${nodo.nombre} eliminado de la ruta de producción`,
         documentos: documentosSiguientes.map((item, orden) => ({
           ...item,
           orden,
@@ -687,17 +981,17 @@ export function EditorDefiniciones({
       onSeleccionarNodo?.("ruta");
       if (limpiezaPendiente) {
         toast.warning(
-          `${nodo.nombre} ya salió de la vía, pero quedó una definición auxiliar pendiente de limpieza.`,
+          `${nodo.nombre} ya salió de la ruta, pero quedó una definición auxiliar pendiente de limpieza.`,
         );
       } else {
-        toast.success(`${nodo.nombre} fue eliminado de la vía.`);
+        toast.success(`${nodo.nombre} fue eliminado de la ruta.`);
       }
       router.refresh();
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "No se pudo eliminar el nodo de la vía.",
+          : "No se pudo eliminar el nodo de la ruta.",
       );
       throw error;
     } finally {
@@ -770,9 +1064,7 @@ export function EditorDefiniciones({
     if (reemplazo) {
       setCreandoNodo(true);
       try {
-        await guardarBorradorReceta(productoId, {
-          rutaAlternativaId,
-          expectedUpdatedAt: revision.updatedAt,
+        await guardarRevisionActual({
           cambios: `${reemplazo.nombre} reemplazado por ${child.nombre}`,
           documentos: documentosSiguientes.map((item, orden) => ({
             ...item,
@@ -1031,14 +1323,12 @@ export function EditorDefiniciones({
         (gate) => gate.nodoClave !== reemplazo?.clave,
       );
 
-      await guardarBorradorReceta(productoId, {
-        rutaAlternativaId,
-        expectedUpdatedAt: revision.updatedAt,
+      await guardarRevisionActual({
         cambios: reemplazo
           ? `${reemplazo.nombre} reemplazado por ${nombre}`
           : etapa
-            ? `Etapa ${nombre} agregada a la hoja de ruta`
-            : `Paso ${nombre} agregado a la hoja de ruta`,
+            ? `Etapa ${nombre} agregada a la ruta de producción`
+            : `Paso ${nombre} agregado a la ruta de producción`,
         documentos: documentosSiguientes.map((item, orden) => ({
           ...item,
           orden,
@@ -1101,9 +1391,7 @@ export function EditorDefiniciones({
   const guardarDefiniciones = async () => {
     setSaving(true);
     try {
-      await guardarBorradorReceta(productoId, {
-        rutaAlternativaId,
-        expectedUpdatedAt: revision.updatedAt,
+      await guardarRevisionActual({
         cambios: "Modelo productivo actualizado",
         documentos: documentos.map((item, orden) => ({ ...item, orden })),
         componentes: componentes.map((item, orden) => ({ ...item, orden })),
@@ -1194,14 +1482,20 @@ export function EditorDefiniciones({
     >
       <header className={styles.editorHeader}>
         <div>
-          <span>Vía productiva · Borrador V{revision.numero}</span>
-          <h4>Hoja de ruta · {ruta.nombre}</h4>
+          <span>Ruta de producción · Borrador V{revision.numero}</span>
+          <h4>{ruta.nombre}</h4>
           <p>
             Pasos, etapas y componentes forman un único recorrido. Seleccioná un
-            nodo para configurar su participación en esta vía.
+            nodo para configurar su participación en esta ruta.
           </p>
         </div>
         <div className={styles.headerActions}>
+          <Link
+            href={`/productos-servicios/${productoId}?tab=produccion&vista=operaciones&rutaAltId=${rutaAlternativaId}`}
+          >
+            <ArrowLeftIcon />
+            Volver al producto
+          </Link>
           <button
             type="button"
             onClick={() => setContextoDocumentos({ tipo: "GENERAL" })}
@@ -1222,20 +1516,143 @@ export function EditorDefiniciones({
         <section className={`${styles.editorSection} ${styles.flowSection}`}>
           <div className={styles.editorTitle}>
             <div>
-              <strong>Hoja de ruta</strong>
+              <strong>Ruta de producción</strong>
               <span>
-                Arrastrá horizontalmente para ordenar. Soltá sobre una columna
-                para ejecutar nodos en paralelo.
+                Arrastrá el fondo para moverte. Reordená los nodos o soltá sobre
+                una columna para ejecutarlos en paralelo.
               </span>
             </div>
-            <span className={styles.topologyBadge}>
-              {columnasHojaRuta.some((columna) => columna.length > 1)
-                ? "Ruta DAG"
-                : "Ruta lineal"}
-            </span>
+            <div className={styles.roadmapHeaderActions}>
+              <TooltipProvider delay={180}>
+                <div
+                  className={styles.canvasControls}
+                  role="group"
+                  aria-label="Controles de visualización de la ruta de producción"
+                >
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={(props) => (
+                        <Button
+                          {...props}
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          className={styles.canvasControlButton}
+                          aria-label="Alejar ruta de producción"
+                          disabled={
+                            camaraHojaRuta.zoom <= ZOOM_MINIMO_HOJA_RUTA
+                          }
+                          onClick={() =>
+                            establecerZoomHojaRuta(
+                              camaraHojaRutaRef.current.zoom -
+                                PASO_ZOOM_HOJA_RUTA,
+                            )
+                          }
+                        >
+                          <MinusIcon data-icon="inline-start" />
+                        </Button>
+                      )}
+                    />
+                    <TooltipContent>Alejar</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={(props) => (
+                        <Button
+                          {...props}
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className={styles.zoomValue}
+                          aria-label={`Zoom actual ${Math.round(camaraHojaRuta.zoom * 100)}%. Restablecer al 100%.`}
+                          onClick={() => establecerZoomHojaRuta(1)}
+                        >
+                          {Math.round(camaraHojaRuta.zoom * 100)}%
+                        </Button>
+                      )}
+                    />
+                    <TooltipContent>Restablecer al 100%</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={(props) => (
+                        <Button
+                          {...props}
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          className={styles.canvasControlButton}
+                          aria-label="Acercar ruta de producción"
+                          disabled={
+                            camaraHojaRuta.zoom >= ZOOM_MAXIMO_HOJA_RUTA
+                          }
+                          onClick={() =>
+                            establecerZoomHojaRuta(
+                              camaraHojaRutaRef.current.zoom +
+                                PASO_ZOOM_HOJA_RUTA,
+                            )
+                          }
+                        >
+                          <PlusIcon data-icon="inline-start" />
+                        </Button>
+                      )}
+                    />
+                    <TooltipContent>Acercar</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={(props) => (
+                        <Button
+                          {...props}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={styles.fitCanvasButton}
+                          aria-label="Ajustar toda la ruta al lienzo"
+                          onClick={ajustarHojaRuta}
+                        >
+                          <Maximize2Icon data-icon="inline-start" />
+                          Ajustar
+                        </Button>
+                      )}
+                    />
+                    <TooltipContent>Ver toda la ruta</TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
+              <span className={styles.topologyBadge}>
+                {columnasHojaRuta.some((columna) => columna.length > 1)
+                  ? "Ruta DAG"
+                  : "Ruta lineal"}
+              </span>
+            </div>
           </div>
-          <div className={styles.roadmapViewport}>
-            <div className={styles.roadmapCanvas}>
+          <div
+            ref={asignarRoadmapViewport}
+            className={styles.roadmapViewport}
+            data-panning={desplazandoLienzo}
+            tabIndex={0}
+            aria-label="Lienzo de la ruta de producción. Arrastrá el fondo para desplazarte; usá Control o Comando y la rueda para cambiar el zoom."
+            style={
+              {
+                "--roadmap-grid-size": `${28 * camaraHojaRuta.zoom}px`,
+                "--roadmap-grid-x": `${camaraHojaRuta.x}px`,
+                "--roadmap-grid-y": `${camaraHojaRuta.y}px`,
+              } as React.CSSProperties
+            }
+            onPointerDown={iniciarPaneoHojaRuta}
+            onPointerMove={moverHojaRuta}
+            onPointerUp={terminarPaneoHojaRuta}
+            onPointerCancel={terminarPaneoHojaRuta}
+            onKeyDown={manejarTecladoHojaRuta}
+          >
+            <div
+              ref={roadmapCanvasRef}
+              className={styles.roadmapCanvas}
+              style={{
+                transform: `translate3d(${camaraHojaRuta.x}px, ${camaraHojaRuta.y}px, 0) scale(${camaraHojaRuta.zoom})`,
+              }}
+            >
               <div className={styles.routeBoundary}>
                 <span className={styles.boundaryDot} />
                 <strong>Inicio</strong>
@@ -1589,7 +2006,7 @@ export function EditorDefiniciones({
           <div className={styles.addNodeDialog}>
             <DialogHeader className={styles.addNodeHeader}>
               <span>
-                HOJA DE RUTA ·{" "}
+                RUTA DE PRODUCCIÓN ·{" "}
                 {contextoAltaNodo?.reemplazo ? "REEMPLAZAR NODO" : "NUEVO NODO"}
               </span>
               <DialogTitle>
@@ -1679,7 +2096,7 @@ export function EditorDefiniciones({
                           : "Elegí la etapa"}
                     </strong>
                     <span>
-                      La posición ya quedó definida en la hoja de ruta.
+                      La posición ya quedó definida en la ruta de producción.
                     </span>
                   </div>
                   <Input
@@ -1810,7 +2227,7 @@ export function EditorDefiniciones({
         onOpenChange={(open) => {
           if (!open && !procesandoNodo) setNodoAEliminar(null);
         }}
-        titulo="Eliminar nodo de la vía"
+        titulo="Eliminar nodo de la ruta"
         descripcion={
           nodoAEliminar
             ? `${nodoAEliminar.nombre} dejará de formar parte de este recorrido productivo.`
@@ -1823,7 +2240,7 @@ export function EditorDefiniciones({
         ]}
         nombreItem={nodoAEliminar?.nombre}
         requiereTipear={false}
-        accionLabel="Eliminar de la vía"
+        accionLabel="Eliminar de la ruta"
         onConfirmar={eliminarNodoConfirmado}
       />
 
@@ -1839,97 +2256,106 @@ export function EditorDefiniciones({
   );
 }
 
-function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
-  const grafo = revision.grafoProduccionJson;
-  const nombreNodo = (clave: string) =>
-    nombreHumano(
-      revision.recursos.find((recurso) => recurso.pasoClave === clave)
-        ?.pasoNombre ?? clave.replace(/^(ruta|extra):/, ""),
-    );
+function etiquetaFormulaBom(formula: string) {
+  const etiquetas: Record<string, string> = {
+    por_unidad: "Por unidad del producto",
+    por_unidad_productiva: "Según la producción del paso",
+    por_m2: "Según superficie",
+    por_metro_lineal: "Según longitud",
+    fija: "Cantidad fija",
+  };
+  return etiquetas[formula] ?? nombreHumano(formula);
+}
+
+function etiquetaCantidadNodo(nodo: BomNodoMultinivel) {
+  if (!nodo.relacion) return "Producto terminado";
+  const cantidad = new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: 4,
+  }).format(nodo.relacion.cantidad);
+  const unidades: Record<string, string> = {
+    unidad: "unidad",
+    m2: "m²",
+    M2: "m²",
+    metro_lineal: "metro lineal",
+  };
+  const unidad =
+    unidades[nodo.relacion.unidad] ??
+    nombreHumano(nodo.relacion.unidad).toLowerCase();
+  return `${cantidad} ${unidad} · ${etiquetaFormulaBom(nodo.relacion.formula)}`;
+}
+
+function NodoBom({
+  nodo,
+  abiertos,
+  alternar,
+}: {
+  nodo: BomNodoMultinivel;
+  abiertos: Set<string>;
+  alternar: (ocurrenciaId: string) => void;
+}) {
+  const abierto = abiertos.has(nodo.ocurrenciaId);
+  const tieneContenido =
+    nodo.hijos.length > 0 ||
+    nodo.materialesDirectos.length > 0 ||
+    nodo.recursosDirectos.length > 0 ||
+    nodo.documentosDirectos.length > 0;
   return (
-    <div className={styles.revisionBody}>
-      <div className={styles.metrics}>
-        <div>
-          <span>Materiales</span>
-          <strong>{revision.materiales.length}</strong>
-        </div>
-        <div>
-          <span>Recursos</span>
-          <strong>{revision.recursos.length}</strong>
-        </div>
-        <div>
-          <span>Componentes fabricados</span>
-          <strong>{revision.componentes.length}</strong>
-        </div>
-        <div>
-          <span>Documentos requeridos</span>
-          <strong>{revision.documentos.length}</strong>
-        </div>
-      </div>
+    <div
+      className={styles.bomNode}
+      data-root={nodo.nivel === 0 ? "true" : undefined}
+    >
+      <button
+        type="button"
+        className={styles.bomNodeHeader}
+        onClick={() => tieneContenido && alternar(nodo.ocurrenciaId)}
+        aria-expanded={abierto}
+      >
+        <span className={styles.bomChevron} aria-hidden="true">
+          {tieneContenido ? (
+            abierto ? (
+              <ChevronDownIcon />
+            ) : (
+              <ChevronRightIcon />
+            )
+          ) : null}
+        </span>
+        <span className={styles.bomNodeIcon}>
+          {nodo.nivel === 0 ? <BoxesIcon /> : <BlocksIcon />}
+        </span>
+        <span className={styles.bomNodeIdentity}>
+          <span>
+            {nodo.nivel === 0 ? "PRODUCTO TERMINADO" : `NIVEL ${nodo.nivel}`}
+          </span>
+          <strong>{nombreHumano(nodo.productoNombre)}</strong>
+          <small>{etiquetaCantidadNodo(nodo)}</small>
+        </span>
+        <span className={styles.bomNodeStats}>
+          <span>Receta V{nodo.revisionNumero}</span>
+          <b>
+            {nodo.totales.materialesAcumulados}{" "}
+            {nodo.totales.materialesAcumulados === 1
+              ? "material"
+              : "materiales"}
+          </b>
+          <b>
+            {nodo.totales.componentesDirectos}{" "}
+            {nodo.totales.componentesDirectos === 1
+              ? "subcomponente"
+              : "subcomponentes"}
+          </b>
+        </span>
+      </button>
 
-      {grafo?.nodos.length ? (
-        <section className={styles.flowOverview}>
-          <header>
-            <div>
-              <GitCommitHorizontalIcon />
-              <div>
-                <h4>Flujo y precedencias</h4>
-                <p>
-                  {grafo.topologia === "LINEAL"
-                    ? "Recorrido lineal compatible"
-                    : `${grafo.raices.length} inicio(s), ${grafo.terminales.length} terminal(es) y ramas paralelas`}
-                </p>
-              </div>
-            </div>
-            <span>{grafo.topologia}</span>
-          </header>
-          <div className={styles.flowOverviewRows}>
-            {grafo.nodos.map((nodo, index) => {
-              const previos = grafo.aristas
-                .filter((arista) => arista.haciaClave === nodo.clave)
-                .map((arista) => arista.desdeClave);
-              const compuesto = revision.pasosCompuestosJson?.find(
-                (paso) => paso.nodoClave === nodo.clave,
-              );
-              const pasosInternos =
-                compuesto?.pasos?.filter((paso) => paso.activa) ?? [];
-              const operacionesLegacy =
-                compuesto?.operaciones.filter(
-                  (operacion) => operacion.activa,
-                ) ?? [];
-              return (
-                <div key={nodo.clave}>
-                  <b>{String(index + 1).padStart(2, "0")}</b>
-                  <strong>{nombreNodo(nodo.clave)}</strong>
-                  <span>
-                    {previos.length
-                      ? `Después de ${previos.map(nombreNodo).join(" + ")}`
-                      : "Inicio disponible"}
-                    {pasosInternos.length || operacionesLegacy.length
-                      ? ` · Etapa compuesta con ${pasosInternos.length || operacionesLegacy.length} ${pasosInternos.length === 1 || (!pasosInternos.length && operacionesLegacy.length === 1) ? "operación" : "operaciones"}`
-                      : ""}
+      {abierto ? (
+        <div className={styles.bomNodeBody}>
+          {nodo.materialesDirectos.length ? (
+            <div className={styles.bomMaterialList}>
+              {nodo.materialesDirectos.map((material) => (
+                <div key={material.id} className={styles.bomMaterialRow}>
+                  <span className={styles.bomMaterialIcon}>
+                    <BoxesIcon />
                   </span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      <div className={styles.grid}>
-        <section className={styles.block}>
-          <header>
-            <BoxesIcon />
-            <div>
-              <h4>BOM de materiales</h4>
-              <p>Consumos consolidados desde el modelo de esta vía.</p>
-            </div>
-          </header>
-          {revision.materiales.length ? (
-            <div className={styles.rows}>
-              {revision.materiales.map((material) => (
-                <div className={styles.row} key={material.id}>
-                  <div>
+                  <span>
                     <strong>
                       {nombreHumano(
                         material.materialNombre ||
@@ -1937,139 +2363,255 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                           material.slotCodigo,
                       )}
                     </strong>
-                    <span>
+                    <small>
                       {nombreHumano(material.pasoNombre)} ·{" "}
                       {etiquetaRol(material.rol)}
-                    </span>
-                  </div>
-                  <div className={styles.rowMeta}>
-                    <span>{material.formula.replaceAll("_", " ")}</span>
-                    {Number(material.mermaAdicionalPct) > 0 ? (
-                      <b>+{Number(material.mermaAdicionalPct)}% merma</b>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className={styles.empty}>
-              Esta vía todavía no declara materiales.
-            </p>
-          )}
-        </section>
-
-        <section className={styles.block}>
-          <header>
-            <FactoryIcon />
-            <div>
-              <h4>Recursos productivos</h4>
-              <p>Máquinas, perfiles, centros y trabajo humano.</p>
-            </div>
-          </header>
-          {revision.recursos.length ? (
-            <div className={styles.rows}>
-              {revision.recursos.map((recurso) => (
-                <div className={styles.row} key={recurso.id}>
-                  <div>
-                    <strong>{nombreHumano(recurso.pasoNombre)}</strong>
-                    <span>
-                      {recurso.tercerizado
-                        ? recurso.proveedorNombre || "Proceso tercerizado"
-                        : recurso.maquinaNombre ||
-                          recurso.centroCostoNombre ||
-                          "Recurso manual"}
-                    </span>
-                  </div>
-                  <div className={styles.rowMeta}>
-                    {recurso.estacionNombre ? (
-                      <span>Estación {recurso.estacionNombre}</span>
-                    ) : null}
-                    {recurso.perfilNombre ? (
-                      <span>{recurso.perfilNombre}</span>
-                    ) : null}
-                    {recurso.dotacionOperarios > 1 ? (
-                      <b>{recurso.dotacionOperarios} personas</b>
-                    ) : null}
-                    {recurso.habilidadesRequeridas?.length ? (
-                      <b>
-                        Habilidades:{" "}
-                        {recurso.habilidadesRequeridas
-                          .map(nombreHumano)
-                          .join(", ")}
-                      </b>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className={styles.empty}>No hay recursos configurados.</p>
-          )}
-        </section>
-      </div>
-
-      {revision.componentes.length ? (
-        <section className={styles.block}>
-          <header>
-            <BlocksIcon />
-            <div>
-              <h4>Componentes fabricados</h4>
-              <p>Productos con receta propia incluidos en esta versión.</p>
-            </div>
-          </header>
-          <div className={styles.rows}>
-            {revision.componentes.map((componente) => (
-              <div className={styles.row} key={componente.id}>
-                <div>
-                  <strong>{nombreHumano(componente.nombre)}</strong>
-                  <span>
-                    Receta V{componente.recetaVersion} ·{" "}
-                    {componente.politicaEjecucion === "INDEPENDIENTE"
-                      ? "flujo productivo propio"
-                      : "sin seguimiento separado"}
-                    {componente.nodoIncorporacionClave
-                      ? ` · se incorpora antes de ${nombreNodo(componente.nodoIncorporacionClave)}`
+                    </small>
+                  </span>
+                  <span className={styles.bomMaterialRule}>
+                    {etiquetaFormulaBom(material.formula)}
+                    {Number(material.mermaAdicionalPct) > 0
+                      ? ` · +${Number(material.mermaAdicionalPct)}% merma`
                       : ""}
                   </span>
                 </div>
-                <div className={styles.rowMeta}>
-                  <span>
-                    {componente.configuracionJson?.bindings?.some(
-                      (binding) => binding.clave === "cantidad",
-                    )
-                      ? "Cantidad configurada"
-                      : "Cantidad histórica"}
-                  </span>
-                  <b>{componente.requerido ? "Requerido" : "Opcional"}</b>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+              ))}
+            </div>
+          ) : (
+            <p className={styles.bomNoDirectMaterial}>
+              Sin materiales directos en este nivel.
+            </p>
+          )}
 
-      <div className={styles.secondaryGrid}>
-        <section className={styles.secondaryBlock}>
-          <FileCheck2Icon />
-          <div>
-            <strong>Documentos requeridos</strong>
-            <span>
-              {revision.documentos.length
-                ? revision.documentos.map((item) => item.nombre).join(" · ")
-                : "Sin requisitos documentales de plantilla"}
-            </span>
+          {nodo.hijos.length ? (
+            <div className={styles.bomChildren}>
+              {nodo.hijos.map((hijo) => (
+                <NodoBom
+                  key={hijo.ocurrenciaId}
+                  nodo={hijo}
+                  abiertos={abiertos}
+                  alternar={alternar}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          <div className={styles.bomNodeContract}>
+            <span>{nodo.recursosDirectos.length} recursos directos</span>
+            <span>{nodo.documentosDirectos.length} documentos directos</span>
+            <span>{nombreHumano(nodo.rutaNombre)}</span>
           </div>
-        </section>
-        <section className={styles.secondaryBlock}>
-          <GitCommitHorizontalIcon />
-          <div>
-            <strong>Huella de configuración</strong>
-            <span className={styles.hash}>
-              {revision.huellaConfiguracion.slice(0, 16)}…
-            </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
+  const claveRevision = `${revision.id}:${revision.updatedAt}:${revision.huellaConfiguracion}`;
+  const [resultado, setResultado] = React.useState<{
+    claveRevision: string;
+    bom: BomMultinivel | null;
+    error: string | null;
+  } | null>(null);
+  const [vista, setVista] = React.useState<"MULTINIVEL" | "CONSOLIDADO">(
+    "MULTINIVEL",
+  );
+  const [abiertos, setAbiertos] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    let vigente = true;
+    getBomMultinivelRevision(revision.id)
+      .then((resultado) => {
+        if (!vigente) return;
+        setResultado({ claveRevision, bom: resultado, error: null });
+        const iniciales = new Set<string>();
+        const registrar = (nodo: BomNodoMultinivel) => {
+          if (nodo.nivel <= 1) iniciales.add(nodo.ocurrenciaId);
+          nodo.hijos.forEach(registrar);
+        };
+        registrar(resultado.raiz);
+        setAbiertos(iniciales);
+      })
+      .catch((reason: unknown) => {
+        if (!vigente) return;
+        setResultado({
+          claveRevision,
+          bom: null,
+          error:
+            reason instanceof Error
+              ? reason.message
+              : "No se pudo construir el BOM multinivel.",
+        });
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [revision.id, claveRevision]);
+
+  const cargaVigente =
+    resultado?.claveRevision === claveRevision ? resultado : null;
+  const bom = cargaVigente?.bom ?? null;
+  const error = cargaVigente?.error ?? null;
+  const cargando = cargaVigente === null;
+
+  const alternar = (ocurrenciaId: string) => {
+    setAbiertos((actuales) => {
+      const siguientes = new Set(actuales);
+      if (siguientes.has(ocurrenciaId)) siguientes.delete(ocurrenciaId);
+      else siguientes.add(ocurrenciaId);
+      return siguientes;
+    });
+  };
+
+  return (
+    <div className={styles.revisionBody}>
+      <section className={styles.bomIntro}>
+        <div>
+          <span>BOM VERSIONADO</span>
+          <h4>Composición del producto</h4>
+          <p>
+            Leé qué se fabrica dentro de qué y qué materiales aporta cada
+            nivel. El orden de ejecución se consulta en Workflow.
+          </p>
+        </div>
+        <div className={styles.bomViewSwitch} aria-label="Vista del BOM">
+          <button
+            type="button"
+            data-active={vista === "MULTINIVEL"}
+            aria-pressed={vista === "MULTINIVEL"}
+            onClick={() => setVista("MULTINIVEL")}
+          >
+            Multinivel
+          </button>
+          <button
+            type="button"
+            data-active={vista === "CONSOLIDADO"}
+            aria-pressed={vista === "CONSOLIDADO"}
+            onClick={() => setVista("CONSOLIDADO")}
+          >
+            Consolidado
+          </button>
+        </div>
+      </section>
+
+      {cargando ? (
+        <div className={styles.bomLoading}>Construyendo composición…</div>
+      ) : error ? (
+        <div className={styles.bomError}>
+          <strong>No se pudo leer la composición completa</strong>
+          <span>{error}</span>
+        </div>
+      ) : bom ? (
+        <>
+          <div className={styles.metrics}>
+            <div>
+              <span>Niveles</span>
+              <strong>{bom.resumen.niveles}</strong>
+              <small>incluye el producto raíz</small>
+            </div>
+            <div>
+              <span>Productos fabricados</span>
+              <strong>{bom.resumen.productosFabricados}</strong>
+              <small>{bom.raiz.totales.componentesDirectos} hijos directos</small>
+            </div>
+            <div>
+              <span>Materiales</span>
+              <strong>{bom.resumen.materialesAcumulados}</strong>
+              <small>{bom.resumen.materialesDirectos} en el nivel raíz</small>
+            </div>
+            <div>
+              <span>Recursos</span>
+              <strong>{bom.resumen.recursosAcumulados}</strong>
+              <small>{bom.resumen.recursosDirectos} en el nivel raíz</small>
+            </div>
           </div>
-        </section>
-      </div>
+
+          {vista === "MULTINIVEL" ? (
+            <section className={styles.bomTreePanel}>
+              <div className={styles.bomTreeGuide}>
+                <span>ESTRUCTURA MULTINIVEL</span>
+                <p>
+                  Cada sangría representa una receta hija congelada en esta
+                  versión. Abrí un nivel para ver sus materiales y subproductos.
+                </p>
+              </div>
+              <NodoBom nodo={bom.raiz} abiertos={abiertos} alternar={alternar} />
+            </section>
+          ) : (
+            <section className={styles.bomConsolidated}>
+              <div className={styles.bomTreeGuide}>
+                <span>LECTURA CONSOLIDADA</span>
+                <p>
+                  Reúne materiales equivalentes sin perder el producto y el paso
+                  que los originan. Las cantidades finales se resuelven al cotizar.
+                </p>
+              </div>
+              {bom.materialesConsolidados.length ? (
+                <div className={styles.bomConsolidatedRows}>
+                  {bom.materialesConsolidados.map((material) => (
+                    <details key={material.clave}>
+                      <summary>
+                        <span className={styles.bomMaterialIcon}>
+                          <BoxesIcon />
+                        </span>
+                        <span>
+                          <strong>{nombreHumano(material.nombre)}</strong>
+                          <small>{etiquetaFormulaBom(material.formula)}</small>
+                        </span>
+                        <b>
+                          {material.ocurrencias.length}{" "}
+                          {material.ocurrencias.length === 1
+                            ? "aporte"
+                            : "aportes"}
+                        </b>
+                        <ChevronDownIcon />
+                      </summary>
+                      <div>
+                        {material.ocurrencias.map((ocurrencia) => (
+                          <div
+                            key={`${material.clave}:${ocurrencia.ocurrenciaId}`}
+                          >
+                            <strong>{ocurrencia.rutaProductos.join(" → ")}</strong>
+                            <span>{nombreHumano(ocurrencia.pasoNombre)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.empty}>
+                  Ningún nivel de esta versión declara materiales.
+                </p>
+              )}
+            </section>
+          )}
+
+          <div className={styles.secondaryGrid}>
+            <section className={styles.secondaryBlock}>
+              <FileCheck2Icon />
+              <div>
+                <strong>Contrato documental acumulado</strong>
+                <span>
+                  {bom.resumen.documentosAcumulados
+                    ? `${bom.resumen.documentosAcumulados} requisitos en toda la composición`
+                    : "Sin requisitos documentales de plantilla"}
+                </span>
+              </div>
+            </section>
+            <section className={styles.secondaryBlock}>
+              <GitCommitHorizontalIcon />
+              <div>
+                <strong>Huella de la revisión raíz</strong>
+                <span className={styles.hash}>
+                  {revision.huellaConfiguracion.slice(0, 16)}…
+                </span>
+              </div>
+            </section>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -2088,12 +2630,52 @@ export function RecetaProductoTab({
   projectionOnly?: boolean;
 }) {
   const router = useRouter();
+  const [recetasActuales, setRecetasActuales] =
+    React.useState<ProductoReceta[]>(recetas);
   const [working, setWorking] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState<string | null>(null);
   const [revisionARetirar, setRevisionARetirar] =
     React.useState<ProductoRecetaRevision | null>(null);
   const [revisionADescartar, setRevisionADescartar] =
     React.useState<ProductoRecetaRevision | null>(null);
+  const firmaRecetas = React.useMemo(
+    () =>
+      recetas
+        .flatMap((receta) =>
+          receta.revisiones.map(
+            (revision) => `${revision.id}:${revision.updatedAt}`,
+          ),
+        )
+        .join("|"),
+    [recetas],
+  );
+
+  React.useEffect(() => {
+    let activo = true;
+    const actualizarProyeccion = async () => {
+      try {
+        const siguientes = await getRecetasProducto(producto.id);
+        if (activo) setRecetasActuales(siguientes);
+      } catch {
+        // Conservamos la proyección provista por el servidor si la
+        // actualización en segundo plano falla.
+      }
+    };
+    const alVolverAVisible = () => {
+      if (document.visibilityState === "visible") {
+        void actualizarProyeccion();
+      }
+    };
+
+    void actualizarProyeccion();
+    window.addEventListener("focus", actualizarProyeccion);
+    document.addEventListener("visibilitychange", alVolverAVisible);
+    return () => {
+      activo = false;
+      window.removeEventListener("focus", actualizarProyeccion);
+      document.removeEventListener("visibilitychange", alVolverAVisible);
+    };
+  }, [firmaRecetas, producto.id]);
 
   const guardar = async (
     rutaAlternativaId: string,
@@ -2197,7 +2779,7 @@ export function RecetaProductoTab({
       <div className={styles.noRoutes}>
         <FactoryIcon />
         <h3>Primero configurá una ruta productiva</h3>
-        <p>La receta se publica sobre una vía de fabricación concreta.</p>
+        <p>La receta se publica sobre una ruta de producción concreta.</p>
       </div>
     );
   }
@@ -2211,7 +2793,7 @@ export function RecetaProductoTab({
               (ruta) => !rutaAlternativaId || ruta.id === rutaAlternativaId,
             )
             .map((ruta) => {
-              const receta = recetas.find(
+              const receta = recetasActuales.find(
                 (item) => item.rutaAlternativa.id === ruta.id,
               );
               const draft = receta?.revisiones.find(
@@ -2220,15 +2802,29 @@ export function RecetaProductoTab({
               const published = receta?.revisionPublicada ?? null;
               const visible = draft ?? published;
               return (
-                <article className={styles.recipe} key={ruta.id}>
-                  <header className={styles.recipeHeader}>
-                    <div>
-                      <span className={styles.routeCode}>
-                        {ruta.ruta.codigo} · ruta V{ruta.rutaVersion}
-                      </span>
-                      <h3>{ruta.nombre}</h3>
-                      <p>{ruta.ruta.nombre}</p>
-                    </div>
+                <article
+                  className={`${styles.recipe} ${projectionOnly ? styles.recipeProjection : ""}`}
+                  key={ruta.id}
+                >
+                  <header
+                    className={
+                      projectionOnly ? styles.bomToolbar : styles.recipeHeader
+                    }
+                  >
+                    {projectionOnly ? (
+                      <div className={styles.bomToolbarCopy}>
+                        <span>BOM</span>
+                        <strong>BOM multinivel y versiones</strong>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className={styles.routeCode}>
+                          {ruta.ruta.codigo} · ruta V{ruta.rutaVersion}
+                        </span>
+                        <h3>{ruta.nombre}</h3>
+                        <p>{ruta.ruta.nombre}</p>
+                      </div>
+                    )}
                     <div className={styles.headerRight}>
                       {draft ? (
                         <span className={styles.status} data-state="draft">
@@ -2417,7 +3013,7 @@ export function RecetaProductoTab({
                       <BoxesIcon />
                       <div>
                         <strong>
-                          Esta vía todavía trabaja en modo compatible
+                          Esta ruta todavía trabaja en modo compatible
                         </strong>
                         <span>
                           Puede seguir cotizando como hasta ahora. Creá el

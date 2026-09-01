@@ -104,6 +104,7 @@ export interface ProductoRecetaMaterial {
   slotNombre?: string | null;
   rol?: string | null;
   modoSeleccion: string;
+  materialVarianteId?: string | null;
   materialSku?: string | null;
   materialNombre?: string | null;
   unidad?: string | null;
@@ -115,6 +116,114 @@ export interface ProductoRecetaMaterial {
   aplicaMultiCaras: boolean;
   orden: number;
 }
+
+export type BomTotalesNodo = {
+  materialesDirectos: number;
+  materialesAcumulados: number;
+  recursosDirectos: number;
+  recursosAcumulados: number;
+  documentosDirectos: number;
+  documentosAcumulados: number;
+  componentesDirectos: number;
+  componentesAcumulados: number;
+  nivelesDescendientes: number;
+};
+
+export type BomNodoMultinivel = {
+  ocurrenciaId: string;
+  nivel: number;
+  productoId: string;
+  productoCodigo: string;
+  productoNombre: string;
+  unidadComercial: string;
+  recetaId: string;
+  revisionId: string;
+  revisionNumero: number;
+  revisionEstado: "BORRADOR" | "PUBLICADA" | "DEPRECADA";
+  revisionHuella: string;
+  rutaAlternativaId: string;
+  rutaNombre: string;
+  relacion: null | {
+    codigo: string;
+    nombre: string;
+    formula: string;
+    cantidad: number;
+    unidad: string;
+    requerido: boolean;
+    politicaEjecucion: "INLINE" | "INDEPENDIENTE";
+    configuracionJson?: ConfiguracionComponenteFabricado | null;
+    nodoIncorporacionClave?: string | null;
+  };
+  factorReferencia: number;
+  materialesDirectos: ProductoRecetaMaterial[];
+  recursosDirectos: Array<{
+    id: string;
+    pasoClave: string;
+    pasoNombre: string;
+    familiaCodigo: string;
+    maquinaNombre?: string | null;
+    estacionNombre?: string | null;
+    perfilNombre?: string | null;
+    centroCostoNombre?: string | null;
+    dotacionOperarios: number;
+    tercerizado: boolean;
+    proveedorNombre?: string | null;
+    orden: number;
+  }>;
+  documentosDirectos: Array<{
+    id: string;
+    alcance: string;
+    pasoClave?: string | null;
+    codigo: string;
+    nombre: string;
+    proposito: string;
+    etapa: string;
+    requerido: boolean;
+    orden: number;
+  }>;
+  hijos: BomNodoMultinivel[];
+  totales: BomTotalesNodo;
+};
+
+export type BomMaterialConsolidado = {
+  clave: string;
+  nombre: string;
+  sku?: string | null;
+  unidad?: string | null;
+  formula: string;
+  cantidadFactorReferencia: number | null;
+  ocurrencias: Array<{
+    ocurrenciaId: string;
+    productoId: string;
+    productoNombre: string;
+    pasoNombre: string;
+    nivel: number;
+    rutaProductos: string[];
+    factorReferencia: number;
+    cantidadFactor: number | null;
+  }>;
+};
+
+export type BomMultinivel = {
+  revisionRaizId: string;
+  generadoDesdeRevision: {
+    numero: number;
+    estado: "BORRADOR" | "PUBLICADA" | "DEPRECADA";
+    huellaConfiguracion: string;
+  };
+  resumen: {
+    niveles: number;
+    productosFabricados: number;
+    materialesDirectos: number;
+    materialesAcumulados: number;
+    recursosDirectos: number;
+    recursosAcumulados: number;
+    documentosDirectos: number;
+    documentosAcumulados: number;
+  };
+  raiz: BomNodoMultinivel;
+  materialesConsolidados: BomMaterialConsolidado[];
+};
 
 export interface ProductoRecetaRevision {
   id: string;
@@ -381,6 +490,14 @@ export interface ProductoReceta {
 export function getRecetasProducto(id: string): Promise<ProductoReceta[]> {
   return apiRequest<ProductoReceta[]>(
     `/productos-servicios/productos/${id}/receta`,
+  );
+}
+
+export function getBomMultinivelRevision(
+  revisionId: string,
+): Promise<BomMultinivel> {
+  return apiRequest<BomMultinivel>(
+    `/productos-servicios/recetas/revisiones/${revisionId}/bom-multinivel`,
   );
 }
 
@@ -689,8 +806,8 @@ export interface CrearProductoRutaAltPayload {
 export async function crearProductoRutaAlt(
   productoId: string,
   payload: CrearProductoRutaAltPayload,
-) {
-  return apiRequest(
+): Promise<{ id: string }> {
+  return apiRequest<{ id: string }>(
     `/productos-servicios/productos/${productoId}/rutas-alternativas`,
     {
       method: "POST",
@@ -743,8 +860,8 @@ export interface DuplicarProductoRutaAltPayload {
 export async function duplicarProductoRutaAlt(
   rutaAltId: string,
   payload: DuplicarProductoRutaAltPayload = {},
-) {
-  return apiRequest(
+): Promise<{ id: string }> {
+  return apiRequest<{ id: string }>(
     `/productos-servicios/productos/rutas-alternativas/${rutaAltId}/duplicar`,
     {
       method: "POST",

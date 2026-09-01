@@ -458,7 +458,7 @@ export function ConfigurarComponenteWorkspace({
         </>
       }
       onBack={onCancel}
-      backLabel="Volver a la hoja de ruta"
+      backLabel="Volver a la ruta de producción"
       embedded={embedded}
       pinFooterToViewport
       contentClassName={styles.body}
@@ -508,27 +508,35 @@ export function ConfigurarComponenteWorkspace({
           </div>
           <div className={styles.executionCard}>
             <div>
-              <strong>Seguimiento productivo</strong>
+              <strong>Flujo en producción</strong>
               <span>
-                Define si este componente tendrá su propio flujo ejecutable
-                dentro de la orden de trabajo.
+                Define si el componente aparecerá como un trabajo separado, con
+                sus propios pasos y avance.
               </span>
             </div>
-            <select
-              value={politicaEjecucion}
-              onChange={(event) =>
-                setPoliticaEjecucion(
-                  event.target.value as "INLINE" | "INDEPENDIENTE",
-                )
-              }
-            >
-              <option value="INDEPENDIENTE">
-                Generar flujo productivo propio
-              </option>
-              <option value="INLINE">
-                Incluir en el flujo del producto padre
-              </option>
-            </select>
+            <div className={styles.executionControl}>
+              <select
+                aria-label="Flujo en el tablero de producción"
+                value={politicaEjecucion}
+                onChange={(event) =>
+                  setPoliticaEjecucion(
+                    event.target.value as "INLINE" | "INDEPENDIENTE",
+                  )
+                }
+              >
+                <option value="INDEPENDIENTE">
+                  Generar flujo propio en el tablero de producción
+                </option>
+                <option value="INLINE">
+                  No generar flujo en el tablero de producción
+                </option>
+              </select>
+              <span className={styles.executionHint}>
+                {politicaEjecucion === "INDEPENDIENTE"
+                  ? "El componente aparecerá como un trabajo independiente en el tablero."
+                  : "El componente se calculará normalmente, pero no tendrá seguimiento operativo separado."}
+              </span>
+            </div>
           </div>
           <div className={styles.table}>
             <div className={styles.tableHead}>

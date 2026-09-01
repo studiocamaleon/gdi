@@ -382,7 +382,7 @@ export function PasoExtraEditor({
           <p className="text-muted-foreground text-sm">
             {esCreacion
               ? modoHojaRuta
-                ? "Elegí qué operación querés incorporar. Se agregará al final y después podrás ubicarla arrastrando en la hoja de ruta."
+                ? "Elegí qué operación querés incorporar. Se agregará al final y después podrás ubicarla arrastrando en la ruta de producción."
                 : "Elegí la familia del paso y dónde se inserta en el flujo. El resto se configura después, igual que los demás pasos."
               : "Paso puntual solo para este producto en esta ruta. No modifica la ruta base reusable ni a otros productos."}
           </p>

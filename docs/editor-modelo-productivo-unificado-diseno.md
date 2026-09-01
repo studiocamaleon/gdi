@@ -73,6 +73,42 @@ Publicar congela el grafo, las revisiones hijas, bindings y la BOM resultante.
 La vista BOM puede inspeccionar y comparar versiones, pero no mantener una
 configuración paralela.
 
+### 4.1 Proyección multinivel
+
+La proyección BOM debe conservar la estructura de ensamble completa y no
+limitarse a las líneas directas de la revisión raíz. Cada componente fabricado
+referencia una revisión hija exacta; esa revisión se expande recursivamente
+hasta materiales, componentes comprados o subcomponentes fabricados.
+
+La vista distingue expresamente:
+
+- **directo**: pertenece a la revisión del nodo seleccionado;
+- **acumulado**: incluye todos los niveles descendientes;
+- **cantidad maestra**: regla o binding versionado, todavía sin un pedido;
+- **cantidad resuelta**: valor concreto congelado por una cotización u OT.
+
+El producto y sus componentes fabricados son nodos de ensamble. Los materiales,
+consumibles, packaging y componentes comprados son hojas. Un paso o una etapa
+compuesta no crean por sí solos un nivel de BOM: se muestran como origen de
+consumo o punto de incorporación.
+
+### 4.2 Separación con el Workflow
+
+El Workflow responde **cómo y cuándo se fabrica**; la BOM responde **de qué se
+compone y en qué cantidad**. La BOM no duplica el grafo ni vuelve a mostrar su
+topología `LINEAL|DAG`. Vincula cada línea con el paso que la consume y cada
+subensamble con el nodo donde se incorpora.
+
+La pantalla de producto presenta por defecto dos lecturas de la misma revisión:
+
+1. `Multinivel`: árbol expandible de productos, subensambles y materiales;
+2. `Consolidado`: roll-up de materiales y cantidades compatibles, sin perder la
+   trazabilidad de los niveles que aportaron cada consumo.
+
+Recursos, documentos y aprobaciones se mantienen como información técnica de
+la revisión o del nodo seleccionado; no compiten con la jerarquía física de la
+BOM.
+
 ## 5. Compatibilidad y transición
 
 La implementación será compatible con los datos actuales:

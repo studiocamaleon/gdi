@@ -27,6 +27,7 @@ export function ModeloProductivoEditorView({
   lookups,
   catalogoCargos,
   recetas,
+  nodoInicial,
 }: {
   producto: ProductoDetalle;
   rutaAlternativa: RutaAlternativaDetalle;
@@ -34,18 +35,34 @@ export function ModeloProductivoEditorView({
   lookups: LookupsConfigPaso;
   catalogoCargos: CargoDirectoCatalogo[];
   recetas: ProductoReceta[];
+  nodoInicial?: string;
 }) {
   const router = useRouter();
   const [modeloAbierto, setModeloAbierto] = React.useState(true);
-  const [nodoSeleccionado, setNodoSeleccionado] =
-    React.useState<string>("ruta");
+  const [nodoSeleccionado, setNodoSeleccionado] = React.useState<string>(
+    nodoInicial || "ruta",
+  );
   const [creandoRevision, setCreandoRevision] = React.useState(false);
   const receta = recetas.find(
     (item) => item.rutaAlternativa.id === rutaAlternativa.id,
   );
-  const borrador = receta?.revisiones.find(
+  const borradorDesdeProps = receta?.revisiones.find(
     (revision) => revision.estado === "BORRADOR",
   );
+  const [borrador, setBorrador] = React.useState(borradorDesdeProps ?? null);
+  const borradorRef = React.useRef(borradorDesdeProps ?? null);
+  const actualizarBorrador = React.useCallback(
+    (revision: NonNullable<typeof borradorDesdeProps>) => {
+      borradorRef.current = revision;
+      setBorrador(revision);
+    },
+    [],
+  );
+  React.useEffect(() => {
+    if (!borradorDesdeProps) return;
+    if (borradorRef.current?.updatedAt === borradorDesdeProps.updatedAt) return;
+    actualizarBorrador(borradorDesdeProps);
+  }, [actualizarBorrador, borradorDesdeProps]);
   const revisionVisible = borrador ?? receta?.revisionPublicada ?? null;
   const estructura =
     producto.estructuraProducto ??
@@ -54,12 +71,13 @@ export function ModeloProductivoEditorView({
   const prepararBorrador = async () => {
     setCreandoRevision(true);
     try {
-      await guardarBorradorReceta(producto.id, {
+      const revision = await guardarBorradorReceta(producto.id, {
         rutaAlternativaId: rutaAlternativa.id,
         cambios: revisionVisible
           ? `Revisión del modelo productivo V${revisionVisible.numero + 1}`
           : "Definición inicial del modelo productivo",
       });
+      actualizarBorrador(revision);
       toast.success(
         revisionVisible
           ? "La nueva revisión está lista para editar."
@@ -94,6 +112,7 @@ export function ModeloProductivoEditorView({
         onSeleccionarNodo={setNodoSeleccionado}
         onEditarPaso={onEditarPaso}
         onClose={() => setModeloAbierto(false)}
+        onRevisionGuardada={actualizarBorrador}
       />
     ) : (
       <section className={styles.preparePanel}>
@@ -121,8 +140,8 @@ export function ModeloProductivoEditorView({
                 : "Crear un borrador versionado"}
             </strong>
             <p>
-              La BOM seguirá siendo una vista consolidada. Toda la configuración
-              se realizará desde este editor.
+              La BOM seguirá siendo una proyección multinivel. Toda la
+              configuración se realizará desde este editor.
             </p>
           </div>
           <button
@@ -145,6 +164,16 @@ export function ModeloProductivoEditorView({
       lookups={lookups}
       catalogoCargos={catalogoCargos}
       embedded
+      onPasoPersistido={async () => {
+        const revisionActual = borradorRef.current;
+        if (!revisionActual) return;
+        const revision = await guardarBorradorReceta(producto.id, {
+          rutaAlternativaId: rutaAlternativa.id,
+          expectedUpdatedAt: revisionActual.updatedAt,
+          cambios: "Configuración de un paso actualizada",
+        });
+        actualizarBorrador(revision);
+      }}
       modeloProductivo={{
         active: modeloAbierto,
         estructura,

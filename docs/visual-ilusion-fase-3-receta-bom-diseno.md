@@ -55,6 +55,19 @@ validación, reporting y futuras reservas.
 
 Así se evita mantener dos editores y dos motores que puedan contradecirse.
 
+### 3.1.1 Lectura multinivel de la composición
+
+La consolidación no aplana la identidad de los subproductos. La revisión raíz
+conserva la referencia a la revisión exacta de cada hijo y la consulta BOM
+expande esa cadena de forma acíclica y acotada. La UI puede alternar entre el
+árbol multinivel y el roll-up consolidado, pero ambos provienen de las mismas
+revisiones congeladas.
+
+El grafo productivo y la BOM permanecen coordinados, no duplicados: las rutas
+describen precedencias y ejecución; la BOM describe ensambles, materiales y
+cantidades. Las líneas pueden indicar el paso consumidor o el nodo de
+incorporación sin convertir operaciones en componentes físicos.
+
 ### 3.2 Adopción opt-in y compatibilidad
 
 - Producto sin receta publicada: conserva el comportamiento histórico.

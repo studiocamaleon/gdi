@@ -22,6 +22,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   validarProducto,
@@ -80,70 +88,75 @@ export function ProductoValidacionPanel({
     const tieneErrores = Boolean(error) || errores.length > 0;
 
     return (
-      <Collapsible
-        className="relative ml-auto shrink-0"
-        open={detallesAbiertos}
-        onOpenChange={setDetallesAbiertos}
-      >
-        <CollapsibleTrigger
-          render={
-            <Button
-              variant="outline"
-              size="sm"
-              className={
-                tieneErrores
-                  ? "border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10"
-                  : "border-amber-300/70 bg-amber-50 text-amber-800 hover:bg-amber-100"
-              }
-              aria-label="Ver estado de configuración"
+      <div className="relative ml-auto shrink-0">
+        <Popover open={detallesAbiertos} onOpenChange={setDetallesAbiertos}>
+          <PopoverTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                className={
+                  tieneErrores
+                    ? "border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10"
+                    : "border-amber-300/70 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                }
+                aria-label="Ver estado de configuración"
+              />
+            }
+          >
+            {tieneErrores ? <XCircleIcon /> : <AlertTriangleIcon />}
+            {error
+              ? "Validación no disponible"
+              : `${cantidadPendiente} ${cantidadPendiente === 1 ? "pendiente" : "pendientes"}`}
+            <ChevronDownIcon
+              className={`transition-transform ${detallesAbiertos ? "rotate-180" : ""}`}
             />
-          }
-        >
-          {tieneErrores ? <XCircleIcon /> : <AlertTriangleIcon />}
-          {error
-            ? "Validación no disponible"
-            : `${cantidadPendiente} ${cantidadPendiente === 1 ? "pendiente" : "pendientes"}`}
-          <ChevronDownIcon
-            className={`transition-transform ${detallesAbiertos ? "rotate-180" : ""}`}
-          />
-        </CollapsibleTrigger>
+          </PopoverTrigger>
 
-        <CollapsibleContent className="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(420px,calc(100vw-52px))] rounded-2xl border border-border bg-background p-4 text-left shadow-xl">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                {error
-                  ? "No se pudo validar el producto"
-                  : tieneErrores
-                    ? "Configuración incompleta"
-                    : "Configuración para revisar"}
-              </p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {error
-                  ? error
-                  : tieneErrores
-                    ? "Completá estos ajustes antes de utilizar el producto en una cotización."
-                    : "El producto puede cotizarse, pero tiene recomendaciones pendientes."}
-              </p>
+          <PopoverContent
+            align="end"
+            side="bottom"
+            sideOffset={8}
+            className="w-[min(420px,calc(100vw-52px))] rounded-2xl border border-border bg-background p-4 text-left shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <PopoverHeader>
+                <PopoverTitle className="text-sm font-semibold text-foreground">
+                  {error
+                    ? "No se pudo validar el producto"
+                    : tieneErrores
+                      ? "Configuración incompleta"
+                      : "Configuración para revisar"}
+                </PopoverTitle>
+                <PopoverDescription className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {error
+                    ? error
+                    : tieneErrores
+                      ? "Completá estos ajustes antes de utilizar el producto en una cotización."
+                      : "El producto puede cotizarse, pero tiene recomendaciones pendientes."}
+                </PopoverDescription>
+              </PopoverHeader>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={ejecutar}
+                aria-label="Revalidar producto"
+              >
+                <RefreshCwIcon />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={ejecutar}
-              aria-label="Revalidar producto"
-            >
-              <RefreshCwIcon />
-            </Button>
-          </div>
-          {problemas.length > 0 ? (
-            <ul className="mt-3 flex list-disc flex-col gap-1.5 border-t border-border pt-3 pl-5 text-xs leading-5 text-foreground">
-              {problemas.map((problema, idx) => (
-                <li key={`${problema.severidad}-${idx}`}>{problema.mensaje}</li>
-              ))}
-            </ul>
-          ) : null}
-        </CollapsibleContent>
-      </Collapsible>
+            {problemas.length > 0 ? (
+              <ul className="mt-3 flex list-disc flex-col gap-1.5 border-t border-border pt-3 pl-5 text-xs leading-5 text-foreground">
+                {problemas.map((problema, idx) => (
+                  <li key={`${problema.severidad}-${idx}`}>
+                    {problema.mensaje}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </PopoverContent>
+        </Popover>
+      </div>
     );
   }
 
