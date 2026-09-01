@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import {
+  AlcanceDocumentoProduccion,
   EstadoProductoRecetaRevision,
   Prisma,
   UnidadMateriaPrima,
@@ -311,6 +312,7 @@ export class RecetasProductoService {
       revisionFuente?.documentos.map((item) => ({
         codigo: item.codigo,
         nombre: item.nombre,
+        alcance: item.alcance,
         pasoClave: item.pasoClave,
         proposito: item.proposito,
         etapa: item.etapa,
@@ -350,6 +352,7 @@ export class RecetasProductoService {
       productoId,
       documentos,
       componentes,
+      new Set(configuracion.pasos.map((paso) => paso.clave)),
     );
     const nombresPasoVigentes = new Map(
       configuracion.pasos.map((paso) => [paso.clave, paso.nombre]),
@@ -387,9 +390,7 @@ export class RecetasProductoService {
         : undefined;
     const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
       existente?.revisionPublicada?.grafoProduccionJson) as
-      | (GrafoProduccion & Prisma.JsonObject)
-      | null
-      | undefined;
+      (GrafoProduccion & Prisma.JsonObject) | null | undefined;
     const gatesFuente = dto.gates
       ? dto.gates
       : (grafoAnterior?.nodos ?? []).flatMap((nodo) =>
@@ -627,7 +628,19 @@ export class RecetasProductoService {
           data: documentos.map((item, index) => ({
             tenantId: auth.tenantId,
             revisionId: revision.id,
-            pasoClave: item.pasoClave ?? null,
+            alcance:
+              item.alcance ??
+              (item.pasoClave
+                ? AlcanceDocumentoProduccion.PASO
+                : AlcanceDocumentoProduccion.ITEM),
+            pasoClave:
+              (item.alcance ??
+                (item.pasoClave
+                  ? AlcanceDocumentoProduccion.PASO
+                  : AlcanceDocumentoProduccion.ITEM)) ===
+              AlcanceDocumentoProduccion.PASO
+                ? (item.pasoClave ?? null)
+                : null,
             codigo: item.codigo.trim(),
             nombre: item.nombre.trim(),
             proposito: item.proposito,
@@ -727,9 +740,7 @@ export class RecetasProductoService {
       );
     }
     const grafoActual = revision.grafoProduccionJson as
-      | GrafoProduccion
-      | null
-      | undefined;
+      GrafoProduccion | null | undefined;
     await this.validarPasosCompuestos(
       auth.tenantId,
       pasosCompuestosActuales,
@@ -1406,17 +1417,28 @@ export class RecetasProductoService {
 
   private documentosCanonicos(documentos: RecetaDocumentoDto[]) {
     return documentos
-      .map((item, index) => ({
-        codigo: item.codigo.trim(),
-        nombre: item.nombre.trim(),
-        pasoClave: item.pasoClave ?? null,
-        proposito: item.proposito,
-        etapa: item.etapa,
-        tipoAprobacion: item.tipoAprobacion ?? null,
-        requerido: item.requerido ?? true,
-        descripcion: item.descripcion ?? null,
-        orden: item.orden ?? index,
-      }))
+      .map((item, index) => {
+        const alcance =
+          item.alcance ??
+          (item.pasoClave
+            ? AlcanceDocumentoProduccion.PASO
+            : AlcanceDocumentoProduccion.ITEM);
+        return {
+          codigo: item.codigo.trim(),
+          nombre: item.nombre.trim(),
+          alcance,
+          pasoClave:
+            alcance === AlcanceDocumentoProduccion.PASO
+              ? (item.pasoClave ?? null)
+              : null,
+          proposito: item.proposito,
+          etapa: item.etapa,
+          tipoAprobacion: item.tipoAprobacion ?? null,
+          requerido: item.requerido ?? true,
+          descripcion: item.descripcion ?? null,
+          orden: item.orden ?? index,
+        };
+      })
       .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo));
   }
 
@@ -1895,6 +1917,7 @@ export class RecetasProductoService {
     productoId: string,
     documentos: RecetaDocumentoDto[],
     componentes: RecetaComponenteDto[],
+    clavesPaso: Set<string>,
   ) {
     const codigosDocumentos = new Set<string>();
     for (const item of documentos) {
@@ -1903,6 +1926,22 @@ export class RecetasProductoService {
         throw new BadRequestException(`Documento duplicado: ${item.codigo}.`);
       }
       codigosDocumentos.add(codigo);
+      const alcance =
+        item.alcance ??
+        (item.pasoClave
+          ? AlcanceDocumentoProduccion.PASO
+          : AlcanceDocumentoProduccion.ITEM);
+      if (alcance === AlcanceDocumentoProduccion.PASO) {
+        if (!item.pasoClave || !clavesPaso.has(item.pasoClave)) {
+          throw new BadRequestException(
+            `El documento "${item.nombre}" debe apuntar a un paso vigente de la ruta.`,
+          );
+        }
+      } else if (item.pasoClave) {
+        throw new BadRequestException(
+          `El documento "${item.nombre}" no puede conservar un paso cuando su alcance es ${alcance.toLowerCase()}.`,
+        );
+      }
     }
     const codigosComponentes = new Set<string>();
     for (const item of componentes) {

@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import {
+  AlcanceDocumentoProduccion,
   ArchivoEstado,
   DecisionAprobacionDocumento,
   EstadoRevisionArchivo,
@@ -214,10 +215,11 @@ export class DesarrolloDocumentalService {
         if (!requisito.tipoAprobacion) continue;
 
         const clavePaso = requisito.pasoClave?.replace(/^(ruta|extra):/, '');
-        const pasoId = clavePaso
-          ? (item.pasos.find((paso) => paso.rutaPasoId === clavePaso)?.id ??
-            null)
-          : null;
+        const pasoId =
+          requisito.alcance === AlcanceDocumentoProduccion.PASO && clavePaso
+            ? (item.pasos.find((paso) => paso.rutaPasoId === clavePaso)?.id ??
+              null)
+            : null;
         const gateExistente = await tx.gateProduccionDocumento.findUnique({
           where: {
             ordenItemId_recetaDocumentoId: {
@@ -232,6 +234,7 @@ export class DesarrolloDocumentalService {
             where: { id: gateExistente.id },
             data: {
               pasoId,
+              alcance: requisito.alcance,
               archivoMaestroId: maestro.id,
               tipoAprobacion: requisito.tipoAprobacion,
               nombre: requisito.nombre,
@@ -246,6 +249,7 @@ export class DesarrolloDocumentalService {
               ordenId: args.ordenId,
               ordenItemId: item.id,
               pasoId,
+              alcance: requisito.alcance,
               archivoMaestroId: maestro.id,
               recetaDocumentoId: requisito.id,
               tipoAprobacion: requisito.tipoAprobacion,
@@ -738,6 +742,9 @@ export class DesarrolloDocumentalService {
           proyectoCampanaId: campana.id,
           ordenId: orden.id,
           pasoId: dto.pasoId ?? null,
+          alcance: dto.pasoId
+            ? AlcanceDocumentoProduccion.PASO
+            : AlcanceDocumentoProduccion.ORDEN,
           archivoMaestroId: maestro.id,
           tipoAprobacion: dto.tipoAprobacion,
           nombre: dto.nombre.trim(),
@@ -763,12 +770,35 @@ export class DesarrolloDocumentalService {
     return this.listar(gate.proyectoCampanaId);
   }
 
-  async exigirGatesCumplidos(ordenId: string, pasoId?: string): Promise<void> {
+  async exigirGatesCumplidos(
+    ordenId: string,
+    pasoId?: string,
+    ordenItemId?: string,
+  ): Promise<void> {
+    const alcances = [
+      { alcance: AlcanceDocumentoProduccion.ORDEN },
+      ...(ordenItemId
+        ? [
+            {
+              alcance: AlcanceDocumentoProduccion.ITEM,
+              ordenItemId,
+            },
+          ]
+        : []),
+      ...(pasoId
+        ? [
+            {
+              alcance: AlcanceDocumentoProduccion.PASO,
+              pasoId,
+            },
+          ]
+        : []),
+    ];
     const gates = await this.prisma.gateProduccionDocumento.findMany({
       where: {
         ordenId,
         activo: true,
-        OR: [{ pasoId: null }, ...(pasoId ? [{ pasoId }] : [])],
+        OR: alcances,
       },
       include: {
         archivoMaestro: {

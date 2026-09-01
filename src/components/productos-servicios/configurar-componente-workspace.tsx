@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import {
-  ArrowLeftIcon,
   BoxesIcon,
   ExternalLinkIcon,
   GitBranchIcon,
@@ -27,6 +26,7 @@ import {
   valorReglaVisibleAInterno,
   valorVisibleAInterno,
 } from "@/lib/componentes-configuracion-unidades";
+import { ModeloProductivoConfigShell } from "./modelo-productivo-config-shell";
 import styles from "./configurar-componente-workspace.module.css";
 
 const ORIGENES: Array<{
@@ -172,9 +172,13 @@ function camposDelPadre(
         "decimal",
         "tiempo_manual",
       ].includes(tipo),
-      tipoDato: ["number", "numero", "entero", "decimal", "tiempo_manual"].includes(
-        tipo,
-      )
+      tipoDato: [
+        "number",
+        "numero",
+        "entero",
+        "decimal",
+        "tiempo_manual",
+      ].includes(tipo)
         ? "number"
         : ["boolean", "bool"].includes(tipo)
           ? "boolean"
@@ -386,7 +390,10 @@ export function ConfigurarComponenteWorkspace({
               ) === index,
           ),
         );
-        const base = parametrosPublicosDelComponente(result, componente.cantidad);
+        const base = parametrosPublicosDelComponente(
+          result,
+          componente.cantidad,
+        );
         setBindings((actuales) => {
           const existentes = new Map(
             actuales.map((item) => [item.clave, item]),
@@ -440,474 +447,438 @@ export function ConfigurarComponenteWorkspace({
   const parametros = bindings.length - opcionales.length;
 
   return (
-    <div
-      className={embedded ? styles.embedded : styles.backdrop}
-      role={embedded ? "region" : "dialog"}
-      aria-modal={embedded ? undefined : true}
-      aria-label={
-        embedded ? `Configuración de ${componente.nombre}` : undefined
+    <ModeloProductivoConfigShell
+      tipo="COMPONENTE"
+      eyebrow="Producción · Componente · Configuración de uso"
+      titulo={componente.nombre}
+      descripcion={
+        <>
+          Definí cómo {productoPadreNombre} completa cada parámetro de este
+          producto hijo. Esto no modifica su receta global.
+        </>
+      }
+      onBack={onCancel}
+      backLabel="Volver a la hoja de ruta"
+      embedded={embedded}
+      pinFooterToViewport
+      contentClassName={styles.body}
+      headerAction={
+        <a
+          href={`/productos-servicios/${componente.productoComponenteId}?tab=produccion`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Editar producto hijo <ExternalLinkIcon />
+        </a>
+      }
+      primaryLabel="Aplicar configuración"
+      primaryDisabled={!formulario || loading}
+      onPrimary={() =>
+        formulario &&
+        onSave(
+          {
+            version: 1,
+            bindings,
+          },
+          formulario.producto.unidadComercial,
+          politicaEjecucion,
+        )
       }
     >
-      <div
-        className={`${styles.workspace} ${embedded ? styles.workspaceEmbedded : ""}`}
-      >
-        <header className={styles.header}>
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Volver a la receta"
-          >
-            <ArrowLeftIcon />
-          </button>
-          <div>
-            <span>Producción · Componente · Configuración de uso</span>
-            <h2>{componente.nombre}</h2>
-            <p>
-              Definí cómo {productoPadreNombre} completa cada parámetro de este
-              producto hijo. Esto no modifica su receta global.
-            </p>
+      {loading ? (
+        <div className={styles.message}>Cargando parámetros…</div>
+      ) : null}
+      {error ? <div className={styles.error}>{error}</div> : null}
+      {formulario ? (
+        <>
+          <div className={styles.contextCard}>
+            <BoxesIcon />
+            <div>
+              <strong>Contrato público del hijo</strong>
+              <span>
+                {parametros} parámetros
+                {opcionales.length
+                  ? ` · ${opcionales.length} opcional${opcionales.length === 1 ? "" : "es"}`
+                  : ""}
+                {condicionales.length
+                  ? ` · ${condicionales.length} automático${condicionales.length === 1 ? "" : "s"}`
+                  : ""}
+              </span>
+            </div>
           </div>
-          <a
-            href={`/productos-servicios/${componente.productoComponenteId}?tab=produccion`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Editar producto hijo <ExternalLinkIcon />
-          </a>
-        </header>
-
-        <main className={styles.body}>
-          {loading ? (
-            <div className={styles.message}>Cargando parámetros…</div>
-          ) : null}
-          {error ? <div className={styles.error}>{error}</div> : null}
-          {formulario ? (
-            <>
-              <div className={styles.contextCard}>
-                <BoxesIcon />
+          <div className={styles.executionCard}>
+            <div>
+              <strong>Seguimiento productivo</strong>
+              <span>
+                Define si este componente tendrá su propio flujo ejecutable
+                dentro de la orden de trabajo.
+              </span>
+            </div>
+            <select
+              value={politicaEjecucion}
+              onChange={(event) =>
+                setPoliticaEjecucion(
+                  event.target.value as "INLINE" | "INDEPENDIENTE",
+                )
+              }
+            >
+              <option value="INDEPENDIENTE">
+                Generar flujo productivo propio
+              </option>
+              <option value="INLINE">
+                Incluir en el flujo del producto padre
+              </option>
+            </select>
+          </div>
+          <div className={styles.table}>
+            <div className={styles.tableHead}>
+              <span>Parámetro del hijo</span>
+              <span>Origen</span>
+              <span>Configuración</span>
+            </div>
+            {bindings.map((binding, index) => (
+              <div
+                className={`${styles.binding} ${esActivacionOpcional(binding) ? styles.activationBinding : ""}`}
+                key={binding.clave}
+              >
                 <div>
-                  <strong>Contrato público del hijo</strong>
-                  <span>
-                    {parametros} parámetros
-                    {opcionales.length
-                      ? ` · ${opcionales.length} opcional${opcionales.length === 1 ? "" : "es"}`
-                      : ""}
-                    {condicionales.length
-                      ? ` · ${condicionales.length} automático${condicionales.length === 1 ? "" : "s"}`
-                      : ""}
-                  </span>
-                </div>
-              </div>
-              <div className={styles.executionCard}>
-                <div>
-                  <strong>Seguimiento productivo</strong>
-                  <span>
-                    Define si este componente tendrá su propio flujo ejecutable
-                    dentro de la orden de trabajo.
-                  </span>
+                  <strong>{binding.etiqueta}</strong>
+                  {esActivacionOpcional(binding) ? (
+                    <small className={styles.optionalMark}>
+                      <GitBranchIcon /> Servicio opcional del componente
+                    </small>
+                  ) : binding.requerido ? (
+                    <small className={styles.requiredMark}>
+                      <span aria-hidden="true" />
+                      Requerido
+                    </small>
+                  ) : null}
                 </div>
                 <select
-                  value={politicaEjecucion}
-                  onChange={(event) =>
-                    setPoliticaEjecucion(
-                      event.target.value as "INLINE" | "INDEPENDIENTE",
-                    )
+                  value={
+                    esActivacionOpcional(binding)
+                      ? opcionActivacion(binding)
+                      : binding.origen
                   }
-                >
-                  <option value="INDEPENDIENTE">
-                    Generar flujo productivo propio
-                  </option>
-                  <option value="INLINE">
-                    Incluir en el flujo del producto padre
-                  </option>
-                </select>
-              </div>
-              <div className={styles.table}>
-                <div className={styles.tableHead}>
-                  <span>Parámetro del hijo</span>
-                  <span>Origen</span>
-                  <span>Configuración</span>
-                </div>
-                {bindings.map((binding, index) => (
-                  <div
-                    className={`${styles.binding} ${esActivacionOpcional(binding) ? styles.activationBinding : ""}`}
-                    key={binding.clave}
-                  >
-                    <div>
-                      <strong>{binding.etiqueta}</strong>
-                      {esActivacionOpcional(binding) ? (
-                        <small className={styles.optionalMark}>
-                          <GitBranchIcon /> Servicio opcional del componente
-                        </small>
-                      ) : binding.requerido ? (
-                        <small className={styles.requiredMark}>
-                          <span aria-hidden="true" />
-                          Requerido
-                        </small>
-                      ) : null}
-                    </div>
-                    <select
-                      value={
-                        esActivacionOpcional(binding)
-                          ? opcionActivacion(binding)
-                          : binding.origen
-                      }
-                      onChange={(event) => {
-                        const opcion = event.target.value;
-                        if (esActivacionOpcional(binding)) {
-                          if (opcion === "FIJO_TRUE") {
-                            cambiar(index, {
-                              origen: "FIJO",
-                              valor: true,
-                              regla: null,
-                              padreClave: null,
-                            });
-                            return;
-                          }
-                          if (opcion === "FIJO_FALSE") {
-                            cambiar(index, {
-                              origen: "FIJO",
-                              valor: false,
-                              regla: null,
-                              padreClave: null,
-                            });
-                            return;
-                          }
-                        }
-                        const origen =
-                          opcion as BindingParametroComponente["origen"];
-                        const candidatos =
-                          origen === "FORMULA"
-                            ? camposPadre.filter((campo) => campo.numerico)
-                            : camposCompatibles(binding, camposPadre);
-                        const campoElegido =
-                          candidatos.find(
-                            (campo) =>
-                              idCampo(campo) ===
-                              idRegla(binding.regla, binding.padreClave),
-                          ) ?? candidatos[0];
-                        const campoPadre = campoElegido?.clave ?? "";
+                  onChange={(event) => {
+                    const opcion = event.target.value;
+                    if (esActivacionOpcional(binding)) {
+                      if (opcion === "FIJO_TRUE") {
                         cambiar(index, {
-                          origen,
-                          regla:
-                            origen === "PADRE" || origen === "FORMULA"
-                              ? {
-                                  campoPadre,
-                                  operador:
-                                    origen === "PADRE"
-                                      ? "COPIAR"
-                                      : binding.regla?.operador === "COPIAR"
-                                        ? "MULTIPLICAR"
-                                        : (binding.regla?.operador ??
-                                          "MULTIPLICAR"),
-                                  valor:
-                                    origen === "FORMULA"
-                                      ? (binding.regla?.valor ?? 1)
-                                      : null,
-                                  fuente: campoElegido
-                                    ? fuenteDeCampo(campoElegido)
-                                    : null,
-                                }
-                              : binding.regla,
+                          origen: "FIJO",
+                          valor: true,
+                          regla: null,
+                          padreClave: null,
+                        });
+                        return;
+                      }
+                      if (opcion === "FIJO_FALSE") {
+                        cambiar(index, {
+                          origen: "FIJO",
+                          valor: false,
+                          regla: null,
+                          padreClave: null,
+                        });
+                        return;
+                      }
+                    }
+                    const origen =
+                      opcion as BindingParametroComponente["origen"];
+                    const candidatos =
+                      origen === "FORMULA"
+                        ? camposPadre.filter((campo) => campo.numerico)
+                        : camposCompatibles(binding, camposPadre);
+                    const campoElegido =
+                      candidatos.find(
+                        (campo) =>
+                          idCampo(campo) ===
+                          idRegla(binding.regla, binding.padreClave),
+                      ) ?? candidatos[0];
+                    const campoPadre = campoElegido?.clave ?? "";
+                    cambiar(index, {
+                      origen,
+                      regla:
+                        origen === "PADRE" || origen === "FORMULA"
+                          ? {
+                              campoPadre,
+                              operador:
+                                origen === "PADRE"
+                                  ? "COPIAR"
+                                  : binding.regla?.operador === "COPIAR"
+                                    ? "MULTIPLICAR"
+                                    : (binding.regla?.operador ??
+                                      "MULTIPLICAR"),
+                              valor:
+                                origen === "FORMULA"
+                                  ? (binding.regla?.valor ?? 1)
+                                  : null,
+                              fuente: campoElegido
+                                ? fuenteDeCampo(campoElegido)
+                                : null,
+                            }
+                          : binding.regla,
+                    });
+                  }}
+                >
+                  {esActivacionOpcional(binding) ? (
+                    <>
+                      <option value="DEFAULT_HIJO">
+                        Usar predeterminado del hijo
+                      </option>
+                      <option value="FIJO_TRUE">Incluir siempre</option>
+                      <option value="FIJO_FALSE">No incluir</option>
+                      <option value="PADRE">Resolver desde el padre</option>
+                      <option value="COTIZACION">Definir al cotizar</option>
+                    </>
+                  ) : (
+                    ORIGENES.map((origen) => (
+                      <option key={origen.value} value={origen.value}>
+                        {origen.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <div className={styles.valueField}>
+                  {binding.origen === "PADRE" ? (
+                    <select
+                      value={idRegla(binding.regla, binding.padreClave)}
+                      onChange={(event) => {
+                        const campo = camposPadre.find(
+                          (item) => idCampo(item) === event.target.value,
+                        );
+                        if (!campo) return;
+                        cambiar(index, {
+                          padreClave:
+                            campo.fuenteTipo === "PADRE" ? campo.clave : null,
+                          regla: {
+                            campoPadre: campo.clave,
+                            operador: "COPIAR",
+                            valor: null,
+                            fuente: fuenteDeCampo(campo),
+                          },
                         });
                       }}
                     >
-                      {esActivacionOpcional(binding) ? (
-                        <>
-                          <option value="DEFAULT_HIJO">
-                            Usar predeterminado del hijo
-                          </option>
-                          <option value="FIJO_TRUE">Incluir siempre</option>
-                          <option value="FIJO_FALSE">No incluir</option>
-                          <option value="PADRE">Resolver desde el padre</option>
-                          <option value="COTIZACION">
-                            Definir al cotizar
-                          </option>
-                        </>
-                      ) : (
-                        ORIGENES.map((origen) => (
-                          <option key={origen.value} value={origen.value}>
-                            {origen.label}
-                          </option>
-                        ))
-                      )}
+                      <option value="PADRE:">Elegir dato disponible…</option>
+                      {camposCompatibles(binding, camposPadre).map((campo) => (
+                        <option value={idCampo(campo)} key={idCampo(campo)}>
+                          {campo.etiqueta}
+                        </option>
+                      ))}
                     </select>
-                    <div className={styles.valueField}>
-                      {binding.origen === "PADRE" ? (
-                        <select
-                          value={idRegla(binding.regla, binding.padreClave)}
-                          onChange={(event) => {
-                            const campo = camposPadre.find(
-                              (item) => idCampo(item) === event.target.value,
-                            );
-                            if (!campo) return;
-                            cambiar(index, {
-                              padreClave:
-                                campo.fuenteTipo === "PADRE"
-                                  ? campo.clave
-                                  : null,
-                              regla: {
-                                campoPadre: campo.clave,
-                                operador: "COPIAR",
-                                valor: null,
-                                fuente: fuenteDeCampo(campo),
-                              },
-                            });
-                          }}
-                        >
-                          <option value="PADRE:">
-                            Elegir dato disponible…
-                          </option>
-                          {camposCompatibles(binding, camposPadre).map((campo) => (
+                  ) : binding.origen === "FORMULA" ? (
+                    <div className={styles.ruleEditor}>
+                      <select
+                        aria-label={`Dato disponible para ${binding.etiqueta}`}
+                        value={idRegla(binding.regla)}
+                        onChange={(event) => {
+                          const campo = camposPadre.find(
+                            (item) => idCampo(item) === event.target.value,
+                          );
+                          if (!campo) return;
+                          const operador =
+                            binding.regla?.operador ?? "MULTIPLICAR";
+                          cambiar(index, {
+                            regla: {
+                              campoPadre: campo.clave,
+                              operador,
+                              valor: operacionUsaUnidad(operador)
+                                ? valorReglaVisibleAInterno(
+                                    campo.clave,
+                                    operador,
+                                    1,
+                                  )
+                                : 1,
+                              fuente: fuenteDeCampo(campo),
+                            },
+                          });
+                        }}
+                      >
+                        <option value="PADRE:">Elegir dato…</option>
+                        {camposPadre
+                          .filter((campo) => campo.numerico)
+                          .map((campo) => (
                             <option value={idCampo(campo)} key={idCampo(campo)}>
                               {campo.etiqueta}
                             </option>
                           ))}
-                        </select>
-                      ) : binding.origen === "FORMULA" ? (
-                        <div className={styles.ruleEditor}>
-                          <select
-                            aria-label={`Dato disponible para ${binding.etiqueta}`}
-                            value={idRegla(binding.regla)}
-                            onChange={(event) => {
-                              const campo = camposPadre.find(
-                                (item) => idCampo(item) === event.target.value,
-                              );
-                              if (!campo) return;
-                              const operador =
-                                binding.regla?.operador ?? "MULTIPLICAR";
-                              cambiar(index, {
-                                regla: {
-                                  campoPadre: campo.clave,
-                                  operador,
-                                  valor: operacionUsaUnidad(operador)
-                                    ? valorReglaVisibleAInterno(
-                                        campo.clave,
-                                        operador,
-                                        1,
-                                      )
-                                    : 1,
-                                  fuente: fuenteDeCampo(campo),
-                                },
-                              });
-                            }}
-                          >
-                            <option value="PADRE:">Elegir dato…</option>
-                            {camposPadre
-                              .filter((campo) => campo.numerico)
-                              .map((campo) => (
-                                <option
-                                  value={idCampo(campo)}
-                                  key={idCampo(campo)}
-                                >
-                                  {campo.etiqueta}
-                                </option>
-                              ))}
-                          </select>
-                          <select
-                            aria-label={`Operación para ${binding.etiqueta}`}
-                            value={binding.regla?.operador ?? "MULTIPLICAR"}
-                            onChange={(event) => {
-                              const operador = event.target.value as Exclude<
-                                NonNullable<
-                                  BindingParametroComponente["regla"]
-                                >["operador"],
-                                "COPIAR"
-                              >;
-                              const campoPadre =
-                                binding.regla?.campoPadre ?? "cantidad";
-                              cambiar(index, {
-                                regla: {
-                                  campoPadre,
-                                  operador,
-                                  valor: operacionUsaUnidad(operador)
-                                    ? valorReglaVisibleAInterno(
-                                        campoPadre,
-                                        operador,
-                                        1,
-                                      )
-                                    : 1,
-                                  fuente: binding.regla?.fuente ?? {
-                                    tipo: "PADRE",
-                                    campo: campoPadre,
-                                  },
-                                },
-                              });
-                            }}
-                          >
-                            <option value="MULTIPLICAR">Multiplicar por</option>
-                            <option value="RESTAR">Restar</option>
-                            <option value="SUMAR">Sumar</option>
-                            <option value="DIVIDIR">Dividir por</option>
-                          </select>
-                          <label className={styles.numberWithUnit}>
-                            <input
-                              aria-label={`Valor de cálculo para ${binding.etiqueta}`}
-                              type="number"
-                              step="any"
-                              value={valorReglaInternoAVisible(
-                                binding.regla?.campoPadre ?? "cantidad",
-                                binding.regla?.operador ?? "MULTIPLICAR",
-                                binding.regla?.valor ?? 1,
-                              )}
-                              onChange={(event) => {
-                                const campoPadre =
-                                  binding.regla?.campoPadre ?? "cantidad";
-                                const operador =
-                                  binding.regla?.operador ?? "MULTIPLICAR";
-                                cambiar(index, {
-                                  regla: {
+                      </select>
+                      <select
+                        aria-label={`Operación para ${binding.etiqueta}`}
+                        value={binding.regla?.operador ?? "MULTIPLICAR"}
+                        onChange={(event) => {
+                          const operador = event.target.value as Exclude<
+                            NonNullable<
+                              BindingParametroComponente["regla"]
+                            >["operador"],
+                            "COPIAR"
+                          >;
+                          const campoPadre =
+                            binding.regla?.campoPadre ?? "cantidad";
+                          cambiar(index, {
+                            regla: {
+                              campoPadre,
+                              operador,
+                              valor: operacionUsaUnidad(operador)
+                                ? valorReglaVisibleAInterno(
                                     campoPadre,
                                     operador,
-                                    valor: valorReglaVisibleAInterno(
-                                      campoPadre,
-                                      operador,
-                                      Number(event.target.value),
-                                    ),
-                                    fuente: binding.regla?.fuente ?? {
-                                      tipo: "PADRE",
-                                      campo: campoPadre,
-                                    },
-                                  },
-                                });
-                              }}
-                            />
-                            <span>
-                              {operacionUsaUnidad(
-                                binding.regla?.operador ?? "MULTIPLICAR",
-                              )
-                                ? (camposPadre.find(
-                                    (campo) =>
-                                      idCampo(campo) === idRegla(binding.regla),
-                                  )?.unidad ?? "unidad")
-                                : "factor"}
-                            </span>
-                          </label>
-                        </div>
-                      ) : binding.origen === "COTIZACION" ? (
-                        <span>Se solicitará en el sheet comercial</span>
-                      ) : esActivacionOpcional(binding) ? (
-                        <span className={styles.activationSummary}>
-                          {binding.origen === "FIJO"
-                            ? binding.valor === true
-                              ? "Este trabajo siempre se incluirá"
-                              : "Este trabajo no se incluirá"
-                            : binding.valor === true
-                              ? "El hijo lo incluye de forma predeterminada"
-                              : "El hijo lo omite de forma predeterminada"}
-                        </span>
-                      ) : binding.opciones?.length ? (
-                        <select
-                          value={String(binding.valor ?? "")}
-                          onChange={(event) =>
-                            cambiar(index, { valor: event.target.value })
-                          }
-                        >
-                          <option value="">Elegir opción…</option>
-                          {binding.opciones.map((opcion) => (
-                            <option value={opcion.valor} key={opcion.valor}>
-                              {opcion.etiqueta}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <label className={styles.numberWithUnit}>
-                          <input
-                            value={valorBindingVisible(binding)}
-                            placeholder={
-                              binding.origen === "DEFAULT_HIJO"
-                                ? "Sin valor predeterminado"
-                                : "Ingresar valor"
-                            }
-                            onChange={(event) =>
-                              cambiar(index, {
-                                valor: parseValorBinding(
-                                  event.target.value,
-                                  binding,
+                                    1,
+                                  )
+                                : 1,
+                              fuente: binding.regla?.fuente ?? {
+                                tipo: "PADRE",
+                                campo: campoPadre,
+                              },
+                            },
+                          });
+                        }}
+                      >
+                        <option value="MULTIPLICAR">Multiplicar por</option>
+                        <option value="RESTAR">Restar</option>
+                        <option value="SUMAR">Sumar</option>
+                        <option value="DIVIDIR">Dividir por</option>
+                      </select>
+                      <label className={styles.numberWithUnit}>
+                        <input
+                          aria-label={`Valor de cálculo para ${binding.etiqueta}`}
+                          type="number"
+                          step="any"
+                          value={valorReglaInternoAVisible(
+                            binding.regla?.campoPadre ?? "cantidad",
+                            binding.regla?.operador ?? "MULTIPLICAR",
+                            binding.regla?.valor ?? 1,
+                          )}
+                          onChange={(event) => {
+                            const campoPadre =
+                              binding.regla?.campoPadre ?? "cantidad";
+                            const operador =
+                              binding.regla?.operador ?? "MULTIPLICAR";
+                            cambiar(index, {
+                              regla: {
+                                campoPadre,
+                                operador,
+                                valor: valorReglaVisibleAInterno(
+                                  campoPadre,
+                                  operador,
+                                  Number(event.target.value),
                                 ),
-                              })
-                            }
-                          />
+                                fuente: binding.regla?.fuente ?? {
+                                  tipo: "PADRE",
+                                  campo: campoPadre,
+                                },
+                              },
+                            });
+                          }}
+                        />
+                        <span>
+                          {operacionUsaUnidad(
+                            binding.regla?.operador ?? "MULTIPLICAR",
+                          )
+                            ? (camposPadre.find(
+                                (campo) =>
+                                  idCampo(campo) === idRegla(binding.regla),
+                              )?.unidad ?? "unidad")
+                            : "factor"}
+                        </span>
+                      </label>
+                    </div>
+                  ) : binding.origen === "COTIZACION" ? (
+                    <span>Se solicitará en el sheet comercial</span>
+                  ) : esActivacionOpcional(binding) ? (
+                    <span className={styles.activationSummary}>
+                      {binding.origen === "FIJO"
+                        ? binding.valor === true
+                          ? "Este trabajo siempre se incluirá"
+                          : "Este trabajo no se incluirá"
+                        : binding.valor === true
+                          ? "El hijo lo incluye de forma predeterminada"
+                          : "El hijo lo omite de forma predeterminada"}
+                    </span>
+                  ) : binding.opciones?.length ? (
+                    <select
+                      value={String(binding.valor ?? "")}
+                      onChange={(event) =>
+                        cambiar(index, { valor: event.target.value })
+                      }
+                    >
+                      <option value="">Elegir opción…</option>
+                      {binding.opciones.map((opcion) => (
+                        <option value={opcion.valor} key={opcion.valor}>
+                          {opcion.etiqueta}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <label className={styles.numberWithUnit}>
+                      <input
+                        value={valorBindingVisible(binding)}
+                        placeholder={
+                          binding.origen === "DEFAULT_HIJO"
+                            ? "Sin valor predeterminado"
+                            : "Ingresar valor"
+                        }
+                        onChange={(event) =>
+                          cambiar(index, {
+                            valor: parseValorBinding(
+                              event.target.value,
+                              binding,
+                            ),
+                          })
+                        }
+                      />
+                      {unidadVisibleParametro(binding.clave, binding.unidad) ? (
+                        <span>
                           {unidadVisibleParametro(
                             binding.clave,
                             binding.unidad,
-                          ) ? (
-                            <span>
-                              {unidadVisibleParametro(
-                                binding.clave,
-                                binding.unidad,
-                              )}
-                            </span>
-                          ) : null}
-                        </label>
-                      )}
-                    </div>
-                  </div>
+                          )}
+                        </span>
+                      ) : null}
+                    </label>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {condicionales.length ? (
+            <section className={styles.automations}>
+              <div className={styles.automationsHead}>
+                <SparklesIcon />
+                <div>
+                  <strong>Automatismos de la ruta hija</strong>
+                  <span>
+                    No se activan manualmente: el sistema evalúa sus reglas con
+                    la configuración resuelta del componente.
+                  </span>
+                </div>
+              </div>
+              <div className={styles.automationList}>
+                {condicionales.map((condicional) => (
+                  <article key={condicional.id}>
+                    <strong>{condicional.nombre}</strong>
+                    <span>
+                      {condicional.condicionadoPor.length
+                        ? `Depende de ${condicional.condicionadoPor
+                            .map((campo) =>
+                              etiquetaCampoCondicional(campo, bindings),
+                            )
+                            .join(", ")}`
+                        : "Se resuelve mediante la condición configurada en su ruta"}
+                    </span>
+                  </article>
                 ))}
               </div>
-              {condicionales.length ? (
-                <section className={styles.automations}>
-                  <div className={styles.automationsHead}>
-                    <SparklesIcon />
-                    <div>
-                      <strong>Automatismos de la ruta hija</strong>
-                      <span>
-                        No se activan manualmente: el sistema evalúa sus reglas
-                        con la configuración resuelta del componente.
-                      </span>
-                    </div>
-                  </div>
-                  <div className={styles.automationList}>
-                    {condicionales.map((condicional) => (
-                      <article key={condicional.id}>
-                        <strong>{condicional.nombre}</strong>
-                        <span>
-                          {condicional.condicionadoPor.length
-                            ? `Depende de ${condicional.condicionadoPor
-                                .map((campo) =>
-                                  etiquetaCampoCondicional(campo, bindings),
-                                )
-                                .join(", ")}`
-                            : "Se resuelve mediante la condición configurada en su ruta"}
-                        </span>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-              <p className={styles.hint}>
-                Las reglas sólo permiten usar datos publicados por el producto
-                padre o por otros componentes de esta receta. Las medidas se
-                ingresan en centímetros, igual que en el sheet comercial; el
-                sistema realiza la conversión interna.
-              </p>
-            </>
+            </section>
           ) : null}
-        </main>
-
-        <footer className={styles.footer}>
-          <button type="button" onClick={onCancel}>
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={!formulario || loading}
-            onClick={() =>
-              formulario &&
-              onSave(
-                {
-                  version: 1,
-                  bindings,
-                },
-                formulario.producto.unidadComercial,
-                politicaEjecucion,
-              )
-            }
-          >
-            Aplicar configuración
-          </button>
-        </footer>
-      </div>
-    </div>
+          <p className={styles.hint}>
+            Las reglas sólo permiten usar datos publicados por el producto padre
+            o por otros componentes de esta receta. Las medidas se ingresan en
+            centímetros, igual que en el sheet comercial; el sistema realiza la
+            conversión interna.
+          </p>
+        </>
+      ) : null}
+    </ModeloProductivoConfigShell>
   );
 }

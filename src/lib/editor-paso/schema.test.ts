@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ESQUEMA_PASO,
+  labelMultiplicador,
   MODO_ACTIVACION_CONSECUENCIA,
   SECCIONES_MIGRADAS,
   modosActivacionOfrecidos,
@@ -214,6 +215,14 @@ describe("paridad esquema ↔ censo", () => {
       expect(clave).toMatch(/^[a-z]+\.[a-z_]+$/);
     }
   });
+
+  it("toda opción no material pertenece a un eje visible del editor guiado", () => {
+    expect(
+      ESQUEMA_PASO.filter(
+        (op) => op.seccion !== "materiales" && op.eje == null,
+      ).map((op) => op.clave),
+    ).toEqual([]);
+  });
 });
 
 describe("sección Activación", () => {
@@ -335,13 +344,29 @@ describe("sección Activación", () => {
     expect(mult.visible(ctxBase())).toBe(false);
     const ctx = ctxBase({ familia: { multiplicadoresSoportados: ["caras"] } });
     expect(mult.visible(ctx)).toBe(true);
+    expect(mult.eje).toBe("identidad");
+    expect(mult.grupo).toBe("multiplicadores");
     expect(mult.resumen(ctx)).toBe("Sin multiplicadores");
     const control = mult.control;
     if (control.tipo !== "toggles") throw new Error("esperaba toggles");
+    expect(control.opciones(ctx)).toEqual([
+      { value: "caras", label: "Caras" },
+    ]);
     expect(control.aplicar(ctx, ["caras"])).toEqual({
       tipo: "config",
       patch: { multiplicadoresActivos: ["caras"] },
     });
+  });
+
+  it("los multiplicadores siempre se presentan con nombres humanos", () => {
+    expect(labelMultiplicador("tipoCopia")).toBe("Tipo de copia");
+    expect(labelMultiplicador("hojasPorLibro")).toBe("Hojas por libro");
+    expect(labelMultiplicador("cantidad_modificaciones-porPieza")).toBe(
+      "Cantidad modificaciones por pieza",
+    );
+    expect(labelMultiplicador("campoNuevoDelMotor")).not.toBe(
+      "campoNuevoDelMotor",
+    );
   });
 
   it("opcionesDeSeccion respeta visibilidad", () => {

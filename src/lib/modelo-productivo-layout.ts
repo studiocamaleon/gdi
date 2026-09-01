@@ -143,3 +143,25 @@ export function insertarNodoProductivo(
   siguientes.splice(posicion, 0, [nodoClave]);
   return siguientes;
 }
+
+/**
+ * Sustituye un nodo sin cambiar el momento ni la rama que ocupa. Las aristas
+ * se vuelven a calcular desde estas columnas por el editor del modelo.
+ */
+export function reemplazarNodoProductivo(
+  columnas: string[][],
+  nodoAnteriorClave: string,
+  nodoNuevoClave: string,
+): string[][] {
+  if (nodoAnteriorClave === nodoNuevoClave) {
+    return columnas.map((columna) => [...columna]);
+  }
+
+  return columnas
+    .map((columna) =>
+      columna
+        .filter((clave) => clave !== nodoNuevoClave)
+        .map((clave) => (clave === nodoAnteriorClave ? nodoNuevoClave : clave)),
+    )
+    .filter((columna) => columna.length > 0);
+}

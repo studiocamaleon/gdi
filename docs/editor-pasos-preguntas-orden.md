@@ -203,7 +203,7 @@ La primera es del paso; las nueve siguientes se repiten **por slot**.
 | `tiempo.calcular_segun` | ¿El ritmo cuenta piezas, m² o metros? | T-2 sin tiempo del comercial | |
 | `tiempo.centro` | ¿En qué centro productivo se realiza este paso? | si NO hay máquina | |
 | `tiempo.dotacion` | ¿Cuántas personas trabajan? | siempre | |
-| `activacion.multiplicadores` | ¿Qué variables multiplican el trabajo acá? | si la familia declara multiplicadores | Hoy en Activación; multiplica el TIEMPO. Emparejar con `materiales.caras` (H-3) |
+| `activacion.multiplicadores` | ¿Qué variables multiplican el trabajo acá? | si la familia declara multiplicadores | Vive en Información básica, antes de Materiales: declara variables generales del paso. Cada slot decide después si también afectan su consumo |
 | `oficio.setup` | ¿Preparar la máquina lleva un tiempo distinto acá? | si hay máquina | Hoy en Ajustes; es tiempo |
 | `oficio.cleanup` | ¿Y la limpieza al terminar? | si hay máquina | Hoy en Ajustes; es tiempo |
 
@@ -402,8 +402,9 @@ acordeones viejos, la card del tiempo, más acordeones—.
 
 Con eso se dio el **paso A del §7**: cada opción declara ahora a qué **eje**
 pertenece (`eje` en `OpcionPaso`) en vez de agruparse por su sección, y el
-render filtra por eje (`opcionesDeEje`). La sección sobrevive porque el
-detallado congelado y el test de paridad todavía la usan.
+render filtra por eje (`opcionesDeEje`). La sección sobrevive como clave
+canónica de paridad y persistencia; desde el 2026-08-31 el editor guiado es la
+única presentación disponible.
 
 | Eje | Bloques | Se lee |
 |---|---|---|

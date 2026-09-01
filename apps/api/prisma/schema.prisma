@@ -474,6 +474,14 @@ enum TipoAprobacionDocumento {
   LIBERACION_PRODUCTIVA
 }
 
+/// Alcance operativo congelado de un requisito documental. ITEM representa
+/// la ruta o subruta de un producto dentro de una OT compuesta.
+enum AlcanceDocumentoProduccion {
+  ORDEN
+  ITEM
+  PASO
+}
+
 enum EstadoSolicitudAprobacion {
   PENDIENTE
   APROBADA
@@ -2898,19 +2906,20 @@ model ProductoRecetaComponente {
 /// Requisito documental de plantilla. El ArchivoMaestro concreto se resuelve
 /// al aplicar la receta en una campaña/OT.
 model ProductoRecetaDocumento {
-  id             String                   @id @default(uuid()) @db.Uuid
-  tenantId       String                   @db.Uuid
-  revisionId     String                   @db.Uuid
-  pasoClave      String?                  @db.VarChar(120)
-  codigo         String                   @db.VarChar(100)
-  nombre         String                   @db.VarChar(180)
+  id             String                     @id @default(uuid()) @db.Uuid
+  tenantId       String                     @db.Uuid
+  revisionId     String                     @db.Uuid
+  alcance        AlcanceDocumentoProduccion @default(ITEM)
+  pasoClave      String?                    @db.VarChar(120)
+  codigo         String                     @db.VarChar(100)
+  nombre         String                     @db.VarChar(180)
   proposito      PropositoArchivoMaestro
   etapa          EtapaDesarrolloDocumento
   tipoAprobacion TipoAprobacionDocumento?
-  requerido      Boolean                  @default(true)
-  descripcion    String?                  @db.VarChar(1000)
-  orden          Int                      @default(0)
-  createdAt      DateTime                 @default(now())
+  requerido      Boolean                    @default(true)
+  descripcion    String?                    @db.VarChar(1000)
+  orden          Int                        @default(0)
+  createdAt      DateTime                   @default(now())
 
   tenant                   Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   revision                 ProductoRecetaRevision    @relation(fields: [revisionId], references: [id], onDelete: Cascade)
@@ -5175,19 +5184,20 @@ model DecisionAprobacionDocumentoRegistro {
 }
 
 model GateProduccionDocumento {
-  id                String                  @id @default(uuid()) @db.Uuid
-  tenantId          String                  @db.Uuid
-  proyectoCampanaId String                  @db.Uuid
-  ordenId           String                  @db.Uuid
-  ordenItemId       String?                 @db.Uuid
-  pasoId            String?                 @db.Uuid
-  archivoMaestroId  String                  @db.Uuid
-  recetaDocumentoId String?                 @db.Uuid
+  id                String                     @id @default(uuid()) @db.Uuid
+  tenantId          String                     @db.Uuid
+  proyectoCampanaId String                     @db.Uuid
+  ordenId           String                     @db.Uuid
+  ordenItemId       String?                    @db.Uuid
+  pasoId            String?                    @db.Uuid
+  archivoMaestroId  String                     @db.Uuid
+  recetaDocumentoId String?                    @db.Uuid
+  alcance           AlcanceDocumentoProduccion @default(ORDEN)
   tipoAprobacion    TipoAprobacionDocumento
-  nombre            String                  @db.VarChar(180)
-  activo            Boolean                 @default(true)
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  nombre            String                     @db.VarChar(180)
+  activo            Boolean                    @default(true)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
 
   tenant                   Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   proyectoCampana          ProyectoCampana          @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)

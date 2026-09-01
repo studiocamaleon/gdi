@@ -11,6 +11,7 @@ import {
   CheckIcon,
   ClockIcon,
   DropletIcon,
+  GitCommitHorizontalIcon,
   Grid2X2Icon,
   GripVerticalIcon,
   LockIcon,
@@ -86,6 +87,10 @@ import {
   CANTIDAD_BASE_SLOT_OPTIONS,
   CANTIDAD_BASE_SLOT_OPTIONS_INSUMO,
 } from "@/lib/editor-paso/catalogo-materiales";
+import {
+  describirConsumoAutomatico,
+  resumirReglaCantidad,
+} from "@/lib/editor-paso/consumo-presentacion";
 import {
   MONTAJE_SOURCE_OPTIONS,
   TALONARIO_MODE_OPTIONS,
@@ -174,6 +179,7 @@ interface Props {
   lookups: LookupsConfigPaso;
   catalogoCargos?: import("@/lib/productos-servicios").CargoDirectoCatalogo[];
   embedded?: boolean;
+  modoFocoNodo?: boolean;
   configuracionBase?: {
     familiaCodigo: string;
     origen: "sistema" | "tenant";
@@ -847,6 +853,56 @@ function slotDisplayName(
     | undefined,
 ) {
   return slot.slotNombre?.trim() || slotNombre(slot.slotCodigo, familia);
+}
+
+function materialLabelParaConsumo({
+  slot,
+  persistedSlot,
+  candidateMaterials,
+  fallback,
+}: {
+  slot: UpsertSlotMaterialPayload;
+  persistedSlot: SlotMaterialDetalle | null | undefined;
+  candidateMaterials: Record<string, MateriaPrimaBusquedaItem>;
+  fallback: string;
+}) {
+  const seleccionActual = slot.materialVarianteId
+    ? Object.values(candidateMaterials).find((material) =>
+        material.variantes.some(
+          (variante) => variante.id === slot.materialVarianteId,
+        ),
+      )
+    : null;
+  const persistedVariante = persistedSlot?.materialVariante ?? null;
+  const persistedNombre =
+    persistedVariante && persistedVariante.id === slot.materialVarianteId
+      ? persistedVariante.materiaPrima.nombre
+      : null;
+  const directo = seleccionActual?.nombre ?? persistedNombre;
+  if (directo) return directo;
+
+  const candidatos = Array.from(
+    new Set(
+      (slot.candidatos ?? [])
+        .map(
+          (candidate) =>
+            candidateMaterials[candidate.materiaPrimaId]?.nombre ??
+            persistedSlot?.candidatos.find(
+              (persisted) =>
+                persisted.materiaPrimaId === candidate.materiaPrimaId,
+            )?.materiaPrima.nombre ??
+            null,
+        )
+        .filter((nombre): nombre is string => Boolean(nombre)),
+    ),
+  );
+  if (candidatos.length === 1) return candidatos[0];
+  if (candidatos.length > 1) {
+    return `${candidatos[0]} y ${candidatos.length - 1} alternativa${
+      candidatos.length === 2 ? "" : "s"
+    }`;
+  }
+  return fallback;
 }
 
 // ─── Helpers de JSON ───────────────────────────────────────────────
@@ -2934,6 +2990,7 @@ export function ConfigPasosEditorView({
   lookups,
   catalogoCargos = [],
   embedded = false,
+  modoFocoNodo = false,
   configuracionBase,
   configuracionContextual,
   modeloProductivo,
@@ -3360,35 +3417,10 @@ export function ConfigPasosEditorView({
     //   () => rutaAlternativa.configPasos.length === 0
     false,
   );
-  // Vista del panel del paso: el detallado clásico o el esquema guiado
-  // EXPANDIDO (mismo cuerpo que el asistente, a página completa). Ambas
-  // conviven mientras el usuario decide con cuál quedarse; la elección
-  // se recuerda por navegador.
-  const [vistaEditor, setVistaEditorState] = React.useState<
-    "detallado" | "guiado"
-  >("guiado");
-  // La preferencia guardada se lee POST-hidratación: leer localStorage en
-  // el estado inicial hacía divergir SSR y cliente (hydration mismatch).
-  React.useEffect(() => {
-    try {
-      const guardada = window.localStorage.getItem("editorPasoVista");
-      // Honrar AMBAS vistas guardadas (antes sólo restauraba "guiado" y la
-      // elección "detallado" se perdía en cada recarga).
-      if (guardada === "guiado" || guardada === "detallado") {
-        setVistaEditorState(guardada);
-      }
-    } catch {
-      // sin storage: queda el default
-    }
-  }, []);
-  const setVistaEditor = (vista: "detallado" | "guiado") => {
-    setVistaEditorState(vista);
-    try {
-      window.localStorage.setItem("editorPasoVista", vista);
-    } catch {
-      // sin storage (privado): la elección vive sólo en la sesión
-    }
-  };
+  // El editor declarativo guiado reemplazó definitivamente al detallado.
+  // Se mantiene este discriminante temporal mientras se poda el JSX legacy
+  // por completo, pero ya no existe preferencia, selector ni ruta de acceso.
+  const vistaEditor: "detallado" | "guiado" = "guiado";
   const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<
     string | null
   >(null);
@@ -4183,7 +4215,10 @@ export function ConfigPasosEditorView({
     });
   };
 
-  const guardarPaso = async (rutaPasoId: string) => {
+  const guardarPaso = async (
+    rutaPasoId: string,
+    opciones?: { comoBorrador?: boolean },
+  ) => {
     // Parsear JSONs antes de guardar
     const jsonText = jsonTexts[rutaPasoId];
     const extraGuardar = pasosExtras.find((e) => e.id === rutaPasoId) ?? null;
@@ -4194,8 +4229,24 @@ export function ConfigPasosEditorView({
       ? familiasMap.get(familiaCodigoGuardar)
       : undefined;
     const noEjecutar = configs[rutaPasoId].modoActivacion === "NO_EJECUTAR";
+    const sinValidacionProduccion =
+      noEjecutar || configs[rutaPasoId].tercerizado === true;
     const cantidadRelevante =
       !noEjecutar && requiereMecanismoCantidad(configs[rutaPasoId], familia);
+    const erroresBorrador = sinValidacionProduccion
+      ? 0
+      : validarBasico(configs[rutaPasoId], familia, {
+            familiaCodigo: familiaCodigoGuardar ?? "",
+          }).errores.length +
+        validarMateriales(configs[rutaPasoId], familia).errores.length +
+        validarAvanzado(
+          jsonTexts[rutaPasoId].params,
+          cantidadRelevante ? jsonTexts[rutaPasoId].mecanismo : "",
+          configs[rutaPasoId],
+          familia,
+        ).errores.length;
+    const guardarComoBorrador =
+      opciones?.comoBorrador ?? erroresBorrador > 0;
     const paramsRes = textToJson(jsonText.params);
     const mecanismoRes = cantidadRelevante
       ? textToJson(jsonText.mecanismo)
@@ -4420,7 +4471,11 @@ export function ConfigPasosEditorView({
         ...prev,
         [rutaPasoId]: configSnapshot(configs[rutaPasoId]),
       }));
-      toast.success("Configuración guardada");
+      toast.success(
+        guardarComoBorrador
+          ? "Borrador guardado. Todavía no está listo para cotizar."
+          : "Paso guardado y listo para cotizar.",
+      );
       router.refresh();
       return true;
     } catch (err) {
@@ -4735,6 +4790,9 @@ export function ConfigPasosEditorView({
     const next = pasosUnificados[Math.min(pasosUnificados.length - 1, i + 1)];
     if (next) setActivePasoId(next);
   };
+  const configurandoNodoDelModelo = Boolean(
+    modoFocoNodo || (modeloProductivo && !modeloProductivo.active),
+  );
 
   return (
     <div
@@ -4745,7 +4803,7 @@ export function ConfigPasosEditorView({
       }
     >
       <div
-        className={`editor-shell ${modeloProductivo?.active ? "modelo-hoja-ruta-activa" : ""}`}
+        className={`editor-shell ${modeloProductivo?.active ? "modelo-hoja-ruta-activa" : configurandoNodoDelModelo ? "modelo-configuracion-nodo-activa" : ""}`}
       >
         <aside className="editor-side">
           <div className="side-head">
@@ -5479,9 +5537,58 @@ export function ConfigPasosEditorView({
                         valMateriales.warnings.length +
                         valAvanzado.warnings.length;
                     const pasoTieneCambios = hasUnsavedChanges(paso.id);
+                    const pendientesPasoActual = pendientesDePaso(cfg, familia);
+                    const bloqueantesPasoActual = pendientesPasoActual.filter(
+                      (pendiente) => pendiente.bloqueante,
+                    ).length;
+                    const pendientesVisualesPasoActual = Math.max(
+                      totalErrores,
+                      bloqueantesPasoActual,
+                    );
+                    const estadoPaso =
+                      pendientesVisualesPasoActual > 0
+                        ? "pending"
+                        : totalWarnings > 0
+                          ? "warning"
+                          : "ready";
 
                     return (
                       <React.Fragment key={paso.id}>
+                        {modeloProductivo ? (
+                          <header className="modelo-config-step-header">
+                            <button
+                              type="button"
+                              onClick={() => modeloProductivo.onOpen("ruta")}
+                              aria-label="Volver a la hoja de ruta"
+                            >
+                              <ArrowLeftIcon />
+                            </button>
+                            <span className="modelo-config-step-icon">
+                              <GitCommitHorizontalIcon />
+                            </span>
+                            <div className="modelo-config-step-copy">
+                              <span>Producción · Paso de producción</span>
+                              <h1>{pasoLabel}</h1>
+                              <p>
+                                Configurá parámetros, materiales, recursos y
+                                tiempos de esta operación individual.
+                              </p>
+                            </div>
+                            <div
+                              className="modelo-config-step-status"
+                              data-state={estadoPaso}
+                            >
+                              <span>Estado del paso</span>
+                              <strong>
+                                {estadoPaso === "ready"
+                                  ? "Configuración completa"
+                                  : estadoPaso === "warning"
+                                    ? `${totalWarnings} ${totalWarnings === 1 ? "aviso" : "avisos"}`
+                                    : `${pendientesVisualesPasoActual} ${pendientesVisualesPasoActual === 1 ? "pendiente" : "pendientes"}`}
+                              </strong>
+                            </div>
+                          </header>
+                        ) : null}
                         {/* Header mínimo (feedback 2026-08-06): el número de
                           paso, el estado Configurado y el "Listo para cotizar"
                           viven en el sidebar; el centro de costo ya se lee ahí.
@@ -5493,9 +5600,9 @@ export function ConfigPasosEditorView({
                           elegir otro compatible; nombrarlo lo hacía parecer
                           fijo). Queda sólo el toggle de vista (feedback del
                           usuario, 2026-08-11). */}
-                        <div className="step-head">
-                          <div style={{ flex: 1 }}>
-                            {activeExtra ? (
+                        {!modeloProductivo && activeExtra ? (
+                          <div className="step-head">
+                            <div style={{ flex: 1 }}>
                               <Button
                                 type="button"
                                 variant="outline"
@@ -5504,63 +5611,32 @@ export function ConfigPasosEditorView({
                               >
                                 Editar ubicación o eliminar
                               </Button>
-                            ) : null}
+                            </div>
                           </div>
-                          {/* Re-habilitado 2026-08-11 (pedido del usuario):
-                            el toggle Detallado/Guiado vuelve para comparar
-                            vistas. OJO: el detallado está CONGELADO — las
-                            mejoras nuevas (panel de geometría, criterios
-                            como params, tercerizado manual) viven sólo en
-                            el guiado. El Asistente flotante sigue oculto. */}
-                          <div className="pill-row">
-                            <button
-                              className="btn"
-                              type="button"
-                              aria-pressed={vistaEditor === "detallado"}
-                              style={
-                                vistaEditor === "detallado"
-                                  ? { fontWeight: 650 }
-                                  : { opacity: 0.6 }
-                              }
-                              onClick={() => setVistaEditor("detallado")}
-                            >
-                              Detallado
-                            </button>
-                            <button
-                              className="btn"
-                              type="button"
-                              aria-pressed={vistaEditor === "guiado"}
-                              style={
-                                vistaEditor === "guiado"
-                                  ? { fontWeight: 650 }
-                                  : { opacity: 0.6 }
-                              }
-                              onClick={() => setVistaEditor("guiado")}
-                            >
-                              Guiado
-                            </button>
-                            {false && (
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={() => setAsistenteAbierto(true)}
-                              >
-                                Asistente guiado
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                        ) : null}
 
                         <div className="config-step-content pasos-sections">
                           {vistaEditor === "guiado" ? (
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 14,
-                                maxWidth: 980,
-                              }}
-                            >
+                            <div className="paso-config-workspace">
+                              <div className="paso-config-intro">
+                                <div>
+                                  <span>Configuración operativa</span>
+                                  <h2>Definí cómo se ejecuta este paso</h2>
+                                  <p>
+                                    Completá el recorrido de arriba hacia abajo.
+                                    Cada bloque resuelve una decisión concreta
+                                    de producción.
+                                  </p>
+                                </div>
+                                <div className="paso-config-legend">
+                                  <span>
+                                    <i data-tone="ready" /> Resuelto
+                                  </span>
+                                  <span>
+                                    <i data-tone="pending" /> Requiere atención
+                                  </span>
+                                </div>
+                              </div>
                               <SeccionesEsquemaPaso
                                 configuracionBase={Boolean(configuracionBase)}
                                 pasoActual={{
@@ -5580,7 +5656,7 @@ export function ConfigPasosEditorView({
                                 familiasMap={familiasMap}
                                 lookups={lookups}
                                 jsonTexts={jsonTexts}
-                                vivos={pendientesDePaso(cfg, familia)}
+                                vivos={pendientesPasoActual}
                                 onPatch={(pasoId, patch) =>
                                   updateConfig(pasoId, patch)
                                 }
@@ -7667,25 +7743,8 @@ export function ConfigPasosEditorView({
                           botones quedan siempre visibles — sticky al borde
                           inferior de .editor-main (el contenedor con scroll),
                           no un header entero que tape contenido. */}
-                        <div
-                          style={{
-                            position: "sticky",
-                            bottom: 12,
-                            zIndex: 30,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            width: "fit-content",
-                            marginLeft: "auto",
-                            marginTop: 14,
-                            padding: "8px 10px",
-                            borderRadius: 12,
-                            background: "var(--surface, #fff)",
-                            border: "1px solid var(--hairline, #e6e2dc)",
-                            boxShadow: "0 8px 24px rgba(20, 16, 12, 0.14)",
-                          }}
-                        >
-                          {!configuracionBase ? (
+                        <div className="paso-config-savebar">
+                          {!configuracionBase && !configurandoNodoDelModelo ? (
                             <>
                               <button
                                 className="btn"
@@ -7705,27 +7764,77 @@ export function ConfigPasosEditorView({
                               </button>
                             </>
                           ) : null}
-                          <button
-                            className="btn btn-primary"
-                            type="button"
-                            onClick={() => guardarPaso(paso.id)}
-                            disabled={
-                              guardando === paso.id ||
-                              totalErrores > 0 ||
-                              !pasoTieneCambios
-                            }
-                          >
-                            {pasoTieneCambios ? (
-                              <SaveIcon className="size-4" />
-                            ) : (
-                              <CheckIcon className="size-4" />
-                            )}
-                            {guardando === paso.id
-                              ? "Guardando..."
-                              : pasoTieneCambios
-                                ? "Guardar paso"
-                                : "Guardado"}
-                          </button>
+                          <div className="paso-config-save-state">
+                            {totalErrores > 0 ? (
+                              <span className="paso-config-save-pending">
+                                Faltan {pendientesVisualesPasoActual}{" "}
+                                {pendientesVisualesPasoActual === 1
+                                  ? "requisito"
+                                  : "requisitos"}{" "}
+                                para completar el paso.
+                              </span>
+                            ) : null}
+                            <div className="paso-config-save-actions">
+                              {totalErrores > 0 ? (
+                                <>
+                                  <button
+                                    className="btn"
+                                    type="button"
+                                    onClick={() =>
+                                      guardarPaso(paso.id, {
+                                        comoBorrador: true,
+                                      })
+                                    }
+                                    disabled={
+                                      guardando === paso.id ||
+                                      !pasoTieneCambios
+                                    }
+                                  >
+                                    {pasoTieneCambios ? (
+                                      <SaveIcon className="size-4" />
+                                    ) : (
+                                      <CheckIcon className="size-4" />
+                                    )}
+                                    {guardando === paso.id
+                                      ? "Guardando..."
+                                      : pasoTieneCambios
+                                        ? "Guardar borrador"
+                                        : "Borrador guardado"}
+                                  </button>
+                                  <button
+                                    className="btn btn-primary"
+                                    type="button"
+                                    disabled
+                                    title="Completá los requisitos pendientes para guardar el paso"
+                                  >
+                                    <CheckIcon className="size-4" />
+                                    Guardar paso
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  className="btn btn-primary"
+                                  type="button"
+                                  onClick={() => guardarPaso(paso.id)}
+                                  disabled={
+                                    guardando === paso.id ||
+                                    !pasoTieneCambios
+                                  }
+                                >
+                                  {pasoTieneCambios ? (
+                                    <SaveIcon className="size-4" />
+                                  ) : (
+                                    <CheckIcon className="size-4" />
+                                  )}
+                                  {guardando === paso.id
+                                    ? "Guardando..."
+                                    : pasoTieneCambios
+                                      ? "Guardar paso"
+                                      : "Paso guardado"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </React.Fragment>
                     );
@@ -9667,90 +9776,6 @@ function fraseUnidadProductiva(magnitud: string | null): string {
     : FORMULA_MIDE_FRASE.por_unidad_productiva;
 }
 
-const FORMA_TINTS = {
-  mide: { bg: "#e6f1fb", fg: "#185fa5" },
-  regla: { bg: "#eeedfe", fg: "#534ab7" },
-  derivado: { bg: "#faeeda", fg: "#854f0b" },
-} as const;
-
-function FormaConsumoSeccion({
-  icono,
-  tint,
-  titulo,
-  subtitulo,
-  children,
-}: {
-  icono: React.ReactNode;
-  tint: { bg: string; fg: string };
-  titulo: string;
-  subtitulo: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-        <span
-          aria-hidden
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 26,
-            height: 26,
-            borderRadius: 7,
-            background: tint.bg,
-            color: tint.fg,
-            flexShrink: 0,
-          }}
-        >
-          {icono}
-        </span>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>{titulo}</span>
-        <span style={{ fontSize: 12, color: "var(--muted-text-2, #92929b)" }}>
-          {subtitulo}
-        </span>
-      </div>
-      <div style={{ paddingLeft: 35 }}>{children}</div>
-    </div>
-  );
-}
-
-// Un enlace de texto para cambiar de forma (sin peso de botón).
-function EnlaceForma({
-  children,
-  onClick,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        marginTop: 10,
-        border: 0,
-        background: "none",
-        padding: 0,
-        fontSize: 12,
-        color: "var(--muted-text, #6e6e76)",
-        textDecoration: "underline",
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-const fraseConectorStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: "var(--muted-text, #6e6e76)",
-};
-
 /**
  * "Cómo se calcula el consumo" — las 3 formas. Reemplaza a la vez el select de
  * fórmula (materiales.consumo) y la base×factor (materiales.base):
@@ -9782,11 +9807,17 @@ function ConsumoReglaGuiado({
       }
     | null
     | undefined;
-  familia: { multiplicadoresSoportados?: string[] } | null | undefined;
+  familia:
+    | {
+        codigo?: string;
+        multiplicadoresSoportados?: string[];
+      }
+    | null
+    | undefined;
   paramsPaso: Record<string, unknown>;
   esAdicional: boolean;
-  /** Sustantivo del material para la frase ("broche", "módulo"); null si no. */
-  materialLabel: string | null;
+  /** Nombre humano del material o, como fallback, del slot. */
+  materialLabel: string;
   /** Magnitud concreta que produce el paso ("pliegos", "m²"); null → genérico. */
   magnitudProduceLabel: string | null;
   /** Fuente heredada de "Sobre qué mide" para el "de …" inline; null si no. */
@@ -9806,68 +9837,41 @@ function ConsumoReglaGuiado({
   const reglaPropia = Boolean(slot.cantidadBase);
   const permiteReglaPropia =
     esAdicional || decl?.tipo === "INSUMO_PASO" || derivado;
+  const familiaCodigo = familia?.codigo ?? "";
+  const automatico = describirConsumoAutomatico({
+    familiaCodigo,
+    slotCodigo: decl?.codigo ?? null,
+    formula: slot.formula,
+    materialLabel,
+    magnitudProduceLabel,
+    fuenteLabel,
+    paramsPaso,
+  });
+  const calculoGobernadoPorPaso =
+    derivado ||
+    forzada ||
+    [
+      "impresion_por_area",
+      "impresion_por_hoja",
+      "montaje_sobre_sustrato",
+      "laminado",
+    ].includes(familiaCodigo) ||
+    (["aplicacion_transfer", "aplicacion_transfer_textil"].includes(
+      familiaCodigo,
+    ) &&
+      ["textil", "prenda"].includes(decl?.codigo ?? ""));
 
-  const mermaAdicional = (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: 8,
-        marginTop: 12,
-        paddingTop: 12,
-        borderTop: "1px solid var(--border, #e7e3de)",
-      }}
-    >
-      <span style={{ fontSize: 12, fontWeight: 650 }}>Merma adicional</span>
-      <Input
-        aria-label="Merma adicional del material"
-        type="number"
-        min={0}
-        max={1000}
-        step={0.1}
-        value={slot.mermaAdicionalPct ?? 0}
-        onChange={(event) =>
-          onSlotPatch({
-            mermaAdicionalPct:
-              event.target.value === "" ? 0 : Number(event.target.value),
-          })
-        }
-        style={{ width: 82 }}
-      />
-      <span style={fraseConectorStyle}>%</span>
-      <span style={{ ...fraseConectorStyle, fontSize: 11.5 }}>
-        Se suma una sola vez al consumo; no reemplaza el desperdicio geométrico.
-      </span>
-    </div>
-  );
-
-  const dePart = fuenteLabel ? (
-    <>
-      {" "}
-      <span style={fraseConectorStyle}>de</span>{" "}
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 500,
-          color: "var(--fg-2, #2c2c33)",
-        }}
-      >
-        {fuenteLabel}
-      </span>
-    </>
-  ) : null;
-
-  // ── Forma 3: lo deriva la geometría ─────────────────────────────────
-  if (derivado && !reglaPropia) {
-    let detalle: React.ReactNode;
+  let detalleDerivado: React.ReactNode = null;
+  let resumenDerivado = automatico.resumen;
+  if (derivado) {
     if (decl?.cantidadFija !== undefined) {
-      detalle = (
+      detalleDerivado = (
         <>
-          <b>{decl.cantidadFija} por cartel</b> — con varios carteles idénticos
-          se multiplica; cada uno se elige por los watts de SU cartel.
+          <b>{decl.cantidadFija} por cartel</b>. Si el trabajo tiene varios
+          carteles, la cantidad se multiplica automáticamente.
         </>
       );
+      resumenDerivado = `Por cada cartel, el sistema descontará ${decl.cantidadFija} ${materialLabel}.`;
     } else if (decl?.codigo === "perfil_estructural") {
       const params = paramsPaso ?? {};
       const tipoBastidor =
@@ -9890,179 +9894,219 @@ function ConsumoReglaGuiado({
         densidadLed: 1,
         coberturaLedM2: 0.0625,
       });
-      detalle = (
+      detalleDerivado = (
         <>
-          los <b>metros de perfil del bastidor</b>, comprados en{" "}
-          <b>barras enteras</b> cuando la variante declara su largo. Ej.: 1,00 ×
-          0,80 m → <b>{m.mlTotal.toFixed(1).replace(".", ",")} ml</b>.
+          Metros de perfil necesarios para el bastidor, convertidos a{" "}
+          <b>barras enteras</b> según el largo de la variante. Ejemplo 1,00 ×
+          0,80 m: <b>{m.mlTotal.toFixed(1).replace(".", ",")} ml</b>.
         </>
       );
+      resumenDerivado = `El sistema calculará los metros de ${materialLabel} desde las medidas y refuerzos del bastidor.`;
     } else if (decl?.codigo === "modulos_led") {
-      detalle = (
+      detalleDerivado = (
         <>
-          <b>los módulos</b> que siembra el paso: uno cada <i>paso</i> de la
-          variante, en grilla sobre la medida del cartel, × la densidad.
+          Módulos que entran en la grilla del cartel según la separación y la
+          densidad configuradas.
         </>
       );
+      resumenDerivado = `El sistema calculará cuántos ${materialLabel} necesita cada cartel.`;
     } else if (decl?.codigo === "cableado") {
-      detalle = (
+      detalleDerivado = (
         <>
-          <b>los metros de cable</b>: perímetro × 1,4 + 12 cm por módulo.
+          Metros de cable calculados desde el perímetro del cartel y la cantidad
+          de módulos.
         </>
       );
+      resumenDerivado = `El sistema calculará los metros de ${materialLabel} usando el perímetro y los módulos del cartel.`;
     } else {
-      detalle = (
-        <>
-          <b>{decl?.magnitudDerivada}</b>, la magnitud que publica la geometría
-          del paso.
-        </>
+      detalleDerivado = (
+        <b>{humanizeCode(decl?.magnitudDerivada ?? "geometria_del_paso")}</b>
       );
+      resumenDerivado = `El sistema descontará ${materialLabel} usando la geometría calculada por el paso.`;
     }
-    return (
-      <FormaConsumoSeccion
-        icono={<Share2Icon size={15} />}
-        tint={FORMA_TINTS.derivado}
-        titulo="Lo deriva la geometría"
-        subtitulo="la regla la fija el paso"
-      >
-        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-          <span style={fraseConectorStyle}>Gasta </span>
-          {detalle}
+  }
+  return (
+    <div className="ps-consumo-regla">
+      <div className="ps-consumo-regla__cabecera">
+        <span
+          className="ps-consumo-regla__icono"
+          data-modo={reglaPropia ? "regla" : derivado ? "geometria" : "auto"}
+          aria-hidden
+        >
+          {reglaPropia ? (
+            <SlidersHorizontalIcon size={16} />
+          ) : derivado ? (
+            <Share2Icon size={16} />
+          ) : (
+            <RulerIcon size={16} />
+          )}
+        </span>
+        <div>
+          <span className="ps-consumo-regla__eyebrow">
+            Cómo se determina el consumo
+          </span>
+          <strong>
+            {reglaPropia
+              ? "Regla por cantidad"
+              : derivado
+                ? "Cálculo geométrico automático"
+                : "Cálculo automático del paso"}
+          </strong>
+          <p>
+            {reglaPropia
+              ? "Definí una cantidad de material y el dato que la multiplica."
+              : "El sistema resuelve el consumo con los datos productivos del trabajo."}
+          </p>
         </div>
         {permiteReglaPropia ? (
-          <EnlaceForma
-            onClick={() => onSlotPatch({ cantidadBase: "cantidad_pedida" })}
-          >
-            <SlidersHorizontalIcon size={13} /> …o pisala con una regla propia
-          </EnlaceForma>
-        ) : null}
-        {mermaAdicional}
-      </FormaConsumoSeccion>
-    );
-  }
+          <div className="ps-consumo-regla__modo">
+            <span>Origen del consumo</span>
+            <HumanSelect
+              value={reglaPropia ? "regla" : "automatico"}
+              onValueChange={(value) =>
+                value === "regla"
+                  ? onSlotPatch({
+                      cantidadBase: "cantidad_pedida",
+                      cantidadFactor: slot.cantidadFactor ?? 1,
+                    })
+                  : onSlotPatch({
+                      cantidadBase: null,
+                      cantidadFactor: null,
+                    })
+              }
+              options={[
+                {
+                  value: "automatico",
+                  label: derivado
+                    ? "Calculado desde la geometría"
+                    : "Calculado automáticamente",
+                },
+                { value: "regla", label: "Definir regla por cantidad" },
+              ]}
+              placeholder="Elegir origen"
+            />
+          </div>
+        ) : (
+          <span className="ps-consumo-regla__controlado">
+            El paso lo calcula
+          </span>
+        )}
+      </div>
 
-  // ── Forma 2: regla propia (N por base) ──────────────────────────────
-  if (reglaPropia) {
-    return (
-      <FormaConsumoSeccion
-        icono={<SlidersHorizontalIcon size={15} />}
-        tint={FORMA_TINTS.regla}
-        titulo="Regla propia"
-        subtitulo="N por base"
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 7,
-            lineHeight: 2,
-          }}
-        >
-          <span style={fraseConectorStyle}>Gasta</span>
-          <Input
-            type="number"
-            min={0}
-            step={0.0001}
-            value={slot.cantidadFactor ?? 1}
-            onChange={(event) =>
-              onSlotPatch({
-                cantidadFactor:
-                  event.target.value === "" ? null : Number(event.target.value),
-              })
-            }
-            style={{ maxWidth: 84 }}
-          />
-          {materialLabel ? (
-            <span style={{ fontSize: 13, fontWeight: 500 }}>
-              {materialLabel}
-            </span>
-          ) : null}
-          <span style={fraseConectorStyle}>por cada</span>
-          <div style={{ minWidth: 220 }}>
+      {reglaPropia ? (
+        <div className="ps-consumo-regla__campos ps-consumo-regla__campos--regla">
+          <label>
+            <span>Cantidad de material</span>
+            <div className="ps-consumo-regla__cantidad">
+              <Input
+                aria-label="Cantidad de material consumido"
+                type="number"
+                min={0}
+                step={0.0001}
+                value={slot.cantidadFactor ?? 1}
+                onChange={(event) =>
+                  onSlotPatch({
+                    cantidadFactor:
+                      event.target.value === ""
+                        ? null
+                        : Number(event.target.value),
+                  })
+                }
+              />
+              <strong>{materialLabel}</strong>
+            </div>
+          </label>
+          <label>
+            <span>Por cada</span>
             <HumanSelect
               value={slot.cantidadBase ?? "cantidad_pedida"}
-              onValueChange={(v) =>
-                onSlotPatch({ cantidadBase: v || "cantidad_pedida" })
+              onValueChange={(value) =>
+                onSlotPatch({
+                  cantidadBase: value || "cantidad_pedida",
+                })
               }
               options={CANTIDAD_BASE_SLOT_OPTIONS}
-              placeholder="Base"
+              placeholder="Elegir dato del trabajo"
             />
-          </div>
+          </label>
         </div>
-        <EnlaceForma
-          onClick={() =>
-            onSlotPatch({ cantidadBase: null, cantidadFactor: null })
-          }
-        >
-          <ArrowLeftIcon size={13} />{" "}
-          {derivado
-            ? "Volver a lo que deriva la geometría"
-            : "Volver a lo que mide el paso"}
-        </EnlaceForma>
-        {mermaAdicional}
-      </FormaConsumoSeccion>
-    );
-  }
+      ) : (
+        <div className="ps-consumo-regla__campos">
+          <label>
+            <span>Dato que determina el consumo</span>
+            {calculoGobernadoPorPaso ? (
+              <div className="ps-consumo-regla__valor-controlado">
+                {derivado ? "Geometría productiva del paso" : automatico.dato}
+              </div>
+            ) : (
+              <HumanSelect
+                value={slot.formula ?? "por_unidad_productiva"}
+                onValueChange={(value) =>
+                  onSlotPatch({
+                    formula: value || "por_unidad_productiva",
+                  })
+                }
+                options={FORMULA_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label:
+                    option.value === "por_unidad_productiva"
+                      ? fraseUnidadProductiva(magnitudProduceLabel)
+                      : (FORMULA_MIDE_FRASE[option.value] ?? option.label),
+                }))}
+                placeholder="Elegir dato del trabajo"
+              />
+            )}
+          </label>
+          <label>
+            <span>Resultado que se descuenta</span>
+            <div className="ps-consumo-regla__valor-controlado">
+              {derivado ? detalleDerivado : automatico.resultado}
+            </div>
+          </label>
+        </div>
+      )}
 
-  // ── Forma 1: lo mide el paso (fórmula) ──────────────────────────────
-  return (
-    <FormaConsumoSeccion
-      icono={<RulerIcon size={15} />}
-      tint={FORMA_TINTS.mide}
-      titulo="Lo mide el paso"
-      subtitulo="sustrato y lo que sigue la geometría"
-    >
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 7,
-          lineHeight: 2,
-        }}
-      >
-        <span style={fraseConectorStyle}>Gasta</span>
-        {forzada ? (
-          <>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>
-              {decl?.formulaForzada === "por_unidad_productiva"
-                ? fraseUnidadProductiva(magnitudProduceLabel)
-                : (FORMULA_MIDE_FRASE[decl?.formulaForzada ?? ""] ??
-                  decl?.formulaForzada)}
-            </span>
-            <span style={fraseConectorStyle}>— lo fija el paso</span>
-          </>
-        ) : (
-          <div style={{ minWidth: 240 }}>
-            <HumanSelect
-              value={slot.formula ?? "por_unidad_productiva"}
-              onValueChange={(v) =>
-                onSlotPatch({ formula: v || "por_unidad_productiva" })
-              }
-              options={FORMULA_OPTIONS.map((o) => ({
-                value: o.value,
-                label:
-                  o.value === "por_unidad_productiva"
-                    ? fraseUnidadProductiva(magnitudProduceLabel)
-                    : (FORMULA_MIDE_FRASE[o.value] ?? o.label),
-              }))}
-              placeholder="Qué mide"
-            />
-          </div>
-        )}
-        {dePart}
+      <div className="ps-consumo-regla__preview">
+        <span>Vista previa de la regla</span>
+        <p>
+          {reglaPropia
+            ? resumirReglaCantidad({
+                cantidad: slot.cantidadFactor,
+                base: slot.cantidadBase,
+                materialLabel,
+              })
+            : derivado
+              ? resumenDerivado
+              : automatico.resumen}
+        </p>
       </div>
-      {permiteReglaPropia ? (
-        <EnlaceForma
-          onClick={() => onSlotPatch({ cantidadBase: "cantidad_pedida" })}
-        >
-          <SlidersHorizontalIcon size={13} /> …o usá una regla propia (N por
-          base)
-        </EnlaceForma>
-      ) : null}
-      {mermaAdicional}
-    </FormaConsumoSeccion>
+
+      <div className="ps-consumo-regla__merma">
+        <div>
+          <strong>Merma extra</strong>
+          <span>
+            Se suma al consumo calculado; no duplica el desperdicio del nesting.
+          </span>
+        </div>
+        <div className="ps-consumo-regla__porcentaje">
+          <Input
+            aria-label="Merma adicional del material"
+            type="number"
+            min={0}
+            max={1000}
+            step={0.1}
+            value={slot.mermaAdicionalPct ?? 0}
+            onChange={(event) =>
+              onSlotPatch({
+                mermaAdicionalPct:
+                  event.target.value === "" ? 0 : Number(event.target.value),
+              })
+            }
+          />
+          <span>%</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -12158,6 +12202,7 @@ function EncabezadoGrupo({
 }) {
   return (
     <div
+      className="paso-config-group-head"
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -12336,6 +12381,7 @@ function EjeGuiado({
 
   return (
     <div
+      className={`eje-guiado ${enLista ? "is-list" : fijo ? "is-fixed" : "is-collapsible"} ${abierto ? "is-open" : "is-closed"} ${faltaAlgo ? "has-pending" : "is-resolved"}`}
       style={
         enLista
           ? {
@@ -12363,6 +12409,7 @@ function EjeGuiado({
       }
     >
       <div
+        className="eje-guiado-head"
         onClick={enLista ? () => setColapsado(!colapsado) : undefined}
         style={{
           display: "flex",
@@ -12373,8 +12420,9 @@ function EjeGuiado({
           ...(enLista ? { padding: "11px 13px", cursor: "pointer" } : {}),
         }}
       >
-        <div style={{ minWidth: 0 }}>
+        <div className="eje-guiado-copy" style={{ minWidth: 0 }}>
           <div
+            className="eje-guiado-title"
             style={{
               display: "flex",
               alignItems: "center",
@@ -12386,6 +12434,7 @@ function EjeGuiado({
             {ocultarCheck ? null : (
               <span
                 aria-hidden
+                className="eje-guiado-check"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -12424,6 +12473,7 @@ function EjeGuiado({
             if (!texto) return null;
             return (
               <div
+                className="eje-guiado-subtitle"
                 style={{
                   fontSize: 12.5,
                   color: "var(--muted-text, #6e6e76)",
@@ -12438,6 +12488,7 @@ function EjeGuiado({
           })()}
         </div>
         <div
+          className="eje-guiado-actions"
           style={{
             display: "flex",
             alignItems: "center",
@@ -12490,6 +12541,7 @@ function EjeGuiado({
 
       {abierto ? (
         <div
+          className="eje-guiado-content"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -13276,7 +13328,7 @@ function SeccionesEsquemaPaso({
     gap: 10,
   };
   return (
-    <>
+    <div className="paso-config-flow">
       {/* Editor declarativo: Activación (A) + Tiempo y costo +
           Máquina y perfil (B) salen del ESQUEMA — completas, con
           abierto/colapsado/Cambiar. Las cards de abajo son
@@ -13966,7 +14018,7 @@ function SeccionesEsquemaPaso({
                 (E.2); si la familia la declara aparece colapsada. */}
             <EjeGuiado
               titulo="Información básica"
-              subtitulo="Cómo se llama acá y quién lo hace."
+              subtitulo="Cómo se llama, quién lo hace y qué datos pueden multiplicar el trabajo."
               opciones={opcionesDeEje("identidad", ctx).filter(
                 (o) => o.clave !== "quien.proveedor",
               )}
@@ -14303,6 +14355,20 @@ function SeccionesEsquemaPaso({
                                     (o) => o.value === slot.fuenteMedida,
                                   )?.label ?? null)
                                 : null;
+                            const nombreSlot = familia
+                              ? slotDisplayName(slot, familia)
+                              : (slot.slotNombre ??
+                                humanizeCode(slot.slotCodigo));
+                            const materialLabel = materialLabelParaConsumo({
+                              slot,
+                              persistedSlot: materialesApi.getPersistedSlot(
+                                pasoActual.id,
+                                slot.slotCodigo,
+                              ),
+                              candidateMaterials:
+                                materialesApi.candidateMaterials,
+                              fallback: nombreSlot,
+                            });
                             return (
                               <ConsumoReglaGuiado
                                 slot={slot}
@@ -14310,7 +14376,7 @@ function SeccionesEsquemaPaso({
                                 familia={familia}
                                 paramsPaso={asRecord(cfg.paramsPasoJson)}
                                 esAdicional={!decl}
-                                materialLabel={null}
+                                materialLabel={materialLabel}
                                 magnitudProduceLabel={magnitudProducePaso(
                                   cfg,
                                   familia,
@@ -14471,7 +14537,7 @@ function SeccionesEsquemaPaso({
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
 

@@ -20,6 +20,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  AlcanceDocumentoProduccion,
   EtapaDesarrolloDocumento,
   PoliticaEjecucionRecetaComponente,
   PropositoArchivoMaestro,
@@ -34,6 +35,10 @@ export class RecetaDocumentoDto {
   @IsString()
   @Length(1, 180)
   nombre!: string;
+
+  @IsOptional()
+  @IsEnum(AlcanceDocumentoProduccion)
+  alcance?: AlcanceDocumentoProduccion;
 
   @IsOptional()
   @IsString()

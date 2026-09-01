@@ -32,6 +32,7 @@ import type {
   RutaAlternativaDetalle,
 } from "@/lib/productos-servicios";
 import { getCatalogoFamilias } from "@/lib/productos-servicios-api";
+import { labelMultiplicador } from "@/lib/editor-paso/schema";
 import {
   getLabel,
   modoActivacionLabels,
@@ -439,7 +440,7 @@ function RutaAlternativaContent({
                               variant="secondary"
                               className="mr-1 text-[10px]"
                             >
-                              {m}
+                              {labelMultiplicador(m)}
                             </Badge>
                           ))}
                         </div>

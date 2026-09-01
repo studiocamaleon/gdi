@@ -255,3 +255,93 @@ dependencias, componentes, documentos y etapas en la revisión de receta. La
 siguiente iteración deberá unificar el indicador visible de cambios pendientes,
 la validación/publicación y la prueba integral del journey de Cartel Backlight
 antes de retirar definitivamente las superficies anteriores.
+
+## 11. Contrato de interacción de los nodos
+
+Decisión aprobada el 2026-08-31 para reemplazar los inspectores persistentes:
+
+- un clic selecciona el nodo y mantiene visible su posición en el recorrido;
+- doble clic o `Enter` abre su espacio de configuración;
+- clic derecho abre un menú contextual en el punto de interacción;
+- el botón `•••` de la tarjeta abre exactamente el mismo menú y cubre teclado y
+  pantallas táctiles;
+- el asa de arrastre conserva como única responsabilidad cambiar la posición.
+
+Las acciones siguen una anatomía común:
+
+- `Configurar`: abre el editor específico del nodo;
+- `Reemplazar`: utiliza el mismo selector de alta y conserva el momento y la
+  rama del nodo reemplazado;
+- `Eliminar de la vía`: retira el nodo y reconecta los momentos adyacentes;
+- los pasos heredados de la plantilla base no pueden reemplazarse ni eliminarse
+  desde el producto: esas acciones se realizan en la definición de la ruta para
+  evitar cambios que reaparezcan al recargar.
+
+Un reemplazo descarta únicamente la configuración propia del nodo anterior. Si
+el nodo participa en referencias que no pueden migrarse de forma segura, la
+operación debe advertirlo o impedirse; nunca debe dejar referencias silenciosas
+a una clave inexistente.
+
+Los requisitos de inicio de un paso (`material disponible` y `control de
+calidad`) forman parte de su configuración contextual y dejan de requerir un
+inspector independiente debajo del lienzo.
+
+### 11.1 Espacio de configuración común
+
+Paso, componente y etapa utilizan una misma carcasa técnica, alineada con la
+Orden de Trabajo:
+
+1. volver a la hoja de ruta;
+2. etiqueta del tipo y breadcrumb cuando corresponda;
+3. nombre y explicación breve del alcance;
+4. contenido específico del nodo sobre una superficie clara;
+5. pie estable con `Cancelar` y la acción primaria.
+
+El tipo se distingue por icono y acento —paso neutro, componente naranja y
+etapa ámbar—, no mediante tres layouts diferentes. Los formularios de edición
+no se apilan dentro de modales oscuros. Los modales quedan reservados para
+elegir un nodo, confirmar una acción destructiva o explicar una incompatibilidad.
+
+La Hoja de ruta es el único navegador estructural del modelo. Al configurar un
+paso —incluidas las subtareas de una etapa compuesta— el sidebar histórico de
+pasos, componentes y etapas se oculta: el formulario usa todo el ancho y sólo
+conserva un breadcrumb y la acción de volver a su contexto inmediato. En este
+modo tampoco se ofrecen controles `Anterior`/`Siguiente`, porque permitirían
+navegar el árbol por una segunda interfaz paralela al grafo.
+
+## 12. Requisitos documentales en la Hoja de ruta
+
+Decisión aprobada el 2026-08-31: la Hoja de ruta reemplaza los gates manuales
+genéricos de `material disponible` y `control de calidad` por condiciones con
+una fuente de verdad concreta. Los consumos de material continúan dentro del
+paso; la disponibilidad futura provendrá de reservas y asignaciones reales. El
+control de calidad se representa como paso/etapa o, cuando corresponda, como
+una aprobación documental. El soporte relacional de los gates operativos se
+conserva para compatibilidad, pero deja de ofrecerse como configuración manual
+en la Hoja de ruta.
+
+Cada requisito documental declara uno de tres alcances congelados en la OT:
+
+- `ORDEN`: bloquea el ingreso de toda la OT a producción y cualquier ejecución;
+- `ITEM`: bloquea exclusivamente la ruta o subruta del producto que lo declaró;
+- `PASO`: bloquea el nodo seleccionado, sin detener ramas independientes.
+
+Los requisitos propios de un componente se definen en la receta del producto
+hijo. Al usarlo en un producto compuesto se heredan con la revisión exacta del
+componente y se muestran en el nodo padre como información de sólo lectura. No
+se duplican ni se editan silenciosamente desde el padre. Los documentos del
+conjunto se declaran en la ruta padre.
+
+La interacción queda centralizada así:
+
+- la cabecera de la Hoja de ruta abre los requisitos generales de alcance
+  `ORDEN` o `ITEM`;
+- el menú contextual de un paso o etapa abre los requisitos `PASO` de ese nodo;
+- el menú contextual de un componente permite revisar los documentos
+  heredados y navegar a su producto de origen;
+- las tarjetas muestran un indicador documental, nunca un gate manual sin
+  semántica de negocio.
+
+Un requisito sin tipo de aprobación crea el documento esperado y lo hace
+visible, pero no bloquea. Para bloquear debe exigir una aprobación concreta y
+una revisión liberada a producción.

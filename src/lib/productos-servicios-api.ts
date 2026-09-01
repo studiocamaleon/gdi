@@ -183,6 +183,7 @@ export interface ProductoRecetaRevision {
   }>;
   documentos: Array<{
     id: string;
+    alcance: "ORDEN" | "ITEM" | "PASO";
     pasoClave?: string | null;
     codigo: string;
     nombre: string;
@@ -198,6 +199,7 @@ export interface ProductoRecetaRevision {
 export type ProductoRecetaDocumentoInput = {
   codigo: string;
   nombre: string;
+  alcance?: "ORDEN" | "ITEM" | "PASO";
   pasoClave?: string | null;
   proposito: "PRINT" | "CUT" | "RENDER" | "PLANO" | "INSTRUCTIVO" | "OTRO";
   etapa: "BRIEF" | "DISENO" | "PROTOTIPO" | "MUESTRA" | "PRODUCCION";
@@ -229,11 +231,7 @@ export type ProductoRecetaComponenteInput = {
 };
 
 export type OrigenParametroComponente =
-  | "DEFAULT_HIJO"
-  | "FIJO"
-  | "PADRE"
-  | "FORMULA"
-  | "COTIZACION";
+  "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
 
 export type BindingParametroComponente = {
   clave: string;
@@ -774,10 +772,7 @@ export interface UpsertSlotMaterialPayload {
   slotNombre?: string | null;
   slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
   modoSeleccion:
-    | "HARDCODED"
-    | "COMERCIAL_ELIGE"
-    | "MOTOR_ELIGE_AUTO"
-    | "HEREDA_DE_PASO";
+    "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO" | "HEREDA_DE_PASO";
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
@@ -959,9 +954,7 @@ export interface CrearCargoDirectoPayload {
   nombre: string;
   descripcion?: string;
   modoCalculo:
-    | "MONTO_FIJO_PLANO"
-    | "PORCENTAJE_SOBRE_BASE"
-    | "POR_UNIDAD_INPUT";
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -979,9 +972,7 @@ export interface ActualizarCargoDirectoPayload {
   nombre?: string;
   descripcion?: string;
   modoCalculo?:
-    | "MONTO_FIJO_PLANO"
-    | "PORCENTAJE_SOBRE_BASE"
-    | "POR_UNIDAD_INPUT";
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;

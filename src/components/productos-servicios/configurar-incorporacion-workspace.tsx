@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import {
-  ArrowLeftIcon,
   BoxesIcon,
   CheckIcon,
   Settings2Icon,
@@ -25,6 +24,7 @@ import {
   type ProductoRecetaComponenteInput,
   type UpsertConfigPasoPayload,
 } from "@/lib/productos-servicios-api";
+import { ModeloProductivoConfigShell } from "./modelo-productivo-config-shell";
 import styles from "./configurar-incorporacion-workspace.module.css";
 
 function configuracionInicial(
@@ -173,222 +173,165 @@ export function ConfigurarIncorporacionWorkspace({
       pasosExtras: [],
     };
     return (
-      <div
-        className={embedded ? styles.embedded : styles.backdrop}
-        role={embedded ? "region" : "dialog"}
-        aria-modal={embedded ? undefined : true}
-        aria-label={
-          embedded ? `Configuración de ${pasoActivo.nombre}` : undefined
-        }
+      <ModeloProductivoConfigShell
+        tipo="PASO"
+        eyebrow={`Producción · Etapa ${paso.pasoNombre} · Paso interno`}
+        titulo={pasoActivo.nombre}
+        descripcion="Configurá parámetros, materiales, recursos y tiempos como en un paso normal. Este paso calcula el trabajo, pero no tendrá un estado independiente en la OT."
+        onBack={() => setEditando(null)}
+        backLabel="Volver a la etapa"
+        embedded={embedded}
+        wide
+        contentClassName={styles.fullEditor}
       >
-        <div
-          className={`${styles.workspace} ${styles.editorWorkspace} ${embedded ? styles.workspaceEmbedded : ""}`}
-        >
-          <header className={styles.header}>
-            <button
-              type="button"
-              onClick={() => setEditando(null)}
-              aria-label="Volver a la etapa"
-            >
-              <ArrowLeftIcon />
-            </button>
-            <div>
-              <span>Producción · Etapa · {paso.pasoNombre}</span>
-              <h2>{pasoActivo.nombre}</h2>
-              <p>
-                Operación interna de cálculo: configurá parámetros, materiales,
-                recursos y tiempos como en un paso normal. No tendrá estado
-                independiente en la OT.
-              </p>
-            </div>
-          </header>
-          <div className={styles.fullEditor}>
-            <ConfigPasosEditorView
-              embedded
-              producto={producto}
-              rutaAlternativa={rutaSintetica}
-              catalogoFamilias={catalogo}
-              lookups={lookups}
-              configuracionContextual={{
-                iniciales: {
-                  [pasoActivo.codigo]: {
-                    ...pasoActivo.configuracion,
-                    rutaPasoId: pasoActivo.codigo,
-                    nombreVisible:
-                      pasoActivo.configuracion.nombreVisible?.trim() ||
-                      pasoActivo.nombre,
-                  },
-                },
-                guardar: async (_, configuracion) => {
-                  cambiarPaso(pasoActivo.codigo, { configuracion });
-                  toast.success("Paso guardado dentro de la etapa");
-                },
-              }}
-            />
-          </div>
-        </div>
-      </div>
+        <ConfigPasosEditorView
+          embedded
+          modoFocoNodo
+          producto={producto}
+          rutaAlternativa={rutaSintetica}
+          catalogoFamilias={catalogo}
+          lookups={lookups}
+          configuracionContextual={{
+            iniciales: {
+              [pasoActivo.codigo]: {
+                ...pasoActivo.configuracion,
+                rutaPasoId: pasoActivo.codigo,
+                nombreVisible:
+                  pasoActivo.configuracion.nombreVisible?.trim() ||
+                  pasoActivo.nombre,
+              },
+            },
+            guardar: async (_, configuracion) => {
+              cambiarPaso(pasoActivo.codigo, { configuracion });
+              toast.success("Paso guardado dentro de la etapa");
+            },
+          }}
+        />
+      </ModeloProductivoConfigShell>
     );
   }
 
   return (
-    <div
-      className={embedded ? styles.embedded : styles.backdrop}
-      role={embedded ? "region" : "dialog"}
-      aria-modal={embedded ? undefined : true}
-      aria-label={embedded ? `Configuración de ${paso.pasoNombre}` : undefined}
+    <ModeloProductivoConfigShell
+      tipo="ETAPA"
+      eyebrow="Producción · Etapa compuesta"
+      titulo={paso.pasoNombre}
+      descripcion="Configurá las operaciones que determinan el tiempo, los materiales y el costo. En producción se ejecutará una sola etapa."
+      onBack={onCancel}
+      backLabel="Volver a la hoja de ruta"
+      embedded={embedded}
+      contentClassName={styles.body}
+      footerNote="El desglose se versionará con la receta. La OT recibirá una sola etapa con tiempo, materiales y costo consolidados."
+      primaryLabel="Aplicar etapa"
+      primaryDisabled={
+        !pasos.length || pasos.some((item) => !item.familiaCodigo)
+      }
+      onPrimary={() =>
+        onSave({
+          ...paso,
+          version: 2,
+          operaciones: [],
+          pasos: pasos.map((item, index) => ({
+            ...item,
+            orden: index,
+          })),
+        })
+      }
     >
-      <div
-        className={`${styles.workspace} ${embedded ? styles.workspaceEmbedded : ""}`}
-      >
-        <header className={styles.header}>
-          <button type="button" onClick={onCancel} aria-label="Volver a la BOM">
-            <ArrowLeftIcon />
-          </button>
-          <div>
-            <span>Producción · Etapa compuesta</span>
-            <h2>{paso.pasoNombre}</h2>
-            <p>
-              Configurá las operaciones que determinan el tiempo, los materiales
-              y el costo. En producción se ejecutará una sola etapa.
-            </p>
-          </div>
-        </header>
-        <main className={styles.body}>
-          <div className={styles.contextCard}>
-            <BoxesIcon />
-            <div>
-              <strong>Subruta contextual del producto</strong>
-              <span>
-                {pasos.filter((item) => item.activa).length} operaciones activas
-                · {componentes.length} componentes disponibles
-              </span>
-            </div>
-          </div>
-          {error ? <p className={styles.error}>{error}</p> : null}
-          {!catalogo && !error ? (
-            <p className={styles.message}>Cargando editor productivo…</p>
-          ) : null}
-          <div className={styles.stepList}>
-            {pasos.map((item, index) => {
-              const definicion = definiciones.find(
-                (candidate) => candidate.codigo === item.codigo,
-              );
-              const obligatoria = definicion?.requerida === true;
-              return (
-                <section className={styles.stepCard} key={item.codigo}>
-                  <div className={styles.stepIdentity}>
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <WorkflowIcon />
-                    <div>
-                      <strong>{item.nombre}</strong>
-                      <small>
-                        {catalogo?.familias.find(
-                          (familia) => familia.codigo === item.familiaCodigo,
-                        )?.nombre ??
-                          (item.familiaCodigo
-                            ? "Paso real"
-                            : "Falta elegir el paso real")}
-                      </small>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.activeButton}
-                    aria-pressed={item.activa}
-                    disabled={obligatoria}
-                    onClick={() =>
-                      cambiarPaso(item.codigo, { activa: !item.activa })
-                    }
-                  >
-                    <span>{item.activa ? <CheckIcon /> : null}</span>
-                    {obligatoria
-                      ? "Obligatorio"
-                      : item.activa
-                        ? "Incluido"
-                        : "No incluido"}
-                  </button>
-                  <div className={styles.componentLinks}>
-                    <span>Componentes involucrados</span>
-                    {componentes.length ? (
-                      componentes.map((componente) => (
-                        <label key={componente.codigo}>
-                          <input
-                            type="checkbox"
-                            checked={item.componentesCodigos.includes(
-                              componente.codigo,
-                            )}
-                            onChange={(event) =>
-                              cambiarPaso(item.codigo, {
-                                componentesCodigos: event.target.checked
-                                  ? [
-                                      ...item.componentesCodigos,
-                                      componente.codigo,
-                                    ]
-                                  : item.componentesCodigos.filter(
-                                      (codigo) => codigo !== componente.codigo,
-                                    ),
-                              })
-                            }
-                          />
-                          {componente.nombre}
-                        </label>
-                      ))
-                    ) : (
-                      <small>
-                        Trabajo general del producto, sin componente.
-                      </small>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.configureButton}
-                    disabled={
-                      !item.activa ||
-                      !item.familiaCodigo ||
-                      !catalogo ||
-                      !lookups
-                    }
-                    onClick={() => setEditando(item.codigo)}
-                  >
-                    <Settings2Icon /> Configurar operación
-                  </button>
-                </section>
-              );
-            })}
-          </div>
-        </main>
-        <footer className={styles.footer}>
-          <p>
-            El desglose se versionará con la receta. La OT recibirá una sola
-            etapa con tiempo, materiales y costo consolidados.
-          </p>
-          <div>
-            <button type="button" onClick={onCancel}>
-              Cancelar
-            </button>
-            <button
-              type="button"
-              disabled={
-                !pasos.length || pasos.some((item) => !item.familiaCodigo)
-              }
-              onClick={() =>
-                onSave({
-                  ...paso,
-                  version: 2,
-                  operaciones: [],
-                  pasos: pasos.map((item, index) => ({
-                    ...item,
-                    orden: index,
-                  })),
-                })
-              }
-            >
-              Aplicar etapa
-            </button>
-          </div>
-        </footer>
+      <div className={styles.contextCard}>
+        <BoxesIcon />
+        <div>
+          <strong>Subruta contextual del producto</strong>
+          <span>
+            {pasos.filter((item) => item.activa).length} operaciones activas ·{" "}
+            {componentes.length} componentes disponibles
+          </span>
+        </div>
       </div>
-    </div>
+      {error ? <p className={styles.error}>{error}</p> : null}
+      {!catalogo && !error ? (
+        <p className={styles.message}>Cargando editor productivo…</p>
+      ) : null}
+      <div className={styles.stepList}>
+        {pasos.map((item, index) => {
+          const definicion = definiciones.find(
+            (candidate) => candidate.codigo === item.codigo,
+          );
+          const obligatoria = definicion?.requerida === true;
+          return (
+            <section className={styles.stepCard} key={item.codigo}>
+              <div className={styles.stepIdentity}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <WorkflowIcon />
+                <div>
+                  <strong>{item.nombre}</strong>
+                  <small>
+                    {catalogo?.familias.find(
+                      (familia) => familia.codigo === item.familiaCodigo,
+                    )?.nombre ??
+                      (item.familiaCodigo
+                        ? "Paso real"
+                        : "Falta elegir el paso real")}
+                  </small>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={styles.activeButton}
+                aria-pressed={item.activa}
+                disabled={obligatoria}
+                onClick={() =>
+                  cambiarPaso(item.codigo, { activa: !item.activa })
+                }
+              >
+                <span>{item.activa ? <CheckIcon /> : null}</span>
+                {obligatoria
+                  ? "Obligatorio"
+                  : item.activa
+                    ? "Incluido"
+                    : "No incluido"}
+              </button>
+              <div className={styles.componentLinks}>
+                <span>Componentes involucrados</span>
+                {componentes.length ? (
+                  componentes.map((componente) => (
+                    <label key={componente.codigo}>
+                      <input
+                        type="checkbox"
+                        checked={item.componentesCodigos.includes(
+                          componente.codigo,
+                        )}
+                        onChange={(event) =>
+                          cambiarPaso(item.codigo, {
+                            componentesCodigos: event.target.checked
+                              ? [...item.componentesCodigos, componente.codigo]
+                              : item.componentesCodigos.filter(
+                                  (codigo) => codigo !== componente.codigo,
+                                ),
+                          })
+                        }
+                      />
+                      {componente.nombre}
+                    </label>
+                  ))
+                ) : (
+                  <small>Trabajo general del producto, sin componente.</small>
+                )}
+              </div>
+              <button
+                type="button"
+                className={styles.configureButton}
+                disabled={
+                  !item.activa || !item.familiaCodigo || !catalogo || !lookups
+                }
+                onClick={() => setEditando(item.codigo)}
+              >
+                <Settings2Icon /> Configurar operación
+              </button>
+            </section>
+          );
+        })}
+      </div>
+    </ModeloProductivoConfigShell>
   );
 }

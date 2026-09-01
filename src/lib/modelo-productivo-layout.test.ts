@@ -4,6 +4,7 @@ import {
   construirColumnasProductivas,
   insertarNodoProductivo,
   moverNodoProductivo,
+  reemplazarNodoProductivo,
   type NodoProductivoVisual,
 } from "./modelo-productivo-layout";
 
@@ -77,5 +78,25 @@ describe("layout del modelo productivo", () => {
         { tipo: "PARALELO", columna: 0 },
       ),
     ).toEqual([["componente:bastidor", "componente:lona"], ["ruta:ensamble"]]);
+  });
+
+  it("reemplaza un nodo conservando su momento y su rama", () => {
+    expect(
+      reemplazarNodoProductivo(
+        [["componente:bastidor", "componente:lona"], ["ruta:ensamble"]],
+        "componente:lona",
+        "extra:impresion",
+      ),
+    ).toEqual([["componente:bastidor", "extra:impresion"], ["ruta:ensamble"]]);
+  });
+
+  it("evita duplicar un nodo que ya existía al reemplazar", () => {
+    expect(
+      reemplazarNodoProductivo(
+        [["extra:impresion"], ["ruta:control"]],
+        "ruta:control",
+        "extra:impresion",
+      ),
+    ).toEqual([["extra:impresion"]]);
   });
 });

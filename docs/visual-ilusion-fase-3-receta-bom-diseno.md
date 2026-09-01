@@ -180,12 +180,19 @@ concreto. Al usarla dentro de una campaña se resuelve o crea el maestro
 correspondiente. La liberación continúa gobernada por la Fase 2 y los cambios
 se comunican por la Fase 2.5.
 
+En productos compuestos el requisito pertenece por defecto a la receta que lo
+origina: un documento de la lona se configura en la ruta de la lona y se
+hereda al incorporarla como componente. El alcance queda explícito como OT
+completa, ruta/subruta del item o paso determinado; por lo tanto un requisito
+general de un componente no puede bloquear accidentalmente las ramas del
+producto padre.
+
 ## 10. Contrato visual
 
 - La ficha expone una sola pestaña principal llamada `Producción`; `Rutas`,
   `Pasos` y `Receta / BOM` dejan de competir como pestañas hermanas.
 - Producción organiza el recorrido `Rutas y flujo → Pasos y recursos → BOM y
-  versiones`, conservando la vía seleccionada durante toda la navegación.
+versiones`, conservando la vía seleccionada durante toda la navegación.
 - La configuración viva continúa en rutas/pasos y la versión publicada sigue
   siendo su contrato inmutable, pero la interfaz explica y conecta ambas capas.
 - Las URLs históricas con `tab=rutas|pasos|receta` redirigen al nuevo recorrido.

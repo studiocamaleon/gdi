@@ -2905,8 +2905,7 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
-            | undefined;
+            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -4769,8 +4768,7 @@ export class OrdenesTrabajoService {
           ? snapshot.pasos
           : [];
         const grafoGuardado = revisionHija.grafoProduccionJson as
-          | (GrafoProduccion & Prisma.JsonObject)
-          | null;
+          (GrafoProduccion & Prisma.JsonObject) | null;
         const grafoHijo = grafoGuardado
           ? (grafoGuardado as unknown as GrafoProduccion)
           : compilarRutaLineal(
@@ -5702,7 +5700,11 @@ export class OrdenesTrabajoService {
             .join(' y ')}.`,
         );
       }
-      await this.desarrolloDocumental.exigirGatesCumplidos(ordenId, paso.id);
+      await this.desarrolloDocumental.exigirGatesCumplidos(
+        ordenId,
+        paso.id,
+        paso.itemId,
+      );
     }
 
     const motivo = payload.motivo?.trim();

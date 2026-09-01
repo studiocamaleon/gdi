@@ -42530,6 +42530,716 @@ body:has(.t-app) {
   background: transparent;
 }
 
+.editor-main .modelo-config-step-header {
+  display: grid;
+  align-items: center;
+  gap: 16px;
+  margin: -28px -32px 0;
+  padding: 28px 36px;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  background:
+    radial-gradient(circle at 78% -70%, rgb(255 105 52 / 24%), transparent 46%),
+    linear-gradient(112deg, #17161b 0%, #221a1d 55%, #542b20 125%);
+  grid-template-columns: auto auto minmax(280px, 1fr) auto auto;
+}
+
+.editor-main .modelo-config-step-header > button {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 12px;
+  color: #fff;
+  background: rgb(255 255 255 / 6%);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.editor-main .modelo-config-step-header > button:hover {
+  border-color: rgb(255 119 69 / 62%);
+  background: rgb(255 255 255 / 11%);
+  transform: translateX(-2px);
+}
+
+.editor-main .modelo-config-step-header > button svg {
+  width: 18px;
+}
+
+.editor-main .modelo-config-step-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgb(255 111 58 / 42%);
+  border-radius: 14px;
+  color: #ff7040;
+  background: rgb(255 103 48 / 9%);
+}
+
+.editor-main .modelo-config-step-icon svg {
+  width: 21px;
+}
+
+.editor-main .modelo-config-step-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.editor-main .modelo-config-step-copy > span {
+  color: #ff7545;
+  font: 760 10px var(--font-mono);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.editor-main .modelo-config-step-header h1 {
+  margin: 2px 0 0;
+  color: #fff;
+  font-size: clamp(24px, 2vw, 32px);
+  font-weight: 690;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.editor-main .modelo-config-step-copy p {
+  margin: 0;
+  color: rgb(255 255 255 / 62%);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.editor-main .modelo-config-step-status {
+  display: grid;
+  min-width: 176px;
+  gap: 4px;
+  padding: 11px 14px;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 6%);
+}
+
+.editor-main .modelo-config-step-status > span {
+  color: rgb(255 255 255 / 46%);
+  font: 700 9px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.editor-main .modelo-config-step-status strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.editor-main .modelo-config-step-status strong::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #efa91b;
+  box-shadow: 0 0 0 4px rgb(239 169 27 / 12%);
+  content: "";
+}
+
+.editor-main .modelo-config-step-status[data-state="ready"] strong::before {
+  background: #32bc83;
+  box-shadow: 0 0 0 4px rgb(50 188 131 / 12%);
+}
+
+.editor-main .modelo-config-step-status[data-state="warning"] strong::before {
+  background: #ff7545;
+  box-shadow: 0 0 0 4px rgb(255 117 69 / 12%);
+}
+
+/* Ficha técnica de un paso productivo. Se aplica sólo cuando la Hoja de ruta
+   abre un nodo: el editor histórico conserva su presentación normal. */
+.editor-shell.modelo-configuracion-nodo-activa > .editor-main {
+  padding: 28px 32px 0;
+  background:
+    linear-gradient(rgb(30 26 22 / 3%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(30 26 22 / 3%) 1px, transparent 1px), #f6f4f1;
+  background-size: 32px 32px;
+}
+
+.modelo-configuracion-nodo-activa .config-step-content {
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 28px 34px 0;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-workspace {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 2px 2px 4px;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-intro > div:first-child > span {
+  color: #d85224;
+  font: 760 10px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-intro h2 {
+  margin: 5px 0 3px;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-intro p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 3px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d9aa56;
+  box-shadow: 0 0 0 3px rgb(217 170 86 / 14%);
+}
+
+.modelo-configuracion-nodo-activa .paso-config-legend i[data-tone="ready"] {
+  background: #22a06b;
+  box-shadow: 0 0 0 3px rgb(34 160 107 / 12%);
+}
+
+.modelo-configuracion-nodo-activa .paso-config-flow {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 16px;
+  counter-reset: paso-config-section;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado.is-fixed {
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid #ded9d2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgb(30 23 18 / 4%);
+  counter-increment: paso-config-section;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado.is-fixed.has-pending {
+  border-color: color-mix(in srgb, #d89b35 54%, #ded9d2);
+  box-shadow:
+    inset 3px 0 0 #dfa331,
+    0 10px 28px rgb(30 23 18 / 4%);
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado.is-fixed .eje-guiado-head {
+  align-items: center !important;
+  padding: 17px 20px !important;
+  border-bottom: 1px solid #ebe7e1;
+  background: linear-gradient(105deg, #f7f5f2, #fff 54%);
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-title {
+  gap: 9px !important;
+  color: var(--ink);
+  font-size: 15.5px !important;
+  font-weight: 690 !important;
+}
+
+.modelo-configuracion-nodo-activa
+  .eje-guiado.is-fixed
+  .eje-guiado-title::before {
+  display: inline-flex;
+  width: 27px;
+  flex: 0 0 27px;
+  justify-content: center;
+  color: #9a9189;
+  font: 760 10px var(--font-mono);
+  letter-spacing: 0.07em;
+  content: counter(paso-config-section, decimal-leading-zero);
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-check {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-subtitle {
+  max-width: 760px !important;
+  margin-top: 3px !important;
+  margin-left: 56px !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-content {
+  gap: 18px !important;
+  padding: 20px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-content label {
+  color: #4b4541 !important;
+  font-size: 11.5px !important;
+  font-weight: 620 !important;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-content input,
+.modelo-configuracion-nodo-activa .eje-guiado-content select,
+.modelo-configuracion-nodo-activa
+  .eje-guiado-content
+  [data-slot="select-trigger"] {
+  min-height: 40px;
+  border-color: #ded8d1;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-group-head {
+  margin-top: 2px;
+  padding: 17px 18px 12px !important;
+  border: 1px solid #ded9d2;
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(105deg, #f7f5f2, #fff 54%);
+}
+
+.modelo-configuracion-nodo-activa
+  .paso-config-group-head
+  + div[style*="overflow: hidden"] {
+  margin-top: -16px;
+  border-color: #ded9d2 !important;
+  border-radius: 0 0 16px 16px !important;
+  box-shadow: 0 10px 28px rgb(30 23 18 / 4%);
+}
+
+/* Regla de consumo: traduce la configuración técnica del motor a un contrato
+   controlado y legible. Mantiene la densidad de la OT, sin adoptar la card
+   genérica de los componentes base. */
+.ps-consumo-regla {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #ddd7d0;
+  border-radius: 14px;
+  background: #fbfaf8;
+  box-shadow: inset 3px 0 0 rgb(224 82 38 / 78%);
+}
+
+.ps-consumo-regla__cabecera {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) minmax(230px, 310px);
+  align-items: center;
+  gap: 13px;
+  padding: 15px 16px;
+  border-bottom: 1px solid #e7e2dc;
+  background: linear-gradient(112deg, #f5f2ee, #fff 64%);
+}
+
+.ps-consumo-regla__icono {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid #d7d2cb;
+  border-radius: 10px;
+  color: #413d3a;
+  background: #fff;
+}
+
+.ps-consumo-regla__icono[data-modo="regla"] {
+  border-color: #d9cbc1;
+  color: #bc4823;
+  background: #fff6f1;
+}
+
+.ps-consumo-regla__icono[data-modo="geometria"] {
+  border-color: #dfc893;
+  color: #97610e;
+  background: #fff8e8;
+}
+
+.ps-consumo-regla__cabecera > div:nth-child(2) {
+  min-width: 0;
+}
+
+.ps-consumo-regla__eyebrow,
+.ps-consumo-regla__modo > span,
+.ps-consumo-regla__campos > label > span,
+.ps-consumo-regla__preview > span {
+  display: block;
+  color: #8b827a;
+  font: 720 9.5px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ps-consumo-regla__cabecera strong {
+  display: block;
+  margin-top: 3px;
+  color: #201d1b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ps-consumo-regla__cabecera p {
+  margin: 3px 0 0;
+  color: #756e68;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.ps-consumo-regla__modo {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ps-consumo-regla__controlado {
+  justify-self: end;
+  padding: 6px 9px;
+  border: 1px solid #ded9d2;
+  border-radius: 999px;
+  color: #746d67;
+  background: #fff;
+  font: 700 9px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ps-consumo-regla__campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.ps-consumo-regla__campos > label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ps-consumo-regla__valor-controlado {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  padding: 9px 12px;
+  border: 1px solid #dfdad4;
+  border-radius: 10px;
+  color: #292521;
+  background: #fff;
+  font-size: 12.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ps-consumo-regla__cantidad {
+  display: grid;
+  grid-template-columns: minmax(92px, 140px) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid #dfdad4;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.ps-consumo-regla__cantidad input {
+  min-height: 40px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.ps-consumo-regla__cantidad strong {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0 12px;
+  border-left: 1px solid #ebe6e0;
+  overflow: hidden;
+  color: #5e5751;
+  background: #f7f5f2;
+  font-size: 11.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ps-consumo-regla__preview {
+  margin: 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #ead9cf;
+  border-radius: 11px;
+  background: linear-gradient(105deg, #fff7f2, #fff 72%);
+}
+
+.ps-consumo-regla__preview > span {
+  color: #be4a25;
+}
+
+.ps-consumo-regla__preview p {
+  margin: 5px 0 0;
+  color: #352e2a;
+  font-size: 12.5px;
+  font-weight: 590;
+  line-height: 1.5;
+}
+
+.ps-consumo-regla__merma {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-top: 1px solid #e8e3dd;
+  background: #fff;
+}
+
+.ps-consumo-regla__merma > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ps-consumo-regla__merma strong {
+  color: #302b28;
+  font-size: 11.5px;
+  font-weight: 680;
+}
+
+.ps-consumo-regla__merma > div:first-child span {
+  color: #817a74;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.ps-consumo-regla__porcentaje {
+  display: grid;
+  width: 104px;
+  flex: 0 0 104px;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  overflow: hidden;
+  border: 1px solid #dfdad4;
+  border-radius: 9px;
+}
+
+.ps-consumo-regla__porcentaje input {
+  min-height: 36px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.ps-consumo-regla__porcentaje span {
+  display: grid;
+  place-items: center;
+  border-left: 1px solid #ebe6e0;
+  color: #756e68;
+  background: #f6f4f1;
+  font: 700 10px var(--font-mono);
+}
+
+.editor-main .paso-config-savebar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 14px;
+  margin-left: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline, #e6e2dc);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  box-shadow: 0 8px 24px rgb(20 16 12 / 14%);
+}
+
+.modelo-configuracion-nodo-activa .paso-config-savebar {
+  bottom: 0;
+  width: calc(100% + 64px);
+  justify-content: flex-end;
+  margin: 24px -32px 0;
+  padding: 13px 36px;
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: rgb(250 249 247 / 94%);
+  box-shadow: 0 -10px 30px rgb(28 20 15 / 7%);
+  backdrop-filter: blur(14px);
+}
+
+.modelo-configuracion-nodo-activa .paso-config-savebar .btn-primary {
+  min-height: 40px;
+  padding-inline: 17px;
+  border-radius: 10px;
+  background: #1b191d;
+  box-shadow: 0 7px 18px rgb(23 20 23 / 16%);
+}
+
+.paso-config-save-state,
+.paso-config-save-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paso-config-save-state {
+  margin-left: auto;
+}
+
+.paso-config-save-pending {
+  max-width: 300px;
+  color: #8b6420;
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+@media (max-width: 1040px) {
+  .editor-main .modelo-config-step-header {
+    grid-template-columns: auto auto minmax(220px, 1fr) auto;
+  }
+
+  .editor-main .modelo-config-step-status {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .editor-shell.modelo-configuracion-nodo-activa > .editor-main {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .editor-main .modelo-config-step-header {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    margin-right: -16px;
+    margin-left: -16px;
+    padding: 20px 16px;
+  }
+
+  .editor-main .modelo-config-step-icon {
+    display: none;
+  }
+
+  .editor-main .modelo-config-step-copy {
+    grid-column: 2 / -1;
+  }
+
+  .modelo-configuracion-nodo-activa .config-step-content {
+    padding: 22px 2px 0;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-intro {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-legend {
+    white-space: normal;
+  }
+
+  .modelo-configuracion-nodo-activa .eje-guiado-content {
+    padding: 16px !important;
+  }
+
+  .ps-consumo-regla__cabecera {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .ps-consumo-regla__modo,
+  .ps-consumo-regla__controlado {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .ps-consumo-regla__campos {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 13px;
+  }
+
+  .ps-consumo-regla__preview {
+    margin-right: 13px;
+    margin-left: 13px;
+  }
+
+  .ps-consumo-regla__merma {
+    align-items: flex-start;
+  }
+
+  .modelo-configuracion-nodo-activa .eje-guiado-subtitle {
+    margin-left: 0 !important;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-savebar {
+    width: calc(100% + 32px);
+    margin-right: -16px;
+    margin-left: -16px;
+    padding: 11px 16px;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-save-state {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-save-pending {
+    width: 100%;
+    max-width: none;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-save-actions {
+    width: 100%;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-save-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
 .editor-side .modelo-vista-flujo {
   display: grid;
   width: 100%;
@@ -42621,15 +43331,18 @@ body:has(.t-app) {
 
 /* El editor del modelo productivo usa todo el ancho: la hoja de ruta es el
    navegador primario y reemplaza temporalmente al sidebar vertical. */
-.editor-shell.modelo-hoja-ruta-activa {
+.editor-shell.modelo-hoja-ruta-activa,
+.editor-shell.modelo-configuracion-nodo-activa {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.editor-shell.modelo-hoja-ruta-activa > .editor-side {
+.editor-shell.modelo-hoja-ruta-activa > .editor-side,
+.editor-shell.modelo-configuracion-nodo-activa > .editor-side {
   display: none;
 }
 
-.editor-shell.modelo-hoja-ruta-activa > .editor-main {
+.editor-shell.modelo-hoja-ruta-activa > .editor-main,
+.editor-shell.modelo-configuracion-nodo-activa > .editor-main {
   min-width: 0;
 }
 

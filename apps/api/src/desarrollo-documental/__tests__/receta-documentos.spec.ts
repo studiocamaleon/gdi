@@ -9,7 +9,12 @@ function servicio() {
   );
 }
 
-function txFixture(opts?: { existente?: boolean; conPaso?: boolean }) {
+function txFixture(opts?: {
+  existente?: boolean;
+  conPaso?: boolean;
+  alcance?: 'ORDEN' | 'ITEM' | 'PASO';
+}) {
+  const alcance = opts?.alcance ?? 'PASO';
   const documento = {
     id: 'doc-receta-1',
     codigo: 'ARTE-FINAL',
@@ -19,7 +24,8 @@ function txFixture(opts?: { existente?: boolean; conPaso?: boolean }) {
     tipoAprobacion: 'CLIENTE',
     requerido: true,
     descripcion: null,
-    pasoClave: 'ruta:paso-ruta-1',
+    alcance,
+    pasoClave: alcance === 'PASO' ? 'ruta:paso-ruta-1' : null,
     orden: 0,
   };
   return {
@@ -80,6 +86,7 @@ describe('requisitos documentales de receta en OT', () => {
       data: expect.objectContaining({
         ordenItemId: 'item-1',
         pasoId: 'paso-ot-1',
+        alcance: 'PASO',
         recetaDocumentoId: 'doc-receta-1',
         archivoMaestroId: 'maestro-1',
         tipoAprobacion: 'CLIENTE',
@@ -102,5 +109,43 @@ describe('requisitos documentales de receta en OT', () => {
       data: expect.objectContaining({ pasoId: 'paso-ot-1', activo: true }),
     });
     expect(resultado).toEqual({ documentosCreados: 0, gatesCreados: 0 });
+  });
+
+  it('un requisito de subruta se congela en el item sin apuntar a un paso', async () => {
+    const tx = txFixture({ alcance: 'ITEM' });
+
+    await servicio().materializarRequisitosReceta(tx as never, args);
+
+    expect(tx.gateProduccionDocumento.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ordenItemId: 'item-1',
+        pasoId: null,
+        alcance: 'ITEM',
+      }),
+    });
+  });
+
+  it('al ejecutar un paso consulta gates de OT, subruta y paso', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const instance = new DesarrolloDocumentalService(
+      { gateProduccionDocumento: { findMany } } as never,
+      {} as never,
+      {} as never,
+      undefined,
+    );
+
+    await instance.exigirGatesCumplidos('orden-1', 'paso-ot-1', 'item-1');
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { alcance: 'ORDEN' },
+            { alcance: 'ITEM', ordenItemId: 'item-1' },
+            { alcance: 'PASO', pasoId: 'paso-ot-1' },
+          ],
+        }),
+      }),
+    );
   });
 });

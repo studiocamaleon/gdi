@@ -6,7 +6,6 @@ import {
   ArrowRightIcon,
   ArchiveXIcon,
   BadgeCheckIcon,
-  BoxIcon,
   BlocksIcon,
   BoxesIcon,
   CopyPlusIcon,
@@ -15,9 +14,11 @@ import {
   FilePlus2Icon,
   GitCommitHorizontalIcon,
   GripVerticalIcon,
+  MoreHorizontalIcon,
   PencilLineIcon,
   PlusIcon,
   RefreshCwIcon,
+  ReplaceIcon,
   RocketIcon,
   Settings2Icon,
   Trash2Icon,
@@ -51,6 +52,7 @@ import {
   construirColumnasProductivas,
   insertarNodoProductivo,
   moverNodoProductivo,
+  reemplazarNodoProductivo,
 } from "@/lib/modelo-productivo-layout";
 import {
   agregarPasoExtra,
@@ -59,6 +61,7 @@ import {
   eliminarPasoExtra,
   guardarBorradorReceta,
   getProductos,
+  getRecetasProducto,
   getPasosTenant,
   publicarReceta,
   type ProductoRecetaComponenteInput,
@@ -69,13 +72,44 @@ import {
 } from "@/lib/productos-servicios-api";
 import { ConfigurarComponenteWorkspace } from "./configurar-componente-workspace";
 import { ConfigurarIncorporacionWorkspace } from "./configurar-incorporacion-workspace";
+import {
+  DocumentosHeredadosDialog,
+  DocumentosRequeridosDialog,
+} from "./documentos-requeridos-dialog";
+import {
+  NodoProductivoMenu,
+  type AccionNodoProductivo,
+} from "./nodo-productivo-menu";
 import styles from "./receta-producto-tab.module.css";
 
-type ContextoAltaNodo =
+type NodoProductivoEditor = {
+  clave: string;
+  tipo: "PASO" | "COMPONENTE" | "ETAPA";
+  orden: number;
+  nombre: string;
+  seleccion: string;
+};
+
+type NodoReemplazado = Pick<
+  NodoProductivoEditor,
+  "clave" | "tipo" | "nombre" | "seleccion"
+>;
+
+type ContextoAltaNodo = (
   | { tipo: "SECUENCIAL"; posicion: number }
-  | { tipo: "PARALELO"; columna: number };
+  | { tipo: "PARALELO"; columna: number }
+) & { reemplazo?: NodoReemplazado };
 
 type TipoAltaNodo = "PASO" | "COMPONENTE" | "ETAPA";
+
+type ContextoDocumentos =
+  { tipo: "GENERAL" } | { tipo: "NODO"; nodoClave: string; nodoNombre: string };
+
+type DocumentosHeredadosComponente = {
+  documentos: ProductoRecetaDocumentoInput[];
+  rutaAlternativaId: string | null;
+  loading: boolean;
+};
 
 function fecha(value?: string | null) {
   if (!value) return "—";
@@ -159,6 +193,7 @@ export function EditorDefiniciones({
     revision.documentos.map((item) => ({
       codigo: item.codigo,
       nombre: item.nombre,
+      alcance: item.alcance ?? (item.pasoClave ? "PASO" : "ORDEN"),
       pasoClave: item.pasoClave,
       proposito: item.proposito as ProductoRecetaDocumentoInput["proposito"],
       etapa: item.etapa as ProductoRecetaDocumentoInput["etapa"],
@@ -195,7 +230,6 @@ export function EditorDefiniciones({
   >(null);
   const [pasoCompuestoConfigurando, setPasoCompuestoConfigurando] =
     React.useState<string | null>(null);
-  const [productoNuevoId, setProductoNuevoId] = React.useState("");
   const [nodoArrastrado, setNodoArrastrado] = React.useState<string | null>(
     null,
   );
@@ -209,6 +243,9 @@ export function EditorDefiniciones({
   );
   const [busquedaAltaNodo, setBusquedaAltaNodo] = React.useState("");
   const [creandoNodo, setCreandoNodo] = React.useState(false);
+  const [nodoAEliminar, setNodoAEliminar] =
+    React.useState<NodoReemplazado | null>(null);
+  const [procesandoNodo, setProcesandoNodo] = React.useState(false);
   const pasosDocumento = React.useMemo(
     () => [
       ...ruta.ruta.pasos
@@ -255,27 +292,21 @@ export function EditorDefiniciones({
       haciaClave,
     }));
   });
-  const [gates, setGates] = React.useState<
-    Array<{ nodoClave: string; tipo: "MATERIAL" | "CALIDAD" }>
-  >(() =>
-    (revision.grafoProduccionJson?.nodos ?? []).flatMap((nodo) =>
-      (nodo.gates ?? []).map((tipo) => ({ nodoClave: nodo.clave, tipo })),
-    ),
-  );
+  // Los gates operativos manuales quedan desactivados en el editor. El modelo
+  // relacional se conserva para compatibilidad hasta que Inventario y Calidad
+  // puedan resolverlos desde una fuente real.
+  const gates: Array<{
+    nodoClave: string;
+    tipo: "MATERIAL" | "CALIDAD";
+  }> = [];
+  const [contextoDocumentos, setContextoDocumentos] =
+    React.useState<ContextoDocumentos | null>(null);
+  const [componenteDocumentalActivo, setComponenteDocumentalActivo] =
+    React.useState<string | null>(null);
+  const [documentosHeredados, setDocumentosHeredados] = React.useState<
+    Record<string, DocumentosHeredadosComponente>
+  >({});
 
-  const componenteSeleccionado = nodoSeleccionado.startsWith("componente:")
-    ? nodoSeleccionado.slice("componente:".length)
-    : null;
-  const etapaSeleccionada = nodoSeleccionado.startsWith("etapa:")
-    ? nodoSeleccionado.slice("etapa:".length)
-    : null;
-  const pasoSeleccionado = nodoSeleccionado.startsWith("paso:")
-    ? nodoSeleccionado.slice("paso:".length)
-    : null;
-  const detallePasoSeleccionado = pasoSeleccionado
-    ? pasosDocumento.find((item) => item.value === pasoSeleccionado)
-    : null;
-  const creandoComponente = nodoSeleccionado === "nuevo-componente";
   const productosDisponibles = productos.filter(
     (productoDisponible) =>
       !componentes.some(
@@ -466,13 +497,221 @@ export function EditorDefiniciones({
     setBusquedaAltaNodo("");
   };
 
-  const agregarComponente = (productoId?: string) => {
+  const esNodoRemovible = (nodoClave: string) => !nodoClave.startsWith("ruta:");
+
+  const abrirReemplazoNodo = (nodo: NodoProductivoEditor) => {
+    if (!esNodoRemovible(nodo.clave)) {
+      toast.info(
+        "Este nodo pertenece a la ruta base. Para reemplazarlo, editá la definición de esa ruta.",
+      );
+      return;
+    }
+    const columna = columnasHojaRuta.findIndex((item) =>
+      item.some((candidate) => candidate.clave === nodo.clave),
+    );
+    if (columna < 0) return;
+    abrirAltaNodo({
+      ...(columnasHojaRuta[columna].length > 1
+        ? { tipo: "PARALELO" as const, columna }
+        : { tipo: "SECUENCIAL" as const, posicion: columna }),
+      reemplazo: nodo,
+    });
+  };
+
+  const abrirConfiguracionNodo = (nodo: NodoProductivoEditor) => {
+    onSeleccionarNodo?.(nodo.seleccion);
+    if (nodo.tipo === "COMPONENTE") {
+      const codigo = nodo.clave.slice("componente:".length);
+      const index = componentes.findIndex((item) => item.codigo === codigo);
+      if (index >= 0) setComponenteConfigurando(index);
+      return;
+    }
+    if (nodo.tipo === "ETAPA") {
+      const etapa = pasosCompuestos.find(
+        (item) => item.nodoClave === nodo.clave,
+      );
+      const plantilla = pasosTenant.find(
+        (item) => item.id === etapa?.pasoTenantId,
+      );
+      if (!etapa || !plantilla?.pasosInternos?.length) {
+        toast.info("Esta etapa todavía no tiene subtareas declaradas.");
+        return;
+      }
+      setPasoCompuestoConfigurando(nodo.clave);
+      return;
+    }
+    onEditarPaso?.(nodo.clave);
+  };
+
+  const accionesParaNodo = (
+    nodo: NodoProductivoEditor,
+  ): AccionNodoProductivo[] => {
+    const removible = esNodoRemovible(nodo.clave);
+    const acciones: AccionNodoProductivo[] = [
+      {
+        id: "configurar",
+        etiqueta:
+          nodo.tipo === "COMPONENTE"
+            ? "Configurar uso"
+            : nodo.tipo === "ETAPA"
+              ? "Configurar etapa"
+              : "Configurar paso",
+        icono: Settings2Icon,
+        onSelect: () => abrirConfiguracionNodo(nodo),
+      },
+      {
+        id: "reemplazar",
+        etiqueta: removible
+          ? "Reemplazar nodo"
+          : "Reemplazar desde la ruta base",
+        icono: ReplaceIcon,
+        disabled: !removible,
+        onSelect: () => abrirReemplazoNodo(nodo),
+      },
+    ];
+
+    if (nodo.tipo === "COMPONENTE") {
+      const codigo = nodo.clave.slice("componente:".length);
+      const cantidad = documentosHeredados[codigo]?.documentos.length ?? 0;
+      acciones.push({
+        id: "documentos-heredados",
+        etiqueta: cantidad
+          ? `Ver documentos heredados (${cantidad})`
+          : "Ver documentos heredados",
+        icono: FileCheck2Icon,
+        separadorAntes: true,
+        onSelect: () => setComponenteDocumentalActivo(codigo),
+      });
+    } else {
+      const cantidad = documentos.filter(
+        (item) => item.alcance === "PASO" && item.pasoClave === nodo.clave,
+      ).length;
+      acciones.push({
+        id: "documentos-requeridos",
+        etiqueta: cantidad
+          ? `Documentos requeridos (${cantidad})`
+          : "Documentos requeridos",
+        icono: FileCheck2Icon,
+        separadorAntes: true,
+        onSelect: () =>
+          setContextoDocumentos({
+            tipo: "NODO",
+            nodoClave: nodo.clave,
+            nodoNombre: nodo.nombre,
+          }),
+      });
+    }
+
+    acciones.push({
+      id: "eliminar",
+      etiqueta: removible
+        ? "Eliminar de la vía"
+        : "Eliminar desde la ruta base",
+      icono: Trash2Icon,
+      destructive: true,
+      disabled: !removible,
+      separadorAntes: true,
+      onSelect: () => setNodoAEliminar(nodo),
+    });
+    return acciones;
+  };
+
+  const eliminarNodoConfirmado = async () => {
+    if (!nodoAEliminar || procesandoNodo) return;
+    setProcesandoNodo(true);
+    try {
+      const nodo = nodoAEliminar;
+      let limpiezaPendiente = false;
+      const componentesSiguientes =
+        nodo.tipo === "COMPONENTE"
+          ? componentes.filter(
+              (item) => `componente:${item.codigo}` !== nodo.clave,
+            )
+          : componentes;
+      const pasosCompuestosSiguientes = pasosCompuestos.filter(
+        (item) => item.nodoClave !== nodo.clave,
+      );
+      const columnasSiguientes = columnasHojaRuta
+        .map((columna) =>
+          columna
+            .map((item) => item.clave)
+            .filter((clave) => clave !== nodo.clave),
+        )
+        .filter((columna) => columna.length > 0);
+      const clavesPasoSiguientes = pasosDocumento
+        .map((paso) => paso.value)
+        .filter((clave) => clave !== nodo.clave);
+      const resultado = resolverOrdenHojaRuta(
+        columnasSiguientes,
+        componentesSiguientes,
+        clavesPasoSiguientes,
+      );
+      if (!resultado.ok) throw new Error(resultado.error);
+
+      const documentosSiguientes = documentos.filter(
+        (documento) => documento.pasoClave !== nodo.clave,
+      );
+      const gatesSiguientes = gates.filter(
+        (gate) => gate.nodoClave !== nodo.clave,
+      );
+
+      await guardarBorradorReceta(productoId, {
+        rutaAlternativaId,
+        expectedUpdatedAt: revision.updatedAt,
+        cambios: `${nodo.nombre} eliminado de la hoja de ruta`,
+        documentos: documentosSiguientes.map((item, orden) => ({
+          ...item,
+          orden,
+        })),
+        componentes: resultado.componentes.map((item, orden) => ({
+          ...item,
+          orden,
+        })),
+        pasosCompuestos: pasosCompuestosSiguientes,
+        dependencias: resultado.dependencias,
+        gates: gatesSiguientes,
+      });
+      if (nodo.clave.startsWith("extra:")) {
+        try {
+          await eliminarPasoExtra(nodo.clave.slice("extra:".length));
+        } catch {
+          limpiezaPendiente = true;
+        }
+      }
+
+      setDocumentos(documentosSiguientes);
+      setComponentes(resultado.componentes);
+      setPasosCompuestos(pasosCompuestosSiguientes);
+      setDependencias(resultado.dependencias);
+      setNodoAEliminar(null);
+      onSeleccionarNodo?.("ruta");
+      if (limpiezaPendiente) {
+        toast.warning(
+          `${nodo.nombre} ya salió de la vía, pero quedó una definición auxiliar pendiente de limpieza.`,
+        );
+      } else {
+        toast.success(`${nodo.nombre} fue eliminado de la vía.`);
+      }
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar el nodo de la vía.",
+      );
+      throw error;
+    } finally {
+      setProcesandoNodo(false);
+    }
+  };
+
+  const agregarComponente = async (productoComponenteId?: string) => {
     const contexto = contextoAltaNodo ?? {
       tipo: "SECUENCIAL" as const,
       posicion: Math.max(0, columnasHojaRuta.length - 1),
     };
     const child =
-      productosDisponibles.find((item) => item.id === productoId) ??
+      productosDisponibles.find((item) => item.id === productoComponenteId) ??
       productosDisponibles[0];
     if (!child) return;
     const nuevoComponente: ProductoRecetaComponenteInput = {
@@ -487,23 +726,103 @@ export function EditorDefiniciones({
       nodosPredecesoresClaves: [],
       nodoIncorporacionClave: null,
     };
-    const componentesSiguientes = [...componentes, nuevoComponente];
-    const columnas = insertarNodoProductivo(
-      columnasHojaRuta.map((columna) => columna.map((nodo) => nodo.clave)),
-      `componente:${child.codigo}`,
-      contexto,
+    const reemplazo = contexto.reemplazo;
+    const componentesBase = reemplazo
+      ? componentes.filter(
+          (item) => `componente:${item.codigo}` !== reemplazo.clave,
+        )
+      : componentes;
+    const componentesSiguientes = [...componentesBase, nuevoComponente];
+    const columnasActuales = columnasHojaRuta.map((columna) =>
+      columna.map((nodo) => nodo.clave),
     );
-    const resultado = resolverOrdenHojaRuta(columnas, componentesSiguientes);
+    const nodoNuevoClave = `componente:${child.codigo}`;
+    const columnas = reemplazo
+      ? reemplazarNodoProductivo(
+          columnasActuales,
+          reemplazo.clave,
+          nodoNuevoClave,
+        )
+      : insertarNodoProductivo(columnasActuales, nodoNuevoClave, contexto);
+    const clavesPasoSiguientes = pasosDocumento
+      .map((paso) => paso.value)
+      .filter((clave) => clave !== reemplazo?.clave);
+    const resultado = resolverOrdenHojaRuta(
+      columnas,
+      componentesSiguientes,
+      clavesPasoSiguientes,
+    );
     if (!resultado.ok) {
       toast.error(resultado.error);
       return;
     }
+    const pasosCompuestosSiguientes = pasosCompuestos.filter(
+      (item) => item.nodoClave !== reemplazo?.clave,
+    );
+    const documentosSiguientes = documentos.filter(
+      (documento) => documento.pasoClave !== reemplazo?.clave,
+    );
+    const gatesSiguientes = gates.filter(
+      (gate) => gate.nodoClave !== reemplazo?.clave,
+    );
+    let limpiezaPendiente = false;
+
+    if (reemplazo) {
+      setCreandoNodo(true);
+      try {
+        await guardarBorradorReceta(productoId, {
+          rutaAlternativaId,
+          expectedUpdatedAt: revision.updatedAt,
+          cambios: `${reemplazo.nombre} reemplazado por ${child.nombre}`,
+          documentos: documentosSiguientes.map((item, orden) => ({
+            ...item,
+            orden,
+          })),
+          componentes: resultado.componentes.map((item, orden) => ({
+            ...item,
+            orden,
+          })),
+          pasosCompuestos: pasosCompuestosSiguientes,
+          dependencias: resultado.dependencias,
+          gates: gatesSiguientes,
+        });
+        if (reemplazo.clave.startsWith("extra:")) {
+          try {
+            await eliminarPasoExtra(reemplazo.clave.slice("extra:".length));
+          } catch {
+            limpiezaPendiente = true;
+          }
+        }
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo reemplazar el nodo.",
+        );
+        return;
+      } finally {
+        setCreandoNodo(false);
+      }
+    }
+
+    setDocumentos(documentosSiguientes);
     setDependencias(resultado.dependencias);
     setComponentes(resultado.componentes);
-    setProductoNuevoId("");
+    setPasosCompuestos(pasosCompuestosSiguientes);
     cerrarAltaNodo();
-    onSeleccionarNodo?.(`componente:${child.codigo}`);
-    toast.success("Componente agregado en la posición elegida.");
+    onSeleccionarNodo?.(nodoNuevoClave);
+    if (limpiezaPendiente && reemplazo) {
+      toast.warning(
+        `${reemplazo.nombre} fue reemplazado, pero quedó una definición auxiliar pendiente de limpieza.`,
+      );
+    } else {
+      toast.success(
+        reemplazo
+          ? `${reemplazo.nombre} fue reemplazado por ${child.nombre}.`
+          : "Componente agregado en la posición elegida.",
+      );
+    }
   };
 
   React.useEffect(() => {
@@ -557,6 +876,82 @@ export function EditorDefiniciones({
       });
   }, [pasosDocumento, productoId, ruta]);
 
+  React.useEffect(() => {
+    let vigente = true;
+    void Promise.all(
+      componentes.map(async (componente) => {
+        try {
+          const recetasComponente = await getRecetasProducto(
+            componente.productoComponenteId,
+          );
+          const referencia = revision.componentes.find(
+            (item) => item.codigo === componente.codigo,
+          );
+          const revisionExacta = recetasComponente
+            .flatMap((recetaComponente) =>
+              recetaComponente.revisiones.map((revisionComponente) => ({
+                receta: recetaComponente,
+                revision: revisionComponente,
+              })),
+            )
+            .find(
+              (candidate) =>
+                candidate.revision.id === referencia?.recetaRevisionId,
+            );
+          const publicada = recetasComponente
+            .filter((item) => item.revisionPublicada)
+            .map((item) => ({
+              receta: item,
+              revision: item.revisionPublicada!,
+            }))[0];
+          const seleccionada = revisionExacta ?? publicada;
+          return [
+            componente.codigo,
+            {
+              documentos: (seleccionada?.revision.documentos ?? []).map(
+                (item) => ({
+                  codigo: item.codigo,
+                  nombre: item.nombre,
+                  alcance: item.alcance ?? (item.pasoClave ? "PASO" : "ORDEN"),
+                  pasoClave: item.pasoClave,
+                  proposito:
+                    item.proposito as ProductoRecetaDocumentoInput["proposito"],
+                  etapa: item.etapa as ProductoRecetaDocumentoInput["etapa"],
+                  tipoAprobacion:
+                    item.tipoAprobacion as ProductoRecetaDocumentoInput["tipoAprobacion"],
+                  requerido: item.requerido,
+                  descripcion: item.descripcion,
+                  orden: item.orden,
+                }),
+              ),
+              rutaAlternativaId:
+                seleccionada?.receta.rutaAlternativa.id ?? null,
+              loading: false,
+            },
+          ] as const;
+        } catch {
+          return [
+            componente.codigo,
+            {
+              documentos: [],
+              rutaAlternativaId: null,
+              loading: false,
+            },
+          ] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (vigente) setDocumentosHeredados(Object.fromEntries(entries));
+    });
+
+    return () => {
+      vigente = false;
+    };
+    // La revisión fija la versión heredada; cualquier cambio local de los
+    // componentes vuelve a resolver el resumen sin modificar al producto hijo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [componentes, revision.id]);
+
   const crearPasoEnContexto = async ({
     familiaCodigo,
     nombre,
@@ -569,6 +964,8 @@ export function EditorDefiniciones({
     if (!contextoAltaNodo || creandoNodo) return;
     setCreandoNodo(true);
     let creado: PasoExtra | null = null;
+    let modeloGuardado = false;
+    let limpiezaPendiente = false;
     try {
       const columnasActuales = columnasHojaRuta.map((columna) =>
         columna.map((nodo) => nodo.clave),
@@ -590,20 +987,33 @@ export function EditorDefiniciones({
       })) as PasoExtra;
 
       const nodoClave = `extra:${creado.id}`;
-      const columnasSiguientes = insertarNodoProductivo(
-        columnasActuales,
-        nodoClave,
-        contextoAltaNodo,
+      const reemplazo = contextoAltaNodo.reemplazo;
+      const componentesSiguientes = reemplazo
+        ? componentes.filter(
+            (item) => `componente:${item.codigo}` !== reemplazo.clave,
+          )
+        : componentes;
+      const columnasSiguientes = reemplazo
+        ? reemplazarNodoProductivo(columnasActuales, reemplazo.clave, nodoClave)
+        : insertarNodoProductivo(columnasActuales, nodoClave, contextoAltaNodo);
+      const resultado = resolverOrdenHojaRuta(
+        columnasSiguientes,
+        componentesSiguientes,
+        [
+          ...pasosDocumento
+            .map((paso) => paso.value)
+            .filter((clave) => clave !== reemplazo?.clave),
+          nodoClave,
+        ],
       );
-      const resultado = resolverOrdenHojaRuta(columnasSiguientes, componentes, [
-        ...pasosDocumento.map((paso) => paso.value),
-        nodoClave,
-      ]);
       if (!resultado.ok) throw new Error(resultado.error);
 
+      const pasosCompuestosBase = pasosCompuestos.filter(
+        (item) => item.nodoClave !== reemplazo?.clave,
+      );
       const pasosCompuestosSiguientes = etapa
         ? [
-            ...pasosCompuestos,
+            ...pasosCompuestosBase,
             {
               version: 2 as const,
               nodoClave,
@@ -613,24 +1023,44 @@ export function EditorDefiniciones({
               pasos: [],
             },
           ]
-        : pasosCompuestos;
+        : pasosCompuestosBase;
+      const documentosSiguientes = documentos.filter(
+        (documento) => documento.pasoClave !== reemplazo?.clave,
+      );
+      const gatesSiguientes = gates.filter(
+        (gate) => gate.nodoClave !== reemplazo?.clave,
+      );
 
       await guardarBorradorReceta(productoId, {
         rutaAlternativaId,
         expectedUpdatedAt: revision.updatedAt,
-        cambios: etapa
-          ? `Etapa ${nombre} agregada a la hoja de ruta`
-          : `Paso ${nombre} agregado a la hoja de ruta`,
-        documentos: documentos.map((item, orden) => ({ ...item, orden })),
+        cambios: reemplazo
+          ? `${reemplazo.nombre} reemplazado por ${nombre}`
+          : etapa
+            ? `Etapa ${nombre} agregada a la hoja de ruta`
+            : `Paso ${nombre} agregado a la hoja de ruta`,
+        documentos: documentosSiguientes.map((item, orden) => ({
+          ...item,
+          orden,
+        })),
         componentes: resultado.componentes.map((item, orden) => ({
           ...item,
           orden,
         })),
         pasosCompuestos: pasosCompuestosSiguientes,
         dependencias: resultado.dependencias,
-        gates,
+        gates: gatesSiguientes,
       });
+      modeloGuardado = true;
+      if (reemplazo?.clave.startsWith("extra:")) {
+        try {
+          await eliminarPasoExtra(reemplazo.clave.slice("extra:".length));
+        } catch {
+          limpiezaPendiente = true;
+        }
+      }
 
+      setDocumentos(documentosSiguientes);
       setDependencias(resultado.dependencias);
       setComponentes(resultado.componentes);
       setPasosCompuestos(pasosCompuestosSiguientes);
@@ -638,14 +1068,22 @@ export function EditorDefiniciones({
       setTipoAltaNodo(null);
       setBusquedaAltaNodo("");
       onSeleccionarNodo?.(etapa ? `etapa:${nodoClave}` : `paso:${nodoClave}`);
-      toast.success(
-        etapa
-          ? "Etapa agregada en la posición elegida."
-          : "Paso agregado en la posición elegida.",
-      );
+      if (limpiezaPendiente && reemplazo) {
+        toast.warning(
+          `${reemplazo.nombre} fue reemplazado, pero quedó una definición auxiliar pendiente de limpieza.`,
+        );
+      } else {
+        toast.success(
+          reemplazo
+            ? `${reemplazo.nombre} fue reemplazado por ${nombre}.`
+            : etapa
+              ? "Etapa agregada en la posición elegida."
+              : "Paso agregado en la posición elegida.",
+        );
+      }
       router.refresh();
     } catch (error) {
-      if (creado) {
+      if (creado && !modeloGuardado) {
         try {
           await eliminarPasoExtra(creado.id);
         } catch {
@@ -764,6 +1202,16 @@ export function EditorDefiniciones({
           </p>
         </div>
         <div className={styles.headerActions}>
+          <button
+            type="button"
+            onClick={() => setContextoDocumentos({ tipo: "GENERAL" })}
+          >
+            <FileCheck2Icon />
+            Requisitos generales
+            {documentos.filter((item) => item.alcance !== "PASO").length
+              ? ` (${documentos.filter((item) => item.alcance !== "PASO").length})`
+              : ""}
+          </button>
           <button type="button" aria-label="Cerrar flujo" onClick={onClose}>
             <XIcon />
           </button>
@@ -877,71 +1325,101 @@ export function EditorDefiniciones({
                       {columna.map((nodo) => {
                         const seleccionado =
                           nodoSeleccionado === nodo.seleccion;
-                        const gateCount = gates.filter(
-                          (gate) => gate.nodoClave === nodo.clave,
-                        ).length;
+                        const documentosNodo =
+                          nodo.tipo === "COMPONENTE"
+                            ? (documentosHeredados[
+                                nodo.clave.slice("componente:".length)
+                              ]?.documentos.length ?? 0)
+                            : documentos.filter(
+                                (item) =>
+                                  item.alcance === "PASO" &&
+                                  item.pasoClave === nodo.clave,
+                              ).length;
                         return (
-                          <button
-                            type="button"
-                            className={styles.roadmapNode}
-                            data-node-type={nodo.tipo.toLowerCase()}
-                            data-selected={seleccionado}
-                            data-dragging={nodoArrastrado === nodo.clave}
-                            draggable
+                          <NodoProductivoMenu
                             key={nodo.clave}
-                            onClick={() => onSeleccionarNodo?.(nodo.seleccion)}
-                            onDragStart={(event) => {
-                              setNodoArrastrado(nodo.clave);
-                              event.dataTransfer.effectAllowed = "move";
-                              event.dataTransfer.setData(
-                                "application/x-grafoprint-node",
-                                nodo.clave,
-                              );
-                            }}
-                            onDragEnd={() => {
-                              setNodoArrastrado(null);
-                              setDestinoArrastre(null);
-                            }}
+                            acciones={accionesParaNodo(nodo)}
+                            id={`acciones-nodo-${nodo.clave.replace(/[^a-zA-Z0-9_-]/g, "-")}`}
+                            trigger={<MoreHorizontalIcon />}
                           >
-                            <span className={styles.nodeDragHandle}>
-                              <GripVerticalIcon />
-                            </span>
-                            <span className={styles.nodeIcon}>
-                              {nodo.tipo === "COMPONENTE" ? (
-                                <BoxesIcon />
-                              ) : nodo.tipo === "ETAPA" ? (
-                                <BlocksIcon />
-                              ) : (
-                                <GitCommitHorizontalIcon />
-                              )}
-                            </span>
-                            <span className={styles.nodeMain}>
-                              <small>
-                                {nodo.tipo === "COMPONENTE"
-                                  ? "Subruta fabricada"
-                                  : nodo.tipo === "ETAPA"
-                                    ? "Etapa consolidada"
-                                    : "Paso de producción"}
-                              </small>
-                              <strong>{nodo.nombre}</strong>
-                              <span>
-                                {gateCount
-                                  ? `${gateCount} requisito${gateCount === 1 ? "" : "s"} de liberación`
-                                  : nodo.tipo === "COMPONENTE"
-                                    ? "Receta y ruta propias"
-                                    : nodo.tipo === "ETAPA"
-                                      ? "Un estado en producción"
-                                      : "Operación individual"}
+                            <article
+                              className={styles.roadmapNode}
+                              data-node-type={nodo.tipo.toLowerCase()}
+                              data-selected={seleccionado}
+                              data-dragging={nodoArrastrado === nodo.clave}
+                              draggable
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`${nodo.nombre}. ${nodo.tipo === "COMPONENTE" ? "Componente" : nodo.tipo === "ETAPA" ? "Etapa" : "Paso"}. Enter para configurar; menú de acciones disponible.`}
+                              onClick={() =>
+                                onSeleccionarNodo?.(nodo.seleccion)
+                              }
+                              onContextMenu={() =>
+                                onSeleccionarNodo?.(nodo.seleccion)
+                              }
+                              onDoubleClick={() => abrirConfiguracionNodo(nodo)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  abrirConfiguracionNodo(nodo);
+                                } else if (event.key === " ") {
+                                  event.preventDefault();
+                                  onSeleccionarNodo?.(nodo.seleccion);
+                                }
+                              }}
+                              onDragStart={(event) => {
+                                setNodoArrastrado(nodo.clave);
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData(
+                                  "application/x-grafoprint-node",
+                                  nodo.clave,
+                                );
+                              }}
+                              onDragEnd={() => {
+                                setNodoArrastrado(null);
+                                setDestinoArrastre(null);
+                              }}
+                            >
+                              <span className={styles.nodeDragHandle}>
+                                <GripVerticalIcon />
                               </span>
-                            </span>
-                            <span className={styles.nodeType}>
-                              {nodo.tipo === "COMPONENTE"
-                                ? "Componente"
-                                : nodo.tipo === "ETAPA"
-                                  ? "Etapa"
-                                  : "Paso"}
-                            </span>
-                          </button>
+                              <span className={styles.nodeIcon}>
+                                {nodo.tipo === "COMPONENTE" ? (
+                                  <BoxesIcon />
+                                ) : nodo.tipo === "ETAPA" ? (
+                                  <BlocksIcon />
+                                ) : (
+                                  <GitCommitHorizontalIcon />
+                                )}
+                              </span>
+                              <span className={styles.nodeMain}>
+                                <small>
+                                  {nodo.tipo === "COMPONENTE"
+                                    ? "Subruta fabricada"
+                                    : nodo.tipo === "ETAPA"
+                                      ? "Etapa consolidada"
+                                      : "Paso de producción"}
+                                </small>
+                                <strong>{nodo.nombre}</strong>
+                                <span>
+                                  {documentosNodo
+                                    ? `${documentosNodo} documento${documentosNodo === 1 ? "" : "s"} ${nodo.tipo === "COMPONENTE" ? "heredado" : "requerido"}${documentosNodo === 1 ? "" : "s"}`
+                                    : nodo.tipo === "COMPONENTE"
+                                      ? "Receta y ruta propias"
+                                      : nodo.tipo === "ETAPA"
+                                        ? "Un estado en producción"
+                                        : "Operación individual"}
+                                </span>
+                              </span>
+                              <span className={styles.nodeType}>
+                                {nodo.tipo === "COMPONENTE"
+                                  ? "Componente"
+                                  : nodo.tipo === "ETAPA"
+                                    ? "Etapa"
+                                    : "Paso"}
+                              </span>
+                            </article>
+                          </NodoProductivoMenu>
                         );
                       })}
                     </div>
@@ -1013,453 +1491,90 @@ export function EditorDefiniciones({
             </div>
           </div>
         </section>
-
-        {detallePasoSeleccionado ? (
-          <section
-            className={`${styles.editorSection} ${styles.nodeInspectorSummary}`}
-          >
-            <div className={styles.inspectorEyebrow}>Paso de producción</div>
-            <BoxIcon />
-            <div>
-              <strong>{detallePasoSeleccionado.label}</strong>
-              <span>
-                Es una operación atómica. Sus materiales, recursos, parámetros y
-                tiempos se configuran en la ficha del paso.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => onEditarPaso?.(detallePasoSeleccionado.value)}
-            >
-              <Settings2Icon /> Configurar paso
-            </button>
-            <div className={styles.nodeGateControls}>
-              <span>Requisitos para iniciar</span>
-              <div>
-                {(
-                  [
-                    ["MATERIAL", "Material disponible"],
-                    ["CALIDAD", "Control de calidad"],
-                  ] as const
-                ).map(([tipo, etiqueta]) => {
-                  const activo = gates.some(
-                    (gate) =>
-                      gate.nodoClave === detallePasoSeleccionado.value &&
-                      gate.tipo === tipo,
-                  );
-                  return (
-                    <button
-                      type="button"
-                      key={tipo}
-                      data-active={activo}
-                      onClick={() =>
-                        setGates((actuales) =>
-                          activo
-                            ? actuales.filter(
-                                (gate) =>
-                                  !(
-                                    gate.nodoClave ===
-                                      detallePasoSeleccionado.value &&
-                                    gate.tipo === tipo
-                                  ),
-                              )
-                            : [
-                                ...actuales,
-                                {
-                                  nodoClave: detallePasoSeleccionado.value,
-                                  tipo,
-                                },
-                              ],
-                        )
-                      }
-                    >
-                      {activo ? "✓ " : "+ "}
-                      {etiqueta}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {nodoSeleccionado === "ruta" ? (
-          <section className={styles.editorSection}>
-            <div className={styles.editorTitle}>
-              <div>
-                <strong>Requisitos de la vía</strong>
-                <span>
-                  Documentos y aprobaciones que condicionan el recorrido.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setDocumentos((prev) => [
-                    ...prev,
-                    {
-                      codigo: `DOC-${prev.length + 1}`,
-                      nombre: "Nuevo documento",
-                      proposito: "PRINT",
-                      etapa: "DISENO",
-                      tipoAprobacion: "CLIENTE",
-                      requerido: true,
-                    },
-                  ])
-                }
-              >
-                <PlusIcon /> Agregar
-              </button>
-            </div>
-            <div className={styles.editorRows}>
-              {documentos.map((item, index) => (
-                <div
-                  className={styles.definitionRow}
-                  key={`${item.codigo}-${index}`}
-                >
-                  <input
-                    aria-label={`Nombre del documento ${index + 1}`}
-                    value={item.nombre}
-                    onChange={(event) =>
-                      setDocumentos((prev) =>
-                        prev.map((value, i) =>
-                          i === index
-                            ? { ...value, nombre: event.target.value }
-                            : value,
-                        ),
-                      )
-                    }
-                  />
-                  <select
-                    aria-label={`Propósito del documento ${index + 1}`}
-                    value={item.proposito}
-                    onChange={(event) =>
-                      setDocumentos((prev) =>
-                        prev.map((value, i) =>
-                          i === index
-                            ? {
-                                ...value,
-                                proposito: event.target
-                                  .value as ProductoRecetaDocumentoInput["proposito"],
-                              }
-                            : value,
-                        ),
-                      )
-                    }
-                  >
-                    <option value="PRINT">Arte de impresión</option>
-                    <option value="CUT">Archivo de corte</option>
-                    <option value="RENDER">Render</option>
-                    <option value="PLANO">Plano técnico</option>
-                    <option value="INSTRUCTIVO">Instructivo</option>
-                    <option value="OTRO">Otro</option>
-                  </select>
-                  <select
-                    aria-label={`Aprobación del documento ${index + 1}`}
-                    value={item.tipoAprobacion ?? ""}
-                    onChange={(event) =>
-                      setDocumentos((prev) =>
-                        prev.map((value, i) =>
-                          i === index
-                            ? {
-                                ...value,
-                                tipoAprobacion: (event.target.value ||
-                                  null) as ProductoRecetaDocumentoInput["tipoAprobacion"],
-                              }
-                            : value,
-                        ),
-                      )
-                    }
-                  >
-                    <option value="">Sin aprobación</option>
-                    <option value="CLIENTE">Cliente</option>
-                    <option value="DISENO">Diseño</option>
-                    <option value="COLOR_MUESTRA">Color / muestra</option>
-                    <option value="INGENIERIA">Ingeniería</option>
-                    <option value="LIBERACION_PRODUCTIVA">
-                      Liberación productiva
-                    </option>
-                  </select>
-                  <div className={styles.definitionSubrow}>
-                    <select
-                      aria-label={`Etapa del documento ${index + 1}`}
-                      value={item.etapa}
-                      onChange={(event) =>
-                        setDocumentos((prev) =>
-                          prev.map((value, i) =>
-                            i === index
-                              ? {
-                                  ...value,
-                                  etapa: event.target
-                                    .value as ProductoRecetaDocumentoInput["etapa"],
-                                }
-                              : value,
-                          ),
-                        )
-                      }
-                    >
-                      <option value="BRIEF">Brief</option>
-                      <option value="DISENO">Diseño</option>
-                      <option value="PROTOTIPO">Prototipo</option>
-                      <option value="MUESTRA">Muestra</option>
-                      <option value="PRODUCCION">Producción</option>
-                    </select>
-                    <select
-                      aria-label={`Paso protegido por el documento ${index + 1}`}
-                      value={item.pasoClave ?? ""}
-                      onChange={(event) =>
-                        setDocumentos((prev) =>
-                          prev.map((value, i) =>
-                            i === index
-                              ? {
-                                  ...value,
-                                  pasoClave: event.target.value || null,
-                                }
-                              : value,
-                          ),
-                        )
-                      }
-                    >
-                      <option value="">Toda la orden</option>
-                      {pasosDocumento.map((paso) => (
-                        <option value={paso.value} key={paso.value}>
-                          Antes de {paso.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`Quitar documento ${index + 1}`}
-                    onClick={() =>
-                      setDocumentos((prev) =>
-                        prev.filter((_, i) => i !== index),
-                      )
-                    }
-                  >
-                    <Trash2Icon />
-                  </button>
-                </div>
-              ))}
-              {!documentos.length ? <p>Sin documentos declarados.</p> : null}
-            </div>
-          </section>
-        ) : null}
-
-        {producto.estructuraProducto === "COMPUESTO" &&
-        (componenteSeleccionado || creandoComponente) ? (
-          <section className={styles.editorSection}>
-            <div className={styles.editorTitle}>
-              <div>
-                <strong>
-                  {creandoComponente
-                    ? "Nuevo componente"
-                    : "Inspector del componente"}
-                </strong>
-                <span>
-                  Configurá cómo el producto padre alimenta y utiliza esta
-                  subruta.
-                </span>
-              </div>
-            </div>
-            <div className={styles.editorRows}>
-              {creandoComponente ? (
-                <div className={styles.newComponentCard}>
-                  <label htmlFor="producto-componente-nuevo">
-                    Producto fabricado
-                  </label>
-                  <select
-                    id="producto-componente-nuevo"
-                    value={productoNuevoId || productosDisponibles[0]?.id || ""}
-                    onChange={(event) => setProductoNuevoId(event.target.value)}
-                  >
-                    {productosDisponibles.map((item) => (
-                      <option value={item.id} key={item.id}>
-                        {item.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  <p>
-                    Su ruta se incorpora como subgrafo versionado. Después
-                    podrás configurar sus medidas, cantidad y parámetros.
-                  </p>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => onSeleccionarNodo?.("ruta")}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!productosDisponibles.length}
-                      onClick={() => agregarComponente(productoNuevoId)}
-                    >
-                      <PlusIcon /> Incorporar componente
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-              {componentes.map((item, index) =>
-                item.codigo !== componenteSeleccionado ? null : (
-                  <div
-                    className={styles.definitionRow}
-                    key={`${item.productoComponenteId}-${index}`}
-                  >
-                    <select
-                      aria-label={`Producto componente ${index + 1}`}
-                      value={item.productoComponenteId}
-                      onChange={(event) => {
-                        const child = productos.find(
-                          (value) => value.id === event.target.value,
-                        );
-                        if (!child) return;
-                        setComponentes((prev) =>
-                          prev.map((value, i) =>
-                            i === index
-                              ? {
-                                  ...value,
-                                  productoComponenteId: child.id,
-                                  codigo: child.codigo,
-                                  nombre: child.nombre,
-                                }
-                              : value,
-                          ),
-                        );
-                      }}
-                    >
-                      {productos.map((item) => (
-                        <option value={item.id} key={item.id}>
-                          {item.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    <div className={styles.routePositionSummary}>
-                      <GitCommitHorizontalIcon />
-                      <div>
-                        <strong>Ubicación definida en la hoja de ruta</strong>
-                        <span>
-                          Arrastrá el nodo para cambiar cuándo comienza y dónde
-                          converge.
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.configureUsage}
-                      onClick={() => setComponenteConfigurando(index)}
-                    >
-                      <Settings2Icon />
-                      {item.configuracionJson?.bindings?.length
-                        ? `${item.configuracionJson.bindings.length} parámetros configurados`
-                        : "Configurar uso"}
-                    </button>
-                    <div className={styles.componentSummary}>
-                      <span>
-                        {item.configuracionJson?.bindings?.some(
-                          (binding) => binding.clave === "cantidad",
-                        )
-                          ? "Cantidad configurada por regla"
-                          : "Falta configurar la cantidad"}
-                      </span>
-                      <b>
-                        {item.politicaEjecucion === "INLINE"
-                          ? "Sin seguimiento separado"
-                          : "Flujo productivo propio"}
-                      </b>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Quitar componente ${index + 1}`}
-                      onClick={() =>
-                        setComponentes((prev) => {
-                          const next = prev.filter((_, i) => i !== index);
-                          onSeleccionarNodo?.("ruta");
-                          return next;
-                        })
-                      }
-                    >
-                      <Trash2Icon />
-                    </button>
-                  </div>
-                ),
-              )}
-              {!componentes.length ? <p>Sin componentes fabricados.</p> : null}
-            </div>
-          </section>
-        ) : producto.estructuraProducto !== "COMPUESTO" &&
-          nodoSeleccionado === "ruta" ? (
-          <section
-            className={`${styles.editorSection} ${styles.simpleProductNotice}`}
-          >
-            <BoxIcon />
-            <div>
-              <strong>Producto simple</strong>
-              <span>
-                Esta vía utiliza pasos propios. Cambiá su estructura en
-                Identidad si necesitás incorporar productos fabricados.
-              </span>
-            </div>
-          </section>
-        ) : null}
-
-        {pasosCompuestos.length && etapaSeleccionada ? (
-          <section
-            className={`${styles.editorSection} ${styles.compoundSection}`}
-          >
-            <div className={styles.editorTitle}>
-              <div>
-                <strong>Inspector de la etapa</strong>
-                <span>
-                  Sus pasos internos calculan el trabajo, pero la OT controla un
-                  único estado operativo.
-                </span>
-              </div>
-            </div>
-            <div className={styles.compoundCards}>
-              {pasosCompuestos.map((paso) => {
-                if (paso.nodoClave !== etapaSeleccionada) return null;
-                const plantilla = pasosTenant.find(
-                  (item) => item.id === paso.pasoTenantId,
-                );
-                const vinculados = componentes.filter(
-                  (item) => item.nodoIncorporacionClave === paso.nodoClave,
-                );
-                const activas = paso.operaciones.filter(
-                  (item) => item.activa,
-                ).length;
-                return (
-                  <div className={styles.compoundCard} key={paso.nodoClave}>
-                    <BoxesIcon />
-                    <div>
-                      <strong>{paso.pasoNombre}</strong>
-                      <span>
-                        {plantilla?.pasosInternos?.length ?? 0} pasos declarados
-                        · {vinculados.length} componentes vinculados
-                      </span>
-                      <small>
-                        {(paso.pasos?.filter((item) => item.activa).length ??
-                        activas)
-                          ? `${paso.pasos?.filter((item) => item.activa).length ?? activas} pasos configurados`
-                          : "Pendiente de configuración"}
-                      </small>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!plantilla?.pasosInternos?.length}
-                      onClick={() =>
-                        setPasoCompuestoConfigurando(paso.nodoClave)
-                      }
-                    >
-                      <Settings2Icon /> Configurar etapa
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
       </div>
+
+      {contextoDocumentos ? (
+        <DocumentosRequeridosDialog
+          key={
+            contextoDocumentos.tipo === "NODO"
+              ? contextoDocumentos.nodoClave
+              : "general"
+          }
+          open
+          contexto={contextoDocumentos}
+          documentos={
+            contextoDocumentos.tipo === "NODO"
+              ? documentos.filter(
+                  (item) =>
+                    item.alcance === "PASO" &&
+                    item.pasoClave === contextoDocumentos.nodoClave,
+                )
+              : documentos.filter((item) => item.alcance !== "PASO")
+          }
+          onOpenChange={(open) => {
+            if (!open) setContextoDocumentos(null);
+          }}
+          onApply={(actualizados) => {
+            setDocumentos((current) => {
+              if (contextoDocumentos.tipo === "NODO") {
+                return [
+                  ...current.filter(
+                    (item) =>
+                      !(
+                        item.alcance === "PASO" &&
+                        item.pasoClave === contextoDocumentos.nodoClave
+                      ),
+                  ),
+                  ...actualizados,
+                ];
+              }
+              return [
+                ...current.filter((item) => item.alcance === "PASO"),
+                ...actualizados,
+              ];
+            });
+          }}
+        />
+      ) : null}
+
+      <DocumentosHeredadosDialog
+        open={Boolean(componenteDocumentalActivo)}
+        componenteNombre={
+          componentes.find((item) => item.codigo === componenteDocumentalActivo)
+            ?.nombre ?? "Componente"
+        }
+        documentos={
+          componenteDocumentalActivo
+            ? (documentosHeredados[componenteDocumentalActivo]?.documentos ??
+              [])
+            : []
+        }
+        loading={
+          componenteDocumentalActivo
+            ? (documentosHeredados[componenteDocumentalActivo]?.loading ?? true)
+            : false
+        }
+        onOpenChange={(open) => {
+          if (!open) setComponenteDocumentalActivo(null);
+        }}
+        onEditarOrigen={
+          componenteDocumentalActivo &&
+          documentosHeredados[componenteDocumentalActivo]?.rutaAlternativaId
+            ? () => {
+                const componente = componentes.find(
+                  (item) => item.codigo === componenteDocumentalActivo,
+                );
+                const rutaOrigen =
+                  documentosHeredados[componenteDocumentalActivo]
+                    ?.rutaAlternativaId;
+                if (!componente || !rutaOrigen) return;
+                router.push(
+                  `/productos-servicios/${componente.productoComponenteId}/rutas/${rutaOrigen}`,
+                );
+              }
+            : undefined
+        }
+      />
 
       <Dialog
         open={Boolean(contextoAltaNodo)}
@@ -1473,16 +1588,25 @@ export function EditorDefiniciones({
         >
           <div className={styles.addNodeDialog}>
             <DialogHeader className={styles.addNodeHeader}>
-              <span>HOJA DE RUTA · NUEVO NODO</span>
-              <DialogTitle>¿Qué querés incorporar?</DialogTitle>
+              <span>
+                HOJA DE RUTA ·{" "}
+                {contextoAltaNodo?.reemplazo ? "REEMPLAZAR NODO" : "NUEVO NODO"}
+              </span>
+              <DialogTitle>
+                {contextoAltaNodo?.reemplazo
+                  ? `Reemplazar ${contextoAltaNodo.reemplazo.nombre}`
+                  : "¿Qué querés incorporar?"}
+              </DialogTitle>
               <DialogDescription>
-                {contextoAltaNodo?.tipo === "PARALELO"
-                  ? `Se ejecutará en paralelo dentro del momento ${contextoAltaNodo.columna + 1}.`
-                  : contextoAltaNodo?.posicion === 0
-                    ? "Se ubicará al inicio del recorrido."
-                    : contextoAltaNodo?.posicion === columnasHojaRuta.length
-                      ? "Se ubicará al final del recorrido."
-                      : `Se creará un nuevo momento entre el ${contextoAltaNodo?.posicion} y el ${(contextoAltaNodo?.posicion ?? 0) + 1}.`}
+                {contextoAltaNodo?.reemplazo
+                  ? "El nuevo nodo conservará este momento de la ruta. La configuración propia del nodo anterior no se copiará."
+                  : contextoAltaNodo?.tipo === "PARALELO"
+                    ? `Se ejecutará en paralelo dentro del momento ${contextoAltaNodo.columna + 1}.`
+                    : contextoAltaNodo?.posicion === 0
+                      ? "Se ubicará al inicio del recorrido."
+                      : contextoAltaNodo?.posicion === columnasHojaRuta.length
+                        ? "Se ubicará al final del recorrido."
+                        : `Se creará un nuevo momento entre el ${contextoAltaNodo?.posicion} y el ${(contextoAltaNodo?.posicion ?? 0) + 1}.`}
               </DialogDescription>
             </DialogHeader>
 
@@ -1616,7 +1740,8 @@ export function EditorDefiniciones({
                             variant="outline"
                             className={styles.addNodeOption}
                             key={item.id}
-                            onClick={() => agregarComponente(item.id)}
+                            disabled={creandoNodo}
+                            onClick={() => void agregarComponente(item.id)}
                           >
                             <BoxesIcon data-icon="inline-start" />
                             <span>
@@ -1669,12 +1794,38 @@ export function EditorDefiniciones({
               </section>
             ) : (
               <p className={styles.addNodeEmpty}>
-                Primero elegí qué clase de nodo querés sumar al recorrido.
+                Primero elegí qué clase de nodo querés{" "}
+                {contextoAltaNodo?.reemplazo
+                  ? "usar como reemplazo"
+                  : "sumar al recorrido"}
+                .
               </p>
             )}
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmacionDestructiva
+        open={nodoAEliminar !== null}
+        onOpenChange={(open) => {
+          if (!open && !procesandoNodo) setNodoAEliminar(null);
+        }}
+        titulo="Eliminar nodo de la vía"
+        descripcion={
+          nodoAEliminar
+            ? `${nodoAEliminar.nombre} dejará de formar parte de este recorrido productivo.`
+            : null
+        }
+        impacto={[
+          "La ruta reconectará automáticamente los momentos anterior y siguiente.",
+          "Se quitarán sus requisitos y referencias propias de esta revisión.",
+          "La configuración del producto o paso reutilizable original no se eliminará.",
+        ]}
+        nombreItem={nodoAEliminar?.nombre}
+        requiereTipear={false}
+        accionLabel="Eliminar de la vía"
+        onConfirmar={eliminarNodoConfirmado}
+      />
 
       <footer className={styles.editorFooter}>
         <span>
