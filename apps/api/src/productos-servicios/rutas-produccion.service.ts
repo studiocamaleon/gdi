@@ -11,6 +11,14 @@ import type {
   DuplicarRutaDto,
 } from './dto/ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
+import {
+  leerWorkflowRuta,
+  pasosDesdeWorkflow,
+  remapearPasosWorkflow,
+  validarWorkflowRuta,
+  workflowLinealDesdePasos,
+  type RutaWorkflow,
+} from './ruta-workflow';
 
 @Injectable()
 export class RutasProduccionService {
@@ -38,25 +46,37 @@ export class RutasProduccionService {
     // Traer SOLO los pasos de la versión actual de cada ruta (antes se cargaban
     // los pasos de TODAS las versiones y se filtraba en memoria, creciendo sin
     // límite con cada versión guardada).
-    const pasos = await this.prisma.rutaPaso.findMany({
-      where: {
-        tenantId,
-        OR: rutas.map((ruta) => ({
-          rutaId: ruta.id,
-          version: ruta.versionActual,
-        })),
-      },
-      orderBy: { orden: 'asc' },
-      select: {
-        id: true,
-        rutaId: true,
-        version: true,
-        orden: true,
-        familiaCodigo: true,
-        nombreVisible: true,
-        icono: true,
-      },
-    });
+    const [pasos, versiones] = await Promise.all([
+      this.prisma.rutaPaso.findMany({
+        where: {
+          tenantId,
+          OR: rutas.map((ruta) => ({
+            rutaId: ruta.id,
+            version: ruta.versionActual,
+          })),
+        },
+        orderBy: { orden: 'asc' },
+        select: {
+          id: true,
+          rutaId: true,
+          version: true,
+          orden: true,
+          familiaCodigo: true,
+          nombreVisible: true,
+          icono: true,
+        },
+      }),
+      this.prisma.rutaVersion.findMany({
+        where: {
+          tenantId,
+          OR: rutas.map((ruta) => ({
+            rutaId: ruta.id,
+            version: ruta.versionActual,
+          })),
+        },
+        select: { rutaId: true, snapshotJson: true },
+      }),
+    ]);
 
     const pasosPorRuta = new Map<string, typeof pasos>();
     for (const paso of pasos) {
@@ -65,18 +85,31 @@ export class RutasProduccionService {
       pasosPorRuta.set(paso.rutaId, lista);
     }
 
-    return rutas.map((ruta) => ({
-      ...ruta,
-      pasos: (pasosPorRuta.get(ruta.id) ?? []).map(({ rutaId, ...paso }) => {
-        void rutaId;
-        return paso;
-      }),
-    }));
+    const snapshotPorRuta = new Map(
+      versiones.map((version) => [version.rutaId, version.snapshotJson]),
+    );
+    return rutas.map((ruta) => {
+      const pasosRuta = pasosPorRuta.get(ruta.id) ?? [];
+      return {
+        ...ruta,
+        pasos: pasosRuta.map(({ rutaId, ...paso }) => {
+          void rutaId;
+          return paso;
+        }),
+        workflow: leerWorkflowRuta(snapshotPorRuta.get(ruta.id), pasosRuta),
+      };
+    });
   }
 
   async crearRuta(tenantId: string, dto: CrearRutaDto) {
-    this.validarOrdenPasos(dto.pasos);
-    await this.familias.validarFamiliasDePasos(tenantId, dto.pasos);
+    const workflowEntrada = await this.prepararWorkflowEntrada(
+      tenantId,
+      dto.workflow,
+      dto.pasos,
+    );
+    const pasosEntrada = pasosDesdeWorkflow(workflowEntrada);
+    this.validarOrdenPasos(pasosEntrada);
+    await this.familias.validarFamiliasDePasos(tenantId, pasosEntrada);
     const nombre = dto.nombre.trim();
     if (!nombre)
       throw new BadRequestException('El nombre de la ruta es obligatorio.');
@@ -93,7 +126,7 @@ export class RutasProduccionService {
             versionActual: 1,
             activo: true,
             pasos: {
-              create: dto.pasos.map((p) => ({
+              create: pasosEntrada.map((p) => ({
                 tenantId,
                 version: 1,
                 orden: p.orden,
@@ -106,16 +139,17 @@ export class RutasProduccionService {
           },
           include: { pasos: true },
         });
+        const workflow = remapearPasosWorkflow(workflowEntrada, ruta.pasos);
         await tx.rutaVersion.create({
           data: {
             tenantId,
             rutaId: ruta.id,
             version: 1,
-            snapshotJson: this.buildRutaSnapshot(ruta.pasos),
+            snapshotJson: this.buildRutaSnapshot(ruta.pasos, workflow),
             cambios: 'Versión inicial',
           },
         });
-        return ruta;
+        return { ...ruta, workflow };
       });
     } catch (err) {
       if (
@@ -147,6 +181,18 @@ export class RutasProduccionService {
         `Ruta "${origen.nombre}" no tiene pasos para duplicar.`,
       );
     }
+    const versionOrigen = await this.prisma.rutaVersion.findFirst({
+      where: {
+        tenantId,
+        rutaId: origen.id,
+        version: origen.versionActual,
+      },
+      select: { snapshotJson: true },
+    });
+    const workflowOrigen = leerWorkflowRuta(
+      versionOrigen?.snapshotJson,
+      pasosActuales,
+    );
 
     const nombre = dto.nombre?.trim() || `${origen.nombre} copia`;
     const baseCodigo = dto.codigo?.trim() || this.codigoFromNombre(nombre);
@@ -177,17 +223,21 @@ export class RutasProduccionService {
           include: { pasos: true },
         });
 
+        const workflow = remapearPasosWorkflow(
+          workflowOrigen,
+          rutaDuplicada.pasos,
+        );
         await tx.rutaVersion.create({
           data: {
             tenantId,
             rutaId: rutaDuplicada.id,
             version: 1,
-            snapshotJson: this.buildRutaSnapshot(rutaDuplicada.pasos),
+            snapshotJson: this.buildRutaSnapshot(rutaDuplicada.pasos, workflow),
             cambios: 'Versión inicial',
           },
         });
 
-        return rutaDuplicada;
+        return { ...rutaDuplicada, workflow };
       });
     } catch (err) {
       if (
@@ -217,9 +267,16 @@ export class RutasProduccionService {
       );
     }
 
-    if (dto.pasos) {
-      this.validarOrdenPasos(dto.pasos);
-      await this.familias.validarFamiliasDePasos(tenantId, dto.pasos);
+    const cambiaWorkflow = Boolean(dto.workflow || dto.pasos);
+    const workflowEntrada = cambiaWorkflow
+      ? await this.prepararWorkflowEntrada(tenantId, dto.workflow, dto.pasos)
+      : null;
+    const pasosEntrada = workflowEntrada
+      ? pasosDesdeWorkflow(workflowEntrada)
+      : null;
+    if (pasosEntrada) {
+      this.validarOrdenPasos(pasosEntrada);
+      await this.familias.validarFamiliasDePasos(tenantId, pasosEntrada);
     }
     if (dto.nombre !== undefined && !dto.nombre.trim()) {
       throw new BadRequestException('El nombre de la ruta es obligatorio.');
@@ -233,7 +290,7 @@ export class RutasProduccionService {
       }
       if (dto.activo !== undefined) dataBase.activo = dto.activo;
 
-      if (dto.pasos) {
+      if (workflowEntrada && pasosEntrada) {
         if (existente.productosAlternativas.length > 0) {
           const maxVersion = await tx.rutaPaso.aggregate({
             where: { tenantId, rutaId: id },
@@ -246,7 +303,7 @@ export class RutasProduccionService {
             ) + 1;
           dataBase.versionActual = nuevaVersion;
           await tx.rutaPaso.createMany({
-            data: dto.pasos.map((p) => ({
+            data: pasosEntrada.map((p) => ({
               tenantId,
               rutaId: id,
               version: nuevaVersion,
@@ -261,13 +318,14 @@ export class RutasProduccionService {
             where: { tenantId, rutaId: id, version: nuevaVersion },
             orderBy: { orden: 'asc' },
           });
+          const workflow = remapearPasosWorkflow(workflowEntrada, nuevosPasos);
           await tx.rutaVersion.create({
             data: {
               tenantId,
               rutaId: id,
               version: nuevaVersion,
-              snapshotJson: this.buildRutaSnapshot(nuevosPasos),
-              cambios: dto.cambios ?? 'Actualización de pasos',
+              snapshotJson: this.buildRutaSnapshot(nuevosPasos, workflow),
+              cambios: dto.cambios ?? 'Actualización del Workflow',
             },
           });
         } else {
@@ -276,12 +334,20 @@ export class RutasProduccionService {
             tenantId,
             rutaId: id,
             version,
-            pasos: dto.pasos,
+            pasos: pasosEntrada,
           });
           const pasosActualizados = await tx.rutaPaso.findMany({
             where: { tenantId, rutaId: id, version },
             orderBy: { orden: 'asc' },
           });
+          const workflow = remapearPasosWorkflow(
+            workflowEntrada,
+            pasosActualizados,
+          );
+          const snapshotJson = this.buildRutaSnapshot(
+            pasosActualizados,
+            workflow,
+          );
           await tx.rutaVersion.upsert({
             where: {
               tenantId_rutaId_version: {
@@ -294,12 +360,12 @@ export class RutasProduccionService {
               tenantId,
               rutaId: id,
               version,
-              snapshotJson: this.buildRutaSnapshot(pasosActualizados),
-              cambios: dto.cambios ?? 'Actualización de pasos',
+              snapshotJson,
+              cambios: dto.cambios ?? 'Actualización del Workflow',
             },
             update: {
-              snapshotJson: this.buildRutaSnapshot(pasosActualizados),
-              cambios: dto.cambios ?? 'Actualización de pasos',
+              snapshotJson,
+              cambios: dto.cambios ?? 'Actualización del Workflow',
             },
           });
         }
@@ -310,9 +376,21 @@ export class RutasProduccionService {
         data: dataBase,
         include: { pasos: { orderBy: { orden: 'asc' } } },
       });
+      const pasosActuales = ruta.pasos.filter(
+        (paso) => paso.version === ruta.versionActual,
+      );
+      const versionActual = await tx.rutaVersion.findFirst({
+        where: {
+          tenantId,
+          rutaId: ruta.id,
+          version: ruta.versionActual,
+        },
+        select: { snapshotJson: true },
+      });
       return {
         ...ruta,
-        pasos: ruta.pasos.filter((paso) => paso.version === ruta.versionActual),
+        pasos: pasosActuales,
+        workflow: leerWorkflowRuta(versionActual?.snapshotJson, pasosActuales),
       };
     });
   }
@@ -637,9 +715,16 @@ export class RutasProduccionService {
       },
     });
     if (!ruta) throw new NotFoundException(`Ruta ${id} no encontrada`);
+    const pasosActuales = ruta.pasos.filter(
+      (paso) => paso.version === ruta.versionActual,
+    );
+    const versionActual = ruta.versiones.find(
+      (version) => version.version === ruta.versionActual,
+    );
     return {
       ...ruta,
-      pasos: ruta.pasos.filter((paso) => paso.version === ruta.versionActual),
+      pasos: pasosActuales,
+      workflow: leerWorkflowRuta(versionActual?.snapshotJson, pasosActuales),
     };
   }
 
@@ -653,8 +738,17 @@ export class RutasProduccionService {
       version?: number;
       activo?: boolean;
     }>,
+    workflow?: RutaWorkflow,
   ): Prisma.InputJsonObject {
+    const workflowNormalizado = workflow
+      ? validarWorkflowRuta(workflow)
+      : workflowLinealDesdePasos(pasos);
     return {
+      contractVersion: 1,
+      topologia: workflowNormalizado.topologia,
+      workflow: JSON.parse(
+        JSON.stringify(workflowNormalizado),
+      ) as Prisma.InputJsonObject,
       pasos: pasos
         .slice()
         .sort((a, b) => a.orden - b.orden)
@@ -669,5 +763,116 @@ export class RutasProduccionService {
           activo: paso.activo ?? true,
         })),
     };
+  }
+
+  private async prepararWorkflowEntrada(
+    tenantId: string,
+    workflowDto: CrearRutaDto['workflow'] | ActualizarRutaDto['workflow'],
+    pasosDto: CrearRutaDto['pasos'] | ActualizarRutaDto['pasos'],
+  ): Promise<RutaWorkflow> {
+    if (!workflowDto) {
+      if (!pasosDto?.length) {
+        throw new BadRequestException(
+          'La ruta debe contener al menos un Paso, Etapa o Componente.',
+        );
+      }
+      this.validarOrdenPasos(pasosDto);
+      return workflowLinealDesdePasos(
+        pasosDto.map((paso) => ({
+          id: `nuevo-${paso.orden}`,
+          ...paso,
+        })),
+      );
+    }
+
+    let workflow: RutaWorkflow;
+    try {
+      workflow = validarWorkflowRuta({
+        contractVersion: 1,
+        topologia: workflowDto.topologia ?? 'DAG',
+        nodos: workflowDto.nodos,
+        aristas: workflowDto.aristas,
+      } as unknown as RutaWorkflow);
+    } catch (error: unknown) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'El Workflow de la ruta no es válido.',
+      );
+    }
+
+    const componentes = workflow.nodos.filter(
+      (nodo) => nodo.tipo === 'COMPONENTE',
+    );
+    const idsComponentes = [
+      ...new Set(componentes.map((nodo) => nodo.productoComponenteId)),
+    ];
+    const productos = idsComponentes.length
+      ? await this.prisma.producto.findMany({
+          where: { tenantId, id: { in: idsComponentes } },
+          select: { id: true, codigo: true, nombre: true, activo: true },
+        })
+      : [];
+    const productoPorId = new Map(productos.map((item) => [item.id, item]));
+    for (const id of idsComponentes) {
+      const producto = productoPorId.get(id);
+      if (!producto) {
+        throw new BadRequestException(
+          'Uno de los componentes no pertenece al catálogo de la empresa.',
+        );
+      }
+      if (!producto.activo) {
+        throw new BadRequestException(
+          `El componente "${producto.nombre}" está inactivo.`,
+        );
+      }
+    }
+
+    const codigosTenant = workflow.nodos
+      .filter((nodo) => nodo.tipo !== 'COMPONENTE')
+      .map((nodo) => nodo.familiaCodigo)
+      .filter((codigo) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          codigo,
+        ),
+      );
+    const pasosTenant = codigosTenant.length
+      ? await this.prisma.pasoTenant.findMany({
+          where: { tenantId, id: { in: codigosTenant } },
+          select: { id: true, tipoPaso: true },
+        })
+      : [];
+    const tipoPorFamilia = new Map(
+      pasosTenant.map((paso) => [
+        paso.id,
+        paso.tipoPaso === 'COMPUESTO' ? ('ETAPA' as const) : ('PASO' as const),
+      ]),
+    );
+
+    try {
+      return validarWorkflowRuta({
+        ...workflow,
+        nodos: workflow.nodos.map((nodo) => {
+          if (nodo.tipo === 'COMPONENTE') {
+            const producto = productoPorId.get(nodo.productoComponenteId)!;
+            return {
+              ...nodo,
+              codigo: nodo.codigo || producto.codigo,
+              nombre: producto.nombre,
+            };
+          }
+          return {
+            ...nodo,
+            tipo: tipoPorFamilia.get(nodo.familiaCodigo) ?? 'PASO',
+          };
+        }),
+      });
+    } catch (error: unknown) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'El Workflow de la ruta no es válido.',
+      );
+    }
   }
 }

@@ -1402,7 +1402,9 @@ export class MotorUniversalService {
           dependenciasCalculo: dependenciasCalculoComponente(
             componente.configuracionJson,
           ),
+          nodosPredecesoresClaves: componente.nodosPredecesoresClaves,
           nodoIncorporacionClave: componente.nodoIncorporacionClave,
+          grafoProduccion: hija.grafoProduccion,
           pasos: hija.pasos,
           componentes: hija.componentesFabricados,
         });
@@ -1856,6 +1858,14 @@ export class MotorUniversalService {
             huella: recetaPublicada.huella,
           }
         : null,
+      grafoProduccion:
+        (recetaPublicada?.snapshot &&
+        typeof recetaPublicada.snapshot === 'object' &&
+        !Array.isArray(recetaPublicada.snapshot)
+          ? ((recetaPublicada.snapshot as Record<string, unknown>)
+              .grafoProduccion as
+              CotizacionResultado['grafoProduccion'] | undefined)
+          : undefined) ?? null,
       costos: {
         tiempoTotal,
         tiempoExtraTotal,

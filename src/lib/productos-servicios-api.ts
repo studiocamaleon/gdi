@@ -724,7 +724,8 @@ export interface CrearRutaPayload {
   codigo?: string;
   nombre: string;
   descripcion?: string;
-  pasos: PasoRutaPayload[];
+  pasos?: PasoRutaPayload[];
+  workflow?: import("@/lib/productos-servicios").RutaWorkflow;
 }
 
 export async function crearRuta(payload: CrearRutaPayload) {
@@ -740,6 +741,7 @@ export interface ActualizarRutaPayload {
   descripcion?: string;
   activo?: boolean;
   pasos?: PasoRutaPayload[];
+  workflow?: import("@/lib/productos-servicios").RutaWorkflow;
   nuevaVersion?: boolean;
   cambios?: string;
 }
@@ -1641,6 +1643,11 @@ export interface CotizarResponse {
     cantidadComercialReal?: number;
     cantidadComercialPricing?: number;
     unidadComercialPricing?: string;
+    grafoProduccion?: {
+      topologia?: "LINEAL" | "DAG";
+      nodos?: Array<{ clave: string; indice?: number }>;
+      aristas?: Array<{ desdeClave: string; haciaClave: string }>;
+    } | null;
     minimoComercialAplicado?: {
       base: MinimoComercialBase;
       cantidadMinima: number;
@@ -1682,7 +1689,13 @@ export interface CotizarResponse {
       recetaHuella: string;
       costoUnitario: number;
       costoTotal: number;
+      nodosPredecesoresClaves?: string[];
       nodoIncorporacionClave?: string | null;
+      grafoProduccion?: {
+        topologia?: "LINEAL" | "DAG";
+        nodos?: Array<{ clave: string; indice?: number }>;
+        aristas?: Array<{ desdeClave: string; haciaClave: string }>;
+      } | null;
       /** Ruta real ejecutada para fabricar esta rama del BOM. */
       pasos?: Array<{
         rutaPasoId?: string;
@@ -1691,11 +1704,58 @@ export interface CotizarResponse {
         nombreVisible?: string | null;
         activado: boolean;
         costoTotal: number;
+        tercerizado?: boolean;
+        proveedorId?: string | null;
+        plazoProveedorDias?: number | null;
+        tercerizadoDetalle?: {
+          fuente: string;
+          magnitud?: string;
+          valorMagnitud?: number;
+          tarifa?: number;
+          entradaClave?: string;
+        };
         tiempo?: {
           totalMin: number;
+          centroCostoId?: string | null;
           centroCostoNombre?: string | null;
+          tarifaHora?: number;
+          costo?: number;
           origenTiempo?: "manual_comercial" | "calculado";
+          tiemposExtra?: Array<{
+            id: string;
+            etiqueta: string;
+            minutos: number;
+            centroCostoId?: string | null;
+            centroCostoNombre?: string | null;
+            tarifaHora: number;
+            dotacionOperarios: number;
+            costo: number;
+          }>;
         };
+        materiales?: Array<{
+          slotCodigo: string;
+          slotNombre?: string | null;
+          materialVarianteId: string;
+          materialNombre: string;
+          materialSku: string;
+          materialDisplayName: string;
+          cantidad: number;
+          unidad: string;
+          precioUnitario: number;
+          costoTotal: number;
+        }>;
+        nestingResult?: NestingViewerInput;
+        operacionesInternas?: Array<{
+          codigo: string;
+          nombre: string;
+          familiaCodigo: string;
+          activada: boolean;
+          duracionMin: number;
+          costoTotal: number;
+          centroCostoId?: string | null;
+          centroCostoNombre?: string | null;
+          nestingResult?: NestingViewerInput;
+        }>;
       }>;
       componentes?: Array<Record<string, unknown>>;
       operacionesIncorporacion?: Array<{
@@ -1788,7 +1848,20 @@ export interface CotizarResponse {
         costoTotal: number;
         centroCostoId?: string | null;
         centroCostoNombre?: string | null;
+        materiales?: Array<{
+          slotCodigo: string;
+          slotNombre?: string | null;
+          materialVarianteId: string;
+          materialNombre: string;
+          materialSku: string;
+          materialDisplayName: string;
+          cantidad: number;
+          unidad: string;
+          precioUnitario: number;
+          costoTotal: number;
+        }>;
         componentesCodigos?: string[];
+        nestingResult?: NestingViewerInput;
       }>;
       configPasoId?: string;
       activado: boolean;

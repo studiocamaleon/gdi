@@ -86,7 +86,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
         };
       default:
         return {
-          status: HttpStatus.BAD_REQUEST,
+          // Un código de Prisma no reconocido no describe un dato inválido
+          // del usuario: es un fallo interno que debemos registrar con stack.
+          // Tratarlo como 400 ocultaba la causa y hacía imposible diagnosticar
+          // acciones operativas fallidas (por ejemplo, avanzar producción).
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
           message: 'No se pudo completar la operación.',
         };
     }

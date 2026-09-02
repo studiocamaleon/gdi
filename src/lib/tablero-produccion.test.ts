@@ -2,13 +2,30 @@ import { describe, expect, it } from "vitest";
 
 import {
   bucketKanbanProduccion,
+  codigoVisibleItem,
   debeRefrescarTablero,
   esItemEnCursoOperativo,
+  etiquetaPasoKanban,
+  itemBloqueado,
+  itemIniciado,
+  lineaEstado,
   resolverEstacionDePaso,
   textoEntregaRelativa,
+  type TableroItemData,
 } from "@/lib/tablero-produccion";
 
 describe("clasificación operativa del tablero", () => {
+  it("distingue el paso que está corriendo del próximo paso pendiente", () => {
+    expect(etiquetaPasoKanban("en_curso")).toBe("Paso en curso:");
+    expect(etiquetaPasoKanban("pendiente")).toBe("Próximo paso:");
+    expect(etiquetaPasoKanban("bloqueado")).toBe("Próximo paso:");
+  });
+
+  it("identifica cada item con un único código compacto de OT", () => {
+    expect(codigoVisibleItem("OT-2026-0041", 0)).toBe("OT-0041-A");
+    expect(codigoVisibleItem("OT-2026-0041", 1)).toBe("OT-0041-B");
+  });
+
   it("un pendiente futuro no cuenta como trabajo en curso", () => {
     expect(
       esItemEnCursoOperativo({
@@ -39,6 +56,44 @@ describe("clasificación operativa del tablero", () => {
         diasEntrega: -3,
       }),
     ).toBe("delayed");
+  });
+
+  it("el Kanban omite los items cuyo trabajo ya terminó", () => {
+    expect(
+      bucketKanbanProduccion({
+        iniciado: true,
+        terminado: true,
+        atrasado: false,
+        diasEntrega: 2,
+      }),
+    ).toBeNull();
+  });
+
+  it("considera iniciado un tercerizado desde que fue pedido al proveedor", () => {
+    const base = {
+      sinRuta: false,
+      pasos: [
+        {
+          id: "bastidor",
+          indice: 0,
+          estado: "pendiente",
+          tipoEjecucion: "tercerizado",
+        },
+      ],
+    } as TableroItemData;
+
+    expect(
+      itemIniciado({
+        ...base,
+        pasos: [{ ...base.pasos[0], estadoCompra: "pendiente" }],
+      }),
+    ).toBe(false);
+    expect(
+      itemIniciado({
+        ...base,
+        pasos: [{ ...base.pasos[0], estadoCompra: "pedido" }],
+      }),
+    ).toBe(true);
   });
 
   it("expresa las entregas vencidas como atraso y no como tiempo restante", () => {
@@ -75,6 +130,46 @@ describe("clasificación operativa del tablero", () => {
         arrastreActivo: true,
       }),
     ).toBe(false);
+  });
+
+  it("no confunde un DAG bloqueado por componentes con un item completado", () => {
+    const item = {
+      sinRuta: false,
+      pasos: [
+        {
+          id: "ensamble",
+          indice: 0,
+          nodoClave: "etapa:ensamble",
+          estado: "pendiente",
+          predecesoresSatisfechos: false,
+          predecesorPasoIds: ["paso-componente"],
+        },
+      ],
+    } as TableroItemData;
+
+    expect(lineaEstado(item)).toBe(
+      "Esperando componentes o pasos anteriores",
+    );
+    expect(itemBloqueado(item)).toBe(true);
+  });
+
+  it("presenta un nodo tercerizado como compra y no como trabajo por iniciar", () => {
+    const item = {
+      sinRuta: false,
+      pasos: [
+        {
+          id: "bastidor",
+          indice: 0,
+          nodoClave: "paso:bastidor",
+          estado: "pendiente",
+          predecesoresSatisfechos: true,
+          tipoEjecucion: "tercerizado",
+          estadoCompra: "pedido",
+        },
+      ],
+    } as TableroItemData;
+
+    expect(lineaEstado(item)).toBe("Pedido al proveedor");
   });
 });
 

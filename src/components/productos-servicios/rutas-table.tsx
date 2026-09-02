@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRightIcon,
   BookOpenIcon,
+  BoxesIcon,
   CircleDotIcon,
   CopyIcon,
   FactoryIcon,
   GitBranchIcon,
   LayersIcon,
   LayoutDashboardIcon,
+  Layers3Icon,
   Loader2Icon,
   PackageIcon,
   PaintbrushIcon,
@@ -80,14 +82,23 @@ function getStepIcon(icono?: string | null) {
 }
 
 function RoutePreview({
-  pasos,
+  ruta,
   familiaLabel,
-  rutaNombre,
 }: {
-  pasos: RutaListItem["pasos"];
+  ruta: RutaListItem;
   familiaLabel: (codigo: string) => string;
-  rutaNombre: string;
 }) {
+  const nodos =
+    ruta.workflow?.nodos.slice().sort((a, b) => a.orden - b.orden) ??
+    ruta.pasos.map((paso, index) => ({
+      clave: paso.id,
+      tipo: "PASO" as const,
+      orden: index,
+      familiaCodigo: paso.familiaCodigo,
+      nombreVisible: paso.nombreVisible,
+      icono: paso.icono,
+    }));
+  const topologia = ruta.workflow?.topologia ?? "LINEAL";
   return (
     <Tooltip>
       <TooltipTrigger
@@ -97,12 +108,12 @@ function RoutePreview({
             type="button"
             variant="outline"
             size="sm"
-            aria-label={`Ver recorrido de ${rutaNombre}: ${pasos.length} ${pasos.length === 1 ? "paso" : "pasos"}`}
+            aria-label={`Ver Workflow de ${ruta.nombre}: ${nodos.length} ${nodos.length === 1 ? "nodo" : "nodos"}`}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
             <RouteIcon data-icon="inline-start" />
-            {pasos.length} {pasos.length === 1 ? "paso" : "pasos"}
+            {nodos.length} {nodos.length === 1 ? "nodo" : "nodos"} · {topologia}
           </Button>
         )}
       />
@@ -111,20 +122,28 @@ function RoutePreview({
         align="start"
         className="block w-80 max-w-[calc(100vw-2rem)] p-3"
       >
-        <p className="mb-2 font-medium">Recorrido de producción</p>
+        <p className="mb-2 font-medium">Workflow reusable</p>
         <ol className="grid gap-1.5">
-          {pasos.map((paso, index) => {
-            const StepIcon = getStepIcon(paso.icono);
+          {nodos.map((nodo, index) => {
+            const StepIcon =
+              nodo.tipo === "COMPONENTE"
+                ? BoxesIcon
+                : nodo.tipo === "ETAPA"
+                  ? Layers3Icon
+                  : getStepIcon(nodo.icono);
+            const nombre =
+              nodo.tipo === "COMPONENTE"
+                ? nodo.nombre
+                : nodo.nombreVisible?.trim() ||
+                  familiaLabel(nodo.familiaCodigo);
             return (
-              <li key={paso.id} className="flex min-w-0 items-center gap-2">
+              <li key={nodo.clave} className="flex min-w-0 items-center gap-2">
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background/15 text-[10px] font-semibold">
                   {index + 1}
                 </span>
                 <StepIcon className="size-3.5 shrink-0 opacity-75" />
-                <span className="min-w-0 truncate">
-                  {paso.nombreVisible?.trim() ||
-                    familiaLabel(paso.familiaCodigo)}
-                </span>
+                <span className="min-w-0 truncate">{nombre}</span>
+                <small className="ml-auto opacity-60">{nodo.tipo}</small>
               </li>
             );
           })}
@@ -175,11 +194,15 @@ export function RutasTable({
       if (estadoFiltro === "activas" && !r.activo) return false;
       if (estadoFiltro === "inactivas" && r.activo) return false;
       if (!term) return true;
-      const nombresPasos = r.pasos
-        .map((p) => familiaLabel(p.familiaCodigo).toLowerCase())
+      const nombresNodos = (r.workflow?.nodos ?? r.pasos)
+        .map((nodo) =>
+          "tipo" in nodo && nodo.tipo === "COMPONENTE"
+            ? nodo.nombre.toLowerCase()
+            : familiaLabel(nodo.familiaCodigo).toLowerCase(),
+        )
         .join(" ");
       const haystack =
-        `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresPasos}`.toLowerCase();
+        `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresNodos}`.toLowerCase();
       return haystack.includes(term);
     });
   }, [rutas, search, familiaLabel, estadoFiltro]);
@@ -231,8 +254,8 @@ export function RutasTable({
         <div className="title-block">
           <h1>Rutas de producción</h1>
           <div className="sub">
-            {rutas.length} rutas reusables. Cada ruta es un esqueleto de pasos
-            que los productos pueden referenciar.
+            {rutas.length} rutas reusables. Cada ruta versiona un Workflow de
+            pasos, etapas y componentes que distintos productos pueden usar.
           </div>
         </div>
         {puedeGestionar ? (
@@ -352,9 +375,8 @@ export function RutasTable({
                         </td>
                         <td>
                           <RoutePreview
-                            pasos={ruta.pasos}
+                            ruta={ruta}
                             familiaLabel={familiaLabel}
-                            rutaNombre={ruta.nombre}
                           />
                         </td>
                         <td className="right">
@@ -433,8 +455,9 @@ export function RutasTable({
             <AlertDialogHeader>
               <AlertDialogTitle>Duplicar ruta de producción</AlertDialogTitle>
               <AlertDialogDescription>
-                Definí el nombre de la copia. Se copiarán los pasos de la
-                versión actual para que puedas revisarla antes de usarla.
+                Definí el nombre de la copia. Se copiará el Workflow completo de
+                la versión actual —incluidos etapas, componentes y paralelismos—
+                para que puedas revisarlo antes de usarlo.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="mt-4 grid gap-3">

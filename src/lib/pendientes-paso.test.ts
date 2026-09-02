@@ -25,7 +25,9 @@ const FAMILIA_MANUAL: FamiliaParaPendientes = {
   },
 };
 
-function cfgBase(extra: Partial<UpsertConfigPasoPayload> = {}): UpsertConfigPasoPayload {
+function cfgBase(
+  extra: Partial<UpsertConfigPasoPayload> = {},
+): UpsertConfigPasoPayload {
   return {
     rutaPasoId: "rp-1",
     modoActivacion: "OPCIONAL",
@@ -102,7 +104,12 @@ describe("pendientesDePaso (E.3.1)", () => {
       ...FAMILIA_MANUAL,
       slotsRequeridos: [
         { codigo: "papel", nombre: "Papel", requerido: true },
-        { codigo: "tinta_maq", nombre: "Tinta", requerido: true, tipo: "CONSUMIBLE_MAQUINA" },
+        {
+          codigo: "tinta_maq",
+          nombre: "Tinta",
+          requerido: true,
+          tipo: "CONSUMIBLE_MAQUINA",
+        },
       ],
     };
     // Requerido sin configurar (la tinta de máquina NO cuenta: la cobra el perfil).
@@ -146,14 +153,15 @@ describe("pendientesDePaso (E.3.1)", () => {
       slotsRequeridos: [{ codigo: "papel", nombre: "Papel", requerido: true }],
       defaults: null,
     };
-    // Sin proveedor y con la matriz vacía: dos bloqueantes, y NI ritmo ni
-    // centro ni materiales (el proveedor pone todo eso).
+    // Sin proveedor, plazo ni grilla: tres bloqueantes, y NI ritmo ni centro
+    // ni materiales (el proveedor pone todo eso).
     const pendientes = pendientesDePaso(
       cfgBase({ tercerizado: true, fuenteCostoTercerizado: "matriz" }),
       familiaTerc,
     );
     expect(pendientes.map((p) => p.tipo).sort()).toEqual([
       "grilla_tercerizado",
+      "plazo_proveedor",
       "proveedor",
     ]);
 
@@ -163,6 +171,7 @@ describe("pendientesDePaso (E.3.1)", () => {
         cfgBase({
           tercerizado: true,
           proveedorId: "prov-1",
+          plazoProveedorDias: 3,
           fuenteCostoTercerizado: "fijo",
           tercerizadoConfigJson: { costoFijo: 1500 },
         }),
@@ -176,6 +185,7 @@ describe("pendientesDePaso (E.3.1)", () => {
         cfgBase({
           tercerizado: true,
           proveedorId: "prov-1",
+          plazoProveedorDias: 3,
           fuenteCostoTercerizado: "tarifa_magnitud",
           tercerizadoConfigJson: {},
         }),
@@ -184,11 +194,38 @@ describe("pendientesDePaso (E.3.1)", () => {
     ).toEqual(["grilla_tercerizado"]);
   });
 
+  it("tercerizado: el plazo del proveedor es obligatorio para calcular ETA", () => {
+    const sinPlazo = pendientesDePaso(
+      cfgBase({
+        tercerizado: true,
+        proveedorId: "prov-1",
+        fuenteCostoTercerizado: "manual",
+      }),
+      FAMILIA_MANUAL,
+    );
+    expect(sinPlazo.map((p) => p.tipo)).toEqual(["plazo_proveedor"]);
+    expect(sinPlazo[0].bloqueante).toBe(true);
+
+    expect(
+      pendientesDePaso(
+        cfgBase({
+          tercerizado: true,
+          proveedorId: "prov-1",
+          plazoProveedorDias: 0,
+          fuenteCostoTercerizado: "manual",
+        }),
+        FAMILIA_MANUAL,
+      ),
+    ).toEqual([]);
+  });
+
   it("tercerizado manual: el proveedor cotiza cada trabajo — nunca faltan precios", () => {
     const familiaTerc: FamiliaParaPendientes = {
       codigo: "estructura-uuid",
       relacionMaquinaSoportada: ["M-0"],
-      slotsRequeridos: [{ codigo: "perfil", nombre: "Perfil", requerido: true }],
+      slotsRequeridos: [
+        { codigo: "perfil", nombre: "Perfil", requerido: true },
+      ],
       defaults: null,
     };
     // Sin costo estimado tampoco bloquea: el costo se ingresa al cotizar.
@@ -197,6 +234,7 @@ describe("pendientesDePaso (E.3.1)", () => {
         cfgBase({
           tercerizado: true,
           proveedorId: "prov-1",
+          plazoProveedorDias: 2,
           fuenteCostoTercerizado: "manual",
           tercerizadoConfigJson: {},
         }),
@@ -209,7 +247,9 @@ describe("pendientesDePaso (E.3.1)", () => {
     const familiaTerc: FamiliaParaPendientes = {
       codigo: "estructura-uuid",
       relacionMaquinaSoportada: ["M-0"],
-      slotsRequeridos: [{ codigo: "perfil", nombre: "Perfil", requerido: true }],
+      slotsRequeridos: [
+        { codigo: "perfil", nombre: "Perfil", requerido: true },
+      ],
       defaults: null,
     };
     // Slot en fijo sin variante → bloquea, igual que en un paso interno.
@@ -217,6 +257,7 @@ describe("pendientesDePaso (E.3.1)", () => {
       cfgBase({
         tercerizado: true,
         proveedorId: "prov-1",
+        plazoProveedorDias: 2,
         fuenteCostoTercerizado: "manual",
         tercerizadoConfigJson: { materialesPropios: true },
         slotsMateriales: [
@@ -233,6 +274,7 @@ describe("pendientesDePaso (E.3.1)", () => {
         cfgBase({
           tercerizado: true,
           proveedorId: "prov-1",
+          plazoProveedorDias: 2,
           fuenteCostoTercerizado: "manual",
           tercerizadoConfigJson: {},
           slotsMateriales: [
@@ -257,6 +299,7 @@ describe("pendientesDePaso (E.3.1)", () => {
           modoActivacion: "CONDICIONAL",
           tercerizado: true,
           proveedorId: "prov-1",
+          plazoProveedorDias: 2,
           fuenteCostoTercerizado: "fijo",
           tercerizadoConfigJson: { costoFijo: 100 },
         }),
@@ -268,7 +311,11 @@ describe("pendientesDePaso (E.3.1)", () => {
   it("T-1 sin máquina: pide duración salvo override o default", () => {
     const familiaT1: FamiliaParaPendientes = {
       ...FAMILIA_MANUAL,
-      defaults: { ...FAMILIA_MANUAL.defaults!, productividadHora: null, tiempoFijoMin: null },
+      defaults: {
+        ...FAMILIA_MANUAL.defaults!,
+        productividadHora: null,
+        tiempoFijoMin: null,
+      },
     };
     expect(
       pendientesDePaso(cfgBase({ modoTiempo: "T-1" }), familiaT1).map(
@@ -285,7 +332,9 @@ describe("pendientesDePaso (E.3.1)", () => {
       ...familiaT1,
       defaults: { ...familiaT1.defaults!, tiempoFijoMin: 25 },
     };
-    expect(pendientesDePaso(cfgBase({ modoTiempo: "T-1" }), conDefault)).toEqual([]);
+    expect(
+      pendientesDePaso(cfgBase({ modoTiempo: "T-1" }), conDefault),
+    ).toEqual([]);
   });
 
   it("herencia sin origen: sugerido, no bloqueante (hay regla histórica)", () => {

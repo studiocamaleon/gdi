@@ -317,6 +317,12 @@ export interface CotizacionResultado {
     version: number;
     huella: string;
   } | null;
+  /** DAG productivo congelado de la receta usada para cotizar. */
+  grafoProduccion?: {
+    topologia?: 'LINEAL' | 'DAG';
+    nodos?: Array<{ clave: string; indice?: number }>;
+    aristas?: Array<{ desdeClave: string; haciaClave: string }>;
+  } | null;
   /** Costos por bucket (a-g del molde). */
   costos: {
     tiempoTotal: number;
@@ -423,8 +429,12 @@ export interface ComponenteFabricadoCosteado {
   outputsPublicos?: Record<string, unknown>;
   /** Componentes cuyos outputs fueron necesarios para resolver este contexto. */
   dependenciasCalculo?: string[];
+  /** Nodos del padre que habilitan el inicio de esta rama productiva. */
+  nodosPredecesoresClaves?: string[];
   /** Nodo de la ruta padre en el que esta rama vuelve a incorporarse. */
   nodoIncorporacionClave?: string | null;
+  /** DAG propio congelado de la receta hija. */
+  grafoProduccion?: CotizacionResultado['grafoProduccion'];
   /** Subruta productiva real ejecutada para fabricar este componente. */
   pasos?: PasoEjecutado[];
   operacionesIncorporacion?: OperacionIncorporacionCosteada[];
@@ -562,6 +572,12 @@ export interface PasoEjecutado {
     centroCostoNombre?: string | null;
     materiales?: MaterialEjecutado[];
     componentesCodigos?: string[];
+    /**
+     * El acomodo pertenece a la operación interna, no al contenedor. Se
+     * conserva para que Producción pueda explicar el nesting de una etapa
+     * consolidada sin materializar sus subtareas como estados separados.
+     */
+    nestingResult?: NestingEjecutado;
   }>;
   /** Materiales consumidos (si activado). */
   materiales?: MaterialEjecutado[];

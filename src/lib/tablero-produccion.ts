@@ -170,9 +170,14 @@ export function esItemEnCursoOperativo(item: {
 
 export function bucketKanbanProduccion(item: {
   iniciado: boolean;
+  terminado?: boolean;
   atrasado: boolean;
   diasEntrega: number | null;
-}): "not-started" | "today" | "delayed" | "active" {
+}): "not-started" | "today" | "delayed" | "active" | null {
+  // El Kanban representa trabajo operativo pendiente. Un item terminado ya no
+  // necesita ocupar una columna; sigue disponible en las demás vistas y en la
+  // orden de trabajo para consulta histórica.
+  if (item.terminado) return null;
   if (item.atrasado) return "delayed";
   if (item.diasEntrega === 0) return "today";
   if (!item.iniciado) return "not-started";
@@ -295,14 +300,14 @@ export const CATEGORIAS_FAMILIA: Array<{ key: string; nm: string }> = [
 
 export type TableroPrioridad = "urgent" | "high" | "normal";
 
-/** "OT-2026-0184" + índice 0 → "OT-0184 · A" (código visible del item). */
+/** "OT-2026-0184" + índice 0 → "OT-0184-A" (código visible del item). */
 export function codigoVisibleItem(
   ordenNumero: string,
   itemIndice: number,
 ): string {
   const corto = ordenNumero.replace(/^OT-\d{4}-/, "OT-");
   const letra = String.fromCharCode(65 + (itemIndice % 26));
-  return `${corto} · ${letra}`;
+  return `${corto}-${letra}`;
 }
 
 /** Días de diferencia entre la fecha de entrega (date-only) y hoy. */
@@ -370,12 +375,39 @@ export function itemTerminado(item: TableroItemData): boolean {
   );
 }
 
+/**
+ * El item todavía tiene trabajo pendiente, pero ninguna frontera de su DAG
+ * está habilitada. En una OT compuesta esto significa que espera componentes
+ * u otros pasos de la orden; operativamente está bloqueado, no completado.
+ */
+export function itemEsperandoDependencias(item: TableroItemData): boolean {
+  return (
+    !item.sinRuta &&
+    item.pasos.some((paso) => paso.estado !== "hecho") &&
+    pasosActivos(item).length === 0
+  );
+}
+
 export function itemBloqueado(item: TableroItemData): boolean {
-  return item.pasos.some((paso) => paso.estado === "bloqueado");
+  return (
+    item.pasos.some((paso) => paso.estado === "bloqueado") ||
+    itemEsperandoDependencias(item)
+  );
 }
 
 export function itemIniciado(item: TableroItemData): boolean {
-  return item.pasos.some((paso) => paso.estado !== "pendiente");
+  return item.pasos.some((paso) => {
+    if (paso.estado !== "pendiente") return true;
+    if (paso.tipoEjecucion !== "tercerizado") return false;
+
+    // En un paso tercerizado la ejecución comienza con la orden de compra, no
+    // con un cronómetro de taller. `pedido` y sus estados posteriores deben
+    // sacar al item de "No iniciados" aunque el paso continúe pendiente hasta
+    // que producción confirme la recepción/cierre.
+    return ["pedido", "recibido", "entregado"].includes(
+      (paso.estadoCompra ?? "").toLowerCase(),
+    );
+  });
 }
 
 /** Primera frontera visible; en un DAG puede haber varias activas a la vez. */
@@ -456,13 +488,37 @@ export function itemConRetraso(item: TableroItemData): boolean {
 export function lineaEstado(item: TableroItemData): string {
   if (item.sinRuta) return "Sin ruta de producción cargada";
   const actual = pasoActual(item);
-  if (!actual) return "Todos los pasos completados";
+  if (!actual) {
+    // En un workflow DAG puede no haber una frontera ejecutable aunque todavía
+    // queden pasos pendientes: sucede cuando el producto padre espera que
+    // terminen rutas de componentes u otros nodos de la OT. No debe presentarse
+    // como completado hasta que todos sus pasos estén realmente en `hecho`.
+    return itemTerminado(item)
+      ? "Todos los pasos completados"
+      : "Esperando componentes o pasos anteriores";
+  }
+  if (actual.tipoEjecucion === "tercerizado") {
+    const estadosCompra: Record<string, string> = {
+      pendiente: "Compra a proveedor pendiente",
+      pedido: "Pedido al proveedor",
+      recibido: "Recibido del proveedor",
+      entregado: "Entregado por el proveedor",
+    };
+    return estadosCompra[actual.estadoCompra ?? "pendiente"];
+  }
   // El motivo del bloqueo se muestra aparte (blockedReason): acá sólo el dónde.
   if (actual.estado === "bloqueado") return `Bloqueado en ${actual.nombre}`;
   if (actual.estado === "en_curso") return `${actual.nombre} · en curso`;
   if (actual.estado === "pausado") return `${actual.nombre} · pausado`;
   if (!itemIniciado(item)) return `Por iniciar · primer paso: ${actual.nombre}`;
   return `Próximo paso: ${actual.nombre}`;
+}
+
+/** Rótulo breve de la operación visible en las cards del Kanban. */
+export function etiquetaPasoKanban(
+  estado: TableroPasoData["estado"] | undefined,
+): "Paso en curso:" | "Próximo paso:" {
+  return estado === "en_curso" ? "Paso en curso:" : "Próximo paso:";
 }
 
 /** "45 min" / "2h 30m" / "12 h" a partir de minutos estimados. */

@@ -72,7 +72,9 @@ const slug = (str: string) =>
 
 function cfgDe(value: UpsertConfigPasoPayload): Record<string, unknown> {
   const c = value.tercerizadoConfigJson;
-  return c && typeof c === "object" ? { ...(c as Record<string, unknown>) } : {};
+  return c && typeof c === "object"
+    ? { ...(c as Record<string, unknown>) }
+    : {};
 }
 
 /** Producto cartesiano de los valores de cada eje (sin el de cantidad). */
@@ -191,20 +193,33 @@ export function PasoTercerizadoPanel({
               </div>
               <div className={s.f}>
                 <span className={s.k}>
-                  Plazo de entrega <span className={s.o}>· opcional</span>
+                  Plazo de entrega del proveedor <span aria-hidden> *</span>
                 </span>
-                <span className={s.ctl}>
+                <span
+                  className={`${s.ctl} ${
+                    value.plazoProveedorDias == null ||
+                    value.plazoProveedorDias < 0
+                      ? s.warnb
+                      : ""
+                  }`}
+                >
                   <input
                     className={s.num}
                     inputMode="numeric"
+                    type="number"
+                    min={0}
+                    required
+                    aria-required="true"
+                    aria-invalid={
+                      value.plazoProveedorDias == null ||
+                      value.plazoProveedorDias < 0
+                    }
                     placeholder="—"
                     value={value.plazoProveedorDias ?? ""}
                     onChange={(e) =>
                       onChange({
                         plazoProveedorDias:
-                          e.target.value === ""
-                            ? null
-                            : Number(e.target.value),
+                          e.target.value === "" ? null : Number(e.target.value),
                       })
                     }
                   />
@@ -346,10 +361,7 @@ function TarifaEditor({
   const { moneda } = useConfigRegional();
   const numOrNull = (v: string) => (v === "" ? null : Number(v));
   return (
-    <div
-      className={s.fields}
-      style={{ marginTop: 12, maxWidth: 520 }}
-    >
+    <div className={s.fields} style={{ marginTop: 12, maxWidth: 520 }}>
       <div className={s.f}>
         <span className={s.k}>Tarifa</span>
         <span className={s.ctl}>
@@ -467,10 +479,7 @@ function FijoEditor({
 }) {
   const { moneda } = useConfigRegional();
   return (
-    <div
-      className={s.fields}
-      style={{ marginTop: 12, maxWidth: 520 }}
-    >
+    <div className={s.fields} style={{ marginTop: 12, maxWidth: 520 }}>
       <div className={s.f}>
         <span className={s.k}>Precio por orden</span>
         <span className={s.ctl}>
@@ -657,13 +666,23 @@ function MatrizEditor({
             </p>
           </div>
           <div className={s.sp} />
-          <button type="button" className={`${s.btn} ${s.btnGh}`} onClick={addEje}>
+          <button
+            type="button"
+            className={`${s.btn} ${s.btnGh}`}
+            onClick={addEje}
+          >
             <PlusIcon className="size-3.5" />
             Agregar atributo
           </button>
         </div>
         {atributos.length === 0 ? (
-          <p style={{ fontSize: 12.5, color: "var(--muted-text-2, #92929b)", margin: 0 }}>
+          <p
+            style={{
+              fontSize: 12.5,
+              color: "var(--muted-text-2, #92929b)",
+              margin: 0,
+            }}
+          >
             Agregá los atributos que mueven el precio (medida, faz, papel…).
           </p>
         ) : (
@@ -675,7 +694,9 @@ function MatrizEditor({
                     className={s.nm}
                     value={eje.label}
                     placeholder="Nombre del atributo"
-                    onChange={(e) => patchEje(eje.clave, { label: e.target.value })}
+                    onChange={(e) =>
+                      patchEje(eje.clave, { label: e.target.value })
+                    }
                   />
                   <span className={s.rc}>
                     {eje.valores.length
@@ -817,7 +838,9 @@ function MatrizEditor({
                         ) ?? "";
                       return (
                         <td key={c.clave} className={s.pr}>
-                          <span className={`${s.ctl} ${val === "" ? s.zero : ""}`}>
+                          <span
+                            className={`${s.ctl} ${val === "" ? s.zero : ""}`}
+                          >
                             <span className={s.pre}>{moneda.simbolo}</span>
                             <input
                               className={s.num}

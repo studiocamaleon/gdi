@@ -6,7 +6,11 @@ import Link from "next/link";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  BadgeCheckIcon,
   BoxesIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleDashedIcon,
   CopyIcon,
   Grid2X2Icon,
   Loader2Icon,
@@ -62,6 +66,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { duplicarProducto, listProductos } from "@/lib/productos-servicios-api";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 import {
@@ -150,13 +160,25 @@ function highlightMatch(text: string, query: string): React.ReactNode {
 function estadoProducto(producto: ProductoListItem) {
   switch (producto.estadoCatalogo) {
     case "activo":
-      return { label: "Activo", variant: "default" as const };
+      return {
+        label: "Activo",
+        description: "Publicado y disponible para cotizar.",
+      };
     case "incompleto":
-      return { label: "Incompleto", variant: "destructive" as const };
+      return {
+        label: "Incompleto",
+        description: "Falta completar su configuración antes de publicarlo.",
+      };
     case "listo":
-      return { label: "Listo", variant: "outline" as const };
+      return {
+        label: "Listo para publicar",
+        description: "La configuración está completa, pero aún no fue publicada.",
+      };
     default:
-      return { label: "Borrador", variant: "secondary" as const };
+      return {
+        label: "Borrador",
+        description: "Todavía está en preparación y no puede cotizarse.",
+      };
   }
 }
 
@@ -700,16 +722,17 @@ export function ProductosServiciosTable({
             </div>
           ) : (
             <div className={styles.tableFrame}>
-              <Table className={styles.table}>
+              <TooltipProvider delay={180}>
+                <Table className={styles.table}>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[34%]">Nombre</TableHead>
+                    <TableHead className="w-[31%]">Nombre</TableHead>
+                    <TableHead className="w-[14%]">Tipo</TableHead>
                     <TableHead className="w-[14%]">Categoría</TableHead>
                     <TableHead className="w-[16%]">Unidad de venta</TableHead>
-                    <TableHead className="w-[19%]">
+                    <TableHead className="w-[17%]">
                       Definición de medida
                     </TableHead>
-                    <TableHead className="w-[9%]">Estado</TableHead>
                     {canManage ? (
                       <TableHead className="w-[8%] text-right">
                         Acciones
@@ -728,6 +751,14 @@ export function ProductosServiciosTable({
                       producto.modoMedidas,
                     );
                     const estado = estadoProducto(producto);
+                    const EstadoIcon =
+                      producto.estadoCatalogo === "activo"
+                        ? BadgeCheckIcon
+                        : producto.estadoCatalogo === "incompleto"
+                          ? CircleAlertIcon
+                          : producto.estadoCatalogo === "listo"
+                            ? CircleCheckIcon
+                            : CircleDashedIcon;
                     return (
                       <TableRow
                         key={producto.id}
@@ -737,30 +768,49 @@ export function ProductosServiciosTable({
                           className={styles.productCell}
                           title={producto.descripcion ?? undefined}
                         >
-                          <Link
-                            className={styles.productName}
-                            href={`/productos-servicios/${producto.id}?tab=identidad`}
-                          >
-                            {highlightMatch(producto.nombre, query.search)}
-                          </Link>
-                          {producto.tercerizado ? (
-                            <span className={styles.outsourcedPill}>
-                              Tercerizado
-                            </span>
-                          ) : null}
+                          <span className={styles.productIdentity}>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={(props) => (
+                                  <button
+                                    {...props}
+                                    type="button"
+                                    className={styles.statusIcon}
+                                    data-state={producto.estadoCatalogo}
+                                    aria-label={`Estado: ${estado.label}`}
+                                  >
+                                    <EstadoIcon />
+                                  </button>
+                                )}
+                              />
+                              <TooltipContent
+                                side="right"
+                                align="center"
+                                className={styles.statusTooltip}
+                              >
+                                <strong>{estado.label}</strong>
+                                <span>{estado.description}</span>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Link
+                              className={styles.productName}
+                              href={`/productos-servicios/${producto.id}?tab=identidad`}
+                            >
+                              {highlightMatch(producto.nombre, query.search)}
+                            </Link>
+                          </span>
+                        </TableCell>
+                        <TableCell>
                           <span
-                            className={styles.compositionPill}
+                            className={styles.typePill}
                             data-kind={
                               producto.esCompuesto ? "compuesto" : "simple"
                             }
                           >
-                            {producto.esCompuesto ? "Compuesto" : "Simple"}
+                            {producto.esCompuesto
+                              ? "Producto compuesto"
+                              : "Producto simple"}
                           </span>
-                          {producto.usadoComoComponente ? (
-                            <span className={styles.componentPill}>
-                              Usado como componente
-                            </span>
-                          ) : null}
                         </TableCell>
                         <TableCell>
                           <span className={styles.categoryPill}>
@@ -776,14 +826,6 @@ export function ProductosServiciosTable({
                         <TableCell title={medidas.descripcion}>
                           <span className={styles.measurePill}>
                             {medidas.label}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span
-                            className={styles.statusPill}
-                            data-state={producto.estadoCatalogo}
-                          >
-                            {estado.label}
                           </span>
                         </TableCell>
                         {canManage ? (
@@ -807,7 +849,8 @@ export function ProductosServiciosTable({
                     );
                   })}
                 </TableBody>
-              </Table>
+                </Table>
+              </TooltipProvider>
             </div>
           )}
         </section>

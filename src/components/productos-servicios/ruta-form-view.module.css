@@ -1,0 +1,154 @@
+.identityCard.identityCard {
+  align-self: flex-start;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--side-accent);
+  background: var(--surface);
+  box-shadow:
+    0 1px 0 rgb(20 20 26 / 4%),
+    0 14px 36px rgb(20 20 26 / 6%);
+}
+
+.identityHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 18px 18px 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: linear-gradient(
+    115deg,
+    var(--surface) 42%,
+    var(--signal-bg) 100%
+  );
+}
+
+.identityIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--ps-accent-bord);
+  border-radius: 12px;
+  color: var(--ps-accent);
+  background: color-mix(in srgb, var(--ps-accent-bg) 82%, var(--surface));
+}
+
+.identityIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.identityCopy {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--signal);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.identityCopy [data-slot="card-title"] {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.identityCopy [data-slot="card-description"] {
+  max-width: 34ch;
+  margin-top: 3px;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.identityContent {
+  padding: 18px;
+}
+
+.fieldGroup {
+  gap: 16px;
+}
+
+.fieldGroup [data-slot="field"] {
+  gap: 7px;
+}
+
+.fieldGroup [data-slot="field-label"] {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.fieldGroup input,
+.fieldGroup textarea {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  box-shadow: 0 1px 1px rgb(20 20 26 / 3%);
+}
+
+.fieldGroup input {
+  min-height: 40px;
+}
+
+.fieldGroup textarea {
+  min-height: 94px;
+  resize: vertical;
+}
+
+.fieldGroup input:focus-visible,
+.fieldGroup textarea:focus-visible {
+  border-color: var(--ps-accent);
+  box-shadow: 0 0 0 3px var(--ps-accent-bg);
+}
+
+.required {
+  color: var(--ps-accent);
+}
+
+@media (max-width: 1500px) {
+  .routeColumns {
+    flex-direction: column;
+  }
+
+  .routeColumns > .identityCard.identityCard {
+    flex: 0 1 auto;
+    width: 100%;
+  }
+
+  .identityCopy [data-slot="card-description"] {
+    max-width: 58ch;
+  }
+
+  .fieldGroup {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
+    align-items: start;
+  }
+}
+
+@media (max-width: 700px) {
+  .fieldGroup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .identityHeader {
+    padding: 16px;
+  }
+
+  .identityContent {
+    padding: 16px;
+  }
+}

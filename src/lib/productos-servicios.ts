@@ -17,19 +17,14 @@ export const unidadComercialProductoItems: Array<{
 ];
 
 export type ModoMedidasProducto =
-  | "FIJA"
-  | "LIBRE"
-  | "COMERCIAL_ELIGE"
-  | "MIXTA";
+  "FIJA" | "LIBRE" | "COMERCIAL_ELIGE" | "MIXTA";
 
 export type DimensionProducto = "ANCHO" | "ALTO" | "PROFUNDIDAD";
 
 export type EstructuraProducto = "SIMPLE" | "COMPUESTO";
 
 export type MinimoComercialPolitica =
-  | "NONE"
-  | "ADVERTIR_FACTURAR_MINIMO"
-  | "BLOQUEAR";
+  "NONE" | "ADVERTIR_FACTURAR_MINIMO" | "BLOQUEAR";
 
 export type MinimoComercialBase = "cantidad_comercial" | "pliegos_impresos";
 
@@ -465,7 +460,36 @@ export interface RutaListItem {
     nombreVisible?: string | null;
     icono?: string | null;
   }>;
+  workflow?: RutaWorkflow;
   _count: { productosAlternativas: number };
+}
+
+export type TipoNodoRutaWorkflow = "PASO" | "ETAPA" | "COMPONENTE";
+
+export type NodoRutaWorkflow =
+  | {
+      clave: string;
+      tipo: "PASO" | "ETAPA";
+      orden: number;
+      familiaCodigo: string;
+      nombreVisible?: string | null;
+      icono?: string | null;
+    }
+  | {
+      clave: string;
+      tipo: "COMPONENTE";
+      orden: number;
+      productoComponenteId: string;
+      codigo: string;
+      nombre: string;
+      requerido: boolean;
+    };
+
+export interface RutaWorkflow {
+  contractVersion: 1;
+  topologia: "LINEAL" | "DAG";
+  nodos: NodoRutaWorkflow[];
+  aristas: Array<{ desdeClave: string; haciaClave: string }>;
 }
 
 // ============================================================================

@@ -6,29 +6,11 @@ import { useRouter } from "next/navigation";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import {
   ArrowLeftIcon,
-  BookOpenIcon,
-  CircleDotIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  FactoryIcon,
   HistoryIcon,
-  LayersIcon,
-  LayoutDashboardIcon,
-  ListChecksIcon,
-  PackageIcon,
-  PaintbrushIcon,
-  PlusIcon,
-  PrinterIcon,
   RefreshCwIcon,
+  RouteIcon,
   SaveIcon,
-  ScissorsIcon,
-  ShieldCheckIcon,
-  SunIcon,
   Trash2Icon,
-  TruckIcon,
-  WrenchIcon,
-  XIcon,
-  ZapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,7 +24,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Card,
   CardContent,
@@ -50,57 +31,30 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  HumanSelect,
-  type HumanSelectOption,
-} from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { FamiliasCapacidadesSheet } from "@/components/productos-servicios/familias-capacidades-sheet";
 import {
   actualizarRuta,
   crearRuta,
   eliminarRuta,
   migrarProductosRuta,
+  getPasosTenant,
+  getProductos,
 } from "@/lib/productos-servicios-api";
-import type { CatalogoFamilias } from "@/lib/productos-servicios";
+import type {
+  CatalogoFamilias,
+  PasoTenant,
+  ProductoListItem,
+  RutaWorkflow,
+} from "@/lib/productos-servicios";
+import { RutaWorkflowEditor } from "@/components/productos-servicios/ruta-workflow-editor";
+import styles from "./ruta-form-view.module.css";
 
 type Modo = "crear" | "editar";
-type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
-
-const STEP_ICONS = [
-  { key: "Layout", label: "Diseño", icon: LayoutDashboardIcon },
-  { key: "Layers", label: "Capas", icon: LayersIcon },
-  { key: "Printer", label: "Impresión", icon: PrinterIcon },
-  { key: "Plot", label: "Plotter", icon: FactoryIcon },
-  { key: "Cut", label: "Corte", icon: ScissorsIcon },
-  { key: "Scissors", label: "Tijeras", icon: ScissorsIcon },
-  { key: "Brush", label: "Acabado", icon: PaintbrushIcon },
-  { key: "Stamp", label: "Troquel", icon: CircleDotIcon },
-  { key: "Fold", label: "Plegado", icon: LayersIcon },
-  { key: "Cnc", label: "CNC", icon: FactoryIcon },
-  { key: "Beam", label: "Láser", icon: ZapIcon },
-  { key: "Book", label: "Encuadernación", icon: BookOpenIcon },
-  { key: "Tool", label: "Herramienta", icon: WrenchIcon },
-  { key: "Shield", label: "QA", icon: ShieldCheckIcon },
-  { key: "Package", label: "Empaque", icon: PackageIcon },
-  { key: "Truck", label: "Despacho", icon: TruckIcon },
-  { key: "Wrench", label: "Instalación", icon: WrenchIcon },
-  { key: "Sun", label: "Secado", icon: SunIcon },
-] satisfies Array<{ key: string; label: string; icon: IconComponent }>;
-
-const STEP_ICON_BY_KEY = Object.fromEntries(
-  STEP_ICONS.map((item) => [item.key, item.icon]),
-) as Record<string, IconComponent>;
 
 const DEFAULT_ICON_BY_FAMILY: Record<string, string> = {
   diseno_grafico: "Layout",
@@ -126,56 +80,6 @@ function getDefaultStepIcon(familiaCodigo: string) {
   return DEFAULT_ICON_BY_FAMILY[familiaCodigo] ?? "Layout";
 }
 
-function getStepIcon(icono?: string | null) {
-  return STEP_ICON_BY_KEY[icono ?? ""] ?? LayoutDashboardIcon;
-}
-
-function IconoPasoPicker({
-  value,
-  onChange,
-}: {
-  value?: string | null;
-  onChange: (value: string) => void;
-}) {
-  const selected = STEP_ICONS.find((item) => item.key === value);
-  const label = selected?.label ?? "Diseño";
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <button
-            type="button"
-            className="route-step-icon-trigger"
-            title={`Ícono: ${label}`}
-            aria-label={`Elegir ícono del paso. Actual: ${label}`}
-          />
-        }
-      >
-        {React.createElement(getStepIcon(value))}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="route-step-icon-menu">
-        <div className="route-step-icon-grid" aria-label="Íconos disponibles">
-          {STEP_ICONS.map((item) => {
-            const Icon = item.icon;
-            const active = value === item.key;
-            return (
-              <DropdownMenuItem
-                key={item.key}
-                className={`route-step-icon-option ${active ? "on" : ""}`}
-                onClick={() => onChange(item.key)}
-              >
-                <Icon />
-                <span>{item.label}</span>
-              </DropdownMenuItem>
-            );
-          })}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 interface RutaConPasos {
   id: string;
   codigo: string;
@@ -190,6 +94,7 @@ interface RutaConPasos {
     nombreVisible?: string | null;
     icono?: string | null;
   }>;
+  workflow?: RutaWorkflow;
   versiones?: Array<{
     version: number;
     cambios: string | null;
@@ -222,24 +127,87 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   const { fechaNumerica } = useFecha();
   const [guardando, setGuardando] = React.useState(false);
   const [eliminando, setEliminando] = React.useState(false);
-  const [familiasOpen, setFamiliasOpen] = React.useState(false);
 
   const [nombre, setNombre] = React.useState(rutaExistente?.nombre ?? "");
   const [descripcion, setDescripcion] = React.useState(
     rutaExistente?.descripcion ?? "",
   );
   const [activo, setActivo] = React.useState(rutaExistente?.activo ?? true);
+  const workflowInicial = React.useMemo<RutaWorkflow>(() => {
+    if (rutaExistente?.workflow) return rutaExistente.workflow;
+    const nodos =
+      rutaExistente?.pasos.map((paso, index) => ({
+        clave: `ruta:${paso.id}`,
+        tipo: "PASO" as const,
+        orden: index,
+        familiaCodigo: paso.familiaCodigo,
+        nombreVisible: paso.nombreVisible ?? null,
+        icono: paso.icono ?? "Layout",
+      })) ?? [];
+    return {
+      contractVersion: 1,
+      topologia: "LINEAL",
+      nodos,
+      aristas: nodos.slice(1).map((nodo, index) => ({
+        desdeClave: nodos[index].clave,
+        haciaClave: nodo.clave,
+      })),
+    };
+  }, [rutaExistente]);
+  const [workflow, setWorkflow] = React.useState<RutaWorkflow>(workflowInicial);
+  const [productos, setProductos] = React.useState<ProductoListItem[]>([]);
+  const [pasosTenant, setPasosTenant] = React.useState<PasoTenant[]>([]);
   const [pasos, setPasos] = React.useState<PasoEditable[]>(
-    rutaExistente?.pasos.map((p) => ({
-      familiaCodigo: p.familiaCodigo,
-      nombreVisible: p.nombreVisible ?? "",
-      icono: p.icono ?? getDefaultStepIcon(p.familiaCodigo),
-      uiKey: p.id,
-    })) ?? [],
+    workflowInicial.nodos
+      .filter((nodo) => nodo.tipo !== "COMPONENTE")
+      .map((nodo) => ({
+        familiaCodigo: nodo.familiaCodigo,
+        nombreVisible: nodo.nombreVisible ?? "",
+        icono: nodo.icono ?? getDefaultStepIcon(nodo.familiaCodigo),
+        uiKey: nodo.clave.replace(/^ruta:/, ""),
+      })),
   );
 
+  React.useEffect(() => {
+    let activo = true;
+    void Promise.all([getProductos(true), getPasosTenant()])
+      .then(([productosDisponibles, pasosDisponibles]) => {
+        if (!activo) return;
+        setProductos(productosDisponibles);
+        setPasosTenant(pasosDisponibles.filter((paso) => paso.activo));
+      })
+      .catch(() => {
+        if (!activo) return;
+        toast.error("No se pudo cargar el catálogo de nodos reutilizables.");
+      });
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  const actualizarWorkflow = React.useCallback((siguiente: RutaWorkflow) => {
+    setWorkflow(siguiente);
+    setPasos(
+      siguiente.nodos
+        .filter((nodo) => nodo.tipo !== "COMPONENTE")
+        .map((nodo) => ({
+          familiaCodigo: nodo.familiaCodigo,
+          nombreVisible: nodo.nombreVisible ?? "",
+          icono: nodo.icono ?? getDefaultStepIcon(nodo.familiaCodigo),
+          uiKey: nodo.clave.replace(/^ruta:/, ""),
+        })),
+    );
+  }, []);
+
   // Diff respecto a inicial: detectar cambio estructural (heurística)
-  const pasosOriginales = React.useRef(rutaExistente?.pasos ?? []);
+  const pasosOriginales = React.useMemo(
+    () => rutaExistente?.pasos ?? [],
+    [rutaExistente],
+  );
+  const workflowOriginal = React.useMemo(
+    () => JSON.stringify(workflowInicial),
+    [workflowInicial],
+  );
 
   // G-F1 — heurística fina (doc §7.6): detecta cambios tipados estructurales.
   // - AGREGAR_PASO / QUITAR_PASO / CAMBIAR_FAMILIA / CAMBIAR_ORDEN → sugerencia: nueva versión.
@@ -257,7 +225,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
 
   const cambiosDetectados = React.useMemo<CambioTipado[]>(() => {
     if (modo === "crear") return [];
-    const originales = pasosOriginales.current;
+    const originales = pasosOriginales;
     const cambios: CambioTipado[] = [];
     const usadosNuevos = new Set<number>();
 
@@ -308,34 +276,32 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
     });
 
     return cambios;
-  }, [pasos, modo]);
+  }, [pasos, modo, pasosOriginales]);
 
-  const cambioEstructural = cambiosDetectados.length > 0;
+  const cambioWorkflow =
+    modo === "editar" && JSON.stringify(workflow) !== workflowOriginal;
+  const cambioEstructural = cambiosDetectados.length > 0 || cambioWorkflow;
   const cambioIconos = React.useMemo(() => {
     if (modo === "crear") return false;
     return pasos.some((paso) => {
-      const original = pasosOriginales.current.find(
-        (item) => item.id === paso.uiKey,
-      );
+      const original = pasosOriginales.find((item) => item.id === paso.uiKey);
       if (!original) return false;
       return (
         (original.icono ?? getDefaultStepIcon(original.familiaCodigo)) !==
         paso.icono
       );
     });
-  }, [modo, pasos]);
+  }, [modo, pasos, pasosOriginales]);
   const cambioNombres = React.useMemo(() => {
     if (modo === "crear") return false;
     return pasos.some((paso) => {
-      const original = pasosOriginales.current.find(
-        (item) => item.id === paso.uiKey,
-      );
+      const original = pasosOriginales.find((item) => item.id === paso.uiKey);
       if (!original) return false;
       return (
         (original.nombreVisible?.trim() ?? "") !== paso.nombreVisible.trim()
       );
     });
-  }, [modo, pasos]);
+  }, [modo, pasos, pasosOriginales]);
   const productosAfectados = rutaExistente?.productosAlternativas?.length ?? 0;
   const requiereVersionadoPorUso =
     (cambioEstructural || cambioIconos || cambioNombres) &&
@@ -356,22 +322,6 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
 
   const [cambiosDescripcion, setCambiosDescripcion] = React.useState("");
 
-  // Familias agrupadas por categoría para el selector
-  const familiasPorCategoria = React.useMemo(() => {
-    const map = new Map<string, typeof catalogoFamilias.familias>();
-    const familiasUsadas = new Set(pasos.map((paso) => paso.familiaCodigo));
-    for (const f of catalogoFamilias.familias.filter(
-      (familia) =>
-        familia.visibleEnSelector !== false ||
-        familiasUsadas.has(familia.codigo),
-    )) {
-      const arr = map.get(f.categoria) ?? [];
-      arr.push(f);
-      map.set(f.categoria, arr);
-    }
-    return map;
-  }, [catalogoFamilias, pasos]);
-
   const familiaNombre = React.useCallback(
     (codigo: string): string => {
       return (
@@ -382,105 +332,18 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
     [catalogoFamilias],
   );
 
-  const familiaOptions = React.useMemo<HumanSelectOption[]>(() => {
-    // Los pasos creados por la empresa van PRIMERO en su propio grupo, igual
-    // que en el selector de pasos extra: si alguien creó "Serigrafía manual"
-    // es para usarla en rutas, no para bucearla entre las del catálogo.
-    const propios: HumanSelectOption[] = [];
-    const sistema: HumanSelectOption[] = [];
-    for (const [catCodigo, fams] of familiasPorCategoria.entries()) {
-      const cat = catalogoFamilias.categorias.find(
-        (c) => c.codigo === catCodigo,
-      );
-      for (const f of fams) {
-        if (f.origen === "tenant") {
-          propios.push({
-            value: f.codigo,
-            label: f.nombre,
-            description: f.descripcion,
-            group: "Tus pasos",
-          });
-        } else {
-          sistema.push({
-            value: f.codigo,
-            label: f.nombre,
-            code: f.codigo,
-            description: f.descripcion,
-            group: cat?.nombre ?? catCodigo,
-          });
-        }
-      }
-    }
-    return [...propios, ...sistema];
-  }, [catalogoFamilias.categorias, familiasPorCategoria]);
-
-  const agregarPaso = () => {
-    setPasos((prev) => [
-      ...prev,
-      {
-        familiaCodigo: "pre_prensa",
-        nombreVisible: "",
-        icono: getDefaultStepIcon("pre_prensa"),
-        uiKey: `new-${Date.now()}-${Math.random()}`,
-      },
-    ]);
-  };
-
-  const cambiarPaso = (idx: number, familiaCodigo: string) => {
-    setPasos((prev) =>
-      prev.map((p, i) => {
-        if (i !== idx) return p;
-        const icono =
-          p.icono === getDefaultStepIcon(p.familiaCodigo)
-            ? getDefaultStepIcon(familiaCodigo)
-            : p.icono;
-        return { ...p, familiaCodigo, icono };
-      }),
-    );
-  };
-
-  const cambiarIconoPaso = (idx: number, icono: string) => {
-    setPasos((prev) => prev.map((p, i) => (i === idx ? { ...p, icono } : p)));
-  };
-
-  const cambiarNombrePaso = (idx: number, nombreVisible: string) => {
-    setPasos((prev) =>
-      prev.map((p, i) => (i === idx ? { ...p, nombreVisible } : p)),
-    );
-  };
-
-  const eliminarPaso = (idx: number) => {
-    setPasos((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const moverPaso = (idx: number, dir: -1 | 1) => {
-    setPasos((prev) => {
-      const newPasos = [...prev];
-      const target = idx + dir;
-      if (target < 0 || target >= newPasos.length) return prev;
-      [newPasos[idx], newPasos[target]] = [newPasos[target], newPasos[idx]];
-      return newPasos;
-    });
-  };
-
   const handleGuardar = async () => {
     if (pasos.length === 0) {
-      toast.error("La ruta debe tener al menos 1 paso");
+      toast.error("La ruta debe tener al menos un Paso o una Etapa");
       return;
     }
     setGuardando(true);
     try {
-      const pasosPayload = pasos.map((p, idx) => ({
-        orden: idx + 1,
-        familiaCodigo: p.familiaCodigo,
-        nombreVisible: p.nombreVisible.trim() || null,
-        icono: p.icono,
-      }));
       if (modo === "crear") {
         const creado = (await crearRuta({
           nombre,
           descripcion: descripcion || undefined,
-          pasos: pasosPayload,
+          workflow,
         })) as { id: string };
         toast.success(`Ruta "${nombre}" creada`);
         router.push(`/productos-servicios/rutas/${creado.id}`);
@@ -489,9 +352,9 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           nombre,
           descripcion: descripcion || undefined,
           activo,
-          pasos:
+          workflow:
             cambioEstructural || cambioIconos || cambioNombres
-              ? pasosPayload
+              ? workflow
               : undefined,
           cambios: cambiosDescripcion || undefined,
         });
@@ -595,32 +458,46 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
       </div>
 
       <div className="route-editor">
-        <div className="route-cols">
-          {/* Identidad */}
-          <Card className="wiz-section">
-            <CardHeader>
-              <CardTitle>Identidad</CardTitle>
-              <CardDescription>Nombre de la ruta reusable.</CardDescription>
+        <div className={`route-cols ${styles.routeColumns}`}>
+          <Card className={`wiz-section ${styles.identityCard}`}>
+            <CardHeader className={styles.identityHeader}>
+              <span className={styles.identityIcon} aria-hidden="true">
+                <RouteIcon />
+              </span>
+              <div className={styles.identityCopy}>
+                <span className={styles.eyebrow}>Ruta reusable</span>
+                <CardTitle>Identidad</CardTitle>
+                <CardDescription>
+                  Definí cómo se reconocerá esta ruta en el catálogo y al
+                  incorporarla a un producto.
+                </CardDescription>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre *</Label>
-                <Input
-                  id="nombre"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Tarjeta digital standard"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="descripcion">Descripción</Label>
-                <Textarea
-                  id="descripcion"
-                  value={descripcion}
-                  onChange={(e) => setDescripcion(e.target.value)}
-                  rows={3}
-                />
-              </div>
+            <CardContent className={styles.identityContent}>
+              <FieldGroup className={styles.fieldGroup}>
+                <Field>
+                  <FieldLabel htmlFor="nombre">
+                    Nombre <span className={styles.required}>*</span>
+                  </FieldLabel>
+                  <Input
+                    id="nombre"
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    placeholder="Ej. Impresión y terminación estándar"
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="descripcion">Descripción</FieldLabel>
+                  <Textarea
+                    id="descripcion"
+                    value={descripcion}
+                    onChange={(e) => setDescripcion(e.target.value)}
+                    rows={3}
+                    placeholder="Explicá brevemente cuándo conviene usar esta ruta."
+                  />
+                </Field>
+              </FieldGroup>
               {modo === "editar" && requiereVersionadoPorUso && (
                 <Card className="bg-orange-50 border-orange-300">
                   <CardContent className="pt-4">
@@ -644,6 +521,12 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                       {cambioNombres ? (
                         <li>Cambian nombres operativos de uno o más pasos.</li>
                       ) : null}
+                      {cambioWorkflow ? (
+                        <li>
+                          Cambia la estructura del Workflow, sus paralelismos o
+                          sus componentes fabricados.
+                        </li>
+                      ) : null}
                       {cambioIconos ? (
                         <li>Cambian íconos de uno o más pasos.</li>
                       ) : null}
@@ -666,106 +549,15 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
             </CardContent>
           </Card>
 
-          {/* Pasos */}
-          <Card className="wiz-section">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Pasos en orden</CardTitle>
-                  <CardDescription>
-                    Cada paso es una familia del catálogo. El producto configura
-                    máquinas y materiales después.
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setFamiliasOpen(true)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <ListChecksIcon className="mr-2 size-4" />
-                    Ver familias
-                  </Button>
-                  <Button onClick={agregarPaso} variant="outline" size="sm">
-                    <PlusIcon className="mr-2 size-4" />
-                    Agregar paso
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {pasos.length === 0 ? (
-                <p className="section-empty">
-                  Sin pasos. Agregá uno para arrancar.
-                </p>
-              ) : (
-                pasos.map((paso, idx) => (
-                  <div key={paso.uiKey} className="step-row">
-                    <div className="step-num">{idx + 1}</div>
-                    <IconoPasoPicker
-                      value={paso.icono}
-                      onChange={(icono) => cambiarIconoPaso(idx, icono)}
-                    />
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      <HumanSelect
-                        value={paso.familiaCodigo}
-                        onValueChange={(v) =>
-                          cambiarPaso(idx, v || "pre_prensa")
-                        }
-                        options={familiaOptions}
-                        triggerClassName="w-full"
-                        contentClassName="max-h-80"
-                      />
-                      <Field>
-                        <FieldLabel
-                          htmlFor={`nombre-paso-${paso.uiKey}`}
-                          className="sr-only"
-                        >
-                          Nombre personalizado del paso {idx + 1}
-                        </FieldLabel>
-                        <Input
-                          id={`nombre-paso-${paso.uiKey}`}
-                          value={paso.nombreVisible}
-                          maxLength={120}
-                          onChange={(event) =>
-                            cambiarNombrePaso(idx, event.target.value)
-                          }
-                          placeholder={`Nombre personalizado (opcional) · ${familiaNombre(paso.familiaCodigo)}`}
-                        />
-                      </Field>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => moverPaso(idx, -1)}
-                      disabled={idx === 0}
-                      aria-label={`Subir paso ${idx + 1}`}
-                    >
-                      <ChevronUpIcon className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => moverPaso(idx, 1)}
-                      disabled={idx === pasos.length - 1}
-                      aria-label={`Bajar paso ${idx + 1}`}
-                    >
-                      <ChevronDownIcon className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => eliminarPaso(idx)}
-                      className="text-red-600 hover:text-red-700"
-                      aria-label={`Eliminar paso ${idx + 1}`}
-                    >
-                      <XIcon className="size-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+          <div className="route-workflow-slot">
+            <RutaWorkflowEditor
+              value={workflow}
+              onChange={actualizarWorkflow}
+              catalogoFamilias={catalogoFamilias}
+              pasosTenant={pasosTenant}
+              productos={productos}
+            />
+          </div>
 
           {/* Historial de versiones */}
         </div>
@@ -867,12 +659,13 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
             <div />
           )}
           <span className="route-actions-copy">
-            {modo === "editar" &&
-            (rutaExistente?.productosAlternativas?.length ?? 0) === 0
-              ? "Los cambios se aplican sobre esta ruta. Todavía no está asociada a productos."
-              : `Los cambios estructurales crearán automáticamente v${
-                  (rutaExistente?.versionActual ?? 1) + 1
-                } para preservar los productos existentes.`}
+            {modo === "crear"
+              ? "Se guardará como V1 y quedará disponible para reutilizarla en distintos productos."
+              : (rutaExistente?.productosAlternativas?.length ?? 0) === 0
+                ? "Los cambios se aplican sobre esta ruta. Todavía no está asociada a productos."
+                : `Los cambios estructurales crearán automáticamente v${
+                    (rutaExistente?.versionActual ?? 1) + 1
+                  } para preservar los productos existentes.`}
           </span>
           <button
             type="button"
@@ -886,7 +679,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
             type="button"
             className="btn btn-primary"
             onClick={handleGuardar}
-            disabled={guardando || !nombre}
+            disabled={guardando || !nombre || workflow.nodos.length === 0}
           >
             <SaveIcon className="size-4" />
             {guardando
@@ -959,12 +752,6 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           onConfirmar={ejecutarEliminar}
         />
       )}
-
-      <FamiliasCapacidadesSheet
-        catalogoFamilias={catalogoFamilias}
-        open={familiasOpen}
-        onOpenChange={setFamiliasOpen}
-      />
     </div>
   );
 }

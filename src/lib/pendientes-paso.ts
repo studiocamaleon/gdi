@@ -22,6 +22,7 @@ export type PendientePasoTipo =
   | "material_slot"
   | "grilla_tercerizado"
   | "proveedor"
+  | "plazo_proveedor"
   | "herencia_origen"
   | "ritmo"
   | "tiempo_fijo"
@@ -135,6 +136,15 @@ export function pendientesDePaso(
         bloqueante: true,
       });
     }
+    if (cfg.plazoProveedorDias == null || cfg.plazoProveedorDias < 0) {
+      pendientes.push({
+        tipo: "plazo_proveedor",
+        etiqueta: "el plazo del proveedor",
+        motivo:
+          "Sin plazo de entrega no se puede estimar cuándo termina esta rama ni cuándo se liberan sus sucesores.",
+        bloqueante: true,
+      });
+    }
     const fuente = cfg.fuenteCostoTercerizado ?? "matriz";
     const configTerc = asRecord(cfg.tercerizadoConfigJson);
     // "manual": el proveedor cotiza cada trabajo al momento de cotizar; el
@@ -146,8 +156,9 @@ export function pendientesDePaso(
           ? (cfg.tercerizadoEntradas?.length ?? 0) === 0
           : fuente === "tarifa_magnitud"
             ? num(configTerc.tarifa) === null
-            : num(configTerc.costo ?? configTerc.costoFijo ?? configTerc.monto) ===
-              null;
+            : num(
+                configTerc.costo ?? configTerc.costoFijo ?? configTerc.monto,
+              ) === null;
     if (sinGrilla) {
       pendientes.push({
         tipo: "grilla_tercerizado",
@@ -313,7 +324,8 @@ export function pendientesDePaso(
     // marcaba "Falta: de qué paso hereda" en rutas que cotizan perfecto
     // (H6 del relevamiento del editor).
     const heredaPorOutput =
-      typeof config.campoOutput === "string" && config.campoOutput.trim() !== "";
+      typeof config.campoOutput === "string" &&
+      config.campoOutput.trim() !== "";
     if (!origenExplicito && !heredaPorOutput) {
       pendientes.push({
         tipo: "herencia_origen",

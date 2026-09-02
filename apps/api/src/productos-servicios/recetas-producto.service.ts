@@ -48,6 +48,7 @@ import {
   construirBomMultinivel,
   type BomRevisionFuente,
 } from './bom-multinivel';
+import { leerWorkflowRuta } from './ruta-workflow';
 
 type ProductoDetalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaDetalle = ProductoDetalle['rutasAlternativas'][number];
@@ -331,6 +332,9 @@ export class RecetasProductoService {
     const borradorExistente = existente?.revisiones[0] ?? null;
     const revisionFuente =
       borradorExistente ?? existente?.revisionPublicada ?? null;
+    const plantillaRuta = !revisionFuente
+      ? await this.plantillaInicialDesdeRuta(auth.tenantId, ruta)
+      : null;
     if (
       dto.expectedUpdatedAt &&
       (!borradorExistente ||
@@ -375,6 +379,7 @@ export class RecetasProductoService {
         nodosPredecesoresClaves: item.nodosPredecesoresClaves,
         orden: item.orden,
       })) ??
+      plantillaRuta?.componentes ??
       [];
     if (producto.estructuraProducto === 'SIMPLE' && componentes.length > 0) {
       throw new BadRequestException(
@@ -421,7 +426,7 @@ export class RecetasProductoService {
               existente?.revisionPublicada
                 ?.grafoProduccionJson) as unknown as GrafoProduccion
           ).aristas
-        : undefined;
+        : plantillaRuta?.dependencias;
     const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
       existente?.revisionPublicada?.grafoProduccionJson) as
       (GrafoProduccion & Prisma.JsonObject) | null | undefined;
@@ -1498,6 +1503,57 @@ export class RecetasProductoService {
         producto.cargosDirectosCotizacion,
       ) as unknown[],
     };
+  }
+
+  private async plantillaInicialDesdeRuta(
+    tenantId: string,
+    ruta: RutaDetalle,
+  ): Promise<{
+    dependencias: Array<{ desdeClave: string; haciaClave: string }>;
+    componentes: RecetaComponenteDto[];
+  }> {
+    const version = await this.prisma.rutaVersion.findFirst({
+      where: {
+        tenantId,
+        rutaId: ruta.rutaId,
+        version: ruta.rutaVersion,
+      },
+      select: { snapshotJson: true },
+    });
+    const workflow = leerWorkflowRuta(version?.snapshotJson, ruta.ruta.pasos);
+    const tipos = new Map(
+      workflow.nodos.map((nodo) => [nodo.clave, nodo.tipo]),
+    );
+    const dependencias = workflow.aristas.filter(
+      (arista) =>
+        tipos.get(arista.desdeClave) !== 'COMPONENTE' &&
+        tipos.get(arista.haciaClave) !== 'COMPONENTE',
+    );
+    const componentes: RecetaComponenteDto[] = workflow.nodos
+      .filter((nodo) => nodo.tipo === 'COMPONENTE')
+      .map((nodo, index) => ({
+        productoComponenteId: nodo.productoComponenteId,
+        codigo: nodo.codigo,
+        nombre: nodo.nombre,
+        politicaEjecucion: 'INDEPENDIENTE',
+        formula: 'por_unidad',
+        cantidad: 1,
+        unidad: 'unidad',
+        requerido: nodo.requerido,
+        configuracionJson: null,
+        nodoIncorporacionClave:
+          workflow.aristas.find((arista) => arista.desdeClave === nodo.clave)
+            ?.haciaClave ?? null,
+        nodosPredecesoresClaves: workflow.aristas
+          .filter(
+            (arista) =>
+              arista.haciaClave === nodo.clave &&
+              tipos.get(arista.desdeClave) !== 'COMPONENTE',
+          )
+          .map((arista) => arista.desdeClave),
+        orden: index,
+      }));
+    return { dependencias, componentes };
   }
 
   /** Materializa las operaciones privadas de una etapa como pasos de cálculo

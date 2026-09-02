@@ -726,6 +726,28 @@ describe("simularFlujo · traza", () => {
     expect(traza[1].fin).toEqual(jul(20, 9, 30));
   });
 
+  it("conserva las dependencias DAG reales, incluso entre items", () => {
+    const bastidor = tercerizado(0, "estructura", 2);
+    bastidor.nodoClave = "componente:bastidor";
+    bastidor.esTerminal = true;
+    const itemBastidor = item("bastidor", [bastidor]);
+
+    const ensamble = interno(0, "ensamble", 60);
+    ensamble.nodoClave = "etapa:ensamble";
+    ensamble.predecesorPasoIds = [itemBastidor.pasos[0].id];
+    ensamble.esTerminal = true;
+    const itemPadre = item("padre", [ensamble]);
+
+    const { traza } = correr([itemBastidor, itemPadre], {
+      estaciones: [estacion({ id: "ensamble", familias: ["ensamble"] })],
+    });
+    const bloqueBastidor = traza.find((p) => p.itemId === "bastidor")!;
+    const bloqueEnsamble = traza.find((p) => p.itemId === "padre")!;
+
+    expect(bloqueEnsamble.predecesorPasoIds).toEqual([bloqueBastidor.pasoId]);
+    expect(bloqueEnsamble.inicio).toEqual(bloqueBastidor.fin);
+  });
+
   it("mide la espera por un puesto ocupado", () => {
     const { traza } = correr([
       item("A", [interno(0, "impresion", 120)]),

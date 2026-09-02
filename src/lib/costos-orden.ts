@@ -24,6 +24,95 @@ import type {
 type CotizacionItem = PropuestaItem["cotizacion"];
 type PasoCosteo = CotizacionItem["pasos"][number];
 
+type ComponenteCosteoRecursivo = {
+  costoTotal?: number;
+  pasos?: unknown[];
+  componentes?: ComponenteCosteoRecursivo[];
+};
+
+/**
+ * Recorre el árbol de costeo sin aplanar su semántica. El total del producto
+ * padre ya incluye a los hijos, pero los centros y las vistas explicativas
+ * necesitan entrar en cada receta congelada para no perder sus operaciones.
+ */
+export function recorrerPasosCotizados(
+  cotizacion: CotizacionItem,
+  visitar: (paso: PasoCosteo, contexto: { componente: boolean }) => void,
+) {
+  cotizacion.pasos.forEach((paso) => visitar(paso, { componente: false }));
+
+  const recorrerComponentes = (componentes: ComponenteCosteoRecursivo[]) => {
+    for (const componente of componentes) {
+      for (const paso of componente.pasos ?? []) {
+        visitar(paso as PasoCosteo, { componente: true });
+      }
+      recorrerComponentes(componente.componentes ?? []);
+    }
+  };
+
+  recorrerComponentes(
+    (cotizacion.componentesFabricados ??
+      []) as unknown as ComponenteCosteoRecursivo[],
+  );
+}
+
+function getDesgloseComponentes(cotizacion: CotizacionItem) {
+  const componentes = (cotizacion.componentesFabricados ??
+    []) as unknown as ComponenteCosteoRecursivo[];
+  const totalDeclarado = componentes.reduce(
+    (total, componente) => total + (componente.costoTotal ?? 0),
+    0,
+  );
+  let materiales = 0;
+  let tiempo = 0;
+  let tiempoExtra = 0;
+  let tercerizado = 0;
+  let cargos = 0;
+  let tieneDetalle = false;
+  const recorrer = (ramas: ComponenteCosteoRecursivo[]) => {
+    for (const rama of ramas) {
+      for (const rawPaso of rama.pasos ?? []) {
+        tieneDetalle = true;
+        const paso = rawPaso as PasoCosteo;
+        if (!paso.activado) continue;
+        const materialesPaso = sumMaterialesPaso(paso);
+        const cargosPaso = sumCargosPaso(paso);
+        materiales += materialesPaso;
+        cargos += cargosPaso;
+        if (paso.tercerizado) {
+          // Un paso tercerizado puede consumir materiales PROPIOS. El motor
+          // congela `costoTotal = proveedor + materiales`; por eso sólo la
+          // diferencia pertenece al proveedor. Si sumáramos todo como
+          // tercerización, el BOM ocultaría materia prima real dentro de un
+          // bucket ajeno y se perdería la trazabilidad pedida por el usuario.
+          tercerizado += Math.max(
+            0,
+            paso.costoTotal - materialesPaso - cargosPaso,
+          );
+          continue;
+        }
+        tiempo += getCostoTiempoPaso(paso);
+        tiempoExtra += sumTiempoExtraPaso(paso);
+      }
+      recorrer(rama.componentes ?? []);
+    }
+  };
+  recorrer(componentes);
+  const totalDetallado =
+    materiales + tiempo + tiempoExtra + tercerizado + cargos;
+  return {
+    materiales,
+    tiempo,
+    tiempoExtra,
+    tercerizado,
+    cargos,
+    tieneDetalle,
+    // Un snapshot viejo puede traer sólo el total del componente. Ese residuo
+    // no se inventa como un bucket BOM: queda como costo sin desglosar.
+    residual: Math.max(0, totalDeclarado - totalDetallado),
+  };
+}
+
 /** Bajo este margen el renglón se marca en rojo (mismo umbral que el item). */
 export const MARGEN_ALERTA_PCT = 25;
 
@@ -129,6 +218,8 @@ export type CostoItemDesglose = {
   /** Lo que costaron los bloques de tiempo extra (preparación, traslados). */
   tiempoExtraTotal: number;
   tercerizadoTotal: number;
+  /** Total de auditoría de las ramas fabricadas; no es un bucket visible. */
+  componentesFabricadosTotal: number;
   cargosTotal: number;
   /** Filas que componen el precio neto (suman 100%). */
   filasNeto: FilaCosto[];
@@ -165,14 +256,25 @@ export function calcularCostoItem(
   // y no es ingreso).
   const margenPct = precioNeto > 0 ? (margenMonto / precioNeto) * 100 : 0;
 
-  const materialesTotal = item.cotizacion.costos.materialesTotal;
-  const tercerizadoTotal = item.cotizacion.costos.tercerizadoTotal ?? 0;
-  const cargosTotal = item.cotizacion.costos.cargosDirectosTotal;
+  const desgloseComponentes = getDesgloseComponentes(item.cotizacion);
+  const materialesTotal =
+    item.cotizacion.costos.materialesTotal + desgloseComponentes.materiales;
+  const tercerizadoTotal =
+    (item.cotizacion.costos.tercerizadoTotal ?? 0) +
+    desgloseComponentes.tercerizado;
+  const componentesFabricadosTotal =
+    item.cotizacion.costos.componentesFabricadosTotal ?? 0;
+  const cargosTotal =
+    item.cotizacion.costos.cargosDirectosTotal + desgloseComponentes.cargos;
   const cargosSinMargenTotal = item.cotizacion.costos.cargosSinMargenTotal ?? 0;
   // Tiempo extra (preparación, traslados): son horas de un centro, no un
   // desembolso. Por eso tiene fila propia y NO entra en los costos variables:
   // la contribución tiene que cubrirlo, igual que al resto del tiempo.
-  const tiempoExtraTotal = item.cotizacion.costos.tiempoExtraTotal ?? 0;
+  const tiempoTotal =
+    item.cotizacion.costos.tiempoTotal + desgloseComponentes.tiempo;
+  const tiempoExtraTotal =
+    (item.cotizacion.costos.tiempoExtraTotal ?? 0) +
+    desgloseComponentes.tiempoExtra;
 
   // ── Cascada del precio: cada fila suma hacia abajo hasta el precio de venta.
   //    costo (materiales + centro de costo + cargos) + impuestos internos +
@@ -190,6 +292,9 @@ export function calcularCostoItem(
     materialesTotal +
     cargosTotal +
     tercerizadoTotal +
+    // Los snapshots viejos pueden no traer los pasos internos. Ese residual
+    // sigue siendo variable, aunque no se le asigne una naturaleza inventada.
+    desgloseComponentes.residual +
     costosInternosTotal +
     comisionesTotal;
   const contribucionMonto = precioNeto - costosVariablesTotal;
@@ -232,7 +337,7 @@ export function calcularCostoItem(
       key: "centro-costo",
       label: "Centro de costo",
       tipo: "Centro de costo",
-      monto: item.cotizacion.costos.tiempoTotal,
+      monto: tiempoTotal,
     },
     {
       key: "tiempo-extra",
@@ -256,6 +361,13 @@ export function calcularCostoItem(
           : undefined,
       tipo: "Cargo directo",
       monto: cargosTotal,
+    },
+    {
+      key: "sin-desglosar",
+      label: "Costo sin desglosar",
+      hint: "snapshot anterior sin detalle suficiente para clasificarlo",
+      tipo: "Sin clasificar",
+      monto: desgloseComponentes.residual,
     },
   ];
 
@@ -318,9 +430,10 @@ export function calcularCostoItem(
     contribucionMonto,
     contribucionPct,
     materialesTotal,
-    tiempoTotal: item.cotizacion.costos.tiempoTotal,
+    tiempoTotal,
     tiempoExtraTotal,
     tercerizadoTotal,
+    componentesFabricadosTotal,
     cargosTotal,
     filasNeto,
   };
@@ -378,6 +491,7 @@ export type CostosOrdenConsolidado = {
   /** Lo que costó el tiempo de todos los centros. */
   centroCostoTotal: number;
   tercerizadoTotal: number;
+  componentesFabricadosTotal: number;
   /** Cargos de los items + cargos de la orden. */
   cargosTotal: number;
   /**
@@ -434,6 +548,7 @@ export function consolidarCostosOrden(
   // desglose lo muestre aparte (docs/cargos-por-paso-analisis-y-plan.md §7.3).
   const centroCostoTotal = suma((d) => d.tiempoTotal + d.tiempoExtraTotal);
   const tercerizadoTotal = suma((d) => d.tercerizadoTotal);
+  const componentesFabricadosTotal = suma((d) => d.componentesFabricadosTotal);
   const cargosItems = suma((d) => d.cargosTotal);
   const cargosTotal = cargosItems + cargosOrdenTotal;
 
@@ -501,8 +616,8 @@ export function consolidarCostosOrden(
   };
   for (const item of items) {
     if (itemSinCostear(item)) continue;
-    for (const paso of item.cotizacion.pasos) {
-      if (!paso.activado || !paso.tiempo) continue;
+    recorrerPasosCotizados(item.cotizacion, (paso) => {
+      if (!paso.activado || !paso.tiempo) return;
       // Los bloques de tiempo extra pueden vivir en OTRO centro que el paso
       // (el traslado en Instalación, el trabajo en Taller): se atribuyen al
       // suyo, o el centro que hizo las horas no las ve.
@@ -524,7 +639,7 @@ export function consolidarCostosOrden(
           false,
         );
       }
-    }
+    });
   }
 
   return {
@@ -546,6 +661,7 @@ export function consolidarCostosOrden(
     materialesTotal,
     centroCostoTotal,
     tercerizadoTotal,
+    componentesFabricadosTotal,
     cargosTotal,
     composicion,
     centros: [...centrosPorId.values()].sort(

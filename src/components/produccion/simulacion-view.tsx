@@ -39,12 +39,25 @@ import {
 
 /* Tintas de proceso: hay que distinguir muchas OTs a la vez. */
 const TINTAS = [
-  "#2E4BFF", "#D6006B", "#B45309", "#6D28D9",
-  "#0E9F6E", "#EA580C", "#0284C7", "#9333EA",
+  "#2E4BFF",
+  "#D6006B",
+  "#B45309",
+  "#6D28D9",
+  "#0E9F6E",
+  "#EA580C",
+  "#0284C7",
+  "#9333EA",
 ];
 
 /* Un acento por estación, estable entre renders. */
-const ACENTOS = ["#0E9F6E", "#0284C7", "#2E4BFF", "#6D28D9", "#EA580C", "#0891B2"];
+const ACENTOS = [
+  "#0E9F6E",
+  "#0284C7",
+  "#2E4BFF",
+  "#6D28D9",
+  "#EA580C",
+  "#0891B2",
+];
 
 const ROW = 26;
 const PAD = 6;
@@ -94,7 +107,9 @@ function opacidadEtiqueta(anchoPx: number, minimo: number, comodo: number) {
 const DIA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const hhmm = (d: Date, zona?: string) => hora(d.toISOString(), zona);
 const diaCorto = (d: Date, zona?: string) => {
-  const [dd, mm, yyyy] = fechaNumerica(d.toISOString(), zona).split("/").map(Number);
+  const [dd, mm, yyyy] = fechaNumerica(d.toISOString(), zona)
+    .split("/")
+    .map(Number);
   // La fecha civil ya salió en la zona pedida; el getUTCDay sobre ese trío
   // es puro calendario, sin volver a pasar por la zona del navegador.
   const idx = new Date(Date.UTC(yyyy, mm - 1, dd)).getUTCDay();
@@ -106,6 +121,7 @@ type Bloque = {
   itemId: string;
   pasoId: string;
   pasoIndice: number;
+  predecesorPasoIds: string[];
   ot: string;
   ordenId: string;
   itemNombre: string;
@@ -207,7 +223,9 @@ export function SimulacionView({
     const el = scrollRef.current;
     if (!el) return;
     setAnchoVisible(el.clientWidth);
-    const obs = new ResizeObserver(([e]) => setAnchoVisible(e.contentRect.width));
+    const obs = new ResizeObserver(([e]) =>
+      setAnchoVisible(e.contentRect.width),
+    );
     obs.observe(el);
     return () => obs.disconnect();
   }, [vista]);
@@ -318,7 +336,11 @@ export function SimulacionView({
   React.useEffect(() => {
     const alTeclear = (e: KeyboardEvent) => {
       const foco = document.activeElement;
-      if (foco instanceof HTMLInputElement || foco instanceof HTMLTextAreaElement) return;
+      if (
+        foco instanceof HTMLInputElement ||
+        foco instanceof HTMLTextAreaElement
+      )
+        return;
       if (e.key === "+" || e.key === "=") zoomear(zRef.current * 1.4);
       else if (e.key === "-" || e.key === "_") zoomear(zRef.current / 1.4);
       else if (e.key === "0") ajustar();
@@ -411,8 +433,8 @@ export function SimulacionView({
         <h3>No hay nada que simular todavía</h3>
         <p>
           Cuando haya items con ruta y pasos pendientes, acá vas a ver el plan
-          completo: qué paso corre en qué estación, a qué hora, y por qué
-          esperó lo que esperó.
+          completo: qué paso corre en qué estación, a qué hora, y por qué esperó
+          lo que esperó.
         </p>
       </div>
     );
@@ -454,7 +476,11 @@ export function SimulacionView({
             l="no llegan"
             tono={total.tarde > 0 ? "hot" : undefined}
           />
-          <Stat k={String(eje.dias.length)} l="jornadas de horizonte" tono="acc" />
+          <Stat
+            k={String(eje.dias.length)}
+            l="jornadas de horizonte"
+            tono="acc"
+          />
         </div>
       </div>
 
@@ -473,7 +499,13 @@ export function SimulacionView({
               >
                 {tocando ? "⏸ Pausar" : "▶ Reproducir"}
               </button>
-              <button type="button" onClick={() => { setTocando(false); setCorte(null); }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setTocando(false);
+                  setCorte(null);
+                }}
+              >
                 Ver todo
               </button>
             </div>
@@ -483,7 +515,10 @@ export function SimulacionView({
               max={tope}
               value={cursor}
               aria-label="Decisión del scheduler"
-              onChange={(e) => { setTocando(false); setCorte(Number(e.target.value)); }}
+              onChange={(e) => {
+                setTocando(false);
+                setCorte(Number(e.target.value));
+              }}
             />
             <span className="simu-cnt simu-decisiones">
               {cursor} / {tope} decisiones
@@ -507,14 +542,20 @@ export function SimulacionView({
               <span className="simu-cnt simu-vista">
                 {loQueEntra(anchoVisible, z, eje.jornadaMin)}
               </span>
-              <button type="button" onClick={ajustar} title="Encuadrar el trabajo del taller">
+              <button
+                type="button"
+                onClick={ajustar}
+                title="Encuadrar el trabajo del taller"
+              >
                 Ajustar
               </button>
             </div>
           </>
         ) : (
           <div className="simu-ctl">
-            <span className="simu-eyebrow">Agenda del taller · plan del motor</span>
+            <span className="simu-eyebrow">
+              Agenda del taller · plan del motor
+            </span>
           </div>
         )}
 
@@ -528,10 +569,18 @@ export function SimulacionView({
               role="combobox"
               aria-expanded={sugerencias && hits.length > 0}
               aria-controls="simu-sugg"
-              onChange={(e) => { setConsulta(e.target.value); setSugerencias(true); }}
+              onChange={(e) => {
+                setConsulta(e.target.value);
+                setSugerencias(true);
+              }}
               onFocus={() => setSugerencias(true)}
               onBlur={() => window.setTimeout(() => setSugerencias(false), 140)}
-              onKeyDown={(e) => { if (e.key === "Escape") { setConsulta(""); setSugerencias(false); } }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setConsulta("");
+                  setSugerencias(false);
+                }
+              }}
             />
             {sugerencias && hits.length > 0 ? (
               <div className="simu-sugg" id="simu-sugg" role="listbox">
@@ -575,7 +624,12 @@ export function SimulacionView({
 
         {vista === "mesa" ? (
           <div className="simu-readout">
-            <Readout bloques={bloques} cursor={cursor} carriles={carriles.length} tarde={total.tarde} />
+            <Readout
+              bloques={bloques}
+              cursor={cursor}
+              carriles={carriles.length}
+              tarde={total.tarde}
+            />
           </div>
         ) : null}
       </div>
@@ -643,7 +697,11 @@ function Readout({
 }) {
   const { zonaHoraria } = useConfigRegional();
   if (cursor === 0)
-    return <span className="muted">Taller vacío. El scheduler todavía no colocó nada.</span>;
+    return (
+      <span className="muted">
+        Taller vacío. El scheduler todavía no colocó nada.
+      </span>
+    );
   if (cursor >= bloques.length)
     return (
       <>
@@ -676,13 +734,16 @@ function Readout({
       </b>
       {b.esperaMin > 0 ? (
         <>
-          {" "}tras esperar <span className="amber">{horas(b.esperaMin)}</span> por un
-          puesto libre
+          {" "}
+          tras esperar <span className="amber">{horas(b.esperaMin)}</span> por
+          un puesto libre
         </>
       ) : (
         " apenas queda libre"
       )}
-      {b.duracionMin != null ? ` · ${b.duracionMin} min` : ` · ${b.plazoDias} d proveedor`}
+      {b.duracionMin != null
+        ? ` · ${b.duracionMin} min`
+        : ` · ${b.plazoDias} d proveedor`}
       {b.candidatos && b.candidatos > 1 ? (
         <span className="muted"> ({b.candidatos} candidatos en juego)</span>
       ) : null}
@@ -737,8 +798,10 @@ function LineaDeTiempo({
     const { x, y } = ratonRef.current;
     let px = x + 14;
     let py = y + 18;
-    if (px + el.offsetWidth > window.innerWidth - 8) px = x - el.offsetWidth - 14;
-    if (py + el.offsetHeight > window.innerHeight - 8) py = y - el.offsetHeight - 12;
+    if (px + el.offsetWidth > window.innerWidth - 8)
+      px = x - el.offsetWidth - 14;
+    if (py + el.offsetHeight > window.innerHeight - 8)
+      py = y - el.offsetHeight - 12;
     el.style.transform = `translate(${px}px, ${py}px)`;
   }, []);
 
@@ -756,7 +819,11 @@ function LineaDeTiempo({
       // (el primero puede arrancar a media jornada), sin pisar su borde
       // izquierdo, que ya lleva la etiqueta de la fecha.
       const primero = Math.ceil(dia.desdeMin / intervalo) * intervalo;
-      for (let min = primero; min < dia.desdeMin + dia.ancho; min += intervalo) {
+      for (
+        let min = primero;
+        min < dia.desdeMin + dia.ancho;
+        min += intervalo
+      ) {
         const offset = min - dia.desdeMin;
         if (offset <= 0) continue;
         ticks.push({
@@ -787,11 +854,17 @@ function LineaDeTiempo({
           </span>
         ))}
         <span className="simu-lg simu-lg-end">
-          <span className="simu-sw" style={{ boxShadow: "inset 0 0 0 1.5px var(--simu-hot)" }} />
+          <span
+            className="simu-sw"
+            style={{ boxShadow: "inset 0 0 0 1.5px var(--simu-hot)" }}
+          />
           no llega a la fecha
         </span>
         <span className="simu-lg">
-          <span className="simu-sw" style={{ border: "1.5px dashed var(--simu-ink-3)" }} />
+          <span
+            className="simu-sw"
+            style={{ border: "1.5px dashed var(--simu-ink-3)" }}
+          />
           tercerizado
         </span>
         <span className="simu-lg">
@@ -833,13 +906,19 @@ function LineaDeTiempo({
                   className={`simu-day ${i % 5 === 0 ? "wk" : ""}`}
                   style={{ left: d.x * z, width: d.ancho * z }}
                 >
-                  <span style={{ opacity: opacidadEtiqueta(d.ancho * z, 34, 62) }}>
+                  <span
+                    style={{ opacity: opacidadEtiqueta(d.ancho * z, 34, 62) }}
+                  >
                     {d.etiqueta}
                   </span>
                 </div>
               ))}
               {ticks.map((t) => (
-                <div key={t.key} className="simu-hora" style={{ left: t.x * z }}>
+                <div
+                  key={t.key}
+                  className="simu-hora"
+                  style={{ left: t.x * z }}
+                >
                   <span>{t.etiqueta}</span>
                 </div>
               ))}
@@ -853,7 +932,11 @@ function LineaDeTiempo({
                   style={{ height: altura(c) }}
                 >
                   {eje.dias.map((d) => (
-                    <div key={d.fecha} className="simu-gridline" style={{ left: d.x * z }} />
+                    <div
+                      key={d.fecha}
+                      className="simu-gridline"
+                      style={{ left: d.x * z }}
+                    />
                   ))}
                   {c.bloques.map((b) => {
                     const col = tintaDe(b.ot, otsInfo);
@@ -861,7 +944,8 @@ function LineaDeTiempo({
                     const oculto = b.orden >= cursor;
                     const atenuado =
                       !oculto &&
-                      ((soloTarde && !b.tarde) || (focoOTs !== null && !focoOTs.has(b.ot)));
+                      ((soloTarde && !b.tarde) ||
+                        (focoOTs !== null && !focoOTs.has(b.ot)));
                     return (
                       <div
                         key={b.pasoId}
@@ -872,7 +956,9 @@ function LineaDeTiempo({
                           oculto ? "pend" : "",
                           atenuado ? "dim" : "",
                           sel?.orden === b.orden ? "sel" : "",
-                        ].filter(Boolean).join(" ")}
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
                         style={{
                           left: b.x0 * z,
                           width: Math.max(4, w),
@@ -915,7 +1001,11 @@ function LineaDeTiempo({
               {/* Las horas van una sola vez sobre todos los carriles: dentro
                   de cada uno serían cientos de nodos repetidos. */}
               {ticks.map((t) => (
-                <div key={t.key} className="simu-gridline hora" style={{ left: t.x * z }} />
+                <div
+                  key={t.key}
+                  className="simu-gridline hora"
+                  style={{ left: t.x * z }}
+                />
               ))}
               {/* La etiqueta va a la izquierda porque de ese lado no hay
                   bloques; pero si la línea está contra el origen no entra y
@@ -928,7 +1018,13 @@ function LineaDeTiempo({
               </div>
             </div>
 
-            <Hilo carriles={carriles} ot={hiloOT} z={z} cursor={cursor} otsInfo={otsInfo} />
+            <Hilo
+              carriles={carriles}
+              ot={hiloOT}
+              z={z}
+              cursor={cursor}
+              otsInfo={otsInfo}
+            />
           </div>
         </div>
       </div>
@@ -941,7 +1037,8 @@ function LineaDeTiempo({
             {tip.ot} · {tip.pasoNombre}
           </span>
           <span className="t2">
-            {diaCorto(tip.inicio, zonaHoraria)} {hhmm(tip.inicio, zonaHoraria)} → {hhmm(tip.fin, zonaHoraria)}
+            {diaCorto(tip.inicio, zonaHoraria)} {hhmm(tip.inicio, zonaHoraria)}{" "}
+            → {hhmm(tip.fin, zonaHoraria)}
             <b className={tip.tarde ? "hot" : ""}>
               {tip.duracionMin != null
                 ? `${tip.duracionMin} min`
@@ -955,10 +1052,9 @@ function LineaDeTiempo({
 }
 
 /**
- * El hilo del recorrido. Una OT puede tener varios items con secuencias
- * independientes: se dibuja un hilo POR ITEM, o iría hacia atrás en el
- * tiempo. Y cuando dos pasos encadenados se solapan por el ancho mínimo
- * de bloque, el conector es vertical en vez de una curva que retrocede.
+ * Dependencias reales del workflow. No se infieren por índice ni por item:
+ * el motor entrega las aristas resueltas del DAG, incluidas las que cruzan
+ * desde la ruta de un componente hacia una etapa del producto padre.
  */
 function Hilo({
   carriles,
@@ -974,61 +1070,89 @@ function Hilo({
   otsInfo: Array<{ ot: string }>;
 }) {
   if (!ot) return null;
-  const porItem = new Map<string, Array<{ x0: number; x1: number; y: number; idx: number }>>();
+  const porPaso = new Map<
+    string,
+    {
+      pasoId: string;
+      predecesorPasoIds: string[];
+      x0: number;
+      x1: number;
+      y: number;
+    }
+  >();
   let yOff = 0;
   carriles.forEach((c) => {
     c.bloques.forEach((b) => {
       if (b.ot !== ot || b.orden >= cursor) return;
-      const arr = porItem.get(b.itemId) ?? [];
-      arr.push({
+      porPaso.set(b.pasoId, {
+        pasoId: b.pasoId,
+        predecesorPasoIds: b.predecesorPasoIds,
         x0: b.x0 * z,
         x1: Math.max(b.x0 * z + 4, b.x1 * z),
         y: yOff + PAD + b.fila * (ROW + PAD) + ROW / 2,
-        idx: b.pasoIndice,
       });
-      porItem.set(b.itemId, arr);
     });
     yOff += altura(c);
   });
-  if (porItem.size === 0) return null;
+  if (porPaso.size === 0) return null;
 
   const col = tintaDe(ot, otsInfo);
-  const paths: string[] = [];
-  const nodos: Array<{ x: number; y: number }> = [];
-  porItem.forEach((grupo) => {
-    grupo.sort((a, b) => a.idx - b.idx);
-    let d = "";
-    grupo.forEach((p, i) => {
-      if (i > 0) {
-        const prev = grupo[i - 1];
-        if (p.x0 >= prev.x1) {
-          const mx = (prev.x1 + p.x0) / 2;
-          d += ` M ${prev.x1} ${prev.y} C ${mx} ${prev.y}, ${mx} ${p.y}, ${p.x0} ${p.y}`;
-        } else {
-          d += ` M ${p.x0} ${prev.y} L ${p.x0} ${p.y}`;
-        }
-      }
-      nodos.push({ x: p.x0, y: p.y });
-    });
-    if (d) paths.push(d.trim());
-  });
+  const aristas = [...porPaso.values()].flatMap((destino) =>
+    destino.predecesorPasoIds.flatMap((predecesorId) => {
+      const origen = porPaso.get(predecesorId);
+      if (!origen) return [];
+      const xOrigen = origen.x1;
+      const xDestino = destino.x0;
+      const d =
+        xDestino >= xOrigen
+          ? (() => {
+              const mx = (xOrigen + xDestino) / 2;
+              return `M ${xOrigen} ${origen.y} C ${mx} ${origen.y}, ${mx} ${destino.y}, ${xDestino} ${destino.y}`;
+            })()
+          : `M ${xDestino} ${origen.y} L ${xDestino} ${destino.y}`;
+      return [{ predecesorId, destinoId: destino.pasoId, d, origen, destino }];
+    }),
+  );
+  if (aristas.length === 0) return null;
 
   return (
-    <svg className="simu-thread" style={{ top: AXIS_H }}>
-      {paths.map((d, i) => (
+    <svg
+      className="simu-thread"
+      style={{ top: AXIS_H }}
+      aria-label={`Dependencias reales del workflow de ${ot}`}
+    >
+      {aristas.map((arista) => (
         <path
-          key={i}
-          d={d}
+          key={`${arista.predecesorId}->${arista.destinoId}`}
+          d={arista.d}
           fill="none"
           stroke={col}
           strokeWidth="1.5"
-          strokeDasharray="4 3"
+          strokeDasharray="3 4"
+          strokeLinecap="round"
           opacity=".85"
-        />
+          data-predecesor={arista.predecesorId}
+          data-sucesor={arista.destinoId}
+        >
+          <title>Dependencia real del workflow</title>
+        </path>
       ))}
-      {nodos.map((n, i) => (
-        <circle key={i} cx={n.x} cy={n.y} r="2.5" fill={col} />
-      ))}
+      {aristas.flatMap((arista) => [
+        <circle
+          key={`${arista.predecesorId}-salida-${arista.destinoId}`}
+          cx={arista.origen.x1}
+          cy={arista.origen.y}
+          r="2.5"
+          fill={col}
+        />,
+        <circle
+          key={`${arista.destinoId}-entrada-${arista.predecesorId}`}
+          cx={arista.destino.x0}
+          cy={arista.destino.y}
+          r="2.5"
+          fill={col}
+        />,
+      ])}
     </svg>
   );
 }
@@ -1051,7 +1175,9 @@ function Proyeccion({
   const { zonaHoraria } = useConfigRegional();
   const maxMin = Math.max(
     1,
-    ...carriles.map((c) => c.bloques.reduce((s, b) => s + (b.duracionMin ?? 0), 0)),
+    ...carriles.map((c) =>
+      c.bloques.reduce((s, b) => s + (b.duracionMin ?? 0), 0),
+    ),
   );
   const secciones = carriles
     .map((c) => ({
@@ -1064,7 +1190,9 @@ function Proyeccion({
     .filter((s) => s.bs.length > 0);
 
   if (secciones.length === 0)
-    return <div className="simu-proj-vacio">Ningún paso coincide con el filtro.</div>;
+    return (
+      <div className="simu-proj-vacio">Ningún paso coincide con el filtro.</div>
+    );
 
   return (
     <div className="simu-proj">
@@ -1107,7 +1235,9 @@ function Proyeccion({
                 ) : null}
               </div>
               <div className="simu-load">
-                <span style={{ width: `${Math.max(4, (totMin / maxMin) * 100)}%` }} />
+                <span
+                  style={{ width: `${Math.max(4, (totMin / maxMin) * 100)}%` }}
+                />
               </div>
             </div>
             <div className="simu-sbody">
@@ -1139,8 +1269,12 @@ function Proyeccion({
                       }}
                     >
                       <div className="simu-ptime">
-                        {c.filas > 1 ? <span className="pst">P{b.fila + 1}</span> : null}
-                        <span className="h0">{hhmm(b.inicio, zonaHoraria)}</span>
+                        {c.filas > 1 ? (
+                          <span className="pst">P{b.fila + 1}</span>
+                        ) : null}
+                        <span className="h0">
+                          {hhmm(b.inicio, zonaHoraria)}
+                        </span>
                         <span className="arr">→</span>
                         <span className="h1">{finTxt}</span>
                         <span className="dur">
@@ -1165,7 +1299,9 @@ function Proyeccion({
                       </div>
                       <div className="simu-pflags">
                         {b.esperaMin > 0 ? (
-                          <span className="simu-badge wait">espera {horas(b.esperaMin)}</span>
+                          <span className="simu-badge wait">
+                            espera {horas(b.esperaMin)}
+                          </span>
                         ) : null}
                         {b.tercerizado ? (
                           <span className="simu-badge terc">tercerizado</span>
@@ -1173,7 +1309,9 @@ function Proyeccion({
                         {c.key === SIN_ESTACION_KEY ? (
                           <span className="simu-badge sin">supuesto</span>
                         ) : null}
-                        {b.tarde ? <span className="simu-badge late">no llega</span> : null}
+                        {b.tarde ? (
+                          <span className="simu-badge late">no llega</span>
+                        ) : null}
                       </div>
                     </div>
                   </React.Fragment>
@@ -1207,43 +1345,46 @@ function Inspector({
   if (b.esperaMin > 0)
     notas.push(
       <div key="e" className="simu-note">
-        Esperó <b>{horas(b.esperaMin)}</b> en {b.estNombre} a que se liberara un puesto o
-        la máquina. El trabajo estaba listo antes, pero el recurso estaba ocupado.
+        Esperó <b>{horas(b.esperaMin)}</b> en {b.estNombre} a que se liberara un
+        puesto o la máquina. El trabajo estaba listo antes, pero el recurso
+        estaba ocupado.
       </div>,
     );
   if (b.tercerizado)
     notas.push(
       <div key="t" className="simu-note a">
-        Paso tercerizado: no ocupa puesto del taller. Corre en el calendario del proveedor,{" "}
-        <b>{b.plazoDias} días hábiles</b>.
+        Paso tercerizado: no ocupa puesto del taller. Corre en el calendario del
+        proveedor, <b>{b.plazoDias} días hábiles</b>.
       </div>,
     );
   if (b.estKey === SIN_ESTACION_KEY)
     notas.push(
       <div key="s" className="simu-note a">
-        La familia <b>{b.familia}</b> no está asignada a ninguna estación. El motor la
-        programa con capacidad infinita — <b>esta parte del plan es optimista</b>.
+        La familia <b>{b.familia}</b> no está asignada a ninguna estación. El
+        motor la programa con capacidad infinita —{" "}
+        <b>esta parte del plan es optimista</b>.
       </div>,
     );
   if (b.duracionMin === 0)
     notas.push(
       <div key="z" className="simu-note">
-        Duración cero real: el paso existe en la ruta pero no consume tiempo de máquina.
+        Duración cero real: el paso existe en la ruta pero no consume tiempo de
+        máquina.
       </div>,
     );
   if (b.preparacionMin > 0)
     notas.push(
       <div key="p" className="simu-note">
-        Después de este paso quedan <b>{b.preparacionMin} min</b> de separación —
-        cambio de material y traslado — antes de que arranque el siguiente en{" "}
+        Después de este paso quedan <b>{b.preparacionMin} min</b> de separación
+        — cambio de material y traslado — antes de que arranque el siguiente en{" "}
         {b.estNombre}. Por eso hay aire entre este bloque y el próximo.
       </div>,
     );
   if (b.enCurso)
     notas.push(
       <div key="c" className="simu-note">
-        Ya estaba en curso al arrancar la simulación: se programó con el tiempo que le
-        quedaba.
+        Ya estaba en curso al arrancar la simulación: se programó con el tiempo
+        que le quedaba.
       </div>,
     );
   if (b.tarde)
@@ -1252,7 +1393,8 @@ function Inspector({
         Este item termina después de la entrega comprometida
         {b.entrega ? (
           <>
-            {" "}(<b>{b.entrega}</b>)
+            {" "}
+            (<b>{b.entrega}</b>)
           </>
         ) : null}
         . No llega.
@@ -1261,15 +1403,20 @@ function Inspector({
   if (b.candidatos && b.candidatos > 1)
     notas.push(
       <div key="k" className="simu-note">
-        En este turno el scheduler evaluó <b>{b.candidatos} candidatos</b> y eligió éste
-        porque podía arrancar antes.
+        En este turno el scheduler evaluó <b>{b.candidatos} candidatos</b> y
+        eligió éste porque podía arrancar antes.
       </div>,
     );
 
   return (
     <aside className="simu-insp" aria-label="Detalle de la decisión">
       <div className="h">
-        <button type="button" className="x" onClick={onClose} aria-label="Cerrar">
+        <button
+          type="button"
+          className="x"
+          onClick={onClose}
+          aria-label="Cerrar"
+        >
           ✕
         </button>
         <div className="simu-eyebrow">
@@ -1286,14 +1433,23 @@ function Inspector({
         <div>
           <Fila k="Estación" v={b.estNombre} />
           <Fila k="Familia" v={b.familia} />
-          <Fila k="Arranca" v={`${diaCorto(b.inicio, zonaHoraria)} ${hhmm(b.inicio, zonaHoraria)}`} />
-          <Fila k="Termina" v={`${diaCorto(b.fin, zonaHoraria)} ${hhmm(b.fin, zonaHoraria)}`} />
+          <Fila
+            k="Arranca"
+            v={`${diaCorto(b.inicio, zonaHoraria)} ${hhmm(b.inicio, zonaHoraria)}`}
+          />
+          <Fila
+            k="Termina"
+            v={`${diaCorto(b.fin, zonaHoraria)} ${hhmm(b.fin, zonaHoraria)}`}
+          />
           {b.duracionMin != null ? (
             <Fila k="Duración" v={`${b.duracionMin} min`} />
           ) : (
             <Fila k="Plazo proveedor" v={`${b.plazoDias} días`} />
           )}
-          <Fila k="Espera previa" v={b.esperaMin > 0 ? horas(b.esperaMin) : "—"} />
+          <Fila
+            k="Espera previa"
+            v={b.esperaMin > 0 ? horas(b.esperaMin) : "—"}
+          />
           {b.preparacionMin > 0 ? (
             <Fila k="Separación" v={`${b.preparacionMin} min después`} />
           ) : null}
@@ -1342,7 +1498,13 @@ function construir(
     (max, p) => (p.fin > max ? p.fin : max),
     ahora,
   );
-  const eje = construirEje({ estaciones, ahora, hasta: finMax, noLaborables, zona });
+  const eje = construirEje({
+    estaciones,
+    ahora,
+    hasta: finMax,
+    noLaborables,
+    zona,
+  });
   /* El eje arranca en la APERTURA del día, no en este instante: la línea de
      "ahora" hay que ubicarla, no dejarla en el origen. */
   const xAhora = eje.aX(ahora);
@@ -1359,6 +1521,7 @@ function construir(
         itemId: p.itemId,
         pasoId: p.pasoId,
         pasoIndice: p.pasoIndice,
+        predecesorPasoIds: p.predecesorPasoIds,
         ot: item.ordenNumero,
         ordenId: item.ordenId,
         itemNombre: item.nombre,
@@ -1395,10 +1558,13 @@ function construir(
   /* Un carril por estación con trabajo; cada uno reparte sus bloques en
      sub-filas por solape (los puestos simultáneos de la estación). */
   const keys = [...new Set(crudos.map((b) => b.estKey))];
-  const orden = (k: string) => (k === SIN_ESTACION_KEY ? 1 : k === PROVEEDOR_KEY ? 2 : 0);
+  const orden = (k: string) =>
+    k === SIN_ESTACION_KEY ? 1 : k === PROVEEDOR_KEY ? 2 : 0;
   const carriles: Carril[] = keys
     .map((key, i) => {
-      const bloques = crudos.filter((b) => b.estKey === key).sort((a, b) => a.x0 - b.x0);
+      const bloques = crudos
+        .filter((b) => b.estKey === key)
+        .sort((a, b) => a.x0 - b.x0);
       const filas: Bloque[][] = [];
       bloques.forEach((b) => {
         let f = filas.findIndex((r) => r[r.length - 1].x1 <= b.x0);
@@ -1423,7 +1589,9 @@ function construir(
               : ACENTOS[i % ACENTOS.length],
       };
     })
-    .sort((a, b) => orden(a.key) - orden(b.key) || a.nombre.localeCompare(b.nombre));
+    .sort(
+      (a, b) => orden(a.key) - orden(b.key) || a.nombre.localeCompare(b.nombre),
+    );
 
   const minutos = crudos.reduce((s, b) => s + (b.duracionMin ?? 0), 0);
   const sinEst = crudos

@@ -71,6 +71,9 @@ export type PasoProgramado = {
   itemId: string;
   pasoId: string;
   pasoIndice: number;
+  /** Dependencias reales resueltas por el scheduler. Pueden pertenecer a
+   *  otro item de la misma OT (componente → etapa del producto padre). */
+  predecesorPasoIds: string[];
   /** Id de estación, o SIN_ESTACION_KEY / PROVEEDOR_KEY. */
   estacionKey: string;
   inicio: Date;
@@ -568,6 +571,7 @@ export function simularFlujo({
       itemId: item.id,
       pasoId: paso.id,
       pasoIndice: paso.indice,
+      predecesorPasoIds: [...(predecesores.get(paso.id) ?? [])],
       estacionKey: esTercerizado(paso) ? PROVEEDOR_KEY : est!.key,
       inicio,
       fin,

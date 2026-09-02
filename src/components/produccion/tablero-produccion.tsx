@@ -44,6 +44,7 @@ import {
   etiquetaDuracion,
   etiquetaEntrega,
   etiquetaMomento,
+  etiquetaPasoKanban,
   etiquetaRestante,
   diasHastaEntrega,
   familiaIcono,
@@ -118,7 +119,12 @@ type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban" | "simulacion";
 type StatusFilter = "all" | "in-progress" | "blocked" | "delayed" | "due-today";
 type PriorityFilter = "all" | TableroPrioridad;
-type KanbanBucketKey = "not-started" | "today" | "delayed" | "active";
+type KanbanBucketKey =
+  | "not-started"
+  | "blocked"
+  | "today"
+  | "delayed"
+  | "active";
 
 const DEFAULT_BOARD_MODE: Mode = "items";
 /** Refresco en vivo del dataset (mismo ritmo que el tracking público). */
@@ -394,13 +400,19 @@ function buildItemView(
     dueDays: diasHastaEntrega(item.fechaEntrega),
     delayed: itemConRetraso(item),
     blocked,
-    blockedReason: bloqueadoPaso?.motivoBloqueo ?? null,
+    blockedReason:
+      bloqueadoPaso?.motivoBloqueo ??
+      (blocked && !actual ? "Esperando componentes o pasos anteriores" : null),
     started: itemIniciado(item),
     finished: itemTerminado(item),
     sinRuta: item.sinRuta,
     progressPct: progresoItem(item),
     statusLine: lineaEstado(item),
-    station: actual ? (estacionActual?.nombre ?? "Sin estación") : "—",
+    station: actual
+      ? actual.tipoEjecucion === "tercerizado"
+        ? "Proveedor tercerizado"
+        : (estacionActual?.nombre ?? "Sin estación")
+      : "—",
     stationIcon: estacionActual?.icono ?? null,
     currentStep,
     currentSteps,
@@ -1803,7 +1815,7 @@ function ItemDetailSheet({
               ? "Todos los pasos completados. La orden se finaliza desde Órdenes de trabajo."
               : currentStep
                 ? `Paso actual: ${currentStep.paso.nombre}`
-                : null}
+                : item.statusLine}
           </div>
           <div className="spacer" />
           {alcance !== "operario" ? (
@@ -2976,19 +2988,19 @@ function ByStationView({
 
 // ── Kanban ───────────────────────────────────────────────────────────────
 
-function getKanbanBucket(item: ItemView): KanbanBucketKey {
+function getKanbanBucket(item: ItemView): KanbanBucketKey | null {
+  if (item.blocked) return "blocked";
   return bucketKanbanProduccion({
     iniciado: item.started,
+    terminado: item.finished,
     atrasado: item.delayed,
     diasEntrega: item.dueDays,
   });
 }
 
-function kanbanStepIcon(item: ItemView) {
+function kanbanStepIcon(item: ItemView, step: StepView | undefined) {
   if (item.blocked) return <BanIcon />;
-  const IconCmp = item.currentStep
-    ? getStepIcon(item.currentStep.iconKey)
-    : LayoutDashboardIcon;
+  const IconCmp = step ? getStepIcon(step.iconKey) : LayoutDashboardIcon;
   return <IconCmp />;
 }
 
@@ -3002,7 +3014,12 @@ const KanbanCard = React.memo(function KanbanCard({
   item: ItemView;
   onOpen: (id: string) => void;
 }) {
-  const step = item.currentStep;
+  // Si el DAG espera una dependencia externa no hay una frontera ejecutable,
+  // pero la card igualmente debe nombrar el próximo paso, no decir solamente
+  // "En espera" ni repetir una explicación de estado.
+  const step =
+    item.currentStep ??
+    item.steps.find((candidate) => candidate.paso.estado !== "hecho");
 
   return (
     <button
@@ -3012,7 +3029,6 @@ const KanbanCard = React.memo(function KanbanCard({
     >
       <div className="kan-card-top">
         <span className="item-code">{item.code}</span>
-        <span className="ot-badge">{item.otCode}</span>
         {item.data.componenteDe ? (
           <span
             className="ot-badge"
@@ -3028,17 +3044,31 @@ const KanbanCard = React.memo(function KanbanCard({
         ) : null}
         <span className="kan-pct">{item.progressPct}%</span>
       </div>
+      <div className="kan-customer">{item.customer}</div>
       <div className="kan-title">{item.product}</div>
-      <div className="kan-meta">
-        {item.customer} · {item.spec}
-      </div>
       <div className="kan-step">
-        <span className="kan-step-ico">{kanbanStepIcon(item)}</span>
+        <span
+          className={`kan-step-ico ${item.blocked ? "is-blocked" : ""}`}
+        >
+          {kanbanStepIcon(item, step)}
+        </span>
         <div>
-          <div className="tec">
-            {step?.paso.nombre ?? (item.sinRuta ? "Sin ruta" : "Completado")}
+          <div className="kan-step-label">
+            {etiquetaPasoKanban(step?.paso.estado)}
           </div>
-          <div className="sub">{item.statusLine}</div>
+          <div className="tec">
+            {step?.paso.nombre ??
+              (item.sinRuta
+                ? "Sin ruta"
+                : item.finished
+                  ? "Completado"
+                    : item.blocked
+                      ? "Bloqueado"
+                      : "En espera")}
+          </div>
+          {item.blocked && item.blockedReason ? (
+            <div className="kan-blocked-reason">{item.blockedReason}</div>
+          ) : null}
         </div>
       </div>
       <div className="kan-progress" aria-label={`Avance ${item.progressPct}%`}>
@@ -3121,6 +3151,11 @@ function KanbanView({
       key: "not-started",
       title: "No iniciados",
       description: "Sin pasos ejecutados",
+    },
+    {
+      key: "blocked",
+      title: "Bloqueados",
+      description: "Esperan dependencias o intervención",
     },
     { key: "today", title: "Vencen hoy", description: "Prioridad de despacho" },
     { key: "delayed", title: "Con retraso", description: "Entrega vencida" },

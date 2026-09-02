@@ -7775,7 +7775,7 @@ export function ConfigPasosEditorView({
                             </>
                           ) : null}
                           <div className="paso-config-save-state">
-                            {totalErrores > 0 ? (
+                            {pendientesVisualesPasoActual > 0 ? (
                               <span className="paso-config-save-pending">
                                 Faltan {pendientesVisualesPasoActual}{" "}
                                 {pendientesVisualesPasoActual === 1
@@ -7785,7 +7785,7 @@ export function ConfigPasosEditorView({
                               </span>
                             ) : null}
                             <div className="paso-config-save-actions">
-                              {totalErrores > 0 ? (
+                              {pendientesVisualesPasoActual > 0 ? (
                                 <>
                                   <button
                                     className="btn"

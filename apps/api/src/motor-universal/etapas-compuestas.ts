@@ -122,6 +122,7 @@ export function consolidarEtapasCompuestas(
         centroCostoNombre: item.tiempo?.centroCostoNombre ?? null,
         materiales: item.materiales,
         componentesCodigos: item.componentesCodigos,
+        nestingResult: item.nestingResult,
       })),
       tercerizado: false,
       proveedorId: null,

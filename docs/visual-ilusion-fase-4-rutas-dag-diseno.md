@@ -350,3 +350,59 @@ habilitar el armado.
 
 La ampliación queda implementada y pendiente de validación funcional final en
 un producto rector antes de cambiar el estado global de la fase a `COMPLETA`.
+
+## 12.11 Rutas reutilizables de nodos
+
+La ruta reusable adopta el mismo contrato conceptual que la Hoja de ruta del
+producto: es un Workflow versionado, lineal o DAG, cuyos nodos pueden ser
+Pasos, Etapas consolidadas o Componentes fabricados. Su persistencia,
+compatibilidad, aplicación al producto y criterios de aceptación están
+detallados en `docs/rutas-produccion-reutilizables-workflow-diseno.md`.
+
+## 13. Proyección de la ruta en cotización, OT y producción
+
+La jerarquía comercial y la jerarquía productiva se conservan separadas. Esto
+evita que un componente fabricado aparezca como otro producto vendido o que sus
+pasos internos se mezclen con los nodos del producto padre.
+
+- Una línea comercial de la OT es siempre un ítem raíz (`parentItemId = null`).
+- Los componentes fabricados se materializan como ítems técnicos hijos, con su
+  propio contexto, receta y ruta. No agregan una segunda línea comercial ni un
+  precio independiente al producto vendido.
+- En el Workflow del producto padre, cada componente directo se representa como
+  un único nodo de componente. Sus pasos internos se consultan y ejecutan dentro
+  de la ruta propia del ítem hijo; no se promocionan como pasos del padre.
+- Las dependencias que cruzan ítems conectan el nodo agregado del componente con
+  el paso o etapa del padre donde converge.
+- Una etapa consolidada continúa siendo un único paso ejecutable de la OT. Sus
+  operaciones internas aportan tiempo, materiales y costo al snapshot de esa
+  etapa, pero no generan estados independientes en el tablero.
+- El tablero de producción recibe tanto los ítems comerciales raíz como los
+  ítems técnicos hijos que generan flujo. Cada uno conserva su ruta, y el orden
+  global se coordina mediante las dependencias cruzadas.
+
+Estas reglas son invariantes del snapshot: una OT histórica no se reinterpreta
+contra la configuración viva del catálogo y una OT nueva no debe aplanar las
+subrutas de componentes dentro del Workflow del producto padre.
+
+### 13.1 Lectura jerárquica del Workflow en la OT
+
+La pestaña Producción ofrece dos niveles de lectura sobre el mismo snapshot:
+
+- **Resumen:** muestra únicamente los nodos del Workflow del producto vendido.
+  Cada componente ocupa una tarjeta agregada y conserva la frontera de su
+  subruta.
+- **Workflow completo:** explota las subrutas sobre un único lienzo. El
+  componente deja de ocupar una tarjeta contenedora y se convierte en la
+  etiqueta de su rama; sus pasos reales se dibujan como nodos conectados y las
+  ramas vuelven a converger en el nodo correspondiente del producto padre.
+- **Etapa consolidada:** permanece como un único nodo y un único estado
+  operativo. En la lectura completa expone las subtareas que explican su
+  tiempo, materiales y costo, pero esas subtareas no son acciones separadas
+  para el operador.
+
+La expansión conserva la jerarquía semántica, pero no introduce paneles ni
+mini-lienzos anidados. El nombre del componente identifica la rama; las aristas
+expresan su secuencia y convergencia con el Workflow raíz. El encabezado informa
+operaciones reales, cantidad de subrutas y etapas; cada rama de componente
+informa su avance `completadas / total`.

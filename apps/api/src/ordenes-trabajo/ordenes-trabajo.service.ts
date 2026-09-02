@@ -405,8 +405,11 @@ const LIST_INCLUDE = {
   cliente: { select: { nombre: true } },
   vendedor: { select: { nombreCompleto: true } },
   proyectoCampana: { select: { id: true, codigo: true, nombre: true } },
-  _count: { select: { items: true } },
+  _count: {
+    select: { items: { where: { parentItemId: null } } },
+  },
   items: {
+    where: { parentItemId: null },
     select: { nombre: true, ordenIndice: true },
     orderBy: { ordenIndice: 'asc' as const },
   },
@@ -1054,8 +1057,16 @@ export class OrdenesTrabajoService {
       where: { id, tenantId: auth.tenantId },
       include: {
         ...LIST_INCLUDE,
-        _count: { select: { items: true, eventos: true } },
+        _count: {
+          select: {
+            items: { where: { parentItemId: null } },
+            eventos: true,
+          },
+        },
         items: {
+          // Los componentes fabricados son subitems técnicos ejecutables. No
+          // son renglones comerciales adicionales ni tienen precio propio.
+          where: { parentItemId: null },
           orderBy: { ordenIndice: 'asc' as const },
           include: {
             parentItem: { select: { id: true, nombre: true } },
@@ -5171,6 +5182,10 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            // El tablero necesita conservar la jerarquía del BOM: sin el
+            // padre cargado los componentes se proyectaban como productos
+            // independientes y se perdía el contexto de la OT compuesta.
+            parentItem: { select: { id: true, nombre: true } },
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
             cotizacionItem: {
@@ -6953,10 +6968,13 @@ export class OrdenesTrabajoService {
 
   private toListItem(
     orden: Omit<OrdenConRelaciones, 'items'> & {
-      items: Array<{ nombre: string }>;
+      items: Array<{ nombre: string; parentItemId?: string | null }>;
     },
   ) {
     const estado = orden.estado as OrdenTrabajoEstado;
+    const itemsComerciales = orden.items.filter(
+      (item) => item.parentItemId == null,
+    );
     return {
       id: orden.id,
       numero: orden.numero,
@@ -6971,10 +6989,10 @@ export class OrdenesTrabajoService {
       fechaEntrega: orden.fechaEntrega
         ? orden.fechaEntrega.toISOString().slice(0, 10)
         : null,
-      itemsCount: orden._count.items,
+      itemsCount: itemsComerciales.length,
       total: Number(orden.total ?? 0),
       progresoPct: progresoEfectivo(estado, orden.progresoPct),
-      resumen: orden.items.map((item) => item.nombre).join(' · '),
+      resumen: itemsComerciales.map((item) => item.nombre).join(' · '),
       proyectoCampana: orden.proyectoCampana,
     };
   }
@@ -7056,100 +7074,102 @@ export class OrdenesTrabajoService {
           minutosReales: o.minutosRealesAlCancelar ?? 0,
         };
       })(),
-      productos: orden.items.map((item) => {
-        const cotItem = (
-          item as typeof item & {
-            cotizacionItem?: {
-              productoId: string;
-              rutaAlternativaId: string | null;
-              jobContextJson: unknown;
-              snapshotJson: unknown;
-              trazabilidadJson: unknown;
-              costoUnitario: unknown;
-              costoTotal: unknown;
-              precioUnitario: unknown;
-              precioTotal: unknown;
-              precioConfigSnapshotJson: unknown;
-              impuestosSnapshotJson: unknown;
-              comisionesSnapshotJson: unknown;
-              precioEspecialClienteSnapshotJson: unknown;
-            } | null;
-          }
-        ).cotizacionItem;
-        const itemCategorias = item as typeof item & {
-          categoriaComercial?: string;
-          subcategoriaComercial?: string;
-        };
-        const itemDescuento = item as typeof item & {
-          descuentoTipo?: 'PORCENTAJE' | 'MONTO' | null;
-          descuentoValor?: unknown;
-          descuentoMonto?: unknown;
-          descuentoCuponId?: string | null;
-        };
-        return {
-          id: item.id,
-          cotizacionItemId: item.cotizacionItemId,
-          // Descuento comercial persistido (F1): para rehidratar la ficha con el
-          // mismo descuento que aplicó el vendedor. Ver descuentos-diseno.md §10.
-          descuentoTipo: itemDescuento.descuentoTipo ?? null,
-          descuentoValor:
-            itemDescuento.descuentoValor != null
-              ? Number(itemDescuento.descuentoValor)
+      productos: orden.items
+        .filter((item) => item.parentItemId == null)
+        .map((item) => {
+          const cotItem = (
+            item as typeof item & {
+              cotizacionItem?: {
+                productoId: string;
+                rutaAlternativaId: string | null;
+                jobContextJson: unknown;
+                snapshotJson: unknown;
+                trazabilidadJson: unknown;
+                costoUnitario: unknown;
+                costoTotal: unknown;
+                precioUnitario: unknown;
+                precioTotal: unknown;
+                precioConfigSnapshotJson: unknown;
+                impuestosSnapshotJson: unknown;
+                comisionesSnapshotJson: unknown;
+                precioEspecialClienteSnapshotJson: unknown;
+              } | null;
+            }
+          ).cotizacionItem;
+          const itemCategorias = item as typeof item & {
+            categoriaComercial?: string;
+            subcategoriaComercial?: string;
+          };
+          const itemDescuento = item as typeof item & {
+            descuentoTipo?: 'PORCENTAJE' | 'MONTO' | null;
+            descuentoValor?: unknown;
+            descuentoMonto?: unknown;
+            descuentoCuponId?: string | null;
+          };
+          return {
+            id: item.id,
+            cotizacionItemId: item.cotizacionItemId,
+            // Descuento comercial persistido (F1): para rehidratar la ficha con el
+            // mismo descuento que aplicó el vendedor. Ver descuentos-diseno.md §10.
+            descuentoTipo: itemDescuento.descuentoTipo ?? null,
+            descuentoValor:
+              itemDescuento.descuentoValor != null
+                ? Number(itemDescuento.descuentoValor)
+                : null,
+            descuentoMonto:
+              itemDescuento.descuentoMonto != null
+                ? Number(itemDescuento.descuentoMonto)
+                : null,
+            descuentoCuponId: itemDescuento.descuentoCuponId ?? null,
+            codigo: item.codigo,
+            nombre: item.nombre,
+            familia: item.familia,
+            categoriaComercial: itemCategorias.categoriaComercial ?? '',
+            subcategoriaComercial: itemCategorias.subcategoriaComercial ?? '',
+            cantidad: Number(item.cantidad),
+            cantidadUnidad: item.cantidadUnidad,
+            subtotal: Number(item.subtotal),
+            impuestos: Number(item.impuestos),
+            total: Number(item.total),
+            specs: (item.specsJson ?? []) as Array<{
+              etiqueta: string;
+              valor: string;
+            }>,
+            adicionales: (item.adicionalesJson ?? []) as string[],
+            snapshot: cotItem
+              ? {
+                  productoId: cotItem.productoId,
+                  rutaAlternativaId: cotItem.rutaAlternativaId,
+                  jobContext: cotItem.jobContextJson ?? null,
+                  resumen: cotItem.snapshotJson ?? null,
+                  trazabilidad: cotItem.trazabilidadJson ?? null,
+                  costoUnitario:
+                    cotItem.costoUnitario != null
+                      ? Number(cotItem.costoUnitario)
+                      : null,
+                  costoTotal:
+                    cotItem.costoTotal != null
+                      ? Number(cotItem.costoTotal)
+                      : null,
+                  precioUnitario:
+                    cotItem.precioUnitario != null
+                      ? Number(cotItem.precioUnitario)
+                      : null,
+                  precioTotal:
+                    cotItem.precioTotal != null
+                      ? Number(cotItem.precioTotal)
+                      : null,
+                  precioSnapshots: {
+                    precioConfig: cotItem.precioConfigSnapshotJson ?? null,
+                    impuestos: cotItem.impuestosSnapshotJson ?? null,
+                    comisiones: cotItem.comisionesSnapshotJson ?? null,
+                    precioEspecialCliente:
+                      cotItem.precioEspecialClienteSnapshotJson ?? null,
+                  },
+                }
               : null,
-          descuentoMonto:
-            itemDescuento.descuentoMonto != null
-              ? Number(itemDescuento.descuentoMonto)
-              : null,
-          descuentoCuponId: itemDescuento.descuentoCuponId ?? null,
-          codigo: item.codigo,
-          nombre: item.nombre,
-          familia: item.familia,
-          categoriaComercial: itemCategorias.categoriaComercial ?? '',
-          subcategoriaComercial: itemCategorias.subcategoriaComercial ?? '',
-          cantidad: Number(item.cantidad),
-          cantidadUnidad: item.cantidadUnidad,
-          subtotal: Number(item.subtotal),
-          impuestos: Number(item.impuestos),
-          total: Number(item.total),
-          specs: (item.specsJson ?? []) as Array<{
-            etiqueta: string;
-            valor: string;
-          }>,
-          adicionales: (item.adicionalesJson ?? []) as string[],
-          snapshot: cotItem
-            ? {
-                productoId: cotItem.productoId,
-                rutaAlternativaId: cotItem.rutaAlternativaId,
-                jobContext: cotItem.jobContextJson ?? null,
-                resumen: cotItem.snapshotJson ?? null,
-                trazabilidad: cotItem.trazabilidadJson ?? null,
-                costoUnitario:
-                  cotItem.costoUnitario != null
-                    ? Number(cotItem.costoUnitario)
-                    : null,
-                costoTotal:
-                  cotItem.costoTotal != null
-                    ? Number(cotItem.costoTotal)
-                    : null,
-                precioUnitario:
-                  cotItem.precioUnitario != null
-                    ? Number(cotItem.precioUnitario)
-                    : null,
-                precioTotal:
-                  cotItem.precioTotal != null
-                    ? Number(cotItem.precioTotal)
-                    : null,
-                precioSnapshots: {
-                  precioConfig: cotItem.precioConfigSnapshotJson ?? null,
-                  impuestos: cotItem.impuestosSnapshotJson ?? null,
-                  comisiones: cotItem.comisionesSnapshotJson ?? null,
-                  precioEspecialCliente:
-                    cotItem.precioEspecialClienteSnapshotJson ?? null,
-                },
-              }
-            : null,
-        };
-      }),
+          };
+        }),
       eventos: orden.eventos.map((evento) => ({
         fecha: evento.fecha.toISOString(),
         tipo: evento.tipo,

@@ -36,8 +36,17 @@ function paso(
 
 describe('consolidarEtapasCompuestas', () => {
   it('expone un único paso operativo y conserva el desglose calculado', () => {
+    const tensado = paso('tensado', 'Tensado de lona', 40, 100);
+    tensado.nestingResult = {
+      algorithm: 'grid-2d-single',
+      cantidadCalculada: 1,
+      unidad: 'pliegos',
+      aprovechamientoPct: 80,
+      substrates: [{ kind: 'sheet', count: 1, widthMm: 1000, heightMm: 700 }],
+      placements: [],
+    };
     const resultado = consolidarEtapasCompuestas([
-      paso('tensado', 'Tensado de lona', 40, 100),
+      tensado,
       paso('cenefas', 'Colocación de cenefas', 20, 50),
     ]);
 
@@ -51,5 +60,9 @@ describe('consolidarEtapasCompuestas', () => {
       tiempo: { totalMin: 60, costo: 150 },
     });
     expect(resultado[0].operacionesInternas).toHaveLength(2);
+    expect(resultado[0].operacionesInternas?.[0].nestingResult).toMatchObject({
+      algorithm: 'grid-2d-single',
+      cantidadCalculada: 1,
+    });
   });
 });

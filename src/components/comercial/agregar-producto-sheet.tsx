@@ -81,6 +81,7 @@ import {
   type PropuestaItem,
   type UnidadPropuesta,
 } from "@/lib/propuestas";
+import { resolverCantidadTrabajo } from "@/lib/cantidad-trabajo";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
   type AnalisisSvgFabricacion,
@@ -3350,15 +3351,12 @@ function buildJobContext(
     config.modoCotizacionLineal === "directo";
   const usaMedidaPersonalizadaReal =
     cotizaConPiezas && config.piezas.length > 0;
-  const cantidadTrabajo = cotizaLinealDirecto
-    ? 1
-    : cotizaConPiezas
-      ? config.piezas.reduce(
-          (total, pieza) =>
-            total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
-          0,
-        ) || 1
-      : qty;
+  const cantidadTrabajo = resolverCantidadTrabajo({
+    cantidadItem: qty,
+    cotizaLinealDirecto,
+    usaMedidaPersonalizada: usaMedidaPersonalizadaReal,
+    piezas: config.piezas,
+  });
   const ctx: Record<string, unknown> = {
     cantidad: cantidadTrabajo,
     caras: config.caras,
@@ -7396,7 +7394,9 @@ function ApConfigStep({
         {usaMedidaMixta && motorConfig.piezas.length > 0
           ? renderPiezasEditor({ titulo: "A medida" })
           : null}
-        {renderCantidadCard()}
+        {usaMedidaMixta && motorConfig.piezas.length > 0
+          ? null
+          : renderCantidadCard()}
         {entranPorPliego ? (
           <div className="ap-minimum-alert">
             <Grid2X2Icon />

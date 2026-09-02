@@ -66,7 +66,9 @@ export function PanelComprasOt({
         <span className="ttl">
           Compras / Tercerizados <span className="ct">{compras.length}</span>
         </span>
-        <span className="sub">Pasos que compramos a un proveedor (fuera del tablero)</span>
+        <span className="sub">
+          Se gestionan como compras y bloquean el workflow hasta su recepción
+        </span>
       </div>
       <div style={{ display: "flex", flexDirection: "column" }}>
         {compras.map(({ paso, item, esperandoA }) => {

@@ -8,6 +8,7 @@ import {
   getCatalogoFamilias,
   getRutaById,
 } from "@/lib/productos-servicios-api";
+import type { RutaWorkflow } from "@/lib/productos-servicios";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ interface RutaConPasos {
     nombreVisible?: string | null;
     icono?: string | null;
   }>;
+  workflow?: RutaWorkflow;
   versiones: Array<{
     version: number;
     cambios: string | null;
@@ -47,22 +49,24 @@ export default async function RutaDetallePage({
   if (!(await tienePermiso("costos.gestionar"))) {
     return <SinPermiso modulo="Rutas de producción" />;
   }
+  let ruta: RutaConPasos;
+  let catalogo: Awaited<ReturnType<typeof getCatalogoFamilias>>;
   try {
-    const [ruta, catalogo] = await Promise.all([
+    [ruta, catalogo] = await Promise.all([
       getRutaById(rutaId) as Promise<RutaConPasos>,
       getCatalogoFamilias(),
     ]);
-    return (
-      <RutaFormView
-        modo="editar"
-        rutaExistente={ruta}
-        catalogoFamilias={catalogo}
-      />
-    );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       notFound();
     }
     throw err;
   }
+  return (
+    <RutaFormView
+      modo="editar"
+      rutaExistente={ruta}
+      catalogoFamilias={catalogo}
+    />
+  );
 }
