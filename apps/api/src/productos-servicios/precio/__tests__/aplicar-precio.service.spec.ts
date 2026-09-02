@@ -71,6 +71,158 @@ describe('AplicarPrecioService', () => {
     ...overrides,
   });
 
+  describe('pricing compuesto', () => {
+    it('aplica reglas por bloque y consolida IVA y descuento una sola vez', () => {
+      const r = service.aplicarCompuesto({
+        costoTotal: 1_000,
+        cantidad: 1,
+        precioConfigPadre: {
+          metodoCalculo: 'por_margen',
+          detalle: { marginPct: 25 },
+        },
+        bloques: [
+          {
+            codigo: 'GENERAL',
+            nombre: 'Trabajo propio y componentes heredados',
+            costoTotal: 600,
+            cantidad: 1,
+            precioConfig: {
+              metodoCalculo: 'por_margen',
+              detalle: { marginPct: 25 },
+            },
+          },
+          {
+            codigo: 'impresion',
+            nombre: 'Impresión',
+            costoTotal: 400,
+            cantidad: 10,
+            precioConfig: {
+              metodoCalculo: 'por_margen',
+              detalle: { marginPct: 50 },
+            },
+          },
+        ],
+        impuestos: [iva21],
+        comisiones: [],
+        descuento: { tipo: 'PORCENTAJE', valor: 10 },
+      });
+
+      expect(r.descuento.montoTotal).toBe(160);
+      expect(r.precioNetoTotal).toBe(1_440);
+      expect(r.precioBrutoTotal).toBe(1_742.4);
+      expect(r.desglose.totalImpuestos).toBe(302.4);
+      expect(r.bloques.map((bloque) => bloque.netoListaTotal)).toEqual([
+        800, 800,
+      ]);
+      expect(
+        r.bloques.reduce((total, bloque) => total + bloque.descuentoTotal, 0),
+      ).toBe(r.descuento.montoTotal);
+    });
+
+    it('evalúa los tramos con la cantidad propia de cada componente', () => {
+      const r = service.aplicarCompuesto({
+        costoTotal: 1_000,
+        cantidad: 1,
+        precioConfigPadre: {
+          metodoCalculo: 'por_margen',
+          detalle: { marginPct: 0 },
+        },
+        bloques: [
+          {
+            codigo: 'GENERAL',
+            nombre: 'General',
+            costoTotal: 500,
+            cantidad: 1,
+            precioConfig: {
+              metodoCalculo: 'por_margen',
+              detalle: { marginPct: 0 },
+            },
+          },
+          {
+            codigo: 'tarjetas',
+            nombre: 'Tarjetas',
+            costoTotal: 500,
+            cantidad: 1_000,
+            precioConfig: {
+              metodoCalculo: 'margen_variable',
+              detalle: {
+                tiers: [
+                  { quantityUntil: 500, marginPct: 50 },
+                  { quantityUntil: 2_000, marginPct: 20 },
+                ],
+              },
+            },
+          },
+        ],
+        impuestos: [],
+        comisiones: [],
+      });
+
+      expect(r.bloques[1].netoListaTotal).toBe(625);
+      expect(r.precioNetoTotal).toBe(1_125);
+    });
+
+    it('traslada los costos sin margen del bloque sin aplicarles utilidad', () => {
+      const r = service.aplicarCompuesto({
+        costoTotal: 200,
+        cantidad: 1,
+        precioConfigPadre: {
+          metodoCalculo: 'por_margen',
+          detalle: { marginPct: 50 },
+        },
+        bloques: [
+          {
+            codigo: 'GENERAL',
+            nombre: 'General',
+            costoTotal: 200,
+            costoSinMargenTotal: 100,
+            cantidad: 1,
+            precioConfig: {
+              metodoCalculo: 'por_margen',
+              detalle: { marginPct: 50 },
+            },
+          },
+        ],
+        impuestos: [],
+        comisiones: [],
+      });
+
+      expect(r.precioNetoTotal).toBe(300);
+      expect(r.desglose.trasladoSinMargenUnitario).toBe(100);
+    });
+
+    it('absorbe el residuo de centavos y mantiene los bloques reconciliados', () => {
+      const precioConfig: PrecioConfig = {
+        metodoCalculo: 'por_margen',
+        detalle: { marginPct: 0 },
+      };
+      const r = service.aplicarCompuesto({
+        costoTotal: 1.006,
+        cantidad: 1,
+        precioConfigPadre: precioConfig,
+        bloques: ['GENERAL', 'hijo', 'override'].map((codigo) => ({
+          codigo,
+          nombre: codigo,
+          costoTotal: 1.006 / 3,
+          cantidad: 1,
+          precioConfig,
+        })),
+        impuestos: [],
+        comisiones: [],
+      });
+
+      expect(
+        r.bloques.reduce((total, bloque) => total + bloque.costoTotal, 0),
+      ).toBe(1.01);
+      expect(
+        r.bloques.reduce((total, bloque) => total + bloque.netoListaTotal, 0),
+      ).toBe(r.descuento.netoListaTotal);
+      expect(
+        r.bloques.reduce((total, bloque) => total + bloque.netoFinalTotal, 0),
+      ).toBe(r.precioNetoTotal);
+    });
+  });
+
   // ════════════════════════════════════════════════════════════════════
   // Métodos de cálculo del precio base (sin impuestos ni comisiones)
   // ════════════════════════════════════════════════════════════════════

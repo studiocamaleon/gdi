@@ -49,6 +49,10 @@ import {
   type BomRevisionFuente,
 } from './bom-multinivel';
 import { leerWorkflowRuta } from './ruta-workflow';
+import {
+  congelarPoliticaPricingComponente,
+  validarPoliticaPricingComponente,
+} from './precio/pricing-compuesto';
 
 type ProductoDetalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaDetalle = ProductoDetalle['rutasAlternativas'][number];
@@ -412,6 +416,7 @@ export class RecetasProductoService {
       auth.tenantId,
       componentes,
       pasosCompuestos,
+      { actualizarSnapshotsPricing: true },
     );
 
     const aristasFuente = dto.dependencias
@@ -429,7 +434,9 @@ export class RecetasProductoService {
         : plantillaRuta?.dependencias;
     const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
       existente?.revisionPublicada?.grafoProduccionJson) as
-      (GrafoProduccion & Prisma.JsonObject) | null | undefined;
+      | (GrafoProduccion & Prisma.JsonObject)
+      | null
+      | undefined;
     const gatesFuente = dto.gates
       ? dto.gates
       : (grafoAnterior?.nodos ?? []).flatMap((nodo) =>
@@ -654,8 +661,9 @@ export class RecetasProductoService {
             unidad: item.unidad ?? 'unidad',
             requerido: item.requerido ?? true,
             configuracionJson:
-              (item.configuracionJson as Prisma.InputJsonValue | undefined) ??
-              undefined,
+              (componentesVersionados[index].configuracionJson as
+                | Prisma.InputJsonValue
+                | undefined) ?? undefined,
             nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
             nodosPredecesoresClaves: item.nodosPredecesoresClaves ?? [],
             orden: item.orden ?? index,
@@ -755,6 +763,7 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
       })),
       pasosCompuestosActuales,
+      { actualizarSnapshotsPricing: true },
     );
     const configuracionConInternos = this.incorporarPasosInternos(
       configuracion,
@@ -779,7 +788,9 @@ export class RecetasProductoService {
       );
     }
     const grafoActual = revision.grafoProduccionJson as
-      GrafoProduccion | null | undefined;
+      | GrafoProduccion
+      | null
+      | undefined;
     await this.validarPasosCompuestos(
       auth.tenantId,
       pasosCompuestosActuales,
@@ -1679,6 +1690,7 @@ export class RecetasProductoService {
     tenantId: string,
     componentes: RecetaComponenteDto[],
     pasosCompuestos: ConfiguracionPasoCompuesto[] = [],
+    opciones: { actualizarSnapshotsPricing?: boolean } = {},
   ) {
     if (!componentes.length) return [];
     const ids = [
@@ -1693,6 +1705,7 @@ export class RecetasProductoService {
       },
       select: {
         productoId: true,
+        producto: { select: { precioConfigJson: true } },
         revisionPublicada: {
           select: {
             id: true,
@@ -1709,6 +1722,12 @@ export class RecetasProductoService {
           ? [[receta.productoId, receta.revisionPublicada] as const]
           : [],
       ),
+    );
+    const precioPorProducto = new Map(
+      recetas.map((receta) => [
+        receta.productoId,
+        receta.producto.precioConfigJson,
+      ]),
     );
     const componentePorCodigo = new Map(
       componentes.map((item) => [item.codigo, item]),
@@ -1868,6 +1887,12 @@ export class RecetasProductoService {
         recetaRevisionId: revision.id,
         recetaVersion: revision.numero,
         recetaHuella: revision.huellaConfiguracion,
+        configuracionJson: congelarPoliticaPricingComponente({
+          configuracionJson: item.configuracionJson,
+          precioConfigHijo: precioPorProducto.get(item.productoComponenteId),
+          actualizarSnapshot: opciones.actualizarSnapshotsPricing === true,
+          componenteNombre: item.nombre,
+        }),
       };
     });
   }
@@ -2157,6 +2182,7 @@ export class RecetasProductoService {
     const codigosComponentes = new Set<string>();
     for (const item of componentes) {
       validarConfiguracionComponente(item.configuracionJson, item.nombre);
+      validarPoliticaPricingComponente(item.configuracionJson, item.nombre);
       if (item.productoComponenteId === productoId) {
         throw new BadRequestException(
           'Un producto no puede ser componente de sí mismo.',

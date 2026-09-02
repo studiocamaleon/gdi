@@ -97,6 +97,7 @@ type NodoProductivoEditor = {
   orden: number;
   nombre: string;
   seleccion: string;
+  omitido?: boolean;
 };
 
 type NodoReemplazado = Pick<
@@ -329,6 +330,7 @@ export function EditorDefiniciones({
                 paso.familiaNombre ||
                 paso.familiaCodigo,
             ),
+            modoActivacion: config?.modoActivacion,
           };
         }),
       ...(ruta.pasosExtras ?? [])
@@ -336,6 +338,7 @@ export function EditorDefiniciones({
         .map((paso) => ({
           value: `extra:${paso.id}`,
           label: nombreHumano(paso.nombreVisible || paso.familiaCodigo),
+          modoActivacion: paso.modoActivacion,
         })),
     ],
     [ruta],
@@ -402,7 +405,7 @@ export function EditorDefiniciones({
     () => pasosTenant.filter((paso) => paso.tipoPaso === "COMPUESTO"),
     [pasosTenant],
   );
-  const nodosHojaRuta = React.useMemo(
+  const nodosHojaRuta = React.useMemo<NodoProductivoEditor[]>(
     () => [
       ...pasosDocumento.map((paso, index) => {
         const esEtapa = pasosCompuestos.some(
@@ -414,6 +417,7 @@ export function EditorDefiniciones({
           orden: 100 + index,
           nombre: paso.label,
           seleccion: esEtapa ? `etapa:${paso.value}` : `paso:${paso.value}`,
+          omitido: paso.modoActivacion === "NO_EJECUTAR",
         };
       }),
       ...componentes.map((componente, index) => ({
@@ -1764,10 +1768,11 @@ export function EditorDefiniciones({
                               data-node-type={nodo.tipo.toLowerCase()}
                               data-selected={seleccionado}
                               data-dragging={nodoArrastrado === nodo.clave}
+                              data-omitted={nodo.omitido}
                               draggable
                               role="button"
                               tabIndex={0}
-                              aria-label={`${nodo.nombre}. ${nodo.tipo === "COMPONENTE" ? "Componente" : nodo.tipo === "ETAPA" ? "Etapa" : "Paso"}. Enter para configurar; menú de acciones disponible.`}
+                              aria-label={`${nodo.nombre}. ${nodo.omitido ? "Paso omitido en este producto" : nodo.tipo === "COMPONENTE" ? "Componente" : nodo.tipo === "ETAPA" ? "Etapa" : "Paso"}. Enter para configurar; menú de acciones disponible.`}
                               onClick={() =>
                                 onSeleccionarNodo?.(nodo.seleccion)
                               }
@@ -1811,29 +1816,35 @@ export function EditorDefiniciones({
                               </span>
                               <span className={styles.nodeMain}>
                                 <small>
-                                  {nodo.tipo === "COMPONENTE"
-                                    ? "Subruta fabricada"
-                                    : nodo.tipo === "ETAPA"
-                                      ? "Etapa consolidada"
-                                      : "Paso de producción"}
+                                  {nodo.omitido
+                                    ? "Paso omitido"
+                                    : nodo.tipo === "COMPONENTE"
+                                      ? "Subruta fabricada"
+                                      : nodo.tipo === "ETAPA"
+                                        ? "Etapa consolidada"
+                                        : "Paso de producción"}
                                 </small>
                                 <strong>{nodo.nombre}</strong>
                                 <span>
                                   {documentosNodo
                                     ? `${documentosNodo} documento${documentosNodo === 1 ? "" : "s"} ${nodo.tipo === "COMPONENTE" ? "heredado" : "requerido"}${documentosNodo === 1 ? "" : "s"}`
-                                    : nodo.tipo === "COMPONENTE"
-                                      ? "Receta y ruta propias"
-                                      : nodo.tipo === "ETAPA"
-                                        ? "Un estado en producción"
-                                        : "Operación individual"}
+                                    : nodo.omitido
+                                      ? "No participa en la ejecución de esta ruta"
+                                      : nodo.tipo === "COMPONENTE"
+                                        ? "Receta y ruta propias"
+                                        : nodo.tipo === "ETAPA"
+                                          ? "Un estado en producción"
+                                          : "Operación individual"}
                                 </span>
                               </span>
                               <span className={styles.nodeType}>
-                                {nodo.tipo === "COMPONENTE"
-                                  ? "Componente"
-                                  : nodo.tipo === "ETAPA"
-                                    ? "Etapa"
-                                    : "Paso"}
+                                {nodo.omitido
+                                  ? "Omitido"
+                                  : nodo.tipo === "COMPONENTE"
+                                    ? "Componente"
+                                    : nodo.tipo === "ETAPA"
+                                      ? "Etapa"
+                                      : "Paso"}
                               </span>
                             </article>
                           </NodoProductivoMenu>

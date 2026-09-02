@@ -1,12 +1,95 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   ordenarComponentesPorCalculo,
+  proyectarEspecificacionesEfectivasComponente,
   resolverJobContextComponente,
   resolverOperacionesIncorporacion,
   validarConfiguracionComponente,
 } from '../componentes-configuracion';
 
 describe('configuración de componentes fabricados', () => {
+  it('proyecta todos los parámetros efectivos con etiquetas humanas', () => {
+    const configuracion = {
+      version: 1,
+      bindings: [
+        {
+          clave: 'cantidad',
+          etiqueta: 'Cantidad de piezas',
+          tipoDato: 'number',
+          unidad: 'unidad',
+          origen: 'FORMULA',
+          requerido: true,
+          regla: {
+            campoPadre: 'cantidad',
+            operador: 'MULTIPLICAR',
+            valor: 2,
+          },
+        },
+        {
+          clave: 'medidaCustomMm.anchoMm',
+          etiqueta: 'Ancho',
+          tipoDato: 'number',
+          unidad: 'mm',
+          origen: 'FIJO',
+          valor: 1000,
+        },
+        {
+          clave: 'modoColor_impresion',
+          etiqueta: 'Impresión por área',
+          tipoDato: 'modo_color',
+          origen: 'DEFAULT_HIJO',
+          valor: 'CMYK+blanco',
+          opciones: [{ valor: 'CMYK+blanco', etiqueta: 'CMYK + Blanco' }],
+        },
+        {
+          clave: 'opcionalesActivados.diseno',
+          etiqueta: 'Diseño gráfico',
+          tipoDato: 'boolean',
+          origen: 'COTIZACION',
+          valor: false,
+        },
+      ],
+    };
+    const jobContext = resolverJobContextComponente({
+      configuracion,
+      contextoPadre: { cantidad: 3 },
+      codigoComponente: 'vinilo',
+      cantidadLegacy: 1,
+    });
+
+    expect(
+      proyectarEspecificacionesEfectivasComponente({
+        configuracion,
+        jobContext,
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        clave: 'cantidad',
+        etiqueta: 'Cantidad de piezas',
+        origen: 'FORMULA',
+        valor: 6,
+        valorTexto: '6',
+      }),
+      expect.objectContaining({
+        clave: 'medidaCustomMm.anchoMm',
+        etiqueta: 'Ancho',
+        valor: 1000,
+      }),
+      expect.objectContaining({
+        clave: 'modoColor_impresion',
+        etiqueta: 'Impresión por área',
+        valor: 'CMYK+blanco',
+        valorTexto: 'CMYK + Blanco',
+      }),
+      expect.objectContaining({
+        clave: 'opcionalesActivados.diseno',
+        etiqueta: 'Diseño gráfico',
+        valor: false,
+        valorTexto: 'No',
+      }),
+    ]);
+  });
+
   it('resuelve operaciones fijas y por output público sin fórmulas libres', () => {
     const operaciones = resolverOperacionesIncorporacion({
       configuracion: {

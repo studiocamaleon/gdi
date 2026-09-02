@@ -1,0 +1,526 @@
+.root {
+  --pricing-accent: var(--pd-orange, #ff6a2b);
+  --pricing-accent-soft: var(--pd-orange-soft, #fff2eb);
+  --pricing-ink: var(--pd-ink, var(--foreground));
+  --pricing-muted: var(--pd-muted, var(--muted-foreground));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 104px;
+}
+
+.commercialGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.section {
+  position: relative;
+  gap: 0;
+  overflow: hidden;
+  padding-block: 0;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background:
+    radial-gradient(
+      circle at 96% -20%,
+      color-mix(in srgb, var(--pricing-accent) 7%, transparent),
+      transparent 19rem
+    ),
+    var(--card);
+  box-shadow: 0 12px 34px rgb(25 22 19 / 5%);
+}
+
+.section::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--pricing-accent),
+    color-mix(in srgb, var(--pricing-accent) 16%, transparent) 52%,
+    transparent 86%
+  );
+  content: "";
+}
+
+.sectionCompact {
+  height: 100%;
+}
+
+.sectionHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 21px 22px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionLead {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 13px;
+}
+
+.sectionMark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--pricing-accent);
+  background: var(--pricing-ink);
+  box-shadow: 0 8px 18px rgb(20 20 26 / 13%);
+}
+
+.sectionMark svg {
+  width: 17px;
+  height: 17px;
+}
+
+.sectionCopy {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--pricing-accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--pricing-ink);
+  font-size: 16px;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+}
+
+.sectionDescription {
+  max-width: 72ch;
+  margin-top: 4px;
+  color: var(--pricing-muted);
+  font-size: 12.5px;
+  line-height: 1.48;
+}
+
+.sectionAction {
+  align-self: start;
+  justify-self: end;
+}
+
+.sectionContent {
+  padding: 20px 22px 23px;
+}
+
+.methodShell {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.82fr) minmax(260px, 1.18fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.methodSelector {
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--card);
+}
+
+.methodFields {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--background);
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.switchField {
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--card);
+}
+
+.tierCard {
+  gap: 0;
+  padding-block: 0;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: none;
+}
+
+.tierHeader {
+  padding: 14px 15px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tierContent {
+  padding: 14px 15px 15px;
+}
+
+.tierRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tierRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+}
+
+.tierRow input {
+  width: 92px;
+}
+
+.tierText {
+  color: var(--pricing-muted);
+  font-size: 12px;
+}
+
+.tierGrow {
+  flex: 1;
+}
+
+.segmented {
+  overflow: hidden;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--pricing-accent) 2%, var(--card));
+}
+
+.segmented :global([data-slot="toggle-group-item"]) {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--pricing-muted);
+  background: transparent;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.segmented :global([data-slot="toggle-group-item"]:hover) {
+  color: var(--pricing-ink);
+  background: color-mix(in srgb, var(--pricing-accent) 10%, transparent);
+}
+
+.segmented :global([data-slot="toggle-group-item"][aria-pressed="true"]),
+.segmented :global([data-slot="toggle-group-item"][data-pressed]),
+.segmented :global([data-slot="toggle-group-item"][data-state="on"]) {
+  color: var(--pricing-ink);
+  background: var(--pricing-accent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--pricing-ink) 16%, transparent),
+    0 4px 12px color-mix(in srgb, var(--pricing-accent) 28%, transparent);
+  font-weight: 720;
+  transform: translateY(-1px);
+}
+
+.segmented :global([data-slot="toggle-group-item"][aria-pressed="true"]:hover),
+.segmented :global([data-slot="toggle-group-item"][data-pressed]:hover),
+.segmented :global([data-slot="toggle-group-item"][data-state="on"]:hover) {
+  background: color-mix(in srgb, var(--pricing-accent) 88%, var(--background));
+}
+
+.taxSegmented :global([data-slot="toggle-group-item"]) {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.optionName {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+  font-weight: 650;
+}
+
+.optionDescription {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  color: var(--pricing-muted);
+  font-size: 11.5px;
+  font-weight: 450;
+}
+
+.segmented
+  :global([data-slot="toggle-group-item"][aria-pressed="true"])
+  .optionDescription,
+.segmented
+  :global([data-slot="toggle-group-item"][data-pressed])
+  .optionDescription,
+.segmented
+  :global([data-slot="toggle-group-item"][data-state="on"])
+  .optionDescription {
+  color: color-mix(in srgb, var(--pricing-ink) 74%, transparent);
+}
+
+.optionBadge {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.segmented
+  :global([data-slot="toggle-group-item"][aria-pressed="true"])
+  .optionBadge,
+.segmented
+  :global([data-slot="toggle-group-item"][data-pressed])
+  .optionBadge,
+.segmented
+  :global([data-slot="toggle-group-item"][data-state="on"])
+  .optionBadge {
+  border-color: color-mix(in srgb, var(--pricing-ink) 22%, transparent);
+  background: color-mix(in srgb, var(--background) 60%, transparent);
+}
+
+.checkGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.checkGridSingle {
+  grid-template-columns: 1fr;
+}
+
+.checkOption {
+  min-height: 58px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--card);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+
+.checkOption:has([data-checked]) {
+  border-color: color-mix(in srgb, var(--pricing-accent) 34%, var(--border));
+  background: var(--pricing-accent-soft);
+}
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+}
+
+.summaryValue {
+  color: var(--pricing-ink);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 720;
+}
+
+.automaticNote {
+  margin-top: 12px;
+}
+
+.componentGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.componentCard {
+  gap: 0;
+  padding-block: 0;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: none;
+}
+
+.componentCard:has([aria-pressed="true"][value="OVERRIDE"]),
+.componentCard:has([aria-pressed="true"][value="USAR_PRODUCTO_HIJO"]) {
+  border-color: color-mix(in srgb, var(--pricing-accent) 35%, var(--border));
+}
+
+.componentHeader {
+  padding: 14px 15px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.componentContent {
+  padding: 14px 15px 15px;
+}
+
+.overridePanel {
+  padding: 13px;
+  border: 1px dashed color-mix(in srgb, var(--pricing-accent) 42%, var(--border));
+  border-radius: 11px;
+  background: var(--pricing-accent-soft);
+}
+
+.preview {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.previewHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--pricing-accent) 2%, var(--card));
+}
+
+.previewTitle {
+  color: var(--pricing-ink);
+  font-size: 13px;
+  font-weight: 660;
+}
+
+.previewDescription {
+  margin-top: 2px;
+  color: var(--pricing-muted);
+  font-size: 11.5px;
+}
+
+.previewTable {
+  overflow-x: auto;
+  background: var(--card);
+}
+
+.tableShell {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.specialEditor {
+  gap: 0;
+  margin-top: 15px;
+  padding-block: 0;
+  border: 1px dashed color-mix(in srgb, var(--pricing-accent) 40%, var(--border));
+  background: var(--pricing-accent-soft);
+  box-shadow: none;
+}
+
+.specialEditorHeader {
+  padding: 14px 15px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--pricing-accent) 22%, var(--border));
+}
+
+.specialEditorContent {
+  padding: 15px;
+}
+
+.specialEditorFooter {
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 15px;
+  background: color-mix(in srgb, var(--pricing-accent-soft) 72%, var(--card));
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.stickyCopy {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.stickyDot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--pricing-accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--pricing-accent) 12%, transparent);
+}
+
+@media (max-width: 1280px) {
+  .componentGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1080px) {
+  .commercialGrid,
+  .methodShell {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .root {
+    gap: 12px;
+  }
+
+  .sectionHeader {
+    grid-template-columns: 1fr;
+    padding: 18px 17px 15px;
+  }
+
+  .sectionAction {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .sectionAction > * {
+    width: 100%;
+  }
+
+  .sectionContent {
+    padding: 16px 17px 18px;
+  }
+
+  .fieldGrid,
+  .checkGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryRow,
+  .previewHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

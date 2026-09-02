@@ -131,18 +131,18 @@ function formatMoney(value: number, moneda: Moneda) {
   return formatearMoneda(value, moneda, { decimales: 0 });
 }
 
-function labelUnidad(u: NestingViewerInput["unidad"]): string {
+function labelUnidad(u: NestingViewerInput["unidad"], cantidad = 2): string {
   switch (u) {
     case "m_lineales":
       return "m lineales";
     case "pliegos":
-      return "pliegos";
+      return cantidad === 1 ? "pliego" : "pliegos";
     case "pouches":
-      return "pouches";
+      return cantidad === 1 ? "pouch" : "pouches";
     case "m2":
       return "m²";
     case "piezas":
-      return "piezas";
+      return cantidad === 1 ? "pieza" : "piezas";
   }
 }
 
@@ -294,15 +294,26 @@ export function NestingViewer({
         <div className="nesting-strat on">
           <span className="ix">01</span>
           <span>
-            {result.estrategiaDisposicion === "composicion_original"
-              ? "Composición original"
-              : algorithmLabel(result.algorithm)}
+            {result.composicionCompuesta
+              ? "Acomodo consolidado"
+              : result.estrategiaDisposicion === "composicion_original"
+                ? "Composición original"
+                : algorithmLabel(result.algorithm)}
           </span>
           <span className="yield">
             {formatNumber(result.aprovechamientoPct, 1)}%
           </span>
         </div>
-        {result.costingPreview ? (
+        {result.composicionCompuesta ? (
+          <div className="right">
+            <strong className="font-semibold text-foreground">
+              {result.composicionCompuesta.participantes} componentes
+            </strong>
+            {" · "}
+            {result.composicionCompuesta.sustratosIndependientes} →{" "}
+            {result.composicionCompuesta.sustratosConsolidados} placas
+          </div>
+        ) : result.costingPreview ? (
           <div className="right">
             Costeo:{" "}
             <strong className="font-semibold text-foreground">
@@ -330,7 +341,7 @@ export function NestingViewer({
         {copias > 1 ? (
           <StatBlock
             label="Cantidad calculada"
-            value={`${formatNumber(result.cantidadCalculada * copias, 2)} ${labelUnidad(result.unidad)}`}
+            value={`${formatNumber(result.cantidadCalculada * copias, 2)} ${labelUnidad(result.unidad, result.cantidadCalculada * copias)}`}
             hint={`${formatNumber(result.cantidadCalculada, 2)} por copia × ${copias} (${copiasLabel(copias)})`}
           />
         ) : (
@@ -340,7 +351,7 @@ export function NestingViewer({
                 ? "Largo consumido"
                 : "Cantidad calculada"
             }
-            value={`${formatNumber(result.cantidadCalculada, 2)} ${labelUnidad(result.unidad)}`}
+            value={`${formatNumber(result.cantidadCalculada, 2)} ${labelUnidad(result.unidad, result.cantidadCalculada)}`}
             hint={
               result.consumedLengthMm
                 ? `Rollo: ${formatMm(result.consumedLengthMm)}`
@@ -1674,7 +1685,8 @@ function getVectorContours(placement: Placement): VectorContour[] {
     const contour = candidate as { esHueco?: unknown; puntos?: unknown };
     if (!Array.isArray(contour.puntos) || contour.puntos.length < 3) return [];
     const puntos = contour.puntos.flatMap((point) => {
-      if (!point || typeof point !== "object" || Array.isArray(point)) return [];
+      if (!point || typeof point !== "object" || Array.isArray(point))
+        return [];
       const { x, y } = point as { x?: unknown; y?: unknown };
       return typeof x === "number" &&
         Number.isFinite(x) &&
@@ -2396,12 +2408,22 @@ function CostingOverlay({
     );
   }
 
-  const bounds = costingPreview.chargedBounds ?? {
-    xMm: 0,
-    yMm: 0,
-    widthMm: substrateWidthMm,
-    heightMm: substrateHeightMm * (costingPreview.chargedRatio ?? 1),
-  };
+  const chargedRatio = costingPreview.chargedRatio ?? 1;
+  const bounds =
+    costingPreview.chargedBounds ??
+    (substrateWidthMm > substrateHeightMm
+      ? {
+          xMm: 0,
+          yMm: 0,
+          widthMm: substrateWidthMm * chargedRatio,
+          heightMm: substrateHeightMm,
+        }
+      : {
+          xMm: 0,
+          yMm: 0,
+          widthMm: substrateWidthMm,
+          heightMm: substrateHeightMm * chargedRatio,
+        });
 
   return (
     <g>

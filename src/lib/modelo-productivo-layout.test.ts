@@ -4,6 +4,7 @@ import {
   construirColumnasProductivas,
   insertarNodoProductivo,
   moverNodoProductivo,
+  reducirAristasProductivas,
   reemplazarNodoProductivo,
   type NodoProductivoVisual,
 } from "./modelo-productivo-layout";
@@ -98,5 +99,43 @@ describe("layout del modelo productivo", () => {
         "extra:impresion",
       ),
     ).toEqual([["extra:impresion"]]);
+  });
+
+  it("reconecta el flujo cuando un paso intermedio está omitido", () => {
+    const aristas = reducirAristasProductivas(
+      [
+        { desdeClave: "diseno", haciaClave: "preprensa" },
+        { desdeClave: "preprensa", haciaClave: "impresion" },
+        { desdeClave: "impresion", haciaClave: "laminado" },
+        { desdeClave: "laminado", haciaClave: "guillotina" },
+        { desdeClave: "guillotina", haciaClave: "plotter" },
+      ],
+      new Set(["diseno", "preprensa", "impresion", "laminado", "plotter"]),
+    );
+
+    expect(aristas).toEqual([
+      { desdeClave: "diseno", haciaClave: "preprensa" },
+      { desdeClave: "preprensa", haciaClave: "impresion" },
+      { desdeClave: "impresion", haciaClave: "laminado" },
+      { desdeClave: "laminado", haciaClave: "plotter" },
+    ]);
+    expect(
+      construirColumnasProductivas(
+        ["diseno", "preprensa", "impresion", "laminado", "plotter"].map(
+          (clave, orden) => ({
+            clave,
+            orden,
+            tipo: "PASO" as const,
+          }),
+        ),
+        aristas,
+      ).map((columna) => columna.map((nodo) => nodo.clave)),
+    ).toEqual([
+      ["diseno"],
+      ["preprensa"],
+      ["impresion"],
+      ["laminado"],
+      ["plotter"],
+    ]);
   });
 });

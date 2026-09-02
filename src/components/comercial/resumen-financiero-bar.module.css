@@ -8,7 +8,11 @@
 /* La lista de productos scrollea acá dentro; la barra queda de footer fijo. */
 .scroll {
   flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 

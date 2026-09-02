@@ -109,4 +109,43 @@ describe('costingConsumedLength', () => {
       { index: 1, occupationPct: 40, segmentApplied: null, cost: 40 },
     ]);
   });
+
+  it('mide el largo consumido sobre el lado mayor de una placa apaisada', () => {
+    const result = costingConsumedLength({
+      strategy: 'consumed-length',
+      nesting: {
+        algorithm: 'grid-2d-multi',
+        substrates: [{ kind: 'sheet', count: 1, widthMm: 1300, heightMm: 900 }],
+        placements: [
+          {
+            pieceId: 'pieza',
+            substrateIndex: 0,
+            xMm: 5,
+            yMm: 5,
+            widthMm: 500,
+            heightMm: 700,
+            rotated: false,
+          },
+        ],
+        metrics: {
+          trailingMarginMm: 5,
+          aprovechamientoPct: 0,
+          areaUtilMm2: 350_000,
+          areaTotalMm2: 1_170_000,
+        },
+      },
+      unitPrice: 1000,
+      totalPieces: 1,
+      unitsNeeded: 1,
+    });
+
+    expect(result.breakdown.units).toEqual([
+      {
+        index: 0,
+        occupationPct: 39.23,
+        segmentApplied: null,
+        cost: 392.31,
+      },
+    ]);
+  });
 });

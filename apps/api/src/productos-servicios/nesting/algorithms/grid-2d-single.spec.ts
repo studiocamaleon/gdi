@@ -43,4 +43,20 @@ describe('nestGrid2DSingle', () => {
       new Set(result.placements.map((placement) => placement.rotated)).size,
     ).toBe(1);
   });
+
+  it('publica el largo consumido sobre el lado mayor de una placa apaisada', () => {
+    const result = nestGrid2DSingle(
+      { id: 'pieza', widthMm: 500, heightMm: 700, quantity: 1 },
+      {
+        kind: 'sheet',
+        widthMm: 1300,
+        heightMm: 900,
+        margins: { leftMm: 5, rightMm: 7, topMm: 11, bottomMm: 13 },
+      },
+      { allowRotation: false },
+    );
+
+    expect(result.metrics.largoConsumidoMm).toBe(1012);
+    expect(result.metrics.trailingMarginMm).toBe(7);
+  });
 });

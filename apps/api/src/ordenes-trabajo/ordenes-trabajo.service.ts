@@ -82,6 +82,7 @@ import {
 } from '../produccion/simulador-laser-compatibilidad';
 import { resolverEstacionDePaso } from '../eta/motor/tablero-tipos';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
+import type { LoteNestingCompuestoSnapshot } from '../motor-universal/tipos';
 
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
@@ -440,6 +441,7 @@ type PasoVisibleParaOperario = {
   indice: number;
   nodoClave?: string | null;
   predecesorPasoIds?: string[];
+  predecesoresSatisfechos?: boolean;
   estado: string;
   mesaEsMia: boolean;
   mesaUsuarioNombre: string | null;
@@ -463,6 +465,9 @@ export function pasosVisiblesParaOperario<T extends PasoVisibleParaOperario>(
       return false;
     }
     if (paso.nodoClave) {
+      if (paso.predecesoresSatisfechos != null) {
+        return paso.predecesoresSatisfechos;
+      }
       return (paso.predecesorPasoIds ?? []).every(
         (id) => porId.get(id)?.estado === 'hecho',
       );
@@ -497,6 +502,48 @@ type PasoTrazabilidad = {
   proveedorId?: string | null;
   plazoProveedorDias?: number | null;
 };
+
+function lotesNestingAplicados(
+  trazabilidad: unknown,
+): LoteNestingCompuestoSnapshot[] {
+  if (
+    !trazabilidad ||
+    typeof trazabilidad !== 'object' ||
+    Array.isArray(trazabilidad)
+  ) {
+    return [];
+  }
+  const analisis = (trazabilidad as Record<string, unknown>)
+    .analisisNestingCompuesto;
+  if (!analisis || typeof analisis !== 'object' || Array.isArray(analisis)) {
+    return [];
+  }
+  const grupos = (analisis as Record<string, unknown>).grupos;
+  if (!Array.isArray(grupos)) return [];
+  return grupos.flatMap((grupo) => {
+    if (!grupo || typeof grupo !== 'object' || Array.isArray(grupo)) return [];
+    const registro = grupo as Record<string, unknown>;
+    const aplicacion = registro.aplicacion;
+    const lote = registro.lote;
+    if (
+      !aplicacion ||
+      typeof aplicacion !== 'object' ||
+      Array.isArray(aplicacion) ||
+      (aplicacion as Record<string, unknown>).aplicado !== true ||
+      !lote ||
+      typeof lote !== 'object' ||
+      Array.isArray(lote)
+    ) {
+      return [];
+    }
+    const candidato = lote as unknown as LoteNestingCompuestoSnapshot;
+    return typeof candidato.id === 'string' &&
+      Array.isArray(candidato.participantes) &&
+      candidato.participantes.length >= 2
+      ? [candidato]
+      : [];
+  });
+}
 
 function grafoDesdeSnapshotReceta(valor: Prisma.JsonValue | null | undefined) {
   if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
@@ -2916,7 +2963,8 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
+            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
+            | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -4779,7 +4827,8 @@ export class OrdenesTrabajoService {
           ? snapshot.pasos
           : [];
         const grafoGuardado = revisionHija.grafoProduccionJson as
-          (GrafoProduccion & Prisma.JsonObject) | null;
+          | (GrafoProduccion & Prisma.JsonObject)
+          | null;
         const grafoHijo = grafoGuardado
           ? (grafoGuardado as unknown as GrafoProduccion)
           : compilarRutaLineal(
@@ -4960,6 +5009,172 @@ export class OrdenesTrabajoService {
           });
         }
         pendientes.push(hijo.id);
+      }
+    }
+
+    await this.materializarLotesNestingCompuesto(tx, tenantId, padresIniciales);
+  }
+
+  /**
+   * Proyecta el lote económico congelado por el motor a una única operación
+   * de taller. Los demás pasos siguen existiendo como aliases para conservar
+   * la topología y la trazabilidad por componente, pero no se muestran ni se
+   * ejecutan por separado.
+   */
+  private async materializarLotesNestingCompuesto(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    padresIniciales: string[],
+  ) {
+    for (const padreId of padresIniciales) {
+      const padre = await tx.ordenTrabajoItem.findFirst({
+        where: { id: padreId, tenantId },
+        select: {
+          ordenId: true,
+          cotizacionItem: { select: { trazabilidadJson: true } },
+        },
+      });
+      if (!padre) continue;
+      const lotes = lotesNestingAplicados(
+        padre.cotizacionItem?.trazabilidadJson,
+      );
+      if (lotes.length === 0) continue;
+
+      const componentes = await tx.ordenTrabajoItem.findMany({
+        where: { tenantId, parentItemId: padreId },
+        select: {
+          componenteCodigo: true,
+          pasos: {
+            select: {
+              id: true,
+              rutaPasoId: true,
+              nombre: true,
+            },
+          },
+        },
+      });
+      const pasosPorParticipante = new Map(
+        componentes.flatMap((componente) =>
+          componente.pasos.map(
+            (paso) =>
+              [
+                `${componente.componenteCodigo ?? ''}:${paso.rutaPasoId ?? ''}`,
+                paso,
+              ] as const,
+          ),
+        ),
+      );
+
+      for (const lote of lotes) {
+        const participantes = lote.participantes.map((participante) => ({
+          snapshot: participante,
+          paso: pasosPorParticipante.get(
+            `${participante.componenteCodigo}:${participante.rutaPasoId}`,
+          ),
+        }));
+        if (participantes.some((participante) => !participante.paso)) {
+          throw new ConflictException(
+            `No se pudo materializar el lote de nesting compartido ${lote.id}: falta un paso participante en la OT.`,
+          );
+        }
+        const resueltos = participantes as Array<{
+          snapshot: LoteNestingCompuestoSnapshot['participantes'][number];
+          paso: { id: string; rutaPasoId: string | null; nombre: string };
+        }>;
+        const operativo =
+          resueltos.find(
+            (participante) => participante.snapshot.esPasoOperativo,
+          ) ?? resueltos[0];
+        const aliases = resueltos.filter(
+          (participante) => participante.paso.id !== operativo.paso.id,
+        );
+        const idsParticipantes = resueltos.map(
+          (participante) => participante.paso.id,
+        );
+
+        const [dependencias, gates] = await Promise.all([
+          tx.ordenTrabajoPasoDependencia.findMany({
+            where: {
+              tenantId,
+              ordenId: padre.ordenId,
+              OR: [
+                { predecesorPasoId: { in: idsParticipantes } },
+                { sucesorPasoId: { in: idsParticipantes } },
+              ],
+            },
+            select: {
+              predecesorPasoId: true,
+              sucesorPasoId: true,
+              tipo: true,
+              obligatoria: true,
+            },
+          }),
+          tx.ordenTrabajoPasoGate.findMany({
+            where: { tenantId, pasoId: { in: idsParticipantes } },
+            select: { tipo: true },
+          }),
+        ]);
+        const idsSet = new Set(idsParticipantes);
+        const dependenciasOperativas = dependencias.flatMap((dependencia) => {
+          if (
+            idsSet.has(dependencia.sucesorPasoId) &&
+            !idsSet.has(dependencia.predecesorPasoId)
+          ) {
+            return [{ ...dependencia, sucesorPasoId: operativo.paso.id }];
+          }
+          if (
+            idsSet.has(dependencia.predecesorPasoId) &&
+            !idsSet.has(dependencia.sucesorPasoId)
+          ) {
+            return [{ ...dependencia, predecesorPasoId: operativo.paso.id }];
+          }
+          return [];
+        });
+        if (dependenciasOperativas.length > 0) {
+          await tx.ordenTrabajoPasoDependencia.createMany({
+            data: dependenciasOperativas.map((dependencia) => ({
+              tenantId,
+              ordenId: padre.ordenId,
+              ...dependencia,
+            })),
+            skipDuplicates: true,
+          });
+        }
+        if (gates.length > 0) {
+          await tx.ordenTrabajoPasoGate.createMany({
+            data: [...new Set(gates.map((gate) => gate.tipo))].map((tipo) => ({
+              tenantId,
+              ordenId: padre.ordenId,
+              pasoId: operativo.paso.id,
+              tipo,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        await tx.ordenTrabajoItemPaso.update({
+          where: { id: operativo.paso.id },
+          data: {
+            nestingLoteId: lote.id,
+            nestingLoteRol: 'OPERATIVO',
+            nestingLoteSnapshotJson: lote as unknown as Prisma.InputJsonValue,
+            nombre: operativo.paso.nombre.startsWith('Nesting compartido · ')
+              ? operativo.paso.nombre
+              : `Nesting compartido · ${operativo.paso.nombre}`,
+            duracionEstimadaMin: lote.duracionEstimadaMin,
+          },
+        });
+        if (aliases.length > 0) {
+          await tx.ordenTrabajoItemPaso.updateMany({
+            where: { id: { in: aliases.map((alias) => alias.paso.id) } },
+            data: {
+              nestingLoteId: lote.id,
+              nestingLoteRol: 'PARTICIPANTE',
+              nestingLoteSnapshotJson: Prisma.JsonNull,
+              duracionEstimadaMin: 0,
+            },
+          });
+        }
       }
     }
   }
@@ -5571,6 +5786,11 @@ export class OrdenesTrabajoService {
     if (!paso) {
       throw new NotFoundException('No se encontró el paso de producción.');
     }
+    if (paso.nestingLoteRol === 'PARTICIPANTE') {
+      throw new ConflictException(
+        'Este paso forma parte de un nesting compartido y se ejecuta desde su operación principal.',
+      );
+    }
     const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
     if (
       (payload.accion === 'desbloquear' || payload.accion === 'reabrir') &&
@@ -5919,6 +6139,27 @@ export class OrdenesTrabajoService {
         );
       }
 
+      // F4.4.2: el paso visible gobierna la tanda física completa. Sus
+      // aliases conservan la trazabilidad de cada componente y avanzan en la
+      // misma transacción, sin duplicar tiempo ni trabajo en el tablero.
+      if (paso.nestingLoteRol === 'OPERATIVO' && paso.nestingLoteId) {
+        await tx.ordenTrabajoItemPaso.updateMany({
+          where: {
+            tenantId: auth.tenantId,
+            ordenId,
+            nestingLoteId: paso.nestingLoteId,
+            nestingLoteRol: 'PARTICIPANTE',
+          },
+          data: {
+            ...data,
+            duracionEstimadaMin: 0,
+            ...(payload.accion === 'completar'
+              ? { tiempoRealMin: 0, tiempoFuente: 'medido_lote' }
+              : {}),
+          },
+        });
+      }
+
       // Tramos (D2): iniciar/continuar abren sesión de trabajo; pausar,
       // completar y bloquear cierran la abierta con su motivo.
       if (payload.accion === 'iniciar' || payload.accion === 'continuar') {
@@ -6022,6 +6263,9 @@ export class OrdenesTrabajoService {
             itemId,
             accion: payload.accion,
             antes: estadoActual,
+            ...(paso.nestingLoteId
+              ? { nestingLoteId: paso.nestingLoteId }
+              : {}),
             ...(motivo ? { motivo } : {}),
           },
         },
@@ -6784,6 +7028,9 @@ export class OrdenesTrabajoService {
         maquinaId: string | null;
         duracionEstimadaMin: Prisma.Decimal | null;
         operacionesIncorporacionSnapshotJson: Prisma.JsonValue;
+        nestingLoteId: string | null;
+        nestingLoteRol: string | null;
+        nestingLoteSnapshotJson: Prisma.JsonValue;
         estado: string;
         motivoBloqueo: string | null;
         tipoEjecucion: string;
@@ -6836,6 +7083,9 @@ export class OrdenesTrabajoService {
       !Array.isArray(item.cotizacionItem.jobContextJson)
         ? (item.cotizacionItem.jobContextJson as Record<string, unknown>)
         : null;
+    const pasosVisibles = item.pasos.filter(
+      (paso) => paso.nestingLoteRol !== 'PARTICIPANTE',
+    );
     return {
       id: item.id,
       parentItemId: item.parentItemId,
@@ -6868,8 +7118,8 @@ export class OrdenesTrabajoService {
       // gráfico. Se proyecta sólo el brief, no todo el jobContext comercial.
       briefDiseno: jobContext?.briefDiseno ?? null,
       caras: jobContext?.caras === 2 ? 2 : 1,
-      sinRuta: item.pasos.length === 0,
-      pasos: item.pasos.map((paso) => ({
+      sinRuta: pasosVisibles.length === 0,
+      pasos: pasosVisibles.map((paso) => ({
         id: paso.id,
         indice: paso.indice,
         nodoClave: paso.nodoClave,
@@ -6920,6 +7170,13 @@ export class OrdenesTrabajoService {
         )
           ? paso.operacionesIncorporacionSnapshotJson
           : null,
+        nestingLote:
+          paso.nestingLoteRol === 'OPERATIVO'
+            ? {
+                id: paso.nestingLoteId,
+                snapshot: paso.nestingLoteSnapshotJson,
+              }
+            : null,
         estado: paso.estado,
         motivoBloqueo: paso.motivoBloqueo,
         tipoEjecucion: paso.tipoEjecucion,

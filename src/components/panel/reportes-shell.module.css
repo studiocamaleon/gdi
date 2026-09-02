@@ -4,20 +4,9 @@
 }
 
 .indiceHead h1 {
-  margin-top: 5px;
   font-size: 29px;
   font-weight: 640;
   letter-spacing: -0.04em;
-}
-
-.modulo {
-  display: block;
-  color: #ff6a2b;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 @media (max-width: 640px) {

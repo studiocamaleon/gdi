@@ -60,6 +60,12 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
+import { PricingCompuestoEditor } from "@/components/productos-servicios/pricing-compuesto-editor";
+import {
+  componenteRevisionAInput,
+  componentesPricingKey,
+  crearComponentesPricingPorRuta,
+} from "@/components/productos-servicios/pricing-compuesto-helpers";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
 import {
   precioConfigKey,
@@ -765,7 +771,9 @@ export function ProductoWorkspace({
               {activeTab === "herramientas" && (
                 <HerramientasTab producto={producto} />
               )}
-              {activeTab === "pricing" && <PricingTab producto={producto} />}
+              {activeTab === "pricing" && (
+                <PricingTab producto={producto} recetas={recetas} />
+              )}
             </fieldset>
           </TabsContent>
         </Tabs>
@@ -2694,7 +2702,13 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
   );
 }
 
-function PricingTab({ producto }: { producto: ProductoDetalle }) {
+function PricingTab({
+  producto,
+  recetas,
+}: {
+  producto: ProductoDetalle;
+  recetas: ProductoReceta[];
+}) {
   const router = useRouter();
   const [precioPersistido, setPrecioPersistido] =
     React.useState<TabPrecioConfig>(
@@ -2711,19 +2725,74 @@ function PricingTab({ producto }: { producto: ProductoDetalle }) {
         detalle: { marginPct: 40, minimumMarginPct: 25 },
       },
   );
+  const [componentesPersistidos, setComponentesPersistidos] = React.useState(
+    () => crearComponentesPricingPorRuta(recetas),
+  );
+  const [componentesPorRuta, setComponentesPorRuta] = React.useState(() =>
+    crearComponentesPricingPorRuta(recetas),
+  );
   const [guardando, setGuardando] = React.useState(false);
-  const precioDirty = React.useMemo(
+  const precioProductoDirty = React.useMemo(
     () => precioConfigKey(precioConfig) !== precioConfigKey(precioPersistido),
     [precioConfig, precioPersistido],
   );
+  const componentesDirty = React.useMemo(
+    () =>
+      componentesPricingKey(componentesPorRuta) !==
+      componentesPricingKey(componentesPersistidos),
+    [componentesPersistidos, componentesPorRuta],
+  );
+  const precioDirty = precioProductoDirty || componentesDirty;
 
   const guardar = async () => {
     setGuardando(true);
     try {
-      await actualizarProducto(producto.id, {
-        precioConfigJson: precioConfig as unknown as Record<string, unknown>,
-      });
-      setPrecioPersistido(precioConfig);
+      const rutasDirty = Object.keys(componentesPorRuta).filter(
+        (rutaAlternativaId) =>
+          componentesPricingKey({
+            [rutaAlternativaId]: componentesPorRuta[rutaAlternativaId] ?? [],
+          }) !==
+          componentesPricingKey({
+            [rutaAlternativaId]:
+              componentesPersistidos[rutaAlternativaId] ?? [],
+          }),
+      );
+
+      for (const rutaAlternativaId of rutasDirty) {
+        const receta = recetas.find(
+          (item) => item.rutaAlternativa.id === rutaAlternativaId,
+        );
+        if (!receta) {
+          throw new Error("No se encontró la receta de la ruta seleccionada.");
+        }
+        const borrador = receta.revisiones.find(
+          (revision) => revision.estado === "BORRADOR",
+        );
+        const guardada = await guardarBorradorReceta(producto.id, {
+          rutaAlternativaId,
+          expectedUpdatedAt: borrador?.updatedAt,
+          cambios: "Políticas de pricing por componente actualizadas",
+          componentes: componentesPorRuta[rutaAlternativaId] ?? [],
+        });
+        const componentesGuardados = guardada.componentes.map(
+          componenteRevisionAInput,
+        );
+        setComponentesPersistidos((current) => ({
+          ...current,
+          [rutaAlternativaId]: componentesGuardados,
+        }));
+        setComponentesPorRuta((current) => ({
+          ...current,
+          [rutaAlternativaId]: componentesGuardados,
+        }));
+      }
+
+      if (precioProductoDirty) {
+        await actualizarProducto(producto.id, {
+          precioConfigJson: precioConfig as unknown as Record<string, unknown>,
+        });
+        setPrecioPersistido(precioConfig);
+      }
       router.refresh();
     } catch (err) {
       throw err instanceof Error ? err : new Error("Error guardando");
@@ -2742,6 +2811,19 @@ function PricingTab({ producto }: { producto: ProductoDetalle }) {
         precioDirty={precioDirty}
         guardandoPrecio={guardando}
         onGuardarPrecio={guardar}
+        pricingCompuestoSection={
+          producto.estructuraProducto === "COMPUESTO" ? (
+            <PricingCompuestoEditor
+              producto={producto}
+              precioConfig={precioConfig}
+              onChangePrecioConfig={setPrecioConfig}
+              recetas={recetas}
+              componentesPorRuta={componentesPorRuta}
+              onChangeComponentesPorRuta={setComponentesPorRuta}
+              hayCambiosComponentes={componentesDirty}
+            />
+          ) : undefined
+        }
       />
     </div>
   );

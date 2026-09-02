@@ -2469,6 +2469,28 @@
   transform: scale(0.98);
 }
 
+.roadmapNode[data-omitted="true"] {
+  --node-accent: var(--muted-text, #77736d);
+
+  border-style: dashed;
+  background: color-mix(in srgb, var(--surface-2, #f3f1ee) 62%, white);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.roadmapNode[data-omitted="true"]::before {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--muted-text, #77736d) 0 6px,
+    transparent 6px 11px
+  );
+}
+
+.roadmapNode[data-omitted="true"]:hover,
+.roadmapNode[data-omitted="true"][data-selected="true"] {
+  opacity: 1;
+}
+
 .roadmapNode[data-node-type="componente"] {
   --node-accent: var(--signal, #e85f2a);
 }

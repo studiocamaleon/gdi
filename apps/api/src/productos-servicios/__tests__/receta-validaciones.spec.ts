@@ -10,7 +10,10 @@ type ValidadorInterno = {
         slots: Array<Record<string, unknown>>;
       }>;
     },
-    unidades: Map<string, UnidadMateriaPrima | null>,
+    unidades: Map<
+      string,
+      { unidad: UnidadMateriaPrima | null; sku: string; nombre: string }
+    >,
   ): void;
   validarCiclos(
     tenantId: string,
@@ -60,8 +63,22 @@ describe('validaciones industriales de receta', () => {
           ],
         },
         new Map([
-          ['variante-unidad', UnidadMateriaPrima.UNIDAD],
-          ['variante-m2', UnidadMateriaPrima.M2],
+          [
+            'variante-unidad',
+            {
+              unidad: UnidadMateriaPrima.UNIDAD,
+              sku: 'UNIDAD',
+              nombre: 'Variante por unidad',
+            },
+          ],
+          [
+            'variante-m2',
+            {
+              unidad: UnidadMateriaPrima.M2,
+              sku: 'M2',
+              nombre: 'Variante por metro cuadrado',
+            },
+          ],
         ]),
       ),
     ).toThrow(BadRequestException);

@@ -60,14 +60,48 @@ describe("construirWorkflowCotizacion", () => {
     ]);
   });
 
-  it("oculta pasos desactivados sin romper el resto del recorrido", () => {
-    const omitido = { ...paso("omitido", 1, "Omitido"), activado: false };
-    const activo = paso("activo", 2, "Activo");
+  it("oculta pasos desactivados sin romper ni reordenar el resto del recorrido", () => {
+    const diseno = paso("diseno", 1, "Diseño gráfico");
+    const preprensa = paso("preprensa", 2, "Pre-prensa");
+    const impresion = paso("impresion", 3, "Impresión por hoja");
+    const laminado = paso("laminado", 4, "Laminado");
+    const guillotina = {
+      ...paso("guillotina", 5, "Corte con guillotina"),
+      activado: false,
+    };
+    const plotter = paso("plotter", 6, "Plotter de corte");
     const resultado = construirWorkflowCotizacion({
-      pasos: [omitido, activo],
+      pasos: [diseno, preprensa, impresion, laminado, guillotina, plotter],
       componentes: [],
+      grafoProduccion: {
+        nodos: [
+          { clave: "ruta:diseno", indice: 0 },
+          { clave: "ruta:preprensa", indice: 1 },
+          { clave: "ruta:impresion", indice: 2 },
+          { clave: "ruta:laminado", indice: 3 },
+          { clave: "ruta:guillotina", indice: 4 },
+          { clave: "ruta:plotter", indice: 5 },
+        ],
+        aristas: [
+          { desdeClave: "ruta:diseno", haciaClave: "ruta:preprensa" },
+          { desdeClave: "ruta:preprensa", haciaClave: "ruta:impresion" },
+          { desdeClave: "ruta:impresion", haciaClave: "ruta:laminado" },
+          { desdeClave: "ruta:laminado", haciaClave: "ruta:guillotina" },
+          { desdeClave: "ruta:guillotina", haciaClave: "ruta:plotter" },
+        ],
+      },
     });
 
-    expect(resultado.nodos.map((nodo) => nodo.clave)).toEqual(["ruta:activo"]);
+    expect(resultado.columnas.map((columna) => columna[0].clave)).toEqual([
+      "ruta:diseno",
+      "ruta:preprensa",
+      "ruta:impresion",
+      "ruta:laminado",
+      "ruta:plotter",
+    ]);
+    expect(resultado.aristas).toContainEqual({
+      desdeClave: "ruta:laminado",
+      haciaClave: "ruta:plotter",
+    });
   });
 });

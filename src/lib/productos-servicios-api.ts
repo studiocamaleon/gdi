@@ -369,6 +369,22 @@ export type ConfiguracionComponenteFabricado = {
   version: 1 | 2;
   bindings: BindingParametroComponente[];
   operacionesIncorporacion?: OperacionIncorporacion[];
+  pricing?: PoliticaPricingComponente;
+};
+
+export type ModoPricingComponente =
+  "HEREDAR_PADRE" | "USAR_PRODUCTO_HIJO" | "OVERRIDE";
+
+export type PrecioConfigComponente = {
+  metodoCalculo: string;
+  detalle: Record<string, unknown>;
+};
+
+export type PoliticaPricingComponente = {
+  version: 1;
+  modo: ModoPricingComponente;
+  precioConfigOverride?: PrecioConfigComponente;
+  precioConfigSnapshot?: PrecioConfigComponente;
 };
 
 export type FuenteOperacionIncorporacion = {
@@ -1577,6 +1593,123 @@ export interface NestingViewerInput {
     numerosXTalonario: number;
     modoIncompleto: string;
   };
+  /**
+   * Metadatos de presentación agregados por el frontend cuando varios
+   * componentes comparten un único lote de nesting aplicado. No forma parte
+   * del resultado individual del motor: permite que el visor explique por qué
+   * ya no muestra una pestaña por componente.
+   */
+  composicionCompuesta?: {
+    participantes: number;
+    sustratosIndependientes: number;
+    sustratosConsolidados: number;
+    ahorroPct: number;
+  };
+}
+
+export interface AnalisisNestingCompuestoInput {
+  version: 1;
+  modo: "SOMBRA" | "APLICADO";
+  politica: "CONSOLIDAR_COMPATIBLES";
+  aplicadoACostos: boolean;
+  grupos: Array<{
+    id: string;
+    firmaVersion: 1;
+    firmaCompatibilidad: string;
+    participantes: Array<{
+      componenteCodigo: string;
+      productoId: string;
+      pasoClave: string;
+      rutaPasoId: string;
+      pasoNombre: string;
+      piezas: string[];
+    }>;
+    independiente: {
+      sustratos: number;
+      aprovechamientoPct: number;
+    };
+    consolidado: {
+      algoritmo: "grid-2d-multi";
+      sustratos: number;
+      aprovechamientoPct: number;
+      substrates: Array<{
+        kind: "sheet";
+        count: number;
+        widthMm: number;
+        heightMm: number;
+      }>;
+      placements: NestingViewerInput["placements"];
+    };
+    diferencia: {
+      sustratos: number;
+      ahorroPct: number;
+      ahorroPotencial: boolean;
+    };
+    aplicacion?: {
+      aplicado: boolean;
+      motivoNoAplicado?: string;
+      costoMaterialIndependiente: number;
+      costoMaterialConsolidado: number;
+      costoPreparacionIndependiente: number;
+      costoPreparacionConsolidado: number;
+      ahorroCostoTotal: number;
+    };
+    lote?: {
+      id: string;
+      versionContrato: 1;
+      estado: "CONGELADO";
+      firmaCompatibilidad: string;
+      materialVarianteId: string;
+      materialNombre: string;
+      participantes: Array<{
+        componenteCodigo: string;
+        productoId: string;
+        pasoClave: string;
+        rutaPasoId: string;
+        piezas: string[];
+        areaUtilMm2: number;
+        porcentajeAsignacion: number;
+        costoMaterialAsignado: number;
+        costoPreparacionAsignado: number;
+        esPasoOperativo: boolean;
+      }>;
+      /** Snapshot autoritativo del mismo resultado utilizado para costear. */
+      nestingResult: Partial<NestingViewerInput> &
+        Pick<
+          NestingViewerInput,
+          "algorithm" | "substrates" | "placements" | "aprovechamientoPct"
+        >;
+      costeoSustrato?: {
+        strategy: "simple" | "m2-exact" | "consumed-length" | "plate-segments";
+        totalCost: number;
+        unitPrice: number;
+        pricePerM2: number;
+        fullUnits: number;
+        fullUnitsCost: number;
+        lastUnit: {
+          occupationPct: number;
+          segmentApplied: number | null;
+          cost: number;
+        } | null;
+        units: Array<{
+          index: number;
+          occupationPct: number;
+          segmentApplied: number | null;
+          cost: number;
+        }>;
+      };
+      costoMaterialTotal: number;
+      costoPreparacionTotal: number;
+      costoTotalAsignado: number;
+      duracionEstimadaMin: number;
+    };
+  }>;
+  exclusiones: Array<{
+    componenteCodigo: string;
+    pasoClave?: string;
+    codigo: string;
+    motivo: string;
+  }>;
 }
 
 export interface CotizarRequest {
@@ -1684,6 +1817,17 @@ export interface CotizarResponse {
       cantidad: number;
       unidad: string;
       jobContext?: Record<string, unknown>;
+      /** Valores efectivos del componente, congelados junto con la cotización. */
+      especificacionesEfectivas?: Array<{
+        clave: string;
+        etiqueta: string;
+        tipoDato: string;
+        unidad?: string | null;
+        requerido: boolean;
+        origen: "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
+        valor: unknown;
+        valorTexto: string;
+      }>;
       recetaRevisionId: string;
       recetaVersion: number;
       recetaHuella: string;
@@ -1698,6 +1842,7 @@ export interface CotizarResponse {
       } | null;
       /** Ruta real ejecutada para fabricar esta rama del BOM. */
       pasos?: Array<{
+        configPasoId?: string;
         rutaPasoId?: string;
         rutaPasoOrden: number;
         familiaCodigo: string;
@@ -1823,6 +1968,8 @@ export interface CotizarResponse {
         netoListaTotal: number;
       };
     };
+    /** Resultado del análisis/aplicación de nesting compartido en compuestos. */
+    analisisNestingCompuesto?: AnalisisNestingCompuestoInput;
     pasos: Array<{
       /**
        * Paso de la ruta que originó este renglón de costeo. El motor lo emite

@@ -1,4 +1,7 @@
-import { construirColumnasProductivas } from "@/lib/modelo-productivo-layout";
+import {
+  construirColumnasProductivas,
+  reducirAristasProductivas,
+} from "@/lib/modelo-productivo-layout";
 
 export type GrafoCotizacionSnapshot = {
   nodos?: Array<{ clave: string; indice?: number }>;
@@ -126,10 +129,9 @@ export function construirWorkflowCotizacion<
         : []),
     ];
   });
-  const aristas = [...aristasBase, ...aristasComponentes].filter(
-    (arista) =>
-      clavesValidas.has(arista.desdeClave) &&
-      clavesValidas.has(arista.haciaClave),
+  const aristas = reducirAristasProductivas(
+    [...aristasBase, ...aristasComponentes],
+    clavesValidas,
   );
 
   return {

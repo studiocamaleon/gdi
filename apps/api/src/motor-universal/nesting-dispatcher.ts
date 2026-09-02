@@ -52,6 +52,10 @@ import {
 } from '../productos-servicios/nesting/helpers/talonario-grouping';
 import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import {
+  consumedLengthAlongPlateLongAxis,
+  resolvePlateAxes,
+} from '../productos-servicios/nesting/helpers/plate-axis';
+import {
   calcularCuadernilloCaballete,
   SELECCION_HOJAS_TODAS,
   type CuadernilloCaballeteResult,
@@ -123,6 +127,17 @@ export interface NestingDispatchResult {
   machineRunLengthMm?: number;
   /** Cantidad de instancias de pieza efectivamente acomodadas. */
   piezasAcomodadas: number;
+  /**
+   * F4.4.1 — demanda física exacta que originó un nesting rectangular.
+   * El modo sombra la usa para reagrupar piezas de componentes distintos sin
+   * inferir cantidades desde una vista previa ni alterar el resultado actual.
+   */
+  demandaRectangular?: Array<{
+    pieceId: string;
+    cantidad: number;
+    anchoMm: number;
+    altoMm: number;
+  }>;
   /** Política efectiva aplicada al vector completo. */
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
   /** Datos normalizados para que el SVG muestre márgenes, área útil y separación. */
@@ -333,7 +348,76 @@ export async function runNestingForPaso(
   if (!resultado || !geometriaDispatchValida(resultado)) return null;
   // El agrupamiento de talonario es post-nesting. El original declara el modo
   // y las capas siguientes lo heredan para repetir la misma tirada.
-  return aplicarTalonarioGroupingSiCorresponde(resultado, paso, jobContext);
+  const final = aplicarTalonarioGroupingSiCorresponde(
+    resultado,
+    paso,
+    jobContext,
+  );
+  return adjuntarDemandaRectangular(final, paso, jobContext);
+}
+
+function adjuntarDemandaRectangular(
+  result: NestingDispatchResult,
+  paso: PasoCargado,
+  jobContext: JobContext,
+): NestingDispatchResult {
+  if (
+    result.unidad !== 'pliegos' ||
+    !['grid-2d-single', 'grid-2d-multi'].includes(result.algorithm) ||
+    result.talonarioGrouping ||
+    result.imposicionCuadernillo
+  ) {
+    return result;
+  }
+
+  const estrategia = resolverFamilia(paso.familiaCodigo)?.nestingConfig
+    ?.estrategia;
+  if (estrategia === 'pliego_digital') {
+    const piezas = getPiezasParaNesting(jobContext)
+      .map((pieza, index) => ({
+        pieceId: pieza.sourcePieceId ?? `pieza_${index}`,
+        cantidad: Math.ceil(Number(pieza.cantidad)),
+        anchoMm: Number(pieza.anchoMm),
+        altoMm: Number(pieza.altoMm),
+      }))
+      .filter(
+        (pieza) => pieza.cantidad > 0 && pieza.anchoMm > 0 && pieza.altoMm > 0,
+      );
+    return piezas.length > 0
+      ? { ...result, demandaRectangular: piezas }
+      : result;
+  }
+
+  // Los caminos genéricos y de montaje materializan un placement por pieza
+  // realmente pedida. Reconstruir desde ellos también preserva paneles y
+  // geometrías derivadas por pasos anteriores.
+  const agrupadas = new Map<
+    string,
+    {
+      pieceId: string;
+      cantidad: number;
+      anchoMm: number;
+      altoMm: number;
+    }
+  >();
+  for (const placement of result.placements) {
+    const anchoMm = placement.rotated ? placement.heightMm : placement.widthMm;
+    const altoMm = placement.rotated ? placement.widthMm : placement.heightMm;
+    const key = `${placement.pieceId}:${anchoMm}:${altoMm}`;
+    const actual = agrupadas.get(key);
+    if (actual) actual.cantidad += 1;
+    else {
+      agrupadas.set(key, {
+        pieceId: placement.pieceId,
+        cantidad: 1,
+        anchoMm,
+        altoMm,
+      });
+    }
+  }
+  return agrupadas.size > 0
+    ? { ...result, demandaRectangular: [...agrupadas.values()] }
+    : result;
 }
 
 /** Última barrera común: ningún algoritmo puede publicar piezas fuera del
@@ -725,8 +809,7 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
         contornos,
         cortesInternos,
         copyIndex,
-        rotacionGrados:
-          (placement.rotated ? 90 : 0) % 360,
+        rotacionGrados: (placement.rotated ? 90 : 0) % 360,
         layoutHeredadoDe: layout.sourceRutaPasoId,
         requiereRotacionFisicaEnMaquina,
         label: pieza.id,
@@ -1092,7 +1175,7 @@ function runPlastificadoPouch(
     return null;
   }
 
-  const result = runGrid2DSingleForArea(jobContext, config, 'Pouch');
+  const result = runGrid2DSingleForArea(jobContext, config, 'Pouch', false);
   if (!result) return null;
 
   return {
@@ -1604,9 +1687,7 @@ function runShelfRollo(
     panelIndex: p.panelIndex ?? undefined,
     panelCount: p.panelCount ?? undefined,
     panelAxis: (p.panelAxis ?? undefined) as
-      | 'vertical'
-      | 'horizontal'
-      | undefined,
+      'vertical' | 'horizontal' | undefined,
     usefulWidthMm: p.usefulWidthMm,
     usefulHeightMm: p.usefulHeightMm,
     overlapStartMm: p.overlapStartMm,
@@ -1933,6 +2014,7 @@ function runGrid2DSingleForArea(
   jobContext: JobContext,
   config: NestingConfigResolved,
   substrateLabel = 'Placa',
+  advanceAlongLongSide = true,
 ): NestingDispatchResult | null {
   const piezas = getPiezasParaNesting(jobContext);
   const pieza = piezas[0];
@@ -2001,6 +2083,7 @@ function runGrid2DSingleForArea(
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
+      advanceAlongLongSide,
     });
     const placementsPlaca =
       mixedLayout?.placements ?? result.placements.slice(0, piezasEnEstaPlaca);
@@ -2019,10 +2102,19 @@ function runGrid2DSingleForArea(
       areaUtilMm2: piezasEnEstaPlaca * pieza.anchoMm * pieza.altoMm,
       consumedLengthMm:
         mixedLayout?.consumedLengthMm ??
-        consumedLengthFromPlacements(
-          indexedPlacements,
-          config.margins.bottomMm,
-        ),
+        consumedLengthFromPlacements(indexedPlacements, {
+          widthMm: config.sheetWidthMm,
+          heightMm: config.sheetHeightMm,
+          trailingMarginMm: advanceAlongLongSide
+            ? resolvePlateAxes({
+                widthMm: config.sheetWidthMm,
+                heightMm: config.sheetHeightMm,
+              }).longAxis === 'x'
+              ? config.margins.rightMm
+              : config.margins.bottomMm
+            : config.margins.bottomMm,
+          advanceAlongLongSide,
+        }),
     });
   }
   const previewConsumedLengthMm =
@@ -2049,6 +2141,14 @@ function runGrid2DSingleForArea(
       areaUtilMm2: totalPiezas * pieza.anchoMm * pieza.altoMm,
       areaTotalMm2: result.metrics.areaTotalMm2 * pliegosNecesarios,
       largoConsumidoMm: previewConsumedLengthMm,
+      trailingMarginMm: advanceAlongLongSide
+        ? resolvePlateAxes({
+            widthMm: config.sheetWidthMm,
+            heightMm: config.sheetHeightMm,
+          }).longAxis === 'x'
+          ? config.margins.rightMm
+          : config.margins.bottomMm
+        : config.margins.bottomMm,
       perSubstrate,
     },
     piezasPorPliego,
@@ -2069,14 +2169,26 @@ function runGrid2DSingleForArea(
 
 function consumedLengthFromPlacements(
   placements: Placement[],
-  trailingMarginMm: number,
+  config: {
+    widthMm: number;
+    heightMm: number;
+    trailingMarginMm: number;
+    advanceAlongLongSide: boolean;
+  },
 ): number {
   if (placements.length === 0) return 0;
+  if (config.advanceAlongLongSide) {
+    return consumedLengthAlongPlateLongAxis({
+      placements,
+      sheet: { widthMm: config.widthMm, heightMm: config.heightMm },
+      trailingMarginMm: config.trailingMarginMm,
+    });
+  }
   return (
     placements.reduce(
       (max, placement) => Math.max(max, placement.yMm + placement.heightMm),
       0,
-    ) + trailingMarginMm
+    ) + config.trailingMarginMm
   );
 }
 
@@ -2096,7 +2208,41 @@ function buildSingleSizeMixedLayout(input: {
   separationHMm: number;
   separationVMm: number;
   allowRotation: boolean;
+  advanceAlongLongSide?: boolean;
 }): { placements: Placement[]; consumedLengthMm: number } | null {
+  if (
+    input.advanceAlongLongSide &&
+    input.substrateWidthMm > input.substrateHeightMm
+  ) {
+    const transposed = buildSingleSizeMixedLayout({
+      ...input,
+      pieceWidthMm: input.pieceHeightMm,
+      pieceHeightMm: input.pieceWidthMm,
+      substrateWidthMm: input.substrateHeightMm,
+      substrateHeightMm: input.substrateWidthMm,
+      margins: {
+        leftMm: input.margins.topMm,
+        rightMm: input.margins.bottomMm,
+        topMm: input.margins.leftMm,
+        bottomMm: input.margins.rightMm,
+      },
+      separationHMm: input.separationVMm,
+      separationVMm: input.separationHMm,
+      advanceAlongLongSide: false,
+    });
+    return transposed
+      ? {
+          consumedLengthMm: transposed.consumedLengthMm,
+          placements: transposed.placements.map((placement) => ({
+            ...placement,
+            xMm: placement.yMm,
+            yMm: placement.xMm,
+            widthMm: placement.heightMm,
+            heightMm: placement.widthMm,
+          })),
+        }
+      : null;
+  }
   if (input.quantity <= 0) return null;
   const usableWidthMm =
     input.substrateWidthMm - input.margins.leftMm - input.margins.rightMm;

@@ -16,6 +16,45 @@ export type DestinoNodoProductivo =
   | { tipo: "SECUENCIAL"; posicion: number };
 
 /**
+ * Proyecta las dependencias del modelo completo sobre los nodos que participan
+ * en una vista o ejecución concreta. Cuando un nodo intermedio está omitido,
+ * conecta cada ancestro activo con el primer descendiente activo alcanzable.
+ *
+ * Ejemplo: A → omitido → B se convierte en A → B. Filtrar solamente las
+ * aristas dejaría a B como una raíz falsa y el layout lo mostraría en paralelo.
+ */
+export function reducirAristasProductivas(
+  aristas: AristaProductivaVisual[],
+  clavesActivas: Set<string>,
+): AristaProductivaVisual[] {
+  const salientes = new Map<string, string[]>();
+  for (const arista of aristas) {
+    if (arista.desdeClave === arista.haciaClave) continue;
+    salientes.set(arista.desdeClave, [
+      ...(salientes.get(arista.desdeClave) ?? []),
+      arista.haciaClave,
+    ]);
+  }
+
+  const reducidas: AristaProductivaVisual[] = [];
+  for (const desdeClave of clavesActivas) {
+    const pendientes = [...(salientes.get(desdeClave) ?? [])];
+    const visitados = new Set<string>();
+    while (pendientes.length > 0) {
+      const haciaClave = pendientes.shift()!;
+      if (visitados.has(haciaClave)) continue;
+      visitados.add(haciaClave);
+      if (clavesActivas.has(haciaClave)) {
+        reducidas.push({ desdeClave, haciaClave });
+      } else {
+        pendientes.push(...(salientes.get(haciaClave) ?? []));
+      }
+    }
+  }
+  return reducidas;
+}
+
+/**
  * Proyecta un DAG en momentos productivos. Los nodos de una misma columna
  * pueden ejecutarse en paralelo; las columnas avanzan de izquierda a derecha.
  */

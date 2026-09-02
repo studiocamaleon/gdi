@@ -607,6 +607,15 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 **Ampliación 4.2.4 — activación interna de componentes:**
 `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md`, §17
 
+**Ampliación 4.3 — pricing composicional:**
+`docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`
+
+**Ampliación 4.4 — nesting compartido dentro del compuesto:**
+`docs/visual-ilusion-fase-4-4-nesting-compuestos-diseno.md`
+
+**Cierre transversal — pasos omitidos en una ruta de producto:**
+`docs/editor-modelo-productivo-unificado-diseno.md`, §13
+
 **Dependencias:** Fase 3.
 
 ### Objetivo de negocio
@@ -632,6 +641,10 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 - Conservar dentro de cada componente los pasos opcionales y condicionales de
   su ruta: los opcionales se fijan, heredan o solicitan al cotizar; los
   condicionales continúan evaluándose automáticamente con el JobContext hijo.
+- Tratar `NO_EJECUTAR` como una omisión contextual y reversible: el editor
+  conserva el nodo estructural atenuado para poder reactivarlo, mientras que
+  producto, cotización, costos y OT proyectan el grafo efectivo contrayendo el
+  paso omitido y preservando las dependencias entre sus vecinos activos.
 - Mantener separada la inclusión del componente completo de la activación de
   sus pasos internos, y presentar esas decisiones dentro del componente sin
   aplanar la subruta en el recorrido del padre.
@@ -696,6 +709,9 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
   valores fijos y solicita al menos una decisión comercial; validar y congelar
   ambos JobContexts sin doble conteo.
 - Ejecutar una OT lineal histórica con resultado equivalente.
+- Omitir un paso intermedio sin convertir su sucesor en una raíz o rama
+  paralela; el preview, el desglose por paso y la OT deben conservar el mismo
+  orden efectivo.
 - ETA y progreso coherentes en ambos tipos de topología.
 - Resolver el caso Backlight: Bastidor publica geometría; Lona y Cenefas la
   consumen al cotizar y las tres ramas siguen disponibles en paralelo hasta su
@@ -721,6 +737,10 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
   sin cambiar el contrato.
 - Scheduler ETA, simuladores y tablero adaptados a DAG; editor controlado de
   dependencias y gates en Producción/BOM.
+- Proyección común de pasos omitidos: el grafo de diseño completo se mantiene
+  versionado y el grafo efectivo conecta los primeros descendientes activos.
+  Preview y desglose por paso ya comparten esta reducción; la materialización
+  de OT aplica la misma semántica en backend.
 - Migraciones aplicadas en desarrollo y test; builds aprobados; regresión
   acumulada: backend 197 suites/1.944 pruebas y frontend 54 archivos/542
   pruebas aprobadas.
@@ -731,10 +751,193 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 
 ---
 
+## Fase 4.3 — Pricing composicional para productos compuestos
+
+**Estado actual:** COMPLETA · QA FUNCIONAL, DESKTOP Y RESPONSIVE APROBADO
+
+**Dependencias:** cierre y validación de Fase 4.2.
+
+**Documento de diseño:** `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`
+
+### Avance de preparación — 2026-09-02
+
+- Auditoría focalizada de la frontera padre–componente: 9 suites y 84 pruebas
+  aprobadas.
+- Regresión completa de integración del motor: 87 pruebas aprobadas.
+- Golden master agregado para demostrar que `GENERAL` usa la regla del padre,
+  no propaga el pricing del hijo y persiste la configuración efectiva en el
+  snapshot del ítem.
+- Contrato versionado implementado en JSON para estrategia y política BOM,
+  con lectura tolerante (`GENERAL`/`HEREDAR_PADRE`) para datos históricos y
+  validación de overrides explícitos.
+- Regla efectiva del hijo u override congelada en la revisión; cambios
+  posteriores del pricing hijo no mutan el snapshot publicado.
+- El motor ya expone la asignación reconciliada de costos entre bloque general
+  y componentes, manteniendo intacto el precio final en modo `GENERAL`.
+- `MIXTO` y `POR_COMPONENTE` calculan el neto con la cantidad y regla congelada
+  de cada bloque; cargas, descuento y redondeo se consolidan una sola vez.
+- El desglose comercial por bloque queda congelado en la trazabilidad del ítem
+  y el golden master valida el cambio `GENERAL → MIXTO` de punta a punta.
+- Editor implementado en Pricing del producto padre para estrategia general,
+  mixta o por componente, con herencia, regla congelada del hijo y override
+  contextual por relación BOM.
+- La previsualización estructural anticipa bloques y reglas efectivas; el
+  guardado actualiza la configuración comercial y el borrador versionado de
+  Routing sin publicar cambios productivos de forma implícita.
+- QA visual desktop aprobado en un producto compuesto publicado, incluyendo
+  estrategia mixta y override sin guardar datos de prueba.
+- Refinamiento visual Grafoprint aplicado a toda la pestaña: regla base,
+  composición, impuestos, comisiones, excepciones y guardado unificado comparten
+  jerarquía, densidad y estados de interacción.
+- Matriz funcional cerrada sobre un fixture controlado con cuatro ocurrencias
+  del mismo hijo: `HEREDAR_PADRE`, `USAR_PRODUCTO_HIJO`, `OVERRIDE` y opcional
+  omitido, recorridas en `GENERAL`, `MIXTO` y `POR_COMPONENTE`.
+- Los bloques reconciliados absorben residuos de redondeo de forma
+  determinista; costo, neto de lista, descuento y neto final suman exactamente
+  sus totales consolidados.
+- QA responsive aprobado en Chrome real a 390 × 844 y 768 × 1024, sin
+  desborde horizontal global y con scroll local en la vista previa tabular.
+- Regresión de cierre aprobada: API 206 suites/1.997 pruebas, frontend 62
+  archivos/588 pruebas, 10 snapshots y builds de producción de API y web.
+- Fase cerrada. El siguiente incremento recomendado es Fase 4.4: nesting
+  compartido entre componentes compatibles del mismo producto compuesto.
+
+### Objetivo de negocio
+
+Permitir que un producto compuesto conserve el pricing general actual o use
+reglas comerciales diferentes por componente, sin duplicar impuestos,
+comisiones, descuentos ni redondeos.
+
+### Alcance obligatorio
+
+- Estrategias `GENERAL | POR_COMPONENTE | MIXTO`, con `GENERAL` compatible por
+  defecto.
+- Política versionada por relación BOM: heredar del padre, congelar la regla
+  del producto hijo o definir un override contextual.
+- Pricing por bloques de costo y aplicación única de cargas comerciales sobre
+  la línea final.
+- Regla propia para costos directos e incorporación del padre.
+- Desglose de costo, neto y margen por componente con permisos y snapshots.
+- Editor y previsualización dentro del Pricing del producto padre.
+
+### Invariantes
+
+- El modo general no cambia resultados existentes.
+- Cada costo participa exactamente en un bloque.
+- Impuestos, comisiones, descuentos y redondeo se aplican una sola vez.
+- Una revisión publicada no sigue cambios posteriores del pricing hijo.
+- Componentes inactivos no aportan costo ni precio.
+
+### Criterios de salida
+
+- Comparar el mismo compuesto en modo general, por componente y mixto.
+- Aplicar reglas diferentes a impresión, estructura y ensamblaje manteniendo
+  una sola línea comercial.
+- Reconstruir el total y margen desde el snapshot sin consultar configuración
+  mutable.
+- Regresión del pricing simple y compuesto, seguridad y QA visual aprobadas.
+
+---
+
+## Fase 4.4 — Nesting compartido dentro de productos compuestos
+
+**Estado inicial:** PROPUESTA · PENDIENTE
+
+**Estado actual:** EN IMPLEMENTACIÓN · 4.4.2 CONSOLIDACIÓN RECTANGULAR IMPLEMENTADA Y VALIDADA
+
+**Dependencias:** Fases 4.2–4.3.
+
+**Documento de diseño:** `docs/visual-ilusion-fase-4-4-nesting-compuestos-diseno.md`
+
+### Objetivo de negocio
+
+Consolidar piezas compatibles de varias ramas del mismo producto compuesto para
+reducir consumo y preparación, conservando identidad, costos y ejecución.
+
+### Alcance obligatorio
+
+- Política `INDEPENDIENTE | CONSOLIDAR_COMPATIBLES` con exclusión por
+  componente.
+- Firma estricta de compatibilidad productiva; mismo material por sí solo no
+  habilita la mezcla.
+- Pipeline en dos etapas: resolver demandas, agrupar, nestear y devolver
+  asignaciones a cada componente.
+- Lote compartido congelado en cotización y referenciado una sola vez en OT.
+- Reconciliación determinística de material, desperdicio y preparación.
+- Modo sombra antes de afectar costos; primera activación limitada a geometría
+  rectangular segura.
+
+### Invariantes
+
+- El modo independiente conserva el resultado anterior.
+- Toda pieza pertenece a un único placement y mantiene su componente de origen.
+- Consumo y preparación compartidos no se duplican.
+- El ahorro cotizado debe poder ejecutarse en producción.
+- La suma de costos asignados coincide con el costo completo del lote.
+
+### Avance 4.4.1 — observabilidad sin impacto comercial
+
+- Activación voluntaria por producto; ausencia de configuración conserva el
+  nesting independiente.
+- Exclusión explícita por uso BOM con motivo opcional.
+- Demanda rectangular exacta expuesta por el dispatcher y firma SHA-256
+  productiva versión 1.
+- Agrupación limitada a pliegos rectangulares de material, máquina y
+  configuración estrictamente compatibles.
+- Comparación de pliegos y aprovechamiento independiente/consolidado mediante
+  el algoritmo multi-pieza existente, conservando la identidad de cada pieza.
+- Resultado devuelto y persistido en la trazabilidad de la cotización, siempre
+  con `aplicadoACostos: false`; costos, precio y OT continúan independientes.
+- Validación focalizada: 136 pruebas del motor y build de API aprobados.
+- Regresión integral: 207 suites, 2.001 pruebas y 10 snapshots aprobados; 2
+  suites y 3 pruebas omitidas.
+
+### Avance 4.4.2 — consumo reconciliado y ejecución única
+
+- El lote rectangular se aplica antes de Fase 4.3 sólo cuando todos los
+  participantes admiten un costeo directo y reproducible.
+- Material y preparación se asignan por área útil con reconciliación exacta.
+- Si el consolidado aumenta consumo o costo, el motor conserva los valores
+  independientes y persiste el motivo del fallback.
+- La cotización congela firma, placements, participantes, asignaciones, costo
+  y duración del lote.
+- La OT materializa una sola operación visible; los aliases por componente
+  preservan la topología y se sincronizan transaccionalmente.
+- Dependencias y gates convergen en la operación compartida, que libera todas
+  las ramas al completarse.
+- Migración operativa aplicada, build aprobado y regresión integral aprobada:
+  207 suites, 2.004 pruebas y 10 snapshots; 2 suites y 3 pruebas omitidas.
+
+El próximo paso es 4.4.3: extender la misma semántica a rollos y geometría
+vectorial sin perder identidad print/cut.
+
+### Criterios de salida
+
+- Consolidar dos componentes compatibles y demostrar menor consumo real.
+- Rechazar y explicar dos componentes incompatibles aunque compartan material.
+- Reflejar los costos reasignados en el pricing de Fase 4.3.
+- Ejecutar una sola vez el lote en OT y liberar todas las ramas participantes.
+- Regresión, reconciliación, concurrencia y QA visual aprobadas.
+
+### Secuencia aprobada antes de retomar el plan original
+
+```text
+Cierre funcional de F4.2
+  → F4.3 Pricing composicional
+  → F4.4 Nesting compartido dentro del compuesto
+  → F5 Centro de corte y consolidación entre órdenes
+```
+
+No se inicia F4.3 sobre una frontera padre–componente todavía inestable ni se
+adelanta F5 antes de demostrar que el lote compartido de un único compuesto es
+cotizable, trazable y ejecutable.
+
+---
+
 ## Fase 5 — Centro de corte y planes de nesting persistentes
 
 **Estado inicial:** PENDIENTE  
-**Dependencias:** Fases 3–4.
+**Dependencias:** Fases 3–4.4.
 
 ### Objetivo de negocio
 
@@ -749,6 +952,8 @@ Convertir corte/nesting en trabajo planificado, versionado y trazable, no sólo 
 - Aprobación/liberación del plan antes de ejecutar.
 - Cola específica de mesa de corte usando estaciones y capacidad existentes.
 - Consolidación de trabajos y relación entre tanda de máquina y lotes productivos futuros.
+- Extensión de los lotes compartidos de Fase 4.4 desde el alcance de un único
+  producto compuesto hacia múltiples ítems y órdenes compatibles.
 - Consumo planificado vs. real y aporte a costos/sostenibilidad.
 - Revisiones sin sobrescribir planes ya ejecutados.
 
@@ -1182,12 +1387,14 @@ F0 Gobierno
      │   └─ F2.5 Tiempo real/notificaciones
      │       └─ F3 Recetas/BOM
      │           └─ F4 DAG y gates
-     │               ├─ F5 Nesting/corte
-     │               └─ F6 Lotes/parcialidad
-     │                   ├─ F7 Calidad/reproceso
-     │                   ├─ F8 Variantes
-     │                   └─ F9 Reservas/inventario
-     │                       └─ F10 Compras/tercerización
+     │               └─ F4.3 Pricing compuesto
+     │                   └─ F4.4 Nesting del compuesto
+     │                       └─ F5 Nesting/corte persistente
+     │                           └─ F6 Lotes/parcialidad
+     │                               ├─ F7 Calidad/reproceso
+     │                               ├─ F8 Variantes
+     │                               └─ F9 Reservas/inventario
+     │                                   └─ F10 Compras/tercerización
      └─────────────────────────┐
 F4 + F6 + F9 + F10 ───────────┴─ F11 Planificación
 F1 + F6 + F8 + F9 ────────────── F12 Kits/destinos
@@ -1393,6 +1600,8 @@ Cada fase tomará el subconjunto pertinente y agregará fixtures automatizados c
 | DM-012 | La incorporación vive en la relación BOM y se agrupa en un paso compuesto | Cerrada | El mismo hijo puede incorporarse de formas diferentes; fabricación e incorporación necesitan tiempos y costos separados sin perder una ruta legible.                     |
 | DM-013 | La geometría requerida se declara en el producto, no se infiere de pasos  | Cerrada | El sheet debe pedir sólo los ejes publicados por Comercial; cualquier paso o componente puede consumirlos sin apropiarse de su origen.                                   |
 | DM-014 | Las rutas reutilizables son plantillas versionadas de Workflow            | Cerrada | Permite reutilizar recorridos lineales o DAG con pasos, etapas y componentes sin duplicar el motor ni mezclar la plantilla con la configuración contextual del producto. |
+| DM-015 | El pricing compuesto admite estrategia general, por componente o mixta    | Cerrada   | Los componentes pueden tener lógicas comerciales distintas, pero impuestos, comisiones, descuentos y redondeo pertenecen una sola vez a la línea final.                 |
+| DM-016 | El nesting entre componentes exige una firma productiva compatible         | Cerrada   | La activación es voluntaria por producto y el valor por defecto es independiente; compartir material no basta y la primera versión se limita a pliegos rectangulares.  |
 
 Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decisión se revoca, se conserva la fila y se añade la sucesora.
 
@@ -1414,6 +1623,8 @@ Esta tabla se actualizará al integrar cada fase.
 |   4.2 | EN DESARROLLO · CIERRE 4.2.2 | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | `97930b0a`, `d47d73a8`; cierre en curso                    | Subrutas reales; falta ejecutar sus pasos después de resolver outputs hijos y validar Cartel Backlight de extremo a extremo |
 | 4.2.3 | IMPLEMENTADA · EN VALIDACIÓN | `visual-ilusion/fase-4-rutas-dag`                    | `docs/contrato-comercial-dimensiones-producto-diseno.md`                | migración `20260831010000_producto_dimensiones_3d`         | Dimensiones explícitas 2D/3D; profundidad ya no se origina en la familia bastidor                                           |
 | 4.2.4 | IMPLEMENTADA · EN VALIDACIÓN | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | validación técnica integral aprobada                       | Opcionales configurables por uso, condicionales automáticos y subruta hija reducida correctamente al materializar la OT     |
+|   4.3 | COMPLETA                     | `visual-ilusion/fase-4-3-pricing-compuestos`         | `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`            | validación funcional y regresión integral                  | Matriz general/mixta/por componente, snapshots, redondeo y QA responsive aprobados; Fase 4.4 habilitada                     |
+|   4.4 | EN IMPLEMENTACIÓN · 4.4.2    | `visual-ilusion/fase-4-4-nesting-compuestos`         | `docs/visual-ilusion-fase-4-4-nesting-compuestos-diseno.md`             | consolidación rectangular y regresión integral aprobadas    | Costos reconciliados antes de pricing y una operación compartida en OT; sigue 4.4.3 para rollos y geometría vectorial       |
 |     5 | PENDIENTE                    | —                                                    | —                                                                       | —                                                          | —                                                                                                                           |
 |     6 | PENDIENTE                    | —                                                    | —                                                                       | —                                                          | —                                                                                                                           |
 |     7 | PENDIENTE                    | —                                                    | —                                                                       | —                                                          | —                                                                                                                           |

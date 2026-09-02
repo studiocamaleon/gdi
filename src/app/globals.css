@@ -75,6 +75,9 @@
   .ot-v1 {
     --muted: var(--muted-text);
     --muted-2: var(--muted-text-2);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .ot-v1 svg {
@@ -675,6 +678,8 @@
   }
 
   .orden-table {
+    width: 100%;
+    min-width: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--r-3);
@@ -824,6 +829,14 @@
 
   .orows > .order-row-wrap + .order-row-wrap {
     border-top: 1px solid var(--hairline);
+  }
+
+  .ot-v1 .orows,
+  .ot-v1 .order-row-wrap,
+  .ot-v1 .oprow,
+  .ot-v1 .oprow-body {
+    min-width: 0;
+    max-width: 100%;
   }
 
   /* Recotización masiva al cambiar el cliente: banner de progreso y filas
@@ -2091,7 +2104,14 @@
 
   .op-production {
     display: grid;
+    min-width: 0;
+    max-width: 100%;
     gap: 12px;
+  }
+
+  .op-production .cost-section {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .production-note {
@@ -44330,8 +44350,15 @@ body:has(.t-app) {
 /* Workflow congelado de una cotización. Conserva la gramática del editor sin
    convertir la DAG en tarjetas verticales ni mezclar edición con consulta. */
 .op-production .quote-workflow-viewport {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 12px;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
   border: 1px solid var(--hairline);
   border-radius: 16px;
   background-color: #fbfaf8;
@@ -44339,6 +44366,17 @@ body:has(.t-app) {
     linear-gradient(#eeeae4 1px, transparent 1px),
     linear-gradient(90deg, #eeeae4 1px, transparent 1px);
   background-size: 32px 32px;
+}
+
+.op-production .quote-workflow-viewport::-webkit-scrollbar {
+  height: 9px;
+}
+
+.op-production .quote-workflow-viewport::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--border-strong);
+  background-clip: padding-box;
 }
 
 .op-production .quote-workflow-canvas {

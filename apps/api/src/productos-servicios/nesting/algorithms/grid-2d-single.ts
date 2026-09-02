@@ -25,6 +25,7 @@ import type {
   NestingResult,
   Placement,
 } from '../types';
+import { resolvePlateAxes } from '../helpers/plate-axis';
 
 interface GridDimensions {
   columnas: number;
@@ -81,6 +82,7 @@ export function nestGrid2DSingle<T = unknown>(
 
   const areaWidthMm = substrate.widthMm - marginLeftMm - marginRightMm;
   const areaHeightMm = substrate.heightMm - marginTopMm - marginBottomMm;
+  const { longAxis } = resolvePlateAxes(substrate);
 
   const orig = calcGrid(
     piece.widthMm,
@@ -138,7 +140,7 @@ export function nestGrid2DSingle<T = unknown>(
         areaUtilMm2: 0,
         areaTotalMm2: substrate.widthMm * substrate.heightMm,
         largoConsumidoMm: 0,
-        trailingMarginMm: marginBottomMm,
+        trailingMarginMm: longAxis === 'x' ? marginRightMm : marginBottomMm,
       },
     };
   }
@@ -165,16 +167,19 @@ export function nestGrid2DSingle<T = unknown>(
       ? Math.round((areaUtilMm2 / areaTotalMm2) * 10000) / 100
       : 0;
 
-  // Largo consumido: legacy lo calcula como margen + filas × altura + (filas-1) × sep + margen
-  // Esto es el "alto efectivo" que usa la pieza, útil para costeo `largo_consumido`.
-  // Mantiene la fórmula exacta del código legacy (margen uniforme top+bottom).
-  const marginVUniformMm = marginTopMm; // legacy usa el mismo margen para top y bottom
+  // Largo consumido: avanza siempre sobre el lado mayor de la placa. La
+  // declaración ancho/alto del material no puede cambiar el eje de costeo.
   const largoConsumidoMm =
-    best.filas > 0
-      ? marginVUniformMm +
-        best.filas * placedHeightMm +
-        (best.filas - 1) * sepVMm +
-        (m.bottomMm ?? marginTopMm)
+    count > 0
+      ? longAxis === 'x'
+        ? marginLeftMm +
+          best.columnas * placedWidthMm +
+          (best.columnas - 1) * sepHMm +
+          marginRightMm
+        : marginTopMm +
+          best.filas * placedHeightMm +
+          (best.filas - 1) * sepVMm +
+          marginBottomMm
       : 0;
 
   return {
@@ -197,7 +202,7 @@ export function nestGrid2DSingle<T = unknown>(
       areaUtilMm2,
       areaTotalMm2,
       largoConsumidoMm,
-      trailingMarginMm: marginBottomMm,
+      trailingMarginMm: longAxis === 'x' ? marginRightMm : marginBottomMm,
     },
   };
 }

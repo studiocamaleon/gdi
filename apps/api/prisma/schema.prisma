@@ -3960,6 +3960,14 @@ model OrdenTrabajoItemPaso {
   /// Desglose congelado de las subtareas aportadas por relaciones BOM al
   /// paso compuesto. No gobierna estados; explica duración, recursos y costo.
   operacionesIncorporacionSnapshotJson Json?
+  /// F4.4.2: varios pasos de componentes pueden representar una sola tanda
+  /// física de nesting. Todos comparten el id; sólo el rol OPERATIVO se
+  /// muestra y ejecuta, mientras PARTICIPANTE se sincroniza como alias.
+  nestingLoteId                        String?                       @db.VarChar(100)
+  nestingLoteRol                       String?                       @db.VarChar(20)
+  /// Snapshot inmutable del lote consolidado. Se guarda únicamente en el
+  /// paso OPERATIVO para no duplicar placements potencialmente voluminosos.
+  nestingLoteSnapshotJson              Json?
   /// 'pendiente' | 'en_curso' | 'pausado' | 'hecho' | 'bloqueado'.
   estado                               String                        @default("pendiente")
   motivoBloqueo                        String?
@@ -4023,6 +4031,7 @@ model OrdenTrabajoItemPaso {
   @@index([tenantId, estado])
   @@index([tenantId, mesaUsuarioId])
   @@index([tenantId, maquinaId])
+  @@index([tenantId, ordenId, nestingLoteId])
   @@index([tenantId, estado, completadoEl])
 }
 

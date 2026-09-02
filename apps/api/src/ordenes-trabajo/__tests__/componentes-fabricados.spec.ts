@@ -208,4 +208,178 @@ describe('materialización de componentes fabricados', () => {
       skipDuplicates: true,
     });
   });
+
+  it('materializa una sola operación para el lote de nesting y conserva los aliases', async () => {
+    const lote = {
+      id: 'nesting-compuesto-firma',
+      versionContrato: 1,
+      estado: 'CONGELADO',
+      firmaCompatibilidad: 'firma',
+      materialVarianteId: 'material',
+      materialNombre: 'PVC 1 mm',
+      participantes: [
+        {
+          componenteCodigo: 'frente',
+          productoId: 'producto-frente',
+          pasoClave: 'paso-frente',
+          rutaPasoId: 'impresion-frente',
+          piezas: ['frente'],
+          areaUtilMm2: 100,
+          porcentajeAsignacion: 50,
+          costoMaterialAsignado: 5,
+          costoPreparacionAsignado: 3,
+          esPasoOperativo: true,
+        },
+        {
+          componenteCodigo: 'dorso',
+          productoId: 'producto-dorso',
+          pasoClave: 'paso-dorso',
+          rutaPasoId: 'impresion-dorso',
+          piezas: ['dorso'],
+          areaUtilMm2: 100,
+          porcentajeAsignacion: 50,
+          costoMaterialAsignado: 5,
+          costoPreparacionAsignado: 3,
+          esPasoOperativo: false,
+        },
+      ],
+      nestingResult: {
+        algorithm: 'grid-2d-multi',
+        substrates: [{ kind: 'sheet', count: 1, widthMm: 100, heightMm: 100 }],
+        placements: [],
+        aprovechamientoPct: 48,
+      },
+      costoMaterialTotal: 10,
+      costoPreparacionTotal: 6,
+      costoTotalAsignado: 16,
+      duracionEstimadaMin: 26,
+    };
+    const itemFindFirst = jest.fn().mockResolvedValue({
+      ordenId: 'orden',
+      cotizacionItem: {
+        trazabilidadJson: {
+          analisisNestingCompuesto: {
+            grupos: [{ aplicacion: { aplicado: true }, lote }],
+          },
+        },
+      },
+    });
+    const itemsFindMany = jest.fn().mockResolvedValue([
+      {
+        componenteCodigo: 'frente',
+        pasos: [
+          {
+            id: 'paso-frente',
+            rutaPasoId: 'impresion-frente',
+            nombre: 'Impresión frente',
+          },
+        ],
+      },
+      {
+        componenteCodigo: 'dorso',
+        pasos: [
+          {
+            id: 'paso-dorso',
+            rutaPasoId: 'impresion-dorso',
+            nombre: 'Impresión dorso',
+          },
+        ],
+      },
+    ]);
+    const dependenciasCreateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const gatesCreateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const pasoUpdate = jest.fn().mockResolvedValue({ id: 'paso-frente' });
+    const pasoUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const tx = {
+      ordenTrabajoItem: {
+        findFirst: itemFindFirst,
+        findMany: itemsFindMany,
+      },
+      ordenTrabajoItemPaso: {
+        update: pasoUpdate,
+        updateMany: pasoUpdateMany,
+      },
+      ordenTrabajoPasoDependencia: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            predecesorPasoId: 'pre-frente',
+            sucesorPasoId: 'paso-frente',
+            tipo: 'precedencia',
+            obligatoria: true,
+          },
+          {
+            predecesorPasoId: 'pre-dorso',
+            sucesorPasoId: 'paso-dorso',
+            tipo: 'precedencia',
+            obligatoria: true,
+          },
+          {
+            predecesorPasoId: 'paso-dorso',
+            sucesorPasoId: 'post-dorso',
+            tipo: 'precedencia',
+            obligatoria: true,
+          },
+        ]),
+        createMany: dependenciasCreateMany,
+      },
+      ordenTrabajoPasoGate: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ tipo: 'MATERIAL' }, { tipo: 'CALIDAD' }]),
+        createMany: gatesCreateMany,
+      },
+    };
+    const service = Object.create(
+      OrdenesTrabajoService.prototype,
+    ) as OrdenesTrabajoService;
+
+    await (
+      service as unknown as {
+        materializarLotesNestingCompuesto: (
+          tx: unknown,
+          tenantId: string,
+          padres: string[],
+        ) => Promise<void>;
+      }
+    ).materializarLotesNestingCompuesto(tx, 'tenant', ['item-padre']);
+
+    expect(pasoUpdate).toHaveBeenCalledWith({
+      where: { id: 'paso-frente' },
+      data: expect.objectContaining({
+        nestingLoteId: lote.id,
+        nestingLoteRol: 'OPERATIVO',
+        nestingLoteSnapshotJson: lote,
+        nombre: 'Nesting compartido · Impresión frente',
+        duracionEstimadaMin: 26,
+      }),
+    });
+    expect(pasoUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['paso-dorso'] } },
+      data: expect.objectContaining({
+        nestingLoteId: lote.id,
+        nestingLoteRol: 'PARTICIPANTE',
+        duracionEstimadaMin: 0,
+      }),
+    });
+    expect(dependenciasCreateMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          predecesorPasoId: 'pre-dorso',
+          sucesorPasoId: 'paso-frente',
+        }),
+        expect.objectContaining({
+          predecesorPasoId: 'paso-frente',
+          sucesorPasoId: 'post-dorso',
+        }),
+      ]),
+      skipDuplicates: true,
+    });
+    expect(gatesCreateMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({ pasoId: 'paso-frente', tipo: 'MATERIAL' }),
+        expect.objectContaining({ pasoId: 'paso-frente', tipo: 'CALIDAD' }),
+      ]),
+      skipDuplicates: true,
+    });
+  });
 });

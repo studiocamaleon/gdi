@@ -11,6 +11,11 @@
  */
 
 import type { CostingInput, CostingResult } from '../types';
+import {
+  consumedLengthAlongPlateLongAxis,
+  inferPlateTrailingMarginMm,
+  resolvePlateAxes,
+} from '../../helpers/plate-axis';
 import { round2, pricePerM2 } from './shared';
 
 const DEFAULT_SEGMENTS = [25, 50, 75, 100];
@@ -37,8 +42,6 @@ export function costingPlateSegments<T = unknown>(
   const columnas = metrics.columnas ?? 0;
   const filas = metrics.filas ?? 0;
   const fullLayoutLengthMm = metrics.largoConsumidoMm ?? 0;
-  const firstPlacement = input.nesting.placements[0];
-  const inferredBottomMarginMm = firstPlacement?.yMm ?? 0;
 
   let totalCost = 0;
   let fullUnits = 0;
@@ -58,16 +61,24 @@ export function costingPlateSegments<T = unknown>(
       placementsIndexadas.length > 0
         ? placementsIndexadas
         : input.nesting.placements.slice(0, piezasEnEsteSustrato);
+    const candidateSubstrate = input.nesting.substrates[i];
+    const unitSubstrate =
+      candidateSubstrate?.kind === 'sheet' ? candidateSubstrate : substrate;
+    const { longAxis, longSideMm } = resolvePlateAxes(unitSubstrate);
     const largoConsumido = placementsDeEstaUnidad.length
-      ? consumedLengthFromPlacements(
-          placementsDeEstaUnidad,
-          metrics.trailingMarginMm ?? inferredBottomMarginMm,
-        )
+      ? consumedLengthAlongPlateLongAxis({
+          placements: placementsDeEstaUnidad,
+          sheet: unitSubstrate,
+          trailingMarginMm: metrics.trailingMarginMm,
+        })
       : fullLayoutLengthMm > 0 && filas > 0 && columnas > 0
-        ? Math.ceil(piezasEnEsteSustrato / columnas) *
-          (fullLayoutLengthMm / filas)
+        ? longAxis === 'y'
+          ? Math.ceil(piezasEnEsteSustrato / columnas) *
+            (fullLayoutLengthMm / filas)
+          : Math.min(piezasEnEsteSustrato, columnas) *
+            (fullLayoutLengthMm / columnas)
         : 0;
-    const occupation = round2((largoConsumido / substrate.heightMm) * 100);
+    const occupation = round2((largoConsumido / longSideMm) * 100);
     const segment = segmentSteps.find((s) => s >= occupation) ?? 100;
     const cost = round2(input.unitPrice * (segment / 100));
 
@@ -112,7 +123,7 @@ function costingPlateSegmentsByActualPlacements<T = unknown>(
     throw new Error('costingPlateSegments requires a sheet substrate.');
   }
 
-  if (substrate.heightMm <= 0) {
+  if (Math.max(substrate.widthMm, substrate.heightMm) <= 0) {
     return emptyResult(input.unitPrice);
   }
 
@@ -135,12 +146,19 @@ function costingPlateSegmentsByActualPlacements<T = unknown>(
 
   for (let i = 0; i < input.unitsNeeded; i++) {
     const placements = placementsBySubstrate.get(i) ?? [];
-    const trailingMarginMm = inferTrailingMarginMm(placements);
-    const largoConsumido = consumedLengthFromPlacements(
+    const candidateSubstrate = input.nesting.substrates[i];
+    const unitSubstrate =
+      candidateSubstrate?.kind === 'sheet' ? candidateSubstrate : substrate;
+    const trailingMarginMm =
+      input.nesting.metrics.trailingMarginMm ??
+      inferPlateTrailingMarginMm(placements, unitSubstrate);
+    const largoConsumido = consumedLengthAlongPlateLongAxis({
       placements,
+      sheet: unitSubstrate,
       trailingMarginMm,
-    );
-    const occupation = round2((largoConsumido / substrate.heightMm) * 100);
+    });
+    const { longSideMm } = resolvePlateAxes(unitSubstrate);
+    const occupation = round2((largoConsumido / longSideMm) * 100);
     const segment = segmentSteps.find((s) => s >= occupation) ?? 100;
     const cost = round2(input.unitPrice * (segment / 100));
     totalCost += cost;
@@ -173,28 +191,6 @@ function costingPlateSegmentsByActualPlacements<T = unknown>(
       units,
     },
   };
-}
-
-function consumedLengthFromPlacements<T = unknown>(
-  placements: CostingInput<T>['nesting']['placements'],
-  trailingMarginMm: number,
-): number {
-  if (placements.length === 0) return 0;
-  const maxBottom = placements.reduce(
-    (max, placement) => Math.max(max, placement.yMm + placement.heightMm),
-    0,
-  );
-  return maxBottom + trailingMarginMm;
-}
-
-function inferTrailingMarginMm<T = unknown>(
-  placements: CostingInput<T>['nesting']['placements'],
-): number {
-  if (placements.length === 0) return 0;
-  return placements.reduce(
-    (min, placement) => Math.min(min, placement.yMm),
-    placements[0].yMm,
-  );
 }
 
 function emptyResult(unitPrice: number): CostingResult {

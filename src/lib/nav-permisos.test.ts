@@ -95,17 +95,17 @@ describe("qué muestra el sidebar", () => {
    * no reaparezcan como grupos con hijos.
    */
   describe("los módulos de una sola línea", () => {
-    it("Reportes es una sola entrada a /reportes", () => {
+    it("Centro de análisis es una sola entrada a /reportes", () => {
       const reportes = navPara(new Set(["reportes.ver"])).find(
-        (m) => m.label === "Reportes",
+        (m) => m.label === "Centro de análisis",
       );
       expect(reportes?.href).toBe("/reportes");
-      expect(hijos(["reportes.ver"], "Reportes")).toEqual([]);
+      expect(hijos(["reportes.ver"], "Centro de análisis")).toEqual([]);
     });
 
     /** Sin la llave del módulo no hay Reportes, aunque tenga la de un reporte. */
-    it("sin reportes.ver no aparece Reportes", () => {
-      expect(etiquetas(["reportes.ver_resumen"])).not.toContain("Reportes");
+    it("sin reportes.ver no aparece Centro de análisis", () => {
+      expect(etiquetas(["reportes.ver_resumen"])).not.toContain("Centro de análisis");
     });
 
     /** Configuración salió de la lista: es el ancla del pie, no un grupo. */

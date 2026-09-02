@@ -14,6 +14,7 @@ import {
 
 import {
   construirColumnasProductivas,
+  reducirAristasProductivas,
   type AristaProductivaVisual,
   type TipoNodoProductivoVisual,
 } from "@/lib/modelo-productivo-layout";
@@ -150,7 +151,11 @@ function construirModeloPreview({
         (paso.centroCostoId ? "Centro productivo configurado" : null) ||
         "Sin centro asignado",
     }));
-  const pasos = [...pasosBase, ...pasosExtra]
+  const pasosCompletos = [...pasosBase, ...pasosExtra];
+  const omitidos = pasosCompletos.filter(
+    (paso) => paso.modoActivacion === "NO_EJECUTAR",
+  ).length;
+  const pasos = pasosCompletos
     .filter((paso) => paso.modoActivacion !== "NO_EJECUTAR")
     .sort((a, b) => a.orden - b.orden);
   const nodosPaso: NodoPreview[] = pasos.map((paso, index) => {
@@ -211,15 +216,15 @@ function construirModeloPreview({
       ];
     },
   );
-  const aristas = [...aristasBase, ...aristasComponentes].filter(
-    (arista) =>
-      clavesValidas.has(arista.desdeClave) &&
-      clavesValidas.has(arista.haciaClave),
+  const aristas = reducirAristasProductivas(
+    [...aristasBase, ...aristasComponentes],
+    clavesValidas,
   );
 
   return {
     nodos,
     aristas,
+    omitidos,
     columnas: construirColumnasProductivas(nodos, aristas),
   };
 }
@@ -362,8 +367,11 @@ export function ModeloProductivoPreview({
     <div className={styles.preview}>
       <div className={styles.toolbar}>
         <p>
-          {modelo.nodos.length} nodos · {componentes} componentes · {etapas}{" "}
-          {etapas === 1 ? "etapa" : "etapas"}
+          {modelo.nodos.length} nodos activos · {componentes} componentes ·{" "}
+          {etapas} {etapas === 1 ? "etapa" : "etapas"}
+          {modelo.omitidos > 0
+            ? ` · ${modelo.omitidos} omitido${modelo.omitidos === 1 ? "" : "s"}`
+            : ""}
         </p>
         <div className={styles.toolbarActions}>
           <div className={styles.zoomControls} aria-label="Zoom de la ruta">

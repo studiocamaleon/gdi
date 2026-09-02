@@ -25,6 +25,7 @@ import type {
   MedidaPredefinidaDto,
 } from './dto/producto.dto';
 import { EstructuraProductoDto } from './dto/producto.dto';
+import { validarConfiguracionPricingCompuesto } from './precio/pricing-compuesto';
 
 type MedidaPredefinidaNormalizada = {
   id: string;
@@ -193,6 +194,7 @@ export class ProductosService {
   }
 
   async crearProducto(tenantId: string, dto: CrearProductoDto) {
+    validarConfiguracionPricingCompuesto(dto.precioConfigJson);
     const subcategoriaComercial = await this.assertSubcategoriaComercial(
       dto.subcategoriaComercialCodigo,
     );
@@ -298,6 +300,7 @@ export class ProductosService {
     id: string,
     dto: ActualizarProductoDto,
   ) {
+    validarConfiguracionPricingCompuesto(dto.precioConfigJson);
     const existente = await this.prisma.producto.findFirst({
       where: { id, tenantId },
     });

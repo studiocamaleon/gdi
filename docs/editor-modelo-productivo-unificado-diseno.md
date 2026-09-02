@@ -381,3 +381,30 @@ La interacción queda centralizada así:
 Un requisito sin tipo de aprobación crea el documento esperado y lo hace
 visible, pero no bloquea. Para bloquear debe exigir una aprobación concreta y
 una revisión liberada a producción.
+
+## 13. Pasos omitidos en una ruta de producto
+
+Decisión cerrada el 2026-09-02: `NO_EJECUTAR` significa que un paso heredado
+de la ruta reutilizable **no participa en este producto**, pero no elimina el
+nodo estructural ni modifica la plantilla compartida.
+
+La representación depende del contexto:
+
+- en el editor del modelo el nodo permanece en su posición, atenuado, con
+  borde discontinuo y la etiqueta `Omitido`; desde allí puede configurarse y
+  reactivarse;
+- en el resumen del producto se muestra únicamente el recorrido activo y se
+  informa por separado cuántos pasos quedaron omitidos;
+- en cotización, costos, tiempos y OT el nodo no existe operativamente: no
+  consume materiales, recursos ni tiempo y no crea un estado de producción;
+- al proyectar el grafo activo se contraen los nodos omitidos. Por ejemplo,
+  `A → omitido → B` se ejecuta y visualiza como `A → B`;
+- si se omite una rama completa, la contracción conserva las dependencias hasta
+  el primer descendiente activo. Nunca convierte un descendiente en una raíz o
+  en un paralelo accidental;
+- reactivar el paso restaura su posición y sus dependencias originales porque
+  el grafo completo sigue versionado en la receta.
+
+La ruta guardada conserva así dos lecturas consistentes: el **grafo de diseño**,
+que permite entender y revertir la omisión, y el **grafo efectivo**, que
+representa exactamente lo que se cotiza y se fabrica.

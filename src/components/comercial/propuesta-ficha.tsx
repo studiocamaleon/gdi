@@ -167,6 +167,7 @@ import { FidelizacionCotizador } from "@/components/comercial/fidelizacion-cotiz
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import { ComponentesEspecificaciones } from "@/components/comercial/componentes-especificaciones";
 import {
   BriefDisenoDialog,
   BriefDisenoEspecificaciones,
@@ -1810,6 +1811,10 @@ type FuenteNesting = {
   paso: PanelEditorPaso;
   /** Sólo el paso raíz pertenece al editor de paneles del item padre. */
   editable: boolean;
+  /** Metadatos internos para reemplazar participantes por su lote común. */
+  componenteCodigo?: string;
+  pasoClave?: string;
+  orden: number;
 };
 
 /**
@@ -1828,6 +1833,7 @@ function recolectarNestingsCotizacion(
     paso: PasoCosteo,
     contexto: string | null,
     editable: boolean,
+    componenteCodigo?: string,
   ) => {
     if (paso.nestingResult) {
       secuencia += 1;
@@ -1838,6 +1844,9 @@ function recolectarNestingsCotizacion(
           .join(" · "),
         paso: paso as PanelEditorPaso,
         editable,
+        componenteCodigo,
+        pasoClave: paso.configPasoId,
+        orden: secuencia,
       });
     }
 
@@ -1871,6 +1880,8 @@ function recolectarNestingsCotizacion(
           .join(" · "),
         paso: pasoInterno,
         editable: false,
+        componenteCodigo,
+        orden: secuencia,
       });
     }
   };
@@ -1886,7 +1897,12 @@ function recolectarNestingsCotizacion(
         componente.nombre?.trim() || componente.codigo || "Componente";
       const ruta = [...rutaPadre, nombre];
       for (const paso of componente.pasos ?? []) {
-        agregarPaso(paso as PasoCosteo, ruta.join(" › "), false);
+        agregarPaso(
+          paso as PasoCosteo,
+          ruta.join(" › "),
+          false,
+          componente.codigo,
+        );
       }
       recorrerComponentes(componente.componentes ?? [], ruta);
     }
@@ -1896,7 +1912,159 @@ function recolectarNestingsCotizacion(
     (cotizacion.componentesFabricados ??
       []) as unknown as ComponenteNestingRecursivo[],
   );
-  return fuentes;
+
+  const gruposAplicados =
+    cotizacion.analisisNestingCompuesto?.grupos.filter(
+      (grupo) => grupo.aplicacion?.aplicado === true && grupo.lote,
+    ) ?? [];
+  if (gruposAplicados.length === 0) return fuentes;
+
+  const suprimidas = new Set<string>();
+  const consolidadas: FuenteNesting[] = [];
+  const nombresPorCodigo = new Map<string, string>();
+  const indexarNombres = (componentes: ComponenteNestingRecursivo[]) => {
+    for (const componente of componentes) {
+      if (componente.codigo) {
+        nombresPorCodigo.set(
+          componente.codigo,
+          componente.nombre?.trim() || componente.codigo,
+        );
+      }
+      indexarNombres(componente.componentes ?? []);
+    }
+  };
+  indexarNombres(
+    (cotizacion.componentesFabricados ??
+      []) as unknown as ComponenteNestingRecursivo[],
+  );
+
+  for (const grupo of gruposAplicados) {
+    const lote = grupo.lote!;
+    const participantes = grupo.participantes.map((participante) =>
+      fuentes.find(
+        (fuente) =>
+          fuente.componenteCodigo === participante.componenteCodigo &&
+          (fuente.pasoClave === participante.pasoClave ||
+            fuente.paso.rutaPasoId === participante.rutaPasoId),
+      ),
+    );
+    // Ante un snapshot incompleto conservamos los resultados individuales: es
+    // preferible mostrar más información que inventar una asociación.
+    if (participantes.some((participante) => !participante)) continue;
+    const fuentesParticipantes = participantes as FuenteNesting[];
+    const base = fuentesParticipantes[0];
+    const baseResult = base.paso.nestingResult;
+    const snapshot = lote.nestingResult;
+    const cantidadSustratos = snapshot.substrates.reduce(
+      (total, substrate) =>
+        total + (substrate.kind === "sheet" ? substrate.count : 1),
+      0,
+    );
+    const placements = snapshot.placements.map((placement) => {
+      const meta =
+        placement.meta &&
+        typeof placement.meta === "object" &&
+        !Array.isArray(placement.meta)
+          ? (placement.meta as Record<string, unknown>)
+          : {};
+      const codigo =
+        typeof meta.componenteCodigo === "string"
+          ? meta.componenteCodigo
+          : null;
+      return {
+        ...placement,
+        meta: {
+          ...meta,
+          ...(codigo
+            ? { label: nombresPorCodigo.get(codigo) ?? codigo }
+            : {}),
+        },
+      };
+    });
+    const nestingResult: NestingViewerInput = {
+      algorithm: "grid-2d-multi",
+      cantidadCalculada:
+        snapshot.cantidadCalculada ?? cantidadSustratos,
+      unidad: snapshot.unidad ?? "pliegos",
+      aprovechamientoPct: snapshot.aprovechamientoPct,
+      maquina: snapshot.maquina ?? baseResult.maquina,
+      sustrato: snapshot.sustrato ?? baseResult.sustrato,
+      substrates: snapshot.substrates,
+      placements,
+      piezasAcomodadas: snapshot.piezasAcomodadas ?? placements.length,
+      visualConfig: snapshot.visualConfig ?? baseResult.visualConfig,
+      costingPreview: snapshot.costingPreview,
+      composicionCompuesta: {
+        participantes: grupo.participantes.length,
+        sustratosIndependientes: grupo.independiente.sustratos,
+        sustratosConsolidados: grupo.consolidado.sustratos,
+        ahorroPct: grupo.diferencia.ahorroPct,
+      },
+    };
+
+    const materialBase = base.paso.materiales?.find(
+      (material) =>
+        material.materialVarianteId === lote.materialVarianteId &&
+        material.detalleCosteoNesting,
+    );
+    const costeo = lote.costeoSustrato;
+    const detalleExacto = costeo
+      ? {
+          strategy: costeo.strategy,
+          totalCost: costeo.totalCost,
+          unitPrice: costeo.unitPrice,
+          pricePerM2: costeo.pricePerM2,
+          fullUnits: costeo.fullUnits,
+          fullUnitsCost: costeo.fullUnitsCost,
+          lastUnit: costeo.lastUnit,
+          units: costeo.units,
+        }
+      : materialBase?.detalleCosteoNesting
+        ? {
+            ...materialBase.detalleCosteoNesting,
+            totalCost: lote.costoMaterialTotal,
+            fullUnits: 0,
+            fullUnitsCost: 0,
+            lastUnit: null,
+            units: [],
+          }
+        : null;
+    const materiales =
+      materialBase && detalleExacto
+        ? [
+            {
+              ...materialBase,
+              materialNombre: lote.materialNombre,
+              materialDisplayName: lote.materialNombre,
+              cantidad:
+                detalleExacto.unitPrice > 0
+                  ? detalleExacto.totalCost / detalleExacto.unitPrice
+                  : materialBase.cantidad,
+              costoTotal: detalleExacto.totalCost,
+              detalleCosteoNesting: detalleExacto,
+            },
+          ]
+        : [];
+
+    fuentesParticipantes.forEach((fuente) => suprimidas.add(fuente.key));
+    consolidadas.push({
+      key: `lote-${lote.id}`,
+      label: `Nesting consolidado · ${nestingTabLabel(nestingResult)}`,
+      paso: {
+        ...base.paso,
+        nombreVisible: `Nesting consolidado de ${grupo.participantes.length} componentes`,
+        costoTotal: lote.costoTotalAsignado,
+        materiales,
+        nestingResult,
+      },
+      editable: false,
+      orden: Math.min(...fuentesParticipantes.map((fuente) => fuente.orden)),
+    });
+  }
+
+  return [...fuentes.filter((fuente) => !suprimidas.has(fuente.key)), ...consolidadas].sort(
+    (a, b) => a.orden - b.orden,
+  );
 }
 
 function formatMinutos(min: number) {
@@ -3248,8 +3416,8 @@ function CostosItemView({
           >
             Indicador de gestión — no forma parte de la composición del precio.
             Precio neto − costos variables (materia prima, proveedor, cargos,
-            impuestos internos y comisiones). Es lo que queda
-            para cubrir la estructura fija y dejar ganancia.
+            impuestos internos y comisiones). Es lo que queda para cubrir la
+            estructura fija y dejar ganancia.
           </span>
         </div>
         <div
@@ -3780,6 +3948,10 @@ export function ProductRow({
     () => leerBriefDiseno(item.jobContext?.briefDiseno),
     [item.jobContext],
   );
+  const componentesFabricados = item.cotizacion.componentesFabricados ?? [];
+  const tieneComponentesFabricados = componentesFabricados.length > 0;
+  const tieneEspecificacionesRaiz =
+    specs.length > 0 || briefDisenoTieneContenido(briefDiseno);
   const carasBrief = getCarasItem(item) === 2 ? 2 : 1;
 
   // Neto por ítem cuando la orden es sin comprobante: Total = subtotal (sin
@@ -3986,110 +4158,125 @@ export function ProductRow({
 
           {innerTab === "specs" ? (
             <>
-              {(() => {
-                // Cortas: grilla compacta que se estira al ancho (auto-fit).
-                // Largas (caras/modo de color por paso): filas plenas debajo,
-                // FUERA de la grilla — un span 1/-1 dentro impediría que
-                // auto-fit colapse las columnas vacías de la fila de arriba.
-                const esLarga = (spec: (typeof specs)[number]) =>
-                  spec.val.length > 40;
-                const cortas = specs.filter((spec) => !esLarga(spec));
-                const largas = specs.filter(esLarga);
-                const renderSpec = (
-                  spec: (typeof specs)[number],
-                  idx: number,
-                ) => {
-                  const isMedidasSpec = spec.lbl
-                    .toLowerCase()
-                    .includes("medida");
-                  const isModoColorSpec =
-                    spec.lbl.toLowerCase().includes("modo de color") ||
-                    // Centro de copiado usa "Color" (mismo valor CMYK/B/N).
-                    spec.lbl.toLowerCase() === "color";
-                  const isCarasSpec =
-                    spec.lbl.toLowerCase() === "caras" ||
-                    // Centro de copiado usa "Faz" (simple/doble, mismo ícono).
-                    spec.lbl.toLowerCase() === "faz";
-                  // "Estampas": una personalización por línea (multilínea, como
-                  // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
-                  const isEstampasSpec = spec.lbl.toLowerCase() === "estampas";
-                  return (
-                    <div
-                      className={`spec ${
-                        isModoColorSpec ? "color-mode-spec" : ""
-                      } ${esLarga(spec) ? "spec-long" : ""}`}
-                      key={`${spec.lbl}-${idx}`}
-                    >
-                      <div className="spec-head">
-                        <div className="lbl">{spec.lbl}</div>
+              {tieneEspecificacionesRaiz
+                ? (() => {
+                    // Cortas: grilla compacta que se estira al ancho (auto-fit).
+                    // Largas (caras/modo de color por paso): filas plenas debajo,
+                    // FUERA de la grilla — un span 1/-1 dentro impediría que
+                    // auto-fit colapse las columnas vacías de la fila de arriba.
+                    const esLarga = (spec: (typeof specs)[number]) =>
+                      spec.val.length > 40;
+                    const cortas = specs.filter((spec) => !esLarga(spec));
+                    const largas = specs.filter(esLarga);
+                    const renderSpec = (
+                      spec: (typeof specs)[number],
+                      idx: number,
+                    ) => {
+                      const isMedidasSpec = spec.lbl
+                        .toLowerCase()
+                        .includes("medida");
+                      const isModoColorSpec =
+                        spec.lbl.toLowerCase().includes("modo de color") ||
+                        // Centro de copiado usa "Color" (mismo valor CMYK/B/N).
+                        spec.lbl.toLowerCase() === "color";
+                      const isCarasSpec =
+                        spec.lbl.toLowerCase() === "caras" ||
+                        // Centro de copiado usa "Faz" (simple/doble, mismo ícono).
+                        spec.lbl.toLowerCase() === "faz";
+                      // "Estampas": una personalización por línea (multilínea, como
+                      // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
+                      const isEstampasSpec =
+                        spec.lbl.toLowerCase() === "estampas";
+                      return (
+                        <div
+                          className={`spec ${
+                            isModoColorSpec ? "color-mode-spec" : ""
+                          } ${esLarga(spec) ? "spec-long" : ""}`}
+                          key={`${spec.lbl}-${idx}`}
+                        >
+                          <div className="spec-head">
+                            <div className="lbl">{spec.lbl}</div>
+                          </div>
+                          <div
+                            className={`val ${
+                              isMedidasSpec || isEstampasSpec ? "multi" : ""
+                            } ${
+                              isModoColorSpec ||
+                              isCarasSpec ||
+                              spec.val.length > 28
+                                ? "wrap"
+                                : ""
+                            }`}
+                          >
+                            {isModoColorSpec ? (
+                              <ModoColorSpecValue value={spec.val} />
+                            ) : isCarasSpec ? (
+                              <CarasSpecValue value={spec.val} />
+                            ) : (
+                              spec.val
+                            )}
+                          </div>
+                        </div>
+                      );
+                    };
+                    return (
+                      <div className="op-specs">
+                        {cortas.length > 0 ? (
+                          <div className="op-specs-grid">
+                            {cortas.map(renderSpec)}
+                          </div>
+                        ) : null}
+                        {largas.map(renderSpec)}
+                        <BriefDisenoEspecificaciones
+                          brief={briefDiseno}
+                          caras={carasBrief}
+                          onOpen={() => setBriefAbierto(true)}
+                        />
                       </div>
-                      <div
-                        className={`val ${
-                          isMedidasSpec || isEstampasSpec ? "multi" : ""
-                        } ${
-                          isModoColorSpec || isCarasSpec || spec.val.length > 28
-                            ? "wrap"
-                            : ""
-                        }`}
-                      >
-                        {isModoColorSpec ? (
-                          <ModoColorSpecValue value={spec.val} />
-                        ) : isCarasSpec ? (
-                          <CarasSpecValue value={spec.val} />
-                        ) : (
-                          spec.val
-                        )}
-                      </div>
-                    </div>
-                  );
-                };
-                return (
-                  <div className="op-specs">
-                    {cortas.length > 0 ? (
-                      <div className="op-specs-grid">
-                        {cortas.map(renderSpec)}
-                      </div>
-                    ) : null}
-                    {largas.map(renderSpec)}
-                    <BriefDisenoEspecificaciones
-                      brief={briefDiseno}
-                      caras={carasBrief}
-                      onOpen={() => setBriefAbierto(true)}
-                    />
-                  </div>
-                );
-              })()}
+                    );
+                  })()
+                : null}
+
+              <ComponentesEspecificaciones
+                componentes={componentesFabricados}
+              />
 
               <div className="op-extras">
-                <div className="op-adicionales">
-                  <div className="op-adi-head">
-                    <PlusIcon />
-                    <span>Opcionales activados</span>
-                  </div>
-                  <div className="op-chips">
-                    {item.adicionales.length > 0 ? (
-                      item.adicionales.map((adicional) => {
-                        const details =
-                          optionalMaterialDetails.get(adicional) ?? [];
-                        return (
-                          <span key={adicional} className="adi-chip-detail">
-                            <span className="adi-chip">
-                              <CheckIcon />
-                              {adicional}
-                            </span>
-                            {details.length > 0 ? (
-                              <span className="adi-chip-variant">
-                                {details.join(" · ")}
+                {item.adicionales.length > 0 || !tieneComponentesFabricados ? (
+                  <div className="op-adicionales">
+                    <div className="op-adi-head">
+                      <PlusIcon />
+                      <span>Opcionales activados</span>
+                    </div>
+                    <div className="op-chips">
+                      {item.adicionales.length > 0 ? (
+                        item.adicionales.map((adicional) => {
+                          const details =
+                            optionalMaterialDetails.get(adicional) ?? [];
+                          return (
+                            <span key={adicional} className="adi-chip-detail">
+                              <span className="adi-chip">
+                                <CheckIcon />
+                                {adicional}
                               </span>
-                            ) : null}
-                          </span>
-                        );
-                      })
-                    ) : (
-                      <span className="adi-chip">Sin opcionales activados</span>
-                    )}
+                              {details.length > 0 ? (
+                                <span className="adi-chip-variant">
+                                  {details.join(" · ")}
+                                </span>
+                              ) : null}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="adi-chip">
+                          Sin opcionales activados
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : componentMaterialDetails.length === 0 ? (
+                  <span aria-hidden="true" />
+                ) : null}
 
                 {componentMaterialDetails.length > 0 ? (
                   <div className="op-adicionales">

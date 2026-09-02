@@ -34,6 +34,23 @@ export type BindingParametroComponente = {
   opciones?: Array<{ valor: string; etiqueta: string }>;
 };
 
+/**
+ * Proyección legible y congelable del valor efectivo usado para costear un
+ * componente. Conserva el valor tipado para otros consumidores y una etiqueta
+ * resuelta para que propuesta, OT y producción no tengan que interpretar las
+ * claves internas del JobContext.
+ */
+export type EspecificacionEfectivaComponente = {
+  clave: string;
+  etiqueta: string;
+  tipoDato: string;
+  unidad?: string | null;
+  requerido: boolean;
+  origen: OrigenParametroComponente;
+  valor: unknown;
+  valorTexto: string;
+};
+
 export type FuenteOperacionIncorporacion = {
   tipo: 'PADRE' | 'COMPONENTE';
   campo: string;
@@ -438,6 +455,55 @@ export function resolverJobContextComponente(args: {
   }
   completarGeometria(resultado);
   return resultado;
+}
+
+function textoValorEfectivo(
+  binding: BindingParametroComponente,
+  valor: unknown,
+): string {
+  const opcion = binding.opciones?.find(
+    (item) => String(item.valor) === String(valor),
+  );
+  if (opcion) return opcion.etiqueta;
+  if (typeof valor === 'boolean') return valor ? 'Sí' : 'No';
+  if (typeof valor === 'number' && Number.isFinite(valor)) {
+    return new Intl.NumberFormat('es-AR', {
+      maximumFractionDigits: 4,
+    }).format(valor);
+  }
+  if (typeof valor === 'string') return valor;
+  return '';
+}
+
+/**
+ * Convierte el contrato BOM + el JobContext ya resuelto en especificaciones
+ * efectivas. Se ejecuta después de resolver herencias, fórmulas y overrides de
+ * cotización, por lo que describe exactamente lo que el motor costeó.
+ */
+export function proyectarEspecificacionesEfectivasComponente(args: {
+  configuracion: unknown;
+  jobContext: Record<string, unknown>;
+}): EspecificacionEfectivaComponente[] {
+  const config = leerConfiguracionComponente(args.configuracion);
+  if (!config) return [];
+
+  return config.bindings.flatMap((binding) => {
+    const valor = leerRuta(args.jobContext, binding.clave);
+    if (valor === undefined || valor === null || valor === '') return [];
+    return [
+      {
+        clave: binding.clave,
+        // Los consumidores nunca deben caer en la clave técnica o un UUID.
+        etiqueta: binding.etiqueta?.trim() || 'Parámetro',
+        tipoDato: binding.tipoDato?.trim() || typeof valor,
+        unidad: binding.unidad ?? null,
+        requerido: binding.requerido !== false,
+        origen: binding.origen,
+        valor,
+        valorTexto: textoValorEfectivo(binding, valor),
+      },
+    ];
+  });
 }
 
 export function validarConfiguracionComponente(
