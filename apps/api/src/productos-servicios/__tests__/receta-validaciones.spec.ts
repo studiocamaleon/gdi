@@ -25,6 +25,7 @@ type ValidadorInterno = {
     productoId: string,
     documentos: Array<Record<string, unknown>>,
     componentes: Array<Record<string, unknown>>,
+    clavesPaso?: Set<string>,
   ): Promise<void>;
 };
 
@@ -131,5 +132,44 @@ describe('validaciones industriales de receta', () => {
         ],
       ),
     ).rejects.toThrow('no tiene un formato válido');
+  });
+
+  it('acepta dos ocurrencias del mismo producto con códigos distintos', async () => {
+    const count = jest.fn().mockResolvedValue(1);
+    const servicio = servicioConPrisma({ producto: { count } });
+
+    await expect(
+      servicio.validarReferenciasBorrador(
+        'tenant-1',
+        'producto-raiz',
+        [],
+        [
+          {
+            productoComponenteId: 'vinilo-impreso',
+            codigo: 'VINILO-IMPRESO',
+            nombre: 'Vinilo frente',
+            formula: 'por_unidad',
+            cantidad: 1,
+            unidad: 'unidad',
+          },
+          {
+            productoComponenteId: 'vinilo-impreso',
+            codigo: 'VINILO-IMPRESO-2',
+            nombre: 'Vinilo lateral',
+            formula: 'por_unidad',
+            cantidad: 1,
+            unidad: 'unidad',
+          },
+        ],
+        new Set(),
+      ),
+    ).resolves.toBeUndefined();
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        id: { in: ['vinilo-impreso'] },
+        activo: true,
+      },
+    });
   });
 });

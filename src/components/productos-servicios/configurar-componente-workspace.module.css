@@ -111,6 +111,19 @@
   overflow: auto;
   padding: 22px;
 }
+
+.identityGroup {
+  margin-bottom: 14px;
+  padding: 15px;
+  border: 1px solid #e0dcd6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.identityGroup input {
+  max-width: 540px;
+}
+
 .contextCard {
   display: flex;
   align-items: center;

@@ -130,6 +130,11 @@ import {
 } from '../productos-servicios/cobertura-toner';
 import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
 import { consolidarEtapasCompuestas } from './etapas-compuestas';
+import {
+  areaImpresaTrabajoDesdeNestingM2,
+  desglosarMermaOperativa,
+  porcentajeMermaOperativaImpresion,
+} from './merma-operativa';
 
 export function aplicarMermaAdicional(
   cantidad: number,
@@ -1195,7 +1200,8 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            PasoEjecutado['ojalesLayout'] | undefined;
+            | PasoEjecutado['ojalesLayout']
+            | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -1581,7 +1587,8 @@ export class MotorUniversalService {
             });
           } else {
             const layout = derivacion.traza?.ojalesLayout as
-              PasoEjecutado['ojalesLayout'] | undefined;
+              | PasoEjecutado['ojalesLayout']
+              | undefined;
             if (layout?.length) {
               ejecucion.ojalesLayout = layout;
               ejecucion.ojalesConfig = derivacion.traza
@@ -1921,7 +1928,8 @@ export class MotorUniversalService {
         !Array.isArray(recetaPublicada.snapshot)
           ? ((recetaPublicada.snapshot as Record<string, unknown>)
               .grafoProduccion as
-              CotizacionResultado['grafoProduccion'] | undefined)
+              | CotizacionResultado['grafoProduccion']
+              | undefined)
           : undefined) ?? null,
       costos: {
         tiempoTotal,
@@ -4402,7 +4410,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -4862,6 +4872,22 @@ export class MotorUniversalService {
       }
     }
 
+    // Una merma operativa de impresión significa pasadas reales adicionales:
+    // consume tiempo de corrida, pero no repite setup, cleanup ni bloques
+    // fijos. El output productivo sigue siendo la cantidad buena solicitada.
+    const runMinTrabajo = runMin;
+    const mermaOperativaPct =
+      tiempoManualMin == null &&
+      paso.maquina &&
+      PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(paso.maquina.plantilla)
+        ? porcentajeMermaOperativaImpresion(paso)
+        : 0;
+    const desgloseRun = desglosarMermaOperativa(
+      runMinTrabajo,
+      mermaOperativaPct,
+    );
+    runMin = desgloseRun.cantidadTotal;
+
     // Por defecto el tiempo del paso se factura en minutos ENTEROS (ceil): un
     // trabajo de 1 hoja y uno de 40 pagan el mismo minuto de máquina, y el precio
     // por hoja salta mucho a cantidades bajas. El centro de copiado activa
@@ -4880,7 +4906,8 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        { tarifa: unknown } | undefined;
+        | { tarifa: unknown }
+        | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -4962,6 +4989,13 @@ export class MotorUniversalService {
     return {
       setupMin,
       runMin,
+      ...(desgloseRun.cantidadMerma > 0
+        ? {
+            runTrabajoMin: desgloseRun.cantidadTrabajo,
+            runMermaMin: desgloseRun.cantidadMerma,
+            mermaOperativaPct: desgloseRun.porcentaje,
+          }
+        : {}),
       cleanupMin,
       tiempoFijoMin,
       extraMin,
@@ -5012,7 +5046,8 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          { tarifa: unknown; nombre?: string | null } | undefined;
+          | { tarifa: unknown; nombre?: string | null }
+          | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -6223,7 +6258,13 @@ export class MotorUniversalService {
       // Fase 3 — pérdida adicional explícita del taller. El nesting y los
       // derivadores ya incluyen su propio desperdicio; este porcentaje se
       // aplica una sola vez, después de caras y multiplicadores.
+      let cantidadTrabajoAntesDeMerma = cantidad;
       cantidad = aplicarMermaAdicional(cantidad, slot.mermaAdicionalPct);
+      const porcentajeMermaAdicional = Number(slot.mermaAdicionalPct ?? 0);
+      let cantidadMermaAdicional = Math.max(
+        0,
+        cantidad - cantidadTrabajoAntesDeMerma,
+      );
 
       const unidadConsumo = unidadEfectivaDeFormula(
         slot.formula,
@@ -6284,15 +6325,29 @@ export class MotorUniversalService {
         nestingDispatch,
         paso,
       );
+      let costoTotal: number;
       if (costeoNesting && precioUnitario > 0) {
         // 'simple' consume unidades ENTERAS: la cantidad es el conteo exacto
         // (dividir el costo redondeado metía 250.0000008 hojas en la línea).
-        cantidad =
+        cantidadTrabajoAntesDeMerma =
           costeoNesting.strategy === 'simple'
             ? costeoNesting.breakdown.fullUnits
             : costeoNesting.totalCost / precioUnitario;
+        const desgloseNestingConMerma = desglosarMermaOperativa(
+          cantidadTrabajoAntesDeMerma,
+          porcentajeMermaAdicional,
+        );
+        cantidadMermaAdicional = desgloseNestingConMerma.cantidadMerma;
+        cantidad = desgloseNestingConMerma.cantidadTotal;
+        // El nesting explica el costo geométrico del trabajo bueno. La merma
+        // operativa representa corridas adicionales del mismo patrón y se
+        // agrega después, sin fingir que el acomodo dejó más espacio vacío.
+        costoTotal =
+          costeoNesting.totalCost *
+          (1 + desgloseNestingConMerma.porcentaje / 100);
+      } else {
+        costoTotal = cantidad * precioUnitario;
       }
-      const costoTotal = costeoNesting?.totalCost ?? cantidad * precioUnitario;
 
       // Cuando el costeo del nesting contó unidades ENTERAS del sustrato
       // (materia prima completa / por tramos / largo utilizado), `cantidad`
@@ -6337,6 +6392,16 @@ export class MotorUniversalService {
         unidad: unidadLinea,
         precioUnitario,
         costoTotal,
+        mermaAdicional:
+          Number.isFinite(porcentajeMermaAdicional) &&
+          porcentajeMermaAdicional > 0 &&
+          cantidadMermaAdicional > 0
+            ? {
+                porcentaje: porcentajeMermaAdicional,
+                cantidadTrabajo: Number(cantidadTrabajoAntesDeMerma.toFixed(8)),
+                cantidadMerma: Number(cantidadMermaAdicional.toFixed(8)),
+              }
+            : undefined,
         estrategiaCosto:
           costeoNesting?.strategy ?? this.resolverEstrategiaCosteoNesting(paso),
         detalleCosteoNesting: costeoNesting
@@ -6352,7 +6417,9 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
+          | 'HARDCODED'
+          | 'COMERCIAL_ELIGE'
+          | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -6737,8 +6804,13 @@ export class MotorUniversalService {
     const maquina = paso.maquina;
     const componentes = maquina?.componentesDesgaste ?? [];
     if (!maquina || componentes.length === 0) return [];
+    const mermaOperativaPct = PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(
+      maquina.plantilla,
+    )
+      ? porcentajeMermaOperativaImpresion(paso)
+      : 0;
 
-    let tintaProcesadaMl: number | null = null;
+    let tintaProcesadaTrabajoMl: number | null = null;
     if (
       componentes.some((componente) => componente.unidadDesgaste === 'ml_tinta')
     ) {
@@ -6779,7 +6851,7 @@ export class MotorUniversalService {
         materialPreliminar,
       );
       if (consumosCompletos && consumoTintaMlM2 > 0 && areaImpresaM2 > 0) {
-        tintaProcesadaMl =
+        tintaProcesadaTrabajoMl =
           consumoTintaMlM2 *
           areaImpresaM2 *
           this.resolverCarasConsumible(paso, jobContext);
@@ -6833,8 +6905,15 @@ export class MotorUniversalService {
       if (!precioRepuesto) continue;
 
       const porMlTinta = componente.unidadDesgaste === 'ml_tinta';
-      const cantidad = porMlTinta ? tintaProcesadaMl : getClicks();
-      if (!cantidad || cantidad <= 0) continue;
+      const cantidadTrabajo = porMlTinta
+        ? tintaProcesadaTrabajoMl
+        : getClicks();
+      if (!cantidadTrabajo || cantidadTrabajo <= 0) continue;
+      const desglose = desglosarMermaOperativa(
+        cantidadTrabajo,
+        mermaOperativaPct,
+      );
+      const cantidad = desglose.cantidadTotal;
       const costoPorUnidad = precioRepuesto / vidaUtil;
       const costoTotal = costoPorUnidad * cantidad;
 
@@ -6852,6 +6931,14 @@ export class MotorUniversalService {
         unidad: porMlTinta ? 'ml' : 'a4_equiv',
         precioUnitario: costoPorUnidad,
         costoTotal,
+        mermaAdicional:
+          desglose.cantidadMerma > 0
+            ? {
+                porcentaje: desglose.porcentaje,
+                cantidadTrabajo: desglose.cantidadTrabajo,
+                cantidadMerma: desglose.cantidadMerma,
+              }
+            : undefined,
         estrategiaCosto: porMlTinta ? 'costo_por_ml_tinta' : 'costo_por_click',
         // La pieza la declara la máquina, no un slot que alguien elija.
         modoSeleccion: 'MAQUINA_DESGASTE',
@@ -6924,20 +7011,24 @@ export class MotorUniversalService {
       return [];
     }
 
-    const areaImpresaM2 = this.calcularAreaImpresaConsumiblesM2(
+    const areaImpresaTrabajoM2 = this.calcularAreaImpresaConsumiblesM2(
       paso,
       jobContext,
       nestingDispatch,
       materialPreliminar,
     );
+    const areaImpresa = desglosarMermaOperativa(
+      areaImpresaTrabajoM2,
+      porcentajeMermaOperativaImpresion(paso),
+    );
     const caras = this.resolverCarasConsumible(paso, jobContext);
     // Área CERO = trabajo cero (ej. un ítem que sólo lleva un paso opcional y no
     // imprime): 0 unidades ⇒ 0 consumibles, no es un error. Sólo un área inválida
     // (NaN o negativa) sí lo es.
-    if (areaImpresaM2 === 0) {
+    if (areaImpresaTrabajoM2 === 0) {
       return [];
     }
-    if (!Number.isFinite(areaImpresaM2) || areaImpresaM2 < 0) {
+    if (!Number.isFinite(areaImpresaTrabajoM2) || areaImpresaTrabajoM2 < 0) {
       errores.push({
         codigo: 'consumibles_maquina_area_invalida',
         severidad: 'ERROR',
@@ -7039,7 +7130,9 @@ export class MotorUniversalService {
         continue;
       }
 
-      const cantidad = consumoBase * areaImpresaM2 * caras;
+      const cantidadTrabajo = consumoBase * areaImpresa.cantidadTrabajo * caras;
+      const cantidadMerma = consumoBase * areaImpresa.cantidadMerma * caras;
+      const cantidad = cantidadTrabajo + cantidadMerma;
       const precioUnitario = precioPorUnidadDeConsumo(
         precioReferencia,
         consumible.materialVariante.unidadStock,
@@ -7070,6 +7163,14 @@ export class MotorUniversalService {
         unidad: consumible.unidad,
         precioUnitario,
         costoTotal,
+        mermaAdicional:
+          cantidadMerma > 0
+            ? {
+                porcentaje: areaImpresa.porcentaje,
+                cantidadTrabajo,
+                cantidadMerma,
+              }
+            : undefined,
         estrategiaCosto: 'consumo_maquina_por_m2',
         modoSeleccion: 'MAQUINA_CONSUMIBLE',
       });
@@ -7250,13 +7351,11 @@ export class MotorUniversalService {
     const areaPersonalizacion = this.areaPersonalizacionM2(paso, jobContext);
     if (areaPersonalizacion !== null) return areaPersonalizacion;
 
-    if (nestingDispatch?.substrates?.length) {
-      const area = nestingDispatch.substrates.reduce((acc, sub) => {
-        if (sub.kind === 'roll') {
-          return acc + (sub.lengthMm * sub.widthMm) / 1_000_000;
-        }
-        return acc + (sub.count * sub.widthMm * sub.heightMm) / 1_000_000;
-      }, 0);
+    if (nestingDispatch) {
+      const area = areaImpresaTrabajoDesdeNestingM2(
+        nestingDispatch,
+        this.totalPiezasParaCosteo(jobContext),
+      );
       if (area > 0) return area;
     }
 
@@ -7868,16 +7967,19 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -7980,14 +8082,16 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              Record<string, unknown> | undefined;
+              | Record<string, unknown>
+              | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -9184,7 +9288,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -9244,7 +9350,8 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        Array<{ codigo: string; monto: number }> | undefined;
+        | Array<{ codigo: string; monto: number }>
+        | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');

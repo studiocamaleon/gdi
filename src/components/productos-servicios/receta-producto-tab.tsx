@@ -61,7 +61,12 @@ import {
   reemplazarNodoProductivo,
 } from "@/lib/modelo-productivo-layout";
 import {
+  cantidadUsosProductoComponente,
+  crearIdentidadOcurrenciaComponente,
+} from "@/lib/componentes-receta-ocurrencias";
+import {
   agregarPasoExtra,
+  actualizarProducto,
   descartarBorradorReceta,
   deprecarReceta,
   eliminarPasoExtra,
@@ -78,6 +83,7 @@ import {
   type ConfiguracionPasoCompuesto,
   type BomMultinivel,
   type BomNodoMultinivel,
+  type PoliticaNestingCompuesto,
 } from "@/lib/productos-servicios-api";
 import { ConfigurarComponenteWorkspace } from "./configurar-componente-workspace";
 import { ConfigurarIncorporacionWorkspace } from "./configurar-incorporacion-workspace";
@@ -89,6 +95,11 @@ import {
   NodoProductivoMenu,
   type AccionNodoProductivo,
 } from "./nodo-productivo-menu";
+import { NestingCompuestoDialog } from "./nesting-compuesto-dialog";
+import {
+  actualizarPoliticaNestingCompuesto,
+  leerPoliticaNestingCompuesto,
+} from "./nesting-compuesto-helpers";
 import styles from "./receta-producto-tab.module.css";
 
 type NodoProductivoEditor = {
@@ -271,6 +282,15 @@ export function EditorDefiniciones({
       orden: item.orden,
     })),
   );
+  const [politicaNestingCompuesto, setPoliticaNestingCompuesto] =
+    React.useState<PoliticaNestingCompuesto>(() =>
+      leerPoliticaNestingCompuesto(producto.atributosComercialesJson),
+    );
+  const politicaNestingPersistidaRef = React.useRef(politicaNestingCompuesto);
+  const productoUpdatedAtRef = React.useRef(producto.updatedAt);
+  const atributosComercialesRef = React.useRef(
+    producto.atributosComercialesJson,
+  );
   const [pasosCompuestos, setPasosCompuestos] = React.useState<
     ConfiguracionPasoCompuesto[]
   >(revision.pasosCompuestosJson ?? []);
@@ -377,13 +397,7 @@ export function EditorDefiniciones({
     Record<string, DocumentosHeredadosComponente>
   >({});
 
-  const productosDisponibles = productos.filter(
-    (productoDisponible) =>
-      !componentes.some(
-        (componente) =>
-          componente.productoComponenteId === productoDisponible.id,
-      ),
-  );
+  const productosDisponibles = productos;
   const idsEtapas = React.useMemo(
     () =>
       new Set(
@@ -1012,10 +1026,28 @@ export function EditorDefiniciones({
       productosDisponibles.find((item) => item.id === productoComponenteId) ??
       productosDisponibles[0];
     if (!child) return;
+    const reemplazo = contexto.reemplazo;
+    const componenteReemplazado = reemplazo?.clave.startsWith("componente:")
+      ? componentes.find(
+          (item) => `componente:${item.codigo}` === reemplazo.clave,
+        )
+      : null;
+    const componentesBase = reemplazo
+      ? componentes.filter(
+          (item) => `componente:${item.codigo}` !== reemplazo.clave,
+        )
+      : componentes;
+    const identidad =
+      componenteReemplazado?.productoComponenteId === child.id
+        ? {
+            codigo: componenteReemplazado.codigo,
+            nombre: componenteReemplazado.nombre,
+          }
+        : crearIdentidadOcurrenciaComponente(child, componentesBase);
     const nuevoComponente: ProductoRecetaComponenteInput = {
       productoComponenteId: child.id,
-      codigo: child.codigo,
-      nombre: child.nombre,
+      codigo: identidad.codigo,
+      nombre: identidad.nombre,
       politicaEjecucion: "INDEPENDIENTE",
       formula: "por_unidad",
       cantidad: 1,
@@ -1024,17 +1056,11 @@ export function EditorDefiniciones({
       nodosPredecesoresClaves: [],
       nodoIncorporacionClave: null,
     };
-    const reemplazo = contexto.reemplazo;
-    const componentesBase = reemplazo
-      ? componentes.filter(
-          (item) => `componente:${item.codigo}` !== reemplazo.clave,
-        )
-      : componentes;
     const componentesSiguientes = [...componentesBase, nuevoComponente];
     const columnasActuales = columnasHojaRuta.map((columna) =>
       columna.map((nodo) => nodo.clave),
     );
-    const nodoNuevoClave = `componente:${child.codigo}`;
+    const nodoNuevoClave = `componente:${identidad.codigo}`;
     const columnas = reemplazo
       ? reemplazarNodoProductivo(
           columnasActuales,
@@ -1115,8 +1141,8 @@ export function EditorDefiniciones({
     } else {
       toast.success(
         reemplazo
-          ? `${reemplazo.nombre} fue reemplazado por ${child.nombre}.`
-          : "Componente agregado en la posición elegida.",
+          ? `${reemplazo.nombre} fue reemplazado por ${identidad.nombre}.`
+          : `${identidad.nombre} fue agregado en la posición elegida.`,
       );
     }
   };
@@ -1395,6 +1421,22 @@ export function EditorDefiniciones({
   const guardarDefiniciones = async () => {
     setSaving(true);
     try {
+      if (
+        producto.estructuraProducto === "COMPUESTO" &&
+        politicaNestingCompuesto !== politicaNestingPersistidaRef.current
+      ) {
+        const productoActualizado = await actualizarProducto(productoId, {
+          expectedUpdatedAt: productoUpdatedAtRef.current,
+          atributosComercialesJson: actualizarPoliticaNestingCompuesto(
+            atributosComercialesRef.current,
+            politicaNestingCompuesto,
+          ),
+        });
+        productoUpdatedAtRef.current = productoActualizado.updatedAt;
+        atributosComercialesRef.current =
+          productoActualizado.atributosComercialesJson;
+        politicaNestingPersistidaRef.current = politicaNestingCompuesto;
+      }
       await guardarRevisionActual({
         cambios: "Modelo productivo actualizado",
         documentos: documentos.map((item, orden) => ({ ...item, orden })),
@@ -1437,7 +1479,7 @@ export function EditorDefiniciones({
           (_, index) => index !== componenteConfigurando,
         )}
         onCancel={() => setComponenteConfigurando(null)}
-        onSave={(configuracionJson, unidad, politicaEjecucion) => {
+        onSave={(configuracionJson, unidad, politicaEjecucion, nombreUso) => {
           setComponentes((current) =>
             current.map((item, index) =>
               index === componenteConfigurando
@@ -1446,6 +1488,7 @@ export function EditorDefiniciones({
                     configuracionJson,
                     unidad,
                     politicaEjecucion,
+                    nombre: nombreUso,
                   }
                 : item,
             ),
@@ -1510,6 +1553,15 @@ export function EditorDefiniciones({
               ? ` (${documentos.filter((item) => item.alcance !== "PASO").length})`
               : ""}
           </button>
+          {producto.estructuraProducto === "COMPUESTO" ? (
+            <NestingCompuestoDialog
+              politica={politicaNestingCompuesto}
+              componentes={componentes}
+              disabled={saving}
+              onPoliticaChange={setPoliticaNestingCompuesto}
+              onComponentesChange={setComponentes}
+            />
+          ) : null}
           <button type="button" aria-label="Cerrar flujo" onClick={onClose}>
             <XIcon />
           </button>
@@ -2162,25 +2214,33 @@ export function EditorDefiniciones({
                               busquedaAltaNodo.trim().toLocaleLowerCase("es"),
                             ),
                         )
-                        .map((item) => (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className={styles.addNodeOption}
-                            key={item.id}
-                            disabled={creandoNodo}
-                            onClick={() => void agregarComponente(item.id)}
-                          >
-                            <BoxesIcon data-icon="inline-start" />
-                            <span>
-                              <strong>{item.nombre}</strong>
-                              <small>
-                                Producto con flujo productivo propio
-                              </small>
-                            </span>
-                            <ArrowRightIcon data-icon="inline-end" />
-                          </Button>
-                        ))
+                        .map((item) => {
+                          const usos = cantidadUsosProductoComponente(
+                            item.id,
+                            componentes,
+                          );
+                          return (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={styles.addNodeOption}
+                              key={item.id}
+                              disabled={creandoNodo}
+                              onClick={() => void agregarComponente(item.id)}
+                            >
+                              <BoxesIcon data-icon="inline-start" />
+                              <span>
+                                <strong>{item.nombre}</strong>
+                                <small>
+                                  {usos > 0
+                                    ? `${usos} uso${usos === 1 ? "" : "s"} en esta receta · se puede repetir`
+                                    : "Producto con flujo productivo propio"}
+                                </small>
+                              </span>
+                              <ArrowRightIcon data-icon="inline-end" />
+                            </Button>
+                          );
+                        })
                     : null}
                   {tipoAltaNodo === "ETAPA"
                     ? etapasDisponibles
@@ -2482,8 +2542,8 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
           <span>BOM VERSIONADO</span>
           <h4>Composición del producto</h4>
           <p>
-            Leé qué se fabrica dentro de qué y qué materiales aporta cada
-            nivel. El orden de ejecución se consulta en Workflow.
+            Leé qué se fabrica dentro de qué y qué materiales aporta cada nivel.
+            El orden de ejecución se consulta en Workflow.
           </p>
         </div>
         <div className={styles.bomViewSwitch} aria-label="Vista del BOM">
@@ -2524,7 +2584,9 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
             <div>
               <span>Productos fabricados</span>
               <strong>{bom.resumen.productosFabricados}</strong>
-              <small>{bom.raiz.totales.componentesDirectos} hijos directos</small>
+              <small>
+                {bom.raiz.totales.componentesDirectos} hijos directos
+              </small>
             </div>
             <div>
               <span>Materiales</span>
@@ -2547,7 +2609,11 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                   versión. Abrí un nivel para ver sus materiales y subproductos.
                 </p>
               </div>
-              <NodoBom nodo={bom.raiz} abiertos={abiertos} alternar={alternar} />
+              <NodoBom
+                nodo={bom.raiz}
+                abiertos={abiertos}
+                alternar={alternar}
+              />
             </section>
           ) : (
             <section className={styles.bomConsolidated}>
@@ -2555,7 +2621,8 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                 <span>LECTURA CONSOLIDADA</span>
                 <p>
                   Reúne materiales equivalentes sin perder el producto y el paso
-                  que los originan. Las cantidades finales se resuelven al cotizar.
+                  que los originan. Las cantidades finales se resuelven al
+                  cotizar.
                 </p>
               </div>
               {bom.materialesConsolidados.length ? (
@@ -2583,7 +2650,9 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
                           <div
                             key={`${material.clave}:${ocurrencia.ocurrenciaId}`}
                           >
-                            <strong>{ocurrencia.rutaProductos.join(" → ")}</strong>
+                            <strong>
+                              {ocurrencia.rutaProductos.join(" → ")}
+                            </strong>
                             <span>{nombreHumano(ocurrencia.pasoNombre)}</span>
                           </div>
                         ))}

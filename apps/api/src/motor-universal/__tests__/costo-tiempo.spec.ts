@@ -16,6 +16,9 @@ import type { ErrorMotor, JobContext, PasoCargado } from '../tipos';
 type TiempoPaso = {
   setupMin: number;
   runMin: number;
+  runTrabajoMin?: number;
+  runMermaMin?: number;
+  mermaOperativaPct?: number;
   cleanupMin: number;
   tiempoFijoMin: number;
   totalMin: number;
@@ -47,7 +50,13 @@ function calcular(
   tarifas: Map<string, unknown>,
   jobContext: JobContext = { cantidad: 1 },
 ) {
-  return createService().calcularTiempo(paso, jobContext, [], tarifas, '2026-07');
+  return createService().calcularTiempo(
+    paso,
+    jobContext,
+    [],
+    tarifas,
+    '2026-07',
+  );
 }
 
 // Paso T-2 con `horasEstimadas` = 1 → run determinístico de 60 min, sin DB.
@@ -153,5 +162,34 @@ describe('Motor — el tiempo se cobra a la tarifa del centro', () => {
 
     // Dos personas 75 min consumen 150 min de las horas del centro.
     expect(t.costo).toBeCloseTo((75 / 60) * 6000 * 2);
+  });
+
+  it('la merma operativa de impresión aumenta sólo el tiempo de corrida', () => {
+    const paso = pasoBase({
+      maquina: {
+        ...maquina,
+        plantilla: 'IMPRESORA_LASER',
+      },
+      slots: [
+        {
+          slotCodigo: 'sustrato_principal',
+          mermaAdicionalPct: 20,
+        },
+      ],
+    });
+    const tarifas = new Map<string, unknown>([
+      ['cc-maq', { tarifa: 6000, manoObra: 2000 }],
+    ]);
+
+    const t = calcular(paso, tarifas);
+
+    expect(t.setupMin).toBe(10);
+    expect(t.runTrabajoMin).toBe(60);
+    expect(t.runMermaMin).toBe(12);
+    expect(t.runMin).toBe(72);
+    expect(t.cleanupMin).toBe(5);
+    expect(t.totalMin).toBe(87);
+    expect(t.mermaOperativaPct).toBe(20);
+    expect(t.costo).toBeCloseTo((87 / 60) * 6000);
   });
 });

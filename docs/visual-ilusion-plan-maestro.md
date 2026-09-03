@@ -843,7 +843,7 @@ comisiones, descuentos ni redondeos.
 
 **Estado inicial:** PROPUESTA · PENDIENTE
 
-**Estado actual:** EN IMPLEMENTACIÓN · 4.4.2 CONSOLIDACIÓN RECTANGULAR IMPLEMENTADA Y VALIDADA
+**Estado actual:** EN IMPLEMENTACIÓN · 4.4.2 CONSOLIDACIÓN RECTANGULAR Y CONFIGURACIÓN UI IMPLEMENTADAS
 
 **Dependencias:** Fases 4.2–4.3.
 
@@ -907,6 +907,9 @@ reducir consumo y preparación, conservando identidad, costos y ejecución.
   las ramas al completarse.
 - Migración operativa aplicada, build aprobado y regresión integral aprobada:
   207 suites, 2.004 pruebas y 10 snapshots; 2 suites y 3 pruebas omitidas.
+- La configuración queda disponible en el editor de cada ruta de producto
+  compuesto: política general y exclusiones por componente, persistidas en el
+  borrador y sujetas a publicación por la huella productiva.
 
 El próximo paso es 4.4.3: extender la misma semántica a rollos y geometría
 vectorial sin perder identidad print/cut.
@@ -1602,6 +1605,7 @@ Cada fase tomará el subconjunto pertinente y agregará fixtures automatizados c
 | DM-014 | Las rutas reutilizables son plantillas versionadas de Workflow            | Cerrada | Permite reutilizar recorridos lineales o DAG con pasos, etapas y componentes sin duplicar el motor ni mezclar la plantilla con la configuración contextual del producto. |
 | DM-015 | El pricing compuesto admite estrategia general, por componente o mixta    | Cerrada   | Los componentes pueden tener lógicas comerciales distintas, pero impuestos, comisiones, descuentos y redondeo pertenecen una sola vez a la línea final.                 |
 | DM-016 | El nesting entre componentes exige una firma productiva compatible         | Cerrada   | La activación es voluntaria por producto y el valor por defecto es independiente; compartir material no basta y la primera versión se limita a pliegos rectangulares.  |
+| DM-017 | La BOM identifica ocurrencias, no productos hijos únicos                    | Cerrada   | Un mismo producto puede usarse varias veces con nombres, medidas y bindings propios; el código interno de la ocurrencia preserva cálculo, Workflow, nesting y OT.       |
 
 Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decisión se revoca, se conserva la fila y se añade la sucesora.
 
@@ -1624,7 +1628,7 @@ Esta tabla se actualizará al integrar cada fase.
 | 4.2.3 | IMPLEMENTADA · EN VALIDACIÓN | `visual-ilusion/fase-4-rutas-dag`                    | `docs/contrato-comercial-dimensiones-producto-diseno.md`                | migración `20260831010000_producto_dimensiones_3d`         | Dimensiones explícitas 2D/3D; profundidad ya no se origina en la familia bastidor                                           |
 | 4.2.4 | IMPLEMENTADA · EN VALIDACIÓN | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | validación técnica integral aprobada                       | Opcionales configurables por uso, condicionales automáticos y subruta hija reducida correctamente al materializar la OT     |
 |   4.3 | COMPLETA                     | `visual-ilusion/fase-4-3-pricing-compuestos`         | `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`            | validación funcional y regresión integral                  | Matriz general/mixta/por componente, snapshots, redondeo y QA responsive aprobados; Fase 4.4 habilitada                     |
-|   4.4 | EN IMPLEMENTACIÓN · 4.4.2    | `visual-ilusion/fase-4-4-nesting-compuestos`         | `docs/visual-ilusion-fase-4-4-nesting-compuestos-diseno.md`             | consolidación rectangular y regresión integral aprobadas    | Costos reconciliados antes de pricing y una operación compartida en OT; sigue 4.4.3 para rollos y geometría vectorial       |
+|   4.4 | EN IMPLEMENTACIÓN · 4.4.2    | `visual-ilusion/fase-4-4-nesting-compuestos`         | `docs/visual-ilusion-fase-4-4-nesting-compuestos-diseno.md`             | consolidación rectangular, configuración UI y regresión aprobadas | Política y exclusiones editables; costos reconciliados y una operación compartida en OT; sigue 4.4.3 para rollos y geometría vectorial |
 |     5 | PENDIENTE                    | —                                                    | —                                                                       | —                                                          | —                                                                                                                           |
 |     6 | PENDIENTE                    | —                                                    | —                                                                       | —                                                          | —                                                                                                                           |
 |     7 | PENDIENTE                    | —                                                    | —                                                                       | —                                                          | —                                                                                                                           |

@@ -340,6 +340,10 @@ function candidatoDesdePaso(args: {
     allowRotation: visual.allowRotation,
     estrategiaCosto: material.estrategiaCosto,
     costingSegmentSteps: nesting.costingSegmentSteps ?? [],
+    mermaOperativaPct: redondear(
+      Math.max(0, Number(material.mermaAdicional?.porcentaje ?? 0)),
+      6,
+    ),
     setupMin: paso.tiempo?.setupMin ?? 0,
     cleanupMin: paso.tiempo?.cleanupMin ?? 0,
     tarifaHora: paso.tiempo?.tarifaHora ?? 0,
@@ -482,7 +486,19 @@ function aplicarGrupoConsolidado(args: {
     );
   }
 
-  const costoMaterialConsolidado = redondear(costeoConsolidado.totalCost, 6);
+  const costoMaterialConsolidadoBase = redondear(
+    costeoConsolidado.totalCost,
+    6,
+  );
+  const mermaOperativaPct = Math.max(
+    0,
+    Number(args.participantes[0].material.mermaAdicional?.porcentaje ?? 0),
+  );
+  const factorMermaOperativa = 1 + mermaOperativaPct / 100;
+  const costoMaterialConsolidado = redondear(
+    costoMaterialConsolidadoBase * factorMermaOperativa,
+    6,
+  );
   const setupCompartido = Math.max(
     ...args.participantes.map(
       (participante) => participante.paso.tiempo?.setupMin ?? 0,
@@ -549,6 +565,20 @@ function aplicarGrupoConsolidado(args: {
       material.precioUnitario > 0
         ? redondear(material.costoTotal / material.precioUnitario, 8)
         : material.cantidad;
+    material.mermaAdicional =
+      mermaOperativaPct > 0
+        ? {
+            porcentaje: mermaOperativaPct,
+            cantidadTrabajo: redondear(
+              material.cantidad / factorMermaOperativa,
+              8,
+            ),
+            cantidadMerma: redondear(
+              material.cantidad - material.cantidad / factorMermaOperativa,
+              8,
+            ),
+          }
+        : undefined;
     material.asignacionNestingCompuesto = {
       loteId: args.id,
       costoIndependiente: costoMaterialAnterior,
@@ -692,6 +722,19 @@ function aplicarGrupoConsolidado(args: {
       fullUnitsCost: costeoConsolidado.breakdown.fullUnitsCost,
       lastUnit: costeoConsolidado.breakdown.lastUnit,
       units: costeoConsolidado.breakdown.units,
+      ...(mermaOperativaPct > 0
+        ? {
+            mermaOperativa: {
+              porcentaje: mermaOperativaPct,
+              costoBase: costoMaterialConsolidadoBase,
+              costoMerma: redondear(
+                costoMaterialConsolidado - costoMaterialConsolidadoBase,
+                6,
+              ),
+              costoTotal: costoMaterialConsolidado,
+            },
+          }
+        : {}),
     },
     costoMaterialTotal: costoMaterialConsolidado,
     costoPreparacionTotal: costoPreparacionConsolidado,

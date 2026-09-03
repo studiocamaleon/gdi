@@ -291,7 +291,8 @@ export interface CotizarOutput {
 }
 
 export type PoliticaNestingCompuesto =
-  'INDEPENDIENTE' | 'CONSOLIDAR_COMPATIBLES';
+  | 'INDEPENDIENTE'
+  | 'CONSOLIDAR_COMPATIBLES';
 
 export interface LoteNestingCompuestoSnapshot {
   id: string;
@@ -321,6 +322,7 @@ export interface LoteNestingCompuestoSnapshot {
   /** Desglose exacto devuelto por la estrategia de costeo para este lote. */
   costeoSustrato?: {
     strategy: 'simple' | 'm2-exact' | 'consumed-length' | 'plate-segments';
+    /** Costo geométrico devuelto por la estrategia, antes de merma operativa. */
     totalCost: number;
     unitPrice: number;
     pricePerM2: number;
@@ -337,6 +339,13 @@ export interface LoteNestingCompuestoSnapshot {
       segmentApplied: number | null;
       cost: number;
     }>;
+    /** Recargo de proceso aplicado después del costeo geométrico. */
+    mermaOperativa?: {
+      porcentaje: number;
+      costoBase: number;
+      costoMerma: number;
+      costoTotal: number;
+    };
   };
   costoMaterialTotal: number;
   costoPreparacionTotal: number;
@@ -692,6 +701,12 @@ export interface PasoEjecutado {
   tiempo?: {
     setupMin: number;
     runMin: number;
+    /** Corrida necesaria para producir las unidades buenas. */
+    runTrabajoMin?: number;
+    /** Corrida esperada adicional por arranque, pruebas o rechazo. */
+    runMermaMin?: number;
+    /** Porcentaje operativo heredado del sustrato principal. */
+    mermaOperativaPct?: number;
     cleanupMin: number;
     tiempoFijoMin: number;
     /** Minutos de los bloques de tiempo extra (van dentro de `totalMin`). */
@@ -1061,6 +1076,16 @@ export interface MaterialEjecutado {
   unidad: string;
   precioUnitario: number;
   costoTotal: number;
+  /**
+   * Pérdida operativa separada de la cantidad útil. En el sustrato sale de la
+   * receta; tinta y desgaste la heredan del sustrato principal del mismo paso.
+   * Se congela para explicar el costo sin reconstruir una receta mutable.
+   */
+  mermaAdicional?: {
+    porcentaje: number;
+    cantidadTrabajo: number;
+    cantidadMerma: number;
+  };
   /** Estrategia usada (simple, m2-exact, etc.). */
   estrategiaCosto: string;
   /** Desglose cuando el costo del material se calculó desde el nesting. */
@@ -1121,7 +1146,9 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;

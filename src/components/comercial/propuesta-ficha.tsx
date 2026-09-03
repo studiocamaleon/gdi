@@ -163,6 +163,10 @@ import {
   construirWorkflowCotizacion,
   type ComponenteWorkflowCotizacion,
 } from "@/lib/workflow-cotizacion";
+import {
+  calcularCostoMermaTiempo,
+  calcularItemsMermaMaterial,
+} from "@/lib/desglose-merma-material";
 import { FidelizacionCotizador } from "@/components/comercial/fidelizacion-cotizador";
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
@@ -186,6 +190,11 @@ import {
 } from "@/lib/centro-copiado-api";
 import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -225,6 +234,7 @@ import {
 } from "@/lib/nesting-compra-pliego";
 import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
 import nestC from "./nesting-compra-pliego-viewer.module.css";
+import costC from "./propuesta-ficha-costos.module.css";
 import descM from "./descuento-modal.module.css";
 import { ConstelacionCanvas } from "@/components/constelacion-canvas";
 import resumenBar from "./resumen-financiero-bar.module.css";
@@ -1975,16 +1985,13 @@ function recolectarNestingsCotizacion(
         ...placement,
         meta: {
           ...meta,
-          ...(codigo
-            ? { label: nombresPorCodigo.get(codigo) ?? codigo }
-            : {}),
+          ...(codigo ? { label: nombresPorCodigo.get(codigo) ?? codigo } : {}),
         },
       };
     });
     const nestingResult: NestingViewerInput = {
       algorithm: "grid-2d-multi",
-      cantidadCalculada:
-        snapshot.cantidadCalculada ?? cantidadSustratos,
+      cantidadCalculada: snapshot.cantidadCalculada ?? cantidadSustratos,
       unidad: snapshot.unidad ?? "pliegos",
       aprovechamientoPct: snapshot.aprovechamientoPct,
       maquina: snapshot.maquina ?? baseResult.maquina,
@@ -2062,9 +2069,10 @@ function recolectarNestingsCotizacion(
     });
   }
 
-  return [...fuentes.filter((fuente) => !suprimidas.has(fuente.key)), ...consolidadas].sort(
-    (a, b) => a.orden - b.orden,
-  );
+  return [
+    ...fuentes.filter((fuente) => !suprimidas.has(fuente.key)),
+    ...consolidadas,
+  ].sort((a, b) => a.orden - b.orden);
 }
 
 function formatMinutos(min: number) {
@@ -2275,6 +2283,165 @@ function MaterialesPasoTable({
           onClose={() => setAbierto(null)}
         />
       ) : null}
+    </div>
+  );
+}
+
+type ItemMermaPasoVista = {
+  key: string;
+  titulo: string;
+  detalle: string;
+  cantidad: number;
+  unidad: string;
+  porcentaje: number;
+  costo: number;
+};
+
+function tituloMermaOperativa(material: MaterialCosteo) {
+  if (material.tipoLineaCosto === "CONSUMIBLE_MAQUINA") {
+    return "Consumo adicional de tinta o tóner";
+  }
+  if (material.tipoLineaCosto === "DESGASTE_MAQUINA") {
+    return "Desgaste adicional de máquina";
+  }
+  return "Merma operativa de sustrato";
+}
+
+function itemsMermaDelPaso(
+  paso: PasoCosteo,
+  cotizacion: CotizacionPropuestaSnapshot,
+): ItemMermaPasoVista[] {
+  const items: ItemMermaPasoVista[] = [];
+
+  (paso.materiales ?? [])
+    .filter((material) => material.costoTotal > 0)
+    .forEach((material, materialIndex) => {
+      const asignacion = material.asignacionNestingCompuesto;
+      const loteCompartido = asignacion
+        ? cotizacion.analisisNestingCompuesto?.grupos.find(
+            (grupo) => grupo.lote?.id === asignacion.loteId,
+          )?.lote
+        : null;
+      const participante = loteCompartido?.participantes.find(
+        (item) =>
+          item.pasoClave === paso.configPasoId ||
+          item.rutaPasoId === paso.rutaPasoId,
+      );
+      const detalles = calcularItemsMermaMaterial({
+        material,
+        costeoNesting:
+          loteCompartido?.nestingResult.costingPreview ??
+          paso.nestingResult?.costingPreview,
+        porcentajeAsignacion:
+          participante?.porcentajeAsignacion ??
+          asignacion?.porcentajeAsignacion ??
+          100,
+        consolidado: Boolean(loteCompartido),
+      });
+
+      detalles.forEach((detalle, detalleIndex) => {
+        const nombreMaterial = getMaterialCosteoLabel(material);
+        const esGeometrica = detalle.origen === "NESTING_GEOMETRICA";
+        items.push({
+          key: `${material.slotCodigo}-${material.materialVarianteId}-${materialIndex}-${detalleIndex}`,
+          titulo: esGeometrica
+            ? "Desperdicio geométrico del nesting"
+            : tituloMermaOperativa(material),
+          detalle: esGeometrica
+            ? `${nombreMaterial} · ${detalle.consolidado ? "lote consolidado" : "acomodo individual"}`
+            : `${nombreMaterial} · ${formatDecimal(detalle.porcentaje, 2)}% sobre el consumo productivo`,
+          cantidad: detalle.cantidadMerma,
+          unidad: detalle.unidad,
+          porcentaje: detalle.porcentaje,
+          costo: detalle.costoMerma,
+        });
+      });
+    });
+
+  const tiempo = paso.tiempo;
+  const runMermaMin = Math.max(0, Number(tiempo?.runMermaMin ?? 0));
+  if (tiempo && runMermaMin > 0) {
+    items.push({
+      key: `tiempo-${paso.configPasoId ?? paso.rutaPasoId ?? paso.rutaPasoOrden}`,
+      titulo: "Tiempo adicional de corrida",
+      detalle: `${tiempo.centroCostoNombre ?? "Centro de costo del paso"} · ${formatDecimal(tiempo.mermaOperativaPct ?? 0, 2)}% sobre la corrida productiva`,
+      cantidad: runMermaMin,
+      unidad: "min",
+      porcentaje: Math.max(0, Number(tiempo.mermaOperativaPct ?? 0)),
+      costo: calcularCostoMermaTiempo(tiempo),
+    });
+  }
+
+  return items.filter(
+    (item) =>
+      Number.isFinite(item.cantidad) &&
+      item.cantidad > 0 &&
+      Number.isFinite(item.costo) &&
+      item.costo >= 0,
+  );
+}
+
+function MermaPasoCollapsible({
+  paso,
+  cotizacion,
+}: {
+  paso: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+}) {
+  const { moneda } = useConfigRegional();
+  const [open, setOpen] = React.useState(false);
+  const items = itemsMermaDelPaso(paso, cotizacion);
+  if (items.length === 0) return null;
+
+  const costoTotal = items.reduce((total, item) => total + item.costo, 0);
+  const cantidadConceptos = items.length;
+
+  return (
+    <div className="cost-detail-block">
+      <Collapsible
+        open={open}
+        onOpenChange={setOpen}
+        className={costC.collapsible}
+      >
+        <CollapsibleTrigger
+          render={<button type="button" className={costC.trigger} />}
+        >
+          <ChevronRightIcon
+            data-icon="inline-start"
+            className={costC.chevron}
+            style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+          />
+          <span className={costC.triggerCopy}>
+            <strong>Merma</strong>
+            <small>
+              {cantidadConceptos}{" "}
+              {cantidadConceptos === 1 ? "concepto" : "conceptos"}
+            </small>
+          </span>
+          <strong className={costC.triggerTotal}>
+            {formatCurrency(costoTotal, moneda)}
+          </strong>
+        </CollapsibleTrigger>
+        <CollapsibleContent className={costC.content}>
+          {items.map((item) => (
+            <div className={costC.item} key={item.key}>
+              <div className={costC.itemCopy}>
+                <strong>{item.titulo}</strong>
+                <small>{item.detalle}</small>
+              </div>
+              <div className={costC.itemQuantity}>
+                <strong>
+                  {formatCantidadCosto(item.cantidad, item.unidad)}
+                </strong>
+                <small>{formatDecimal(item.porcentaje, 1)}%</small>
+              </div>
+              <strong className={costC.itemCost}>
+                {formatCurrency(item.costo, moneda)}
+              </strong>
+            </div>
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
@@ -3111,7 +3278,13 @@ function MutacionPasoDetail({ mutacion }: { mutacion: MutacionAplicadaView }) {
   );
 }
 
-function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
+function PasoCostDetail({
+  paso,
+  cotizacion,
+}: {
+  paso: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+}) {
   const { moneda } = useConfigRegional();
   const materiales = paso.materiales ?? [];
   const cargos = paso.cargosDirectosPaso ?? [];
@@ -3131,6 +3304,8 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
           nesting={paso.nestingResult}
         />
       </div>
+
+      <MermaPasoCollapsible paso={paso} cotizacion={cotizacion} />
 
       {tiemposExtra.length > 0 ? (
         <div className="cost-detail-block">
@@ -3592,7 +3767,10 @@ function CostosItemView({
                     {puedeExpandir && expanded ? (
                       <tr className="cost-step-detail-row">
                         <td colSpan={6}>
-                          <PasoCostDetail paso={paso} />
+                          <PasoCostDetail
+                            paso={paso}
+                            cotizacion={item.cotizacion}
+                          />
                         </td>
                       </tr>
                     ) : null}

@@ -124,6 +124,13 @@ cantidad/fórmula/unidad y política de ejecución. Un accesorio comprado simple
 continúa siendo un slot de rol `COMPONENTE`; no se convierte artificialmente en
 subproducto.
 
+La relación representa una **ocurrencia de uso**, no la definición del producto
+hijo. Una misma definición puede aparecer varias veces en una receta, incluso en
+paralelo, siempre que cada ocurrencia conserve un código interno único. Nombre
+visible, bindings, medidas, cantidad, pricing, opcionalidad y política de nesting
+se configuran por ocurrencia; la receta publicada del hijo se reutiliza sin
+duplicar el producto del catálogo.
+
 ### `ProductoRecetaDocumento`
 
 Requisito declarativo por receta o nodo: nombre, propósito, etapa, tipo de
@@ -173,6 +180,12 @@ La UI debe diferenciar claramente:
 
 - merma calculada por acomodo/geometría;
 - merma adicional declarada por receta.
+
+Cuando el slot es `sustrato_principal` de un paso de impresión, la merma
+adicional representa pérdida operativa y también incrementa la tinta/tóner,
+el desgaste por clicks o tinta procesada y el tiempo de corrida. No se aplica
+a setup/cleanup. El desperdicio geométrico del nesting no se propaga: ver
+`docs/merma-operativa-consumos-diseno.md`.
 
 ## 8. Unidades y componentes
 

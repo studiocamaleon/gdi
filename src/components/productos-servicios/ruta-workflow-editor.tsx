@@ -32,6 +32,10 @@ import {
   moverNodoProductivo,
   type DestinoNodoProductivo,
 } from "@/lib/modelo-productivo-layout";
+import {
+  cantidadUsosProductoComponente,
+  crearIdentidadOcurrenciaComponente,
+} from "@/lib/componentes-receta-ocurrencias";
 import type {
   CatalogoFamilias,
   NodoRutaWorkflow,
@@ -120,6 +124,7 @@ export function RutaWorkflowEditor({
   const [arrastrando, setArrastrando] = React.useState<string | null>(null);
   const [zoom, setZoom] = React.useState(100);
   const [editando, setEditando] = React.useState<string | null>(null);
+  const [nombreEditado, setNombreEditado] = React.useState("");
   const columnas = React.useMemo(
     () => construirColumnasProductivas(value.nodos, value.aristas),
     [value],
@@ -138,20 +143,22 @@ export function RutaWorkflowEditor({
   );
   const opciones = React.useMemo<OpcionNodo[]>(() => {
     if (tipo === "COMPONENTE") {
-      const usados = new Set(
-        value.nodos
-          .filter((nodo) => nodo.tipo === "COMPONENTE")
-          .map((nodo) => nodo.productoComponenteId),
+      const ocurrencias = value.nodos.filter(
+        (nodo) => nodo.tipo === "COMPONENTE",
       );
-      return productos
-        .filter((producto) => !usados.has(producto.id))
-        .map((producto) => ({
+      return productos.map((producto) => {
+        const usos = cantidadUsosProductoComponente(producto.id, ocurrencias);
+        return {
           id: producto.id,
           nombre: producto.nombre,
-          descripcion: `${producto.codigo} · Producto con receta propia`,
+          descripcion:
+            usos > 0
+              ? `${usos} uso${usos === 1 ? "" : "s"} en esta ruta · se puede repetir`
+              : "Producto con receta propia",
           tipo,
           producto,
-        }));
+        };
+      });
     }
     if (tipo === "ETAPA") {
       return [...compuestos.values()].map((paso) => ({
@@ -193,24 +200,31 @@ export function RutaWorkflowEditor({
 
   const agregar = (opcion: OpcionNodo) => {
     if (!destino) return;
-    const nodo: NodoRutaWorkflow = opcion.producto
-      ? {
-          clave: claveNueva("componente"),
-          tipo: "COMPONENTE",
-          orden: value.nodos.length,
-          productoComponenteId: opcion.producto.id,
-          codigo: opcion.producto.codigo,
-          nombre: opcion.producto.nombre,
-          requerido: true,
-        }
-      : {
-          clave: claveNueva("ruta-borrador"),
-          tipo: opcion.tipo === "ETAPA" ? "ETAPA" : "PASO",
-          orden: value.nodos.length,
-          familiaCodigo: opcion.familiaCodigo!,
-          nombreVisible: opcion.nombre,
-          icono: opcion.tipo === "ETAPA" ? "Layers" : "Layout",
-        };
+    const ocurrencias = value.nodos.filter(
+      (nodo) => nodo.tipo === "COMPONENTE",
+    );
+    const identidad = opcion.producto
+      ? crearIdentidadOcurrenciaComponente(opcion.producto, ocurrencias)
+      : null;
+    const nodo: NodoRutaWorkflow =
+      opcion.producto && identidad
+        ? {
+            clave: claveNueva("componente"),
+            tipo: "COMPONENTE",
+            orden: value.nodos.length,
+            productoComponenteId: opcion.producto.id,
+            codigo: identidad.codigo,
+            nombre: identidad.nombre,
+            requerido: true,
+          }
+        : {
+            clave: claveNueva("ruta-borrador"),
+            tipo: opcion.tipo === "ETAPA" ? "ETAPA" : "PASO",
+            orden: value.nodos.length,
+            familiaCodigo: opcion.familiaCodigo!,
+            nombreVisible: opcion.nombre,
+            icono: opcion.tipo === "ETAPA" ? "Layers" : "Layout",
+          };
     const siguientes = insertarNodoProductivo(
       columnasClaves,
       nodo.clave,
@@ -238,6 +252,26 @@ export function RutaWorkflowEditor({
   };
 
   const nodoEditado = value.nodos.find((nodo) => nodo.clave === editando);
+  const abrirEdicionNombre = (nodo: NodoRutaWorkflow) => {
+    setNombreEditado(
+      nodo.tipo === "COMPONENTE" ? nodo.nombre : (nodo.nombreVisible ?? ""),
+    );
+    setEditando(nodo.clave);
+  };
+  const aplicarNombre = () => {
+    if (!nodoEditado || !nombreEditado.trim()) return;
+    onChange({
+      ...value,
+      nodos: value.nodos.map((nodo) =>
+        nodo.clave !== nodoEditado.clave
+          ? nodo
+          : nodo.tipo === "COMPONENTE"
+            ? { ...nodo, nombre: nombreEditado.trim() }
+            : { ...nodo, nombreVisible: nombreEditado.trim() },
+      ),
+    });
+    setEditando(null);
+  };
 
   return (
     <section className={styles.editor}>
@@ -369,15 +403,13 @@ export function RutaWorkflowEditor({
                           </small>
                         </div>
                         <div className={styles.nodeActions}>
-                          {nodo.tipo !== "COMPONENTE" ? (
-                            <button
-                              type="button"
-                              onClick={() => setEditando(nodo.clave)}
-                              aria-label="Editar nombre del nodo"
-                            >
-                              <PencilIcon />
-                            </button>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => abrirEdicionNombre(nodo)}
+                            aria-label="Editar nombre del nodo"
+                          >
+                            <PencilIcon />
+                          </button>
                           <button
                             type="button"
                             onClick={() => eliminar(nodo.clave)}
@@ -551,25 +583,21 @@ export function RutaWorkflowEditor({
               Este nombre se propone al aplicar la ruta a un producto.
             </DialogDescription>
           </DialogHeader>
-          {nodoEditado && nodoEditado.tipo !== "COMPONENTE" ? (
+          {nodoEditado ? (
             <Input
               autoFocus
-              value={nodoEditado.nombreVisible ?? ""}
-              onChange={(event) =>
-                onChange({
-                  ...value,
-                  nodos: value.nodos.map((nodo) =>
-                    nodo.clave === nodoEditado.clave &&
-                    nodo.tipo !== "COMPONENTE"
-                      ? { ...nodo, nombreVisible: event.target.value }
-                      : nodo,
-                  ),
-                })
-              }
+              value={nombreEditado}
+              maxLength={nodoEditado.tipo === "COMPONENTE" ? 180 : 120}
+              onChange={(event) => setNombreEditado(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") aplicarNombre();
+              }}
             />
           ) : null}
           <div className={styles.nameActions}>
-            <Button onClick={() => setEditando(null)}>Listo</Button>
+            <Button disabled={!nombreEditado.trim()} onClick={aplicarNombre}>
+              Listo
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

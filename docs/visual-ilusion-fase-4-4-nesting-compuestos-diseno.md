@@ -1,6 +1,6 @@
 # Fase 4.4 — Nesting compartido dentro de productos compuestos
 
-**Estado:** EN IMPLEMENTACIÓN · 4.4.2 CONSOLIDACIÓN RECTANGULAR IMPLEMENTADA Y VALIDADA
+**Estado:** EN IMPLEMENTACIÓN · 4.4.2 CONSOLIDACIÓN RECTANGULAR Y CONFIGURACIÓN UI IMPLEMENTADAS
 
 **Rama propuesta:** `visual-ilusion/fase-4-4-nesting-compuestos`
 
@@ -50,6 +50,11 @@ type PoliticaNestingCompuesto =
 En `CONSOLIDAR_COMPATIBLES`, cada componente podrá además excluirse de forma
 explícita.
 
+Dos ocurrencias del mismo producto hijo se consideran participantes distintos
+por su código de uso. Pueden recibir medidas y parámetros diferentes, compartir
+un mismo momento del Workflow y consolidarse sólo si sus demandas resultantes
+cumplen la firma estricta de compatibilidad.
+
 La decisión funcional queda cerrada con activación voluntaria por producto:
 
 ```ts
@@ -74,6 +79,17 @@ La decisión funcional queda cerrada con activación voluntaria por producto:
 Si la configuración falta, tiene otra versión o contiene un valor desconocido,
 el motor aplica `INDEPENDIENTE`. La política forma parte de la huella productiva:
 cambiarla exige publicar una nueva revisión antes de volver a cotizar.
+
+La política se configura desde **Productos y servicios → Producto compuesto →
+Rutas → Editar ruta**, mediante el botón **Nesting** del encabezado. El botón
+abre un modal compacto para elegir entre cálculo por componente y consolidación
+de compatibles, y excluir componentes de los lotes compartidos. El editor
+preserva el resto de la configuración BOM y no expone códigos internos.
+
+Al guardar el modelo, la política queda persistida en el producto y las
+exclusiones en el borrador de la receta. La cotización continúa bloqueada por la
+huella productiva hasta publicar esa revisión, evitando que el cálculo use una
+política distinta de la receta vigente.
 
 ## 4. Firma estricta de compatibilidad
 
@@ -163,6 +179,11 @@ En la BOM del producto compuesto:
 - indicador de componentes potencialmente compatibles;
 - exclusión por componente con motivo opcional;
 - advertencias que expliquen por qué dos componentes no pueden consolidarse.
+
+**Implementado en el editor de ruta:** botón contextual y modal compacto con
+selector de política, ayudas mediante tooltip y exclusión individual por
+componente. El botón sólo aparece en productos compuestos; con política
+independiente, las exclusiones quedan visibles pero deshabilitadas.
 
 En la cotización:
 

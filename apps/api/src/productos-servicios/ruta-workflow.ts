@@ -131,7 +131,6 @@ export function validarWorkflowRuta(input: RutaWorkflow): RutaWorkflow {
     );
   }
   const codigosComponentes = new Set<string>();
-  const productosComponentes = new Set<string>();
   for (const nodo of nodos) {
     if (nodo.tipo !== 'COMPONENTE') continue;
     if (codigosComponentes.has(nodo.codigo)) {
@@ -140,12 +139,6 @@ export function validarWorkflowRuta(input: RutaWorkflow): RutaWorkflow {
       );
     }
     codigosComponentes.add(nodo.codigo);
-    if (productosComponentes.has(nodo.productoComponenteId)) {
-      throw new Error(
-        `El componente "${nodo.nombre}" está incorporado más de una vez en la ruta reusable.`,
-      );
-    }
-    productosComponentes.add(nodo.productoComponenteId);
   }
 
   const aristas = input.aristas.map((arista) => ({

@@ -15,6 +15,13 @@ import {
   type ProductoRecetaComponenteInput,
 } from "@/lib/productos-servicios-api";
 import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
   condicionalesPublicosDelComponente,
   parametrosPublicosDelComponente,
 } from "@/lib/componentes-contrato-publico";
@@ -332,6 +339,7 @@ export function ConfigurarComponenteWorkspace({
     configuracion: ConfiguracionComponenteFabricado,
     unidadComercial: string,
     politicaEjecucion: "INLINE" | "INDEPENDIENTE",
+    nombreUso: string,
   ) => void;
   embedded?: boolean;
 }) {
@@ -343,6 +351,7 @@ export function ConfigurarComponenteWorkspace({
   );
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [nombreUso, setNombreUso] = React.useState(componente.nombre);
   const [politicaEjecucion, setPoliticaEjecucion] = React.useState<
     "INLINE" | "INDEPENDIENTE"
   >(componente.politicaEjecucion ?? "INDEPENDIENTE");
@@ -472,16 +481,18 @@ export function ConfigurarComponenteWorkspace({
         </a>
       }
       primaryLabel="Aplicar configuración"
-      primaryDisabled={!formulario || loading}
+      primaryDisabled={!formulario || loading || !nombreUso.trim()}
       onPrimary={() =>
         formulario &&
         onSave(
           {
-            version: 1,
+            ...componente.configuracionJson,
+            version: componente.configuracionJson?.version ?? 1,
             bindings,
           },
           formulario.producto.unidadComercial,
           politicaEjecucion,
+          nombreUso.trim(),
         )
       }
     >
@@ -491,6 +502,22 @@ export function ConfigurarComponenteWorkspace({
       {error ? <div className={styles.error}>{error}</div> : null}
       {formulario ? (
         <>
+          <FieldGroup className={styles.identityGroup}>
+            <Field>
+              <FieldLabel htmlFor="nombre-uso-componente">
+                Nombre en esta receta
+              </FieldLabel>
+              <Input
+                id="nombre-uso-componente"
+                value={nombreUso}
+                maxLength={180}
+                onChange={(event) => setNombreUso(event.target.value)}
+              />
+              <FieldDescription>
+                Identifica esta ocurrencia sin modificar el producto original.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
           <div className={styles.contextCard}>
             <BoxesIcon />
             <div>

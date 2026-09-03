@@ -1,0 +1,126 @@
+.collapsible {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-1);
+  background: var(--surface);
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: auto;
+  min-height: 50px;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  padding: 10px 12px;
+  transition: background 140ms ease;
+  text-align: left;
+}
+
+.trigger:hover {
+  background: var(--surface-2);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--surface) 94%, var(--ps-accent));
+}
+
+.chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 140ms ease;
+}
+
+.triggerCopy,
+.itemCopy,
+.itemQuantity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.triggerCopy {
+  align-items: flex-start;
+}
+
+.triggerCopy strong,
+.itemCopy strong,
+.itemQuantity strong {
+  color: var(--ink);
+}
+
+.triggerCopy small,
+.itemCopy small,
+.itemQuantity small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.triggerTotal {
+  margin-left: auto;
+  color: var(--ps-accent);
+  font-family: var(--font-mono);
+}
+
+.content {
+  border-top: 1px solid var(--hairline);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, auto) minmax(90px, auto);
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 42px;
+}
+
+.item + .item {
+  border-top: 1px solid var(--hairline);
+}
+
+.itemQuantity {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.itemCost {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-left: 12px;
+  }
+
+  .itemQuantity {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .itemCost {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

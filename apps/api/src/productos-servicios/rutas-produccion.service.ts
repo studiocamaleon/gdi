@@ -858,7 +858,10 @@ export class RutasProduccionService {
             return {
               ...nodo,
               codigo: nodo.codigo || producto.codigo,
-              nombre: producto.nombre,
+              nombre:
+                nodo.nombre && nodo.nombre !== 'Componente fabricado'
+                  ? nodo.nombre
+                  : producto.nombre,
             };
           }
           return {

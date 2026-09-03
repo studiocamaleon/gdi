@@ -187,6 +187,27 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     expect(componentes.map((item) => item.costoTotal)).toEqual(costosAntes);
   });
 
+  it('consolida dos ocurrencias distintas del mismo producto hijo', () => {
+    const resultado = analizar([
+      componente('VINILO-FRENTE', nestingBase(), {
+        productoId: 'producto-vinilo',
+        nombre: 'Vinilo frente',
+      }),
+      componente('VINILO-LATERAL', nestingBase(), {
+        productoId: 'producto-vinilo',
+        nombre: 'Vinilo lateral',
+      }),
+    ])!;
+
+    expect(resultado.grupos).toHaveLength(1);
+    expect(
+      resultado.grupos[0].consolidado.placements.map(
+        (placement) =>
+          (placement.meta as { componenteCodigo: string }).componenteCodigo,
+      ),
+    ).toEqual(['VINILO-FRENTE', 'VINILO-LATERAL']);
+  });
+
   it('aplica un único consumo y preparación con reparto reconciliado', () => {
     const componentes = [componente('A'), componente('B')];
 
@@ -279,6 +300,94 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     expect(
       componentes.reduce((total, item) => total + item.costoTotal, 0),
     ).toBe(44);
+  });
+
+  it('conserva la merma operativa al consolidar y congela su costo por separado', () => {
+    const componentes = [componente('A'), componente('B')];
+    for (const item of componentes) {
+      const material = item.pasos?.[0].materiales?.[0];
+      if (!material) throw new Error('fixture inválido');
+      material.cantidad = 1.2;
+      material.costoTotal = 12;
+      material.mermaAdicional = {
+        porcentaje: 20,
+        cantidadTrabajo: 1,
+        cantidadMerma: 0.2,
+      };
+    }
+
+    const resultado = aplicarNestingCompuestoRectangular({
+      politica: 'CONSOLIDAR_COMPATIBLES',
+      tenantId: 'tenant-1',
+      productoPadreId: 'padre-1',
+      recetaRevisionId: 'revision-padre-1',
+      componentes,
+    })!;
+    const grupo = resultado.grupos[0];
+
+    expect(grupo.aplicacion).toMatchObject({
+      aplicado: true,
+      costoMaterialIndependiente: 24,
+      costoMaterialConsolidado: 12,
+    });
+    expect(grupo.lote?.costeoSustrato).toMatchObject({
+      totalCost: 10,
+      mermaOperativa: {
+        porcentaje: 20,
+        costoBase: 10,
+        costoMerma: 2,
+        costoTotal: 12,
+      },
+    });
+    expect(componentes.map((item) => item.pasos?.[0].materiales?.[0])).toEqual([
+      expect.objectContaining({
+        cantidad: 0.6,
+        costoTotal: 6,
+        mermaAdicional: {
+          porcentaje: 20,
+          cantidadTrabajo: 0.5,
+          cantidadMerma: 0.1,
+        },
+      }),
+      expect.objectContaining({
+        cantidad: 0.6,
+        costoTotal: 6,
+        mermaAdicional: {
+          porcentaje: 20,
+          cantidadTrabajo: 0.5,
+          cantidadMerma: 0.1,
+        },
+      }),
+    ]);
+  });
+
+  it('no mezcla en un lote pasos con distinta merma operativa', () => {
+    const componentes = [componente('A'), componente('B')];
+    componentes.forEach((item, index) => {
+      const material = item.pasos?.[0].materiales?.[0];
+      if (!material) throw new Error('fixture inválido');
+      const porcentaje = index === 0 ? 10 : 20;
+      material.mermaAdicional = {
+        porcentaje,
+        cantidadTrabajo: 1,
+        cantidadMerma: porcentaje / 100,
+      };
+    });
+
+    const resultado = analizar(componentes)!;
+
+    expect(resultado.grupos).toEqual([]);
+    expect(resultado.aplicadoACostos).toBe(false);
+    expect(resultado.exclusiones).toEqual([
+      expect.objectContaining({
+        componenteCodigo: 'A',
+        codigo: 'SIN_PAR_COMPATIBLE',
+      }),
+      expect.objectContaining({
+        componenteCodigo: 'B',
+        codigo: 'SIN_PAR_COMPATIBLE',
+      }),
+    ]);
   });
 
   it('costea y dibuja el consolidado sobre el lado largo de una placa apaisada', () => {

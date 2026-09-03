@@ -220,7 +220,7 @@ describe('materialización de componentes fabricados', () => {
       participantes: [
         {
           componenteCodigo: 'frente',
-          productoId: 'producto-frente',
+          productoId: 'producto-vinilo',
           pasoClave: 'paso-frente',
           rutaPasoId: 'impresion-frente',
           piezas: ['frente'],
@@ -232,7 +232,7 @@ describe('materialización de componentes fabricados', () => {
         },
         {
           componenteCodigo: 'dorso',
-          productoId: 'producto-dorso',
+          productoId: 'producto-vinilo',
           pasoClave: 'paso-dorso',
           rutaPasoId: 'impresion-dorso',
           piezas: ['dorso'],

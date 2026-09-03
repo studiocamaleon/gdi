@@ -370,7 +370,15 @@ export type ConfiguracionComponenteFabricado = {
   bindings: BindingParametroComponente[];
   operacionesIncorporacion?: OperacionIncorporacion[];
   pricing?: PoliticaPricingComponente;
+  nestingCompuesto?: {
+    version: 1;
+    excluido: boolean;
+    motivo?: string | null;
+  };
 };
+
+export type PoliticaNestingCompuesto =
+  "INDEPENDIENTE" | "CONSOLIDAR_COMPATIBLES";
 
 export type ModoPricingComponente =
   "HEREDAR_PADRE" | "USAR_PRODUCTO_HIJO" | "OVERRIDE";
@@ -684,8 +692,14 @@ export interface ActualizarProductoPayload {
 export async function actualizarProducto(
   id: string,
   payload: ActualizarProductoPayload,
-) {
-  return apiRequest(`/productos-servicios/productos/${id}`, {
+): Promise<{
+  updatedAt: string;
+  atributosComercialesJson: Record<string, unknown> | null;
+}> {
+  return apiRequest<{
+    updatedAt: string;
+    atributosComercialesJson: Record<string, unknown> | null;
+  }>(`/productos-servicios/productos/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
     headers: { "Content-Type": "application/json" },
@@ -1681,6 +1695,7 @@ export interface AnalisisNestingCompuestoInput {
         >;
       costeoSustrato?: {
         strategy: "simple" | "m2-exact" | "consumed-length" | "plate-segments";
+        /** Costo geométrico antes de la merma operativa. */
         totalCost: number;
         unitPrice: number;
         pricePerM2: number;
@@ -1697,6 +1712,12 @@ export interface AnalisisNestingCompuestoInput {
           segmentApplied: number | null;
           cost: number;
         }>;
+        mermaOperativa?: {
+          porcentaje: number;
+          costoBase: number;
+          costoMerma: number;
+          costoTotal: number;
+        };
       };
       costoMaterialTotal: number;
       costoPreparacionTotal: number;
@@ -1710,6 +1731,12 @@ export interface AnalisisNestingCompuestoInput {
     codigo: string;
     motivo: string;
   }>;
+}
+
+export interface MermaAdicionalMaterialInput {
+  porcentaje: number;
+  cantidadTrabajo: number;
+  cantidadMerma: number;
 }
 
 export interface CotizarRequest {
@@ -1861,6 +1888,13 @@ export interface CotizarResponse {
         };
         tiempo?: {
           totalMin: number;
+          setupMin?: number;
+          runMin?: number;
+          runTrabajoMin?: number;
+          runMermaMin?: number;
+          cleanupMin?: number;
+          tiempoFijoMin?: number;
+          mermaOperativaPct?: number;
           centroCostoId?: string | null;
           centroCostoNombre?: string | null;
           tarifaHora?: number;
@@ -1888,6 +1922,7 @@ export interface CotizarResponse {
           unidad: string;
           precioUnitario: number;
           costoTotal: number;
+          mermaAdicional?: MermaAdicionalMaterialInput;
         }>;
         nestingResult?: NestingViewerInput;
         operacionesInternas?: Array<{
@@ -2006,6 +2041,7 @@ export interface CotizarResponse {
           unidad: string;
           precioUnitario: number;
           costoTotal: number;
+          mermaAdicional?: MermaAdicionalMaterialInput;
         }>;
         componentesCodigos?: string[];
         nestingResult?: NestingViewerInput;
@@ -2061,6 +2097,13 @@ export interface CotizarResponse {
       tiempo?: {
         /** Incluye los minutos de `tiemposExtra` (la ETA los cuenta). */
         totalMin: number;
+        setupMin?: number;
+        runMin?: number;
+        runTrabajoMin?: number;
+        runMermaMin?: number;
+        cleanupMin?: number;
+        tiempoFijoMin?: number;
+        mermaOperativaPct?: number;
         centroCostoId?: string | null;
         centroCostoNombre?: string | null;
         tarifaHora: number;
@@ -2103,6 +2146,7 @@ export interface CotizarResponse {
         unidad: string;
         precioUnitario: number;
         costoTotal: number;
+        mermaAdicional?: MermaAdicionalMaterialInput;
         estrategiaCosto: string;
         modoSeleccion:
           | "HARDCODED"
@@ -2128,6 +2172,12 @@ export interface CotizarResponse {
             segmentApplied: number | null;
             cost: number;
           }>;
+        };
+        asignacionNestingCompuesto?: {
+          loteId: string;
+          costoIndependiente: number;
+          costoAsignado: number;
+          porcentajeAsignacion: number;
         };
       }>;
       cargosDirectosPaso?: Array<{

@@ -121,7 +121,7 @@ describe('Workflow de rutas de producción reutilizables', () => {
     );
   });
 
-  it('impide incorporar dos veces el mismo producto componente', () => {
+  it('permite dos ocurrencias del mismo producto con identidades distintas', () => {
     const workflow = workflowBacklight();
     const lona = workflow.nodos.find(
       (nodo) => nodo.tipo === 'COMPONENTE' && nodo.codigo === 'LONA',
@@ -131,8 +131,40 @@ describe('Workflow de rutas de producción reutilizables', () => {
     }
     lona.productoComponenteId = '11111111-1111-4111-8111-111111111111';
 
+    const validado = validarWorkflowRuta(workflow);
+    expect(
+      validado.nodos
+        .filter((nodo) => nodo.tipo === 'COMPONENTE')
+        .map((nodo) => ({
+          productoId: nodo.productoComponenteId,
+          codigo: nodo.codigo,
+        })),
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          productoId: '11111111-1111-4111-8111-111111111111',
+          codigo: 'BASTIDOR',
+        },
+        {
+          productoId: '11111111-1111-4111-8111-111111111111',
+          codigo: 'LONA',
+        },
+      ]),
+    );
+  });
+
+  it('sigue rechazando dos ocurrencias con el mismo código interno', () => {
+    const workflow = workflowBacklight();
+    const lona = workflow.nodos.find(
+      (nodo) => nodo.tipo === 'COMPONENTE' && nodo.codigo === 'LONA',
+    );
+    if (!lona || lona.tipo !== 'COMPONENTE') {
+      throw new Error('Fixture de componente inválido');
+    }
+    lona.codigo = 'BASTIDOR';
+
     expect(() => validarWorkflowRuta(workflow)).toThrow(
-      'está incorporado más de una vez',
+      'está repetido en la ruta',
     );
   });
 

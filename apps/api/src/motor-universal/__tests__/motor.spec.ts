@@ -435,7 +435,9 @@ describe('MotorUniversalService — smoke tests', () => {
     const cmyk = consumibles.filter(
       (m) => m.materialSku !== 'TINTA-UV-MIMAKI-W',
     );
-    expect(cmyk.every((m) => m.cantidad > 10)).toBe(true);
+    // 500 × 300 mm = 0,15 m² impresos. Cada canal consume 8 ml/m²:
+    // la tinta sigue el área de las piezas, no la superficie vacía del pliego.
+    expect(cmyk.every((m) => Math.abs(m.cantidad - 1.2) < 1e-6)).toBe(true);
   });
 
   it('Talonario duplicado tipoCopia=2: capa 1 + capa 2 se activan, capa 3 NO (CONDICIONAL JsonLogic)', async () => {
