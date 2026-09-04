@@ -3,6 +3,7 @@
 # dependencies
 /node_modules
 /apps/api/node_modules
+/apps/api/.venv-opennest/
 /apps/marketing/node_modules
 /.pnp
 .pnp.*

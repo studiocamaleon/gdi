@@ -256,7 +256,7 @@ const analizar = (componentes: ComponenteFabricadoCosteado[]) =>
   });
 
 describe('F4.4.1 nesting compuesto en modo sombra', () => {
-  it('mantiene INDEPENDIENTE por defecto y exige opt-in versionado', () => {
+  it('mantiene INDEPENDIENTE por defecto y exige opt-in versionado', async () => {
     expect(leerPoliticaNestingCompuesto(null)).toBe('INDEPENDIENTE');
     expect(
       leerPoliticaNestingCompuesto({
@@ -264,7 +264,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       }),
     ).toBe('CONSOLIDAR_COMPATIBLES');
     expect(
-      analizarNestingCompuestoShadow({
+      await analizarNestingCompuestoShadow({
         politica: 'INDEPENDIENTE',
         tenantId: 'tenant-1',
         productoPadreId: 'padre-1',
@@ -274,11 +274,11 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ).toBeUndefined();
   });
 
-  it('compara dos demandas compatibles sin modificar sus costos', () => {
+  it('compara dos demandas compatibles sin modificar sus costos', async () => {
     const componentes = [componente('A'), componente('B')];
     const costosAntes = componentes.map((item) => item.costoTotal);
 
-    const resultado = analizar(componentes)!;
+    const resultado = (await analizar(componentes))!;
 
     expect(resultado).toMatchObject({
       version: 1,
@@ -313,8 +313,8 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     expect(componentes.map((item) => item.costoTotal)).toEqual(costosAntes);
   });
 
-  it('consolida dos ocurrencias distintas del mismo producto hijo', () => {
-    const resultado = analizar([
+  it('consolida dos ocurrencias distintas del mismo producto hijo', async () => {
+    const resultado = (await analizar([
       componente('VINILO-FRENTE', nestingBase(), {
         productoId: 'producto-vinilo',
         nombre: 'Vinilo frente',
@@ -323,7 +323,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
         productoId: 'producto-vinilo',
         nombre: 'Vinilo lateral',
       }),
-    ])!;
+    ]))!;
 
     expect(resultado.grupos).toHaveLength(1);
     expect(
@@ -334,19 +334,23 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ).toEqual(['VINILO-FRENTE', 'VINILO-LATERAL']);
   });
 
-  it('consolida contornos vectoriales compatibles conservando su propietario', () => {
+  it('consolida contornos vectoriales compatibles conservando su propietario', async () => {
     const componentes = [
       componente('VECTOR-A', nestingIrregular('triangulo', 'VECTOR-A')),
       componente('VECTOR-B', nestingIrregular('triangulo', 'VECTOR-B')),
     ];
 
-    const resultado = aplicarNestingCompuestoRectangular({
+    const resolverNestingIrregular = jest.fn(
+      async (problema) => resolverProblemaNestingIrregular(problema),
+    );
+    const resultado = (await aplicarNestingCompuestoRectangular({
       politica: 'CONSOLIDAR_COMPATIBLES',
       tenantId: 'tenant-1',
       productoPadreId: 'padre-1',
       recetaRevisionId: 'revision-padre-1',
       componentes,
-    })!;
+      resolverNestingIrregular,
+    }))!;
     const grupo = resultado.grupos[0];
 
     expect(grupo).toMatchObject({
@@ -372,17 +376,18 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
           ).propietario.componenteCodigo,
       ),
     ).toEqual(expect.arrayContaining(['VECTOR-A', 'VECTOR-B']));
+    expect(resolverNestingIrregular).toHaveBeenCalledTimes(1);
   });
 
-  it('no consolida una composición vectorial que debe conservar su negativo', () => {
+  it('no consolida una composición vectorial que debe conservar su negativo', async () => {
     const primero = nestingIrregular('pieza-a', 'VECTOR-A');
     const segundo = nestingIrregular('pieza-b', 'VECTOR-B');
     primero.estrategiaDisposicion = 'composicion_original';
 
-    const resultado = analizar([
+    const resultado = (await analizar([
       componente('VECTOR-A', primero),
       componente('VECTOR-B', segundo),
-    ])!;
+    ]))!;
 
     expect(resultado.grupos).toHaveLength(0);
     expect(resultado.exclusiones).toEqual(
@@ -396,14 +401,14 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     );
   });
 
-  it('no separa la impresión de un corte vectorial registrado', () => {
+  it('no separa la impresión de un corte vectorial registrado', async () => {
     const registrado = nestingBase({
       layoutVinculadoGeometriaVectorial: true,
     });
-    const resultado = analizar([
+    const resultado = (await analizar([
       componente('IMPRESO-A', registrado),
       componente('IMPRESO-B'),
-    ])!;
+    ]))!;
 
     expect(resultado.grupos).toHaveLength(0);
     expect(resultado.exclusiones).toEqual(
@@ -417,16 +422,16 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     );
   });
 
-  it('aplica un único consumo y preparación con reparto reconciliado', () => {
+  it('aplica un único consumo y preparación con reparto reconciliado', async () => {
     const componentes = [componente('A'), componente('B')];
 
-    const resultado = aplicarNestingCompuestoRectangular({
+    const resultado = (await aplicarNestingCompuestoRectangular({
       politica: 'CONSOLIDAR_COMPATIBLES',
       tenantId: 'tenant-1',
       productoPadreId: 'padre-1',
       recetaRevisionId: 'revision-padre-1',
       componentes,
-    })!;
+    }))!;
 
     expect(resultado).toMatchObject({
       modo: 'APLICADO',
@@ -511,7 +516,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ).toBe(44);
   });
 
-  it('conserva la merma operativa al consolidar y congela su costo por separado', () => {
+  it('conserva la merma operativa al consolidar y congela su costo por separado', async () => {
     const componentes = [componente('A'), componente('B')];
     for (const item of componentes) {
       const material = item.pasos?.[0].materiales?.[0];
@@ -525,13 +530,13 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       };
     }
 
-    const resultado = aplicarNestingCompuestoRectangular({
+    const resultado = (await aplicarNestingCompuestoRectangular({
       politica: 'CONSOLIDAR_COMPATIBLES',
       tenantId: 'tenant-1',
       productoPadreId: 'padre-1',
       recetaRevisionId: 'revision-padre-1',
       componentes,
-    })!;
+    }))!;
     const grupo = resultado.grupos[0];
 
     expect(grupo.aplicacion).toMatchObject({
@@ -570,7 +575,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ]);
   });
 
-  it('no mezcla en un lote pasos con distinta merma operativa', () => {
+  it('no mezcla en un lote pasos con distinta merma operativa', async () => {
     const componentes = [componente('A'), componente('B')];
     componentes.forEach((item, index) => {
       const material = item.pasos?.[0].materiales?.[0];
@@ -583,7 +588,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       };
     });
 
-    const resultado = analizar(componentes)!;
+    const resultado = (await analizar(componentes))!;
 
     expect(resultado.grupos).toEqual([]);
     expect(resultado.aplicadoACostos).toBe(false);
@@ -599,7 +604,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ]);
   });
 
-  it('costea y dibuja el consolidado sobre el lado largo de una placa apaisada', () => {
+  it('costea y dibuja el consolidado sobre el lado largo de una placa apaisada', async () => {
     const nestingPlaca = (pieceId: string, anchoMm: number, altoMm: number) =>
       nestingBase({
         aprovechamientoPct: 0,
@@ -653,13 +658,13 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       };
     }
 
-    const resultado = aplicarNestingCompuestoRectangular({
+    const resultado = (await aplicarNestingCompuestoRectangular({
       politica: 'CONSOLIDAR_COMPATIBLES',
       tenantId: 'tenant-1',
       productoPadreId: 'padre-1',
       recetaRevisionId: 'revision-padre-1',
       componentes,
-    })!;
+    }))!;
     const grupo = resultado.grupos[0];
 
     expect(grupo.aplicacion).toMatchObject({
@@ -687,7 +692,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     });
   });
 
-  it('conserva el cálculo independiente si la alternativa empeora consumo o costo', () => {
+  it('conserva el cálculo independiente si la alternativa empeora consumo o costo', async () => {
     const demandaExigente = nestingBase({
       demandaRectangular: [
         { pieceId: 'pieza', cantidad: 3, anchoMm: 60, altoMm: 40 },
@@ -705,13 +710,13 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       ),
     ];
 
-    const resultado = aplicarNestingCompuestoRectangular({
+    const resultado = (await aplicarNestingCompuestoRectangular({
       politica: 'CONSOLIDAR_COMPATIBLES',
       tenantId: 'tenant-1',
       productoPadreId: 'padre-1',
       recetaRevisionId: 'revision-padre-1',
       componentes,
-    })!;
+    }))!;
 
     expect(resultado).toMatchObject({
       modo: 'APLICADO',
@@ -731,7 +736,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     expect(componentes.map((item) => item.costoTotal)).toEqual([30, 30]);
   });
 
-  it('separa el mismo material ante cualquier diferencia productiva crítica', () => {
+  it('separa el mismo material ante cualquier diferencia productiva crítica', async () => {
     const incompatibles: NestingEjecutado[] = [
       nestingBase({ maquina: { id: 'maquina-2', nombre: 'Otra mesa' } }),
       nestingBase({ perfil: { id: 'perfil-2', nombre: 'Alta calidad' } }),
@@ -742,10 +747,10 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ];
 
     for (const nestingIncompatible of incompatibles) {
-      const resultado = analizar([
+      const resultado = (await analizar([
         componente('A'),
         componente('B', nestingIncompatible),
-      ])!;
+      ]))!;
 
       expect(resultado.grupos).toHaveLength(0);
       expect(resultado.exclusiones).toEqual([
@@ -761,7 +766,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     }
   });
 
-  it('respeta la exclusión explícita de una relación BOM', () => {
+  it('respeta la exclusión explícita de una relación BOM', async () => {
     expect(
       leerExclusionNestingComponente({
         nestingCompuesto: {
@@ -772,7 +777,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       }),
     ).toEqual({ excluido: true, motivo: 'Se imprime en otro turno' });
 
-    const resultado = analizar([
+    const resultado = (await analizar([
       componente('A'),
       componente('B', nestingBase(), {
         nestingCompartido: {
@@ -780,7 +785,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
           motivo: 'Se imprime en otro turno',
         },
       }),
-    ])!;
+    ]))!;
 
     expect(resultado.grupos).toHaveLength(0);
     expect(resultado.exclusiones).toEqual([
@@ -796,7 +801,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ]);
   });
 
-  it('consolida rollos y congela exactamente el largo que costea', () => {
+  it('consolida rollos y congela exactamente el largo que costea', async () => {
     const componentes = [
       componente('VINILO-A', nestingRollo('frente', 500, 300)),
       componente('VINILO-B', nestingRollo('lateral', 300, 300)),
@@ -820,13 +825,13 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       item.pasos![0].costoTotal = 23;
     }
 
-    const resultado = aplicarNestingCompuestoRectangular({
+    const resultado = (await aplicarNestingCompuestoRectangular({
       politica: 'CONSOLIDAR_COMPATIBLES',
       tenantId: 'tenant-1',
       productoPadreId: 'padre-1',
       recetaRevisionId: 'revision-padre-1',
       componentes,
-    })!;
+    }))!;
     const grupo = resultado.grupos[0];
 
     expect(grupo).toMatchObject({
@@ -867,7 +872,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ).toEqual(expect.arrayContaining(['VINILO-A', 'VINILO-B']));
   });
 
-  it('reevalúa los anchos automáticos y elige el menor costo del lote completo', () => {
+  it('reevalúa los anchos automáticos y elige el menor costo del lote completo', async () => {
     const componentes = [
       componente('VINILO-A', nestingRollo('frente', 600, 300)),
       componente('VINILO-B', nestingRollo('lateral', 400, 300)),
@@ -923,13 +928,13 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       item.pasos![0].costoTotal = 22.4;
     }
 
-    const resultado = aplicarNestingCompuestoRectangular({
+    const resultado = (await aplicarNestingCompuestoRectangular({
       politica: 'CONSOLIDAR_COMPATIBLES',
       tenantId: 'tenant-1',
       productoPadreId: 'padre-1',
       recetaRevisionId: 'revision-padre-1',
       componentes,
-    })!;
+    }))!;
     const grupo = resultado.grupos[0];
 
     // Individualmente gana 800 mm ($2,40 por pieza). En conjunto, 1000 mm
@@ -959,7 +964,7 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
     ).toEqual(['rollo-1000', 'rollo-1000']);
   });
 
-  it('no consolida automáticamente un panelizado manual', () => {
+  it('no consolida automáticamente un panelizado manual', async () => {
     const manual = nestingRollo('frente', 600, 300);
     manual.visualConfig!.panelizado = {
       enabled: true,
@@ -971,10 +976,10 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
       widthInterpretation: 'total',
       panelCount: 2,
     };
-    const resultado = analizar([
+    const resultado = (await analizar([
       componente('VINILO-A', manual),
       componente('VINILO-B', nestingRollo('lateral', 400, 300)),
-    ])!;
+    ]))!;
 
     expect(resultado.grupos).toEqual([]);
     expect(resultado.exclusiones).toEqual(

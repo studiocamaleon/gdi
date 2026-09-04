@@ -5,6 +5,7 @@ import {
   resolverFormatoFisicoMaterial,
   runNestingForPaso,
 } from '../nesting-dispatcher';
+import { resolverProblemaNestingIrregular } from '../geometria-vectorial/contrato-nesting';
 
 describe('formato físico del material', () => {
   it('reconoce un rollo especial por metadata sin confundir su subfamilia ambigua', () => {
@@ -477,6 +478,9 @@ describe('runNestingForPaso geometría vectorial', () => {
   it.each(['cnc', 'corte_laser', 'corte_hilo_caliente'])(
     'convierte el nesting irregular de %s en placas costeables por el motor',
     async (familiaCodigo) => {
+      const resolveIrregularNesting = jest.fn(async ({ problema }) =>
+        resolverProblemaNestingIrregular(problema),
+      );
       const paso = {
         rutaPasoId: 'rp-cnc',
         rutaPasoOrden: 1,
@@ -500,6 +504,13 @@ describe('runNestingForPaso geometría vectorial', () => {
         paso as never,
         {
           cantidad: 2,
+          disenoVectorialFuente: {
+            schemaVersion: 1,
+            nombreArchivo: 'triangulo.svg',
+            svg: '<svg viewBox="0 0 50 50" />',
+            anchoFinalMm: 50,
+            altoFinalMm: 50,
+          },
           geometriaVectorial: {
             schemaVersion: 1,
             anchoMm: 50,
@@ -538,12 +549,14 @@ describe('runNestingForPaso geometría vectorial', () => {
             margenNoUtilizableMm: 5,
           },
         },
+        { resolveIrregularNesting },
       );
 
       expect(result?.algorithm).toBe('irregular-2d-bottom-left-v1');
       expect(result?.cantidadCalculada).toBe(1);
       expect(result?.unidad).toBe('pliegos');
       expect(result?.placements).toHaveLength(2);
+      expect(resolveIrregularNesting).toHaveBeenCalledTimes(1);
     },
   );
 
@@ -633,6 +646,151 @@ describe('runNestingForPaso geometría vectorial', () => {
       }),
     ]);
     expect(result?.placements).toHaveLength(1);
+  });
+
+  it('mantiene la placa completa y limita los cortes a la ventana accesible cuando sobresale en Y', async () => {
+    const paso = {
+      rutaPasoId: 'rp-laser-placa-sobresaliente',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'corte_laser',
+      configPasoId: 'cp-laser-placa-sobresaliente',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        usarDisenoVectorial: true,
+        nestingConfig: { allowRotation: true, separationHMm: 0 },
+      },
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'laser-abierto-y',
+        codigo: 'LASER-ABIERTO-Y',
+        nombre: 'Láser abierto en Y',
+        plantilla: 'CORTADORA_LASER',
+        anchoUtil: 1_300,
+        largoUtil: 1_000,
+        parametrosTecnicosJson: {
+          tipoLaser: 'CO2',
+          placaSobresalientePermitida: true,
+          ejeSobresalientePlaca: 'Y',
+        },
+        consumibles: [],
+        componentesDesgaste: [],
+      },
+    };
+    const result = await runNestingForPaso(
+      paso as never,
+      {
+        cantidad: 1,
+        geometriaVectorial: {
+          schemaVersion: 1,
+          anchoMm: 300,
+          altoMm: 300,
+          areaTotalMm2: 90_000,
+          perimetroTotalMm: 1_200,
+          hashFuente: 'placa-sobresaliente-y',
+          piezas: [
+            {
+              id: 'pieza-acrilico',
+              anchoMm: 300,
+              altoMm: 300,
+              areaMm2: 90_000,
+              perimetroMm: 1_200,
+              contornos: [
+                {
+                  esHueco: false,
+                  puntos: [
+                    { x: 0, y: 0 },
+                    { x: 300, y: 0 },
+                    { x: 300, y: 300 },
+                    { x: 0, y: 300 },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'acrilico-1220',
+        subfamilia: 'SUSTRATO_RIGIDO',
+        precioReferencia: 1_000,
+        atributosVarianteJson: {
+          anchoMm: 1_220,
+          altoMm: 1_220,
+          espesorMm: 2,
+        },
+      },
+    );
+
+    expect(result?.substrates).toEqual([
+      expect.objectContaining({
+        kind: 'sheet',
+        widthMm: 1_220,
+        heightMm: 1_220,
+      }),
+    ]);
+    expect(result?.visualConfig?.printableArea).toEqual({
+      xMm: 0,
+      yMm: 0,
+      widthMm: 1_220,
+      heightMm: 1_000,
+    });
+    expect(result?.visualConfig?.manejoPlaca).toEqual(
+      expect.objectContaining({ eje: 'y', excedenteMm: 220 }),
+    );
+    expect(
+      result?.placements.every(
+        (placement) => placement.yMm + placement.heightMm <= 1_000,
+      ),
+    ).toBe(true);
+    expect(result?.metricasRaw?.areaTotalMm2).toBe(1_220 * 1_220);
+  });
+
+  it('rechaza la misma placa mayor que la cama si la máquina no declara un eje abierto', async () => {
+    const paso = {
+      rutaPasoId: 'rp-laser-cerrado',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'corte_laser',
+      configPasoId: 'cp-laser-cerrado',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: { usarDisenoVectorial: true },
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'laser-cerrado',
+        codigo: 'LASER-CERRADO',
+        nombre: 'Láser cerrado',
+        plantilla: 'CORTADORA_LASER',
+        anchoUtil: 1_300,
+        largoUtil: 1_000,
+        parametrosTecnicosJson: { tipoLaser: 'CO2' },
+        consumibles: [],
+        componentesDesgaste: [],
+      },
+    };
+
+    await expect(
+      runNestingForPaso(
+        paso as never,
+        { cantidad: 1 },
+        {
+          id: 'acrilico-1220',
+          subfamilia: 'SUSTRATO_RIGIDO',
+          precioReferencia: 1_000,
+          atributosVarianteJson: { anchoMm: 1_220, altoMm: 1_220 },
+        },
+      ),
+    ).rejects.toThrow('supera el área útil de la máquina');
   });
 
   it('conserva la orientación impresa aunque la placa deba girarse al cargarla en el láser', async () => {

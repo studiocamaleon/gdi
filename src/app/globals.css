@@ -247,7 +247,9 @@
 
   .orden-form {
     display: grid;
-    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    grid-template-columns:
+      minmax(250px, 1.4fr) 64px minmax(190px, 1fr) minmax(180px, 1fr)
+      minmax(250px, 1.15fr);
     gap: 0;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -284,12 +286,18 @@
   }
 
   @media (max-width: 1100px) {
-    .ofield:nth-child(2) {
+    .ofield:nth-child(even) {
       border-right: none;
     }
 
-    .ofield:nth-child(-n + 2) {
+    .ofield:nth-child(-n + 4) {
       border-bottom: 1px solid var(--border);
+    }
+  }
+
+  @media (max-width: 700px) {
+    .ofield {
+      border-right: none;
     }
   }
 
@@ -357,6 +365,142 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .ofield--campana {
+    align-items: center;
+    justify-content: center;
+    padding-inline: 10px;
+  }
+
+  .campana-trigger {
+    position: relative;
+    display: inline-flex;
+    width: 38px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+    background: var(--surface-2);
+    color: var(--muted);
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease,
+      color 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .campana-trigger:hover {
+    border-color: color-mix(in srgb, var(--signal) 45%, var(--border));
+    background: var(--surface);
+    color: var(--ink);
+    transform: translateY(-1px);
+  }
+
+  .campana-trigger[data-active="true"] {
+    border-color: color-mix(in srgb, var(--signal) 40%, var(--border));
+    background: color-mix(in srgb, var(--signal) 8%, var(--surface));
+    color: var(--signal);
+  }
+
+  .campana-trigger:disabled,
+  .campana-trigger[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.45;
+    transform: none;
+  }
+
+  .campana-trigger svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .campana-indicator {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 6px;
+    height: 6px;
+    border: 1.5px solid var(--surface);
+    border-radius: 999px;
+    background: var(--signal);
+  }
+
+  .campana-selector-popover {
+    width: min(330px, calc(100vw - 24px));
+    gap: 14px;
+    padding: 16px;
+    border-radius: var(--r-3);
+  }
+
+  .campana-selector-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .campana-selector-heading > svg {
+    width: 18px;
+    height: 18px;
+    color: var(--signal);
+  }
+
+  .campana-selector-heading > div {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .campana-selector-heading strong {
+    font-size: 13px;
+  }
+
+  .campana-selector-heading span,
+  .campana-selector-field > span {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .campana-selector-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .campana-selector-field select {
+    width: 100%;
+    height: 38px;
+    padding: 0 34px 0 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+    outline: none;
+    background:
+      linear-gradient(45deg, transparent 50%, var(--muted) 50%)
+        calc(100% - 16px) 16px / 5px 5px no-repeat,
+      linear-gradient(135deg, var(--muted) 50%, transparent 50%)
+        calc(100% - 11px) 16px / 5px 5px no-repeat,
+      var(--surface-2);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    appearance: none;
+  }
+
+  .campana-selector-field select:focus {
+    border-color: color-mix(in srgb, var(--signal) 55%, var(--border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 10%, transparent);
+  }
+
+  @media (max-width: 1100px) {
+    .ofield--campana {
+      align-items: stretch;
+    }
+
+    .campana-trigger {
+      width: 100%;
+    }
   }
 
   .cliente-combobox {

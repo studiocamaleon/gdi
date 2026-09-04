@@ -95,6 +95,8 @@ export interface JobContext {
     anchoFinalMm: number;
     altoFinalMm?: number;
     configuracionCapas?: import('./geometria-vectorial/tipos').ConfiguracionCapasVectoriales;
+    formatoOrigen?: 'SVG' | 'DXF';
+    unidadOrigen?: string | null;
   };
   /** Clave opaca del análisis previo; el servidor verifica hash y parámetros. */
   disenoVectorialCacheKey?: string;
@@ -1045,6 +1047,23 @@ export interface NestingVisualConfig {
     yMm: number;
     widthMm: number;
     heightMm: number;
+  };
+  /**
+   * Instrucción física para una placa mayor que la cama. `workArea` es la
+   * única ventana donde puede haber cortes en esta carga; el sustrato del
+   * resultado sigue representando la placa completa comprada.
+   */
+  manejoPlaca?: {
+    modo: 'SOBRESALIENTE';
+    eje: 'x' | 'y';
+    excedenteMm: number;
+    workArea: {
+      xMm: number;
+      yMm: number;
+      widthMm: number;
+      heightMm: number;
+    };
+    mensaje: string;
   };
   panelizado?: {
     enabled: boolean;

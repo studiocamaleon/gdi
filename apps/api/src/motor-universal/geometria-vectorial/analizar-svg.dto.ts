@@ -118,6 +118,20 @@ export class MedirSvgFabricacionDto {
   nombreArchivo!: string;
 }
 
+export class NormalizarFuenteVectorialDto {
+  @IsString()
+  @MaxLength(524_288)
+  contenido!: string;
+
+  @IsString()
+  @MaxLength(255)
+  nombreArchivo!: string;
+
+  @IsOptional()
+  @IsIn(['SVG', 'DXF'])
+  formato?: 'SVG' | 'DXF';
+}
+
 export class AnalizarSvgFabricacionDto {
   @IsString()
   @MaxLength(524_288)
@@ -126,6 +140,12 @@ export class AnalizarSvgFabricacionDto {
   @IsString()
   @MaxLength(255)
   nombreArchivo!: string;
+
+  /** Scope estable de la pantalla: un nuevo cálculo invalida el anterior. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  claveSolicitud?: string;
 
   @IsNumber()
   @Min(1)

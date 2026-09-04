@@ -695,9 +695,12 @@ function candidatoDesdePaso(args: {
   };
 }
 
-function consolidarParticipantes(
+async function consolidarParticipantes(
   participantes: Candidato[],
-): ResultadoConsolidado | null {
+  resolverNestingIrregular?: (
+    problema: ProblemaNesting,
+  ) => Promise<SolucionNesting>,
+): Promise<ResultadoConsolidado | null> {
   const base = participantes[0];
   if (
     !base ||
@@ -731,23 +734,24 @@ function consolidarParticipantes(
       const configuracion = base.configuracionIrregular;
       if (!configuracion || demandas.length === 0) return null;
       try {
-        const solucion = resolverProblemaNestingIrregular(
-          crearProblemaNestingIrregular({
-            demandas,
-            anchoPlacaMm: base.sustrato.widthMm,
-            altoPlacaMm: base.sustrato.heightMm,
-            margenMm: Math.max(
-              base.sustrato.margins.leftMm,
-              base.sustrato.margins.rightMm,
-              base.sustrato.margins.topMm,
-              base.sustrato.margins.bottomMm,
-            ),
-            separacionMm: Math.max(base.separationHMm, base.separationVMm),
-            permitirRotacion: base.allowRotation,
-            permitirSegmentacion: configuracion.permitirSegmentacion,
-            configuracionEncastres: configuracion.configuracionEncastres,
-          }),
-        );
+        const problema = crearProblemaNestingIrregular({
+          demandas,
+          anchoPlacaMm: base.sustrato.widthMm,
+          altoPlacaMm: base.sustrato.heightMm,
+          margenMm: Math.max(
+            base.sustrato.margins.leftMm,
+            base.sustrato.margins.rightMm,
+            base.sustrato.margins.topMm,
+            base.sustrato.margins.bottomMm,
+          ),
+          separacionMm: Math.max(base.separationHMm, base.separationVMm),
+          permitirRotacion: base.allowRotation,
+          permitirSegmentacion: configuracion.permitirSegmentacion,
+          configuracionEncastres: configuracion.configuracionEncastres,
+        });
+        const solucion = resolverNestingIrregular
+          ? await resolverNestingIrregular(problema)
+          : resolverProblemaNestingIrregular(problema);
         const porId = new Map(
           demandas.map((demanda) => [demanda.id, demanda] as const),
         );
@@ -1535,14 +1539,17 @@ function aplicarGrupoConsolidado(args: {
   };
 }
 
-export function analizarNestingCompuestoShadow(args: {
+export async function analizarNestingCompuestoShadow(args: {
   politica: PoliticaNestingCompuesto;
   tenantId: string;
   productoPadreId: string;
   recetaRevisionId: string;
   componentes: ComponenteFabricadoCosteado[];
   aplicarCostos?: boolean;
-}): AnalisisNestingCompuestoShadow | undefined {
+  resolverNestingIrregular?: (
+    problema: ProblemaNesting,
+  ) => Promise<SolucionNesting>;
+}): Promise<AnalisisNestingCompuestoShadow | undefined> {
   if (args.politica !== 'CONSOLIDAR_COMPATIBLES') return undefined;
 
   const candidatos: Candidato[] = [];
@@ -1584,9 +1591,29 @@ export function analizarNestingCompuestoShadow(args: {
   }
 
   const grupos: AnalisisNestingCompuestoShadow['grupos'] = [];
-  for (const [firma, participantes] of [...porFirma.entries()].sort(
-    ([a], [b]) => a.localeCompare(b),
-  )) {
+  const gruposOrdenados = [...porFirma.entries()].sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  // Las firmas son disjuntas: ningún candidato aparece en dos grupos. Se
+  // pueden resolver simultáneamente y la cola decidirá cuánto paralelismo hay
+  // según la capacidad real disponible.
+  const consolidadosPorFirma = new Map(
+    await Promise.all(
+      gruposOrdenados
+        .filter(([, participantes]) => participantes.length >= 2)
+        .map(
+          async ([firma, participantes]) =>
+            [
+              firma,
+              await consolidarParticipantes(
+                participantes,
+                args.resolverNestingIrregular,
+              ),
+            ] as const,
+        ),
+    ),
+  );
+  for (const [firma, participantes] of gruposOrdenados) {
     if (participantes.length < 2) {
       const unico = participantes[0];
       exclusiones.push({
@@ -1600,7 +1627,7 @@ export function analizarNestingCompuestoShadow(args: {
     }
 
     const base = participantes[0];
-    const consolidado = consolidarParticipantes(participantes);
+    const consolidado = consolidadosPorFirma.get(firma);
     if (!consolidado) {
       for (const participante of participantes) {
         exclusiones.push({
@@ -1729,13 +1756,16 @@ export function analizarNestingCompuestoShadow(args: {
   };
 }
 
-export function aplicarNestingCompuesto(args: {
+export async function aplicarNestingCompuesto(args: {
   politica: PoliticaNestingCompuesto;
   tenantId: string;
   productoPadreId: string;
   recetaRevisionId: string;
   componentes: ComponenteFabricadoCosteado[];
-}): AnalisisNestingCompuestoShadow | undefined {
+  resolverNestingIrregular?: (
+    problema: ProblemaNesting,
+  ) => Promise<SolucionNesting>;
+}): Promise<AnalisisNestingCompuestoShadow | undefined> {
   return analizarNestingCompuestoShadow({ ...args, aplicarCostos: true });
 }
 

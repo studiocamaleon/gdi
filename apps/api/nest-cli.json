@@ -8,6 +8,10 @@
       {
         "include": "**/*.ttf",
         "outDir": "dist/src"
+      },
+      {
+        "include": "workers/geometria/python/**/*.py",
+        "outDir": "dist/src"
       }
     ],
     "watchAssets": true

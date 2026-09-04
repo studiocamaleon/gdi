@@ -1,21 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { ShapesIcon } from "lucide-react";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+import { FileCheck2Icon, FileUpIcon, ShapesIcon } from "lucide-react";
 import {
   escalarGeometriaProporcional,
   obtenerRelacionAspectoSvg,
   type ConfiguracionGeometriasComerciales,
   type EjeEscalaVectorial,
 } from "@/lib/producto-geometrias";
-import { medirSvgFabricacion } from "@/lib/productos-servicios-api";
+import {
+  medirSvgFabricacion,
+  normalizarFuenteVectorial,
+  type FormatoFuenteVectorial,
+} from "@/lib/productos-servicios-api";
 import styles from "./geometrias-vectoriales-cotizacion.module.css";
 
 export type FuenteVectorialCotizada = {
@@ -26,7 +23,110 @@ export type FuenteVectorialCotizada = {
   altoFinalMm?: number;
   relacionAltoAncho?: number;
   configuracionCapas?: unknown;
+  formatoOrigen?: FormatoFuenteVectorial;
+  unidadOrigen?: string | null;
 };
+
+export function MarcoGeometriaGrafoprint({
+  titulo = "Geometría del producto",
+  descripcion,
+  formato = "SVG / DXF",
+  children,
+}: {
+  titulo?: string;
+  descripcion: string;
+  formato?: string | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={styles.section}>
+      <header className={styles.sectionHeader}>
+        <span className={styles.headerIcon} aria-hidden="true">
+          <ShapesIcon />
+        </span>
+        <div className={styles.headerCopy}>
+          <span className={styles.eyebrow}>GrafoNest · Entrada vectorial</span>
+          <strong>{titulo}</strong>
+          <span>{descripcion}</span>
+        </div>
+        {formato ? <span className={styles.format}>{formato}</span> : null}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+export function ControlArchivoVectorial({
+  etiqueta = "Archivo de producción",
+  nombreArchivo,
+  formatoOrigen,
+  procesando = false,
+  disabled = false,
+  required = false,
+  onSelect,
+}: {
+  etiqueta?: string;
+  nombreArchivo?: string | null;
+  formatoOrigen?: FormatoFuenteVectorial | null;
+  procesando?: boolean;
+  disabled?: boolean;
+  required?: boolean;
+  onSelect: (file: File) => void | Promise<void>;
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const inputId = React.useId();
+  const cargado = Boolean(nombreArchivo);
+
+  return (
+    <div
+      className={styles.fileControl}
+      data-loaded={cargado}
+      data-disabled={disabled}
+    >
+      <input
+        ref={inputRef}
+        id={inputId}
+        type="file"
+        accept=".svg,.dxf,image/svg+xml,image/vnd.dxf,application/dxf"
+        className={styles.fileInput}
+        aria-label={`Subir ${etiqueta}`}
+        required={required && !cargado}
+        disabled={disabled}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void onSelect(file);
+          event.target.value = "";
+        }}
+      />
+      <span className={styles.fileGlyph} aria-hidden="true">
+        {cargado ? <FileCheck2Icon /> : <FileUpIcon />}
+      </span>
+      <div className={styles.fileCopy}>
+        <span className={styles.fileLabel}>{etiqueta}</span>
+        <strong title={nombreArchivo ?? undefined}>
+          {nombreArchivo ?? "SVG o DXF listo para producción"}
+        </strong>
+        <small>
+          {procesando
+            ? "Analizando contornos…"
+            : cargado
+              ? `${formatoOrigen ?? "VECTOR"} preparado para GrafoNest`
+              : "Textos convertidos a curvas · escala proporcional"}
+        </small>
+      </div>
+      <button
+        type="button"
+        className={styles.fileAction}
+        data-cotizacion-action="cargar-geometria"
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+      >
+        <FileUpIcon aria-hidden="true" />
+        {cargado ? "Reemplazar" : "Seleccionar archivo"}
+      </button>
+    </div>
+  );
+}
 
 function longitudSvgMm(value: string | null): number | null {
   if (!value) return null;
@@ -156,17 +256,10 @@ export function GeometriasVectorialesCotizacion({
   if (!fuentes.length) return null;
 
   return (
-    <section className={styles.section}>
-      <header>
-        <ShapesIcon />
-        <div>
-          <strong>Geometrías del producto</strong>
-          <span>
-            Estos diseños pueden ser compartidos por varios componentes sin
-            duplicar el archivo.
-          </span>
-        </div>
-      </header>
+    <MarcoGeometriaGrafoprint
+      descripcion="Cargá los vectores que compartirán los componentes, sin duplicar archivos."
+      formato="SVG / DXF"
+    >
       <div className={styles.sources}>
         {fuentes.map((fuente) => {
           const value = values[fuente.id];
@@ -195,34 +288,45 @@ export function GeometriasVectorialesCotizacion({
                   <span className={styles.required}>Obligatoria</span>
                 ) : null}
               </div>
-              <Input
-                type="file"
-                accept=".svg,image/svg+xml"
-                aria-label={`Subir ${fuente.nombre}`}
+              <ControlArchivoVectorial
+                etiqueta="Archivo de producción"
+                nombreArchivo={value?.nombreArchivo}
+                formatoOrigen={value?.formatoOrigen}
                 required={fuente.requerida && !value}
+                procesando={procesando[fuente.id] === true}
                 disabled={procesando[fuente.id] === true}
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-                  const svg = await file.text();
+                onSelect={async (file) => {
+                  const contenido = await file.text();
                   setProcesando((current) => ({
                     ...current,
                     [fuente.id]: true,
                   }));
                   setErrores((current) => ({ ...current, [fuente.id]: "" }));
                   try {
-                    const medicion = await medirSvgFabricacion({
-                      svg,
+                    const normalizada = await normalizarFuenteVectorial({
+                      contenido,
                       nombreArchivo: file.name,
                     });
+                    const medidas =
+                      normalizada.formatoOrigen === "SVG"
+                        ? medidasInicialesSvg(
+                            normalizada.svg,
+                            normalizada.relacionAltoAncho,
+                          )
+                        : {
+                            anchoFinalMm: normalizada.anchoSugeridoMm,
+                            altoFinalMm: normalizada.altoSugeridoMm,
+                          };
                     onChange({
                       ...values,
                       [fuente.id]: {
                         schemaVersion: 1,
                         nombreArchivo: file.name,
-                        svg,
-                        relacionAltoAncho: medicion.relacionAltoAncho,
-                        ...medidasInicialesSvg(svg, medicion.relacionAltoAncho),
+                        svg: normalizada.svg,
+                        formatoOrigen: normalizada.formatoOrigen,
+                        unidadOrigen: normalizada.unidadDetectada,
+                        relacionAltoAncho: normalizada.relacionAltoAncho,
+                        ...medidas,
                       },
                     });
                   } catch (cause) {
@@ -231,7 +335,7 @@ export function GeometriasVectorialesCotizacion({
                       [fuente.id]:
                         cause instanceof Error
                           ? cause.message
-                          : "No se pudo medir el archivo SVG.",
+                          : "No se pudo interpretar el archivo vectorial.",
                     }));
                   } finally {
                     setProcesando((current) => ({
@@ -248,7 +352,6 @@ export function GeometriasVectorialesCotizacion({
               ) : null}
               {value ? (
                 <div className={styles.loaded}>
-                  <span title={value.nombreArchivo}>{value.nombreArchivo}</span>
                   <div className={styles.measures}>
                     <div className={styles.axisSwitch}>
                       <button
@@ -276,12 +379,13 @@ export function GeometriasVectorialesCotizacion({
                         Alto
                       </button>
                     </div>
-                    <Field>
-                      <FieldLabel>
+                    <label className={styles.field}>
+                      <span className={styles.fieldLabel}>
                         {ejeEscala === "ancho" ? "Ancho" : "Alto"} final
-                      </FieldLabel>
-                      <InputGroup className={styles.inputGroup}>
-                        <InputGroupInput
+                      </span>
+                      <span className={styles.inputWithUnit}>
+                        <input
+                          className={styles.nativeInput}
                           type="number"
                           min="0.1"
                           step="any"
@@ -294,9 +398,9 @@ export function GeometriasVectorialesCotizacion({
                             actualizarEscala(Number(event.target.value))
                           }
                         />
-                        <InputGroupAddon align="inline-end">cm</InputGroupAddon>
-                      </InputGroup>
-                    </Field>
+                        <span>cm</span>
+                      </span>
+                    </label>
                     <div className={styles.resultMeasure}>
                       <span>{ejeEscala === "ancho" ? "Alto" : "Ancho"}</span>
                       <strong>
@@ -313,13 +417,11 @@ export function GeometriasVectorialesCotizacion({
                     </div>
                   </div>
                 </div>
-              ) : (
-                <span className={styles.empty}>Subí un archivo SVG.</span>
-              )}
+              ) : null}
             </section>
           );
         })}
       </div>
-    </section>
+    </MarcoGeometriaGrafoprint>
   );
 }

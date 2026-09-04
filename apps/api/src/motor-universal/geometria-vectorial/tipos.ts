@@ -110,6 +110,16 @@ export interface PlacementVectorial {
 
 export interface NestingIrregularResult {
   algorithm: 'irregular-2d-bottom-left-v1';
+  /** Solver real que originó el layout. `algorithm` se conserva como
+   * discriminante compatible con snapshots y consumidores existentes. */
+  motorNesting?: 'opennest-v1' | 'grafonest-baseline-v1';
+  versionMotor?: string;
+  duracionMs?: number;
+  estrategiaOrientacion?: 'uniforme' | 'cardinal' | 'libre';
+  rotacionesPermitidas?: number;
+  versionPoliticaOrientacion?: number;
+  calidadSolucion?: 'BASE_SEGURA' | 'OPTIMIZADA';
+  optimizacionAgotada?: boolean;
   placas: number;
   anchoPlacaMm: number;
   altoPlacaMm: number;

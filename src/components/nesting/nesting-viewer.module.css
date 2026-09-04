@@ -32,6 +32,48 @@
   color: #fff;
 }
 
+.sheetHandlingNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 18px;
+  color: #7c2d12;
+  background: #fff7ed;
+  border-bottom: 1px solid #fed7aa;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sheetHandlingNotice strong,
+.sheetHandlingNotice span {
+  display: block;
+}
+
+.sheetHandlingNotice strong {
+  color: #9a3412;
+  font-weight: 650;
+}
+
+.sheetHandlingNotice span {
+  margin-top: 1px;
+}
+
+.sheetHandlingMark {
+  display: grid !important;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px !important;
+  place-items: center;
+  color: #c2410c;
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 /* Plan de imposición de cuadernillo (caballete): la tabla hoja → frente/dorso. */
 
 .planImposicion {

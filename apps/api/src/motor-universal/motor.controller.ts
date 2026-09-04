@@ -2,6 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -10,13 +14,18 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { MotorUniversalService } from './motor.service';
-import { CotizarDto, RecotizarItemDto } from './cotizar.dto';
+import {
+  CotizarAsincronoDto,
+  CotizarDto,
+  RecotizarItemDto,
+} from './cotizar.dto';
 import type { CotizarOutput } from './tipos';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 import {
   AnalizarSvgFabricacionDto,
   MedirSvgFabricacionDto,
+  NormalizarFuenteVectorialDto,
 } from './geometria-vectorial/analizar-svg.dto';
 import {
   analizarSvgFabricacion,
@@ -25,6 +34,12 @@ import {
 import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
 import { GeometriaVectorialCacheService } from './geometria-vectorial/geometria-vectorial-cache.service';
 import { resolverConfiguracionEncastresVectoriales } from './geometria-vectorial/segmentacion-encastres';
+import { AnalisisVectorialAsyncService } from './geometria-vectorial/analisis-vectorial-async.service';
+import { CotizacionJobsService } from '../workers/cotizacion/cotizacion-jobs.service';
+import {
+  FuenteVectorialError,
+  normalizarFuenteVectorial,
+} from './geometria-vectorial/fuente-vectorial';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -37,7 +52,43 @@ export class MotorUniversalController {
   constructor(
     private readonly motor: MotorUniversalService,
     private readonly geometriaCache: GeometriaVectorialCacheService,
+    private readonly analisisVectorialAsync: AnalisisVectorialAsyncService,
+    private readonly cotizacionesAsync: CotizacionJobsService,
   ) {}
+
+  /** Puerta única de ingreso para SVG y DXF. Devuelve un SVG canónico para
+   * mantener compatibles recetas y cotizaciones históricas. */
+  @Post('geometria-vectorial/normalizar')
+  normalizarFuente(
+    @Body() dto: NormalizarFuenteVectorialDto,
+    @Req() req: RequestWithAuth,
+  ) {
+    if (!req.auth?.tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    try {
+      return {
+        nombreArchivo: dto.nombreArchivo,
+        ...normalizarFuenteVectorial(dto),
+      };
+    } catch (error) {
+      if (error instanceof FuenteVectorialError) {
+        throw new BadRequestException({
+          message: error.message,
+          diagnosticos: error.diagnosticos,
+        });
+      }
+      if (error instanceof SvgFabricacionError) {
+        throw new BadRequestException({
+          message: error.message,
+          diagnosticos: error.diagnosticos,
+        });
+      }
+      throw error;
+    }
+  }
 
   /**
    * Obtiene la proporción de los contornos fabricables, no del lienzo del SVG.
@@ -70,6 +121,101 @@ export class MotorUniversalController {
       }
       throw error;
     }
+  }
+
+  /** Interpreta la fuente para el editor de capas, sin ejecutar nesting. */
+  @Post('geometria-vectorial/preparar')
+  prepararSvg(
+    @Body() dto: AnalizarSvgFabricacionDto,
+    @Req() req: RequestWithAuth,
+  ) {
+    if (!req.auth?.tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    try {
+      const analisis = analizarSvgFabricacion({
+        svg: dto.svg,
+        anchoFinalMm: dto.anchoFinalMm,
+        altoFinalMm: dto.altoFinalMm,
+      });
+      return {
+        nombreArchivo: dto.nombreArchivo,
+        geometria: analisis.geometria,
+        configuracionCapas: dto.configuracionCapas,
+        diagnosticos: analisis.diagnosticos,
+      };
+    } catch (error) {
+      if (error instanceof SvgFabricacionError) {
+        throw new BadRequestException({
+          message: error.message,
+          diagnosticos: error.diagnosticos,
+        });
+      }
+      throw error;
+    }
+  }
+
+  /** Encola el nesting real. El worker devuelve y valida el único layout que
+   * luego usan tanto la vista como la cotización. */
+  @Post('geometria-vectorial/analizar-asincrono')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async analizarSvgAsincrono(
+    @Body() dto: AnalizarSvgFabricacionDto,
+    @Req() req: RequestWithAuth,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    try {
+      return await this.analisisVectorialAsync.iniciar({ tenantId, dto });
+    } catch (error) {
+      if (error instanceof SvgFabricacionError) {
+        throw new BadRequestException({
+          message: error.message,
+          diagnosticos: error.diagnosticos,
+        });
+      }
+      if (error instanceof NestingIrregularError) {
+        throw new BadRequestException({
+          message: error.message,
+          diagnosticos: [
+            {
+              codigo: 'pieza_no_entra',
+              mensaje: error.message,
+              severidad: 'ERROR',
+            },
+          ],
+        });
+      }
+      throw error;
+    }
+  }
+
+  @Get('geometria-vectorial/trabajos/:id')
+  consultarAnalisisSvg(@Param('id') id: string, @Req() req: RequestWithAuth) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    return this.analisisVectorialAsync.consultar(tenantId, id);
+  }
+
+  @Delete('geometria-vectorial/trabajos/:id')
+  cancelarAnalisisSvg(@Param('id') id: string, @Req() req: RequestWithAuth) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    return this.analisisVectorialAsync.cancelar(tenantId, id);
   }
 
   /**
@@ -172,6 +318,50 @@ export class MotorUniversalController {
       periodo: dto.periodo ?? null,
       descuento: dto.descuento ?? null,
     });
+  }
+
+  /**
+   * Variante durable del costeo. Devuelve 202 y permite que productos con
+   * geometría compleja continúen aunque finalice la petición HTTP original.
+   */
+  @Post('cotizar-asincrono')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async cotizarAsincrono(
+    @Body() dto: CotizarAsincronoDto,
+    @Req() req: RequestWithAuth,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    return this.cotizacionesAsync.crear({
+      claveSolicitud: dto.claveSolicitud,
+      cotizacion: {
+        tenantId,
+        productoId: dto.productoId,
+        rutaAlternativaId: dto.rutaAlternativaId ?? null,
+        jobContext: dto.jobContext as never,
+        clienteId: dto.clienteId ?? null,
+        periodo: dto.periodo ?? null,
+        descuento: dto.descuento ?? null,
+      },
+    });
+  }
+
+  @Get('cotizaciones-asincronas/:id')
+  consultarCotizacionAsincrona(
+    @Param('id') id: string,
+    @Req() req: RequestWithAuth,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    return this.cotizacionesAsync.consultar(tenantId, id);
   }
 
   /**

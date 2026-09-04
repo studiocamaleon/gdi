@@ -91,6 +91,16 @@ export interface NestingConfigResolved {
   sheetHeightMm: number | null;
   machineBedWidthMm: number | null;
   machineBedHeightMm: number | null;
+  /**
+   * Algunas mesas abiertas permiten apoyar una placa mayor que la cama y
+   * dejar el excedente fuera de la máquina. El eje está expresado en las
+   * coordenadas de la máquina (X = ancho, Y = fondo/alto en vista superior).
+   * La placa conserva su formato y costo completos; sólo se limita la ventana
+   * en la que el nesting puede ubicar cortes.
+   */
+  machineSheetOverhang?: {
+    axis: 'x' | 'y';
+  };
   printSheetMode: 'fixed' | 'automatic';
   /**
    * Origen del costo al comparar candidatos de pliego:
@@ -378,6 +388,19 @@ export function resolveNestingConfig(
         pliegoImpresionConfig.heightMm,
       )
     : null;
+  const permitePlacaSobresaliente = readBoolean(
+    maqParams.placaSobresalientePermitida,
+    false,
+  );
+  const ejeSobresalienteRaw =
+    typeof maqParams.ejeSobresalientePlaca === 'string'
+      ? maqParams.ejeSobresalientePlaca.trim().toLowerCase()
+      : '';
+  const machineSheetOverhang: NestingConfigResolved['machineSheetOverhang'] =
+    permitePlacaSobresaliente &&
+    (ejeSobresalienteRaw === 'x' || ejeSobresalienteRaw === 'y')
+      ? { axis: ejeSobresalienteRaw }
+      : undefined;
 
   return {
     algorithm,
@@ -417,6 +440,7 @@ export function resolveNestingConfig(
       maqParams.largoUtil,
       maqParams.largoMesaMm,
     ),
+    machineSheetOverhang,
     printSheetMode,
     printSheetCostSource,
     printSheetCandidates,

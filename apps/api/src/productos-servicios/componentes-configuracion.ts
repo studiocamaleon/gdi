@@ -156,6 +156,9 @@ function esFuenteVectorialValida(value: unknown): boolean {
     value.svg.length > 0 &&
     Buffer.byteLength(value.svg, 'utf8') <= 512 * 1024 &&
     Number(value.anchoFinalMm) > 0 &&
+    (value.formatoOrigen == null ||
+      value.formatoOrigen === 'SVG' ||
+      value.formatoOrigen === 'DXF') &&
     (value.altoFinalMm == null || Number(value.altoFinalMm) > 0)
   );
 }
@@ -868,6 +871,22 @@ export function ordenarComponentesPorCalculo<
     orden?: number;
   },
 >(componentes: T[]): T[] {
+  return agruparComponentesPorNivelCalculo(componentes).flat();
+}
+
+/**
+ * Devuelve niveles topológicos. Los componentes de un mismo nivel no dependen
+ * entre sí y pueden cotizarse en paralelo; los niveles se resuelven en orden.
+ */
+export function agruparComponentesPorNivelCalculo<
+  T extends {
+    codigo: string;
+    nombre: string;
+    requerido?: boolean;
+    configuracionJson?: unknown;
+    orden?: number;
+  },
+>(componentes: T[]): T[][] {
   const porCodigo = new Map(componentes.map((item) => [item.codigo, item]));
   const dependencias = new Map<string, string[]>();
   for (const item of componentes) {
@@ -895,7 +914,7 @@ export function ordenarComponentesPorCalculo<
 
   const pendientes = new Map(porCodigo);
   const resueltos = new Set<string>();
-  const resultado: T[] = [];
+  const resultado: T[][] = [];
   while (pendientes.size > 0) {
     const disponibles = [...pendientes.values()]
       .filter((item) =>
@@ -920,8 +939,8 @@ export function ordenarComponentesPorCalculo<
     for (const item of disponibles) {
       pendientes.delete(item.codigo);
       resueltos.add(item.codigo);
-      resultado.push(item);
     }
+    resultado.push(disponibles);
   }
   return resultado;
 }

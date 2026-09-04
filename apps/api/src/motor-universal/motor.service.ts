@@ -73,8 +73,11 @@ import {
   getImposicionCaballeteConfig,
   hayPliegosImpresosHeredados,
   runNestingForPaso,
+  type NestingDispatchOpts,
   type NestingDispatchResult,
 } from './nesting-dispatcher';
+import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
+import { AnalisisVectorialAsyncService } from './geometria-vectorial/analisis-vectorial-async.service';
 import {
   resolveNestingConfig,
   type MaterialResueltoParaNestingConfig,
@@ -181,8 +184,8 @@ import { jobContextCotizacionValido } from './cotizar.dto';
 import { RecorridosVectorialesService } from '../recorridos-vectoriales/recorridos-vectoriales.service';
 import { crearSvgPlacaDesdeNesting } from '../recorridos-vectoriales/nesting-svg';
 import {
+  agruparComponentesPorNivelCalculo,
   dependenciasCalculoComponente,
-  ordenarComponentesPorCalculo,
   proyectarEspecificacionesEfectivasComponente,
   resolverOcurrenciasCotizadasComponente,
   resolverOperacionesIncorporacion,
@@ -543,7 +546,32 @@ export class MotorUniversalService {
     private readonly recorridosVectoriales: RecorridosVectorialesService = new RecorridosVectorialesService(),
     @Optional()
     private readonly recetasProducto?: RecetasProductoService,
+    @Optional()
+    private readonly analisisVectorialAsync?: AnalisisVectorialAsyncService,
   ) {}
+
+  private opcionesNesting(tenantId: string): NestingDispatchOpts {
+    return {
+      loadPrintSheetMaterial: (varianteId) =>
+        this.cargarPrintSheetMaterial(tenantId, varianteId),
+      ...(this.analisisVectorialAsync
+        ? {
+            resolveIrregularNesting: async ({ fuente, parametros }) =>
+              this.analisisVectorialAsync!.resolverParaCotizacion({
+                tenantId,
+                dto: {
+                  svg: fuente.svg,
+                  nombreArchivo: fuente.nombreArchivo,
+                  anchoFinalMm: fuente.anchoFinalMm,
+                  altoFinalMm: fuente.altoFinalMm,
+                  configuracionCapas: fuente.configuracionCapas,
+                  ...parametros,
+                },
+              }),
+          }
+        : {}),
+    };
+  }
 
   private async generarRecorridoCorteCotizacion(
     paso: PasoCargado,
@@ -825,14 +853,15 @@ export class MotorUniversalService {
     if (jobContext.disenoVectorialFuente) {
       try {
         const fuente = jobContext.disenoVectorialFuente;
-        const cached = this.geometriaCache.obtenerParaCotizacion({
-          tenantId: input.tenantId,
-          cacheKey: jobContext.disenoVectorialCacheKey,
-          svg: fuente.svg,
-          anchoFinalMm: fuente.anchoFinalMm,
-          altoFinalMm: fuente.altoFinalMm,
-          configuracionCapas: fuente.configuracionCapas,
-        });
+        const cached =
+          await this.geometriaCache.obtenerParaCotizacionCompartido({
+            tenantId: input.tenantId,
+            cacheKey: jobContext.disenoVectorialCacheKey,
+            svg: fuente.svg,
+            anchoFinalMm: fuente.anchoFinalMm,
+            altoFinalMm: fuente.altoFinalMm,
+            configuracionCapas: fuente.configuracionCapas,
+          });
         const geometria = cached
           ? cached.geometriaFabricacion
           : aplicarCapasAGeometria(
@@ -1302,9 +1331,9 @@ export class MotorUniversalService {
       (recetaPublicada.componentes.length || pasosInternosCompuestos.length)
     ) {
       const camino = opciones?.componentesCamino ?? [input.productoId];
-      let componentesOrdenados: typeof recetaPublicada.componentes;
+      let componentesPorNivel: Array<typeof recetaPublicada.componentes>;
       try {
-        componentesOrdenados = ordenarComponentesPorCalculo(
+        componentesPorNivel = agruparComponentesPorNivelCalculo(
           recetaPublicada.componentes,
         );
       } catch (error) {
@@ -1321,95 +1350,138 @@ export class MotorUniversalService {
           },
         ]);
       }
-      for (const componente of componentesOrdenados) {
-        if (!componente.requerido) continue;
-        if (camino.includes(componente.productoComponenteId)) {
-          return fallar([
-            {
-              codigo: 'ciclo_componentes_fabricados',
-              severidad: 'ERROR',
-              mensaje: `La composición de "${componente.nombre}" forma un ciclo.`,
-              sugerencia:
-                'Revisar la BOM publicada y quitar la referencia circular.',
-            },
-          ]);
-        }
+      const componentesOrdenados = componentesPorNivel.flat();
+      for (const componentesNivel of componentesPorNivel) {
+        const tareasNivel: Array<{
+          componente: (typeof recetaPublicada.componentes)[number];
+          ocurrencia: ReturnType<
+            typeof resolverOcurrenciasCotizadasComponente
+          >[number];
+          jobContextComponente: Record<string, unknown>;
+          cantidadComponente: number;
+        }> = [];
 
-        let ocurrencias: ReturnType<
-          typeof resolverOcurrenciasCotizadasComponente
-        >;
-        try {
-          ocurrencias = resolverOcurrenciasCotizadasComponente({
-            configuracion: componente.configuracionJson,
-            contextoPadre: jobContext as unknown as Record<string, unknown>,
-            codigoComponente: componente.codigo,
-            nombreComponente: componente.nombre,
-          });
-        } catch (error) {
-          return fallar([
-            {
-              codigo: 'ocurrencias_componente_invalidas',
-              severidad: 'ERROR',
-              mensaje:
-                error instanceof Error
-                  ? error.message
-                  : `No se pudieron interpretar las ocurrencias de "${componente.nombre}".`,
-              sugerencia: 'Revisá los componentes agregados en la cotización.',
-            },
-          ]);
-        }
+        // Sólo los niveles son secuenciales. Dentro de un nivel no hay
+        // dependencias entre componentes, por lo que sus recetas y nestings
+        // pueden ejecutarse en paralelo sin leer outputs incompletos.
+        for (const componente of componentesNivel) {
+          if (!componente.requerido) continue;
+          if (camino.includes(componente.productoComponenteId)) {
+            return fallar([
+              {
+                codigo: 'ciclo_componentes_fabricados',
+                severidad: 'ERROR',
+                mensaje: `La composición de "${componente.nombre}" forma un ciclo.`,
+                sugerencia:
+                  'Revisar la BOM publicada y quitar la referencia circular.',
+              },
+            ]);
+          }
 
-        for (const ocurrencia of ocurrencias) {
-          let jobContextComponente: Record<string, unknown>;
+          let ocurrencias: ReturnType<
+            typeof resolverOcurrenciasCotizadasComponente
+          >;
           try {
-            jobContextComponente = resolverJobContextComponente({
+            ocurrencias = resolverOcurrenciasCotizadasComponente({
               configuracion: componente.configuracionJson,
               contextoPadre: jobContext as unknown as Record<string, unknown>,
               codigoComponente: componente.codigo,
-              cantidadLegacy: componente.cantidad,
-              outputsComponentes,
-              overrideCotizacion: ocurrencia.overrideCotizacion,
+              nombreComponente: componente.nombre,
             });
           } catch (error) {
             return fallar([
               {
-                codigo: 'configuracion_componente_incompleta',
+                codigo: 'ocurrencias_componente_invalidas',
                 severidad: 'ERROR',
                 mensaje:
                   error instanceof Error
                     ? error.message
-                    : `No se pudo configurar el componente "${ocurrencia.nombre}".`,
+                    : `No se pudieron interpretar las ocurrencias de "${componente.nombre}".`,
                 sugerencia:
-                  'Completá los parámetros solicitados del componente antes de cotizar.',
+                  'Revisá los componentes agregados en la cotización.',
               },
             ]);
           }
-          const cantidadComponente = Number(jobContextComponente.cantidad);
-          if (!Number.isFinite(cantidadComponente) || cantidadComponente <= 0) {
-            return fallar([
-              {
-                codigo: 'cantidad_componente_invalida',
-                severidad: 'ERROR',
-                mensaje: `La cantidad calculada de "${ocurrencia.nombre}" debe ser un número positivo.`,
-                contexto: {
-                  cantidad: cantidadComponente,
-                  unidad: componente.unidad,
+
+          for (const ocurrencia of ocurrencias) {
+            let jobContextComponente: Record<string, unknown>;
+            try {
+              jobContextComponente = resolverJobContextComponente({
+                configuracion: componente.configuracionJson,
+                contextoPadre: jobContext as unknown as Record<string, unknown>,
+                codigoComponente: componente.codigo,
+                cantidadLegacy: componente.cantidad,
+                outputsComponentes,
+                overrideCotizacion: ocurrencia.overrideCotizacion,
+              });
+            } catch (error) {
+              return fallar([
+                {
+                  codigo: 'configuracion_componente_incompleta',
+                  severidad: 'ERROR',
+                  mensaje:
+                    error instanceof Error
+                      ? error.message
+                      : `No se pudo configurar el componente "${ocurrencia.nombre}".`,
+                  sugerencia:
+                    'Completá los parámetros solicitados del componente antes de cotizar.',
                 },
-              },
-            ]);
+              ]);
+            }
+            const cantidadComponente = Number(jobContextComponente.cantidad);
+            if (
+              !Number.isFinite(cantidadComponente) ||
+              cantidadComponente <= 0
+            ) {
+              return fallar([
+                {
+                  codigo: 'cantidad_componente_invalida',
+                  severidad: 'ERROR',
+                  mensaje: `La cantidad calculada de "${ocurrencia.nombre}" debe ser un número positivo.`,
+                  contexto: {
+                    cantidad: cantidadComponente,
+                    unidad: componente.unidad,
+                  },
+                },
+              ]);
+            }
+            tareasNivel.push({
+              componente,
+              ocurrencia,
+              jobContextComponente,
+              cantidadComponente,
+            });
           }
-          const resultadoComponente = await this.cotizar(
-            {
-              tenantId: input.tenantId,
-              productoId: componente.productoComponenteId,
-              jobContext: jobContextComponente as never,
-              periodo,
-            },
-            {
-              omitirPrecioReferenciaMinimo: true,
-              componentesCamino: [...camino, componente.productoComponenteId],
-            },
-          );
+        }
+
+        const resultadosNivel = await Promise.all(
+          tareasNivel.map(async (tarea) => ({
+            ...tarea,
+            resultadoComponente: await this.cotizar(
+              {
+                tenantId: input.tenantId,
+                productoId: tarea.componente.productoComponenteId,
+                jobContext: tarea.jobContextComponente as never,
+                periodo,
+              },
+              {
+                omitirPrecioReferenciaMinimo: true,
+                componentesCamino: [
+                  ...camino,
+                  tarea.componente.productoComponenteId,
+                ],
+              },
+            ),
+          })),
+        );
+
+        for (const {
+          componente,
+          ocurrencia,
+          jobContextComponente,
+          cantidadComponente,
+          resultadoComponente,
+        } of resultadosNivel) {
           if (!resultadoComponente.exitoso || !resultadoComponente.cotizacion) {
             const detalle = resultadoComponente.errores.find(
               (error) => error.severidad === 'ERROR',
@@ -1897,7 +1969,7 @@ export class MotorUniversalService {
     // los totales. Así F4.3 recibe costos ya reconciliados y no hay un ajuste
     // comercial posterior capaz de duplicar margen, impuestos o redondeo.
     const analisisNestingCompuesto = recetaPublicada?.componentes.length
-      ? aplicarNestingCompuesto({
+      ? await aplicarNestingCompuesto({
           politica: leerPoliticaNestingCompuesto(
             producto.atributosComercialesJson,
           ),
@@ -1905,6 +1977,16 @@ export class MotorUniversalService {
           productoPadreId: producto.productoId,
           recetaRevisionId: recetaPublicada.id,
           componentes: componentesFabricados,
+          ...(this.analisisVectorialAsync
+            ? {
+                resolverNestingIrregular: (problema) =>
+                  this.analisisVectorialAsync!.resolverProblemaParaCotizacion({
+                    tenantId: input.tenantId,
+                    problema,
+                    claveSolicitud: `cotizacion-compuesta-${producto.productoId}-${recetaPublicada.id}`,
+                  }),
+              }
+            : {}),
         })
       : undefined;
     const componentesFabricadosTotal = componentesFabricados.reduce(
@@ -4014,15 +4096,29 @@ export class MotorUniversalService {
       this.debeAutocalcularNestingSiNoHayOutput(paso, jobContext) ||
       this.debeCalcularNestingLaminado(paso);
     if (debeCalcularNestingProductivo) {
-      nestingDispatch = await runNestingForPaso(
-        paso,
-        this.getJobContextParaNesting(paso, jobContext),
-        materialPreliminar,
-        {
-          loadPrintSheetMaterial: (varianteId) =>
-            this.cargarPrintSheetMaterial(tenantId, varianteId),
-        },
-      );
+      try {
+        nestingDispatch = await runNestingForPaso(
+          paso,
+          this.getJobContextParaNesting(paso, jobContext),
+          materialPreliminar,
+          this.opcionesNesting(tenantId),
+        );
+      } catch (error) {
+        if (error instanceof NestingIrregularError) {
+          errores.push({
+            codigo: 'nesting_irregular_incompatible_con_maquina',
+            severidad: 'ERROR',
+            mensaje: error.message,
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            sugerencia:
+              'Elegí un formato compatible o fraccioná la placa antes de cotizar; revisá también la orientación y el eje abierto de la máquina.',
+          });
+          return this.pasoAbortado(paso);
+        }
+        throw error;
+      }
       nestingDispatch = this.aplicarPasadasLaminadoPorCaras(
         paso,
         jobContext,
@@ -7696,14 +7792,19 @@ export class MotorUniversalService {
         if (paso) {
           const evaluados = await Promise.all(
             validos.map(async (v) => {
-              const dispatch = await runNestingForPaso(paso, jobContext, {
-                id: v.id,
-                atributosVarianteJson: v.atributosVarianteJson ?? null,
-                subfamilia: v.subfamilia ?? null,
-                materiaPrimaTemplateId: v.materiaPrimaTemplateId ?? null,
-                materiaPrimaTipoTecnico: v.materiaPrimaTipoTecnico ?? null,
-                unidadStock: v.unidadStock ?? null,
-              });
+              const dispatch = await runNestingForPaso(
+                paso,
+                jobContext,
+                {
+                  id: v.id,
+                  atributosVarianteJson: v.atributosVarianteJson ?? null,
+                  subfamilia: v.subfamilia ?? null,
+                  materiaPrimaTemplateId: v.materiaPrimaTemplateId ?? null,
+                  materiaPrimaTipoTecnico: v.materiaPrimaTipoTecnico ?? null,
+                  unidadStock: v.unidadStock ?? null,
+                },
+                this.opcionesNesting(tenantId),
+              );
               return { v, aprovechamiento: dispatch?.aprovechamientoPct ?? -1 };
             }),
           );

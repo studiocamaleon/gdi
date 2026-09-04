@@ -908,7 +908,7 @@ const corte_laser: DefinicionFamilia = {
       tipo: 'boolean',
       default: false,
       descripcion:
-        'Permite cargar un SVG, hacer nesting irregular y generar SVG/DXF por placa para producción.',
+        'Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción.',
     },
     {
       campo: 'permitirIngresoPorMedidas',
@@ -916,7 +916,7 @@ const corte_laser: DefinicionFamilia = {
       tipo: 'boolean',
       default: true,
       descripcion:
-        'El vendedor podrá elegir entre medidas rectangulares, SVG o una estimación manual por placas.',
+        'El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto.',
     },
   ],
   productosTipicos: ['Letras de acrílico', 'Cortes complejos en MDF/madera'],
@@ -1000,7 +1000,7 @@ const cnc: DefinicionFamilia = {
       tipo: 'boolean',
       default: false,
       descripcion:
-        'Permite cargar un SVG, hacer nesting irregular y generar SVG/DXF por placa para producción. El CAM/G-code continúa en el software de la CNC.',
+        'Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción. El CAM/G-code continúa en el software de la CNC.',
     },
     {
       campo: 'permitirIngresoPorMedidas',
@@ -1008,7 +1008,7 @@ const cnc: DefinicionFamilia = {
       tipo: 'boolean',
       default: true,
       descripcion:
-        'El vendedor podrá elegir entre medidas rectangulares, SVG o una estimación manual por placas.',
+        'El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto.',
     },
   ],
   productosTipicos: ['Letras corpóreas MDF', 'Carteles rígidos con forma'],
@@ -1095,7 +1095,7 @@ const corte_manual: DefinicionFamilia = {
 };
 
 /** Corte de piezas corpóreas a partir de contornos vectoriales sobre placas.
- * El SVG y su nesting son requisitos del PROCESO: cualquier producto cuya
+ * La fuente vectorial y su nesting son requisitos del PROCESO: cualquier producto cuya
  * ruta use esta familia obtiene el configurador vectorial sin activar una
  * herramienta particular en atributos comerciales. */
 const corte_hilo_caliente: DefinicionFamilia = {

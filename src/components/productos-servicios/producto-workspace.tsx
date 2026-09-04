@@ -1248,6 +1248,8 @@ function IdentidadTab({
                           setGeometriasComercialesEstado((actual) => ({
                             version: 1,
                             modo,
+                            permitirCotizacionManual:
+                              actual.permitirCotizacionManual,
                             fuentes:
                               modo === "RECTANGULAR"
                                 ? []
@@ -1356,6 +1358,20 @@ function IdentidadTab({
                           </Button>
                         </div>
                       ))}
+                      <label className={styles.geometryRequired}>
+                        <Switch
+                          checked={
+                            geometriasComerciales.permitirCotizacionManual
+                          }
+                          onCheckedChange={(permitirCotizacionManual) =>
+                            setGeometriasComercialesEstado((actual) => ({
+                              ...actual,
+                              permitirCotizacionManual,
+                            }))
+                          }
+                        />
+                        Permitir estimación manual por placas
+                      </label>
                     </div>
                   ) : null}
                 </div>

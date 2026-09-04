@@ -1177,13 +1177,34 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
         }),
         field({
           key: "largoUtil",
-          label: "Largo de mesa",
+          label: "Fondo útil (eje Y)",
           scope: "maquina",
           kind: "number",
           unit: "mm",
           required: true,
-          placeholder: "2500",
-          description: "Largo útil de la mesa (ej. 2500mm).",
+          placeholder: "1000",
+          description:
+            "Recorrido útil de adelante hacia atrás, eje Y en vista superior.",
+        }),
+        field({
+          key: "placaSobresalientePermitida",
+          label: "Permite placas sobresalientes",
+          scope: "maquina",
+          kind: "boolean",
+          description:
+            "La placa puede ser mayor que la cama en un eje y quedar parcialmente fuera. El nesting sólo utilizará la zona alcanzable por el cabezal.",
+        }),
+        field({
+          key: "ejeSobresalientePlaca",
+          label: "Eje abierto para el excedente",
+          scope: "maquina",
+          kind: "select",
+          options: [
+            option("X", "Eje X · lateral"),
+            option("Y", "Eje Y · frente/fondo"),
+          ],
+          description:
+            "Indica hacia qué eje puede continuar físicamente la placa fuera de la cama.",
         }),
         field({
           key: "espesorMaximo",
@@ -1475,12 +1496,12 @@ function buildCorteHiloCalienteSections(): MaquinariaTemplateSection[] {
           options: [
             option(
               "preserve-original-if-fits",
-              "Conservar la composición original",
+              "Conservar la composición original (sin optimizar)",
               "Mantiene posiciones y orientación para usar el negativo como molde.",
             ),
             option(
               "optimize-material",
-              "Optimizar el uso del material",
+              "Optimizar el material con GrafoNest",
               "Reacomoda las piezas para ocupar el menor espacio posible.",
             ),
           ],

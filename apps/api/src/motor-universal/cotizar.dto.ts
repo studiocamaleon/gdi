@@ -100,6 +100,9 @@ function esFuenteVectorialValida(value: unknown): boolean {
     fuente.svg.length === 0 ||
     Buffer.byteLength(fuente.svg, 'utf8') > 512 * 1024 ||
     !esNumeroPositivo(fuente.anchoFinalMm) ||
+    (fuente.formatoOrigen !== undefined &&
+      fuente.formatoOrigen !== 'SVG' &&
+      fuente.formatoOrigen !== 'DXF') ||
     (fuente.altoFinalMm !== undefined &&
       !esNumeroPositivo(fuente.altoFinalMm)) ||
     (fuente.configuracionCapas !== undefined &&
@@ -467,6 +470,16 @@ export class CotizarDto {
   @IsOptional()
   @IsUUID()
   cotizacionId?: string;
+}
+
+/** Solicitud durable para cálculos que pueden incluir uno o más nestings. */
+export class CotizarAsincronoDto extends CotizarDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-zA-Z0-9:_-]{8,160}$/, {
+    message: 'claveSolicitud tiene un formato inválido',
+  })
+  claveSolicitud?: string;
 }
 
 /** DTO concreto: los tipos utilitarios de TypeScript no existen en runtime. */

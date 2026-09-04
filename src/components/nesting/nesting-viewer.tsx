@@ -385,6 +385,7 @@ export function NestingViewer({
       </div>
 
       <NestingConfigStrip result={result} substrateLabel={substrateLabel} />
+      <ManejoPlacaNotice visualConfig={result.visualConfig} />
       <NestingCostingSummary costingDetails={costingDetails} />
       <NestingLegend
         pieceGroups={pieceGroups}
@@ -497,6 +498,12 @@ function NestingConfigStrip({
     visualConfig
       ? ["Rotación", visualConfig.allowRotation ? "permitida" : "bloqueada"]
       : null,
+    visualConfig?.manejoPlaca
+      ? [
+          "Carga",
+          `sobresale ${formatMm(visualConfig.manejoPlaca.excedenteMm)} · eje ${visualConfig.manejoPlaca.eje.toUpperCase()}`,
+        ]
+      : null,
     result.costingPreview
       ? ["Costeo", costingLabel(result.costingPreview.strategy)]
       : null,
@@ -516,6 +523,27 @@ function NestingConfigStrip({
           <span className="v">{value}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ManejoPlacaNotice({
+  visualConfig,
+}: {
+  visualConfig?: NestingViewerInput["visualConfig"];
+}) {
+  const manejo = visualConfig?.manejoPlaca;
+  if (!manejo) return null;
+
+  return (
+    <div className={s.sheetHandlingNotice} role="note">
+      <span className={s.sheetHandlingMark} aria-hidden="true">
+        ↕
+      </span>
+      <div>
+        <strong>Carga especial de placa</strong>
+        <span>{manejo.mensaje}</span>
+      </div>
     </div>
   );
 }
@@ -1261,6 +1289,12 @@ function SubstrateView({
               placements={placements}
               displayTransform={displayTransform}
               placementTransform={placementTransform}
+            />
+            <SheetOverhangLayer
+              visualConfig={effectiveVisualConfig}
+              substrateWidthMm={widthMm}
+              substrateHeightMm={heightMm}
+              displayTransform={displayTransform}
             />
             {hasMargins ? (
               <MarginsLayer
@@ -2287,6 +2321,77 @@ function PrintableAreaLayer({
       strokeWidth={0.9}
       strokeDasharray="4 3"
     />
+  );
+}
+
+function SheetOverhangLayer({
+  visualConfig,
+  substrateWidthMm,
+  substrateHeightMm,
+  displayTransform,
+}: {
+  visualConfig: VisualConfig;
+  substrateWidthMm: number;
+  substrateHeightMm: number;
+  displayTransform: DisplayTransform;
+}) {
+  const manejo = visualConfig.manejoPlaca;
+  if (!manejo || manejo.excedenteMm <= 0) return null;
+
+  const workEndX = manejo.workArea.xMm + manejo.workArea.widthMm;
+  const workEndY = manejo.workArea.yMm + manejo.workArea.heightMm;
+  const excedeEnY = workEndY < substrateHeightMm - 0.01;
+  const zona = excedeEnY
+    ? {
+        xMm: 0,
+        yMm: workEndY,
+        widthMm: substrateWidthMm,
+        heightMm: Math.max(0, substrateHeightMm - workEndY),
+      }
+    : {
+        xMm: workEndX,
+        yMm: 0,
+        widthMm: Math.max(0, substrateWidthMm - workEndX),
+        heightMm: substrateHeightMm,
+      };
+  if (zona.widthMm <= 0 || zona.heightMm <= 0) return null;
+
+  const rect = mapDisplayRect(
+    displayTransform,
+    zona.xMm,
+    zona.yMm,
+    zona.widthMm,
+    zona.heightMm,
+  );
+  const labelFits = rect.width >= 95 && rect.height >= 22;
+
+  return (
+    <g pointerEvents="none">
+      <rect
+        x={rect.x}
+        y={rect.y}
+        width={rect.width}
+        height={rect.height}
+        fill="#fff1e8"
+        fillOpacity={0.9}
+        stroke="#ff642d"
+        strokeWidth={1}
+        strokeDasharray="6 4"
+      />
+      {labelFits ? (
+        <text
+          x={rect.x + rect.width / 2}
+          y={rect.y + rect.height / 2}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#a63d18"
+          fontSize={11}
+          fontWeight={600}
+        >
+          Fuera de alcance · {formatMm(manejo.excedenteMm)}
+        </text>
+      ) : null}
+    </g>
   );
 }
 

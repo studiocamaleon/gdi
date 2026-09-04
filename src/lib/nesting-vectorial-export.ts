@@ -6,6 +6,8 @@ export type FuenteVectorialPersistida = {
   svg: string;
   anchoFinalMm: number;
   altoFinalMm?: number;
+  formatoOrigen?: "SVG" | "DXF";
+  unidadOrigen?: string | null;
 };
 
 type Punto = { x: number; y: number };

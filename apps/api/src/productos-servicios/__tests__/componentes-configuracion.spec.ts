@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  agruparComponentesPorNivelCalculo,
   codigoOcurrenciaComponente,
   leerOcurrenciasAdicionalesComponente,
   ordenarComponentesPorCalculo,
@@ -634,6 +635,17 @@ describe('configuración de componentes fabricados', () => {
     expect(
       ordenarComponentesPorCalculo(componentes).map((item) => item.codigo),
     ).toEqual(['bastidor', 'lona']);
+    expect(
+      agruparComponentesPorNivelCalculo([
+        ...componentes,
+        {
+          codigo: 'frente',
+          nombre: 'Frente independiente',
+          orden: 3,
+          configuracionJson: null,
+        },
+      ]).map((nivel) => nivel.map((item) => item.codigo)),
+    ).toEqual([['bastidor', 'frente'], ['lona']]);
   });
 
   it('reutiliza la misma fuente vectorial nombrada del padre en un hijo', () => {

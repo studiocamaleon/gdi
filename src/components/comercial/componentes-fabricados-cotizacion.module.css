@@ -211,12 +211,6 @@
   gap: 8px;
   grid-column: 1 / -1;
 }
-.vectorField > input[type="file"] {
-  min-height: 40px;
-  padding: 7px 9px;
-  border: 1px dashed #d5ccc4;
-  background: #fffaf7;
-}
 .vectorField > small {
   color: #817a76;
   font-size: 10px;
@@ -232,14 +226,6 @@
   border-radius: 9px;
   background: #fff;
 }
-.vectorLoaded > span {
-  overflow: hidden;
-  color: #4f4945;
-  font-size: 10.5px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .vectorMeasures {
   display: grid;
   gap: 9px;
@@ -248,6 +234,43 @@
       150px,
       0.8fr
     );
+}
+.vectorMeasureField {
+  display: grid;
+  gap: 6px;
+}
+.vectorMeasureField > span:first-child {
+  color: #4e4946;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.vectorInputGroup {
+  display: grid;
+  overflow: hidden;
+  height: 36px;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  border: 1px solid #ded8d2;
+  border-radius: 8px;
+  background: #fff;
+}
+.vectorMeasureInput {
+  min-width: 0;
+  padding: 0 10px;
+  border: 0;
+  outline: none;
+  color: #1f1c1b;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+.vectorInputGroup > span {
+  display: grid;
+  border-left: 1px solid #e8e1db;
+  color: #5f5956;
+  background: #f7f4f0;
+  font-size: 10.5px;
+  font-weight: 700;
+  place-items: center;
 }
 .axisSwitch {
   display: grid;
@@ -266,10 +289,10 @@
   cursor: pointer;
 }
 .axisSwitch button[data-active="true"] {
-  color: #1f1c1b;
-  background: #fff;
+  color: #fff;
+  background: #1b1b20;
   font-weight: 700;
-  box-shadow: 0 1px 4px rgb(24 19 16 / 10%);
+  box-shadow: inset 0 -2px 0 #ff642b;
 }
 .resultMeasure {
   display: grid;

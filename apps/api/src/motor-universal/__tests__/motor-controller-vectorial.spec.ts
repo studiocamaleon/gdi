@@ -2,7 +2,11 @@ import { MotorUniversalController } from '../motor.controller';
 
 describe('medición vectorial comercial', () => {
   it('mide los contornos reales aunque el viewBox tenga margen interno', () => {
-    const controller = new MotorUniversalController({} as never, {} as never);
+    const controller = new MotorUniversalController(
+      {} as never,
+      {} as never,
+      {} as never,
+    );
     const result = controller.medirSvg(
       {
         nombreArchivo: 'cartel.svg',

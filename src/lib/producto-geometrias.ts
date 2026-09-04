@@ -10,6 +10,7 @@ export type ConfiguracionGeometriasComerciales = {
   version: 1;
   modo: ModoGeometriaComercial;
   fuentes: FuenteGeometriaComercial[];
+  permitirCotizacionManual: boolean;
 };
 
 export type EjeEscalaVectorial = "ancho" | "alto";
@@ -86,7 +87,19 @@ export function getGeometriasComerciales(
           : [];
       })
     : [];
-  return { version: 1, modo, fuentes };
+  return {
+    version: 1,
+    modo,
+    fuentes,
+    permitirCotizacionManual: raw.permitirCotizacionManual === true,
+  };
+}
+
+export function tieneGeometriasComercialesConfiguradas(
+  atributos: Record<string, unknown> | null | undefined,
+): boolean {
+  const raw = record(atributos).geometriasComerciales;
+  return Boolean(raw && typeof raw === "object" && !Array.isArray(raw));
 }
 
 export function setGeometriasComerciales(

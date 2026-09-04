@@ -4,8 +4,9 @@ import * as React from "react";
 import { BoxesIcon, ChevronDownIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import {
   getRecetasProducto,
-  medirSvgFabricacion,
+  normalizarFuenteVectorial,
   type BindingParametroComponente,
+  type FormatoFuenteVectorial,
   type ProductoReceta,
 } from "@/lib/productos-servicios-api";
 import {
@@ -37,6 +38,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import { ControlArchivoVectorial } from "./geometrias-vectoriales-cotizacion";
 import styles from "./componentes-fabricados-cotizacion.module.css";
 
 const CLAVE_OCURRENCIAS_ADICIONALES = "__ocurrenciasAdicionales";
@@ -54,6 +56,8 @@ type FuenteVectorialComponente = {
   anchoFinalMm: number;
   altoFinalMm?: number;
   relacionAltoAncho?: number;
+  formatoOrigen?: FormatoFuenteVectorial;
+  unidadOrigen?: string | null;
 };
 
 function esRegistro(value: unknown): value is Record<string, unknown> {
@@ -206,35 +210,41 @@ function CampoVectorialOcurrencia({
   const inputId = `${idPrefix}-${binding.clave.replaceAll(".", "-")}`;
 
   return (
-    <Field className={styles.vectorField}>
-      <FieldLabel htmlFor={inputId}>{binding.etiqueta}</FieldLabel>
-      <Input
-        id={inputId}
-        type="file"
-        accept=".svg,image/svg+xml"
+    <div className={styles.vectorField}>
+      <ControlArchivoVectorial
+        etiqueta={binding.etiqueta}
+        nombreArchivo={fuente?.nombreArchivo}
+        formatoOrigen={fuente?.formatoOrigen}
         required={binding.requerido !== false && !fuente}
+        procesando={procesando}
         disabled={procesando}
-        onChange={async (event) => {
-          const file = event.target.files?.[0];
-          if (!file) return;
-          const svg = await file.text();
+        onSelect={async (file) => {
+          const contenido = await file.text();
           setProcesando(true);
           setError(null);
           try {
-            const medicion = await medirSvgFabricacion({
-              svg,
+            const normalizada = await normalizarFuenteVectorial({
+              contenido,
               nombreArchivo: file.name,
             });
-            const medidas = medidasInicialesSvg(
-              svg,
-              medicion.relacionAltoAncho,
-            );
+            const medidas =
+              normalizada.formatoOrigen === "SVG"
+                ? medidasInicialesSvg(
+                    normalizada.svg,
+                    normalizada.relacionAltoAncho,
+                  )
+                : {
+                    anchoFinalMm: normalizada.anchoSugeridoMm,
+                    altoFinalMm: normalizada.altoSugeridoMm,
+                  };
             onChange(
               escribirRuta(current, binding.clave, {
                 schemaVersion: 1,
                 nombreArchivo: file.name,
-                svg,
-                relacionAltoAncho: medicion.relacionAltoAncho,
+                svg: normalizada.svg,
+                formatoOrigen: normalizada.formatoOrigen,
+                unidadOrigen: normalizada.unidadDetectada,
+                relacionAltoAncho: normalizada.relacionAltoAncho,
                 ...medidas,
               } satisfies FuenteVectorialComponente),
             );
@@ -242,7 +252,7 @@ function CampoVectorialOcurrencia({
             setError(
               cause instanceof Error
                 ? cause.message
-                : "No se pudo medir el archivo SVG.",
+                : "No se pudo interpretar el archivo vectorial.",
             );
           } finally {
             setProcesando(false);
@@ -256,7 +266,6 @@ function CampoVectorialOcurrencia({
       ) : null}
       {fuente ? (
         <div className={styles.vectorLoaded}>
-          <span title={fuente.nombreArchivo}>{fuente.nombreArchivo}</span>
           <div className={styles.vectorMeasures}>
             <div className={styles.axisSwitch}>
               <button
@@ -274,12 +283,11 @@ function CampoVectorialOcurrencia({
                 Alto
               </button>
             </div>
-            <Field>
-              <FieldLabel htmlFor={`${inputId}-medida`}>
-                {ejeEscala === "ancho" ? "Ancho" : "Alto"} final
-              </FieldLabel>
-              <InputGroup className={styles.inputGroup}>
-                <InputGroupInput
+            <label className={styles.vectorMeasureField}>
+              <span>{ejeEscala === "ancho" ? "Ancho" : "Alto"} final</span>
+              <span className={styles.vectorInputGroup}>
+                <input
+                  className={styles.vectorMeasureInput}
                   id={`${inputId}-medida`}
                   type="number"
                   min="0.1"
@@ -293,9 +301,9 @@ function CampoVectorialOcurrencia({
                     actualizarEscala(Number(event.target.value))
                   }
                 />
-                <InputGroupAddon align="inline-end">cm</InputGroupAddon>
-              </InputGroup>
-            </Field>
+                <span>cm</span>
+              </span>
+            </label>
             <div className={styles.resultMeasure}>
               <span>{ejeEscala === "ancho" ? "Alto" : "Ancho"}</span>
               <strong>
@@ -311,9 +319,9 @@ function CampoVectorialOcurrencia({
           </div>
         </div>
       ) : (
-        <small>Subí el SVG propio de esta ocurrencia.</small>
+        <small>Subí el SVG o DXF propio de esta ocurrencia.</small>
       )}
-    </Field>
+    </div>
   );
 }
 

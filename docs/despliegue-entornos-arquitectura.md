@@ -19,7 +19,7 @@ Mantener tres entornos aislados:
 La arquitectura recomendada conserva el monolito modular. No hace falta dividir
 los dominios de Administración, Producción, Comercial o Inventario en
 microservicios. La única separación prevista es el procesamiento intensivo de
-CPU —principalmente nesting vectorial— cuando la concurrencia lo justifique.
+CPU —principalmente nesting vectorial— ya está separada en workers durables.
 
 ## Arquitectura actual
 
@@ -67,7 +67,7 @@ sistema y no se compensa con una CDN.
 | Base de datos            | AWS RDS PostgreSQL            | misma región y VPC que el API |
 | Pool administrado futuro | AWS RDS Proxy                 | misma VPC                     |
 | Archivos                 | Cloudflare R2, bucket privado | red de Cloudflare             |
-| Cola/caché futura        | AWS ElastiCache Redis         | misma VPC                     |
+| Cola/caché de workers    | AWS ElastiCache Redis         | misma VPC                     |
 | Secretos del API         | AWS Secrets Manager           | por entorno                   |
 | Logs y métricas          | CloudWatch + Sentry           | por entorno                   |
 | Automatización           | GitHub Actions                | environments separados        |
@@ -109,7 +109,7 @@ Características:
 - ARCA/AFIP en homologación;
 - tokens de Meta/WATI de prueba o integración desactivada;
 - seeds reproducibles para datos de demostración;
-- Redis local en Docker sólo cuando se implemente la cola de workers.
+- Redis local en Docker para ejecutar la cola opt-in de workers.
 
 El desarrollo local debe continuar funcionando aunque R2, Redis y proveedores
 externos no estén configurados.
@@ -265,39 +265,41 @@ Métricas mínimas:
 
 ## Escalado del motor de precios y nesting
 
-El costeo normal y los nestings rectangulares pueden continuar dentro del API.
-El nesting vectorial irregular es CPU-bound y hoy corre de manera sincrónica en
-el hilo principal de Node. Varias solicitudes complejas simultáneas pueden
-degradar las demás pantallas aunque existan muchos tenants con poca actividad.
+El costeo normal y los nestings rectangulares continúan dentro del API. El
+nesting vectorial irregular es CPU-bound y corre en workers de geometría sobre
+Redis/BullMQ; no bloquea el hilo HTTP de Node.
 
-La evolución prevista es:
+La topología implementada es:
 
 ```text
 API web
-  ├── cotización y nesting simple → respuesta inmediata
-  └── nesting pesado → Redis/BullMQ → workers de geometría
-                                      ├── resultado/caché
-                                      └── SVG, TAP y exportaciones a R2
+  ├── cotización simple → respuesta inmediata
+  └── cotización vectorial → Redis/BullMQ → worker de cotización
+                              ├── geometría rápida/estándar → cola interactiva
+                              ├── geometría intensiva       → cola aislada
+                              └── resultado validado        → caché compartida
 ```
 
-Principios de esa implementación futura:
+Principios de la implementación:
 
 - worker separado y escalable independientemente;
 - caché compartida por hash del SVG, medidas, sustrato, márgenes, encastres,
   cantidad y versión de algoritmo;
 - resultado definitivo persistido/snapshoteado en cotización y OT;
-- límites de concurrencia globales y por tenant;
-- cola justa para que un tenant no monopolice la CPU;
+- límites de concurrencia globales y por tenant, coordinados en Redis;
+- colas separadas para impedir que un nesting intensivo bloquee los rápidos;
 - estados `pendiente`, `procesando`, `completado`, `fallido` y `cancelado`;
 - cancelación de trabajos obsoletos cuando el usuario cambia los parámetros;
 - timeout, reintentos controlados e idempotencia;
 - progreso visible en la interfaz;
-- modo directo local para no exigir infraestructura externa al desarrollar;
 - benchmarks antes y después, separados por nesting simple y vectorial.
 
-La caché vectorial actual es local por réplica, conserva hasta 100 entradas por
-15 minutos y está aislada por tenant. Es útil para el flujo inmediato, pero no
-reemplaza Redis ni una cola distribuida.
+La caché vectorial combina L1 local y L2 en Redis, conserva las soluciones siete
+días y está aislada por tenant. El resultado validado alimenta cotización,
+componentes, consolidación irregular, visualización y OT.
+
+El autoscaling por profundidad/antigüedad de cola y el ajuste de las cuotas
+con métricas reales son endurecimientos de producción todavía pendientes.
 
 ## Base de datos y recuperación
 
@@ -342,7 +344,11 @@ reemplaza Redis ni una cola distribuida.
 | Observabilidad centralizada          | parcial                                       |
 | Backups/restauración operados        | pendiente                                     |
 | Graceful shutdown                    | pendiente                                     |
-| Workers/cola de nesting              | pendiente                                     |
+| Base workers/cola de geometría       | implementada (W0)                             |
+| GrafoNest/OpenNest aislado           | implementado (W1)                             |
+| Estado/cancelación de jobs           | implementado (W2)                             |
+| Integración con costeo               | implementada (W3)                             |
+| Cotización durable y colas por peso  | implementada (W4)                             |
 | Pruebas de carga                     | pendiente                                     |
 
 ## Orden recomendado de implementación
@@ -355,8 +361,7 @@ reemplaza Redis ni una cola distribuida.
 6. Pipeline de migraciones y estrategia de rollback.
 7. Producción con RDS Multi-AZ, dos réplicas API y R2.
 8. Pruebas de carga con tráfico representativo.
-9. Extraer nesting pesado a workers cuando las mediciones definan umbrales.
-10. Ajustar autoscaling, pooling y rollups según métricas reales.
+9. Ajustar autoscaling, pooling y rollups según métricas reales.
 
 La arquitectura objetivo no exige una reescritura: formaliza el empaquetado,
 los entornos y la operación de las piezas que ya existen.

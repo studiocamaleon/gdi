@@ -1,8 +1,8 @@
 "use client";
 
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-
-import seC from "./cotizador-seccion.module.css";
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import styles from "./modo-ingreso-selector.module.css";
 
 export type OpcionModoIngreso<T extends string = string> = {
   value: T;
@@ -14,6 +14,10 @@ type Props<T extends string> = {
   options: Array<OpcionModoIngreso<T>>;
   onValueChange: (value: T) => void;
   ariaLabel?: string;
+  title?: string;
+  description?: string;
+  icon?: LucideIcon;
+  action?: ReactNode;
 };
 
 /**
@@ -26,38 +30,52 @@ export function ModoIngresoSelector<T extends string>({
   options,
   onValueChange,
   ariaLabel = "Modo de ingreso",
+  title = "Modo de ingreso",
+  description,
+  icon: Icon,
+  action,
 }: Props<T>) {
-  if (options.length < 2) return null;
+  if (options.length < 2 && !action) return null;
 
   return (
-    <div className={seC.card}>
-      <div className={seC.gh}>Modo de ingreso</div>
-      <div className={seC.body}>
-        <ToggleGroup
-          multiple={false}
-          variant="outline"
-          value={[value]}
-          onValueChange={(values) => {
-            const next = values.at(-1) as T | undefined;
-            if (next) onValueChange(next);
-          }}
-          aria-label={ariaLabel}
-          className="grid w-full"
-          style={{
-            gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
-          }}
-        >
-          {options.map((option) => (
-            <ToggleGroupItem
-              key={option.value}
-              value={option.value}
-              className="w-full"
-            >
-              {option.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
-    </div>
+    <section className={styles.panel}>
+      <header className={styles.header}>
+        {Icon ? (
+          <span className={styles.icon} aria-hidden="true">
+            <Icon />
+          </span>
+        ) : null}
+        <div className={styles.copy}>
+          <strong>{title}</strong>
+          {description ? <span>{description}</span> : null}
+        </div>
+        {action ? <div className={styles.action}>{action}</div> : null}
+      </header>
+      {options.length > 1 ? (
+        <div className={styles.body}>
+          <div
+            className={styles.choices}
+            role="group"
+            aria-label={ariaLabel}
+            style={{
+              gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={styles.choice}
+                data-active={option.value === value}
+                aria-pressed={option.value === value}
+                onClick={() => onValueChange(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }

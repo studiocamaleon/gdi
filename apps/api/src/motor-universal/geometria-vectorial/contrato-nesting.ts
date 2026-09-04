@@ -105,7 +105,7 @@ function rectanguloComoContorno(anchoMm: number, altoMm: number) {
   ] satisfies ContornoVectorial[];
 }
 
-function piezaDesdeDemanda(demanda: DemandaNesting): PiezaVectorial {
+export function piezaDesdeDemanda(demanda: DemandaNesting): PiezaVectorial {
   const geometria = demanda.geometria;
   if (geometria.tipo === 'RECTANGULO') {
     const anchoMm = numeroPositivo(geometria.anchoMm, 'El ancho de la pieza');

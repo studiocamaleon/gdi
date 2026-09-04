@@ -340,11 +340,7 @@ export type ProductoRecetaComponenteInput = {
 };
 
 export type OrigenParametroComponente =
-  | "DEFAULT_HIJO"
-  | "FIJO"
-  | "PADRE"
-  | "FORMULA"
-  | "COTIZACION";
+  "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
 
 export type BindingParametroComponente = {
   clave: string;
@@ -391,13 +387,10 @@ export type ConfiguracionComponenteFabricado = {
 };
 
 export type PoliticaNestingCompuesto =
-  | "INDEPENDIENTE"
-  | "CONSOLIDAR_COMPATIBLES";
+  "INDEPENDIENTE" | "CONSOLIDAR_COMPATIBLES";
 
 export type ModoPricingComponente =
-  | "HEREDAR_PADRE"
-  | "USAR_PRODUCTO_HIJO"
-  | "OVERRIDE";
+  "HEREDAR_PADRE" | "USAR_PRODUCTO_HIJO" | "OVERRIDE";
 
 export type PrecioConfigComponente = {
   metodoCalculo: string;
@@ -553,10 +546,7 @@ export type EstadoRutaPublicacionReceta =
   | "BLOQUEADA";
 
 export type EstadoDependenciaReceta =
-  | "VIGENTE"
-  | "ACTUALIZACION_DISPONIBLE"
-  | "SIN_PUBLICACION"
-  | "AMBIGUA";
+  "VIGENTE" | "ACTUALIZACION_DISPONIBLE" | "SIN_PUBLICACION" | "AMBIGUA";
 
 export interface EstadoPublicacionProducto {
   producto: { id: string; nombre: string };
@@ -1040,10 +1030,7 @@ export interface UpsertSlotMaterialPayload {
   slotNombre?: string | null;
   slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
   modoSeleccion:
-    | "HARDCODED"
-    | "COMERCIAL_ELIGE"
-    | "MOTOR_ELIGE_AUTO"
-    | "HEREDA_DE_PASO";
+    "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO" | "HEREDA_DE_PASO";
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
@@ -1225,9 +1212,7 @@ export interface CrearCargoDirectoPayload {
   nombre: string;
   descripcion?: string;
   modoCalculo:
-    | "MONTO_FIJO_PLANO"
-    | "PORCENTAJE_SOBRE_BASE"
-    | "POR_UNIDAD_INPUT";
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -1245,9 +1230,7 @@ export interface ActualizarCargoDirectoPayload {
   nombre?: string;
   descripcion?: string;
   modoCalculo?:
-    | "MONTO_FIJO_PLANO"
-    | "PORCENTAJE_SOBRE_BASE"
-    | "POR_UNIDAD_INPUT";
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -1660,6 +1643,18 @@ export interface NestingViewerInput {
       widthMm: number;
       heightMm: number;
     };
+    manejoPlaca?: {
+      modo: "SOBRESALIENTE";
+      eje: "x" | "y";
+      excedenteMm: number;
+      workArea: {
+        xMm: number;
+        yMm: number;
+        widthMm: number;
+        heightMm: number;
+      };
+      mensaje: string;
+    };
     panelizado?: {
       enabled: boolean;
       mode: "automatic" | "manual";
@@ -2053,6 +2048,7 @@ export interface CotizarResponse {
     mensaje: string;
     rutaPasoId?: string;
     contexto?: Record<string, unknown>;
+    sugerencia?: string;
   }>;
   cotizacion?: {
     productoId: string;
@@ -2455,6 +2451,102 @@ export async function cotizar(
   });
 }
 
+export interface TrabajoCotizacionAsincrona {
+  id: string;
+  tipo: "quote.calculate.v1";
+  estado: "pendiente" | "procesando" | "completado" | "fallido";
+  creadoEl: string;
+  iniciadoEl?: string;
+  finalizadoEl?: string;
+  correlationId: string;
+  progreso: {
+    porcentaje: number;
+    etapa: "en_cola" | "cotizando" | "completado";
+  };
+  resultado?: CotizarResponse;
+  error?: ErrorTrabajoCotizacion;
+}
+
+export type AccionErrorCotizacion = {
+  tipo:
+    | "REINTENTAR"
+    | "REVISAR_DATOS"
+    | "GENERAR_NESTING"
+    | "ABRIR_CONFIGURACION"
+    | "ABRIR_PUBLICACION";
+  etiqueta: string;
+  href?: string;
+};
+
+export type ErrorTrabajoCotizacion = {
+  codigo:
+    | "RECETA_DESACTUALIZADA"
+    | "RECETA_NO_PUBLICADA"
+    | "CONFIGURACION_INCOMPLETA"
+    | "DATOS_INCOMPLETOS"
+    | "NESTING_FALLIDO"
+    | "SERVICIO_NO_DISPONIBLE"
+    | "CALCULO_FALLIDO";
+  mensaje: string;
+  sugerencia: string;
+  accion: AccionErrorCotizacion;
+};
+
+export class CotizacionAsincronaError extends Error {
+  readonly detalle: ErrorTrabajoCotizacion;
+  readonly referencia: string;
+
+  constructor(detalle: ErrorTrabajoCotizacion, referencia: string) {
+    super(detalle.mensaje);
+    this.name = "CotizacionAsincronaError";
+    this.detalle = detalle;
+    this.referencia = referencia;
+  }
+}
+
+/** Cotización durable: el HTTP inicial sólo encola y el navegador observa. */
+export async function cotizarEnSegundoPlano(
+  req: CotizarRequest,
+  options: {
+    claveSolicitud: string;
+    signal?: AbortSignal;
+    onEstado?: (trabajo: TrabajoCotizacionAsincrona) => void;
+  },
+): Promise<CotizarResponse> {
+  let trabajo = await apiRequest<TrabajoCotizacionAsincrona>(
+    "/motor-universal/cotizar-asincrono",
+    {
+      method: "POST",
+      body: JSON.stringify({ ...req, claveSolicitud: options.claveSolicitud }),
+      headers: { "Content-Type": "application/json" },
+      signal: options.signal,
+    },
+  );
+  options.onEstado?.(trabajo);
+  while (trabajo.estado === "pendiente" || trabajo.estado === "procesando") {
+    await esperar(500, options.signal);
+    trabajo = await apiRequest<TrabajoCotizacionAsincrona>(
+      `/motor-universal/cotizaciones-asincronas/${encodeURIComponent(trabajo.id)}`,
+      { signal: options.signal },
+    );
+    options.onEstado?.(trabajo);
+  }
+  if (trabajo.estado === "completado" && trabajo.resultado) {
+    return trabajo.resultado;
+  }
+  throw new CotizacionAsincronaError(
+    trabajo.error ?? {
+      codigo: "CALCULO_FALLIDO",
+      mensaje:
+        "El trabajo terminó sin un resultado ni una causa específica del motor.",
+      sugerencia:
+        "Reintentá una vez. Si vuelve a ocurrir, compartí la referencia con soporte.",
+      accion: { tipo: "REINTENTAR", etiqueta: "Reintentar ahora" },
+    },
+    trabajo.correlationId,
+  );
+}
+
 export type ConfiguracionEncastresVectoriales = {
   tipoUnion: "cola_milano" | "recta";
   anchoEncastreMm: number;
@@ -2614,6 +2706,14 @@ export interface AnalisisSvgFabricacion {
   };
   nesting: {
     algorithm: "irregular-2d-bottom-left-v1";
+    motorNesting?: "opennest-v1" | "grafonest-baseline-v1";
+    versionMotor?: string;
+    duracionMs?: number;
+    estrategiaOrientacion?: "uniforme" | "cardinal" | "libre";
+    rotacionesPermitidas?: number;
+    versionPoliticaOrientacion?: number;
+    calidadSolucion?: "BASE_SEGURA" | "OPTIMIZADA";
+    optimizacionAgotada?: boolean;
     placas: number;
     anchoPlacaMm: number;
     altoPlacaMm: number;
@@ -2676,9 +2776,10 @@ export interface AnalisisSvgFabricacion {
   }>;
 }
 
-export async function analizarSvgFabricacion(req: {
+export type SolicitudAnalisisSvgFabricacion = {
   svg: string;
   nombreArchivo: string;
+  claveSolicitud?: string;
   anchoFinalMm: number;
   altoFinalMm?: number;
   cantidad: number;
@@ -2691,7 +2792,43 @@ export async function analizarSvgFabricacion(req: {
   preservarComposicionOriginalSiEntra?: boolean;
   configuracionEncastres?: ConfiguracionEncastresVectoriales;
   configuracionCapas?: ConfiguracionCapasVectoriales;
-}): Promise<AnalisisSvgFabricacion> {
+};
+
+export type FormatoFuenteVectorial = "SVG" | "DXF";
+
+export type FuenteVectorialNormalizada = {
+  nombreArchivo: string;
+  formatoOrigen: FormatoFuenteVectorial;
+  svg: string;
+  relacionAltoAncho: number;
+  anchoSugeridoMm: number;
+  altoSugeridoMm: number;
+  unidadDetectada: string | null;
+  diagnosticos: Array<{
+    codigo: string;
+    mensaje: string;
+    severidad: "ERROR" | "WARNING";
+  }>;
+};
+
+export async function normalizarFuenteVectorial(req: {
+  contenido: string;
+  nombreArchivo: string;
+  formato?: FormatoFuenteVectorial;
+}): Promise<FuenteVectorialNormalizada> {
+  return apiRequest<FuenteVectorialNormalizada>(
+    "/motor-universal/geometria-vectorial/normalizar",
+    {
+      method: "POST",
+      body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+export async function analizarSvgFabricacion(
+  req: SolicitudAnalisisSvgFabricacion,
+): Promise<AnalisisSvgFabricacion> {
   return apiRequest<AnalisisSvgFabricacion>(
     "/motor-universal/geometria-vectorial/analizar",
     {
@@ -2700,6 +2837,114 @@ export async function analizarSvgFabricacion(req: {
       headers: { "Content-Type": "application/json" },
     },
   );
+}
+
+export type PreparacionSvgFabricacion = Pick<
+  AnalisisSvgFabricacion,
+  "nombreArchivo" | "geometria" | "configuracionCapas" | "diagnosticos"
+>;
+
+export function prepararSvgFabricacion(
+  req: SolicitudAnalisisSvgFabricacion,
+): Promise<PreparacionSvgFabricacion> {
+  return apiRequest("/motor-universal/geometria-vectorial/preparar", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export type TrabajoAnalisisVectorial = {
+  id: string;
+  tipo: "analisis-vectorial-opennest";
+  estado: "pendiente" | "procesando" | "completado" | "fallido" | "cancelado";
+  creadoEl: string;
+  iniciadoEl?: string;
+  finalizadoEl?: string;
+  correlationId: string;
+  progreso: {
+    porcentaje: number;
+    etapa: "en_cola" | "opennest" | "validando" | "completado";
+  };
+  resultado?: AnalisisSvgFabricacion;
+  error?: { codigo: string; mensaje: string };
+  cancelacion?: {
+    motivo: "usuario" | "obsoleto";
+    solicitadaEl: string;
+    reemplazadoPor?: string;
+  };
+};
+
+/** Ejecuta y espera el nesting durable. El resultado recibido es exactamente
+ * el que queda cacheado para el costeo posterior. */
+export async function analizarSvgFabricacionEnWorker(
+  req: SolicitudAnalisisSvgFabricacion,
+  options?: {
+    signal?: AbortSignal;
+    onEstado?: (trabajo: TrabajoAnalisisVectorial) => void;
+  },
+): Promise<AnalisisSvgFabricacion> {
+  let trabajo = await apiRequest<TrabajoAnalisisVectorial>(
+    "/motor-universal/geometria-vectorial/analizar-asincrono",
+    {
+      method: "POST",
+      body: JSON.stringify(req),
+      signal: options?.signal,
+    },
+  );
+  options?.onEstado?.(trabajo);
+  try {
+    while (trabajo.estado === "pendiente" || trabajo.estado === "procesando") {
+      await esperar(400, options?.signal);
+      trabajo = await apiRequest<TrabajoAnalisisVectorial>(
+        `/motor-universal/geometria-vectorial/trabajos/${encodeURIComponent(trabajo.id)}`,
+        { signal: options?.signal },
+      );
+      options?.onEstado?.(trabajo);
+    }
+  } catch (error) {
+    if (
+      options?.signal?.aborted &&
+      trabajo.id &&
+      !trabajo.id.startsWith("cache-")
+    ) {
+      void apiRequest(
+        `/motor-universal/geometria-vectorial/trabajos/${encodeURIComponent(trabajo.id)}`,
+        { method: "DELETE" },
+      ).catch(() => undefined);
+    }
+    throw error;
+  }
+  if (trabajo.estado === "completado" && trabajo.resultado) {
+    return trabajo.resultado;
+  }
+  if (trabajo.estado === "cancelado") {
+    throw new Error(
+      trabajo.cancelacion?.motivo === "obsoleto"
+        ? "El cálculo fue reemplazado por una configuración más reciente."
+        : "El cálculo fue cancelado.",
+    );
+  }
+  throw new Error(
+    trabajo.error?.mensaje ?? "No se pudo completar el nesting irregular.",
+  );
+}
+
+function esperar(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Consulta cancelada.", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", cancelar);
+      resolve();
+    }, ms);
+    const cancelar = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Consulta cancelada.", "AbortError"));
+    };
+    signal?.addEventListener("abort", cancelar, { once: true });
+  });
 }
 
 export async function medirSvgFabricacion(req: {

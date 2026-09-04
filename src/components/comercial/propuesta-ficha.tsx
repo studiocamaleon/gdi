@@ -203,6 +203,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -212,6 +217,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   type MutacionAplicadaView,
   demasiaPorLado,
@@ -6784,6 +6794,7 @@ export function PropuestaFicha({
   const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
     orden?.proyectoCampana?.id ?? "",
   );
+  const [campanaSelectorOpen, setCampanaSelectorOpen] = React.useState(false);
   const [campanasCliente, setCampanasCliente] = React.useState<
     CampanaReferencia[]
   >([]);
@@ -8961,39 +8972,109 @@ export function PropuestaFicha({
           )}
         </FieldCard>
 
-        <FieldCard label="Campaña" icon={<FolderIcon />}>
+        <div className="ofield ofield--campana">
           {!orden ? (
-            <div className="ctrl-input">
-              <select
-                value={proyectoCampanaId}
-                onChange={(event) => setProyectoCampanaId(event.target.value)}
-                disabled={!clienteId}
-                aria-label="Campaña opcional"
+            <Popover
+              open={campanaSelectorOpen}
+              onOpenChange={setCampanaSelectorOpen}
+            >
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <PopoverTrigger
+                      className="campana-trigger"
+                      data-active={Boolean(proyectoCampanaId)}
+                      disabled={!clienteId}
+                      aria-label={
+                        proyectoCampanaId ? "Cambiar campaña" : "Elegir campaña"
+                      }
+                    />
+                  }
+                >
+                  <FolderIcon aria-hidden="true" />
+                  {proyectoCampanaId ? (
+                    <span className="campana-indicator" />
+                  ) : null}
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {!clienteId
+                    ? "Elegí primero un cliente"
+                    : proyectoCampanaId
+                      ? `Campaña: ${
+                          campanasCliente.find(
+                            (campana) => campana.id === proyectoCampanaId,
+                          )?.nombre ?? "seleccionada"
+                        }`
+                      : "Asociar a una campaña"}
+                </TooltipContent>
+              </Tooltip>
+              <PopoverContent
+                align="start"
+                className="campana-selector-popover"
               >
-                <option value="">
-                  {clienteId ? "Sin campaña" : "Primero elegí un cliente"}
-                </option>
-                {campanasCliente.map((campana) => (
-                  <option key={campana.id} value={campana.id}>
-                    {campana.codigo} · {campana.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="campana-selector-heading">
+                  <FolderIcon aria-hidden="true" />
+                  <div>
+                    <strong>Campaña</strong>
+                    <span>Opcional para esta orden</span>
+                  </div>
+                </div>
+                <label className="campana-selector-field">
+                  <span>Seleccionar campaña</span>
+                  <select
+                    value={proyectoCampanaId}
+                    onChange={(event) => {
+                      setProyectoCampanaId(event.target.value);
+                      setCampanaSelectorOpen(false);
+                    }}
+                    aria-label="Campaña opcional"
+                  >
+                    <option value="">Sin campaña</option>
+                    {campanasCliente.map((campana) => (
+                      <option key={campana.id} value={campana.id}>
+                        {campana.codigo} · {campana.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </PopoverContent>
+            </Popover>
           ) : orden.proyectoCampana ? (
-            <div className="ctrl-input">
-              <Link href={`/comercial/campanas/${orden.proyectoCampana.id}`}>
-                <span className="mono">{orden.proyectoCampana.codigo}</span>
-                {" · "}
-                {orden.proyectoCampana.nombre}
-              </Link>
-            </div>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    className="campana-trigger"
+                    data-active="true"
+                    href={`/comercial/campanas/${orden.proyectoCampana.id}`}
+                    aria-label={`Abrir campaña ${orden.proyectoCampana.nombre}`}
+                  />
+                }
+              >
+                <FolderIcon aria-hidden="true" />
+                <span className="campana-indicator" />
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {orden.proyectoCampana.codigo} · {orden.proyectoCampana.nombre}
+              </TooltipContent>
+            </Tooltip>
           ) : (
-            <div className="ctrl-input">
-              <span>Sin campaña</span>
-            </div>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    className="campana-trigger"
+                    aria-label="Sin campaña"
+                    aria-disabled="true"
+                  />
+                }
+              >
+                <FolderIcon aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent side="top">Sin campaña</TooltipContent>
+            </Tooltip>
           )}
-        </FieldCard>
+        </div>
 
         <FieldCard label="Vendedor" icon={<UserIcon />}>
           <div className="ctrl-input has-avatar">

@@ -11,6 +11,7 @@ describe('geometrías comerciales', () => {
       version: 1,
       modo: 'RECTANGULAR',
       fuentes: [],
+      permitirCotizacionManual: false,
     });
   });
 
@@ -30,8 +31,24 @@ describe('geometrías comerciales', () => {
         ],
       },
     };
-    expect(leerGeometriasComerciales(atributos)).toEqual(
-      atributos.geometriasComerciales,
+    expect(leerGeometriasComerciales(atributos)).toEqual({
+      ...atributos.geometriasComerciales,
+      permitirCotizacionManual: false,
+    });
+    expect(() => validarGeometriasComerciales(atributos)).not.toThrow();
+  });
+
+  it('conserva la excepción manual sólo cuando fue habilitada', () => {
+    const atributos = {
+      geometriasComerciales: {
+        version: 1,
+        modo: 'VECTORIAL',
+        fuentes: [{ id: 'principal', nombre: 'Principal', requerida: true }],
+        permitirCotizacionManual: true,
+      },
+    };
+    expect(leerGeometriasComerciales(atributos).permitirCotizacionManual).toBe(
+      true,
     );
     expect(() => validarGeometriasComerciales(atributos)).not.toThrow();
   });

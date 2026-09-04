@@ -236,7 +236,7 @@ async function installPolyfanProduct(prisma, tenantId, installedMaterial) {
         postprocesadorRecorrido: 'HOTWIRE_TAP_V1',
         origenMaquina: 'bottom-left',
         estrategiaOrigen: 'geometry-bounds',
-        estrategiaNestingVectorial: 'preserve-original-if-fits',
+        estrategiaNestingVectorial: 'optimize-material',
         tipoUnionVectorial: 'cola_milano',
         anchoEncastreMm: 30,
         profundidadEncastreMm: 30,
@@ -268,7 +268,7 @@ async function installPolyfanProduct(prisma, tenantId, installedMaterial) {
   // Sólo completa políticas ausentes en máquinas existentes. Una preferencia
   // que el tenant cambió explícitamente nunca debe ser pisada por el instalador.
   const hotWireDefaults = {
-    estrategiaNestingVectorial: 'preserve-original-if-fits',
+    estrategiaNestingVectorial: 'optimize-material',
     tipoUnionVectorial: 'cola_milano',
     anchoEncastreMm: 30,
     profundidadEncastreMm: 30,

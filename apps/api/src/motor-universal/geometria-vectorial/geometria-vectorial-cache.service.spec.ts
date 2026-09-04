@@ -30,7 +30,10 @@ function input(tenantId = 'tenant-a') {
 }
 
 describe('GeometriaVectorialCacheService', () => {
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => {
+    delete process.env.GRAFONEST_CACHE_TTL_SECONDS;
+    jest.restoreAllMocks();
+  });
 
   it('reutiliza un análisis idéntico y valida nuevamente el hash del SVG', () => {
     const service = new GeometriaVectorialCacheService();
@@ -74,6 +77,7 @@ describe('GeometriaVectorialCacheService', () => {
 
   it('invalida la entrada al vencer el TTL', () => {
     const now = 1_000_000;
+    process.env.GRAFONEST_CACHE_TTL_SECONDS = '900';
     jest.spyOn(Date, 'now').mockReturnValue(now);
     const service = new GeometriaVectorialCacheService();
     const { entry } = service.analizar(input());

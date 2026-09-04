@@ -18,6 +18,7 @@ export type ConfiguracionGeometriasComerciales = {
   version: 1;
   modo: ModoGeometriaComercial;
   fuentes: FuenteGeometriaComercial[];
+  permitirCotizacionManual: boolean;
 };
 
 function esRegistro(value: unknown): value is Record<string, unknown> {
@@ -36,7 +37,12 @@ export function leerGeometriasComerciales(
     ? atributos.geometriasComerciales
     : undefined;
   if (!esRegistro(raw)) {
-    return { version: 1, modo: 'RECTANGULAR', fuentes: [] };
+    return {
+      version: 1,
+      modo: 'RECTANGULAR',
+      fuentes: [],
+      permitirCotizacionManual: false,
+    };
   }
   const modo = MODOS_GEOMETRIA_COMERCIAL.includes(
     raw.modo as ModoGeometriaComercial,
@@ -54,7 +60,12 @@ export function leerGeometriasComerciales(
           : [];
       })
     : [];
-  return { version: 1, modo, fuentes };
+  return {
+    version: 1,
+    modo,
+    fuentes,
+    permitirCotizacionManual: raw.permitirCotizacionManual === true,
+  };
 }
 
 export function validarGeometriasComerciales(atributos: unknown): void {
@@ -67,7 +78,9 @@ export function validarGeometriasComerciales(atributos: unknown): void {
     Number(raw.version) !== 1 ||
     !MODOS_GEOMETRIA_COMERCIAL.includes(raw.modo as ModoGeometriaComercial) ||
     !Array.isArray(raw.fuentes) ||
-    raw.fuentes.length > 30
+    raw.fuentes.length > 30 ||
+    (raw.permitirCotizacionManual !== undefined &&
+      typeof raw.permitirCotizacionManual !== 'boolean')
   ) {
     throw new BadRequestException(
       'La configuración de geometrías comerciales no es válida.',

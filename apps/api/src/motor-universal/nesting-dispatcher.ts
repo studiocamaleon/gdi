@@ -82,6 +82,7 @@ import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
 import {
   marcarNestingVectorialReutilizado,
   obtenerCacheVectorial,
+  type ParametrosNestingVectorialCache,
 } from './geometria-vectorial/geometria-vectorial-cache.service';
 import {
   crearDemandasDesdeGeometriaVectorial,
@@ -336,6 +337,15 @@ export interface NestingDispatchOpts {
   loadPrintSheetMaterial?: (
     varianteId: string,
   ) => Promise<PrintSheetCandidateMaterial | null>;
+  /**
+   * Ejecuta el problema irregular fuera del proceso HTTP. El callback se
+   * inyecta desde el motor porque el dispatcher no conoce Redis ni BullMQ.
+   */
+  resolveIrregularNesting?: (input: {
+    fuente: NonNullable<JobContext['disenoVectorialFuente']>;
+    parametros: ParametrosNestingVectorialCache;
+    problema: ReturnType<typeof crearProblemaNestingIrregular>;
+  }) => Promise<SolucionNesting>;
 }
 
 /**
@@ -582,7 +592,7 @@ async function despacharNesting(
   if (declaracion.estrategia) {
     const estrategia = ESTRATEGIAS_NESTING[declaracion.estrategia];
     if (!estrategia) return null;
-    return await estrategia(paso, jobContext, materialResuelto, config);
+    return await estrategia(paso, jobContext, materialResuelto, config, opts);
   }
 
   // Sin estrategia, la superficie decide (familias de tenant y las del
@@ -612,6 +622,7 @@ type EstrategiaNestingFn = (
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
+  opts?: NestingDispatchOpts,
 ) => NestingDispatchResult | null | Promise<NestingDispatchResult | null>;
 
 /**
@@ -622,12 +633,17 @@ type EstrategiaNestingFn = (
  */
 const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
   /** Contornos SVG normalizados por el servidor sobre una placa finita. */
-  irregular_placa: (paso, jobContext, materialResuelto, config) =>
+  irregular_placa: (paso, jobContext, materialResuelto, config, opts) =>
     herramientasCotizacionEfectivas(
       paso.familiaCodigo,
       paso.paramsPasoJson,
     ).includes('diseno_vectorial')
-      ? runIrregularPlaca(jobContext, materialResuelto, config)
+      ? runIrregularPlaca(
+          jobContext,
+          materialResuelto,
+          config,
+          opts?.resolveIrregularNesting,
+        )
       : null,
 
   /** Corte sobre rollo: shelf sin panelizado. Si el material cargado es hoja/
@@ -707,6 +723,7 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
   layout: LayoutProduccionCompartido,
   config: NestingConfigResolved,
   materialResuelto: MaterialResueltoParaNesting,
+  superficie: SuperficieTrabajoPlaca,
 ): NestingDispatchResult {
   const geometria = jobContext.geometriaVectorial!;
   const substratesOriginales = layout.substrates.filter(
@@ -744,29 +761,12 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
     );
   }
 
-  const camaAncho = config.machineBedWidthMm;
-  const camaAlto = config.machineBedHeightMm;
-  const entraDirecta =
-    camaAncho == null ||
-    camaAlto == null ||
-    (primeraPlaca.widthMm <= camaAncho + 0.01 &&
-      primeraPlaca.heightMm <= camaAlto + 0.01);
-  const entraRotada =
-    camaAncho != null &&
-    camaAlto != null &&
-    primeraPlaca.heightMm <= camaAncho + 0.01 &&
-    primeraPlaca.widthMm <= camaAlto + 0.01;
-  if (!entraDirecta && !entraRotada) {
-    throw new NestingIrregularError(
-      `La placa impresa de ${primeraPlaca.widthMm} × ${primeraPlaca.heightMm} mm no entra en el área útil del láser (${camaAncho} × ${camaAlto} mm), ni siquiera rotada.`,
-    );
-  }
   // La placa puede necesitar girarse físicamente para entrar en la cama, pero
   // el archivo y el visor conservan SIEMPRE las coordenadas de impresión. Si
   // rotáramos el sistema de coordenadas acá, ambos procesos registrarían en
   // producción pero se verían orientados distinto y los archivos dejarían de
   // compartir el mismo origen visual.
-  const requiereRotacionFisicaEnMaquina = !entraDirecta && entraRotada;
+  const requiereRotacionFisicaEnMaquina = superficie.rotadaFisicamente;
 
   const piezasPorId = new Map(
     geometria.piezas.map((pieza) => [pieza.id, pieza] as const),
@@ -826,6 +826,18 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
     const minY = Math.min(...puntos.map((punto) => punto.y));
     const maxX = Math.max(...puntos.map((punto) => punto.x));
     const maxY = Math.max(...puntos.map((punto) => punto.y));
+    const areaTrabajo = superficie.manejoPlaca?.workArea;
+    if (
+      areaTrabajo &&
+      (minX < areaTrabajo.xMm - 0.01 ||
+        minY < areaTrabajo.yMm - 0.01 ||
+        maxX > areaTrabajo.xMm + areaTrabajo.widthMm + 0.01 ||
+        maxY > areaTrabajo.yMm + areaTrabajo.heightMm + 0.01)
+    ) {
+      throw new NestingIrregularError(
+        `El layout impreso ubica la pieza "${pieza.id}" fuera de la zona accesible del láser (${Math.round(areaTrabajo.widthMm)} × ${Math.round(areaTrabajo.heightMm)} mm). Reacomodá la impresión para dejar el excedente de placa sin cortes.`,
+      );
+    }
     const substrateIndex = placement.substrateIndex ?? 0;
     if (areaPorPlaca[substrateIndex] === undefined) {
       throw new NestingIrregularError(
@@ -877,6 +889,29 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
   const aprovechamientoPct =
     areaCompradaMm2 > 0 ? (areaPiezasMm2 / areaCompradaMm2) * 100 : 0;
 
+  const visualCompartida = transformarVisualConfigCompartida(
+    layout.visualConfig,
+    requiereRotacionFisicaEnMaquina,
+  );
+  const visualConfig = superficie.manejoPlaca
+    ? {
+        ...(visualCompartida ?? {
+          margins: {
+            leftMm: 0,
+            rightMm: 0,
+            topMm: 0,
+            bottomMm: 0,
+          },
+          spacing: { horizontalMm: 0, verticalMm: 0 },
+          pieceBleedMm: 0,
+          allowRotation: false,
+        }),
+        printableArea: superficie.manejoPlaca.workArea,
+        usableArea: superficie.manejoPlaca.workArea,
+        manejoPlaca: superficie.manejoPlaca,
+      }
+    : visualCompartida;
+
   return {
     algorithm: 'irregular-2d-bottom-left-v1',
     cantidadCalculada: substrates.length,
@@ -902,10 +937,7 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
     },
     piezasAcomodadas: placements.length,
     estrategiaDisposicion: 'nesting_optimizado',
-    visualConfig: transformarVisualConfigCompartida(
-      layout.visualConfig,
-      requiereRotacionFisicaEnMaquina,
-    ),
+    visualConfig,
   };
 }
 
@@ -940,27 +972,152 @@ function transformarVisualConfigCompartida(
   };
 }
 
-function runIrregularPlaca(
+type SuperficieTrabajoPlaca = {
+  /** Formato físico completo apoyado sobre la máquina. */
+  stockWidthMm: number;
+  stockHeightMm: number;
+  /** Ventana realmente alcanzable por el cabezal en una única carga. */
+  workWidthMm: number;
+  workHeightMm: number;
+  /** La placa se gira físicamente; las coordenadas conservan su orientación. */
+  rotadaFisicamente: boolean;
+  manejoPlaca?: NonNullable<NestingVisualConfig['manejoPlaca']>;
+};
+
+/**
+ * Separa la medida comprada de la superficie alcanzable por la máquina.
+ *
+ * Una cama abierta puede admitir una placa más larga en UN eje: el excedente
+ * queda físicamente fuera, pero el cabezal nunca recibe coordenadas en esa
+ * zona. No se simula una placa más chica ni se abarata el material.
+ */
+function resolverSuperficieTrabajoPlaca(
+  config: NestingConfigResolved,
+): SuperficieTrabajoPlaca {
+  const stockWidthMm = config.sheetWidthMm!;
+  const stockHeightMm = config.sheetHeightMm!;
+  const bedWidthMm = config.machineBedWidthMm;
+  const bedHeightMm = config.machineBedHeightMm;
+
+  if (!bedWidthMm || !bedHeightMm) {
+    return {
+      stockWidthMm,
+      stockHeightMm,
+      workWidthMm: stockWidthMm,
+      workHeightMm: stockHeightMm,
+      rotadaFisicamente: false,
+    };
+  }
+
+  const entraSinRotar =
+    stockWidthMm <= bedWidthMm && stockHeightMm <= bedHeightMm;
+  const entraRotada =
+    stockWidthMm <= bedHeightMm && stockHeightMm <= bedWidthMm;
+  if (entraSinRotar || entraRotada) {
+    return {
+      stockWidthMm,
+      stockHeightMm,
+      workWidthMm: stockWidthMm,
+      workHeightMm: stockHeightMm,
+      rotadaFisicamente: !entraSinRotar && entraRotada,
+    };
+  }
+
+  const eje = config.machineSheetOverhang?.axis;
+  if (!eje) {
+    throw new NestingIrregularError(
+      `La placa de ${stockWidthMm} × ${stockHeightMm} mm supera el área útil de la máquina (${bedWidthMm} × ${bedHeightMm} mm).`,
+    );
+  }
+
+  const orientaciones = [
+    { widthMm: stockWidthMm, heightMm: stockHeightMm, rotada: false },
+    { widthMm: stockHeightMm, heightMm: stockWidthMm, rotada: true },
+  ];
+  const candidatas = orientaciones
+    .filter((orientacion) =>
+      eje === 'y'
+        ? orientacion.widthMm <= bedWidthMm
+        : orientacion.heightMm <= bedHeightMm,
+    )
+    .map((orientacion) => {
+      const workWidthMm =
+        eje === 'x'
+          ? Math.min(orientacion.widthMm, bedWidthMm)
+          : orientacion.widthMm;
+      const workHeightMm =
+        eje === 'y'
+          ? Math.min(orientacion.heightMm, bedHeightMm)
+          : orientacion.heightMm;
+      const excedenteMm =
+        eje === 'y'
+          ? orientacion.heightMm - workHeightMm
+          : orientacion.widthMm - workWidthMm;
+      return {
+        ...orientacion,
+        workWidthMm,
+        workHeightMm,
+        excedenteMm,
+        workAreaMm2: workWidthMm * workHeightMm,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.workAreaMm2 - a.workAreaMm2 ||
+        a.excedenteMm - b.excedenteMm ||
+        Number(a.rotada) - Number(b.rotada),
+    );
+  const elegida = candidatas[0];
+  if (!elegida) {
+    const ejeCerrado = eje === 'y' ? 'X' : 'Y';
+    throw new NestingIrregularError(
+      `La placa de ${stockWidthMm} × ${stockHeightMm} mm supera el eje ${ejeCerrado} de la máquina. Esta máquina sólo admite placas sobresalientes en el eje ${eje.toUpperCase()}.`,
+    );
+  }
+
+  const instruccionCarga = elegida.rotada
+    ? 'Girar la placa 90° y cargarla'
+    : 'Cargarla';
+  const mensaje =
+    `La placa sobresale ${Math.round(elegida.excedenteMm)} mm en el eje ${eje.toUpperCase()}. ` +
+    `${instruccionCarga} con el excedente hacia el lado abierto; todos los cortes están dentro de la zona accesible de ${Math.round(elegida.workWidthMm)} × ${Math.round(elegida.workHeightMm)} mm.`;
+  const workWidthMm = elegida.rotada
+    ? elegida.workHeightMm
+    : elegida.workWidthMm;
+  const workHeightMm = elegida.rotada
+    ? elegida.workWidthMm
+    : elegida.workHeightMm;
+  return {
+    stockWidthMm,
+    stockHeightMm,
+    workWidthMm,
+    workHeightMm,
+    rotadaFisicamente: elegida.rotada,
+    manejoPlaca: {
+      modo: 'SOBRESALIENTE',
+      eje,
+      excedenteMm: elegida.excedenteMm,
+      workArea: {
+        xMm: 0,
+        yMm: 0,
+        widthMm: workWidthMm,
+        heightMm: workHeightMm,
+      },
+      mensaje,
+    },
+  };
+}
+
+async function runIrregularPlaca(
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
-): NestingDispatchResult | null {
+  resolveIrregularNesting?: NestingDispatchOpts['resolveIrregularNesting'],
+): Promise<NestingDispatchResult | null> {
   if (!materialResuelto || !config.sheetWidthMm || !config.sheetHeightMm) {
     return null;
   }
-  if (config.machineBedWidthMm && config.machineBedHeightMm) {
-    const entraSinRotar =
-      config.sheetWidthMm <= config.machineBedWidthMm &&
-      config.sheetHeightMm <= config.machineBedHeightMm;
-    const entraRotada =
-      config.sheetWidthMm <= config.machineBedHeightMm &&
-      config.sheetHeightMm <= config.machineBedWidthMm;
-    if (!entraSinRotar && !entraRotada) {
-      throw new NestingIrregularError(
-        `La placa de ${config.sheetWidthMm} × ${config.sheetHeightMm} mm supera el área útil de la máquina (${config.machineBedWidthMm} × ${config.machineBedHeightMm} mm).`,
-      );
-    }
-  }
+  const superficie = resolverSuperficieTrabajoPlaca(config);
   const layoutCompartido = leerLayoutProduccionCompartido(jobContext);
   if (layoutCompartido && jobContext.geometriaVectorial) {
     return aplicarGeometriaVectorialAlLayoutCompartido(
@@ -968,6 +1125,7 @@ function runIrregularPlaca(
       layoutCompartido,
       config,
       materialResuelto,
+      superficie,
     );
   }
   const placasManuales = Number(jobContext.placasVectorialesManuales ?? 0);
@@ -976,12 +1134,12 @@ function runIrregularPlaca(
   );
   if (placasManuales > 0 && metrosCortePorPlaca > 0) {
     const placas = Math.ceil(placasManuales);
-    const areaPorPlacaMm2 = config.sheetWidthMm * config.sheetHeightMm;
+    const areaPorPlacaMm2 = superficie.stockWidthMm * superficie.stockHeightMm;
     const perimetroCorteMm = placas * metrosCortePorPlaca * 1_000;
     jobContext.piezaAreaTotalM2 = (areaPorPlacaMm2 * placas) / 1_000_000;
     jobContext.piezaPerimetroTotalM = perimetroCorteMm / 1_000;
-    jobContext.piezaAnchoMaxMm = config.sheetWidthMm;
-    jobContext.piezaAltoMaxMm = config.sheetHeightMm;
+    jobContext.piezaAnchoMaxMm = superficie.stockWidthMm;
+    jobContext.piezaAltoMaxMm = superficie.stockHeightMm;
     return {
       algorithm: 'manual-vector-estimate-v1',
       cantidadCalculada: placas,
@@ -993,8 +1151,8 @@ function runIrregularPlaca(
         {
           kind: 'sheet',
           count: placas,
-          widthMm: config.sheetWidthMm,
-          heightMm: config.sheetHeightMm,
+          widthMm: superficie.stockWidthMm,
+          heightMm: superficie.stockHeightMm,
         },
       ],
       placements: [],
@@ -1004,11 +1162,27 @@ function runIrregularPlaca(
         areaTotalMm2: areaPorPlacaMm2 * placas,
         perSubstrate: Array.from({ length: placas }, () => ({
           areaUtilMm2: areaPorPlacaMm2,
-          consumedLengthMm: config.sheetHeightMm!,
+          consumedLengthMm: superficie.stockHeightMm,
         })),
         perimetroCorteMm,
       },
       piezasAcomodadas: 0,
+      visualConfig: superficie.manejoPlaca
+        ? {
+            margins: {
+              leftMm: 0,
+              rightMm: 0,
+              topMm: 0,
+              bottomMm: 0,
+            },
+            spacing: { horizontalMm: 0, verticalMm: 0 },
+            pieceBleedMm: 0,
+            allowRotation: config.allowRotation,
+            printableArea: superficie.manejoPlaca.workArea,
+            usableArea: superficie.manejoPlaca.workArea,
+            manejoPlaca: superficie.manejoPlaca,
+          }
+        : undefined,
     };
   }
   if (!jobContext.geometriaVectorial) return null;
@@ -1031,8 +1205,8 @@ function runIrregularPlaca(
   });
   const problema = crearProblemaNestingIrregular({
     demandas,
-    anchoPlacaMm: config.sheetWidthMm,
-    altoPlacaMm: config.sheetHeightMm,
+    anchoPlacaMm: superficie.workWidthMm,
+    altoPlacaMm: superficie.workHeightMm,
     margenMm: margenUniforme,
     separacionMm: separacionUniforme,
     permitirRotacion: config.allowRotation,
@@ -1047,8 +1221,8 @@ function runIrregularPlaca(
       cached?.analisis.geometria.hashFuente ===
         jobContext.geometriaVectorial.hashFuente &&
       cached.parametros.cantidad === jobContext.cantidad &&
-      cached.parametros.anchoPlacaMm === config.sheetWidthMm &&
-      cached.parametros.altoPlacaMm === config.sheetHeightMm &&
+      cached.parametros.anchoPlacaMm === superficie.workWidthMm &&
+      cached.parametros.altoPlacaMm === superficie.workHeightMm &&
       cached.parametros.margenMm === margenUniforme &&
       cached.parametros.separacionMm === separacionUniforme &&
       cached.parametros.permitirRotacion === config.allowRotation &&
@@ -1059,18 +1233,49 @@ function runIrregularPlaca(
       JSON.stringify(cached.parametros.configuracionEncastres) ===
         JSON.stringify(config.configuracionEncastres);
     if (cacheMatches) marcarNestingVectorialReutilizado(jobContext);
-    const solucionNesting =
+    const parametrosWorker: ParametrosNestingVectorialCache = {
+      cantidad: jobContext.cantidad,
+      anchoPlacaMm: superficie.workWidthMm,
+      altoPlacaMm: superficie.workHeightMm,
+      margenMm: margenUniforme,
+      separacionMm: separacionUniforme,
+      permitirRotacion: config.allowRotation,
+      permitirSegmentacion: config.permitirSegmentacionVectorial,
+      preservarComposicionOriginalSiEntra:
+        config.preservarComposicionOriginalSiEntra,
+      configuracionEncastres: config.configuracionEncastres,
+    };
+    const solucionNestingBase =
       cacheMatches && cached
         ? cached.solucionNesting
-        : resolverProblemaNestingIrregular(problema);
+        : resolveIrregularNesting && jobContext.disenoVectorialFuente
+          ? await resolveIrregularNesting({
+              fuente: jobContext.disenoVectorialFuente,
+              parametros: parametrosWorker,
+              problema,
+            })
+          : resolverProblemaNestingIrregular(problema);
+    const solucionNesting = superficie.manejoPlaca
+      ? {
+          ...solucionNestingBase,
+          diagnosticos: [
+            ...solucionNestingBase.diagnosticos,
+            {
+              codigo: 'placa_sobresaliente',
+              severidad: 'WARNING' as const,
+              mensaje: superficie.manejoPlaca.mensaje,
+            },
+          ],
+        }
+      : solucionNestingBase;
     const result = solucionNesting.resultado;
     const substrates: SubstrateUsage[] = Array.from(
       { length: result.placas },
       () => ({
         kind: 'sheet' as const,
         count: 1,
-        widthMm: result.anchoPlacaMm,
-        heightMm: result.altoPlacaMm,
+        widthMm: superficie.stockWidthMm,
+        heightMm: superficie.stockHeightMm,
       }),
     );
     const perSubstrate = substrates.map((_, index) => ({
@@ -1080,7 +1285,7 @@ function runIrregularPlaca(
           const areaPlacement = areaContornosVectoriales(placement.contornos);
           return sum + areaPlacement;
         }, 0),
-      consumedLengthMm: result.altoPlacaMm,
+      consumedLengthMm: superficie.stockHeightMm,
     }));
     // El corte real incluye las nuevas fronteras creadas por la división. Se
     // publica antes de calcular el tiempo del paso para que el hilo caliente
@@ -1092,11 +1297,15 @@ function runIrregularPlaca(
         (total, union) => total + union.cantidadEncastres,
         0,
       ) * jobContext.cantidad;
+    const areaCompradaMm2 =
+      superficie.stockWidthMm * superficie.stockHeightMm * result.placas;
+    const aprovechamientoPct =
+      areaCompradaMm2 > 0 ? (result.areaPiezasMm2 / areaCompradaMm2) * 100 : 0;
     return {
       algorithm: result.algorithm,
       cantidadCalculada: result.placas,
       unidad: 'pliegos',
-      aprovechamientoPct: result.aprovechamientoPct,
+      aprovechamientoPct,
       substrates,
       placements: result.placements.map((placement) => ({
         pieceId: placement.pieceId,
@@ -1117,9 +1326,9 @@ function runIrregularPlaca(
         },
       })),
       metricasRaw: {
-        aprovechamientoPct: result.aprovechamientoPct,
+        aprovechamientoPct,
         areaUtilMm2: result.areaPiezasMm2,
-        areaTotalMm2: result.areaCompradaMm2,
+        areaTotalMm2: areaCompradaMm2,
         perSubstrate,
         perimetroCorteMm: result.perimetroCorteMm,
         piezasOriginales: result.piezasOriginales,
@@ -1149,12 +1358,19 @@ function runIrregularPlaca(
         // la mitad del gap, una regla válida sólo para layouts impresos legacy.
         pieceBleedMm: 0,
         allowRotation: config.allowRotation,
+        printableArea: {
+          xMm: 0,
+          yMm: 0,
+          widthMm: superficie.workWidthMm,
+          heightMm: superficie.workHeightMm,
+        },
         usableArea: {
           xMm: margenUniforme,
           yMm: margenUniforme,
           widthMm: result.anchoUtilMm,
           heightMm: result.altoUtilMm,
         },
+        manejoPlaca: superficie.manejoPlaca,
       },
     };
   } catch (error) {
