@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   condicionalesPublicosDelComponente,
+  esMedidaPlanaDerivada,
+  medidasDerivadasDeDisenoVectorial,
   parametrosPublicosDelComponente,
 } from "./componentes-contrato-publico";
 import type { FormularioCotizacionProducto } from "./productos-servicios-api";
@@ -23,10 +25,7 @@ function formularioFixture(): FormularioCotizacionProducto {
       ejes: ["ANCHO", "ALTO"],
       instruccion: "pedir_ancho_alto",
       unidadEntrada: "mm",
-      jobContextKeys: [
-        "medidaCustomMm.anchoMm",
-        "medidaCustomMm.altoMm",
-      ],
+      jobContextKeys: ["medidaCustomMm.anchoMm", "medidaCustomMm.altoMm"],
       predefinidas: [],
       default: null,
     },
@@ -68,12 +67,11 @@ describe("contrato público de componentes", () => {
     const bindings = parametrosPublicosDelComponente(formularioFixture(), 1);
     expect(
       bindings.find(
-        (binding) =>
-          binding.clave === "opcionalesActivados.paso-diseno",
+        (binding) => binding.clave === "opcionalesActivados.paso-diseno",
       ),
     ).toEqual(
       expect.objectContaining({
-        etiqueta: "Diseño gráfico",
+        etiqueta: "Activar Diseño gráfico",
         tipoDato: "boolean",
         origen: "COTIZACION",
         valor: false,
@@ -90,9 +88,7 @@ describe("contrato público de componentes", () => {
     const formulario = formularioFixture();
     const bindings = parametrosPublicosDelComponente(formulario, 1);
     expect(
-      bindings.some(
-        (binding) => binding.clave.includes("paso-tinta-blanca"),
-      ),
+      bindings.some((binding) => binding.clave.includes("paso-tinta-blanca")),
     ).toBe(false);
     expect(condicionalesPublicosDelComponente(formulario)).toEqual([
       {
@@ -101,5 +97,45 @@ describe("contrato público de componentes", () => {
         condicionadoPor: ["modoColor_impresion"],
       },
     ]);
+  });
+
+  it("expone el SVG propio de cada componente como dato de cotización", () => {
+    const formulario = formularioFixture();
+    formulario.herramientas = [
+      {
+        tipo: "diseno_vectorial",
+        jobContextKey: "disenoVectorialFuente",
+        etiqueta: "Diseño vectorial",
+        requerido: true,
+      },
+    ];
+
+    expect(parametrosPublicosDelComponente(formulario, 1)).toContainEqual(
+      expect.objectContaining({
+        clave: "disenoVectorialFuente",
+        tipoDato: "vectorial",
+        origen: "COTIZACION",
+        requerido: true,
+      }),
+    );
+  });
+
+  it("reconoce que un SVG heredado reemplaza ancho y alto independientes", () => {
+    const bindings = parametrosPublicosDelComponente(formularioFixture(), 1);
+    bindings.push({
+      clave: "disenoVectorialFuente",
+      etiqueta: "Diseño vectorial",
+      tipoDato: "vectorial",
+      requerido: false,
+      origen: "PADRE",
+      padreClave: "geometriasVectoriales.principal",
+    });
+    const derivar = medidasDerivadasDeDisenoVectorial(bindings);
+    expect(derivar).toBe(true);
+    expect(
+      bindings
+        .filter((binding) => esMedidaPlanaDerivada(binding, derivar))
+        .map((binding) => binding.clave),
+    ).toEqual(["medidaCustomMm.anchoMm", "medidaCustomMm.altoMm"]);
   });
 });

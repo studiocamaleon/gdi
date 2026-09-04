@@ -1,5 +1,88 @@
 import type { PasoEjecutado } from './tipos';
 
+type ComponenteVinculable = {
+  codigo: string;
+  plantillaCodigo?: string;
+  cantidad: number;
+  jobContext: Record<string, unknown>;
+};
+
+function esRegistro(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function piezasDelComponente(componente: ComponenteVinculable) {
+  const piezas = Array.isArray(componente.jobContext.piezas)
+    ? componente.jobContext.piezas
+    : [];
+  return piezas.flatMap((pieza) => {
+    if (!esRegistro(pieza)) return [];
+    const cantidad = Number(pieza.cantidad);
+    const anchoMm = Number(pieza.anchoMm);
+    const altoMm = Number(pieza.altoMm);
+    return cantidad > 0 && anchoMm > 0 && altoMm > 0
+      ? [{ ...pieza, cantidad, anchoMm, altoMm }]
+      : [];
+  });
+}
+
+/**
+ * Contexto estándar de una operación que trabaja sobre componentes. Una
+ * vinculación a la plantilla incluye también todas sus ocurrencias creadas al
+ * cotizar, y publica magnitudes agregadas sin borrar la cantidad del padre.
+ */
+export function agregarContextoComponentesVinculados(args: {
+  contextoPadre: Record<string, unknown>;
+  componentes: ComponenteVinculable[];
+  codigosPlantilla: string[];
+}): Record<string, unknown> {
+  const codigos = new Set(args.codigosPlantilla);
+  const vinculados = args.componentes.filter((componente) =>
+    codigos.has(componente.plantillaCodigo ?? componente.codigo),
+  );
+  if (!vinculados.length) return { ...args.contextoPadre };
+
+  const piezas = vinculados.flatMap(piezasDelComponente);
+  const cantidadPiezas = vinculados.reduce((total, componente) => {
+    const piezasComponente = piezasDelComponente(componente);
+    return (
+      total +
+      (piezasComponente.length
+        ? piezasComponente.reduce(
+            (subtotal, pieza) => subtotal + pieza.cantidad,
+            0,
+          )
+        : Number(componente.cantidad))
+    );
+  }, 0);
+  const areaM2 = piezas.reduce(
+    (total, pieza) =>
+      total + (pieza.anchoMm * pieza.altoMm * pieza.cantidad) / 1_000_000,
+    0,
+  );
+  const perimetroM = piezas.reduce(
+    (total, pieza) =>
+      total + ((2 * (pieza.anchoMm + pieza.altoMm)) / 1_000) * pieza.cantidad,
+    0,
+  );
+
+  return {
+    ...args.contextoPadre,
+    cantidadComponentes: cantidadPiezas,
+    cantidadPiezasComponentes: cantidadPiezas,
+    componentesVinculados: vinculados.map((componente) => componente.codigo),
+    ...(piezas.length
+      ? {
+          piezas,
+          piezaAreaTotalM2: areaM2,
+          piezaPerimetroTotalM: perimetroM,
+          piezaAnchoMaxMm: Math.max(...piezas.map((pieza) => pieza.anchoMm)),
+          piezaAltoMaxMm: Math.max(...piezas.map((pieza) => pieza.altoMm)),
+        }
+      : {}),
+  };
+}
+
 function rutaPasoIdDelContenedor(clave: string) {
   return clave.replace(/^(ruta|extra):/, '');
 }
@@ -54,6 +137,11 @@ export function consolidarEtapasCompuestas(
     const maquinas = new Set(
       tiempos.flatMap((item) => (item.maquinaId ? [item.maquinaId] : [])),
     );
+    const tarifas = new Set(
+      tiempos.flatMap((item) =>
+        Number.isFinite(item.tarifaHora) ? [item.tarifaHora!] : [],
+      ),
+    );
 
     const tiempo = tiempos.length
       ? {
@@ -82,7 +170,10 @@ export function consolidarEtapasCompuestas(
                 ? 'Varios centros'
                 : null,
           maquinaId: maquinas.size === 1 ? [...maquinas][0] : null,
-          tarifaHora: undefined,
+          tarifaHora:
+            centrosNombres.size === 1 && tarifas.size === 1
+              ? [...tarifas][0]
+              : undefined,
           dotacionOperarios: Math.max(
             1,
             ...tiempos.map((item) => Number(item.dotacionOperarios ?? 1)),
@@ -118,9 +209,17 @@ export function consolidarEtapasCompuestas(
         activada: item.activado,
         duracionMin: item.tiempo?.totalMin ?? 0,
         costoTotal: item.costoTotal,
+        configPasoId: item.configPasoId,
+        rutaPasoId: item.rutaPasoId,
+        rutaPasoOrden: item.rutaPasoOrden,
+        razonNoActivado: item.razonNoActivado,
+        activadoPorDependencia: item.activadoPorDependencia,
         centroCostoId: item.tiempo?.centroCostoId ?? null,
         centroCostoNombre: item.tiempo?.centroCostoNombre ?? null,
+        tiempo: item.tiempo,
         materiales: item.materiales,
+        cargosDirectosPaso: item.cargosDirectosPaso,
+        mutacionAplicada: item.mutacionAplicada,
         componentesCodigos: item.componentesCodigos,
         nestingResult: item.nestingResult,
       })),

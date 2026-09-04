@@ -219,6 +219,15 @@ duración, costo y recursos consolidados. El tablero ofrece una sola acción de
 inicio, pausa, bloqueo y finalización. El desglose interno puede consultarse
 como explicación o instrucciones, pero no posee estado propio.
 
+En el desglose de costos, la etapa actúa como fila resumen. Al expandirla se
+muestra una tabla de operaciones con las mismas columnas que un paso normal:
+centro de costo, tiempo, materiales, cargos y total. Cada operación puede
+expandirse a su vez para consultar sus materiales, consumibles, merma, nesting,
+tiempos extra y cargos sin volver a calcularlos en el frontend. El snapshot
+conserva ese detalle por operación; la suma debe coincidir con la etapa padre.
+Las cotizaciones históricas que no posean el contrato ampliado muestran sólo
+los campos realmente congelados y nunca infieren una distribución de costos.
+
 ## 7. Validaciones e invariantes
 
 - Toda operación apunta a un nodo existente de la ruta padre.

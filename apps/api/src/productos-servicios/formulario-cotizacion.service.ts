@@ -4,12 +4,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ProductosService } from './productos.service';
-import { resolverFamilia } from './pasos/familias';
+import {
+  herramientasCotizacionEfectivas,
+  resolverFamilia,
+} from './pasos/familias';
 import {
   camposEditablesComercial,
   camposFijadosComercial,
 } from '../motor-universal/params-runtime';
 import { catalogoSalidasPublicasComposicion } from './composicion-outputs';
+import { leerGeometriasComerciales } from './geometrias-comerciales';
 
 /**
  * Formulario de cotización derivado por producto: la lista plana de PREGUNTAS
@@ -210,10 +214,12 @@ export class FormularioCotizacionService {
       rutaSeleccionada: ruta.id,
       cantidad: this.bloqueCantidad(producto),
       medidas: this.bloqueMedidas(producto),
+      geometrias: leerGeometriasComerciales(producto.atributosComercialesJson),
       preguntas: [
         ...this.preguntasDePasos(ejecutables),
         ...this.preguntasDeCargos(producto, ejecutables),
       ],
+      herramientas: this.herramientasDePasos(ejecutables),
       outputsPublicos: catalogoSalidasPublicasComposicion(
         ejecutables.map((config) => ({
           familiaCodigo: config.rutaPaso?.familiaCodigo ?? '',
@@ -370,6 +376,51 @@ export class FormularioCotizacionService {
     return preguntas;
   }
 
+  /**
+   * Entradas complejas que no son una pregunta escalar. Se publican aparte
+   * para que un producto usado como componente conserve el mismo contrato de
+   * cotización que cuando se vende de forma directa.
+   */
+  private herramientasDePasos(ejecutables: ConfigPaso[]) {
+    const herramientas = new Map<
+      string,
+      {
+        tipo: 'diseno_vectorial';
+        jobContextKey: 'disenoVectorialFuente';
+        etiqueta: string;
+        requerido: boolean;
+      }
+    >();
+    for (const config of ejecutables) {
+      const familiaCodigo = config.rutaPaso?.familiaCodigo ?? '';
+      const familia = resolverFamilia(familiaCodigo);
+      const esEfectiva = herramientasCotizacionEfectivas(
+        familiaCodigo,
+        config.paramsPasoJson,
+      ).includes('diseno_vectorial');
+      const esCapacidadDisponible =
+        familia?.herramientasCotizacionDisponibles?.includes(
+          'diseno_vectorial',
+        ) === true;
+      if (!esEfectiva && !esCapacidadDisponible) {
+        continue;
+      }
+      herramientas.set('disenoVectorialFuente', {
+        tipo: 'diseno_vectorial',
+        jobContextKey: 'disenoVectorialFuente',
+        etiqueta: 'Diseño vectorial',
+        // En un hijo, láser/CNC pueden recibir una geometría heredada aunque
+        // su cotización directa normalmente use medidas. La capacidad se
+        // publica como opcional; las herramientas obligatorias o activadas
+        // explícitamente conservan el requisito.
+        requerido:
+          esEfectiva ||
+          herramientas.get('disenoVectorialFuente')?.requerido === true,
+      });
+    }
+    return [...herramientas.values()];
+  }
+
   /** Espejo de getParamsComercialDeRuta: abiertos = (editables ∪ expuestos) − fijados. */
   private preguntasParams(
     config: ConfigPaso,
@@ -487,6 +538,7 @@ export class FormularioCotizacionService {
       {
         tipo: 'modo_color',
         ...base,
+        etiqueta: `Modo de color · ${base.paso as string}`,
         opciones,
         default: defaultMode,
         requerido: false,

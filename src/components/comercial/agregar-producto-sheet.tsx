@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  BoxesIcon,
   BriefcaseBusinessIcon,
   CheckIcon,
   CircleAlertIcon,
@@ -100,6 +101,11 @@ import { ModoIngresoSelector } from "@/components/comercial/modo-ingreso-selecto
 import { BriefDisenoForm } from "@/components/comercial/brief-diseno-form";
 import { ComponentesFabricadosCotizacion } from "@/components/comercial/componentes-fabricados-cotizacion";
 import {
+  GeometriasVectorialesCotizacion,
+  type FuenteVectorialCotizada,
+} from "@/components/comercial/geometrias-vectoriales-cotizacion";
+import { getGeometriasComerciales } from "@/lib/producto-geometrias";
+import {
   BRIEF_DISENO_VACIO,
   errorBriefDiseno,
   leerBriefDiseno,
@@ -186,6 +192,7 @@ type CargoInputDescriptor = {
 type CatalogProduct = {
   id?: string;
   real: boolean;
+  esCompuesto: boolean;
   code: string;
   name: string;
   family: string;
@@ -309,6 +316,8 @@ type MotorConfigState = {
     configuracionCapas?: ConfiguracionCapasVectoriales;
   } | null;
   disenoVectorialAnalisis: AnalisisSvgFabricacion | null;
+  /** Registro de SVG nombrados que el padre puede compartir con sus hijos. */
+  geometriasVectoriales: Record<string, FuenteVectorialCotizada>;
   modoCotizacionVectorial: "medidas" | "svg" | "placas";
   cotizacionVectorialManual: CotizacionVectorialManual;
   tipoCopia: 1 | 2 | 3;
@@ -581,6 +590,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   disenoSello: null,
   disenoVectorialFuente: null,
   disenoVectorialAnalisis: null,
+  geometriasVectoriales: {},
   modoCotizacionVectorial: "svg",
   cotizacionVectorialManual: {
     placas: 1,
@@ -3007,6 +3017,9 @@ function mapProductoReal(
   return {
     id: producto.id,
     real: true,
+    esCompuesto:
+      producto.estructuraProducto === "COMPUESTO" ||
+      producto.esCompuesto === true,
     code: producto.codigo,
     name: producto.nombre,
     family: subcategoria.nombre,
@@ -3799,6 +3812,9 @@ function buildJobContext(
 
   if (Object.keys(config.componentesConfiguracion).length > 0) {
     ctx.componentesConfiguracion = config.componentesConfiguracion;
+  }
+  if (Object.keys(config.geometriasVectoriales).length > 0) {
+    ctx.geometriasVectoriales = config.geometriasVectoriales;
   }
 
   return ctx;
@@ -4668,6 +4684,15 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         ? (ctx.disenoVectorialFuente as MotorConfigState["disenoVectorialFuente"])
         : null,
     disenoVectorialAnalisis: analisisVectorialDesdeItem(item),
+    geometriasVectoriales:
+      ctx.geometriasVectoriales &&
+      typeof ctx.geometriasVectoriales === "object" &&
+      !Array.isArray(ctx.geometriasVectoriales)
+        ? (ctx.geometriasVectoriales as Record<
+            string,
+            FuenteVectorialCotizada
+          >)
+        : {},
     modoCotizacionVectorial:
       ctx.modoCotizacionVectorial === "medidas"
         ? "medidas"
@@ -4957,6 +4982,15 @@ function ApSelectStep({
                     <span className="d" />
                     {product.family}
                   </span>
+                  {product.esCompuesto ? (
+                    <span
+                      className="ap-compound-icon"
+                      title="Producto compuesto"
+                      aria-label="Producto compuesto"
+                    >
+                      <BoxesIcon aria-hidden="true" />
+                    </span>
+                  ) : null}
                 </span>
                 <span className="ap-prod-name">
                   {highlightMatch(product.name, queryTokens)}
@@ -5514,6 +5548,15 @@ function ApConfigStep({
       getHerramientaMedidasArchivo(productoDetalle?.atributosComercialesJson),
     [productoDetalle],
   );
+  const geometriasComerciales = React.useMemo(
+    () =>
+      getGeometriasComerciales(
+        productoDetalle?.atributosComercialesJson ?? null,
+      ),
+    [productoDetalle?.atributosComercialesJson],
+  );
+  const fuenteGeometricaPrincipalId =
+    geometriasComerciales.fuentes[0]?.id ?? null;
   const pasoVectorialActivo = React.useMemo(
     () => getPasoVectorialActivo(rutaSel, includeVisibleConfig),
     [includeVisibleConfig, rutaSel],
@@ -7648,11 +7691,28 @@ function ApConfigStep({
                       }
                       configuracionEncastres={configuracionEncastresVectoriales}
                       onChange={(fuente, analisis) =>
-                        setMotorConfig((current) => ({
-                          ...current,
-                          disenoVectorialFuente: fuente,
-                          disenoVectorialAnalisis: analisis,
-                        }))
+                        setMotorConfig((current) => {
+                          const geometriasVectoriales = {
+                            ...current.geometriasVectoriales,
+                          };
+                          if (fuenteGeometricaPrincipalId) {
+                            if (fuente) {
+                              geometriasVectoriales[
+                                fuenteGeometricaPrincipalId
+                              ] = fuente;
+                            } else {
+                              delete geometriasVectoriales[
+                                fuenteGeometricaPrincipalId
+                              ];
+                            }
+                          }
+                          return {
+                            ...current,
+                            disenoVectorialFuente: fuente,
+                            disenoVectorialAnalisis: analisis,
+                            geometriasVectoriales,
+                          };
+                        })
                       }
                       onCotizacionManualChange={(cotizacionVectorialManual) =>
                         setMotorConfig((current) => ({
@@ -8410,6 +8470,22 @@ function ApConfigStep({
         )}
       </div>
 
+      {geometriasComerciales.fuentes.length > 0 ? (
+        <GeometriasVectorialesCotizacion
+          configuracion={geometriasComerciales}
+          values={motorConfig.geometriasVectoriales}
+          ocultarFuenteId={
+            editorVectorialHabilitado ? fuenteGeometricaPrincipalId : null
+          }
+          onChange={(geometriasVectoriales) =>
+            setMotorConfig((current) => ({
+              ...current,
+              geometriasVectoriales,
+            }))
+          }
+        />
+      ) : null}
+
       {product.id && motorConfig.rutaAlternativaId ? (
         <ComponentesFabricadosCotizacion
           productoId={product.id}
@@ -8990,6 +9066,13 @@ export function AgregarProductoSheet({
     () => productos.map(mapProductoReal),
     [productos],
   );
+  const geometriasComerciales = React.useMemo(
+    () =>
+      getGeometriasComerciales(
+        productoDetalle?.atributosComercialesJson ?? null,
+      ),
+    [productoDetalle?.atributosComercialesJson],
+  );
   const isEditing = Boolean(editingItem);
 
   const totals = product ? getTotals(product, qty, adi) : null;
@@ -9245,6 +9328,24 @@ export function AgregarProductoSheet({
     const cotizaVectorialPorMedidas =
       motorConfig.modoCotizacionVectorial === "medidas" &&
       pasoVectorialPermiteMedidas(pasoVectorialVisible);
+    const fuentesGeometricasFaltantes =
+      geometriasComerciales.modo === "VECTORIAL"
+        ? geometriasComerciales.fuentes.filter(
+            (fuente) =>
+              fuente.requerida &&
+              !motorConfig.geometriasVectoriales[fuente.id],
+          )
+        : [];
+    if (fuentesGeometricasFaltantes.length > 0) {
+      setCotizando(false);
+      setCotizacion(null);
+      setCotizacionError(
+        `Falta cargar ${fuentesGeometricasFaltantes
+          .map((fuente) => fuente.nombre)
+          .join(", ")}.`,
+      );
+      return;
+    }
     const requiereArchivoVectorial =
       requiereDisenoVectorial && !cotizaVectorialPorMedidas;
     const disenoVectorialListo = Boolean(
@@ -9341,7 +9442,14 @@ export function AgregarProductoSheet({
         setCotizando(false);
       }
     }
-  }, [clienteId, motorConfig, product, productoDetalle, qty]);
+  }, [
+    clienteId,
+    geometriasComerciales,
+    motorConfig,
+    product,
+    productoDetalle,
+    qty,
+  ]);
 
   // Cotización en tiempo real: al cambiar cantidad, medidas, opcionales o ruta
   // se recotiza sola con un pequeño debounce (no hace falta apretar "Cotizar").

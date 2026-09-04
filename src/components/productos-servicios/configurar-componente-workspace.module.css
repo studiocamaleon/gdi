@@ -181,9 +181,73 @@
   font-size: 11px;
   line-height: 1.4;
 }
+.repeatCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 480px);
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 14px;
+  padding: 17px 20px;
+  border: 1px solid #ddd8d2;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.repeatCard > div:first-child strong,
+.repeatCard > div:first-child span {
+  display: block;
+}
+
+.repeatCard > div:first-child span {
+  margin-top: 4px;
+  color: #7a7478;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.repeatControl {
+  display: grid;
+  gap: 12px;
+}
+
+.repeatControl > label {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 11px;
+  border: 1px solid #e2ddd7;
+  border-radius: 10px;
+  background: #fbfaf8;
+  color: #343034;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.repeatFields {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.repeatFields input {
+  width: 100%;
+}
 .contextCard > svg {
   width: 22px;
   color: #f2692f;
+}
+
+@media (max-width: 850px) {
+  .executionCard,
+  .repeatCard {
+    grid-template-columns: 1fr;
+  }
+
+  .repeatFields {
+    grid-template-columns: 1fr;
+  }
 }
 .contextCard div {
   display: grid;
@@ -196,6 +260,24 @@
 .contextCard span {
   color: #77716f;
   font-size: 12px;
+}
+.geometryNotice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+  padding: 10px 13px;
+  border: 1px solid rgb(242 105 47 / 28%);
+  border-radius: 10px;
+  color: #714630;
+  background: rgb(242 105 47 / 6%);
+  font-size: 12px;
+}
+.geometryNotice svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: #f2692f;
 }
 .table {
   overflow: hidden;

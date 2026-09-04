@@ -1,8 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  codigoOcurrenciaComponente,
+  leerOcurrenciasAdicionalesComponente,
   ordenarComponentesPorCalculo,
   proyectarEspecificacionesEfectivasComponente,
   resolverJobContextComponente,
+  resolverOcurrenciasCotizadasComponente,
   resolverOperacionesIncorporacion,
   validarConfiguracionComponente,
 } from '../componentes-configuracion';
@@ -249,6 +252,56 @@ describe('configuración de componentes fabricados', () => {
     });
   });
 
+  it('transporta y valida la fuente vectorial propia de un componente', () => {
+    const fuente = {
+      schemaVersion: 1,
+      nombreArchivo: 'frente.svg',
+      svg: '<svg viewBox="0 0 20 10"><path d="M0 0h20v10H0z"/></svg>',
+      anchoFinalMm: 200,
+      altoFinalMm: 100,
+    };
+    const configuracion = {
+      version: 2,
+      bindings: [
+        { clave: 'cantidad', origen: 'FIJO', valor: 1 },
+        {
+          clave: 'disenoVectorialFuente',
+          tipoDato: 'vectorial',
+          origen: 'COTIZACION',
+          requerido: true,
+        },
+      ],
+    };
+
+    expect(
+      resolverJobContextComponente({
+        configuracion,
+        contextoPadre: {
+          cantidad: 1,
+          componentesConfiguracion: {
+            frente: { disenoVectorialFuente: fuente },
+          },
+        },
+        codigoComponente: 'frente',
+        cantidadLegacy: 1,
+      }),
+    ).toMatchObject({ cantidad: 1, disenoVectorialFuente: fuente });
+
+    expect(() =>
+      resolverJobContextComponente({
+        configuracion,
+        contextoPadre: {
+          cantidad: 1,
+          componentesConfiguracion: {
+            frente: { disenoVectorialFuente: { svg: 'incompleto' } },
+          },
+        },
+        codigoComponente: 'frente',
+        cantidadLegacy: 1,
+      }),
+    ).toThrow(BadRequestException);
+  });
+
   it('mantiene la compatibilidad con componentes anteriores', () => {
     expect(
       resolverJobContextComponente({
@@ -258,6 +311,169 @@ describe('configuración de componentes fabricados', () => {
         cantidadLegacy: 2,
       }),
     ).toEqual({ cantidad: 16 });
+  });
+
+  it('valida y resuelve ocurrencias adicionales autorizadas por la receta', () => {
+    const configuracion = {
+      version: 2,
+      bindings: [
+        {
+          clave: 'cantidad',
+          origen: 'PADRE',
+          padreClave: 'cantidad',
+        },
+        {
+          clave: 'medidaCustomMm.anchoMm',
+          origen: 'COTIZACION',
+          requerido: true,
+        },
+      ],
+      repeticion: { version: 1, permitida: true, maximo: 4 },
+    };
+    const contextoPadre = {
+      cantidad: 10,
+      componentesConfiguracion: {
+        estampa: {
+          __ocurrenciasAdicionales: [
+            {
+              id: 'manga-derecha',
+              nombre: 'Estampa manga derecha',
+              valores: { medidaCustomMm: { anchoMm: 80 } },
+            },
+          ],
+        },
+      },
+    };
+
+    const [ocurrencia] = leerOcurrenciasAdicionalesComponente({
+      configuracion,
+      contextoPadre,
+      codigoComponente: 'estampa',
+      nombreComponente: 'Estampa',
+    });
+    const jobContext = resolverJobContextComponente({
+      configuracion,
+      contextoPadre,
+      codigoComponente: 'estampa',
+      cantidadLegacy: 1,
+      overrideCotizacion: ocurrencia.valores,
+    });
+
+    expect(ocurrencia.nombre).toBe('Estampa manga derecha');
+    expect(codigoOcurrenciaComponente('estampa', ocurrencia.id)).toBe(
+      'estampa__manga-derecha',
+    );
+    expect(jobContext).toMatchObject({
+      cantidad: 10,
+      medidaCustomMm: { anchoMm: 80 },
+    });
+  });
+
+  it('permite que una plantilla 0..N comience vacía y materializa sólo lo agregado', () => {
+    const configuracion = {
+      version: 2,
+      bindings: [{ clave: 'cantidad', origen: 'FIJO', valor: 1 }],
+      repeticion: {
+        version: 1,
+        permitida: true,
+        minimo: 0,
+        maximo: 3,
+      },
+    };
+
+    expect(
+      resolverOcurrenciasCotizadasComponente({
+        configuracion,
+        contextoPadre: { cantidad: 10 },
+        codigoComponente: 'estampa',
+        nombreComponente: 'Estampa DTF',
+      }),
+    ).toEqual([]);
+
+    expect(
+      resolverOcurrenciasCotizadasComponente({
+        configuracion,
+        contextoPadre: {
+          cantidad: 10,
+          componentesConfiguracion: {
+            estampa: {
+              __ocurrenciasAdicionales: [
+                {
+                  id: 'manga',
+                  nombre: 'Estampa manga',
+                  valores: { medidaCustomMm: { anchoMm: 80, altoMm: 60 } },
+                },
+              ],
+            },
+          },
+        },
+        codigoComponente: 'estampa',
+        nombreComponente: 'Estampa DTF',
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        codigo: 'estampa__manga',
+        nombre: 'Estampa manga',
+        ocurrenciaId: 'manga',
+      }),
+    ]);
+  });
+
+  it('mantiene una ocurrencia base en recetas repetibles anteriores', () => {
+    expect(
+      resolverOcurrenciasCotizadasComponente({
+        configuracion: {
+          version: 2,
+          bindings: [{ clave: 'cantidad', origen: 'FIJO', valor: 1 }],
+          repeticion: { version: 1, permitida: true, maximo: 3 },
+        },
+        contextoPadre: { cantidad: 1 },
+        codigoComponente: 'frente',
+        nombreComponente: 'Frente',
+      }),
+    ).toEqual([{ codigo: 'frente', nombre: 'Frente' }]);
+  });
+
+  it('rechaza ocurrencias adicionales si la plantilla no las permite', () => {
+    expect(() =>
+      leerOcurrenciasAdicionalesComponente({
+        configuracion: {
+          version: 1,
+          bindings: [{ clave: 'cantidad', origen: 'FIJO', valor: 1 }],
+        },
+        contextoPadre: {
+          cantidad: 1,
+          componentesConfiguracion: {
+            estampa: {
+              __ocurrenciasAdicionales: [
+                { id: 'manga', nombre: 'Manga', valores: {} },
+              ],
+            },
+          },
+        },
+        codigoComponente: 'estampa',
+        nombreComponente: 'Estampa',
+      }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('acepta una colección vacía si el componente no admite ocurrencias', () => {
+    expect(
+      leerOcurrenciasAdicionalesComponente({
+        configuracion: {
+          version: 1,
+          bindings: [{ clave: 'cantidad', origen: 'FIJO', valor: 1 }],
+        },
+        contextoPadre: {
+          cantidad: 1,
+          componentesConfiguracion: {
+            frentes: { __ocurrenciasAdicionales: [] },
+          },
+        },
+        codigoComponente: 'frentes',
+        nombreComponente: 'Frentes de vinilo',
+      }),
+    ).toEqual([]);
   });
 
   it('impide cotizar si falta un dato solicitado', () => {
@@ -418,6 +634,111 @@ describe('configuración de componentes fabricados', () => {
     expect(
       ordenarComponentesPorCalculo(componentes).map((item) => item.codigo),
     ).toEqual(['bastidor', 'lona']);
+  });
+
+  it('reutiliza la misma fuente vectorial nombrada del padre en un hijo', () => {
+    const fuente = {
+      schemaVersion: 1,
+      nombreArchivo: 'contorno-cartel.svg',
+      svg: '<svg viewBox="0 0 100 50"><path d="M0 0h100v50H0z"/></svg>',
+      anchoFinalMm: 1_000,
+      altoFinalMm: 500,
+    };
+    const result = resolverJobContextComponente({
+      codigoComponente: 'frente_acrilico',
+      cantidadLegacy: 1,
+      contextoPadre: {
+        cantidad: 2,
+        geometriasVectoriales: { contorno_cartel: fuente },
+      },
+      configuracion: {
+        version: 1,
+        bindings: [
+          {
+            clave: 'cantidad',
+            origen: 'PADRE',
+            requerido: true,
+            padreClave: 'cantidad',
+          },
+          {
+            clave: 'disenoVectorialFuente',
+            etiqueta: 'Diseño vectorial',
+            tipoDato: 'vectorial',
+            origen: 'PADRE',
+            requerido: true,
+            padreClave: 'geometriasVectoriales.contorno_cartel',
+          },
+          {
+            clave: 'medidaCustomMm.anchoMm',
+            etiqueta: 'Ancho',
+            tipoDato: 'number',
+            origen: 'COTIZACION',
+            requerido: true,
+          },
+          {
+            clave: 'medidaCustomMm.altoMm',
+            etiqueta: 'Alto',
+            tipoDato: 'number',
+            origen: 'COTIZACION',
+            requerido: true,
+          },
+        ],
+      },
+    });
+
+    expect(result.cantidad).toBe(2);
+    expect(result.disenoVectorialFuente).toEqual(fuente);
+    expect(result.medidaCustomMm).toEqual({
+      anchoMm: 1_000,
+      altoMm: 500,
+    });
+    expect(result.piezas).toEqual([
+      { cantidad: 2, anchoMm: 1_000, altoMm: 500 },
+    ]);
+  });
+
+  it('obtiene el alto proporcional del SVG cuando la fuente sólo fija el ancho', () => {
+    const result = resolverJobContextComponente({
+      codigoComponente: 'frente_acrilico',
+      cantidadLegacy: 1,
+      contextoPadre: { cantidad: 1 },
+      configuracion: {
+        version: 1,
+        bindings: [
+          {
+            clave: 'cantidad',
+            origen: 'PADRE',
+            requerido: true,
+            padreClave: 'cantidad',
+          },
+          {
+            clave: 'disenoVectorialFuente',
+            origen: 'FIJO',
+            requerido: true,
+            valor: {
+              schemaVersion: 1,
+              nombreArchivo: 'frente.svg',
+              svg: '<svg viewBox="0 0 200 50"><path d="M0 0h200v50H0z"/></svg>',
+              anchoFinalMm: 800,
+            },
+          },
+          {
+            clave: 'medidaCustomMm.anchoMm',
+            etiqueta: 'Ancho',
+            origen: 'COTIZACION',
+            requerido: true,
+          },
+          {
+            clave: 'medidaCustomMm.altoMm',
+            etiqueta: 'Alto',
+            origen: 'COTIZACION',
+            requerido: true,
+          },
+        ],
+      },
+    });
+
+    expect(result.medidaCustomMm).toEqual({ anchoMm: 800, altoMm: 200 });
   });
 
   it('rechaza ciclos entre outputs de componentes', () => {

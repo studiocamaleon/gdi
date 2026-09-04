@@ -154,6 +154,7 @@ function algorithmLabel(algorithm: NestingViewerInput["algorithm"]): string {
     "grid-2d-single": "Acomodo en pliego",
     "grid-2d-multi": "Acomodo multi-placa",
     "irregular-2d-bottom-left-v1": "Acomodo vectorial en placa",
+    "manual-vector-estimate-v1": "Estimación manual de corte",
   };
   // Snapshots viejos pueden traer un algoritmo ya retirado.
   return labels[algorithm] ?? "Acomodo";

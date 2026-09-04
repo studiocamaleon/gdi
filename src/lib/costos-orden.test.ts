@@ -4,7 +4,10 @@ import {
   calcularCostoItem,
   consolidarCostosOrden,
   cruzarRealVsCotizado,
+  proyectarPasoOperacionInterna,
   reconciliarComisionPasarela,
+  sumCargosPaso,
+  sumMaterialesPaso,
   tiempoFueMedido,
   tiempoRealAtipico,
 } from "@/lib/costos-orden";
@@ -183,6 +186,76 @@ const cargoOrden = (montoNeto: number): PropuestaCargoDirecto => ({
 });
 
 describe("consolidarCostosOrden", () => {
+  it("proyecta una operación de etapa sin reconstruir sus importes", () => {
+    const etapa = item().cotizacion.pasos[0];
+    const operacion = {
+      codigo: "tensado",
+      nombre: "Tensado de lona",
+      familiaCodigo: "trabajo_manual",
+      activada: true,
+      duracionMin: 9,
+      costoTotal: 135,
+      configPasoId: "interno-tensado",
+      tiempo: {
+        totalMin: 9,
+        centroCostoId: "cc-taller",
+        centroCostoNombre: "Taller",
+        tarifaHora: 600,
+        costo: 90,
+      },
+      materiales: [
+        {
+          slotCodigo: "lona",
+          materialVarianteId: "material-1",
+          materialNombre: "LONA-13OZ",
+          materialSku: "LONA-13OZ",
+          materialDisplayName: "Lona frontlight 13 oz",
+          tipoLineaCosto: "MATERIAL" as const,
+          cantidad: 1,
+          unidad: "m2",
+          precioUnitario: 30,
+          costoTotal: 30,
+          estrategiaCosto: "simple",
+          modoSeleccion: "HARDCODED" as const,
+        },
+      ],
+      cargosDirectosPaso: [
+        {
+          cargoCodigo: "control",
+          cargoNombre: "Control de calidad",
+          monto: 15,
+          modoCalculo: "MONTO_FIJO_PLANO",
+          aplicaMargen: true,
+        },
+      ],
+    };
+
+    const proyectado = proyectarPasoOperacionInterna(etapa, operacion, 0);
+
+    expect(proyectado).toMatchObject({
+      nombreVisible: "Tensado de lona",
+      configPasoId: "interno-tensado",
+      tiempo: { totalMin: 9, costo: 90 },
+      costoTotal: 135,
+    });
+    expect(sumMaterialesPaso(proyectado)).toBe(30);
+    expect(sumCargosPaso(proyectado)).toBe(15);
+
+    const snapshotViejo = proyectarPasoOperacionInterna(
+      etapa,
+      {
+        codigo: "legacy",
+        nombre: "Operación anterior",
+        familiaCodigo: "trabajo_manual",
+        activada: true,
+        duracionMin: 5,
+        costoTotal: 50,
+      },
+      1,
+    );
+    expect(snapshotViejo.tiempo).toBeUndefined();
+  });
+
   it("suma el costo de los items separando materiales de centros", () => {
     const c = consolidarCostosOrden([item()], []);
     expect(c.costoItems).toBe(400);

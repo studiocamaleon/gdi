@@ -83,6 +83,85 @@
   border-top: 1px solid var(--hairline);
 }
 
+.stageTableWrap {
+  margin-top: 0;
+}
+
+.stageTable {
+  min-width: 760px;
+}
+
+.stageRow:hover,
+.stageRow:hover td {
+  background: color-mix(in srgb, var(--surface) 96%, var(--ps-accent));
+}
+
+.inactiveRow {
+  color: var(--muted);
+}
+
+.operationCell {
+  min-width: 280px;
+  white-space: normal !important;
+}
+
+.operationTrigger {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  justify-content: flex-start;
+  padding: 0;
+  white-space: normal;
+}
+
+.operationTrigger:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.operationTrigger:hover,
+.operationTrigger[aria-expanded="true"] {
+  background: transparent;
+  color: var(--ink);
+}
+
+.operationChevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 140ms ease;
+}
+
+.operationChevron[data-open="true"] {
+  color: var(--ps-accent);
+  transform: rotate(90deg);
+}
+
+.hiddenChevron {
+  visibility: hidden;
+}
+
+.operationIndex {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.operationDetailRow:hover td {
+  background: color-mix(in srgb, var(--muted-bg) 48%, transparent);
+}
+
+.detailCell {
+  padding: 0 !important;
+  background: color-mix(in srgb, var(--muted-bg) 48%, transparent);
+  white-space: normal !important;
+}
+
+.stageDetail :global(.cost-step-expanded) {
+  padding: 12px 14px 14px 42px;
+}
+
 .item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(110px, auto) minmax(90px, auto);

@@ -12,6 +12,7 @@ import { tienePermiso } from "@/lib/permisos-server";
 import {
   getCargosDirectosCatalogo,
   getCatalogoFamilias,
+  getEstadoPublicacionProducto,
   getLookupsConfigPaso,
   getProductoById,
   getRecetasProducto,
@@ -87,6 +88,7 @@ async function ProductoDetalleContent({
       lookups,
       catalogoCargos,
       recetas,
+      estadoPublicacion,
       canManage,
     ] = await Promise.all([
       tab === "produccion" && produccionVista === "rutas"
@@ -103,6 +105,7 @@ async function ProductoDetalleContent({
         ? getCargosDirectosCatalogo(true)
         : Promise.resolve(undefined),
       getRecetasProducto(productoId),
+      getEstadoPublicacionProducto(productoId),
       tienePermiso("costos.gestionar"),
     ]);
 
@@ -117,6 +120,7 @@ async function ProductoDetalleContent({
         lookups={lookups}
         catalogoCargos={catalogoCargos}
         recetas={recetas}
+        estadoPublicacion={estadoPublicacion}
         canManage={canManage}
       />
     );

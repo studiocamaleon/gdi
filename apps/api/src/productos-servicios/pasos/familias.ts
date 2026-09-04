@@ -580,6 +580,13 @@ const impresion_3d: DefinicionFamilia = {
 
 const aplicacion_transfer: DefinicionFamilia = {
   codigo: 'aplicacion_transfer',
+  // Una aplicación se repite por transfer, no necesariamente por producto
+  // padre. En un compuesto, `cantidad_montaje` recibe la suma de piezas de
+  // todos los componentes vinculados (frente, espalda, manga, etc.).
+  ritmoDefault: {
+    modoCalculo: 'productivity',
+    fuenteCantidad: 'cantidad_montaje',
+  },
   // Renombrada 2026-08-07 (pedido del usuario): el nombre viejo ("Aplicación
   // DTF UV manual") ataba la familia a UNA técnica; aplica a cualquier
   // transfer colocado a mano. El par con la hermana queda simétrico:
@@ -623,6 +630,7 @@ const aplicacion_transfer: DefinicionFamilia = {
   ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [],
+  magnitudTiempoDefault: 'cantidad_montaje',
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_aplicadas'],
   validaciones: [],
@@ -632,6 +640,10 @@ const aplicacion_transfer: DefinicionFamilia = {
 
 const aplicacion_transfer_textil: DefinicionFamilia = {
   codigo: 'aplicacion_transfer_textil',
+  // La plancha cuenta bajadas/estampas. Cuando el paso pertenece al padre de
+  // un producto compuesto, esta magnitud agrega las piezas de los componentes
+  // vinculados y también sus ocurrencias creadas durante la cotización.
+  magnitudTiempoDefault: 'cantidad_montaje',
   nombre: 'Aplicación de transfer textil',
   categoria: 'produccion_impresion',
   descripcion:

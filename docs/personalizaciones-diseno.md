@@ -1,5 +1,10 @@
 # Productos personalizados — personalizaciones con medida propia
 
+> Estado: legado. Desde la incorporación de componentes repetibles `0..N`, la
+> configuración nueva debe modelarse como producto compuesto. El editor fue
+> retirado del tab Comercial; estas reglas se conservan únicamente para leer y
+> costear productos históricos durante su migración.
+
 Fecha: 2026-07-13
 
 ## Problema
@@ -16,6 +21,7 @@ costo del material de decoración (film DTF) y del proceso de impresión —
 independiente de la medida del producto base.
 
 Escenarios:
+
 - Taza DTF UV con la personalización de **medida predefinida** (transfer estándar).
 - Taza DTF UV con la personalización de **medida definida por el cliente**.
 - Remera con estampa **frente / espalda / ambas / otra** (N personalizaciones

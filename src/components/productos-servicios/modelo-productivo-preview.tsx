@@ -34,7 +34,7 @@ type NodoPreview = {
   orden: number;
   nombre: string;
   descripcion: string;
-  activacion?: "OPCIONAL" | "CONDICIONAL";
+  activacion?: "OPCIONAL" | "CONDICIONAL" | "COTIZACION";
 };
 
 type CamaraPreview = {
@@ -87,7 +87,11 @@ function ContenidoNodo({ nodo }: { nodo: NodoPreview }) {
       </span>
       {nodo.activacion ? (
         <span className={styles.activation}>
-          {nodo.activacion === "OPCIONAL" ? "Opcional" : "Condicional"}
+          {nodo.activacion === "OPCIONAL"
+            ? "Opcional"
+            : nodo.activacion === "COTIZACION"
+              ? "Se agrega al cotizar"
+              : "Condicional"}
         </span>
       ) : null}
     </>
@@ -183,7 +187,12 @@ function construirModeloPreview({
         componente.politicaEjecucion === "INDEPENDIENTE"
           ? "Flujo propio en producción"
           : "Receta y ruta propias",
-      activacion: componente.requerido ? undefined : "OPCIONAL",
+      activacion:
+        componente.configuracionJson?.repeticion?.minimo === 0
+          ? "COTIZACION"
+          : componente.requerido
+            ? undefined
+            : "OPCIONAL",
     }),
   );
   const nodos = [...nodosPaso, ...nodosComponente];

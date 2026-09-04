@@ -108,6 +108,16 @@ export class ConfiguracionCapasVectorialesDto {
   asignaciones!: AsignacionObjetoVectorialDto[];
 }
 
+export class MedirSvgFabricacionDto {
+  @IsString()
+  @MaxLength(524_288)
+  svg!: string;
+
+  @IsString()
+  @MaxLength(255)
+  nombreArchivo!: string;
+}
+
 export class AnalizarSvgFabricacionDto {
   @IsString()
   @MaxLength(524_288)

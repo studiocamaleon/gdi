@@ -23,6 +23,9 @@ import type {
 
 type CotizacionItem = PropuestaItem["cotizacion"];
 type PasoCosteo = CotizacionItem["pasos"][number];
+export type OperacionInternaCosteada = NonNullable<
+  PasoCosteo["operacionesInternas"]
+>[number];
 
 type ComponenteCosteoRecursivo = {
   costoTotal?: number;
@@ -169,6 +172,44 @@ export function sumTiempoExtraPaso(paso: PasoCosteo) {
  *  costo de los bloques de tiempo extra. */
 export function sumCargosYTiempoExtraPaso(paso: PasoCosteo) {
   return sumCargosPaso(paso) + sumTiempoExtraPaso(paso);
+}
+
+/**
+ * Adapta una operación privada de etapa al mismo contrato visual de un paso.
+ * No reconstruye ni reparte importes: usa exclusivamente el detalle congelado
+ * por el motor, para que la explicación siempre coincida con la cotización.
+ */
+export function proyectarPasoOperacionInterna(
+  etapa: PasoCosteo,
+  operacion: OperacionInternaCosteada,
+  indice: number,
+): PasoCosteo {
+  return {
+    rutaPasoId:
+      operacion.rutaPasoId ??
+      `${etapa.rutaPasoId ?? etapa.familiaCodigo}:interno:${operacion.codigo}`,
+    rutaPasoOrden:
+      operacion.rutaPasoOrden ??
+      etapa.rutaPasoOrden + Math.max(1, indice + 1) / 1000,
+    familiaCodigo: operacion.familiaCodigo,
+    nombreVisible: operacion.nombre,
+    componentesCodigos: operacion.componentesCodigos,
+    configPasoId: operacion.configPasoId,
+    activado: operacion.activada,
+    razonNoActivado: operacion.razonNoActivado,
+    activadoPorDependencia: operacion.activadoPorDependencia,
+    mutacionAplicada: operacion.mutacionAplicada,
+    tiempo: operacion.tiempo
+      ? {
+          ...operacion.tiempo,
+          tarifaHora: operacion.tiempo.tarifaHora ?? 0,
+        }
+      : undefined,
+    materiales: operacion.materiales ?? [],
+    cargosDirectosPaso: operacion.cargosDirectosPaso ?? [],
+    costoTotal: operacion.costoTotal,
+    nestingResult: operacion.nestingResult,
+  };
 }
 
 export function getVisibleCostSteps(pasos: PasoCosteo[]) {

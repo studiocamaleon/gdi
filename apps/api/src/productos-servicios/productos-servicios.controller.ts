@@ -89,6 +89,14 @@ export class ProductosServiciosController {
     return this.recetas.obtener(auth, id);
   }
 
+  @Get('productos/:id/receta/estado-publicacion')
+  obtenerEstadoPublicacionReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.recetas.obtenerEstadoPublicacion(auth, id);
+  }
+
   @Get('recetas/revisiones/:revisionId/bom-multinivel')
   obtenerBomMultinivel(
     @CurrentSession() auth: CurrentAuth,

@@ -9,7 +9,9 @@ describe('costingM2Exact', () => {
       unitsNeeded: 1,
       nesting: {
         algorithm: 'grid-2d-single',
-        substrates: [{ kind: 'sheet', count: 1, widthMm: 1000, heightMm: 1000 }],
+        substrates: [
+          { kind: 'sheet', count: 1, widthMm: 1000, heightMm: 1000 },
+        ],
         placements: [
           {
             pieceId: 'pieza_0',
@@ -44,7 +46,9 @@ describe('costingM2Exact', () => {
       pieceHeightMm: 500,
       nesting: {
         algorithm: 'grid-2d-single',
-        substrates: [{ kind: 'sheet', count: 1, widthMm: 2000, heightMm: 1000 }],
+        substrates: [
+          { kind: 'sheet', count: 1, widthMm: 2000, heightMm: 1000 },
+        ],
         // el placement trae demasía (520×520): NO debe usarse para el área
         placements: [
           {
@@ -66,6 +70,39 @@ describe('costingM2Exact', () => {
     });
 
     // 4 piezas × 0,25 m² × $500/m² (placa de 2 m² a $1000)
+    expect(result.totalCost).toBe(500);
+  });
+
+  it('en geometría irregular cobra el área real y no la caja envolvente', () => {
+    const result = costingM2Exact({
+      strategy: 'm2-exact',
+      unitPrice: 1000,
+      totalPieces: 1,
+      unitsNeeded: 1,
+      nesting: {
+        algorithm: 'irregular-2d-bottom-left-v1',
+        substrates: [
+          { kind: 'sheet', count: 1, widthMm: 1000, heightMm: 1000 },
+        ],
+        placements: [
+          {
+            pieceId: 'triangulo',
+            substrateIndex: 0,
+            xMm: 0,
+            yMm: 0,
+            widthMm: 1000,
+            heightMm: 1000,
+            rotated: false,
+          },
+        ],
+        metrics: {
+          aprovechamientoPct: 50,
+          areaUtilMm2: 500_000,
+          areaTotalMm2: 1_000_000,
+        },
+      },
+    });
+
     expect(result.totalCost).toBe(500);
   });
 

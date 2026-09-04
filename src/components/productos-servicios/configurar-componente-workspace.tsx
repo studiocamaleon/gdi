@@ -21,8 +21,11 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   condicionalesPublicosDelComponente,
+  esMedidaPlanaDerivada,
+  medidasDerivadasDeDisenoVectorial,
   parametrosPublicosDelComponente,
 } from "@/lib/componentes-contrato-publico";
 import {
@@ -51,7 +54,7 @@ type CampoPadre = {
   clave: string;
   etiqueta: string;
   numerico: boolean;
-  tipoDato: "number" | "boolean" | "string";
+  tipoDato: "number" | "boolean" | "string" | "vectorial";
   unidad: string | null;
   fuenteTipo: "PADRE" | "COMPONENTE";
   componenteCodigo?: string;
@@ -205,6 +208,29 @@ function camposDelPadre(
       fuenteTipo: "PADRE",
     });
   }
+  for (const fuente of formulario.geometrias?.fuentes ?? []) {
+    campos.push({
+      clave: `geometriasVectoriales.${fuente.id}`,
+      etiqueta: `Geometría del padre · ${fuente.nombre}`,
+      numerico: false,
+      tipoDato: "vectorial",
+      unidad: null,
+      fuenteTipo: "PADRE",
+    });
+  }
+  // Compatibilidad con productos vectoriales anteriores al registro de
+  // fuentes nombradas: su único diseño sigue siendo heredable.
+  for (const herramienta of formulario.herramientas ?? []) {
+    if (herramienta.tipo !== "diseno_vectorial") continue;
+    campos.push({
+      clave: herramienta.jobContextKey,
+      etiqueta: "Geometría principal del padre",
+      numerico: false,
+      tipoDato: "vectorial",
+      unidad: null,
+      fuenteTipo: "PADRE",
+    });
+  }
   return campos.filter(
     (campo, index, list) =>
       list.findIndex((candidate) => candidate.clave === campo.clave) === index,
@@ -288,6 +314,9 @@ function tipoCampoBinding(
   binding: BindingParametroComponente,
 ): CampoPadre["tipoDato"] {
   const tipo = binding.tipoDato.toLowerCase();
+  if (tipo === "vectorial" || binding.clave === "disenoVectorialFuente") {
+    return "vectorial";
+  }
   if (["number", "numero", "entero", "decimal"].includes(tipo)) {
     return "number";
   }
@@ -355,6 +384,18 @@ export function ConfigurarComponenteWorkspace({
   const [politicaEjecucion, setPoliticaEjecucion] = React.useState<
     "INLINE" | "INDEPENDIENTE"
   >(componente.politicaEjecucion ?? "INDEPENDIENTE");
+  const [repeticion, setRepeticion] = React.useState<
+    NonNullable<ConfiguracionComponenteFabricado["repeticion"]>
+  >(() => {
+    const guardada = componente.configuracionJson?.repeticion;
+    return {
+      version: 1,
+      permitida: guardada?.permitida ?? false,
+      minimo: guardada?.minimo === 0 ? 0 : 1,
+      maximo: guardada?.maximo ?? 20,
+      etiquetaAgregar: guardada?.etiquetaAgregar ?? null,
+    };
+  });
 
   React.useEffect(() => {
     let active = true;
@@ -453,7 +494,13 @@ export function ConfigurarComponenteWorkspace({
     ? condicionalesPublicosDelComponente(formulario)
     : [];
   const opcionales = bindings.filter(esActivacionOpcional);
-  const parametros = bindings.length - opcionales.length;
+  const derivarMedidas = medidasDerivadasDeDisenoVectorial(bindings);
+  const bindingsVisibles = bindings
+    .map((binding, index) => ({ binding, index }))
+    .filter(({ binding }) => !esMedidaPlanaDerivada(binding, derivarMedidas));
+  const parametros = bindingsVisibles.filter(
+    ({ binding }) => !esActivacionOpcional(binding),
+  ).length;
 
   return (
     <ModeloProductivoConfigShell
@@ -487,8 +534,11 @@ export function ConfigurarComponenteWorkspace({
         onSave(
           {
             ...componente.configuracionJson,
-            version: componente.configuracionJson?.version ?? 1,
+            version: repeticion.permitida
+              ? 2
+              : (componente.configuracionJson?.version ?? 1),
             bindings,
+            repeticion,
           },
           formulario.producto.unidadComercial,
           politicaEjecucion,
@@ -565,13 +615,117 @@ export function ConfigurarComponenteWorkspace({
               </span>
             </div>
           </div>
+          <div className={styles.repeatCard}>
+            <div>
+              <strong>Componente repetible</strong>
+              <span>
+                Permite agregar otras ocurrencias de este mismo producto al
+                cotizar, cada una con nombre, medidas y configuración propios.
+              </span>
+            </div>
+            <div className={styles.repeatControl}>
+              <label>
+                <span>Permitir agregar ocurrencias</span>
+                <Switch
+                  checked={repeticion.permitida}
+                  disabled={componente.requerido === false}
+                  onCheckedChange={(permitida) =>
+                    setRepeticion((actual) => ({
+                      ...actual,
+                      permitida,
+                      minimo: permitida ? actual.minimo : 1,
+                    }))
+                  }
+                />
+              </label>
+              {componente.requerido === false ? (
+                <span className={styles.executionHint}>
+                  Para repetirlo, primero definí una ocurrencia base
+                  obligatoria.
+                </span>
+              ) : null}
+              {repeticion.permitida ? (
+                <>
+                  <label>
+                    <span>Incluir una ocurrencia inicial</span>
+                    <Switch
+                      checked={repeticion.minimo === 1}
+                      onCheckedChange={(incluida) =>
+                        setRepeticion((actual) => ({
+                          ...actual,
+                          minimo: incluida ? 1 : 0,
+                        }))
+                      }
+                    />
+                  </label>
+                  <span className={styles.executionHint}>
+                    {repeticion.minimo === 1
+                      ? "La cotización comienza con una ocurrencia incluida."
+                      : "La cotización comienza vacía y el comercial decide cuáles agregar."}
+                  </span>
+                  <FieldGroup className={styles.repeatFields}>
+                    <Field>
+                      <FieldLabel htmlFor="maximo-ocurrencias-componente">
+                        Máximo por cotización
+                      </FieldLabel>
+                      <Input
+                        id="maximo-ocurrencias-componente"
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={repeticion.maximo}
+                        onChange={(event) =>
+                          setRepeticion((actual) => ({
+                            ...actual,
+                            maximo: Math.min(
+                              50,
+                              Math.max(1, Number(event.target.value) || 1),
+                            ),
+                          }))
+                        }
+                      />
+                      <FieldDescription>
+                        Total de ocurrencias que puede tener la cotización.
+                      </FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="etiqueta-agregar-componente">
+                        Texto del botón
+                      </FieldLabel>
+                      <Input
+                        id="etiqueta-agregar-componente"
+                        maxLength={100}
+                        placeholder={`Agregar ${componente.nombre}`}
+                        value={repeticion.etiquetaAgregar ?? ""}
+                        onChange={(event) =>
+                          setRepeticion((actual) => ({
+                            ...actual,
+                            etiquetaAgregar: event.target.value || null,
+                          }))
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                </>
+              ) : null}
+            </div>
+          </div>
+          {derivarMedidas ? (
+            <div className={styles.geometryNotice}>
+              <SparklesIcon />
+              <span>
+                El ancho y el alto se obtendrán del diseño vectorial,
+                conservando su proporción.
+              </span>
+            </div>
+          ) : null}
           <div className={styles.table}>
             <div className={styles.tableHead}>
               <span>Parámetro del hijo</span>
               <span>Origen</span>
               <span>Configuración</span>
             </div>
-            {bindings.map((binding, index) => (
+            {bindingsVisibles.map(({ binding, index }) => (
               <div
                 className={`${styles.binding} ${esActivacionOpcional(binding) ? styles.activationBinding : ""}`}
                 key={binding.clave}
@@ -666,7 +820,14 @@ export function ConfigurarComponenteWorkspace({
                       <option value="COTIZACION">Definir al cotizar</option>
                     </>
                   ) : (
-                    ORIGENES.map((origen) => (
+                    (binding.tipoDato === "vectorial"
+                      ? ORIGENES.filter(
+                          (origen) =>
+                            origen.value === "PADRE" ||
+                            origen.value === "COTIZACION",
+                        )
+                      : ORIGENES
+                    ).map((origen) => (
                       <option key={origen.value} value={origen.value}>
                         {origen.label}
                       </option>

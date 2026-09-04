@@ -93,6 +93,82 @@ describe('pasos compuestos', () => {
     ]);
   });
 
+  it('suma un dato estándar de todas las ocurrencias vinculadas', () => {
+    const [configuracion] = leerConfiguracionesPasosCompuestos([
+      {
+        version: 1,
+        nodoClave: 'ruta:aplicacion',
+        pasoTenantId: '7f3ec28c-eb81-4f41-aec1-7fe976793860',
+        pasoNombre: 'Aplicación de transfer textil',
+        operaciones: [
+          {
+            codigo: 'aplicar',
+            nombre: 'Aplicar transfer',
+            activa: true,
+            componentesCodigos: ['estampa'],
+            modoTiempo: 'POR_UNIDAD',
+            fuenteCantidad: {
+              tipo: 'COMPONENTES',
+              componentesCodigos: ['estampa'],
+              campo: 'cantidadPiezas',
+              agregacion: 'SUM',
+            },
+            minutosPorUnidad: 5,
+          },
+        ],
+      },
+    ]);
+
+    const [resultado] = resolverPasoCompuesto({
+      configuracion,
+      contextoPadre: { cantidad: 10 },
+      outputsComponentes: {
+        estampa: {
+          cantidadPiezas: 10,
+          _componente: { plantillaCodigo: 'estampa' },
+        },
+        estampa__manga: {
+          cantidadPiezas: 10,
+          _componente: { plantillaCodigo: 'estampa' },
+        },
+      },
+      nombresComponentes: { estampa: 'Estampa DTF' },
+    });
+
+    expect(resultado.cantidadResuelta).toBe(20);
+    expect(resultado.duracionMin).toBe(100);
+  });
+
+  it('omite una operación cuando ninguno de sus componentes fue agregado', () => {
+    const [configuracion] = leerConfiguracionesPasosCompuestos([
+      {
+        version: 1,
+        nodoClave: 'ruta:aplicacion',
+        pasoTenantId: '7f3ec28c-eb81-4f41-aec1-7fe976793860',
+        pasoNombre: 'Aplicación de transfer textil',
+        operaciones: [
+          {
+            codigo: 'aplicar',
+            nombre: 'Aplicar transfer',
+            activa: true,
+            componentesCodigos: ['estampa'],
+            modoTiempo: 'FIJO',
+            minutosFijos: 5,
+          },
+        ],
+      },
+    ]);
+
+    expect(
+      resolverPasoCompuesto({
+        configuracion,
+        contextoPadre: { cantidad: 10 },
+        outputsComponentes: {},
+        nombresComponentes: { estampa: 'Estampa DTF' },
+      }),
+    ).toEqual([]);
+  });
+
   it('rechaza una operación sin una regla controlada válida', () => {
     expect(() =>
       leerConfiguracionesPasosCompuestos([

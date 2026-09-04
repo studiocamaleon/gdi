@@ -26,6 +26,11 @@ import type {
 } from './dto/producto.dto';
 import { EstructuraProductoDto } from './dto/producto.dto';
 import { validarConfiguracionPricingCompuesto } from './precio/pricing-compuesto';
+import {
+  leerGeometriasComerciales,
+  validarGeometriasComerciales,
+} from './geometrias-comerciales';
+import { leerConfiguracionComponente } from './componentes-configuracion';
 
 type MedidaPredefinidaNormalizada = {
   id: string;
@@ -195,6 +200,7 @@ export class ProductosService {
 
   async crearProducto(tenantId: string, dto: CrearProductoDto) {
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
+    validarGeometriasComerciales(dto.atributosComercialesJson);
     const subcategoriaComercial = await this.assertSubcategoriaComercial(
       dto.subcategoriaComercialCodigo,
     );
@@ -301,6 +307,7 @@ export class ProductosService {
     dto: ActualizarProductoDto,
   ) {
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
+    validarGeometriasComerciales(dto.atributosComercialesJson);
     const existente = await this.prisma.producto.findFirst({
       where: { id, tenantId },
     });
@@ -318,6 +325,81 @@ export class ProductosService {
       throw new ConflictException(
         'El producto cambió desde que abriste la pantalla. Recargá antes de guardar para no sobrescribir cambios de otra persona.',
       );
+    }
+
+    if (dto.atributosComercialesJson !== undefined) {
+      const fuentesAnteriores = new Map(
+        leerGeometriasComerciales(
+          existente.atributosComercialesJson,
+        ).fuentes.map((fuente) => [fuente.id, fuente.nombre]),
+      );
+      const fuentesSiguientes = new Set(
+        leerGeometriasComerciales(dto.atributosComercialesJson).fuentes.map(
+          (fuente) => fuente.id,
+        ),
+      );
+      const eliminadas = new Set(
+        [...fuentesAnteriores.keys()].filter(
+          (fuenteId) => !fuentesSiguientes.has(fuenteId),
+        ),
+      );
+      if (eliminadas.size > 0) {
+        const componentes = await this.prisma.productoRecetaComponente.findMany(
+          {
+            where: {
+              tenantId,
+              revision: {
+                estado: {
+                  in: [
+                    EstadoProductoRecetaRevision.BORRADOR,
+                    EstadoProductoRecetaRevision.PUBLICADA,
+                  ],
+                },
+                receta: { productoId: id },
+              },
+            },
+            select: { nombre: true, configuracionJson: true },
+          },
+        );
+        const usos = componentes.flatMap((componente) => {
+          const configuracion = leerConfiguracionComponente(
+            componente.configuracionJson,
+          );
+          return (configuracion?.bindings ?? []).flatMap((binding) => {
+            if (
+              binding.clave !== 'disenoVectorialFuente' ||
+              binding.origen !== 'PADRE'
+            ) {
+              return [];
+            }
+            const campo =
+              binding.regla?.fuente?.tipo === 'PADRE'
+                ? binding.regla.fuente.campo
+                : (binding.regla?.campoPadre ?? binding.padreClave ?? '');
+            const match = campo.match(/^geometriasVectoriales\.([^.]*)$/);
+            return match && eliminadas.has(match[1])
+              ? [
+                  {
+                    componente: componente.nombre,
+                    fuente:
+                      fuentesAnteriores.get(match[1]) ?? 'Fuente geométrica',
+                  },
+                ]
+              : [];
+          });
+        });
+        if (usos.length > 0) {
+          throw new BadRequestException(
+            `No se puede eliminar ${[
+              ...new Set(usos.map((uso) => `"${uso.fuente}"`)),
+            ].join(', ')} porque la usan ${[
+              ...new Set(usos.map((uso) => `"${uso.componente}"`)),
+            ].join(
+              ', ',
+            )}. Cambiá primero la fuente heredada de esos componentes en la ruta de producción.`,
+          );
+        }
+      }
     }
 
     const data: Prisma.ProductoUpdateInput = {};

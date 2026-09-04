@@ -88,6 +88,27 @@ function esConfiguracionCapasValida(value: unknown): boolean {
   return true;
 }
 
+function esFuenteVectorialValida(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const fuente = value as Record<string, unknown>;
+  return !(
+    (fuente.schemaVersion !== 1 && fuente.schemaVersion !== 2) ||
+    typeof fuente.nombreArchivo !== 'string' ||
+    fuente.nombreArchivo.length === 0 ||
+    fuente.nombreArchivo.length > 255 ||
+    typeof fuente.svg !== 'string' ||
+    fuente.svg.length === 0 ||
+    Buffer.byteLength(fuente.svg, 'utf8') > 512 * 1024 ||
+    !esNumeroPositivo(fuente.anchoFinalMm) ||
+    (fuente.altoFinalMm !== undefined &&
+      !esNumeroPositivo(fuente.altoFinalMm)) ||
+    (fuente.configuracionCapas !== undefined &&
+      !esConfiguracionCapasValida(fuente.configuracionCapas)) ||
+    (fuente.schemaVersion === 2 &&
+      !esConfiguracionCapasValida(fuente.configuracionCapas))
+  );
+}
+
 /**
  * El JobContext mezcla un núcleo estable con campos dinámicos declarados por
  * cada producto/paso. No puede transformarse a un DTO anidado con whitelist:
@@ -141,29 +162,28 @@ export function jobContextCotizacionValido(value: unknown): boolean {
   }
 
   if (ctx.disenoVectorialFuente !== undefined) {
+    if (!esFuenteVectorialValida(ctx.disenoVectorialFuente)) {
+      return false;
+    }
+  }
+  if (ctx.geometriasVectoriales !== undefined) {
     if (
-      !ctx.disenoVectorialFuente ||
-      typeof ctx.disenoVectorialFuente !== 'object' ||
-      Array.isArray(ctx.disenoVectorialFuente)
+      !ctx.geometriasVectoriales ||
+      typeof ctx.geometriasVectoriales !== 'object' ||
+      Array.isArray(ctx.geometriasVectoriales)
     ) {
       return false;
     }
-    const fuente = ctx.disenoVectorialFuente as Record<string, unknown>;
+    const fuentes = Object.entries(
+      ctx.geometriasVectoriales as Record<string, unknown>,
+    );
     if (
-      (fuente.schemaVersion !== 1 && fuente.schemaVersion !== 2) ||
-      typeof fuente.nombreArchivo !== 'string' ||
-      fuente.nombreArchivo.length === 0 ||
-      fuente.nombreArchivo.length > 255 ||
-      typeof fuente.svg !== 'string' ||
-      fuente.svg.length === 0 ||
-      Buffer.byteLength(fuente.svg, 'utf8') > 512 * 1024 ||
-      !esNumeroPositivo(fuente.anchoFinalMm) ||
-      (fuente.altoFinalMm !== undefined &&
-        !esNumeroPositivo(fuente.altoFinalMm)) ||
-      (fuente.configuracionCapas !== undefined &&
-        !esConfiguracionCapasValida(fuente.configuracionCapas)) ||
-      (fuente.schemaVersion === 2 &&
-        !esConfiguracionCapasValida(fuente.configuracionCapas))
+      fuentes.length > 30 ||
+      fuentes.some(
+        ([id, fuente]) =>
+          !/^[a-z0-9][a-z0-9_-]{0,59}$/.test(id) ||
+          !esFuenteVectorialValida(fuente),
+      )
     ) {
       return false;
     }

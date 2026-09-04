@@ -13,6 +13,10 @@ import type {
   DesgloseCostosPricingCompuesto,
   PoliticaPricingComponente,
 } from '../productos-servicios/precio/pricing-compuesto';
+import type {
+  DemandaNesting,
+  SolucionNesting,
+} from './geometria-vectorial/contrato-nesting';
 
 // ============================================================================
 // INPUT — Lo que el motor recibe
@@ -291,8 +295,7 @@ export interface CotizarOutput {
 }
 
 export type PoliticaNestingCompuesto =
-  | 'INDEPENDIENTE'
-  | 'CONSOLIDAR_COMPATIBLES';
+  'INDEPENDIENTE' | 'CONSOLIDAR_COMPATIBLES';
 
 export interface LoteNestingCompuestoSnapshot {
   id: string;
@@ -376,31 +379,31 @@ export interface AnalisisNestingCompuestoShadow {
     }>;
     independiente: {
       sustratos: number;
+      /** Consumo lineal total cuando el sustrato es rollo. */
+      largoMm?: number;
+      /** Área física de rollo consumida; permite comparar anchos distintos. */
+      areaMm2?: number;
       aprovechamientoPct: number;
     };
     consolidado: {
-      algoritmo: 'grid-2d-multi';
+      algoritmo:
+        | 'grid-2d-multi'
+        | 'shelf-rollo'
+        | 'maxrects-rollo'
+        | 'irregular-2d-bottom-left-v1';
       sustratos: number;
+      /** Largo real elegido por el motor para el lote de rollo. */
+      largoMm?: number;
+      areaMm2?: number;
       aprovechamientoPct: number;
-      substrates: Array<{
-        kind: 'sheet';
-        count: number;
-        widthMm: number;
-        heightMm: number;
-      }>;
-      placements: Array<{
-        pieceId: string;
-        substrateIndex?: number;
-        xMm: number;
-        yMm: number;
-        widthMm: number;
-        heightMm: number;
-        rotated: boolean;
-        meta?: unknown;
-      }>;
+      substrates: NestingEjecutado['substrates'];
+      placements: NestingEjecutado['placements'];
     };
     diferencia: {
       sustratos: number;
+      /** Ahorro de largo cuando el sustrato es rollo. */
+      largoMm?: number;
+      areaMm2?: number;
       ahorroPct: number;
       ahorroPotencial: boolean;
     };
@@ -568,6 +571,10 @@ export interface CotizacionResultado {
 export interface ComponenteFabricadoCosteado {
   productoId: string;
   codigo: string;
+  /** Ocurrencia declarada en la receta que autorizó esta instancia. */
+  plantillaCodigo?: string;
+  /** Presente cuando el comercial agregó la ocurrencia al cotizar. */
+  ocurrenciaId?: string;
   nombre: string;
   politicaEjecucion: 'INLINE' | 'INDEPENDIENTE';
   cantidad: number;
@@ -746,24 +753,7 @@ export interface PasoEjecutado {
    * en la OT ni en el Tablero: explican el tiempo, materiales y costo del
    * único paso operativo consolidado.
    */
-  operacionesInternas?: Array<{
-    codigo: string;
-    nombre: string;
-    familiaCodigo: string;
-    activada: boolean;
-    duracionMin: number;
-    costoTotal: number;
-    centroCostoId?: string | null;
-    centroCostoNombre?: string | null;
-    materiales?: MaterialEjecutado[];
-    componentesCodigos?: string[];
-    /**
-     * El acomodo pertenece a la operación interna, no al contenedor. Se
-     * conserva para que Producción pueda explicar el nesting de una etapa
-     * consolidada sin materializar sus subtareas como estados separados.
-     */
-    nestingResult?: NestingEjecutado;
-  }>;
+  operacionesInternas?: OperacionInternaCosteada[];
   /** Materiales consumidos (si activado). */
   materiales?: MaterialEjecutado[];
   /** Cargos directos a nivel paso (si activado). */
@@ -828,6 +818,38 @@ export interface PasoEjecutado {
   estructuraBastidor?: EstructuraBastidorEjecutada;
 }
 
+/**
+ * Proyección costeada de una operación privada de etapa. Conserva el mismo
+ * detalle económico que un paso normal, pero nunca crea un estado operativo
+ * independiente en la OT.
+ */
+export interface OperacionInternaCosteada {
+  codigo: string;
+  nombre: string;
+  familiaCodigo: string;
+  activada: boolean;
+  duracionMin: number;
+  costoTotal: number;
+  configPasoId?: string;
+  rutaPasoId?: string;
+  rutaPasoOrden?: number;
+  razonNoActivado?: string;
+  activadoPorDependencia?: { requeridoPorNombre: string };
+  centroCostoId?: string | null;
+  centroCostoNombre?: string | null;
+  tiempo?: PasoEjecutado['tiempo'];
+  materiales?: MaterialEjecutado[];
+  cargosDirectosPaso?: CargoDirectoEjecutado[];
+  mutacionAplicada?: MutacionAplicada;
+  componentesCodigos?: string[];
+  /**
+   * El acomodo pertenece a la operación interna, no al contenedor. Se
+   * conserva para que Producción pueda explicar el nesting de una etapa
+   * consolidada sin materializar sus subtareas como estados separados.
+   */
+  nestingResult?: NestingEjecutado;
+}
+
 /** El bastidor a fabricar, autosuficiente para dibujarlo en 3D. */
 export interface EstructuraBastidorEjecutada {
   /** simple = marco plano (frontlight) · doble = cajón (backlight). */
@@ -857,7 +879,15 @@ export interface NestingEjecutado {
     | 'secuencial-rollo'
     | 'grid-2d-single'
     | 'grid-2d-multi'
-    | 'irregular-2d-bottom-left-v1';
+    | 'irregular-2d-bottom-left-v1'
+    | 'manual-vector-estimate-v1';
+  /** Política configurada antes de resolver el algoritmo efectivo ganador. */
+  algorithmPolicy?:
+    | 'auto'
+    | 'shelf-rollo'
+    | 'maxrects-rollo'
+    | 'grid-2d-single'
+    | 'grid-2d-multi';
   /** Cantidad calculada en su unidad (m_lineales, pliegos, pouches, m2, piezas). */
   cantidadCalculada: number;
   unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';
@@ -902,6 +932,11 @@ export interface NestingEjecutado {
     anchoMm: number;
     altoMm: number;
   }>;
+  /** Demanda neutral que originó el resultado. Para polígonos conserva los
+   * contornos y la identidad de cada propietario/componente. */
+  demandaNesting?: DemandaNesting[];
+  /** Solución reproducible y versionada del motor irregular. */
+  solucionNesting?: SolucionNesting;
   /** Escalones efectivos cuando el costeo del sustrato usa plate-segments. */
   costingSegmentSteps?: number[];
   /** Perfil efectivo que participó de la firma productiva. */
@@ -918,6 +953,8 @@ export interface NestingEjecutado {
     esPasoOperativo: boolean;
   };
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
+  /** El layout debe permanecer registrado con un corte vectorial posterior. */
+  layoutVinculadoGeometriaVectorial?: boolean;
   /** Datos normalizados para que el SVG muestre cómo pensó el motor. */
   visualConfig?: NestingVisualConfig;
   /** Outputs canónicos publicados por el paso que generó este nesting. */
@@ -1068,9 +1105,29 @@ export interface MaterialEjecutado {
   materialSku: string;
   materialDisplayName: string;
   materiaPrimaNombre?: string | null;
+  materiaPrimaId?: string | null;
   materiaPrimaTemplateId?: string | null;
   materiaPrimaTipoTecnico?: string | null;
   atributosVarianteJson?: Record<string, unknown> | null;
+  /**
+   * Alternativas físicas que el motor podía elegir para un sustrato en rollo.
+   * Se congela únicamente cuando la selección fue automática y el comercial
+   * no fijó una variante. F4.4.3 la usa para reevaluar el mejor ancho sobre la
+   * demanda consolidada, en lugar de heredar el ganador de cada componente.
+   */
+  opcionesNestingRollo?: Array<{
+    materialVarianteId: string;
+    materialSku: string;
+    materialDisplayName: string;
+    materiaPrimaId: string | null;
+    materiaPrimaNombre: string | null;
+    materiaPrimaTemplateId: string | null;
+    materiaPrimaTipoTecnico: string | null;
+    atributosVarianteJson: Record<string, unknown> | null;
+    anchoMm: number;
+    unidad: 'm2' | 'm_lineales';
+    precioUnitario: number;
+  }>;
   tipoLineaCosto: 'MATERIAL' | 'CONSUMIBLE_MAQUINA' | 'DESGASTE_MAQUINA';
   cantidad: number;
   unidad: string;
@@ -1146,9 +1203,7 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    | 'MONTO_FIJO_PLANO'
-    | 'PORCENTAJE_SOBRE_BASE'
-    | 'POR_UNIDAD_INPUT';
+    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;

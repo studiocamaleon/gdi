@@ -1,4 +1,7 @@
-import { consolidarEtapasCompuestas } from '../etapas-compuestas';
+import {
+  agregarContextoComponentesVinculados,
+  consolidarEtapasCompuestas,
+} from '../etapas-compuestas';
 import type { PasoEjecutado } from '../tipos';
 
 function paso(
@@ -35,8 +38,67 @@ function paso(
 }
 
 describe('consolidarEtapasCompuestas', () => {
+  it('agrega las piezas de todas las ocurrencias de las plantillas vinculadas', () => {
+    const contexto = agregarContextoComponentesVinculados({
+      contextoPadre: { cantidad: 10, referencia: 'OT' },
+      codigosPlantilla: ['estampa-frente', 'estampa-espalda'],
+      componentes: [
+        {
+          codigo: 'estampa-frente',
+          plantillaCodigo: 'estampa-frente',
+          cantidad: 10,
+          jobContext: {
+            cantidad: 10,
+            piezas: [{ cantidad: 10, anchoMm: 200, altoMm: 200 }],
+          },
+        },
+        {
+          codigo: 'estampa-espalda',
+          plantillaCodigo: 'estampa-espalda',
+          cantidad: 10,
+          jobContext: {
+            cantidad: 10,
+            piezas: [{ cantidad: 10, anchoMm: 200, altoMm: 200 }],
+          },
+        },
+        {
+          codigo: 'estampa-frente__manga',
+          plantillaCodigo: 'estampa-frente',
+          cantidad: 10,
+          jobContext: {
+            cantidad: 10,
+            piezas: [{ cantidad: 10, anchoMm: 80, altoMm: 120 }],
+          },
+        },
+      ],
+    });
+
+    expect(contexto).toMatchObject({
+      cantidad: 10,
+      cantidadPiezasComponentes: 30,
+      piezaAreaTotalM2: 0.896,
+      componentesVinculados: [
+        'estampa-frente',
+        'estampa-espalda',
+        'estampa-frente__manga',
+      ],
+    });
+    expect(contexto.piezas).toHaveLength(3);
+  });
+
   it('expone un único paso operativo y conserva el desglose calculado', () => {
     const tensado = paso('tensado', 'Tensado de lona', 40, 100);
+    tensado.tiempo!.costo = 90;
+    tensado.cargosDirectosPaso = [
+      {
+        cargoDirectoCatalogoId: 'cargo-1',
+        cargoCodigo: 'control-calidad',
+        cargoNombre: 'Control de calidad',
+        modoCalculo: 'MONTO_FIJO_PLANO',
+        monto: 10,
+        aplicaMargen: true,
+      },
+    ];
     tensado.nestingResult = {
       algorithm: 'grid-2d-single',
       cantidadCalculada: 1,
@@ -57,12 +119,27 @@ describe('consolidarEtapasCompuestas', () => {
       contenedorClave: null,
       activado: true,
       costoTotal: 150,
-      tiempo: { totalMin: 60, costo: 150 },
+      tiempo: { totalMin: 60, tarifaHora: 100, costo: 140 },
     });
     expect(resultado[0].operacionesInternas).toHaveLength(2);
-    expect(resultado[0].operacionesInternas?.[0].nestingResult).toMatchObject({
-      algorithm: 'grid-2d-single',
-      cantidadCalculada: 1,
+    expect(resultado[0].operacionesInternas?.[0]).toMatchObject({
+      configPasoId: 'tensado',
+      rutaPasoId: 'ruta:ensamble:interno:tensado',
+      tiempo: {
+        totalMin: 40,
+        centroCostoNombre: 'Terminación',
+        costo: 90,
+      },
+      cargosDirectosPaso: [
+        {
+          cargoCodigo: 'control-calidad',
+          monto: 10,
+        },
+      ],
+      nestingResult: {
+        algorithm: 'grid-2d-single',
+        cantidadCalculada: 1,
+      },
     });
   });
 });

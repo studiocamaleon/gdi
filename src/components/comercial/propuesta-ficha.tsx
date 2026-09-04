@@ -154,6 +154,7 @@ import {
   calcularCostoItem,
   getCostoTiempoPaso,
   getVisibleCostSteps,
+  proyectarPasoOperacionInterna,
   sumCargosPaso,
   sumCargosYTiempoExtraPaso,
   sumMaterialesPaso,
@@ -203,6 +204,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   type MutacionAplicadaView,
   demasiaPorLado,
@@ -1990,9 +1999,15 @@ function recolectarNestingsCotizacion(
       };
     });
     const nestingResult: NestingViewerInput = {
-      algorithm: "grid-2d-multi",
+      ...baseResult,
+      ...snapshot,
+      algorithm: snapshot.algorithm,
       cantidadCalculada: snapshot.cantidadCalculada ?? cantidadSustratos,
-      unidad: snapshot.unidad ?? "pliegos",
+      unidad:
+        snapshot.unidad ??
+        (snapshot.substrates.some((substrate) => substrate.kind === "roll")
+          ? "m_lineales"
+          : "pliegos"),
       aprovechamientoPct: snapshot.aprovechamientoPct,
       maquina: snapshot.maquina ?? baseResult.maquina,
       sustrato: snapshot.sustrato ?? baseResult.sustrato,
@@ -2012,7 +2027,8 @@ function recolectarNestingsCotizacion(
     const materialBase = base.paso.materiales?.find(
       (material) =>
         material.materialVarianteId === lote.materialVarianteId &&
-        material.detalleCosteoNesting,
+        (material.detalleCosteoNesting ||
+          material.asignacionNestingCompuesto?.loteId === lote.id),
     );
     const costeo = lote.costeoSustrato;
     const detalleExacto = costeo
@@ -3278,14 +3294,197 @@ function MutacionPasoDetail({ mutacion }: { mutacion: MutacionAplicadaView }) {
   );
 }
 
-function PasoCostDetail({
-  paso,
+function pasoTieneDetalleCosteo(paso: PasoCosteo) {
+  return (
+    paso.activado &&
+    (Boolean(paso.tiempo) ||
+      Boolean(paso.mutacionAplicada) ||
+      (paso.materiales?.length ?? 0) > 0 ||
+      (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
+      (paso.cargosDirectosPaso?.length ?? 0) > 0)
+  );
+}
+
+function operacionTieneDetalleDesplegable(paso: PasoCosteo) {
+  return (
+    paso.activado &&
+    (Boolean(paso.mutacionAplicada) ||
+      (paso.materiales?.length ?? 0) > 0 ||
+      (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
+      Number(paso.tiempo?.runMermaMin ?? 0) > 0 ||
+      (paso.cargosDirectosPaso?.length ?? 0) > 0)
+  );
+}
+
+function OperacionesEtapaTable({
+  etapa,
   cotizacion,
 }: {
-  paso: PasoCosteo;
+  etapa: PasoCosteo;
   cotizacion: CotizacionPropuestaSnapshot;
 }) {
   const { moneda } = useConfigRegional();
+  const operaciones = etapa.operacionesInternas ?? [];
+  const [abiertas, setAbiertas] = React.useState<Set<string>>(() => new Set());
+
+  const alternar = (key: string) => {
+    setAbiertas((actuales) => {
+      const siguientes = new Set(actuales);
+      if (siguientes.has(key)) siguientes.delete(key);
+      else siguientes.add(key);
+      return siguientes;
+    });
+  };
+
+  return (
+    <div className="cost-detail-block">
+      <div className="cost-detail-title">Desglose por operación</div>
+      <div className={`cost-detail-table-wrap ${costC.stageTableWrap}`}>
+        <Table className={`cost-detail-table ${costC.stageTable}`}>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Operación</TableHead>
+              <TableHead>Centro de costo</TableHead>
+              <TableHead className="num">Tiempo</TableHead>
+              <TableHead className="num">Materiales</TableHead>
+              <TableHead className="num">Cargos</TableHead>
+              <TableHead className="num">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {operaciones.map((operacion, index) => {
+              const key = `${operacion.codigo}-${index}`;
+              const pasoOperacion = proyectarPasoOperacionInterna(
+                etapa,
+                operacion,
+                index,
+              );
+              const materialesTotal = sumMaterialesPaso(pasoOperacion);
+              const cargosTotal = sumCargosYTiempoExtraPaso(pasoOperacion);
+              const puedeExpandir =
+                operacionTieneDetalleDesplegable(pasoOperacion);
+              const abierta = abiertas.has(key);
+              const centroCosto =
+                operacion.tiempo?.centroCostoNombre ??
+                operacion.centroCostoNombre ??
+                (operacion.activada ? "Sin centro asignado" : "No aplica");
+              const tiempoMin =
+                operacion.tiempo?.totalMin ?? operacion.duracionMin;
+
+              return (
+                <React.Fragment key={key}>
+                  <TableRow
+                    className={`${costC.stageRow} ${
+                      operacion.activada ? "" : costC.inactiveRow
+                    }`}
+                  >
+                    <TableCell className={costC.operationCell}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={costC.operationTrigger}
+                        disabled={!puedeExpandir}
+                        aria-expanded={puedeExpandir ? abierta : undefined}
+                        onClick={() => puedeExpandir && alternar(key)}
+                      >
+                        <ChevronRightIcon
+                          data-icon="inline-start"
+                          data-open={abierta ? "true" : "false"}
+                          aria-hidden="true"
+                          className={`${costC.operationChevron} ${
+                            puedeExpandir ? "" : costC.hiddenChevron
+                          }`}
+                        />
+                        <span className={costC.operationIndex}>
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <strong>{operacion.nombre}</strong>
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <div className="cost-step-center">
+                        <strong>{centroCosto}</strong>
+                        <span>
+                          {operacion.tiempo
+                            ? formatTarifaCentroCosto(pasoOperacion, moneda)
+                            : "Sin detalle tarifario"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="num">
+                      {tiempoMin > 0 ? (
+                        <>
+                          <strong>
+                            {operacion.tiempo
+                              ? formatCurrency(
+                                  getCostoTiempoPaso(pasoOperacion),
+                                  moneda,
+                                )
+                              : "—"}
+                          </strong>
+                          <span>{formatMinutos(tiempoMin)}</span>
+                        </>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell className="num">
+                      {materialesTotal > 0
+                        ? formatCurrency(materialesTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="num">
+                      {cargosTotal > 0
+                        ? formatCurrency(cargosTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="num strong">
+                      {operacion.costoTotal > 0
+                        ? formatCurrency(operacion.costoTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                  </TableRow>
+                  {puedeExpandir && abierta ? (
+                    <TableRow className={costC.operationDetailRow}>
+                      <TableCell colSpan={6} className={costC.detailCell}>
+                        <div className={costC.stageDetail}>
+                          <PasoCostDetail
+                            paso={pasoOperacion}
+                            cotizacion={cotizacion}
+                            contexto="operación"
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function PasoCostDetail({
+  paso,
+  cotizacion,
+  contexto = "paso",
+}: {
+  paso: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+  contexto?: "paso" | "operación";
+}) {
+  if ((paso.operacionesInternas?.length ?? 0) > 0) {
+    return (
+      <div className="cost-step-expanded">
+        <OperacionesEtapaTable etapa={paso} cotizacion={cotizacion} />
+      </div>
+    );
+  }
+
   const materiales = paso.materiales ?? [];
   const cargos = paso.cargosDirectosPaso ?? [];
   const cargosTotal = sumCargosPaso(paso);
@@ -3298,7 +3497,11 @@ function PasoCostDetail({
       ) : null}
 
       <div className="cost-detail-block">
-        <div className="cost-detail-title">Materiales del paso</div>
+        <div className="cost-detail-title">
+          {contexto === "paso"
+            ? "Materiales del paso"
+            : "Materiales de la operación"}
+        </div>
         <MaterialesPasoTable
           materiales={materiales}
           nesting={paso.nestingResult}
@@ -3320,30 +3523,6 @@ function PasoCostDetail({
         <div className="cost-detail-block">
           <div className="cost-detail-title">Cargos directos del paso</div>
           <CargosPasoList cargos={cargos} />
-        </div>
-      ) : null}
-
-      {(paso.operacionesInternas?.length ?? 0) > 0 ? (
-        <div className="cost-detail-block">
-          <div className="cost-detail-title">Operaciones de la etapa</div>
-          <div className="cost-stage-operations">
-            {paso.operacionesInternas!.map((operacion, index) => (
-              <div
-                className="cost-stage-operation"
-                key={`${operacion.codigo}-${index}`}
-              >
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <div>
-                  <strong>{operacion.nombre}</strong>
-                  <small>
-                    {formatMinutos(operacion.duracionMin)} ·{" "}
-                    {operacion.centroCostoNombre ?? "Sin centro asignado"}
-                  </small>
-                </div>
-                <strong>{formatCurrency(operacion.costoTotal, moneda)}</strong>
-              </div>
-            ))}
-          </div>
         </div>
       ) : null}
     </div>
@@ -3671,13 +3850,7 @@ function CostosItemView({
                 // los bloques de tiempo extra: así se distingue del tiempo de
                 // TRABAJO del paso, que es la columna Tiempo.
                 const cargosTotal = sumCargosYTiempoExtraPaso(paso);
-                const puedeExpandir =
-                  paso.activado &&
-                  (Boolean(paso.tiempo) ||
-                    Boolean(paso.mutacionAplicada) ||
-                    (paso.materiales?.length ?? 0) > 0 ||
-                    (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
-                    (paso.cargosDirectosPaso?.length ?? 0) > 0);
+                const puedeExpandir = pasoTieneDetalleCosteo(paso);
                 const expanded = expandedCostSteps.has(stepKey);
                 return (
                   <React.Fragment key={fila.key}>

@@ -2,6 +2,54 @@
 import { OrdenesTrabajoService } from '../ordenes-trabajo.service';
 
 describe('materialización de componentes fabricados', () => {
+  it('respeta un snapshot explícitamente vacío y no reconstruye la plantilla 0..N', async () => {
+    const itemCreate = jest.fn();
+    const tx = {
+      ordenTrabajoItem: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'item-padre',
+          ordenId: 'orden',
+          codigo: 'REMERA',
+          cantidad: 10,
+          ordenIndice: 0,
+          recetaRevision: {
+            componentes: [
+              {
+                codigo: 'estampa',
+                nombre: 'Estampa DTF',
+                politicaEjecucion: 'INDEPENDIENTE',
+                nodoIncorporacionClave: 'ruta:aplicacion',
+                recetaRevisionId: 'revision-hija',
+                cantidad: 1,
+                unidad: 'unidad',
+              },
+            ],
+          },
+          cotizacionItem: {
+            jobContextJson: { cantidad: 10 },
+            trazabilidadJson: { componentesFabricados: [] },
+          },
+        }),
+        create: itemCreate,
+      },
+    };
+    const service = Object.create(
+      OrdenesTrabajoService.prototype,
+    ) as OrdenesTrabajoService;
+
+    await (
+      service as unknown as {
+        materializarComponentesFabricados: (
+          tx: unknown,
+          tenantId: string,
+          padres: string[],
+        ) => Promise<void>;
+      }
+    ).materializarComponentesFabricados(tx, 'tenant', ['item-padre']);
+
+    expect(itemCreate).not.toHaveBeenCalled();
+  });
+
   it('crea el ítem hijo congelado y conecta su terminal al ensamble padre', async () => {
     const padre = {
       id: 'item-padre',

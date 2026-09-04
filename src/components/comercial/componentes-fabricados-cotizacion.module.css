@@ -68,31 +68,114 @@
 .card[open] summary svg {
   transform: rotate(180deg);
 }
+.occurrenceList {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid #ebe7e2;
+  background: #fcfbf9;
+}
+
+.occurrence {
+  overflow: hidden;
+  border: 1px solid #e3ddd6;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.occurrenceHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.occurrenceHead > div {
+  display: grid;
+  gap: 2px;
+}
+
+.occurrenceHead strong {
+  font-size: 11.5px;
+}
+
+.occurrenceHead span {
+  color: #817a76;
+  font-size: 10px;
+}
+
+.occurrenceHead button {
+  color: #8a6252;
+}
+
+.nameField {
+  width: min(420px, 100%);
+}
+
+.nameField input {
+  height: 36px;
+}
+
+.resolvedMessage {
+  margin: 0;
+  padding: 11px 12px;
+  border-top: 1px solid #eee9e4;
+  color: #7b7571;
+  font-size: 11px;
+}
+
+.addOccurrence {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.addOccurrence span {
+  color: #817a76;
+  font-size: 10.5px;
+}
 .fields {
   display: grid;
   gap: 9px;
   padding: 12px;
   border-top: 1px solid #ebe7e2;
-  background: #fcfbf9;
+  background: #fff;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.fields .valueField,
 .fields label {
   display: grid;
   gap: 5px;
 }
+.fields label,
 .fields label span {
   color: #5f5956;
   font-size: 10.5px;
   font-weight: 650;
 }
-.fields input,
+.fields .inputGroup,
 .fields select {
   width: 100%;
   height: 37px;
-  padding: 0 10px;
   border: 1px solid #dcd6d0;
   border-radius: 8px;
   background: #fff;
+}
+.fields select {
+  padding: 0 10px;
+}
+.fields .inputGroup input {
+  height: 100%;
+  padding: 0 10px;
+}
+.fields .inputGroup [data-slot="input-group-addon"] {
+  min-width: 38px;
+  justify-content: center;
+  border-left: 1px solid #ebe7e2;
+  color: #5f5956;
+  font-size: 11px;
+  font-weight: 700;
 }
 .fields .booleanField {
   display: flex;
@@ -123,8 +206,92 @@
   height: 20px;
   accent-color: #f2692f;
 }
+.fields .vectorField {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+.vectorField > input[type="file"] {
+  min-height: 40px;
+  padding: 7px 9px;
+  border: 1px dashed #d5ccc4;
+  background: #fffaf7;
+}
+.vectorField > small {
+  color: #817a76;
+  font-size: 10px;
+}
+.vectorField > .vectorError {
+  color: #b53e1c;
+}
+.vectorLoaded {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #eee4dc;
+  border-radius: 9px;
+  background: #fff;
+}
+.vectorLoaded > span {
+  overflow: hidden;
+  color: #4f4945;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vectorMeasures {
+  display: grid;
+  gap: 9px;
+  align-items: end;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(160px, 1fr) minmax(
+      150px,
+      0.8fr
+    );
+}
+.axisSwitch {
+  display: grid;
+  overflow: hidden;
+  height: 36px;
+  border: 1px solid #ded8d2;
+  border-radius: 8px;
+  background: #f7f5f2;
+  grid-template-columns: 1fr 1fr;
+}
+.axisSwitch button {
+  border: 0;
+  color: #77716d;
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+.axisSwitch button[data-active="true"] {
+  color: #1f1c1b;
+  background: #fff;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgb(24 19 16 / 10%);
+}
+.resultMeasure {
+  display: grid;
+  gap: 1px;
+  min-height: 52px;
+  align-content: center;
+  padding: 6px 10px;
+  border-left: 1px solid #ebe4de;
+}
+.resultMeasure span,
+.resultMeasure small {
+  color: #817a76;
+  font-size: 9px;
+}
+.resultMeasure strong {
+  font-size: 12px;
+}
 @media (max-width: 640px) {
   .fields {
+    grid-template-columns: 1fr;
+  }
+  .vectorMeasures {
     grid-template-columns: 1fr;
   }
 }

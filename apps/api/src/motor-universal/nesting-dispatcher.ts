@@ -78,14 +78,18 @@ import type {
   LayoutProduccionCompartido,
   NestingVisualConfig,
 } from './tipos';
-import {
-  nestearGeometriaIrregular,
-  NestingIrregularError,
-} from './geometria-vectorial/nesting-irregular';
+import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
 import {
   marcarNestingVectorialReutilizado,
   obtenerCacheVectorial,
 } from './geometria-vectorial/geometria-vectorial-cache.service';
+import {
+  crearDemandasDesdeGeometriaVectorial,
+  crearProblemaNestingIrregular,
+  resolverProblemaNestingIrregular,
+  type DemandaNesting,
+  type SolucionNesting,
+} from './geometria-vectorial/contrato-nesting';
 
 /**
  * Resultado del dispatcher con TODO lo que el motor + viewer necesitan.
@@ -97,7 +101,8 @@ export interface NestingDispatchResult {
     | 'secuencial-rollo'
     | 'grid-2d-single'
     | 'grid-2d-multi'
-    | 'irregular-2d-bottom-left-v1';
+    | 'irregular-2d-bottom-left-v1'
+    | 'manual-vector-estimate-v1';
   /**
    * Cantidad CALCULADA del paso, en la unidad correcta:
    *  - Para shelf-rollo: metros lineales consumidos del rollo.
@@ -138,8 +143,18 @@ export interface NestingDispatchResult {
     anchoMm: number;
     altoMm: number;
   }>;
+  /** Contrato neutral que permite volver a resolver demandas poligonales de
+   * varios componentes sin reconstruirlas desde el SVG o el visor. */
+  demandaNesting?: DemandaNesting[];
+  /** Problema y solución versionados que produjeron el layout irregular. */
+  solucionNesting?: SolucionNesting;
   /** Política efectiva aplicada al vector completo. */
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
+  /**
+   * El layout rectangular alimenta un corte vectorial posterior. Impresión y
+   * corte deben compartir la misma solución física para conservar el registro.
+   */
+  layoutVinculadoGeometriaVectorial?: boolean;
   /** Datos normalizados para que el SVG muestre márgenes, área útil y separación. */
   visualConfig?: NestingVisualConfig;
   /**
@@ -361,9 +376,14 @@ function adjuntarDemandaRectangular(
   paso: PasoCargado,
   jobContext: JobContext,
 ): NestingDispatchResult {
+  const esRolloRectangular =
+    result.unidad === 'm_lineales' &&
+    ['shelf-rollo', 'maxrects-rollo'].includes(result.algorithm);
+  const esPliegoRectangular =
+    result.unidad === 'pliegos' &&
+    ['grid-2d-single', 'grid-2d-multi'].includes(result.algorithm);
   if (
-    result.unidad !== 'pliegos' ||
-    !['grid-2d-single', 'grid-2d-multi'].includes(result.algorithm) ||
+    (!esPliegoRectangular && !esRolloRectangular) ||
     result.talonarioGrouping ||
     result.imposicionCuadernillo
   ) {
@@ -372,7 +392,10 @@ function adjuntarDemandaRectangular(
 
   const estrategia = resolverFamilia(paso.familiaCodigo)?.nestingConfig
     ?.estrategia;
-  if (estrategia === 'pliego_digital') {
+  // Tanto el pliego digital como el rollo necesitan preservar la demanda
+  // anterior al algoritmo. En rollo los placements pueden ser paneles, por lo
+  // que reconstruir desde ellos perdería la medida y cantidad originales.
+  if (estrategia === 'pliego_digital' || esRolloRectangular) {
     const piezas = getPiezasParaNesting(jobContext)
       .map((pieza, index) => ({
         pieceId: pieza.sourcePieceId ?? `pieza_${index}`,
@@ -384,7 +407,13 @@ function adjuntarDemandaRectangular(
         (pieza) => pieza.cantidad > 0 && pieza.anchoMm > 0 && pieza.altoMm > 0,
       );
     return piezas.length > 0
-      ? { ...result, demandaRectangular: piezas }
+      ? {
+          ...result,
+          demandaRectangular: piezas,
+          ...(jobContext.geometriaVectorial
+            ? { layoutVinculadoGeometriaVectorial: true }
+            : {}),
+        }
       : result;
   }
 
@@ -416,7 +445,13 @@ function adjuntarDemandaRectangular(
     }
   }
   return agrupadas.size > 0
-    ? { ...result, demandaRectangular: [...agrupadas.values()] }
+    ? {
+        ...result,
+        demandaRectangular: [...agrupadas.values()],
+        ...(jobContext.geometriaVectorial
+          ? { layoutVinculadoGeometriaVectorial: true }
+          : {}),
+      }
     : result;
 }
 
@@ -480,7 +515,11 @@ export function geometriaDispatchValida(
     porSustrato.set(substrateIndex, group);
   }
 
-  if (result.algorithm === 'irregular-2d-bottom-left-v1') return true;
+  if (
+    result.algorithm === 'irregular-2d-bottom-left-v1' ||
+    result.algorithm === 'manual-vector-estimate-v1'
+  )
+    return true;
 
   // Barrido por X: exacto para resultados rectangulares. El límite evita que una
   // validación defensiva vuelva a bloquear el API en tiradas masivas.
@@ -944,10 +983,12 @@ function runIrregularPlaca(
     jobContext.piezaAnchoMaxMm = config.sheetWidthMm;
     jobContext.piezaAltoMaxMm = config.sheetHeightMm;
     return {
-      algorithm: 'irregular-2d-bottom-left-v1',
+      algorithm: 'manual-vector-estimate-v1',
       cantidadCalculada: placas,
       unidad: 'pliegos',
-      aprovechamientoPct: 100,
+      // Sin contornos ni placements no existe aprovechamiento geométrico
+      // calculado. Cero expresa "no medido" y evita simular un 100% ficticio.
+      aprovechamientoPct: 0,
       substrates: [
         {
           kind: 'sheet',
@@ -958,8 +999,8 @@ function runIrregularPlaca(
       ],
       placements: [],
       metricasRaw: {
-        aprovechamientoPct: 100,
-        areaUtilMm2: areaPorPlacaMm2 * placas,
+        aprovechamientoPct: 0,
+        areaUtilMm2: 0,
         areaTotalMm2: areaPorPlacaMm2 * placas,
         perSubstrate: Array.from({ length: placas }, () => ({
           areaUtilMm2: areaPorPlacaMm2,
@@ -981,6 +1022,25 @@ function runIrregularPlaca(
     config.separationHMm,
     config.separationVMm,
   );
+  const demandas = crearDemandasDesdeGeometriaVectorial({
+    geometria: jobContext.geometriaVectorial,
+    cantidad: jobContext.cantidad,
+    propietario: {
+      archivoFuente: jobContext.disenoVectorialFuente?.nombreArchivo,
+    },
+  });
+  const problema = crearProblemaNestingIrregular({
+    demandas,
+    anchoPlacaMm: config.sheetWidthMm,
+    altoPlacaMm: config.sheetHeightMm,
+    margenMm: margenUniforme,
+    separacionMm: separacionUniforme,
+    permitirRotacion: config.allowRotation,
+    permitirSegmentacion: config.permitirSegmentacionVectorial,
+    preservarComposicionOriginalSiEntra:
+      config.preservarComposicionOriginalSiEntra,
+    configuracionEncastres: config.configuracionEncastres,
+  });
   try {
     const cached = obtenerCacheVectorial(jobContext);
     const cacheMatches =
@@ -999,22 +1059,11 @@ function runIrregularPlaca(
       JSON.stringify(cached.parametros.configuracionEncastres) ===
         JSON.stringify(config.configuracionEncastres);
     if (cacheMatches) marcarNestingVectorialReutilizado(jobContext);
-    const result =
+    const solucionNesting =
       cacheMatches && cached
-        ? cached.nesting
-        : nestearGeometriaIrregular({
-            geometria: jobContext.geometriaVectorial,
-            cantidad: jobContext.cantidad,
-            anchoPlacaMm: config.sheetWidthMm,
-            altoPlacaMm: config.sheetHeightMm,
-            margenMm: margenUniforme,
-            separacionMm: separacionUniforme,
-            permitirRotacion: config.allowRotation,
-            permitirSegmentacion: config.permitirSegmentacionVectorial,
-            preservarComposicionOriginalSiEntra:
-              config.preservarComposicionOriginalSiEntra,
-            configuracionEncastres: config.configuracionEncastres,
-          });
+        ? cached.solucionNesting
+        : resolverProblemaNestingIrregular(problema);
+    const result = solucionNesting.resultado;
     const substrates: SubstrateUsage[] = Array.from(
       { length: result.placas },
       () => ({
@@ -1081,6 +1130,8 @@ function runIrregularPlaca(
         estrategiaDisposicion: result.estrategiaDisposicion,
       },
       piezasAcomodadas: result.placements.length,
+      demandaNesting: demandas,
+      solucionNesting,
       estrategiaDisposicion: result.estrategiaDisposicion,
       visualConfig: {
         margins: {

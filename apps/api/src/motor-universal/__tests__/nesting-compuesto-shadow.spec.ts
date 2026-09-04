@@ -9,6 +9,87 @@ import {
   leerExclusionNestingComponente,
   leerPoliticaNestingCompuesto,
 } from '../nesting-compuesto-shadow';
+import {
+  crearProblemaNestingIrregular,
+  resolverProblemaNestingIrregular,
+  type DemandaNesting,
+} from '../geometria-vectorial/contrato-nesting';
+
+const nestingIrregular = (
+  pieceId: string,
+  componenteCodigo: string,
+): NestingEjecutado => {
+  const demanda: DemandaNesting = {
+    schemaVersion: 1,
+    id: pieceId,
+    cantidad: 1,
+    propietario: { componenteCodigo },
+    geometria: {
+      tipo: 'POLIGONO',
+      anchoMm: 60,
+      altoMm: 60,
+      areaMm2: 1_800,
+      perimetroMm: 204.85,
+      contornos: [
+        {
+          esHueco: false,
+          puntos: [
+            { x: 0, y: 60 },
+            { x: 30, y: 0 },
+            { x: 60, y: 60 },
+          ],
+        },
+      ],
+    },
+  };
+  const solucion = resolverProblemaNestingIrregular(
+    crearProblemaNestingIrregular({
+      demandas: [demanda],
+      anchoPlacaMm: 100,
+      altoPlacaMm: 100,
+      permitirRotacion: true,
+      permitirSegmentacion: false,
+    }),
+  );
+  return {
+    algorithm: 'irregular-2d-bottom-left-v1',
+    cantidadCalculada: solucion.resultado.placas,
+    unidad: 'pliegos',
+    aprovechamientoPct: solucion.resultado.aprovechamientoPct,
+    maquina: { id: 'maquina-1', nombre: 'Mesa de corte' },
+    perfil: { id: 'perfil-1', nombre: 'Calidad normal' },
+    sustrato: { materialVarianteId: 'material-1', nombre: 'PVC 1 mm' },
+    substrates: Array.from({ length: solucion.resultado.placas }, () => ({
+      kind: 'sheet' as const,
+      count: 1,
+      widthMm: 100,
+      heightMm: 100,
+    })),
+    placements: solucion.resultado.placements.map((placement) => ({
+      pieceId: placement.pieceId,
+      substrateIndex: placement.substrateIndex,
+      xMm: placement.xMm,
+      yMm: placement.yMm,
+      widthMm: placement.anchoMm,
+      heightMm: placement.altoMm,
+      rotated: placement.rotacion !== 0,
+      meta: { contornos: placement.contornos },
+    })),
+    piezasAcomodadas: solucion.resultado.placements.length,
+    demandaNesting: [demanda],
+    solucionNesting: solucion,
+    estrategiaDisposicion: 'nesting_optimizado',
+    visualConfig: {
+      margins: { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 },
+      spacing: { horizontalMm: 0, verticalMm: 0 },
+      allowRotation: true,
+      usableArea: { xMm: 0, yMm: 0, widthMm: 100, heightMm: 100 },
+    },
+    modoColor: 'CMYK',
+    tecnologia: 'UV',
+    carasProcesadas: 1,
+  };
+};
 
 const nestingBase = (
   overrides: Partial<NestingEjecutado> = {},
@@ -46,6 +127,51 @@ const nestingBase = (
   tecnologia: 'UV',
   carasProcesadas: 1,
   ...overrides,
+});
+
+const nestingRollo = (
+  pieceId: string,
+  anchoMm: number,
+  altoMm: number,
+  rollWidthMm = 800,
+): NestingEjecutado => ({
+  algorithm: 'shelf-rollo',
+  cantidadCalculada: altoMm / 1000,
+  unidad: 'm_lineales',
+  aprovechamientoPct: 0,
+  maquina: { id: 'maquina-rollo', nombre: 'Impresora de rollo' },
+  perfil: { id: 'perfil-rollo', nombre: 'Calidad normal' },
+  sustrato: { materialVarianteId: 'rollo-800', nombre: 'Vinilo 80 cm' },
+  substrates: [{ kind: 'roll', lengthMm: altoMm, widthMm: rollWidthMm }],
+  placements: [
+    {
+      pieceId,
+      substrateIndex: 0,
+      xMm: 0,
+      yMm: 0,
+      widthMm: anchoMm,
+      heightMm: altoMm,
+      rotated: false,
+    },
+  ],
+  consumedLengthMm: altoMm,
+  piezasAcomodadas: 1,
+  demandaRectangular: [{ pieceId, cantidad: 1, anchoMm, altoMm }],
+  visualConfig: {
+    margins: { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 },
+    spacing: { horizontalMm: 0, verticalMm: 0 },
+    allowRotation: false,
+    usableArea: { xMm: 0, yMm: 0, widthMm: rollWidthMm, heightMm: altoMm },
+    printableArea: {
+      xMm: 0,
+      yMm: 0,
+      widthMm: rollWidthMm,
+      heightMm: altoMm,
+    },
+  },
+  modoColor: 'CMYK',
+  tecnologia: 'ECOSOLVENTE',
+  carasProcesadas: 1,
 });
 
 function componente(
@@ -206,6 +332,89 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
           (placement.meta as { componenteCodigo: string }).componenteCodigo,
       ),
     ).toEqual(['VINILO-FRENTE', 'VINILO-LATERAL']);
+  });
+
+  it('consolida contornos vectoriales compatibles conservando su propietario', () => {
+    const componentes = [
+      componente('VECTOR-A', nestingIrregular('triangulo', 'VECTOR-A')),
+      componente('VECTOR-B', nestingIrregular('triangulo', 'VECTOR-B')),
+    ];
+
+    const resultado = aplicarNestingCompuestoRectangular({
+      politica: 'CONSOLIDAR_COMPATIBLES',
+      tenantId: 'tenant-1',
+      productoPadreId: 'padre-1',
+      recetaRevisionId: 'revision-padre-1',
+      componentes,
+    })!;
+    const grupo = resultado.grupos[0];
+
+    expect(grupo).toMatchObject({
+      consolidado: {
+        algoritmo: 'irregular-2d-bottom-left-v1',
+        sustratos: 1,
+      },
+      diferencia: { sustratos: 1, ahorroPotencial: true },
+      aplicacion: { aplicado: true },
+    });
+    expect(grupo.lote?.nestingResult.demandaNesting).toHaveLength(2);
+    expect(grupo.lote?.nestingResult.solucionNesting).toMatchObject({
+      versionAlgoritmo: 1,
+      problema: { demandas: [{ cantidad: 1 }, { cantidad: 1 }] },
+    });
+    expect(
+      grupo.lote?.nestingResult.placements.map(
+        (placement) =>
+          (
+            placement.meta as {
+              propietario: { componenteCodigo: string };
+            }
+          ).propietario.componenteCodigo,
+      ),
+    ).toEqual(expect.arrayContaining(['VECTOR-A', 'VECTOR-B']));
+  });
+
+  it('no consolida una composición vectorial que debe conservar su negativo', () => {
+    const primero = nestingIrregular('pieza-a', 'VECTOR-A');
+    const segundo = nestingIrregular('pieza-b', 'VECTOR-B');
+    primero.estrategiaDisposicion = 'composicion_original';
+
+    const resultado = analizar([
+      componente('VECTOR-A', primero),
+      componente('VECTOR-B', segundo),
+    ])!;
+
+    expect(resultado.grupos).toHaveLength(0);
+    expect(resultado.exclusiones).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          componenteCodigo: 'VECTOR-A',
+          codigo: 'CONFIGURACION_INCOMPLETA',
+          motivo: expect.stringMatching(/disposición original/i),
+        }),
+      ]),
+    );
+  });
+
+  it('no separa la impresión de un corte vectorial registrado', () => {
+    const registrado = nestingBase({
+      layoutVinculadoGeometriaVectorial: true,
+    });
+    const resultado = analizar([
+      componente('IMPRESO-A', registrado),
+      componente('IMPRESO-B'),
+    ])!;
+
+    expect(resultado.grupos).toHaveLength(0);
+    expect(resultado.exclusiones).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          componenteCodigo: 'IMPRESO-A',
+          codigo: 'CONFIGURACION_INCOMPLETA',
+          motivo: expect.stringMatching(/impresión.*corte vectorial/i),
+        }),
+      ]),
+    );
   });
 
   it('aplica un único consumo y preparación con reparto reconciliado', () => {
@@ -585,5 +794,197 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
         motivo: 'Se imprime en otro turno',
       }),
     ]);
+  });
+
+  it('consolida rollos y congela exactamente el largo que costea', () => {
+    const componentes = [
+      componente('VINILO-A', nestingRollo('frente', 500, 300)),
+      componente('VINILO-B', nestingRollo('lateral', 300, 300)),
+    ];
+    for (const item of componentes) {
+      const material = item.pasos?.[0].materiales?.[0];
+      if (!material) throw new Error('fixture inválido');
+      material.materialVarianteId = 'rollo-800';
+      material.materialNombre = 'VINILO-800';
+      material.materialSku = 'VINILO-800';
+      material.materialDisplayName = 'Vinilo 80 cm';
+      material.materiaPrimaId = 'vinilo-base';
+      material.unidad = 'm_lineales';
+      material.precioUnitario = 10;
+      material.cantidad = 0.3;
+      material.costoTotal = 3;
+      material.estrategiaCosto = 'consumed-length';
+      material.detalleCosteoNesting = undefined;
+      item.costoTotal = 23;
+      item.costoUnitario = 23;
+      item.pasos![0].costoTotal = 23;
+    }
+
+    const resultado = aplicarNestingCompuestoRectangular({
+      politica: 'CONSOLIDAR_COMPATIBLES',
+      tenantId: 'tenant-1',
+      productoPadreId: 'padre-1',
+      recetaRevisionId: 'revision-padre-1',
+      componentes,
+    })!;
+    const grupo = resultado.grupos[0];
+
+    expect(grupo).toMatchObject({
+      independiente: { sustratos: 2, largoMm: 600 },
+      consolidado: {
+        algoritmo: 'shelf-rollo',
+        sustratos: 1,
+        largoMm: 300,
+        substrates: [{ kind: 'roll', widthMm: 800, lengthMm: 300 }],
+      },
+      diferencia: { largoMm: 300, ahorroPct: 50, ahorroPotencial: true },
+      aplicacion: {
+        aplicado: true,
+        costoMaterialIndependiente: 6,
+        costoMaterialConsolidado: 3,
+      },
+      lote: {
+        materialVarianteId: 'rollo-800',
+        nestingResult: {
+          algorithm: 'shelf-rollo',
+          unidad: 'm_lineales',
+          cantidadCalculada: 0.3,
+          consumedLengthMm: 300,
+          substrates: [{ kind: 'roll', widthMm: 800, lengthMm: 300 }],
+        },
+        costeoSustrato: {
+          strategy: 'consumed-length',
+          totalCost: 3,
+        },
+      },
+    });
+    expect(grupo.lote?.nestingResult.placements).toHaveLength(2);
+    expect(
+      grupo.lote?.nestingResult.placements.map(
+        (placement) =>
+          (placement.meta as { componenteCodigo: string }).componenteCodigo,
+      ),
+    ).toEqual(expect.arrayContaining(['VINILO-A', 'VINILO-B']));
+  });
+
+  it('reevalúa los anchos automáticos y elige el menor costo del lote completo', () => {
+    const componentes = [
+      componente('VINILO-A', nestingRollo('frente', 600, 300)),
+      componente('VINILO-B', nestingRollo('lateral', 400, 300)),
+    ];
+    componentes[0].pasos![0].nestingResult!.algorithmPolicy = 'auto';
+    componentes[1].pasos![0].nestingResult!.algorithm = 'maxrects-rollo';
+    componentes[1].pasos![0].nestingResult!.algorithmPolicy = 'auto';
+    for (const item of componentes) {
+      const material = item.pasos?.[0].materiales?.[0];
+      if (!material) throw new Error('fixture inválido');
+      material.materialVarianteId = 'rollo-800';
+      material.materialNombre = 'VINILO-800';
+      material.materialSku = 'VINILO-800';
+      material.materialDisplayName = 'Vinilo 80 cm';
+      material.materiaPrimaId = 'vinilo-base';
+      material.unidad = 'm_lineales';
+      material.precioUnitario = 8;
+      material.cantidad = 0.3;
+      material.costoTotal = 2.4;
+      material.estrategiaCosto = 'consumed-length';
+      material.detalleCosteoNesting = undefined;
+      material.modoSeleccion = 'MOTOR_ELIGE_AUTO';
+      material.opcionesNestingRollo = [
+        {
+          materialVarianteId: 'rollo-800',
+          materialSku: 'VINILO-800',
+          materialDisplayName: 'Vinilo 80 cm',
+          materiaPrimaId: 'vinilo-base',
+          materiaPrimaNombre: 'Vinilo',
+          materiaPrimaTemplateId: 'vinilo-template',
+          materiaPrimaTipoTecnico: 'VINILO',
+          atributosVarianteJson: { anchoMm: 800 },
+          anchoMm: 800,
+          unidad: 'm_lineales',
+          precioUnitario: 8,
+        },
+        {
+          materialVarianteId: 'rollo-1000',
+          materialSku: 'VINILO-1000',
+          materialDisplayName: 'Vinilo 100 cm',
+          materiaPrimaId: 'vinilo-base',
+          materiaPrimaNombre: 'Vinilo',
+          materiaPrimaTemplateId: 'vinilo-template',
+          materiaPrimaTipoTecnico: 'VINILO',
+          atributosVarianteJson: { anchoMm: 1000 },
+          anchoMm: 1000,
+          unidad: 'm_lineales',
+          precioUnitario: 12,
+        },
+      ];
+      item.costoTotal = 22.4;
+      item.costoUnitario = 22.4;
+      item.pasos![0].costoTotal = 22.4;
+    }
+
+    const resultado = aplicarNestingCompuestoRectangular({
+      politica: 'CONSOLIDAR_COMPATIBLES',
+      tenantId: 'tenant-1',
+      productoPadreId: 'padre-1',
+      recetaRevisionId: 'revision-padre-1',
+      componentes,
+    })!;
+    const grupo = resultado.grupos[0];
+
+    // Individualmente gana 800 mm ($2,40 por pieza). En conjunto, 1000 mm
+    // ubica ambas en una fila y cuesta $3,60 contra $4,80 del rollo de 800.
+    expect(grupo.aplicacion).toMatchObject({
+      aplicado: true,
+      costoMaterialIndependiente: 4.8,
+      costoMaterialConsolidado: 3.6,
+    });
+    expect(grupo).toMatchObject({
+      independiente: { areaMm2: 480_000 },
+      consolidado: { areaMm2: 300_000 },
+      diferencia: { areaMm2: 180_000, ahorroPct: 37.5 },
+    });
+    expect(grupo.lote).toMatchObject({
+      materialVarianteId: 'rollo-1000',
+      materialNombre: 'Vinilo 100 cm',
+      nestingResult: {
+        consumedLengthMm: 300,
+        substrates: [{ kind: 'roll', widthMm: 1000, lengthMm: 300 }],
+      },
+    });
+    expect(
+      componentes.map(
+        (item) => item.pasos?.[0].materiales?.[0].materialVarianteId,
+      ),
+    ).toEqual(['rollo-1000', 'rollo-1000']);
+  });
+
+  it('no consolida automáticamente un panelizado manual', () => {
+    const manual = nestingRollo('frente', 600, 300);
+    manual.visualConfig!.panelizado = {
+      enabled: true,
+      mode: 'manual',
+      axis: 'vertical',
+      overlapMm: 20,
+      maxPanelWidthMm: 500,
+      distribution: 'equilibrada',
+      widthInterpretation: 'total',
+      panelCount: 2,
+    };
+    const resultado = analizar([
+      componente('VINILO-A', manual),
+      componente('VINILO-B', nestingRollo('lateral', 400, 300)),
+    ])!;
+
+    expect(resultado.grupos).toEqual([]);
+    expect(resultado.exclusiones).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          componenteCodigo: 'VINILO-A',
+          codigo: 'CONFIGURACION_INCOMPLETA',
+          motivo: expect.stringContaining('panelizado manual'),
+        }),
+      ]),
+    );
   });
 });

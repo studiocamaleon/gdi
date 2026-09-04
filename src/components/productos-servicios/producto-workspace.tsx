@@ -31,6 +31,7 @@ import { toast } from "sonner";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
@@ -57,6 +58,7 @@ import {
 } from "@/components/ui/field";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
@@ -81,6 +83,9 @@ import {
   eliminarProductoRutaAlt,
   getCatalogoComercial,
   guardarBorradorReceta,
+  type EstadoDependenciaReceta,
+  type EstadoPublicacionProducto,
+  type EstadoRutaPublicacionReceta,
   type LookupsConfigPaso,
   type ProductoReceta,
 } from "@/lib/productos-servicios-api";
@@ -92,6 +97,13 @@ import {
   getHerramientaEditorSello,
   setHerramientaEditorSello,
 } from "@/lib/producto-herramientas";
+import {
+  getGeometriasComerciales,
+  nuevaFuenteGeometria,
+  setGeometriasComerciales,
+  type ConfiguracionGeometriasComerciales,
+  type ModoGeometriaComercial,
+} from "@/lib/producto-geometrias";
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
@@ -111,12 +123,6 @@ import {
   medidaLabel,
   normalizeMedidasDraft,
 } from "@/lib/producto-medidas";
-import {
-  getPersonalizaciones,
-  normalizePersonalizaciones,
-  nuevaPersonalizacion,
-  type PersonalizacionProducto,
-} from "@/lib/producto-personalizaciones";
 import {
   getLabel,
   modoActivacionLabels,
@@ -144,6 +150,7 @@ interface Props {
   lookups?: LookupsConfigPaso;
   catalogoCargos?: CargoDirectoCatalogo[];
   recetas?: ProductoReceta[];
+  estadoPublicacion?: EstadoPublicacionProducto;
   canManage: boolean;
 }
 
@@ -399,154 +406,6 @@ function MedidasPredefinidasEditor({
   );
 }
 
-function PersonalizacionesEditor({
-  personalizaciones,
-  onChange,
-}: {
-  personalizaciones: PersonalizacionProducto[];
-  onChange: (next: PersonalizacionProducto[]) => void;
-}) {
-  const update = (id: string, patch: Partial<PersonalizacionProducto>) =>
-    onChange(
-      personalizaciones.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    );
-  const remove = (id: string) =>
-    onChange(personalizaciones.filter((p) => p.id !== id));
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {personalizaciones.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: "var(--muted-text)" }}>
-          Todavía sin personalizaciones. Agregá una para que su medida maneje el
-          costo del material/paso de decoración (ej. la impresión DTF).
-        </div>
-      ) : null}
-      {personalizaciones.map((p, index) => (
-        <div
-          key={p.id}
-          style={{
-            border: "1px solid var(--border)",
-            borderRadius: "var(--r-2)",
-            padding: 12,
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="text"
-              value={p.nombre}
-              onChange={(event) => update(p.id, { nombre: event.target.value })}
-              placeholder={`Personalización ${index + 1} (ej. Impresión DTF, Frente)`}
-              style={{ flex: 1 }}
-              aria-label={`Nombre de la personalización ${index + 1}`}
-            />
-            <button
-              type="button"
-              className="icon-action danger"
-              onClick={() => remove(p.id)}
-              title="Eliminar personalización"
-            >
-              <Trash2Icon size={13} />
-            </button>
-          </div>
-          <div className="field">
-            <label>Medida</label>
-            <div className="segmented" style={{ width: "100%" }}>
-              <button
-                type="button"
-                className={p.modoMedida === "FIJA" ? "on" : ""}
-                onClick={() => update(p.id, { modoMedida: "FIJA" })}
-                style={{ flex: 1 }}
-              >
-                Predefinida
-              </button>
-              <button
-                type="button"
-                className={p.modoMedida === "CLIENTE" ? "on" : ""}
-                onClick={() => update(p.id, { modoMedida: "CLIENTE" })}
-                style={{ flex: 1 }}
-              >
-                La ingresa el cliente
-              </button>
-            </div>
-          </div>
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}
-          >
-            <div className="field">
-              <label>
-                {p.modoMedida === "FIJA" ? "Ancho (mm)" : "Ancho sugerido (mm)"}
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={p.anchoMm || ""}
-                onChange={(event) =>
-                  update(p.id, { anchoMm: Number(event.target.value) || 0 })
-                }
-                placeholder="Ancho mm"
-              />
-            </div>
-            <div className="field">
-              <label>
-                {p.modoMedida === "FIJA" ? "Alto (mm)" : "Alto sugerido (mm)"}
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={p.altoMm || ""}
-                onChange={(event) =>
-                  update(p.id, { altoMm: Number(event.target.value) || 0 })
-                }
-                placeholder="Alto mm"
-              />
-            </div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>Obligatoria</div>
-              <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
-                Si está apagada, el comercial la activa al cotizar (opcional).
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`toggle ${p.obligatoria ? "on" : ""}`}
-              onClick={() => update(p.id, { obligatoria: !p.obligatoria })}
-              aria-pressed={p.obligatoria}
-            >
-              <span className="switch" />
-            </button>
-          </div>
-        </div>
-      ))}
-      <button
-        type="button"
-        className="btn btn-ghost btn-sm"
-        style={{ alignSelf: "flex-start" }}
-        onClick={() =>
-          onChange([
-            ...personalizaciones,
-            nuevaPersonalizacion(personalizaciones.length),
-          ])
-        }
-      >
-        <PlusIcon />
-        Agregar personalización
-      </button>
-    </div>
-  );
-}
-
 const TABS: Array<{
   id: ProductoWorkspaceTab;
   label: string;
@@ -562,6 +421,7 @@ const TABS: Array<{
 function tabValidaciones(
   producto: ProductoDetalle,
   recetas: ProductoReceta[],
+  estadoPublicacion?: EstadoPublicacionProducto,
 ): Record<ProductoWorkspaceTab, ValidacionTab> {
   const rutas = producto.rutasAlternativas;
   const sinRutas = rutas.length === 0;
@@ -582,6 +442,32 @@ function tabValidaciones(
               (medida) =>
                 medida.profundidadMm != null && medida.profundidadMm > 0,
             )));
+  const estadosPublicacion = estadoPublicacion?.rutas.map(
+    (ruta) => ruta.estado,
+  );
+  const validacionPublicacion: ValidacionTab = estadosPublicacion?.includes(
+    "BLOQUEADA",
+  )
+    ? { estado: "error", label: "Receta bloqueada" }
+    : estadosPublicacion?.includes("DESACTUALIZADA")
+      ? { estado: "warning", label: "Requiere publicar" }
+      : estadosPublicacion?.includes("BORRADOR_INICIAL")
+        ? { estado: "warning", label: "Borrador sin publicar" }
+        : estadosPublicacion?.includes("SIN_RECETA")
+          ? { estado: "warning", label: "Sin versión publicada" }
+          : estadosPublicacion?.includes("VIGENTE_CON_BORRADOR")
+            ? { estado: "warning", label: "Cambios en borrador" }
+            : estadosPublicacion?.length
+              ? { estado: "ok", label: "Publicada y vigente" }
+              : recetas.length === 0
+                ? { estado: "warning", label: "Sin versión publicada" }
+                : recetas.some((item) =>
+                      item.revisiones.some(
+                        (revision) => revision.estado === "BORRADOR",
+                      ),
+                    )
+                  ? { estado: "warning", label: "Cambios sin publicar" }
+                  : { estado: "ok", label: "Publicada" };
 
   return {
     identidad:
@@ -597,15 +483,7 @@ function tabValidaciones(
         ? { estado: "warning", label: "Sin ruta preferida" }
         : pasosIncompletos
           ? { estado: "warning", label: "Pasos incompletos" }
-          : recetas.length === 0
-            ? { estado: "warning", label: "Sin versión publicada" }
-            : recetas.some((item) =>
-                  item.revisiones.some(
-                    (revision) => revision.estado === "BORRADOR",
-                  ),
-                )
-              ? { estado: "warning", label: "Cambios sin publicar" }
-              : { estado: "ok", label: "Publicada" },
+          : validacionPublicacion,
     cargos: { estado: "ok", label: "Opcional" },
     herramientas: { estado: "ok", label: "Opcional" },
     pricing: precioConfig?.metodoCalculo
@@ -642,12 +520,13 @@ export function ProductoWorkspace({
   catalogoFamilias,
   catalogoCargos = [],
   recetas = [],
+  estadoPublicacion,
   canManage,
 }: Props) {
   const router = useRouter();
   const validaciones = React.useMemo(
-    () => tabValidaciones(producto, recetas),
-    [producto, recetas],
+    () => tabValidaciones(producto, recetas, estadoPublicacion),
+    [producto, recetas, estadoPublicacion],
   );
 
   const irATab = (tab: ProductoWorkspaceTab) => {
@@ -759,6 +638,7 @@ export function ProductoWorkspace({
                   rutasDisponibles={rutasDisponibles}
                   catalogoFamilias={catalogoFamilias}
                   recetas={recetas}
+                  estadoPublicacion={estadoPublicacion}
                   canManage={canManage}
                 />
               )}
@@ -807,7 +687,9 @@ function IdentidadTab({
       minimoComercialBase: producto.minimoComercialBase ?? "cantidad_comercial",
       medidas: getMedidasPredefinidas(producto),
       sinMedida: getDimensionesRequeridas(producto).length === 0,
-      personalizaciones: getPersonalizaciones(producto.personalizacionesJson),
+      geometriasComerciales: getGeometriasComerciales(
+        producto.atributosComercialesJson,
+      ),
       activo: producto.activo,
     }),
     [producto],
@@ -853,15 +735,16 @@ function IdentidadTab({
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(
     () => getMedidasPredefinidas(producto),
   );
-  const [personalizaciones, setPersonalizaciones] = React.useState<
-    PersonalizacionProducto[]
-  >(() => getPersonalizaciones(producto.personalizacionesJson));
   const [activo, setActivo] = React.useState(producto.activo);
   // Producto por unidad sin medida (merchandising: taza, remera). Se persiste
   // como FIJA + medidas vacías. Ver docs/productos-comprados-merchandising-diseno.md
   const [sinMedida, setSinMedida] = React.useState<boolean>(
     () => getDimensionesRequeridas(producto).length === 0,
   );
+  const [geometriasComerciales, setGeometriasComercialesEstado] =
+    React.useState<ConfiguracionGeometriasComerciales>(() =>
+      getGeometriasComerciales(producto.atributosComercialesJson),
+    );
   React.useEffect(() => {
     if (unidadComercial !== "unidad" && sinMedida) {
       setSinMedida(false);
@@ -896,7 +779,7 @@ function IdentidadTab({
         ? []
         : normalizarMedidasPorModo(modoMedidas, medidas, geometria === "3D"),
       sinMedida,
-      personalizaciones: normalizePersonalizaciones(personalizaciones),
+      geometriasComerciales,
       activo,
     }),
     [
@@ -905,8 +788,8 @@ function IdentidadTab({
       estructuraProducto,
       medidas,
       geometria,
+      geometriasComerciales,
       sinMedida,
-      personalizaciones,
       minimoComercialCantidad,
       minimoComercialBase,
       minimoComercialPolitica,
@@ -923,9 +806,6 @@ function IdentidadTab({
         identidadPersistida.modoMedidas,
         identidadPersistida.medidas,
         identidadPersistida.dimensionesRequeridas.includes("PROFUNDIDAD"),
-      ),
-      personalizaciones: normalizePersonalizaciones(
-        identidadPersistida.personalizaciones,
       ),
     }),
     [identidadPersistida],
@@ -949,7 +829,7 @@ function IdentidadTab({
             "minimoComercialBase",
             "medidas",
             "sinMedida",
-            "personalizaciones",
+            "geometriasComerciales",
           ] as const);
     return campos.some(
       (campo) =>
@@ -1036,8 +916,14 @@ function IdentidadTab({
       : geometria === "3D"
         ? ["ANCHO", "ALTO", "PROFUNDIDAD"]
         : ["ANCHO", "ALTO"];
-    const personalizacionesNormalizadas =
-      normalizePersonalizaciones(personalizaciones);
+    if (
+      seccion === "comercial" &&
+      geometriasComerciales.modo === "VECTORIAL" &&
+      geometriasComerciales.fuentes.length === 0
+    ) {
+      toast.error("Agregá al menos una fuente para la geometría vectorial.");
+      return;
+    }
     setGuardando(true);
     try {
       await actualizarProducto(producto.id, {
@@ -1068,11 +954,10 @@ function IdentidadTab({
               medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
               medidaDefaultProfundidadMm: medidaDefault?.profundidadMm ?? null,
               medidasPredefinidasJson: medidasNormalizadas,
-              personalizacionesJson:
-                personalizacionesNormalizadas as unknown as Record<
-                  string,
-                  unknown
-                >[],
+              atributosComercialesJson: setGeometriasComerciales(
+                producto.atributosComercialesJson,
+                geometriasComerciales,
+              ),
             }),
       });
       setIdentidadPersistida({
@@ -1092,7 +977,7 @@ function IdentidadTab({
             : minimoComercialBase,
         medidas: medidasNormalizadas,
         sinMedida,
-        personalizaciones: personalizacionesNormalizadas,
+        geometriasComerciales,
         activo,
       });
       toast.success(
@@ -1244,7 +1129,7 @@ function IdentidadTab({
 
       {seccion === "comercial" ? (
         <>
-          <div className="wiz-section">
+          <div className="wiz-section col-span-full">
             <div className="wiz-section-head">
               <div className="body">
                 <h2>Comercial y medidas</h2>
@@ -1341,6 +1226,138 @@ function IdentidadTab({
                     El sheet solicitará exactamente estas dimensiones cuando el
                     comercial deba definir una medida.
                   </div>
+                </div>
+              )}
+              {(estructuraProducto === "COMPUESTO" || !sinMedida) && (
+                <div className="field">
+                  <label>Forma que puede recibir el producto</label>
+                  <div className="segmented" style={{ width: "100%" }}>
+                    {(
+                      [
+                        ["RECTANGULAR", "Rectangular"],
+                        ["VECTORIAL", "Forma vectorial"],
+                        ["AMBAS", "Ambas"],
+                      ] as Array<[ModoGeometriaComercial, string]>
+                    ).map(([modo, label]) => (
+                      <button
+                        type="button"
+                        className={
+                          geometriasComerciales.modo === modo ? "on" : ""
+                        }
+                        onClick={() =>
+                          setGeometriasComercialesEstado((actual) => ({
+                            version: 1,
+                            modo,
+                            fuentes:
+                              modo === "RECTANGULAR"
+                                ? []
+                                : actual.fuentes.length
+                                  ? actual.fuentes
+                                  : [nuevaFuenteGeometria([])],
+                          }))
+                        }
+                        style={{ flex: 1 }}
+                        key={modo}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="helptext">
+                    La forma pertenece al producto; la ruta define después qué
+                    máquina y qué motor pueden fabricarla.
+                  </div>
+                  {geometriasComerciales.modo !== "RECTANGULAR" ? (
+                    <div className={styles.geometrySources}>
+                      <div className={styles.geometrySourcesHead}>
+                        <div>
+                          <strong>Fuentes geométricas</strong>
+                          <span>
+                            Nombrá los diseños que luego podrán compartir los
+                            componentes.
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setGeometriasComercialesEstado((actual) => ({
+                              ...actual,
+                              fuentes: [
+                                ...actual.fuentes,
+                                nuevaFuenteGeometria(actual.fuentes),
+                              ],
+                            }))
+                          }
+                        >
+                          <PlusIcon data-icon="inline-start" />
+                          Agregar fuente
+                        </Button>
+                      </div>
+                      {geometriasComerciales.fuentes.map((fuente, index) => (
+                        <div
+                          className={styles.geometrySourceRow}
+                          key={fuente.id}
+                        >
+                          <span className={styles.geometrySourceIndex}>
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <Input
+                            aria-label={`Nombre de la fuente ${index + 1}`}
+                            value={fuente.nombre}
+                            maxLength={120}
+                            onChange={(event) =>
+                              setGeometriasComercialesEstado((actual) => ({
+                                ...actual,
+                                fuentes: actual.fuentes.map((item) =>
+                                  item.id === fuente.id
+                                    ? { ...item, nombre: event.target.value }
+                                    : item,
+                                ),
+                              }))
+                            }
+                          />
+                          <label className={styles.geometryRequired}>
+                            <Switch
+                              checked={fuente.requerida}
+                              onCheckedChange={(requerida) =>
+                                setGeometriasComercialesEstado((actual) => ({
+                                  ...actual,
+                                  fuentes: actual.fuentes.map((item) =>
+                                    item.id === fuente.id
+                                      ? { ...item, requerida }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            />
+                            Obligatoria
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Eliminar ${fuente.nombre}`}
+                            disabled={
+                              geometriasComerciales.modo === "VECTORIAL" &&
+                              geometriasComerciales.fuentes.length === 1
+                            }
+                            onClick={() =>
+                              setGeometriasComercialesEstado((actual) => ({
+                                ...actual,
+                                fuentes: actual.fuentes.filter(
+                                  (item) => item.id !== fuente.id,
+                                ),
+                              }))
+                            }
+                          >
+                            <Trash2Icon />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               )}
               {!sinMedida && (
@@ -1499,25 +1516,6 @@ function IdentidadTab({
               )}
             </div>
           </div>
-
-          <div className="wiz-section">
-            <div className="wiz-section-head">
-              <div className="body">
-                <h2>Personalizaciones</h2>
-                <div className="helptext">
-                  Áreas de decoración con medida propia (ej. la impresión DTF de
-                  una taza o remera). La medida de cada personalización maneja
-                  el costo de su material y proceso, aparte de la medida del
-                  producto base. Luego, en <em>Pasos</em>, indicás qué paso
-                  alimenta cada personalización.
-                </div>
-              </div>
-            </div>
-            <PersonalizacionesEditor
-              personalizaciones={personalizaciones}
-              onChange={setPersonalizaciones}
-            />
-          </div>
         </>
       ) : null}
 
@@ -1543,12 +1541,43 @@ function IdentidadTab({
   );
 }
 
+function presentacionEstadoRuta(estado: EstadoRutaPublicacionReceta) {
+  switch (estado) {
+    case "VIGENTE":
+      return { label: "Vigente", tono: "published" };
+    case "VIGENTE_CON_BORRADOR":
+      return { label: "Vigente con borrador", tono: "draft" };
+    case "DESACTUALIZADA":
+      return { label: "Requiere publicación", tono: "outdated" };
+    case "BLOQUEADA":
+      return { label: "Bloqueada", tono: "blocked" };
+    case "BORRADOR_INICIAL":
+      return { label: "Borrador inicial", tono: "draft" };
+    default:
+      return { label: "Sin receta", tono: "empty" };
+  }
+}
+
+function presentacionEstadoDependencia(estado: EstadoDependenciaReceta) {
+  switch (estado) {
+    case "VIGENTE":
+      return "Vigente";
+    case "ACTUALIZACION_DISPONIBLE":
+      return "Actualización disponible";
+    case "AMBIGUA":
+      return "Ruta ambigua";
+    default:
+      return "Sin publicación";
+  }
+}
+
 function ProduccionTab({
   producto,
   rutaAltId,
   rutasDisponibles,
   catalogoFamilias,
   recetas,
+  estadoPublicacion,
   canManage,
 }: {
   producto: ProductoDetalle;
@@ -1557,12 +1586,15 @@ function ProduccionTab({
   rutasDisponibles: RutaListItem[];
   catalogoFamilias?: CatalogoFamilias;
   recetas: ProductoReceta[];
+  estadoPublicacion?: EstadoPublicacionProducto;
   canManage: boolean;
 }) {
   const router = useRouter();
   const [confirmarRevisionOpen, setConfirmarRevisionOpen] =
     React.useState(false);
   const [preparandoRevision, setPreparandoRevision] = React.useState(false);
+  const [estadoPublicacionOpen, setEstadoPublicacionOpen] =
+    React.useState(false);
   const [nodoEditorPendiente, setNodoEditorPendiente] = React.useState("ruta");
   const rutaSeleccionada =
     producto.rutasAlternativas.find((ruta) => ruta.id === rutaAltId) ??
@@ -1583,6 +1615,19 @@ function ProduccionTab({
     (revision) => revision.estado === "BORRADOR",
   );
   const publicada = recetaSeleccionada?.revisionPublicada;
+  const diagnosticoRuta = estadoPublicacion?.rutas.find(
+    (item) => item.ruta.id === rutaSeleccionada?.id,
+  );
+  const presentacionPublicacion = presentacionEstadoRuta(
+    diagnosticoRuta?.estado ??
+      (borrador
+        ? publicada
+          ? "VIGENTE_CON_BORRADOR"
+          : "BORRADOR_INICIAL"
+        : publicada
+          ? "VIGENTE"
+          : "SIN_RECETA"),
+  );
   const editorHref = rutaSeleccionada
     ? `/productos-servicios/${producto.id}/rutas/${rutaSeleccionada.id}`
     : null;
@@ -1650,17 +1695,26 @@ function ProduccionTab({
               <div className={styles.productionRouteHeadActions}>
                 <span
                   className={styles.productionVersionStatus}
-                  data-state={
-                    borrador ? "draft" : publicada ? "published" : "empty"
-                  }
+                  data-state={presentacionPublicacion.tono}
                 >
                   <PackageCheckIcon />
-                  {borrador
-                    ? `Borrador V${borrador.numero}`
-                    : publicada
-                      ? `Publicada V${publicada.numero}`
-                      : "Sin versión"}
+                  {presentacionPublicacion.label}
+                  {publicada
+                    ? ` · V${publicada.numero}`
+                    : borrador
+                      ? ` · V${borrador.numero}`
+                      : ""}
                 </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={styles.publicationStatusTrigger}
+                  onClick={() => setEstadoPublicacionOpen(true)}
+                >
+                  <GitBranchIcon data-icon="inline-start" />
+                  Estado y dependencias
+                </Button>
                 <button
                   type="button"
                   className={styles.productionEditRoute}
@@ -1701,6 +1755,173 @@ function ProduccionTab({
           />
         </div>
       </section>
+
+      <Dialog
+        open={estadoPublicacionOpen}
+        onOpenChange={setEstadoPublicacionOpen}
+      >
+        <DialogContent className={styles.publicationStatusDialog}>
+          <DialogHeader>
+            <span className={styles.prepareRevisionEyebrow}>
+              PUBLICACIÓN · {rutaSeleccionada?.nombre ?? "RUTA"}
+            </span>
+            <DialogTitle>Estado y dependencias de la receta</DialogTitle>
+            <DialogDescription>
+              Muestra qué versión puede usar hoy la cotización y qué productos
+              dependen de ella.
+            </DialogDescription>
+          </DialogHeader>
+
+          {diagnosticoRuta ? (
+            <div className={styles.publicationStatusContent}>
+              <div
+                className={styles.publicationStatusSummary}
+                data-state={presentacionPublicacion.tono}
+              >
+                <div>
+                  <strong>{presentacionPublicacion.label}</strong>
+                  <small>
+                    {diagnosticoRuta.cotizableConReceta
+                      ? `La cotización puede usar la V${diagnosticoRuta.revisionPublicada?.version}.`
+                      : "Esta ruta no puede cotizar con su receta hasta publicar o resolver el bloqueo."}
+                  </small>
+                </div>
+                <Badge variant="outline">
+                  {diagnosticoRuta.revisionPublicada
+                    ? `Publicada V${diagnosticoRuta.revisionPublicada.version}`
+                    : "Sin publicación"}
+                </Badge>
+                {diagnosticoRuta.borrador ? (
+                  <Badge variant="outline">
+                    Borrador V{diagnosticoRuta.borrador.numero}
+                  </Badge>
+                ) : null}
+              </div>
+
+              {diagnosticoRuta.motivos.length > 0 ? (
+                <section className={styles.publicationStatusSection}>
+                  <div className={styles.publicationStatusSectionHead}>
+                    <strong>Qué requiere atención</strong>
+                    <span>{diagnosticoRuta.motivos.length}</span>
+                  </div>
+                  <div className={styles.publicationReasonList}>
+                    {diagnosticoRuta.motivos.map((motivo) => (
+                      <div
+                        key={`${motivo.codigo}-${motivo.titulo}`}
+                        className={styles.publicationReason}
+                      >
+                        <CircleAlertIcon />
+                        <div>
+                          <strong>{motivo.titulo}</strong>
+                          <small>{motivo.detalle}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <section className={styles.publicationStatusSection}>
+                <div className={styles.publicationStatusSectionHead}>
+                  <strong>Componentes de esta receta</strong>
+                  <span>{diagnosticoRuta.dependencias.length}</span>
+                </div>
+                {diagnosticoRuta.dependencias.length > 0 ? (
+                  <div className={styles.publicationDependencyList}>
+                    {diagnosticoRuta.dependencias.map((dependencia) => (
+                      <div
+                        key={dependencia.ocurrencia.id}
+                        className={styles.publicationDependency}
+                      >
+                        <div className={styles.publicationDependencyName}>
+                          <strong>{dependencia.ocurrencia.nombre}</strong>
+                          <small>
+                            {dependencia.rutaCongelada?.nombre ??
+                              "Ruta de origen no disponible"}
+                          </small>
+                        </div>
+                        <div className={styles.publicationVersions}>
+                          <span>
+                            Congelada V{dependencia.revisionCongelada.version}
+                          </span>
+                          <span aria-hidden="true">→</span>
+                          <span>
+                            {dependencia.revisionDisponible
+                              ? `Disponible V${dependencia.revisionDisponible.version}`
+                              : "Sin versión disponible"}
+                          </span>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={styles.publicationDependencyBadge}
+                          data-state={dependencia.estado.toLowerCase()}
+                        >
+                          {presentacionEstadoDependencia(dependencia.estado)}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={styles.publicationStatusEmpty}>
+                    Esta receta no contiene componentes fabricados.
+                  </p>
+                )}
+              </section>
+
+              <section className={styles.publicationStatusSection}>
+                <div className={styles.publicationStatusSectionHead}>
+                  <strong>Productos que usan esta receta</strong>
+                  <span>{estadoPublicacion?.usadoPor.length ?? 0}</span>
+                </div>
+                {estadoPublicacion?.usadoPor.length ? (
+                  <div className={styles.publicationParentList}>
+                    {estadoPublicacion.usadoPor.map((uso) => (
+                      <Link
+                        key={uso.revisionPublicadaPadre.id}
+                        href={`/productos-servicios/${uso.productoPadre.id}?tab=produccion&vista=operaciones&rutaAltId=${uso.rutaPadre.id}`}
+                        className={styles.publicationParent}
+                      >
+                        <div>
+                          <strong>{uso.productoPadre.nombre}</strong>
+                          <small>
+                            {uso.rutaPadre.nombre} · Publicada V
+                            {uso.revisionPublicadaPadre.version}
+                          </small>
+                        </div>
+                        <span>
+                          {uso.ocurrencias.some(
+                            (item) => item.estado !== "VIGENTE",
+                          )
+                            ? "Requiere actualización"
+                            : "Vigente"}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={styles.publicationStatusEmpty}>
+                    Ningún producto publicado usa esta receta como componente.
+                  </p>
+                )}
+              </section>
+            </div>
+          ) : (
+            <p className={styles.publicationStatusEmpty}>
+              No hay diagnóstico disponible para esta ruta.
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEstadoPublicacionOpen(false)}
+            >
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={confirmarRevisionOpen}

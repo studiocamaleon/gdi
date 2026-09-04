@@ -531,8 +531,10 @@ export function lineaEstado(item: TableroItemData): string {
 /** Rótulo breve de la operación visible en las cards del Kanban. */
 export function etiquetaPasoKanban(
   estado: TableroPasoData["estado"] | undefined,
-): "Paso en curso:" | "Próximo paso:" {
-  return estado === "en_curso" ? "Paso en curso:" : "Próximo paso:";
+): "Paso en curso:" | "Paso pausado:" | "Próximo paso:" {
+  if (estado === "en_curso") return "Paso en curso:";
+  if (estado === "pausado") return "Paso pausado:";
+  return "Próximo paso:";
 }
 
 /** "45 min" / "2h 30m" / "12 h" a partir de minutos estimados. */

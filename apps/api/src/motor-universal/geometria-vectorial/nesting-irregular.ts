@@ -63,6 +63,9 @@ export class NestingIrregularError extends Error {}
 export function nestearGeometriaIrregular(input: {
   geometria: GeometriaVectorialCanonica;
   cantidad: number;
+  /** Cantidad física por pieza. Cuando está presente reemplaza la cantidad
+   * uniforme y permite resolver demandas heterogéneas en una sola placa. */
+  cantidadesPorPieza?: Record<string, number>;
   anchoPlacaMm: number;
   altoPlacaMm: number;
   margenMm?: number;
@@ -92,7 +95,27 @@ export function nestearGeometriaIrregular(input: {
       'Los márgenes consumen toda el área de la placa.',
     );
 
+  const cantidadDePieza = (piezaId: string) => {
+    const especifica = input.cantidadesPorPieza?.[piezaId];
+    const value = Math.ceil(especifica ?? cantidad);
+    validarNumero(
+      value,
+      `La cantidad de la pieza "${piezaId}" debe ser mayor que cero.`,
+    );
+    return value;
+  };
+
+  const cantidadesEfectivas = input.geometria.piezas.map((pieza) =>
+    cantidadDePieza(pieza.id),
+  );
+  const cantidadComposiciones = cantidadesEfectivas.every(
+    (value) => value === cantidadesEfectivas[0],
+  )
+    ? cantidadesEfectivas[0]
+    : null;
+
   if (
+    cantidadComposiciones != null &&
     input.preservarComposicionOriginalSiEntra === true &&
     input.geometria.anchoMm <= usableWidth + 0.001 &&
     input.geometria.altoMm <= usableHeight + 0.001 &&
@@ -103,7 +126,7 @@ export function nestearGeometriaIrregular(input: {
   ) {
     return componerSinNestear({
       geometria: input.geometria,
-      cantidad,
+      cantidad: cantidadComposiciones,
       anchoPlacaMm: input.anchoPlacaMm,
       altoPlacaMm: input.altoPlacaMm,
       anchoUtilMm: usableWidth,
@@ -141,7 +164,9 @@ export function nestearGeometriaIrregular(input: {
   );
   const usarGrillaFina = totalPuntosGeometria <= 2_000;
   for (const piece of segmentacion.piezas) {
-    for (let copyIndex = 0; copyIndex < cantidad; copyIndex++)
+    const piezaOrigenId = piece.segmentacion?.piezaOrigenId ?? piece.id;
+    const cantidadPieza = cantidadDePieza(piezaOrigenId);
+    for (let copyIndex = 0; copyIndex < cantidadPieza; copyIndex++)
       instances.push({ piece, copyIndex });
   }
   const ordenes = generarOrdenesCandidatos(instances);
@@ -192,14 +217,22 @@ export function nestearGeometriaIrregular(input: {
     }) ?? mejorLayout.plates;
 
   const placements = plates.flatMap((plate) => plate.placements);
-  const areaPiezasMm2 = input.geometria.areaTotalMm2 * cantidad;
+  const areaPiezasMm2 = input.geometria.piezas.reduce(
+    (total, pieza) => total + pieza.areaMm2 * cantidadDePieza(pieza.id),
+    0,
+  );
   const perimetroCorteMm =
-    (segmentacion.piezas.reduce((sum, pieza) => sum + pieza.perimetroMm, 0) +
-      input.geometria.piezas.reduce(
-        (sum, pieza) => sum + perimetroContornos(pieza.cortesInternos ?? []),
-        0,
-      )) *
-    cantidad;
+    segmentacion.piezas.reduce((total, pieza) => {
+      const piezaOrigenId = pieza.segmentacion?.piezaOrigenId ?? pieza.id;
+      return total + pieza.perimetroMm * cantidadDePieza(piezaOrigenId);
+    }, 0) +
+    input.geometria.piezas.reduce(
+      (total, pieza) =>
+        total +
+        perimetroContornos(pieza.cortesInternos ?? []) *
+          cantidadDePieza(pieza.id),
+      0,
+    );
   const areaCompradaMm2 =
     input.anchoPlacaMm * input.altoPlacaMm * plates.length;
   return {
@@ -217,10 +250,23 @@ export function nestearGeometriaIrregular(input: {
     areaPiezasMm2: redondear(areaPiezasMm2),
     areaCompradaMm2: redondear(areaCompradaMm2),
     perimetroCorteMm: redondear(perimetroCorteMm),
-    piezasOriginales: input.geometria.piezas.length * cantidad,
-    segmentos: segmentacion.piezas.length * cantidad,
-    unionesFisicas:
-      (segmentacion.piezas.length - input.geometria.piezas.length) * cantidad,
+    piezasOriginales: input.geometria.piezas.reduce(
+      (total, pieza) => total + cantidadDePieza(pieza.id),
+      0,
+    ),
+    segmentos: segmentacion.piezas.reduce((total, pieza) => {
+      const piezaOrigenId = pieza.segmentacion?.piezaOrigenId ?? pieza.id;
+      return total + cantidadDePieza(piezaOrigenId);
+    }, 0),
+    unionesFisicas: input.geometria.piezas.reduce((total, pieza) => {
+      const segmentosDePieza = segmentacion.piezas.filter(
+        (segmento) =>
+          (segmento.segmentacion?.piezaOrigenId ?? segmento.id) === pieza.id,
+      ).length;
+      return (
+        total + Math.max(0, segmentosDePieza - 1) * cantidadDePieza(pieza.id)
+      );
+    }, 0),
     uniones: segmentacion.uniones,
     estrategiaDisposicion: 'nesting_optimizado',
   };

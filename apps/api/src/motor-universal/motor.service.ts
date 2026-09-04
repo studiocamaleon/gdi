@@ -82,7 +82,7 @@ import {
   type PrintSheetCandidateMaterial,
 } from './nesting-config';
 import {
-  aplicarNestingCompuestoRectangular,
+  aplicarNestingCompuesto,
   leerExclusionNestingComponente,
   leerPoliticaNestingCompuesto,
 } from './nesting-compuesto-shadow';
@@ -129,7 +129,10 @@ import {
   type NivelCobertura,
 } from '../productos-servicios/cobertura-toner';
 import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
-import { consolidarEtapasCompuestas } from './etapas-compuestas';
+import {
+  agregarContextoComponentesVinculados,
+  consolidarEtapasCompuestas,
+} from './etapas-compuestas';
 import {
   areaImpresaTrabajoDesdeNestingM2,
   desglosarMermaOperativa,
@@ -181,6 +184,7 @@ import {
   dependenciasCalculoComponente,
   ordenarComponentesPorCalculo,
   proyectarEspecificacionesEfectivasComponente,
+  resolverOcurrenciasCotizadasComponente,
   resolverOperacionesIncorporacion,
   resolverJobContextComponente,
 } from '../productos-servicios/componentes-configuracion';
@@ -194,7 +198,7 @@ import {
   leerPoliticaPricingComponente,
 } from '../productos-servicios/precio/pricing-compuesto';
 
-const MOTOR_CONTRACT_VERSION = 'motor-universal-v4';
+const MOTOR_CONTRACT_VERSION = 'motor-universal-v5';
 
 function hashCotizacionInput(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -1330,117 +1334,185 @@ export class MotorUniversalService {
             },
           ]);
         }
-        let jobContextComponente: Record<string, unknown>;
+
+        let ocurrencias: ReturnType<
+          typeof resolverOcurrenciasCotizadasComponente
+        >;
         try {
-          jobContextComponente = resolverJobContextComponente({
+          ocurrencias = resolverOcurrenciasCotizadasComponente({
             configuracion: componente.configuracionJson,
             contextoPadre: jobContext as unknown as Record<string, unknown>,
             codigoComponente: componente.codigo,
-            cantidadLegacy: componente.cantidad,
-            outputsComponentes,
+            nombreComponente: componente.nombre,
           });
         } catch (error) {
           return fallar([
             {
-              codigo: 'configuracion_componente_incompleta',
+              codigo: 'ocurrencias_componente_invalidas',
               severidad: 'ERROR',
               mensaje:
                 error instanceof Error
                   ? error.message
-                  : `No se pudo configurar el componente "${componente.nombre}".`,
-              sugerencia:
-                'Completá los parámetros solicitados del componente antes de cotizar.',
+                  : `No se pudieron interpretar las ocurrencias de "${componente.nombre}".`,
+              sugerencia: 'Revisá los componentes agregados en la cotización.',
             },
           ]);
         }
-        const cantidadComponente = Number(jobContextComponente.cantidad);
-        if (!Number.isFinite(cantidadComponente) || cantidadComponente <= 0) {
-          return fallar([
-            {
-              codigo: 'cantidad_componente_invalida',
-              severidad: 'ERROR',
-              mensaje: `La cantidad calculada de "${componente.nombre}" debe ser un número positivo.`,
-              contexto: {
-                cantidad: cantidadComponente,
-                unidad: componente.unidad,
-              },
-            },
-          ]);
-        }
-        const resultadoComponente = await this.cotizar(
-          {
-            tenantId: input.tenantId,
-            productoId: componente.productoComponenteId,
-            jobContext: jobContextComponente as never,
-            periodo,
-          },
-          {
-            omitirPrecioReferenciaMinimo: true,
-            componentesCamino: [...camino, componente.productoComponenteId],
-          },
-        );
-        if (!resultadoComponente.exitoso || !resultadoComponente.cotizacion) {
-          return fallar([
-            {
-              codigo: 'componente_fabricado_no_cotizable',
-              severidad: 'ERROR',
-              mensaje: `No se pudo costear el componente fabricado "${componente.nombre}".`,
-              contexto: {
-                productoComponenteId: componente.productoComponenteId,
-                errores: resultadoComponente.errores,
-              },
-              sugerencia:
-                'Corregir y publicar la configuración productiva del componente.',
-            },
-          ]);
-        }
-        const hija = resultadoComponente.cotizacion;
-        if (!hija.receta) {
-          return fallar([
-            {
-              codigo: 'componente_sin_receta_publicada',
-              severidad: 'ERROR',
-              mensaje: `El componente fabricado "${componente.nombre}" no tiene una receta publicada vigente.`,
-            },
-          ]);
-        }
-        const outputsPublicos = hija.outputsComposicion ?? {};
-        outputsComponentes[componente.codigo] = outputsPublicos;
-        componentesFabricados.push({
-          productoId: componente.productoComponenteId,
-          codigo: componente.codigo,
-          nombre: componente.nombre,
-          politicaEjecucion: componente.politicaEjecucion,
-          cantidad: cantidadComponente,
-          unidad: componente.unidad,
-          jobContext: jobContextComponente,
-          especificacionesEfectivas:
-            proyectarEspecificacionesEfectivasComponente({
+
+        for (const ocurrencia of ocurrencias) {
+          let jobContextComponente: Record<string, unknown>;
+          try {
+            jobContextComponente = resolverJobContextComponente({
               configuracion: componente.configuracionJson,
-              jobContext: jobContextComponente,
-            }),
-          recetaRevisionId: hija.receta.revisionId,
-          recetaVersion: hija.receta.version,
-          recetaHuella: hija.receta.huella,
-          costoUnitario: hija.costos.unitario,
-          costoTotal: hija.costos.total,
-          cantidadComercialPricing: hija.cantidadComercialPricing,
-          unidadComercialPricing: hija.unidadComercialPricing,
-          costoSinMargenTotal: hija.costos.cargosSinMargenTotal,
-          pricing: leerPoliticaPricingComponente(componente.configuracionJson),
-          nestingCompartido: leerExclusionNestingComponente(
-            componente.configuracionJson,
-          ),
-          outputsPublicos,
-          dependenciasCalculo: dependenciasCalculoComponente(
-            componente.configuracionJson,
-          ),
-          nodosPredecesoresClaves: componente.nodosPredecesoresClaves,
-          nodoIncorporacionClave: componente.nodoIncorporacionClave,
-          grafoProduccion: hija.grafoProduccion,
-          pasos: hija.pasos,
-          componentes: hija.componentesFabricados,
-        });
+              contextoPadre: jobContext as unknown as Record<string, unknown>,
+              codigoComponente: componente.codigo,
+              cantidadLegacy: componente.cantidad,
+              outputsComponentes,
+              overrideCotizacion: ocurrencia.overrideCotizacion,
+            });
+          } catch (error) {
+            return fallar([
+              {
+                codigo: 'configuracion_componente_incompleta',
+                severidad: 'ERROR',
+                mensaje:
+                  error instanceof Error
+                    ? error.message
+                    : `No se pudo configurar el componente "${ocurrencia.nombre}".`,
+                sugerencia:
+                  'Completá los parámetros solicitados del componente antes de cotizar.',
+              },
+            ]);
+          }
+          const cantidadComponente = Number(jobContextComponente.cantidad);
+          if (!Number.isFinite(cantidadComponente) || cantidadComponente <= 0) {
+            return fallar([
+              {
+                codigo: 'cantidad_componente_invalida',
+                severidad: 'ERROR',
+                mensaje: `La cantidad calculada de "${ocurrencia.nombre}" debe ser un número positivo.`,
+                contexto: {
+                  cantidad: cantidadComponente,
+                  unidad: componente.unidad,
+                },
+              },
+            ]);
+          }
+          const resultadoComponente = await this.cotizar(
+            {
+              tenantId: input.tenantId,
+              productoId: componente.productoComponenteId,
+              jobContext: jobContextComponente as never,
+              periodo,
+            },
+            {
+              omitirPrecioReferenciaMinimo: true,
+              componentesCamino: [...camino, componente.productoComponenteId],
+            },
+          );
+          if (!resultadoComponente.exitoso || !resultadoComponente.cotizacion) {
+            const detalle = resultadoComponente.errores.find(
+              (error) => error.severidad === 'ERROR',
+            );
+            return fallar([
+              {
+                codigo: 'componente_fabricado_no_cotizable',
+                severidad: 'ERROR',
+                mensaje: detalle?.mensaje
+                  ? `No se pudo costear el componente fabricado "${ocurrencia.nombre}": ${detalle.mensaje}`
+                  : `No se pudo costear el componente fabricado "${ocurrencia.nombre}".`,
+                contexto: {
+                  productoComponenteId: componente.productoComponenteId,
+                  errores: resultadoComponente.errores,
+                },
+                sugerencia:
+                  detalle?.sugerencia ??
+                  'Corregir y publicar la configuración productiva del componente.',
+              },
+            ]);
+          }
+          const hija = resultadoComponente.cotizacion;
+          if (!hija.receta) {
+            return fallar([
+              {
+                codigo: 'componente_sin_receta_publicada',
+                severidad: 'ERROR',
+                mensaje: `El componente fabricado "${ocurrencia.nombre}" no tiene una receta publicada vigente.`,
+              },
+            ]);
+          }
+          const piezasComponente: unknown[] = Array.isArray(
+            jobContextComponente.piezas,
+          )
+            ? (jobContextComponente.piezas as unknown[])
+            : [];
+          const cantidadPiezas = piezasComponente.length
+            ? piezasComponente.reduce<number>((total, pieza) => {
+                if (
+                  !pieza ||
+                  typeof pieza !== 'object' ||
+                  Array.isArray(pieza)
+                ) {
+                  return total;
+                }
+                const cantidad = Number(
+                  (pieza as Record<string, unknown>).cantidad,
+                );
+                return Number.isFinite(cantidad) ? total + cantidad : total;
+              }, 0)
+            : cantidadComponente;
+          const outputsPublicos = {
+            ...(hija.outputsComposicion ?? {}),
+            cantidadEfectiva: cantidadComponente,
+            cantidadPiezas,
+            unidadCantidadEfectiva: componente.unidad,
+            _componente: {
+              codigo: ocurrencia.codigo,
+              plantillaCodigo: componente.codigo,
+              ocurrenciaId: ocurrencia.ocurrenciaId ?? null,
+            },
+          };
+          outputsComponentes[ocurrencia.codigo] = outputsPublicos;
+          componentesFabricados.push({
+            productoId: componente.productoComponenteId,
+            codigo: ocurrencia.codigo,
+            plantillaCodigo: componente.codigo,
+            ocurrenciaId: ocurrencia.ocurrenciaId,
+            nombre: ocurrencia.nombre,
+            politicaEjecucion: componente.politicaEjecucion,
+            cantidad: cantidadComponente,
+            unidad: componente.unidad,
+            jobContext: jobContextComponente,
+            especificacionesEfectivas:
+              proyectarEspecificacionesEfectivasComponente({
+                configuracion: componente.configuracionJson,
+                jobContext: jobContextComponente,
+              }),
+            recetaRevisionId: hija.receta.revisionId,
+            recetaVersion: hija.receta.version,
+            recetaHuella: hija.receta.huella,
+            costoUnitario: hija.costos.unitario,
+            costoTotal: hija.costos.total,
+            cantidadComercialPricing: hija.cantidadComercialPricing,
+            unidadComercialPricing: hija.unidadComercialPricing,
+            costoSinMargenTotal: hija.costos.cargosSinMargenTotal,
+            pricing: leerPoliticaPricingComponente(
+              componente.configuracionJson,
+            ),
+            nestingCompartido: leerExclusionNestingComponente(
+              componente.configuracionJson,
+            ),
+            outputsPublicos,
+            dependenciasCalculo: dependenciasCalculoComponente(
+              componente.configuracionJson,
+            ),
+            nodosPredecesoresClaves: componente.nodosPredecesoresClaves,
+            nodoIncorporacionClave: componente.nodoIncorporacionClave,
+            grafoProduccion: hija.grafoProduccion,
+            pasos: hija.pasos,
+            componentes: hija.componentesFabricados,
+          });
+        }
       }
 
       // Fase 4.2.2 — las operaciones internas usan el cálculo completo de un
@@ -1463,15 +1535,32 @@ export class MotorUniversalService {
         if (errores.some((error) => error.severidad === 'ERROR')) break;
 
         const codigosVinculados = paso.componentesCodigos ?? [];
+        const componentesVinculados = componentesFabricados.filter(
+          (componente) =>
+            codigosVinculados.includes(
+              componente.plantillaCodigo ?? componente.codigo,
+            ),
+        );
+        if (
+          codigosVinculados.length > 0 &&
+          componentesVinculados.length === 0
+        ) {
+          continue;
+        }
         const outputsVinculados =
-          codigosVinculados.length === 1
-            ? outputsComponentes[codigosVinculados[0]]
+          componentesVinculados.length === 1
+            ? outputsComponentes[componentesVinculados[0].codigo]
             : undefined;
+        const contextoAgregado = agregarContextoComponentesVinculados({
+          contextoPadre: jobContext as unknown as Record<string, unknown>,
+          componentes: componentesFabricados,
+          codigosPlantilla: codigosVinculados,
+        });
         const contextoPaso = {
-          ...jobContext,
+          ...contextoAgregado,
           ...(outputsVinculados ?? {}),
           componentes: outputsComponentes,
-        } as JobContext;
+        } as unknown as JobContext;
         derivacionesDelJobContext(contextoPaso);
 
         const paramsPaso = this.paramsEfectivosDelPaso(paso, contextoPaso);
@@ -1704,6 +1793,12 @@ export class MotorUniversalService {
         } else {
           for (const componente of componentesOrdenados) {
             if (!componente.requerido) continue;
+            const tieneOcurrencias = componentesFabricados.some(
+              (costeado) =>
+                (costeado.plantillaCodigo ?? costeado.codigo) ===
+                componente.codigo,
+            );
+            if (!tieneOcurrencias) continue;
             operacionesResueltas.push(
               ...resolverOperacionesIncorporacion({
                 configuracion: componente.configuracionJson,
@@ -1802,7 +1897,7 @@ export class MotorUniversalService {
     // los totales. Así F4.3 recibe costos ya reconciliados y no hay un ajuste
     // comercial posterior capaz de duplicar margen, impuestos o redondeo.
     const analisisNestingCompuesto = recetaPublicada?.componentes.length
-      ? aplicarNestingCompuestoRectangular({
+      ? aplicarNestingCompuesto({
           politica: leerPoliticaNestingCompuesto(
             producto.atributosComercialesJson,
           ),
@@ -4269,6 +4364,11 @@ export class MotorUniversalService {
     const nestingResult: NestingEjecutado | undefined = nestingDispatch
       ? {
           algorithm: nestingDispatch.algorithm,
+          algorithmPolicy: resolveNestingConfig(
+            pasoConPerfil,
+            this.getJobContextParaNesting(pasoConPerfil, jobContext),
+            materialPreliminar,
+          ).algorithm,
           cantidadCalculada: nestingDispatch.cantidadCalculada,
           unidad: nestingDispatch.unidad,
           aprovechamientoPct: nestingDispatch.aprovechamientoPct,
@@ -4291,6 +4391,10 @@ export class MotorUniversalService {
           machineRunLengthMm: nestingDispatch.machineRunLengthMm,
           piezasAcomodadas: nestingDispatch.piezasAcomodadas,
           demandaRectangular: nestingDispatch.demandaRectangular,
+          demandaNesting: nestingDispatch.demandaNesting,
+          solucionNesting: nestingDispatch.solucionNesting,
+          layoutVinculadoGeometriaVectorial:
+            nestingDispatch.layoutVinculadoGeometriaVectorial,
           costingSegmentSteps:
             this.resolverSegmentosCosteoNesting(pasoConPerfil),
           perfil: pasoConPerfil.perfil
@@ -6367,6 +6471,14 @@ export class MotorUniversalService {
           ? presentacionVariante ||
             (nestingDispatch?.unidad === 'pliegos' ? 'pliego' : unidadConsumo)
           : unidadConsumo;
+      const opcionesNestingRollo = await this.resolverOpcionesNestingRollo({
+        tenantId,
+        paso,
+        slot,
+        jobContext,
+        nestingDispatch,
+        unidadConsumo,
+      });
 
       ejecutados.push({
         slotCodigo: slot.slotCodigo,
@@ -6377,10 +6489,12 @@ export class MotorUniversalService {
         materialSku: materialResuelto.sku,
         materialDisplayName: this.getMaterialDisplayName(materialResuelto),
         materiaPrimaNombre: materialResuelto.materiaPrimaNombre ?? null,
+        materiaPrimaId: materialResuelto.materiaPrimaId ?? null,
         materiaPrimaTemplateId: materialResuelto.materiaPrimaTemplateId ?? null,
         materiaPrimaTipoTecnico:
           materialResuelto.materiaPrimaTipoTecnico ?? null,
         atributosVarianteJson: materialResuelto.atributosVarianteJson ?? null,
+        opcionesNestingRollo,
         tipoLineaCosto: 'MATERIAL',
         cantidad,
         // G-M9: la unidad efectiva depende de la fórmula del slot. Para
@@ -7654,6 +7768,92 @@ export class MotorUniversalService {
     );
   }
 
+  /**
+   * Conserva los anchos que seguían disponibles cuando MOTOR_ELIGE_AUTO tomó
+   * su decisión individual. El lote compuesto vuelve a correr el nesting con
+   * estas alternativas y decide por costo real consolidado. Una elección
+   * comercial explícita no entra acá: en ese caso el ancho queda fijado.
+   */
+  private async resolverOpcionesNestingRollo(args: {
+    tenantId: string;
+    paso: PasoCargado;
+    slot: PasoCargado['slots'][number];
+    jobContext: JobContext;
+    nestingDispatch: NestingDispatchResult | null;
+    unidadConsumo: string;
+  }): Promise<MaterialEjecutado['opcionesNestingRollo'] | undefined> {
+    const { paso, slot, jobContext, nestingDispatch } = args;
+    if (
+      slot.modoSeleccion !== 'MOTOR_ELIGE_AUTO' ||
+      this.getEleccionMaterialComercial(slot, jobContext, paso) ||
+      !nestingDispatch ||
+      !['shelf-rollo', 'maxrects-rollo'].includes(nestingDispatch.algorithm) ||
+      !['m2', 'm_lineales'].includes(args.unidadConsumo)
+    ) {
+      return undefined;
+    }
+
+    const variantes = await Promise.all(
+      this.getSlotCandidatoVarianteIds(slot).map((varianteId) =>
+        this.cargarVariantePorId(args.tenantId, varianteId),
+      ),
+    );
+    const filtroCampo = slot.criterioFiltroCampo ?? '';
+    const filtroValor = filtroCampo
+      ? (jobContext as Record<string, unknown>)[filtroCampo]
+      : undefined;
+    const bocaMm = Number(paso.maquina?.anchoUtil ?? 0);
+    const opciones = variantes
+      .filter((variante): variante is NonNullable<typeof variante> => {
+        if (!variante) return false;
+        if (filtroCampo && filtroValor != null && filtroValor !== '') {
+          return (
+            textoPrimitivo(variante.atributosVarianteJson?.[filtroCampo]) ===
+            textoPrimitivo(filtroValor)
+          );
+        }
+        return true;
+      })
+      .flatMap((variante) => {
+        const anchoMm = getRolloAnchoMm(variante.atributosVarianteJson);
+        const precioReferencia = Number(variante.precioReferencia);
+        const precioUnitario = precioMaterialPorUnidadDeConsumo(
+          precioReferencia,
+          variante.unidadStock,
+          args.unidadConsumo,
+          variante.atributosVarianteJson,
+        );
+        if (
+          !(anchoMm > 0) ||
+          (bocaMm > 0 && anchoMm > bocaMm) ||
+          !(precioUnitario > 0)
+        ) {
+          return [];
+        }
+        return [
+          {
+            materialVarianteId: variante.id,
+            materialSku: variante.sku,
+            materialDisplayName: this.getMaterialDisplayName(variante),
+            materiaPrimaId: variante.materiaPrimaId ?? null,
+            materiaPrimaNombre: variante.materiaPrimaNombre ?? null,
+            materiaPrimaTemplateId: variante.materiaPrimaTemplateId ?? null,
+            materiaPrimaTipoTecnico: variante.materiaPrimaTipoTecnico ?? null,
+            atributosVarianteJson: variante.atributosVarianteJson ?? null,
+            anchoMm,
+            unidad: args.unidadConsumo as 'm2' | 'm_lineales',
+            precioUnitario,
+          },
+        ];
+      })
+      .sort(
+        (a, b) =>
+          a.anchoMm - b.anchoMm ||
+          a.materialVarianteId.localeCompare(b.materialVarianteId),
+      );
+    return opciones.length > 0 ? opciones : undefined;
+  }
+
   private getEleccionMaterialComercial(
     slot: PasoCargado['slots'][number],
     jobContext: JobContext,
@@ -8609,6 +8809,13 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): number {
+    const cantidadComponentes = this.numeroPositivo(
+      (jobContext as Record<string, unknown>).cantidadPiezasComponentes,
+    );
+    if (cantidadComponentes !== null && cantidadComponentes !== undefined) {
+      return cantidadComponentes;
+    }
+
     // Consumo y tiempo COMPARTEN la fuente (§8): el override por-slot gana sobre
     // el param del paso, igual que en buildJobContextPiezas.
     const fuente = fuenteMedidaEfectiva(paso) ?? 'piezas_jobcontext';

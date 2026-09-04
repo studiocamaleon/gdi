@@ -340,7 +340,11 @@ export type ProductoRecetaComponenteInput = {
 };
 
 export type OrigenParametroComponente =
-  "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
+  | "DEFAULT_HIJO"
+  | "FIJO"
+  | "PADRE"
+  | "FORMULA"
+  | "COTIZACION";
 
 export type BindingParametroComponente = {
   clave: string;
@@ -369,6 +373,15 @@ export type ConfiguracionComponenteFabricado = {
   version: 1 | 2;
   bindings: BindingParametroComponente[];
   operacionesIncorporacion?: OperacionIncorporacion[];
+  repeticion?: {
+    version: 1;
+    permitida: boolean;
+    /** 1 incluye la ocurrencia declarada; 0 empieza vacío al cotizar. */
+    minimo: 0 | 1;
+    /** Máximo total de ocurrencias cotizadas. */
+    maximo: number;
+    etiquetaAgregar?: string | null;
+  };
   pricing?: PoliticaPricingComponente;
   nestingCompuesto?: {
     version: 1;
@@ -378,10 +391,13 @@ export type ConfiguracionComponenteFabricado = {
 };
 
 export type PoliticaNestingCompuesto =
-  "INDEPENDIENTE" | "CONSOLIDAR_COMPATIBLES";
+  | "INDEPENDIENTE"
+  | "CONSOLIDAR_COMPATIBLES";
 
 export type ModoPricingComponente =
-  "HEREDAR_PADRE" | "USAR_PRODUCTO_HIJO" | "OVERRIDE";
+  | "HEREDAR_PADRE"
+  | "USAR_PRODUCTO_HIJO"
+  | "OVERRIDE";
 
 export type PrecioConfigComponente = {
   metodoCalculo: string;
@@ -396,9 +412,11 @@ export type PoliticaPricingComponente = {
 };
 
 export type FuenteOperacionIncorporacion = {
-  tipo: "PADRE" | "COMPONENTE";
+  tipo: "PADRE" | "COMPONENTE" | "COMPONENTES";
   campo: string;
   componenteCodigo?: string | null;
+  componentesCodigos?: string[];
+  agregacion?: "SUM";
 };
 
 export type OperacionIncorporacion = {
@@ -471,9 +489,24 @@ export type FormularioCotizacionProducto = {
       profundidadMm?: number | null;
     } | null;
   };
+  geometrias?: {
+    version: 1;
+    modo: "RECTANGULAR" | "VECTORIAL" | "AMBAS";
+    fuentes: Array<{
+      id: string;
+      nombre: string;
+      requerida: boolean;
+    }>;
+  };
   preguntas: Array<
     Record<string, unknown> & { tipo: string; jobContextKey: string }
   >;
+  herramientas?: Array<{
+    tipo: "diseno_vectorial";
+    jobContextKey: "disenoVectorialFuente";
+    etiqueta: string;
+    requerido: boolean;
+  }>;
   adicionales: Array<
     Record<string, unknown> & {
       id: string;
@@ -511,9 +544,95 @@ export interface ProductoReceta {
   revisiones: ProductoRecetaRevision[];
 }
 
+export type EstadoRutaPublicacionReceta =
+  | "SIN_RECETA"
+  | "BORRADOR_INICIAL"
+  | "VIGENTE"
+  | "VIGENTE_CON_BORRADOR"
+  | "DESACTUALIZADA"
+  | "BLOQUEADA";
+
+export type EstadoDependenciaReceta =
+  | "VIGENTE"
+  | "ACTUALIZACION_DISPONIBLE"
+  | "SIN_PUBLICACION"
+  | "AMBIGUA";
+
+export interface EstadoPublicacionProducto {
+  producto: { id: string; nombre: string };
+  resumen: {
+    rutasTotales: number;
+    rutasVigentes: number;
+    rutasConAtencion: number;
+    productosPadreAfectados: number;
+  };
+  rutas: Array<{
+    ruta: {
+      id: string;
+      nombre: string;
+      version: number;
+      esPreferida: boolean;
+    };
+    estado: EstadoRutaPublicacionReceta;
+    cotizableConReceta: boolean;
+    revisionPublicada: {
+      id: string;
+      version: number;
+      publicadaEl?: string | null;
+      publicadaPorNombre?: string | null;
+    } | null;
+    borrador: {
+      id: string;
+      numero: number;
+      updatedAt: string;
+    } | null;
+    motivos: Array<{
+      codigo: string;
+      titulo: string;
+      detalle: string;
+    }>;
+    dependencias: Array<{
+      ocurrencia: { id: string; nombre: string; productoId: string };
+      rutaCongelada: { id: string; nombre: string } | null;
+      revisionCongelada: { id: string; version: number };
+      revisionDisponible: {
+        id: string;
+        version: number;
+        publicadaEl?: string | null;
+      } | null;
+      estado: EstadoDependenciaReceta;
+      publicacionesDisponibles: Array<{
+        ruta: { id: string; nombre: string };
+        revisionId: string;
+        version: number;
+      }>;
+    }>;
+  }>;
+  usadoPor: Array<{
+    productoPadre: { id: string; nombre: string };
+    rutaPadre: { id: string; nombre: string };
+    revisionPublicadaPadre: { id: string; version: number };
+    ocurrencias: Array<{
+      id: string;
+      nombre: string;
+      revisionCongelada: { id: string; version: number };
+      revisionDisponible: { id: string; version: number } | null;
+      estado: "VIGENTE" | "ACTUALIZACION_DISPONIBLE" | "SIN_PUBLICACION";
+    }>;
+  }>;
+}
+
 export function getRecetasProducto(id: string): Promise<ProductoReceta[]> {
   return apiRequest<ProductoReceta[]>(
     `/productos-servicios/productos/${id}/receta`,
+  );
+}
+
+export function getEstadoPublicacionProducto(
+  id: string,
+): Promise<EstadoPublicacionProducto> {
+  return apiRequest<EstadoPublicacionProducto>(
+    `/productos-servicios/productos/${id}/receta/estado-publicacion`,
   );
 }
 
@@ -921,7 +1040,10 @@ export interface UpsertSlotMaterialPayload {
   slotNombre?: string | null;
   slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
   modoSeleccion:
-    "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO" | "HEREDA_DE_PASO";
+    | "HARDCODED"
+    | "COMERCIAL_ELIGE"
+    | "MOTOR_ELIGE_AUTO"
+    | "HEREDA_DE_PASO";
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
@@ -1103,7 +1225,9 @@ export interface CrearCargoDirectoPayload {
   nombre: string;
   descripcion?: string;
   modoCalculo:
-    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -1121,7 +1245,9 @@ export interface ActualizarCargoDirectoPayload {
   nombre?: string;
   descripcion?: string;
   modoCalculo?:
-    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -1464,7 +1590,14 @@ export interface NestingViewerInput {
     | "secuencial-rollo"
     | "grid-2d-single"
     | "grid-2d-multi"
-    | "irregular-2d-bottom-left-v1";
+    | "irregular-2d-bottom-left-v1"
+    | "manual-vector-estimate-v1";
+  algorithmPolicy?:
+    | "auto"
+    | "shelf-rollo"
+    | "maxrects-rollo"
+    | "grid-2d-single"
+    | "grid-2d-multi";
   cantidadCalculada: number;
   unidad: "m_lineales" | "pliegos" | "pouches" | "m2" | "piezas";
   aprovechamientoPct: number;
@@ -1497,6 +1630,7 @@ export interface NestingViewerInput {
   machineRunLengthMm?: number;
   piezasAcomodadas: number;
   estrategiaDisposicion?: "composicion_original" | "nesting_optimizado";
+  layoutVinculadoGeometriaVectorial?: boolean;
   outputsCanonicos?: Record<string, unknown>;
   metricasRaw?: Record<string, unknown>;
   visualConfig?: {
@@ -1640,22 +1774,27 @@ export interface AnalisisNestingCompuestoInput {
     }>;
     independiente: {
       sustratos: number;
+      largoMm?: number;
+      areaMm2?: number;
       aprovechamientoPct: number;
     };
     consolidado: {
-      algoritmo: "grid-2d-multi";
+      algoritmo:
+        | "grid-2d-multi"
+        | "shelf-rollo"
+        | "maxrects-rollo"
+        | "irregular-2d-bottom-left-v1";
       sustratos: number;
+      largoMm?: number;
+      areaMm2?: number;
       aprovechamientoPct: number;
-      substrates: Array<{
-        kind: "sheet";
-        count: number;
-        widthMm: number;
-        heightMm: number;
-      }>;
+      substrates: NestingViewerInput["substrates"];
       placements: NestingViewerInput["placements"];
     };
     diferencia: {
       sustratos: number;
+      largoMm?: number;
+      areaMm2?: number;
       ahorroPct: number;
       ahorroPotencial: boolean;
     };
@@ -1737,6 +1876,128 @@ export interface MermaAdicionalMaterialInput {
   porcentaje: number;
   cantidadTrabajo: number;
   cantidadMerma: number;
+}
+
+/**
+ * Desglose económico congelado de una operación privada de etapa compuesta.
+ * Tiene identidad propia para explicar el costo, aunque la OT materialice un
+ * único estado operativo para toda la etapa.
+ */
+export interface OperacionInternaCosteadaInput {
+  codigo: string;
+  nombre: string;
+  familiaCodigo: string;
+  activada: boolean;
+  duracionMin: number;
+  costoTotal: number;
+  configPasoId?: string;
+  rutaPasoId?: string;
+  rutaPasoOrden?: number;
+  razonNoActivado?: string;
+  activadoPorDependencia?: { requeridoPorNombre: string } | null;
+  centroCostoId?: string | null;
+  centroCostoNombre?: string | null;
+  tiempo?: {
+    totalMin: number;
+    setupMin?: number;
+    runMin?: number;
+    runTrabajoMin?: number;
+    runMermaMin?: number;
+    cleanupMin?: number;
+    tiempoFijoMin?: number;
+    mermaOperativaPct?: number;
+    centroCostoId?: string | null;
+    centroCostoNombre?: string | null;
+    maquinaId?: string | null;
+    tarifaHora?: number;
+    dotacionOperarios?: number;
+    costo: number;
+    origenTiempo?: "manual_comercial" | "calculado";
+    extraMin?: number;
+    tiemposExtra?: Array<{
+      id: string;
+      etiqueta: string;
+      minutos: number;
+      centroCostoId?: string | null;
+      centroCostoNombre?: string | null;
+      tarifaHora: number;
+      dotacionOperarios: number;
+      costo: number;
+    }>;
+  };
+  materiales?: Array<{
+    slotCodigo: string;
+    slotNombre?: string | null;
+    slotRol?: string | null;
+    materialVarianteId: string;
+    materialNombre: string;
+    materialSku: string;
+    materialDisplayName: string;
+    materiaPrimaNombre?: string | null;
+    materiaPrimaTemplateId?: string | null;
+    materiaPrimaTipoTecnico?: string | null;
+    atributosVarianteJson?: Record<string, unknown> | null;
+    tipoLineaCosto: "MATERIAL" | "CONSUMIBLE_MAQUINA" | "DESGASTE_MAQUINA";
+    cantidad: number;
+    unidad: string;
+    precioUnitario: number;
+    costoTotal: number;
+    mermaAdicional?: MermaAdicionalMaterialInput;
+    estrategiaCosto: string;
+    modoSeleccion:
+      | "HARDCODED"
+      | "COMERCIAL_ELIGE"
+      | "MOTOR_ELIGE_AUTO"
+      | "MAQUINA_CONSUMIBLE"
+      | "MAQUINA_DESGASTE";
+    detalleCosteoNesting?: {
+      strategy: string;
+      totalCost: number;
+      unitPrice: number;
+      pricePerM2: number;
+      fullUnits: number;
+      fullUnitsCost: number;
+      lastUnit: {
+        occupationPct: number;
+        segmentApplied: number | null;
+        cost: number;
+      } | null;
+      units?: Array<{
+        index: number;
+        occupationPct: number;
+        segmentApplied: number | null;
+        cost: number;
+      }>;
+    };
+    asignacionNestingCompuesto?: {
+      loteId: string;
+      costoIndependiente: number;
+      costoAsignado: number;
+      porcentajeAsignacion: number;
+    };
+  }>;
+  cargosDirectosPaso?: Array<{
+    cargoCodigo: string;
+    cargoNombre: string;
+    monto: number;
+    modoCalculo: string;
+    aplicaMargen?: boolean;
+  }>;
+  mutacionAplicada?: {
+    nombrePaso: string;
+    subTipo?: string;
+    lados: string[];
+    demasiaMm: number;
+    deltaAnchoMm: number;
+    deltaAltoMm: number;
+    metrosLinealesUnion: number;
+    piezas: Array<{
+      antes: { anchoMm: number; altoMm: number };
+      despues: { anchoMm: number; altoMm: number };
+    }>;
+  } | null;
+  componentesCodigos?: string[];
+  nestingResult?: NestingViewerInput;
 }
 
 export interface CotizarRequest {
@@ -1839,6 +2100,8 @@ export interface CotizarResponse {
     componentesFabricados?: Array<{
       productoId: string;
       codigo: string;
+      plantillaCodigo?: string;
+      ocurrenciaId?: string;
       nombre: string;
       politicaEjecucion: "INLINE" | "INDEPENDIENTE";
       cantidad: number;
@@ -1925,17 +2188,7 @@ export interface CotizarResponse {
           mermaAdicional?: MermaAdicionalMaterialInput;
         }>;
         nestingResult?: NestingViewerInput;
-        operacionesInternas?: Array<{
-          codigo: string;
-          nombre: string;
-          familiaCodigo: string;
-          activada: boolean;
-          duracionMin: number;
-          costoTotal: number;
-          centroCostoId?: string | null;
-          centroCostoNombre?: string | null;
-          nestingResult?: NestingViewerInput;
-        }>;
+        operacionesInternas?: OperacionInternaCosteadaInput[];
       }>;
       componentes?: Array<Record<string, unknown>>;
       operacionesIncorporacion?: Array<{
@@ -2021,31 +2274,7 @@ export interface CotizarResponse {
       contenedorNombre?: string | null;
       pasoInternoCodigo?: string | null;
       componentesCodigos?: string[];
-      operacionesInternas?: Array<{
-        codigo: string;
-        nombre: string;
-        familiaCodigo: string;
-        activada: boolean;
-        duracionMin: number;
-        costoTotal: number;
-        centroCostoId?: string | null;
-        centroCostoNombre?: string | null;
-        materiales?: Array<{
-          slotCodigo: string;
-          slotNombre?: string | null;
-          materialVarianteId: string;
-          materialNombre: string;
-          materialSku: string;
-          materialDisplayName: string;
-          cantidad: number;
-          unidad: string;
-          precioUnitario: number;
-          costoTotal: number;
-          mermaAdicional?: MermaAdicionalMaterialInput;
-        }>;
-        componentesCodigos?: string[];
-        nestingResult?: NestingViewerInput;
-      }>;
+      operacionesInternas?: OperacionInternaCosteadaInput[];
       configPasoId?: string;
       activado: boolean;
       razonNoActivado?: string;
@@ -2471,6 +2700,25 @@ export async function analizarSvgFabricacion(req: {
       headers: { "Content-Type": "application/json" },
     },
   );
+}
+
+export async function medirSvgFabricacion(req: {
+  svg: string;
+  nombreArchivo: string;
+}): Promise<{
+  nombreArchivo: string;
+  relacionAltoAncho: number;
+  diagnosticos: Array<{
+    codigo: string;
+    mensaje: string;
+    severidad: "ERROR" | "WARNING";
+  }>;
+}> {
+  return apiRequest("/motor-universal/geometria-vectorial/medir", {
+    method: "POST",
+    body: JSON.stringify(req),
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export interface CotizarYGuardarResponse {

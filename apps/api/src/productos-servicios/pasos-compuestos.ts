@@ -185,12 +185,22 @@ export function leerConfiguracionesPasosCompuestos(
           const fuente = item.fuenteCantidad;
           if (
             !esRegistro(fuente) ||
-            !['PADRE', 'COMPONENTE'].includes(String(fuente.tipo)) ||
+            !['PADRE', 'COMPONENTE', 'COMPONENTES'].includes(
+              String(fuente.tipo),
+            ) ||
             typeof fuente.campo !== 'string' ||
             !fuente.campo.trim() ||
             (fuente.tipo === 'COMPONENTE' &&
               (typeof fuente.componenteCodigo !== 'string' ||
                 !fuente.componenteCodigo.trim())) ||
+            (fuente.tipo === 'COMPONENTES' &&
+              (fuente.agregacion !== 'SUM' ||
+                !Array.isArray(fuente.componentesCodigos) ||
+                fuente.componentesCodigos.length === 0 ||
+                !fuente.componentesCodigos.every(
+                  (codigo) =>
+                    typeof codigo === 'string' && Boolean(codigo.trim()),
+                ))) ||
             !(Number(item.minutosPorUnidad) > 0) ||
             !(Number(item.factorConversionFuente ?? 1) > 0)
           ) {
@@ -290,6 +300,20 @@ function valorFuente(
   contextoPadre: Record<string, unknown>,
   outputsComponentes: Record<string, Record<string, unknown>>,
 ) {
+  if (fuente.tipo === 'COMPONENTES') {
+    const codigos = new Set(fuente.componentesCodigos ?? []);
+    return Object.values(outputsComponentes).reduce((total, outputs) => {
+      const meta = esRegistro(outputs._componente) ? outputs._componente : null;
+      if (!meta || !codigos.has(String(meta.plantillaCodigo ?? ''))) {
+        return total;
+      }
+      const raw = Object.prototype.hasOwnProperty.call(outputs, fuente.campo)
+        ? outputs[fuente.campo]
+        : leerRuta(outputs, fuente.campo);
+      const numero = Number(raw);
+      return Number.isFinite(numero) ? total + numero : total;
+    }, 0);
+  }
   const root =
     fuente.tipo === 'COMPONENTE' && fuente.componenteCodigo
       ? outputsComponentes[fuente.componenteCodigo]
@@ -306,8 +330,24 @@ export function resolverPasoCompuesto(args: {
   outputsComponentes: Record<string, Record<string, unknown>>;
   nombresComponentes: Record<string, string>;
 }): OperacionCompuestaResuelta[] {
+  const componentesActivos = new Set(
+    Object.entries(args.outputsComponentes).flatMap(([codigo, outputs]) => {
+      const meta = esRegistro(outputs._componente) ? outputs._componente : null;
+      const plantillaCodigo = meta?.plantillaCodigo;
+      return typeof plantillaCodigo === 'string' && plantillaCodigo
+        ? [codigo, plantillaCodigo]
+        : [codigo];
+    }),
+  );
   return args.configuracion.operaciones
-    .filter((item) => item.activa)
+    .filter(
+      (item) =>
+        item.activa &&
+        (item.componentesCodigos.length === 0 ||
+          item.componentesCodigos.some((codigo) =>
+            componentesActivos.has(codigo),
+          )),
+    )
     .map((operacion) => {
       const cantidadResuelta =
         operacion.modoTiempo === 'FIJO'

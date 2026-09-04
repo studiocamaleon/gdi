@@ -11106,6 +11106,33 @@ body {
     border-radius: 50%;
   }
 
+  .ot-v1 .ap-compound-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    color: var(--side-accent, #ff6a2b);
+    background: color-mix(
+      in srgb,
+      var(--side-accent, #ff6a2b) 10%,
+      var(--surface)
+    );
+    border: 1px solid
+      color-mix(
+        in srgb,
+        var(--side-accent, #ff6a2b) 32%,
+        var(--border)
+      );
+    border-radius: 7px;
+  }
+
+  .ot-v1 .ap-compound-icon svg {
+    width: 13px;
+    height: 13px;
+    stroke-width: 1.9;
+  }
+
   .ot-v1 .ap-prod-name {
     color: var(--ink);
     font-size: 14px;
@@ -14696,6 +14723,10 @@ body {
 
 .tablero-produccion .kan-step-ico.is-blocked {
   background: var(--destructive, #cf4b2f);
+}
+
+.tablero-produccion .kan-step-ico.is-paused {
+  background: var(--warn, #d97706);
 }
 
 /* Iconos y avatares de tamaño fijo que viven en una fila flex junto a texto: sin
@@ -32293,38 +32324,6 @@ body:has(.t-app) {
 .cost-steps-table .cost-component-name small {
   color: var(--muted);
   font-size: 10.5px;
-}
-
-.cost-steps-table .cost-stage-operations {
-  display: grid;
-  gap: 6px;
-}
-
-.cost-steps-table .cost-stage-operation {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border: 1px solid var(--hairline);
-  border-radius: 9px;
-  background: var(--surface);
-}
-
-.cost-steps-table .cost-stage-operation > span {
-  font-family: var(--font-mono);
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.cost-steps-table .cost-stage-operation > div {
-  display: grid;
-  gap: 2px;
-}
-
-.cost-steps-table .cost-stage-operation small {
-  color: var(--muted);
-  font-size: 11px;
 }
 
 /* Responsive */

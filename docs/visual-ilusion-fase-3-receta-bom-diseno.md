@@ -329,3 +329,26 @@ El recorrido de un exhibidor usa exactamente el mismo contrato ya validado: los
 roles `SUSTRATO`, `CONSUMIBLE`, `PACKAGING` y `COMPONENTE` se proyectan desde
 los slots existentes hacia la BOM congelada. La ejecución independiente y la
 convergencia de componentes fabricados quedan, deliberadamente, para la Fase 4.
+
+## 17. Estabilización del flujo de publicación (3 de septiembre de 2026)
+
+La ficha de producto deja de inferir la vigencia sólo por la existencia de un
+borrador. Para cada ruta activa reconstruye el mismo snapshot que valida el
+motor al cotizar y expone uno de estos estados: `SIN_RECETA`,
+`BORRADOR_INICIAL`, `VIGENTE`, `VIGENTE_CON_BORRADOR`, `DESACTUALIZADA` o
+`BLOQUEADA`.
+
+El diagnóstico explica qué familia de datos cambió —producto, ruta, Workflow,
+pasos, materiales, recursos, cargos, documentos, componentes o etapas— sin
+reemplazar a la huella SHA-256 como fuente de verdad. También muestra:
+
+- por cada ocurrencia de componente, la versión congelada por el padre y la
+  publicación disponible del hijo;
+- dependencias sin publicación, ambiguas o con actualización disponible;
+- productos padres publicados que usan la receta y podrían requerir una nueva
+  revisión.
+
+Este corte es deliberadamente informativo: conserva las revisiones publicadas
+inmutables y no propaga ni republica cambios en forma automática. Una futura
+acción masiva de actualización deberá crear borradores explícitos, presentar
+el impacto y exigir una publicación consciente por cada ruta afectada.

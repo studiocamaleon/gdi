@@ -1,6 +1,6 @@
 # Fase 4.4 — Nesting compartido dentro de productos compuestos
 
-**Estado:** EN IMPLEMENTACIÓN · 4.4.2 CONSOLIDACIÓN RECTANGULAR Y CONFIGURACIÓN UI IMPLEMENTADAS
+**Estado:** IMPLEMENTADA · PENDIENTE DE VALIDACIÓN FUNCIONAL DEL MOTOR IRREGULAR · FASE 5 BLOQUEADA
 
 **Rama propuesta:** `visual-ilusion/fase-4-4-nesting-compuestos`
 
@@ -41,9 +41,7 @@ centro de corte.
 ## 3. Política del producto compuesto
 
 ```ts
-type PoliticaNestingCompuesto =
-  | "INDEPENDIENTE"
-  | "CONSOLIDAR_COMPATIBLES";
+type PoliticaNestingCompuesto = "INDEPENDIENTE" | "CONSOLIDAR_COMPATIBLES";
 ```
 
 `INDEPENDIENTE` conserva el comportamiento actual y será el valor por defecto.
@@ -97,7 +95,9 @@ Compartir una variante de material no alcanza. Dos demandas sólo pueden entrar
 en el mismo lote cuando coinciden todos los atributos que afectan el proceso:
 
 - tenant, cotización, producto padre y revisión;
-- variante exacta y formato de compra del material;
+- variante exacta y formato de compra del material cuando la selección está
+  fijada; si el motor elige automáticamente, intersección de variantes
+  candidatas de la misma materia prima;
 - familia, algoritmo y superficie de nesting;
 - tecnología, máquina, perfil y geometría útil;
 - caras, modo de color, tinta blanca u otra separación relevante;
@@ -303,13 +303,65 @@ lote por una condición de seguridad.
 - build de API aprobado y regresión integral aprobada: 207 suites, 2.004
   pruebas y 10 snapshots; 2 suites y 3 pruebas omitidas.
 
-El siguiente incremento es **4.4.3**, dedicado a rollos y geometría vectorial.
+El siguiente incremento dentro de 4.4.3 queda limitado a geometría vectorial.
 
 ### 4.4.3 — Rollos y geometría vectorial
 
 - extender a rollos cuando compartan tecnología y ventana productiva;
 - preservar identidad y archivos para nesting irregular;
 - validar correspondencia de impresión y corte.
+
+**Resultado implementado para rollos rectangulares:**
+
+- `shelf-rollo` y `maxrects-rollo` conservan ahora la demanda rectangular
+  original; el consolidado no intenta reconstruirla desde paneles o dibujos;
+- máquina, perfil, tecnología, color, caras, tintas, márgenes, demasía,
+  separación, rotación, merma y preparación forman parte de la firma estricta;
+- con material fijado se exige la misma variante y ancho físico;
+- con `MOTOR_ELIGE_AUTO` sin elección comercial explícita, cada componente
+  congela sus variantes candidatas y el lote vuelve a ejecutar el nesting para
+  cada ancho común; gana el menor costo real del conjunto y luego el menor
+  largo como desempate;
+- la variante ganadora reemplaza la elección individual en todos los
+  participantes y el snapshot congela ancho, largo, placements, costo y
+  procedencia de cada pieza;
+- el costo admite rollos tarifados por metro lineal o por m², conserva la merma
+  operativa y se reparte por área útil con reconciliación exacta;
+- la guarda de no regresión conserva el cálculo individual si aumenta el área
+  física total de rollo o el costo completo; comparar sólo largo sería
+  incorrecto cuando el motor puede elegir anchos distintos;
+- el visor consume el algoritmo y sustrato del snapshot aplicado; no vuelve a
+  simular el acomodo ni fuerza `grid-2d-multi`;
+- el panelizado automático se puede reevaluar; el panelizado manual permanece
+  individual para respetar el layout definido por el usuario.
+
+**Evidencia focalizada:**
+
+- dos piezas de medidas distintas comparten un único tramo de rollo y el largo
+  visual coincide con el costeado;
+- caso de selección automática: aunque 800 mm gane para cada pieza aislada,
+  el lote elige 1000 mm cuando permite una sola fila y reduce el costo total;
+- panelizado manual se excluye de forma segura;
+- 58 pruebas de dispatcher y nesting compuesto aprobadas, incluyendo 13 casos
+  propios de consolidación, y builds de API y frontend aprobados.
+
+**Resultado implementado para geometría irregular:**
+
+- contrato canónico neutral para demandas rectangulares y poligonales;
+- solución versionada con hash reproducible y propietarios trazables;
+- paridad del nesting vectorial individual sobre el nuevo contrato;
+- cantidades heterogéneas y múltiples demandas en una misma ejecución;
+- carga de SVG y medidas finales propia de cada componente u ocurrencia desde
+  el contrato público de cotización;
+- consolidación de contornos compatibles entre componentes;
+- cálculo y reparto por área poligonal real, no por caja envolvente;
+- estimación manual separada del nesting geométrico;
+- exclusión segura de composiciones originales y layouts impresión–corte ya
+  registrados, que nunca se reacomodan de manera independiente.
+
+El diseño y la matriz de prueba están en
+`docs/motor-nesting-irregular-generalizado-diseno.md`. Fase 5 permanece
+bloqueada hasta la validación funcional del usuario.
 
 ## 11. Criterios de salida
 

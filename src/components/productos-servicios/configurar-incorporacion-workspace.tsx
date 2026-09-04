@@ -296,7 +296,14 @@ export function ConfigurarIncorporacionWorkspace({
                 <span>Componentes sobre los que trabaja</span>
                 {componentes.length ? (
                   componentes.map((componente) => (
-                    <label key={componente.codigo}>
+                    <label
+                      key={componente.codigo}
+                      title={
+                        componente.configuracionJson?.repeticion?.permitida
+                          ? "Incluye también las ocurrencias agregadas al cotizar."
+                          : undefined
+                      }
+                    >
                       <input
                         type="checkbox"
                         checked={item.componentesCodigos.includes(
@@ -313,6 +320,9 @@ export function ConfigurarIncorporacionWorkspace({
                         }
                       />
                       {componente.nombre}
+                      {componente.configuracionJson?.repeticion?.permitida
+                        ? " · repetible"
+                        : ""}
                     </label>
                   ))
                 ) : (

@@ -3,16 +3,19 @@ import { createHash } from 'node:crypto';
 import type { JobContext } from '../tipos';
 import { analizarSvgFabricacion } from './svg-parser';
 import { aplicarCapasAGeometria } from './capas-vectoriales';
-import {
-  NestingIrregularError,
-  nestearGeometriaIrregular,
-} from './nesting-irregular';
+import { NestingIrregularError } from './nesting-irregular';
 import type {
   ConfiguracionCapasVectoriales,
   GeometriaVectorialCanonica,
   NestingIrregularResult,
 } from './tipos';
 import type { ConfiguracionEncastresVectoriales } from './segmentacion-encastres';
+import {
+  crearDemandasDesdeGeometriaVectorial,
+  crearProblemaNestingIrregular,
+  resolverProblemaNestingIrregular,
+  type SolucionNesting,
+} from './contrato-nesting';
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 100;
@@ -40,6 +43,7 @@ export interface EntradaGeometriaVectorialCache {
   analisis: AnalisisSvgResultado;
   geometriaFabricacion: GeometriaVectorialCanonica;
   nesting: NestingIrregularResult;
+  solucionNesting: SolucionNesting;
   configuracionCapas?: ConfiguracionCapasVectoriales;
   parametros: ParametrosNestingVectorialCache;
   expiresAt: number;
@@ -90,10 +94,23 @@ export class GeometriaVectorialCacheService {
         'El diseño no tiene piezas configuradas para cortar. Marcá al menos un objeto como pieza o encastre.',
       );
     }
-    const nesting = nestearGeometriaIrregular({
-      geometria: geometriaFabricacion,
-      ...input.parametros,
+    const problema = crearProblemaNestingIrregular({
+      demandas: crearDemandasDesdeGeometriaVectorial({
+        geometria: geometriaFabricacion,
+        cantidad: input.parametros.cantidad,
+      }),
+      anchoPlacaMm: input.parametros.anchoPlacaMm,
+      altoPlacaMm: input.parametros.altoPlacaMm,
+      margenMm: input.parametros.margenMm,
+      separacionMm: input.parametros.separacionMm,
+      permitirRotacion: input.parametros.permitirRotacion,
+      permitirSegmentacion: input.parametros.permitirSegmentacion,
+      preservarComposicionOriginalSiEntra:
+        input.parametros.preservarComposicionOriginalSiEntra,
+      configuracionEncastres: input.parametros.configuracionEncastres,
     });
+    const solucionNesting = resolverProblemaNestingIrregular(problema);
+    const nesting = solucionNesting.resultado;
     const entry: EntradaGeometriaVectorialCache = {
       cacheKey,
       tenantId: input.tenantId,
@@ -103,6 +120,7 @@ export class GeometriaVectorialCacheService {
       analisis,
       geometriaFabricacion,
       nesting,
+      solucionNesting,
       configuracionCapas: input.configuracionCapas,
       parametros: input.parametros,
       expiresAt: Date.now() + CACHE_TTL_MS,

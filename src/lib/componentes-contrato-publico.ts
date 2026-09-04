@@ -9,6 +9,36 @@ export type CondicionalPublicoComponente = {
   condicionadoPor: string[];
 };
 
+const CLAVES_MEDIDA_PLANA = new Set([
+  "medidaCustomMm.anchoMm",
+  "medidaCustomMm.altoMm",
+]);
+
+/**
+ * Cuando el SVG es obligatorio o se hereda del padre, su caja final ya define
+ * ancho y alto. Mantener esos campos como entradas separadas permitiría crear
+ * dos fuentes de verdad incompatibles.
+ */
+export function medidasDerivadasDeDisenoVectorial(
+  bindings: BindingParametroComponente[],
+): boolean {
+  const vector = bindings.find(
+    (binding) =>
+      binding.tipoDato === "vectorial" ||
+      binding.clave === "disenoVectorialFuente",
+  );
+  return Boolean(
+    vector && (vector.origen === "PADRE" || vector.requerido !== false),
+  );
+}
+
+export function esMedidaPlanaDerivada(
+  binding: BindingParametroComponente,
+  derivar: boolean,
+): boolean {
+  return derivar && CLAVES_MEDIDA_PLANA.has(binding.clave);
+}
+
 /**
  * Convierte el formulario público del producto hijo en el contrato que la
  * instancia del componente puede fijar, heredar o pedir durante la cotización.
@@ -106,11 +136,23 @@ export function parametrosPublicosDelComponente(
     });
   }
 
+  for (const herramienta of formulario.herramientas ?? []) {
+    if (herramienta.tipo !== "diseno_vectorial") continue;
+    parametros.push({
+      clave: herramienta.jobContextKey,
+      etiqueta: herramienta.etiqueta,
+      tipoDato: "vectorial",
+      unidad: null,
+      requerido: herramienta.requerido,
+      origen: "COTIZACION",
+    });
+  }
+
   for (const adicional of formulario.adicionales ?? []) {
     if (adicional.tipo !== "paso" || !adicional.jobContextKey) continue;
     parametros.push({
       clave: adicional.jobContextKey,
-      etiqueta: adicional.nombre,
+      etiqueta: `Activar ${adicional.nombre}`,
       tipoDato: "boolean",
       requerido: false,
       // Un paso opcional no debe desaparecer por usar el valor false del

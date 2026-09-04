@@ -17,6 +17,7 @@ import {
 describe("clasificación operativa del tablero", () => {
   it("distingue el paso que está corriendo del próximo paso pendiente", () => {
     expect(etiquetaPasoKanban("en_curso")).toBe("Paso en curso:");
+    expect(etiquetaPasoKanban("pausado")).toBe("Paso pausado:");
     expect(etiquetaPasoKanban("pendiente")).toBe("Próximo paso:");
     expect(etiquetaPasoKanban("bloqueado")).toBe("Próximo paso:");
   });

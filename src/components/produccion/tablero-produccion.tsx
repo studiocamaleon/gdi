@@ -3000,6 +3000,7 @@ function getKanbanBucket(item: ItemView): KanbanBucketKey | null {
 
 function kanbanStepIcon(item: ItemView, step: StepView | undefined) {
   if (item.blocked) return <BanIcon />;
+  if (step?.paso.estado === "pausado") return <PauseIcon />;
   const IconCmp = step ? getStepIcon(step.iconKey) : LayoutDashboardIcon;
   return <IconCmp />;
 }
@@ -3020,6 +3021,7 @@ const KanbanCard = React.memo(function KanbanCard({
   const step =
     item.currentStep ??
     item.steps.find((candidate) => candidate.paso.estado !== "hecho");
+  const pasoPausado = step?.paso.estado === "pausado";
 
   return (
     <button
@@ -3048,7 +3050,10 @@ const KanbanCard = React.memo(function KanbanCard({
       <div className="kan-title">{item.product}</div>
       <div className="kan-step">
         <span
-          className={`kan-step-ico ${item.blocked ? "is-blocked" : ""}`}
+          className={`kan-step-ico ${
+            item.blocked ? "is-blocked" : pasoPausado ? "is-paused" : ""
+          }`}
+          title={pasoPausado ? "Paso pausado" : undefined}
         >
           {kanbanStepIcon(item, step)}
         </span>

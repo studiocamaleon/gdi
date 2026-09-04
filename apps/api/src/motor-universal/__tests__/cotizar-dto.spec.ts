@@ -164,6 +164,36 @@ describe('CotizarDto', () => {
     ).toBe(true);
   });
 
+  it('acepta y valida el registro de geometrías vectoriales nombradas', () => {
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        geometriasVectoriales: {
+          contorno_principal: {
+            schemaVersion: 1,
+            nombreArchivo: 'contorno.svg',
+            svg: '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+            anchoFinalMm: 100,
+            altoFinalMm: 100,
+          },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      jobContextCotizacionValido({
+        cantidad: 1,
+        geometriasVectoriales: {
+          'id no valido': {
+            schemaVersion: 1,
+            nombreArchivo: 'contorno.svg',
+            svg: '<svg/>',
+            anchoFinalMm: 100,
+          },
+        },
+      }),
+    ).toBe(false);
+  });
+
   it('rechaza fuentes vectoriales v2 sin configuración de capas', () => {
     expect(
       jobContextCotizacionValido({

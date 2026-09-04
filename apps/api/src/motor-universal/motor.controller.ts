@@ -14,8 +14,14 @@ import { CotizarDto, RecotizarItemDto } from './cotizar.dto';
 import type { CotizarOutput } from './tipos';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
-import { AnalizarSvgFabricacionDto } from './geometria-vectorial/analizar-svg.dto';
-import { SvgFabricacionError } from './geometria-vectorial/svg-parser';
+import {
+  AnalizarSvgFabricacionDto,
+  MedirSvgFabricacionDto,
+} from './geometria-vectorial/analizar-svg.dto';
+import {
+  analizarSvgFabricacion,
+  SvgFabricacionError,
+} from './geometria-vectorial/svg-parser';
 import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
 import { GeometriaVectorialCacheService } from './geometria-vectorial/geometria-vectorial-cache.service';
 import { resolverConfiguracionEncastresVectoriales } from './geometria-vectorial/segmentacion-encastres';
@@ -32,6 +38,39 @@ export class MotorUniversalController {
     private readonly motor: MotorUniversalService,
     private readonly geometriaCache: GeometriaVectorialCacheService,
   ) {}
+
+  /**
+   * Obtiene la proporción de los contornos fabricables, no del lienzo del SVG.
+   * No ejecuta nesting ni persiste: permite dimensionar una fuente compartida
+   * con el mismo criterio geométrico que luego utilizará el costeo.
+   */
+  @Post('geometria-vectorial/medir')
+  medirSvg(@Body() dto: MedirSvgFabricacionDto, @Req() req: RequestWithAuth) {
+    if (!req.auth?.tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    try {
+      const { geometria, diagnosticos } = analizarSvgFabricacion({
+        svg: dto.svg,
+        anchoFinalMm: 1_000,
+      });
+      return {
+        nombreArchivo: dto.nombreArchivo,
+        relacionAltoAncho: geometria.altoMm / geometria.anchoMm,
+        diagnosticos,
+      };
+    } catch (error) {
+      if (error instanceof SvgFabricacionError) {
+        throw new BadRequestException({
+          message: error.message,
+          diagnosticos: error.diagnosticos,
+        });
+      }
+      throw error;
+    }
+  }
 
   /**
    * Primera frontera del configurador vectorial. Analiza un SVG de una capa y
@@ -78,6 +117,7 @@ export class MotorUniversalController {
         cacheHit,
         geometria: entry.analisis.geometria,
         nesting: entry.nesting,
+        solucionNesting: entry.solucionNesting,
         configuracionCapas: entry.configuracionCapas,
         configuracionEncastres: entry.parametros.configuracionEncastres,
         diagnosticos: entry.analisis.diagnosticos,

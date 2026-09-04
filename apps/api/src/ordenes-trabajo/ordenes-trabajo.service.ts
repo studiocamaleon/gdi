@@ -2963,8 +2963,7 @@ export class OrdenesTrabajoService {
               typeof raw === 'object' &&
               String((raw as { codigo?: unknown }).codigo ?? '') === zonaCodigo,
           ) as
-            | { codigo?: unknown; nombre?: unknown; monto?: unknown }
-            | undefined;
+            { codigo?: unknown; nombre?: unknown; monto?: unknown } | undefined;
           if (!zona)
             throw new BadRequestException(
               `Elegí un importe válido para el cargo "${catalogo.nombre}".`,
@@ -4674,6 +4673,11 @@ export class OrdenesTrabajoService {
   ) {
     const pendientes = [...padresIniciales];
     const visitados = new Set<string>();
+    // Los snapshots de hijos anidados vienen dentro del componente costeado
+    // del nivel anterior. La transacción es atómica, por lo que podemos
+    // propagarlos en memoria y materializar toda la profundidad usando
+    // exactamente el cálculo original, incluidas ocurrencias dinámicas.
+    const costeadosPorItem = new Map<string, unknown[]>();
     while (pendientes.length > 0) {
       const padreId = pendientes.shift()!;
       if (visitados.has(padreId)) continue;
@@ -4691,18 +4695,104 @@ export class OrdenesTrabajoService {
       });
       if (!padre?.recetaRevision) continue;
 
-      for (const componente of padre.recetaRevision.componentes) {
+      const contextoPadreCrudo =
+        padre.jobContextSnapshotJson ?? padre.cotizacionItem?.jobContextJson;
+      const contextoPadreLeido =
+        contextoPadreCrudo &&
+        typeof contextoPadreCrudo === 'object' &&
+        !Array.isArray(contextoPadreCrudo)
+          ? (contextoPadreCrudo as Record<string, unknown>)
+          : {};
+      const contextoPadre = {
+        cantidad: Number(padre.cantidad),
+        ...contextoPadreLeido,
+      };
+      const traza =
+        padre.cotizacionItem?.trazabilidadJson &&
+        typeof padre.cotizacionItem.trazabilidadJson === 'object' &&
+        !Array.isArray(padre.cotizacionItem.trazabilidadJson)
+          ? (padre.cotizacionItem.trazabilidadJson as Record<string, unknown>)
+          : null;
+      const costeadosEnTraza = traza?.componentesFabricados;
+      const tieneCosteadosEnTraza = Array.isArray(costeadosEnTraza);
+      const tieneCosteadosPropagados = costeadosPorItem.has(padre.id);
+      const costeadosTraza = Array.isArray(costeadosEnTraza)
+        ? costeadosEnTraza
+        : [];
+      const costeados = tieneCosteadosEnTraza
+        ? costeadosTraza
+        : (costeadosPorItem.get(padre.id) ?? []);
+      const outputsComponentes = Object.fromEntries(
+        costeados.flatMap((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            return [];
+          }
+          const snapshot = item as Record<string, unknown>;
+          const codigo = snapshot.codigo;
+          const outputs = snapshot.outputsPublicos;
+          return typeof codigo === 'string' &&
+            outputs &&
+            typeof outputs === 'object' &&
+            !Array.isArray(outputs)
+            ? [[codigo, outputs as Record<string, unknown>]]
+            : [];
+        }),
+      );
+      const plantillasPorCodigo = new Map(
+        padre.recetaRevision.componentes.map((item) => [item.codigo, item]),
+      );
+      const tieneSnapshotAutoritativo =
+        tieneCosteadosEnTraza || tieneCosteadosPropagados;
+      const componentesAProcesar = tieneSnapshotAutoritativo
+        ? costeados.flatMap((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+              return [];
+            }
+            const snapshot = item as Record<string, unknown>;
+            const plantillaCodigo =
+              typeof snapshot.plantillaCodigo === 'string'
+                ? snapshot.plantillaCodigo
+                : typeof snapshot.codigo === 'string'
+                  ? snapshot.codigo
+                  : '';
+            const plantilla = plantillasPorCodigo.get(plantillaCodigo);
+            return plantilla ? [{ plantilla, snapshot }] : [];
+          })
+        : padre.recetaRevision.componentes.map((plantilla) => ({
+            plantilla,
+            snapshot: null,
+          }));
+
+      for (const { plantilla, snapshot } of componentesAProcesar) {
+        const componenteCodigo =
+          typeof snapshot?.codigo === 'string'
+            ? snapshot.codigo
+            : plantilla.codigo;
+        const componenteNombre =
+          typeof snapshot?.nombre === 'string'
+            ? snapshot.nombre
+            : plantilla.nombre;
+        const politicaEjecucion =
+          snapshot?.politicaEjecucion === 'INLINE' ||
+          snapshot?.politicaEjecucion === 'INDEPENDIENTE'
+            ? snapshot.politicaEjecucion
+            : plantilla.politicaEjecucion;
+        const nodoIncorporacionClave =
+          typeof snapshot?.nodoIncorporacionClave === 'string'
+            ? snapshot.nodoIncorporacionClave
+            : plantilla.nodoIncorporacionClave;
         // Publicaciones F3 anteriores a la convergencia conservan su ejecución
         // histórica: sólo las nuevas revisiones con nodo declarado crean red.
-        if (
-          componente.politicaEjecucion !== 'INDEPENDIENTE' ||
-          !componente.nodoIncorporacionClave
-        ) {
+        if (politicaEjecucion !== 'INDEPENDIENTE' || !nodoIncorporacionClave) {
           continue;
         }
+        const recetaRevisionId =
+          typeof snapshot?.recetaRevisionId === 'string'
+            ? snapshot.recetaRevisionId
+            : plantilla.recetaRevisionId;
         const revisionHija = await tx.productoRecetaRevision.findFirst({
           where: {
-            id: componente.recetaRevisionId,
+            id: recetaRevisionId,
             tenantId,
             estado: { in: ['PUBLICADA', 'DEPRECADA'] },
           },
@@ -4710,65 +4800,20 @@ export class OrdenesTrabajoService {
         });
         if (!revisionHija) {
           throw new ConflictException(
-            `La receta congelada del componente "${componente.nombre}" ya no está disponible.`,
+            `La receta congelada del componente "${componenteNombre}" ya no está disponible.`,
           );
         }
-
-        const contextoPadreCrudo =
-          padre.jobContextSnapshotJson ?? padre.cotizacionItem?.jobContextJson;
-        const contextoPadreLeido =
-          contextoPadreCrudo &&
-          typeof contextoPadreCrudo === 'object' &&
-          !Array.isArray(contextoPadreCrudo)
-            ? (contextoPadreCrudo as Record<string, unknown>)
-            : {};
-        const contextoPadre = {
-          cantidad: Number(padre.cantidad),
-          ...contextoPadreLeido,
-        };
-        const traza =
-          padre.cotizacionItem?.trazabilidadJson &&
-          typeof padre.cotizacionItem.trazabilidadJson === 'object' &&
-          !Array.isArray(padre.cotizacionItem.trazabilidadJson)
-            ? (padre.cotizacionItem.trazabilidadJson as Record<string, unknown>)
-            : null;
-        const costeados = Array.isArray(traza?.componentesFabricados)
-          ? traza.componentesFabricados
-          : [];
-        const outputsComponentes = Object.fromEntries(
-          costeados.flatMap((item) => {
-            if (!item || typeof item !== 'object' || Array.isArray(item)) {
-              return [];
-            }
-            const snapshot = item as Record<string, unknown>;
-            const codigo = snapshot.codigo;
-            const outputs = snapshot.outputsPublicos;
-            return typeof codigo === 'string' &&
-              outputs &&
-              typeof outputs === 'object' &&
-              !Array.isArray(outputs)
-              ? [[codigo, outputs as Record<string, unknown>]]
-              : [];
-          }),
-        );
-        const costeado = costeados.find(
-          (item) =>
-            item &&
-            typeof item === 'object' &&
-            !Array.isArray(item) &&
-            (item as Record<string, unknown>).codigo === componente.codigo,
-        ) as Record<string, unknown> | undefined;
-        const jobContextHijoCrudo = costeado?.jobContext;
+        const jobContextHijoCrudo = snapshot?.jobContext;
         const jobContextHijo =
           jobContextHijoCrudo &&
           typeof jobContextHijoCrudo === 'object' &&
           !Array.isArray(jobContextHijoCrudo)
             ? (jobContextHijoCrudo as Record<string, unknown>)
             : resolverJobContextComponente({
-                configuracion: componente.configuracionJson,
+                configuracion: plantilla.configuracionJson,
                 contextoPadre,
-                codigoComponente: componente.codigo,
-                cantidadLegacy: Number(componente.cantidad),
+                codigoComponente: plantilla.codigo,
+                cantidadLegacy: Number(plantilla.cantidad),
                 outputsComponentes,
               });
 
@@ -4776,7 +4821,7 @@ export class OrdenesTrabajoService {
           where: {
             tenantId,
             parentItemId: padre.id,
-            componenteCodigo: componente.codigo,
+            componenteCodigo,
           },
         });
         if (!hijo) {
@@ -4785,8 +4830,8 @@ export class OrdenesTrabajoService {
               tenantId,
               ordenId: padre.ordenId,
               parentItemId: padre.id,
-              componenteCodigo: componente.codigo,
-              nodoIncorporacionClave: componente.nodoIncorporacionClave,
+              componenteCodigo,
+              nodoIncorporacionClave,
               recetaRevisionId: revisionHija.id,
               recetaVersion: revisionHija.numero,
               recetaHuella: revisionHija.huellaConfiguracion,
@@ -4797,13 +4842,16 @@ export class OrdenesTrabajoService {
               grafoProduccionSnapshotJson:
                 (revisionHija.grafoProduccionJson as Prisma.InputJsonValue) ??
                 undefined,
-              codigo: `${padre.codigo}/${componente.codigo}`.slice(0, 180),
-              nombre: componente.nombre,
+              codigo: `${padre.codigo}/${componenteCodigo}`.slice(0, 180),
+              nombre: componenteNombre,
               familia: 'Componente fabricado',
               categoriaComercial: 'Producción interna',
               subcategoriaComercial: 'Componente fabricado',
               cantidad: Number(jobContextHijo.cantidad),
-              cantidadUnidad: componente.unidad,
+              cantidadUnidad:
+                typeof snapshot?.unidad === 'string'
+                  ? snapshot.unidad
+                  : plantilla.unidad,
               subtotal: 0,
               impuestos: 0,
               total: 0,
@@ -4811,8 +4859,18 @@ export class OrdenesTrabajoService {
             },
           });
         }
+        const componentesAnidadosCrudos = snapshot?.componentes;
+        const tieneComponentesAnidados = Array.isArray(
+          componentesAnidadosCrudos,
+        );
+        const componentesAnidados = Array.isArray(componentesAnidadosCrudos)
+          ? componentesAnidadosCrudos
+          : [];
+        if (tieneComponentesAnidados) {
+          costeadosPorItem.set(hijo.id, componentesAnidados);
+        }
 
-        const snapshot = revisionHija.snapshotJson as unknown as {
+        const recetaSnapshot = revisionHija.snapshotJson as unknown as {
           pasos?: Array<{
             clave?: string;
             nombre?: string;
@@ -4823,12 +4881,11 @@ export class OrdenesTrabajoService {
             };
           }>;
         };
-        const pasosSnapshot = Array.isArray(snapshot.pasos)
-          ? snapshot.pasos
+        const pasosSnapshot = Array.isArray(recetaSnapshot.pasos)
+          ? recetaSnapshot.pasos
           : [];
         const grafoGuardado = revisionHija.grafoProduccionJson as
-          | (GrafoProduccion & Prisma.JsonObject)
-          | null;
+          (GrafoProduccion & Prisma.JsonObject) | null;
         const grafoHijo = grafoGuardado
           ? (grafoGuardado as unknown as GrafoProduccion)
           : compilarRutaLineal(
@@ -4845,8 +4902,8 @@ export class OrdenesTrabajoService {
             paso.clave ? [[paso.clave, paso] as const] : [],
           ),
         );
-        const pasosCosteados = Array.isArray(costeado?.pasos)
-          ? (costeado.pasos as PasoTrazabilidad[])
+        const pasosCosteados = Array.isArray(snapshot?.pasos)
+          ? (snapshot.pasos as PasoTrazabilidad[])
           : [];
         const clavesDeclaradas = new Set(
           grafoHijo.nodos.map((nodo) => nodo.clave),
@@ -4958,13 +5015,13 @@ export class OrdenesTrabajoService {
           where: {
             tenantId,
             itemId: padre.id,
-            nodoClave: componente.nodoIncorporacionClave,
+            nodoClave: nodoIncorporacionClave,
           },
           select: { id: true },
         });
         if (!incorporacion) {
           throw new ConflictException(
-            `No se pudo ubicar el nodo de incorporación de "${componente.nombre}" en la OT.`,
+            `No se pudo ubicar el nodo de incorporación de "${componenteNombre}" en la OT.`,
           );
         }
         const convergencias = grafoHijoEfectivo.terminales.map((clave) => ({
@@ -4974,7 +5031,13 @@ export class OrdenesTrabajoService {
           sucesorPasoId: incorporacion.id,
           tipo: 'componente_fabricado',
         }));
-        const clavesPredecesoras = componente.nodosPredecesoresClaves ?? [];
+        const clavesPredecesoras = Array.isArray(
+          snapshot?.nodosPredecesoresClaves,
+        )
+          ? snapshot.nodosPredecesoresClaves.filter(
+              (clave): clave is string => typeof clave === 'string',
+            )
+          : plantilla.nodosPredecesoresClaves;
         const predecesoresPadre = clavesPredecesoras.length
           ? await tx.ordenTrabajoItemPaso.findMany({
               where: {

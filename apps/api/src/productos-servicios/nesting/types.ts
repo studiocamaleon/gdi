@@ -131,7 +131,8 @@ export type NestingAlgorithm =
   | 'maxrects-rollo'
   | 'shelf-rollo'
   | 'secuencial-rollo'
-  | 'irregular-2d-bottom-left-v1';
+  | 'irregular-2d-bottom-left-v1'
+  | 'manual-vector-estimate-v1';
 
 export interface NestingMetrics {
   /** Solo grid-2d-single: cantidad de columnas resultantes. */

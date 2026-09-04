@@ -333,6 +333,28 @@ const materialPlaca = {
 };
 
 describe('runNestingForPaso rollo optimizado', () => {
+  it('marca el layout de impresión que debe conservar registro con un corte vectorial', async () => {
+    const result = await runNestingForPaso(
+      buildPasoAreaPlaca() as never,
+      {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 200, altoMm: 100 }],
+        geometriaVectorial: {
+          schemaVersion: 1,
+          anchoMm: 200,
+          altoMm: 100,
+          areaTotalMm2: 20_000,
+          perimetroTotalMm: 600,
+          hashFuente: 'layout-registrado',
+          piezas: [],
+        },
+      },
+      materialPlaca,
+    );
+
+    expect(result?.layoutVinculadoGeometriaVectorial).toBe(true);
+  });
+
   it('acomoda cortes manuales sobre el ancho real de un rollo flexible', async () => {
     const paso = {
       ...buildPaso('auto'),
@@ -360,6 +382,9 @@ describe('runNestingForPaso rollo optimizado', () => {
     expect(result!.visualConfig?.usableArea.widthMm).toBeGreaterThan(0);
     expect(result!.visualConfig?.usableArea.widthMm).toBeLessThanOrEqual(610);
     expect(result!.piezasAcomodadas).toBe(8);
+    expect(result!.demandaRectangular).toEqual([
+      { pieceId: 'pieza_0', cantidad: 8, anchoMm: 280, altoMm: 400 },
+    ]);
   });
 
   it('ejecuta maxrects-rollo cuando se configura explicitamente', async () => {
@@ -766,6 +791,7 @@ describe('runNestingForPaso geometría vectorial', () => {
       atributosVarianteJson: { anchoMm: 1200, altoMm: 600 },
     });
 
+    expect(result?.algorithm).toBe('manual-vector-estimate-v1');
     expect(result?.cantidadCalculada).toBe(3);
     expect(result?.substrates).toEqual([
       { kind: 'sheet', count: 3, widthMm: 1200, heightMm: 600 },

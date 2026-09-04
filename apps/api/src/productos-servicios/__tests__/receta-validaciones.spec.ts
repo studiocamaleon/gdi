@@ -26,6 +26,7 @@ type ValidadorInterno = {
     documentos: Array<Record<string, unknown>>,
     componentes: Array<Record<string, unknown>>,
     clavesPaso?: Set<string>,
+    atributosComercialesJson?: unknown,
   ): Promise<void>;
 };
 
@@ -171,5 +172,65 @@ describe('validaciones industriales de receta', () => {
         activo: true,
       },
     });
+  });
+
+  it('rechaza un componente que hereda una fuente geométrica eliminada', async () => {
+    const servicio = servicioConPrisma({});
+
+    await expect(
+      servicio.validarReferenciasBorrador(
+        'tenant-1',
+        'producto-raiz',
+        [],
+        [
+          {
+            productoComponenteId: 'componente-vectorial',
+            codigo: 'FRENTE',
+            nombre: 'Frente de acrílico',
+            formula: 'por_unidad',
+            cantidad: 1,
+            unidad: 'unidad',
+            configuracionJson: {
+              version: 2,
+              bindings: [
+                {
+                  clave: 'cantidad',
+                  origen: 'PADRE',
+                  requerido: true,
+                  padreClave: 'cantidad',
+                },
+                {
+                  clave: 'disenoVectorialFuente',
+                  origen: 'PADRE',
+                  requerido: true,
+                  regla: {
+                    campoPadre: 'geometriasVectoriales.contorno_viejo',
+                    operador: 'COPIAR',
+                    fuente: {
+                      tipo: 'PADRE',
+                      campo: 'geometriasVectoriales.contorno_viejo',
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        new Set(),
+        {
+          geometriasComerciales: {
+            version: 1,
+            modo: 'VECTORIAL',
+            fuentes: [
+              {
+                id: 'contorno_principal',
+                nombre: 'Contorno principal',
+                requerida: true,
+              },
+            ],
+          },
+        },
+      ),
+    ).rejects.toThrow('ya no existe');
   });
 });

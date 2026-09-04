@@ -52,6 +52,7 @@ import {
   type ConfiguracionCapasVectoriales,
   type ConfiguracionEncastresVectoriales,
 } from "@/lib/productos-servicios-api";
+import { obtenerRelacionAspectoSvg } from "@/lib/producto-geometrias";
 
 import s from "./diseno-vectorial-cotizador.module.css";
 
@@ -1422,35 +1423,6 @@ function formatNumber(value: number) {
 
 function redondearMedida(value: number) {
   return Math.round(value * 100) / 100;
-}
-
-function obtenerRelacionAspectoSvg(svg?: string): number {
-  if (!svg) return 1;
-  const root = svg.match(/<svg\b[^>]*>/i)?.[0];
-  if (!root) return 1;
-
-  const viewBox = root.match(/\bviewBox\s*=\s*["']([^"']+)["']/i)?.[1];
-  if (viewBox) {
-    const values = viewBox
-      .trim()
-      .split(/[\s,]+/)
-      .map(Number);
-    const width = values[2];
-    const height = values[3];
-    if (Number.isFinite(width) && Number.isFinite(height) && width > 0) {
-      return height / width;
-    }
-  }
-
-  const readDimension = (name: "width" | "height") => {
-    const raw = root.match(
-      new RegExp(`\\b${name}\\s*=\\s*["']([0-9]*\\.?[0-9]+)`, "i"),
-    )?.[1];
-    return raw ? Number(raw) : 0;
-  };
-  const width = readDimension("width");
-  const height = readDimension("height");
-  return width > 0 && height > 0 ? height / width : 1;
 }
 
 function NestingPreview({ analisis }: { analisis: AnalisisSvgFabricacion }) {
