@@ -2253,6 +2253,20 @@ export class OrdenesTrabajoService {
       });
     });
 
+    const fechaAnterior = orden.fechaEntrega?.toISOString().slice(0, 10) ?? null;
+    if (
+      estado !== 'borrador' &&
+      payload.fechaEntrega !== undefined &&
+      payload.fechaEntrega.slice(0, 10) !== fechaAnterior
+    ) {
+      void this.avisos.cambioEntrega(
+        orden.id,
+        fechaAnterior,
+        payload.fechaEntrega.slice(0, 10),
+        orden.updatedAt.toISOString(),
+      );
+    }
+
     // Mismo contrato que crear/agregar/editar un item individual: al volver
     // del guardado, cualquier producto vectorial ya tiene sus revisiones por
     // placa listas. `asegurarParaItem` compara hashes, por lo que recorrer el
@@ -2501,6 +2515,14 @@ export class OrdenesTrabajoService {
       });
     });
 
+    if (estado !== 'borrador' && cambios.some((c) => c.campo === 'fechaEntrega')) {
+      void this.avisos.cambioEntrega(
+        orden.id,
+        fechaActualIso,
+        payload.fechaEntrega!,
+        orden.updatedAt.toISOString(),
+      );
+    }
     return this.findOne(auth, orden.id);
   }
 

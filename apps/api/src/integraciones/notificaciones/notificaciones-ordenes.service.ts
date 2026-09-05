@@ -7,6 +7,7 @@ import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
 import { urlEnlacePublico } from '../../enlaces-publicos/enlaces-publicos.urls';
 import { numeroMoneda } from '../../common/moneda';
+import { CANAL_WEB } from './whatsapp-web-texto';
 import { regionalDelTenant } from '../../common/regional';
 
 /**
@@ -59,6 +60,56 @@ export class NotificacionesOrdenesService {
     }
   }
 
+  async cambioEntrega(
+    ordenId: string,
+    anterior: string | null,
+    nueva: string,
+    revision: string,
+  ): Promise<void> {
+    try {
+      const orden = await this.prisma.ordenTrabajo.findFirst({
+        where: { id: ordenId },
+        include: { cliente: true },
+      });
+      if (
+        !orden?.clienteId ||
+        !orden.publicToken ||
+        !['pendiente', 'produccion', 'finalizada'].includes(orden.estado)
+      )
+        return;
+      await enContextoDe(orden.tenantId, async () => {
+        const config =
+          await this.prisma.configuracionNotificaciones.findFirst();
+        if (config?.canalOrdenes !== CANAL_WEB) return;
+        const legible = (iso: string | null) =>
+          iso ? iso.split('-').reverse().join('/') : 'Sin fecha acordada';
+        await this.notificaciones.encolar({
+          evento: 'orden_demorada',
+          entidadId: `${ordenId}:${revision}`,
+          ordenId,
+          clienteId: orden.clienteId,
+          parametros: [
+            nombreDelCliente(
+              orden.cliente?.razonSocial || orden.cliente?.nombre,
+            ),
+            orden.numero,
+            legible(anterior),
+            legible(nueva),
+            urlEnlacePublico(
+              TipoEnlacePublico.SEGUIMIENTO_OT,
+              orden.publicToken!,
+            ),
+          ],
+        });
+      });
+    } catch (error) {
+      this.logger.error(
+        'No se pudo encolar el cambio de entrega.',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
   private async intentar(ordenId: string): Promise<void> {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId },
@@ -72,7 +123,7 @@ export class NotificacionesOrdenesService {
         cobradoTotal: true,
         publicToken: true,
         clienteId: true,
-        cliente: { select: { razonSocial: true } },
+        cliente: { select: { razonSocial: true, nombre: true } },
       },
     });
     if (!orden?.clienteId) return;
@@ -98,17 +149,16 @@ export class NotificacionesOrdenesService {
       ? urlEnlacePublico(TipoEnlacePublico.SEGUIMIENTO_OT, orden.publicToken)
       : null;
 
-    const nombre = nombreDelCliente(orden.cliente?.razonSocial);
+    const nombre = nombreDelCliente(
+      orden.cliente?.razonSocial || orden.cliente?.nombre,
+    );
     const comun = { clienteId: orden.clienteId, ordenId: orden.id };
 
     // Sin `$`: el símbolo ya está en el texto fijo de la plantilla de Meta,
     // y mandarlo acá saldría "$$92.700,00". La fecha, en la zona del taller.
-    const { moneda, zonaHoraria } = await regionalDelTenant(
-      this.prisma,
-      orden.tenantId,
-    );
+    const { moneda } = await regionalDelTenant(this.prisma, orden.tenantId);
     const money = (n: number) => numeroMoneda(n, moneda);
-    const fecha = (d: Date | null) => fechaLegible(d, zonaHoraria);
+    const fecha = (d: Date | null) => fechaEntregaLegible(d);
 
     const parametros = (() => {
       switch (evento) {
@@ -158,13 +208,13 @@ export function nombreDelCliente(razonSocial?: string | null): string {
 }
 
 /** `dd/mm/aaaa`, o un guion si la orden no tiene fecha comprometida. */
-function fechaLegible(d: Date | null, zona: string): string {
+export function fechaEntregaLegible(d: Date | null): string {
   if (!d) return 'a confirmar';
   return new Date(d).toLocaleDateString('es-AR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    timeZone: zona,
+    // fechaEntrega es DATE: conservar el día, sin convertirlo a la zona del taller.
+    timeZone: 'UTC',
   });
 }
-

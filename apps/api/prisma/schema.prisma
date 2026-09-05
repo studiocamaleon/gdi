@@ -578,6 +578,12 @@ model ConfiguracionNotificaciones {
   /// cuando ya se olvidó.
   resenaDiasDespues Int @default(3)
 
+  /// El canal sólo se aplica a avisos nuevos de órdenes; nunca migra la cola.
+  canalOrdenes String @default("WATI")
+  whatsappWebDispositivoId String? @db.Uuid
+  whatsappWebNumero String?
+  whatsappWebDesde DateTime?
+
   updatedAt DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -641,6 +647,12 @@ model NotificacionWhatsapp {
   telefono   String
   plantilla  String
   parametros Json
+
+  canal String @default("WATI")
+  /// Texto ya resuelto al encolar, sin depender de Wati al despachar.
+  textoWeb String?
+  reservaToken String? @db.Uuid
+  mensajeWebId String?
 
   intentos Int     @default(0)
   /// Por qué se descartó o falló. Es lo que se muestra en el log.

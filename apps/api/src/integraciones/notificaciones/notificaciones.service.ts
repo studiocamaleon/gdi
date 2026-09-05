@@ -11,6 +11,7 @@ import {
 import { aE164 } from '../telefono';
 import { DespachoService } from './despacho.service';
 import { ESTADOS } from './estados';
+import { CANAL_WEB, esOrdenWeb, textoWhatsappWeb } from './whatsapp-web-texto';
 
 /**
  * Encola notificaciones de WhatsApp y decide cuáles NO salen.
@@ -166,6 +167,12 @@ export class NotificacionesService {
           telefono: tel.e164,
           plantilla: plantilla.codigo,
           parametros: ctx.parametros,
+          ...(config?.canalOrdenes === CANAL_WEB && esOrdenWeb(ctx.evento)
+            ? {
+                canal: CANAL_WEB,
+                textoWeb: textoWhatsappWeb(ctx.evento, ctx.parametros),
+              }
+            : {}),
         },
       });
       // Se intenta mandar YA, sin esperar al cron. No se hace `await` a

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grafo · Vista de prueba del panel</title>
+    <link rel="stylesheet" href="../src/panel.css" />
+    <style>
+      body {
+        max-width: 380px;
+        margin: 24px auto;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 12px 50px #35261912;
+      }
+      html {
+        background: #e9e6e0;
+      }
+      .preview-label {
+        text-align: center;
+        padding: 7px;
+        font-size: 10px;
+        background: #fff0de;
+        color: #86551f;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="preview-label">VISTA DE PRUEBA · DATOS FICTICIOS</div>
+    <header class="topbar">
+      <div class="brand">
+        grafo<span class="brand-dot">.</span
+        ><small>Junto a tu conversación</small>
+      </div>
+      <button class="icon-button" aria-label="Configurar conexión">⚙</button>
+    </header>
+    <main>
+      <div class="company">Gráfica de ejemplo</div>
+      <section class="chat-card">
+        <div class="eyebrow">CHAT ACTUAL</div>
+        <div class="chat-name">María · Estudio Norte</div>
+        <div class="muted fine">+54 9 2966 123456</div>
+        <details>
+          <summary>Ingresar teléfono manualmente</summary>
+          <p class="fine muted">Vista de prueba sin conexión.</p>
+        </details>
+      </section>
+      <div id="results"></div>
+    </main>
+    <footer>Contacto y órdenes · Grafo</footer>
+    <script type="module" src="preview.js"></script>
+  </body>
+</html>
