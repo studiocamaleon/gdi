@@ -1,0 +1,23 @@
+{
+  "reference": "Proled3D_texto-anton_P2_20260905-204847_v2.431.zip",
+  "source": "R, Anton, 160 mm; P2; Proled 2.431",
+  "parameters": {
+    "shape": "circle",
+    "diameter": 3,
+    "spacing": 1.5,
+    "safeBorder": 4,
+    "safeMargin": 0,
+    "rotation": 0,
+    "shapeAngle": 45
+  },
+  "measurements": {
+    "completeCircularHoles": 287,
+    "medianCircumscribedDiameterMm": 3.0001,
+    "nearestCenterDistanceMm": 4.5,
+    "nominalEdgeGapMm": 1.5,
+    "polygonVertices": {
+      "12": 287
+    }
+  },
+  "scope": "Medición propia de una exportación desde la interfaz. El patrón usa círculos poligonales; se observaron además recortes parciales en el límite. Grafo3D conserva huecos completos y no replica esos recortes. No se incorpora geometría ajena al producto."
+}
