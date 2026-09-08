@@ -967,6 +967,16 @@ cotizable, trazable y ejecutable.
 **Estado inicial:** PENDIENTE  
 **Dependencias:** Fases 3–4.4.
 
+**Revisión previa solicitada el 08/09/2026:** antes de iniciar F5 se analiza
+una ampliación de F4 para resolver operaciones, herramientas, perfiles y
+tiempos/costos estimados de corte desde la cotización. El
+[diagnóstico de Mesa de corte y propuesta de alcance](mesa-de-corte-herramientas-cotizacion-analisis-2026-09-08.md)
+compara equipos compactos e industriales y documenta las conexiones pendientes.
+La implementación de esta ampliación sigue pendiente; no altera la evidencia
+del cierre histórico de F4. En F5, la máquina, herramienta, pasadas y estimación
+del plan deben partir de la configuración cotizada, conservando sus revisiones
+operativas sin reescribir silenciosamente lo vendido.
+
 ### Objetivo de negocio
 
 Convertir corte/nesting en trabajo planificado, versionado y trazable, no sólo en un cálculo transitorio.
