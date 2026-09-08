@@ -43,10 +43,13 @@ describe('Schema CRUD — Modelo Universal V2', () => {
   });
 
   describe('Catálogo de máquinas', () => {
-    it('hay 7 máquinas activas', async () => {
+    it('conserva las 7 máquinas activas del catálogo base', async () => {
       if (!tenantId) return;
       const count = await prisma.maquina.count({
-        where: { tenantId, activo: true },
+        where: { tenantId, activo: true, codigo: { in: [
+          'LAM-BOPP-001', 'ROLAND-VG3-540', 'MIMAKI-UJF-7151', 'POLAR-92',
+          'SKYCUT-C24', 'FELDER-F500', 'RICOH-PRO-C5100',
+        ] } },
       });
       expect(count).toBe(7);
     });
@@ -78,12 +81,20 @@ describe('Schema CRUD — Modelo Universal V2', () => {
   });
 
   describe('Materiales', () => {
-    it('hay 11 materias primas activas (seed v3.0)', async () => {
+    it('conserva los 11 materiales activos del catálogo base', async () => {
       if (!tenantId) return;
-      const count = await prisma.materiaPrima.count({
-        where: { tenantId, activo: true },
+      // Las extensiones agregan materiales; las pruebas de recorridos pueden
+      // crear otros temporalmente. Verificamos la identidad del catálogo base.
+      const codigos = [
+        'PAPEL-OPALINA-300', 'PAPEL-AUTOCOP-CB', 'PAPEL-AUTOCOP-CFB',
+        'VINILO-BLANCO-MONO', 'MDF-9MM', 'FILM-BOPP-MATE', 'FILM-BOPP-BRILLO',
+        'BOLSA-CELOFAN-100', 'TONER-CMYK-RICOH', 'TINTA-LATEX-ROLAND', 'TINTA-UV-MIMAKI',
+      ];
+      const materiales = await prisma.materiaPrima.findMany({
+        where: { tenantId, activo: true, codigo: { in: codigos } },
+        select: { codigo: true },
       });
-      expect(count).toBe(11);
+      expect(materiales.map((material) => material.codigo).sort()).toEqual(codigos.sort());
     });
 
     it('Vinilo blanco tiene 2 variantes (1.37m y 1.52m)', async () => {
@@ -176,12 +187,15 @@ describe('Schema CRUD — Modelo Universal V2', () => {
   });
 
   describe('Rutas de producción', () => {
-    it('hay 5 rutas activas', async () => {
+    it('conserva los 5 flujos activos del catálogo base', async () => {
       if (!tenantId) return;
       const count = await prisma.ruta.count({
         // Las rutas de sistema (plantilla del centro de copiado) no son del
         // catálogo del usuario; no cuentan acá.
-        where: { tenantId, activo: true, sistemaCodigo: null },
+        where: { tenantId, activo: true, sistemaCodigo: null, codigo: { in: [
+          'RUTA-TARJETA-DIGITAL-STD', 'RUTA-VINILO-GRAN-FORMATO',
+          'RUTA-TALONARIO-EMBLOCADO', 'RUTA-TALONARIO-ABROCHADO', 'RUTA-RIGIDO-CUSTOM',
+        ] } },
       });
       expect(count).toBe(5);
     });
