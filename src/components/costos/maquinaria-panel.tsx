@@ -1,5 +1,7 @@
 "use client";
 
+import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -207,15 +209,12 @@ export function MaquinariaPanel({
   );
 
   return (
-    <div className="content">
-      <div className="page-head">
-        <div className="title-block">
-          <h1>Maquinaria</h1>
-          <div className="sub">
-            Catálogo de máquinas y sus perfiles operativos.
-          </div>
-        </div>
-      </div>
+    <div className={`content ${visual.page}`}>
+      <EncabezadoConfiguracion
+        area="maquinaria"
+        titulo="Maquinaria"
+        descripcion="Equipos del taller, perfiles operativos y consumos que intervienen en cada proceso."
+      />
 
       <div className="maq-toolbar">
         <div className="maq-buscador">

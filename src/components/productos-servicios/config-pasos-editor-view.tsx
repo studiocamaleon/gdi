@@ -1,5 +1,6 @@
 "use client";
 
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import consumoStyles from "./config-pasos-consumo.module.css";
 import * as React from "react";
 import { formatearMoneda, monedaDe } from "@/lib/moneda";
@@ -2754,16 +2755,18 @@ function PanelManualEditorSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="!w-[760px] !max-w-[92vw] overflow-y-auto"
+        className={visual.editorSheet}
+        overlayClassName="gp-modal-overlay"
       >
         <SheetHeader>
+          <span className={visual.eyebrow}>Grafoprint · Preparación de piezas</span>
           <SheetTitle>Editor manual de paneles</SheetTitle>
           <SheetDescription>
             Definí cómo se divide cada medida cuando la pieza no entra completa
             en el ancho imprimible del rollo.
           </SheetDescription>
         </SheetHeader>
-        <div className="space-y-4 px-4">
+        <div className={`space-y-4 ${visual.sheetBody}`}>
           {measures.length === 0 ? (
             <div className="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
               Este producto no tiene una medida fija o predefinida para preparar
@@ -4807,11 +4810,7 @@ export function ConfigPasosEditorView({
 
   return (
     <div
-      className={
-        embedded
-          ? "pasos-editor-root"
-          : "pasos-editor-root flex flex-1 flex-col"
-      }
+      className={`${embedded ? "pasos-editor-root" : "pasos-editor-root flex flex-1 flex-col"} ${configuracionBase ? visual.nodeEditor : ""} ${configuracionBase || configurandoNodoDelModelo ? visual.operationalEditor : ""}`}
     >
       <div
         className={`editor-shell ${modeloProductivo?.active ? "modelo-hoja-ruta-activa" : configurandoNodoDelModelo ? "modelo-configuracion-nodo-activa" : ""}`}
@@ -14660,15 +14659,11 @@ function AsistenteGuiado({
   return (
     <Sheet open disablePointerDismissal onOpenChange={(o) => !o && onCerrar()}>
       <SheetContent
-        className="flex w-full flex-col gap-0"
-        style={{ maxWidth: 760 }}
+        className={visual.editorSheet}
+        overlayClassName="gp-modal-overlay"
       >
-        <SheetHeader
-          style={{
-            padding: "18px 24px 10px",
-            borderBottom: "1px solid var(--hairline, #eee)",
-          }}
-        >
+        <SheetHeader>
+          <span className={visual.eyebrow}>Grafoprint · Nodos de producción</span>
           <SheetTitle>Asistente de configuración</SheetTitle>
           <SheetDescription>
             Recorre los pasos de la ruta y pregunta sólo lo que falta; lo que el

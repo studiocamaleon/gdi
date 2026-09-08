@@ -13,6 +13,8 @@
  * diálogo chico de maquina-alta-dialog.tsx.
  */
 
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
+
 import * as React from "react";
 
 import {
@@ -92,7 +94,7 @@ export function MaquinaEditorIdentidad({
         <CardTitle className="text-base">Identidad</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className={visual.identityGrid}>
           <div className="min-w-0 space-y-1">
             <Label htmlFor="nombre">Nombre *</Label>
             <Input
@@ -157,7 +159,7 @@ export function MaquinaEditorIdentidad({
                 })
               }
             >
-              <SelectTrigger className="w-full min-w-0">
+              <SelectTrigger className="w-full min-w-0" aria-label="Estado">
                 <SelectDisplay label={getEstadoMaquinaLabel(form.estado)} />
               </SelectTrigger>
               <SelectContent>
@@ -187,7 +189,7 @@ export function MaquinaEditorIdentidad({
                 });
               }}
             >
-              <SelectTrigger className="w-full min-w-0">
+              <SelectTrigger className="w-full min-w-0" aria-label="Planta">
                 <SelectDisplay
                   label={
                     plantas.find((planta) => planta.id === form.plantaId)
@@ -218,7 +220,10 @@ export function MaquinaEditorIdentidad({
                 })
               }
             >
-              <SelectTrigger className="w-full min-w-0">
+              <SelectTrigger
+                className="w-full min-w-0"
+                aria-label="Centro de costo"
+              >
                 <SelectDisplay
                   label={centroSeleccionado?.nombre}
                   placeholder="Sin asignar"
@@ -266,7 +271,10 @@ export function MaquinaEditorIdentidad({
                   })
                 }
               >
-                <SelectTrigger className="w-full min-w-0">
+                <SelectTrigger
+                  className="w-full min-w-0"
+                  aria-label="Geometría de trabajo"
+                >
                   <SelectDisplay
                     label={getGeometriaTrabajoMaquinaLabel(
                       form.geometriaTrabajo,
@@ -285,7 +293,7 @@ export function MaquinaEditorIdentidad({
               </Select>
             </div>
           ) : null}
-          <div className="min-w-0 space-y-1 md:col-span-2">
+          <div className={`min-w-0 space-y-1 ${visual.identityDescription}`}>
             <Label htmlFor="maquina-descripcion">Descripción</Label>
             <Textarea
               id="maquina-descripcion"
@@ -330,7 +338,14 @@ export function MaquinaEditorSecciones({
   return (
     <>
       {secciones.map((sec) => (
-        <Card key={sec.id}>
+        <Card
+          key={sec.id}
+          className={
+            sec.id !== "perfiles_operativos" && sec.id !== "desgaste_repuestos"
+              ? visual.technicalCard
+              : undefined
+          }
+        >
           <CardHeader>
             <CardTitle className="text-base">{sec.title}</CardTitle>
             {sec.description ? (

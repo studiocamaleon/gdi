@@ -1,5 +1,7 @@
 "use client";
 
+import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -417,44 +419,47 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   };
 
   return (
-    <div className="content">
+    <div className={`content ${visual.page}`}>
       <div className="space-y-3">
         <Link href="/productos-servicios/rutas" className="back-link">
           <ArrowLeftIcon className="size-4" />
           Flujos de producción
         </Link>
-        <div className="page-head wizard-head">
-          <div className="title-block">
-            <h1>
-              {modo === "crear"
-                ? "Nuevo flujo"
-                : `Editar flujo: ${rutaExistente?.nombre}`}
-            </h1>
-            {modo === "editar" && (
-              <div className="sub mt-1 flex items-center gap-2">
+        <EncabezadoConfiguracion
+          area="flujos"
+          titulo={
+            modo === "crear"
+              ? "Nuevo flujo"
+              : (rutaExistente?.nombre ?? "Editar flujo")
+          }
+          descripcion={
+            modo === "editar" ? (
+              <span className="flex flex-wrap items-center gap-2">
                 <span className="tag version">
                   v{rutaExistente?.versionActual}
                 </span>
-                {(rutaExistente?.productosAlternativas?.length ?? 0) > 0 && (
-                  <span>
-                    usado por {rutaExistente?.productosAlternativas?.length}{" "}
-                    producto(s)
-                  </span>
-                )}
+                {(rutaExistente?.productosAlternativas?.length ?? 0) > 0
+                  ? `Usado por ${rutaExistente?.productosAlternativas?.length} producto(s)`
+                  : "Flujo reutilizable · Secuencia y configuración de producción"}
+              </span>
+            ) : (
+              "Organizá las operaciones y sus conexiones para reutilizarlas en tus productos."
+            )
+          }
+          acciones={
+            modo === "editar" ? (
+              <div className="flex items-center gap-2">
+                <Label htmlFor="ruta-activa">Flujo activo</Label>
+                <Switch
+                  id="ruta-activa"
+                  aria-label="Flujo activo"
+                  checked={activo}
+                  onCheckedChange={setActivo}
+                />
               </div>
-            )}
-          </div>
-          {modo === "editar" && (
-            <div className="flex items-center gap-2">
-              <Label htmlFor="ruta-activa">Flujo activo</Label>
-              <Switch
-                id="ruta-activa"
-                checked={activo}
-                onCheckedChange={setActivo}
-              />
-            </div>
-          )}
-        </div>
+            ) : null
+          }
+        />
       </div>
 
       <div className="route-editor">
@@ -699,7 +704,10 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           if (!migrando) setConfirmandoMigracion(open);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          className="gp-alert-modal gp-alert-warning"
+          overlayClassName="gp-alert-overlay"
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>
               Migrar {productosSeleccionados.length} asociación(es) a v

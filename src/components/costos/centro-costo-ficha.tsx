@@ -1,5 +1,6 @@
 "use client";
 
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import { CopyIcon, PlusIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -761,7 +762,7 @@ export function CentroCostoFicha({
   const bloqueIdentidad = (
     <section className="ccosto-seccion">
       <header className="ccosto-seccion-head">
-        <h3>Introduzca el nombre y el tipo</h3>
+        <h3>Identidad del centro</h3>
       </header>
       <div className="ccosto-identidad">
         <label>
@@ -823,15 +824,17 @@ export function CentroCostoFicha({
       <Sheet open={open} onOpenChange={pedirCierre}>
         <SheetContent
           side="right"
-          className="ccosto-ficha !w-[min(1080px,96vw)] !max-w-none"
+          className={`ccosto-ficha ${visual.centroSheet}`}
+          overlayClassName="gp-modal-overlay"
         >
           <SheetHeader>
+            <span className={visual.eyebrow}>Grafoprint · Centros de costo</span>
             <SheetTitle>
-              {esAlta ? "Insertar nuevo centro de costo" : "Centro de costos"}
+              {esAlta ? "Nuevo centro de costo" : centro?.nombre ?? "Centro de costo"}
             </SheetTitle>
             <SheetDescription>
               {esAlta
-                ? "Cargá a mano lo que gasta el sector: no se toma nada de otros módulos."
+                ? "Definí el sector y cargá sus gastos para calcular el valor de la hora."
                 : `${centro?.nombre} · período ${periodo}`}
             </SheetDescription>
           </SheetHeader>

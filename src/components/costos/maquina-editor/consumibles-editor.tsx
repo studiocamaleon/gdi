@@ -8,10 +8,21 @@
  * resto de las impresoras: el consumo cambia con el papel.
  */
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import { CalculatorIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { calcularConsumoTonerGm2 } from "@/lib/calculadora-toner";
@@ -123,7 +134,9 @@ function CalculadoraTonerGm2({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Cobertura ISO del fabricante (%)</Label>
+              <Label className="text-xs">
+                Cobertura ISO del fabricante (%)
+              </Label>
               <Input
                 type="number"
                 min={0}
@@ -164,7 +177,9 @@ function CalculadoraTonerGm2({
                     onChange={(e) => setCoberturaFull(e.target.value)}
                     className="h-8 w-20"
                   />
-                  <span className="text-xs text-muted-foreground">% por color</span>
+                  <span className="text-xs text-muted-foreground">
+                    % por color
+                  </span>
                 </div>
               ) : null}
             </div>
@@ -176,7 +191,9 @@ function CalculadoraTonerGm2({
                 Rendimiento esperado
               </div>
               <div className="text-lg font-semibold">
-                {valido ? Math.round(rendEsperado).toLocaleString("es-AR") : "—"}
+                {valido
+                  ? Math.round(rendEsperado).toLocaleString("es-AR")
+                  : "—"}
                 <span className="ml-1 text-xs font-normal text-muted-foreground">
                   pág A4
                 </span>
@@ -217,8 +234,8 @@ function CalculadoraTonerGm2({
             onClick={() => onApply(consumoRedondeado, destino)}
             className="btn btn-primary h-8 w-full text-xs disabled:opacity-50"
           >
-            Usar {valido ? `${consumoRedondeado} g/m²` : "el valor"} en la columna{" "}
-            {NIVEL_COBERTURA_LABELS[destino]} (4 canales CMYK)
+            Usar {valido ? `${consumoRedondeado} g/m²` : "el valor"} en la
+            columna {NIVEL_COBERTURA_LABELS[destino]} (4 canales CMYK)
           </button>
         </div>
       ) : null}
@@ -247,7 +264,11 @@ function getVariantesConsumiblesCompatibles(
   for (const materiaPrima of materiasPrimas) {
     if (!materiaPrima.activo || !materiaPrima.esConsumible) continue;
     if (necesitaToner && materiaPrima.subfamilia !== "toner") continue;
-    if (!necesitaToner && !["tinta_impresion", "toner"].includes(materiaPrima.subfamilia)) continue;
+    if (
+      !necesitaToner &&
+      !["tinta_impresion", "toner"].includes(materiaPrima.subfamilia)
+    )
+      continue;
     if (
       plantilla === "duplicadora_digital" &&
       materiaPrima.tipoTecnico !== "tinta_duplicadora" &&
@@ -281,7 +302,10 @@ function getVariantesMasterCompatibles(
   });
 }
 
-function varianteMatchesCanal(variante: MateriaPrimaVariante, canal: ConsumibleCanal) {
+function varianteMatchesCanal(
+  variante: MateriaPrimaVariante,
+  canal: ConsumibleCanal,
+) {
   const attrs = variante.atributosVariante ?? {};
   return normalizeCanal(attrs.canal ?? attrs.color) === canal;
 }
@@ -291,7 +315,9 @@ function getSelectedConsumibleVariantFallback(
   varianteId: string,
 ): VarianteConsumibleOption | null {
   for (const materiaPrima of materiasPrimas) {
-    const variante = materiaPrima.variantes.find((item) => item.id === varianteId);
+    const variante = materiaPrima.variantes.find(
+      (item) => item.id === varianteId,
+    );
     if (variante) return { materiaPrima, variante };
   }
   return null;
@@ -353,11 +379,13 @@ export function PerfilTintasModal({
       const nextItem: MaquinaPayload["consumibles"][number] = {
         id: existing?.id,
         materiaPrimaVarianteId: existing?.materiaPrimaVarianteId ?? "",
-        nombre: existing?.nombre ?? `${CANAL_META[canal].label} · ${perfil.nombre}`,
+        nombre:
+          existing?.nombre ?? `${CANAL_META[canal].label} · ${perfil.nombre}`,
         tipo: existing?.tipo ?? consumibleTipoFor(current.plantilla, canal),
         unidad: existing?.unidad ?? consumibleUnidadFor(current.plantilla),
         rendimientoEstimado: existing?.rendimientoEstimado,
-        consumoBase: existing?.consumoBase ?? defaultConsumoBase(current.plantilla, canal),
+        consumoBase:
+          existing?.consumoBase ?? defaultConsumoBase(current.plantilla, canal),
         consumoPorCobertura: existing?.consumoPorCobertura ?? null,
         perfilOperativoId: perfil.id,
         perfilOperativoNombre: perfil.nombre,
@@ -442,30 +470,23 @@ export function PerfilTintasModal({
   };
 
   return (
-    <div className="maq-backdrop show" onClick={onClose}>
-      <div
-        className="maq-modal maq-modal-ancho"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Configurar tintas de ${perfil.nombre}`}
-        onClick={(e) => e.stopPropagation()}
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        className={`gp-modal ${visual.modal} ${visual.consumibles}`}
+        overlayClassName="gp-modal-overlay"
       >
-        <div className="maq-modal-head">
-          <div>
-            <h2>Configurar {esLaser ? "tóner" : "tintas"}</h2>
-            <div className="maq-modal-sub">{perfil.nombre}</div>
-          </div>
-          <button
-            type="button"
-            className="maq-modal-cerrar"
-            aria-label="Cerrar"
-            onClick={onClose}
-          >
-            <XIcon />
-          </button>
-        </div>
-
-        <div className="maq-modal-body">
+        <DialogHeader>
+          <DialogTitle>Configurar {esLaser ? "tóner" : "tintas"}</DialogTitle>
+          <DialogDescription>
+            {perfil.nombre} · Consumibles y rendimiento del perfil operativo.
+          </DialogDescription>
+        </DialogHeader>
+        <FieldGroup className={`maq-modal-body ${visual.consumiblesBody}`}>
           {esLaser && channels.length > 0 ? (
             <CalculadoraTonerGm2
               onApply={(gm2, nivel) => {
@@ -487,8 +508,8 @@ export function PerfilTintasModal({
           ) : null}
           {channels.length === 0 ? (
             <p className="maq-tintas-vacio">
-              Este perfil todavía no declara colores. Definí el campo
-              “Colores” del perfil para generar los canales de tinta.
+              Este perfil todavía no declara colores. Definí el campo “Colores”
+              del perfil para generar los canales de tinta.
             </p>
           ) : (
             <>
@@ -511,7 +532,9 @@ export function PerfilTintasModal({
                         </th>
                       ))
                     ) : (
-                      <th>Consumo ({consumibleUnidadFor(form.plantilla)}/m²)</th>
+                      <th>
+                        Consumo ({consumibleUnidadFor(form.plantilla)}/m²)
+                      </th>
                     )}
                     <th>Material vinculado</th>
                     <th aria-label="Acciones" />
@@ -535,8 +558,13 @@ export function PerfilTintasModal({
                       selected && !selectedStillAvailable
                         ? [
                             ...variantesCanal,
-                            getSelectedConsumibleVariantFallback(materiasPrimas, selected),
-                          ].filter((item): item is VarianteConsumibleOption => Boolean(item))
+                            getSelectedConsumibleVariantFallback(
+                              materiasPrimas,
+                              selected,
+                            ),
+                          ].filter((item): item is VarianteConsumibleOption =>
+                            Boolean(item),
+                          )
                         : variantesCanal;
 
                     return (
@@ -545,7 +573,9 @@ export function PerfilTintasModal({
                           <span className="maq-tintas-color">
                             <span
                               className="sw"
-                              style={{ backgroundColor: CANAL_META[canal].swatch }}
+                              style={{
+                                backgroundColor: CANAL_META[canal].swatch,
+                              }}
                             />
                             {CANAL_META[canal].label}
                           </span>
@@ -633,7 +663,10 @@ export function PerfilTintasModal({
                           >
                             <option value="">Sin vincular</option>
                             {opciones.map((item) => (
-                              <option key={item.variante.id} value={item.variante.id}>
+                              <option
+                                key={item.variante.id}
+                                value={item.variante.id}
+                              >
                                 {getConsumibleVariantOptionLabel(item)}
                               </option>
                             ))}
@@ -690,11 +723,14 @@ export function PerfilTintasModal({
                           ...current,
                           consumibles: current.consumibles.map((item) =>
                             !item.perfilOperativoId &&
-                            String((item.detalle ?? {}).rol ?? "").toLowerCase() ===
-                              "master"
+                            String(
+                              (item.detalle ?? {}).rol ?? "",
+                            ).toLowerCase() === "master"
                               ? {
                                   ...item,
-                                  rendimientoEstimado: Number(event.target.value),
+                                  rendimientoEstimado: Number(
+                                    event.target.value,
+                                  ),
                                 }
                               : item,
                           ),
@@ -709,14 +745,14 @@ export function PerfilTintasModal({
               ) : null}
             </>
           )}
-        </div>
+        </FieldGroup>
 
-        <div className="maq-modal-foot">
-          <button type="button" className="maq-btn maq-btn-primario" onClick={onClose}>
+        <DialogFooter>
+          <Button type="button" onClick={onClose}>
             Listo
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

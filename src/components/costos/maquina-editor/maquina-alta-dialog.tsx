@@ -1,5 +1,6 @@
 "use client";
 
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -108,8 +109,11 @@ export function MaquinaAltaDialog({
         if (!next && !creando) onClose();
       }}
     >
-      <DialogContent>
-        <form onSubmit={handleCrear} className="flex flex-col gap-4">
+      <DialogContent
+        className={`gp-modal gp-modal-compact ${visual.modal}`}
+        overlayClassName="gp-modal-overlay"
+      >
+        <form onSubmit={handleCrear} className={visual.modalForm}>
           <DialogHeader>
             <DialogTitle>Nueva máquina</DialogTitle>
             <DialogDescription>
@@ -142,7 +146,7 @@ export function MaquinaAltaDialog({
                   setPlantilla((value ?? null) as PlantillaMaquinaria | null)
                 }
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-label="Tipo de máquina">
                   <SelectDisplay
                     label={
                       plantilla
@@ -173,7 +177,7 @@ export function MaquinaAltaDialog({
                 disabled={plantas.length === 0}
                 onValueChange={(value) => setPlantaId(value ?? "")}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-label="Planta">
                   <SelectDisplay
                     label={
                       plantas.find((planta) => planta.id === plantaId)?.nombre

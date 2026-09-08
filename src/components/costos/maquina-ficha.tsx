@@ -10,6 +10,8 @@
  * la Fase B (useMaquinaEditor + MaquinaEditorIdentidad/Secciones).
  */
 
+import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightIcon, CircleAlertIcon } from "lucide-react";
@@ -139,12 +141,13 @@ export function MaquinaFicha({
     <Tabs
       value={tab}
       onValueChange={(value) => setTab(value as TabFicha)}
-      className="maq-ficha"
+      className={`maq-ficha ${visual.machine}`}
     >
       <div className="maq-ficha-top">
-        <div className="page-head">
-          <div className="title-block">
-            <h1>{nombreGuardado}</h1>
+        <EncabezadoConfiguracion
+          area="maquinaria"
+          titulo={nombreGuardado}
+          descripcion={
             <nav className="maq-migas" aria-label="Ubicación">
               <button
                 type="button"
@@ -159,8 +162,8 @@ export function MaquinaFicha({
               <span className="sep">/</span>
               <span aria-current="page">{nombreGuardado}</span>
             </nav>
-          </div>
-        </div>
+          }
+        />
 
         <TabsList variant="line" className="maq-ficha-tabs">
           {TABS.map((t) => (

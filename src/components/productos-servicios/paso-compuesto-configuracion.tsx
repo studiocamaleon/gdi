@@ -1,7 +1,8 @@
 "use client";
 
+import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
 import * as React from "react";
-import { BoxesIcon, CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import type {
   DefinicionPasoInternoCompuesto,
@@ -111,18 +112,11 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
 
   return (
     <main className={styles.page}>
-      <header className={styles.hero}>
-        <BoxesIcon />
-        <div>
-          <span className={styles.eyebrow}>Nodo compuesto reutilizable</span>
-          <h1>{paso.nombre}</h1>
-          <p>
-            Definí las operaciones internas que calculan este nodo compuesto. Cada una
-            conserva materiales, parámetros, recursos y tiempos, pero la OT
-            mostrará un único nodo compuesto.
-          </p>
-        </div>
-      </header>
+      <EncabezadoConfiguracion
+        area="nodos"
+        titulo={paso.nombre}
+        descripcion="Nodo compuesto · Sus operaciones internas calculan materiales, recursos y tiempos. En producción se mostrará un único nodo."
+      />
 
       <section className={styles.panel}>
         <div className={styles.panelHead}>
@@ -157,7 +151,8 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
         </div>
         {!operaciones.length ? (
           <div className={styles.empty}>
-            Agregá la primera operación que formará parte de este nodo compuesto.
+            Agregá la primera operación que formará parte de este nodo
+            compuesto.
           </div>
         ) : (
           <div className={styles.rows}>

@@ -1,5 +1,7 @@
 "use client";
 
+import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -32,17 +34,17 @@ import { toast } from "sonner";
 
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
@@ -249,25 +251,23 @@ export function RutasTable({
   };
 
   return (
-    <div className="content">
-      <div className="page-head">
-        <div className="title-block">
-          <h1>Flujos de producción</h1>
-          <div className="sub">
-            {rutas.length} flujos reutilizables. Cada flujo organiza nodos simples,
-            nodos compuestos y componentes que distintos productos pueden usar.
-          </div>
-        </div>
-        {puedeGestionar ? (
-          <Link
-            href="/productos-servicios/rutas/nueva"
-            className="btn btn-primary"
-          >
-            <PlusIcon size={14} />
-            Nuevo flujo
-          </Link>
-        ) : null}
-      </div>
+    <div className={`content ${visual.page}`}>
+      <EncabezadoConfiguracion
+        area="flujos"
+        titulo="Flujos de producción"
+        descripcion={`${rutas.length} flujos reutilizables. Organizá nodos, componentes y secuencias para fabricar tus productos.`}
+        acciones={
+          puedeGestionar ? (
+            <Link
+              href="/productos-servicios/rutas/nueva"
+              className="btn btn-primary"
+            >
+              <PlusIcon size={14} />
+              Nuevo flujo
+            </Link>
+          ) : null
+        }
+      />
 
       {rutas.length === 0 ? (
         <EstadoVacio
@@ -313,6 +313,7 @@ export function RutasTable({
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar flujo o nodo..."
+                aria-label="Buscar flujo o nodo"
               />
               <span className="kbd">/</span>
             </label>
@@ -440,7 +441,7 @@ export function RutasTable({
         </div>
       )}
 
-      <AlertDialog
+      <Dialog
         open={Boolean(rutaADuplicar)}
         onOpenChange={(open) => {
           if (duplicandoId) return;
@@ -450,19 +451,25 @@ export function RutasTable({
           }
         }}
       >
-        <AlertDialogContent>
+        <DialogContent
+          className={`gp-modal gp-modal-compact ${visual.flowModal}`}
+          overlayClassName="gp-modal-overlay"
+        >
           <form onSubmit={handleDuplicarRuta}>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Duplicar flujo de producción</AlertDialogTitle>
-              <AlertDialogDescription>
+            <DialogHeader>
+              <DialogTitle>Duplicar flujo de producción</DialogTitle>
+              <DialogDescription>
                 Definí el nombre de la copia. Se copiará el flujo de producción
-                completo de la versión actual, incluidos sus nodos compuestos, componentes
-                y paralelismos, para que puedas revisarlo antes de usarlo.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="mt-4 grid gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="nombre-copia-ruta">Nombre de la copia</Label>
+                completo de la versión actual, incluidos sus nodos compuestos,
+                componentes y paralelismos, para que puedas revisarlo antes de
+                usarlo.
+              </DialogDescription>
+            </DialogHeader>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="nombre-copia-ruta">
+                  Nombre de la copia
+                </FieldLabel>
                 <Input
                   id="nombre-copia-ruta"
                   autoFocus
@@ -471,9 +478,9 @@ export function RutasTable({
                   placeholder="Nombre del nuevo flujo"
                   disabled={Boolean(duplicandoId)}
                 />
-              </div>
-            </div>
-            <AlertDialogFooter>
+              </Field>
+            </FieldGroup>
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -492,10 +499,10 @@ export function RutasTable({
               >
                 Duplicar flujo
               </Button>
-            </AlertDialogFooter>
+            </DialogFooter>
           </form>
-        </AlertDialogContent>
-      </AlertDialog>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

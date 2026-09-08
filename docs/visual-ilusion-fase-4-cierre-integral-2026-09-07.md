@@ -1,6 +1,6 @@
 # Fase 4 — cierre integral verificado
 
-**Estado: CERRADA FUNCIONALMENTE EN LOCAL. Fase 5 habilitada para planificación.**
+**Estado: COMPLETA. Integrada en `visual-ilusion/analisis` en local el 08/09/2026.**
 
 Fecha: 07/09/2026. Este documento reemplaza el dictamen de cierre pendiente de la [auditoría original](visual-ilusion-fase-4-auditoria-integral-2026-09-07.md). El [registro de trabajo](visual-ilusion-fase-4-cierre-integral-en-progreso.md) conserva los diagnósticos y resultados intermedios, incluidos los fallos corregidos.
 
@@ -64,7 +64,13 @@ Los logs, capturas de resultados, CAD y PDF están en `output/cierre-fase-4-2026
 - API y worker reiniciados con el build final. Frontend en `http://localhost:3000`, API en 3001. El frontend usa webpack para que los cambios globales de estilos se reflejen durante desarrollo.
 - Fue necesario respaldar y regenerar la caché de Next al pasar desde Turbopack; el arranque limpio quedó operativo. Simulador y tablero responden correctamente con autenticación en el servidor habitual.
 - API/web/worker de QA aislados detenidos y Redis efímero eliminado. La cola habitual estaba vacía al reiniciar. Se conservaron el build y la caché anteriores como respaldo local.
-- No se hizo commit, merge ni despliegue remoto. Los cambios de esta revisión conviven con el trabajo anterior del workspace.
+- Al emitir este informe el 07/09 aún no se había hecho commit ni merge. El 08/09 se consolidó el cierre en `8f220f650` y se integró en `visual-ilusion/analisis` mediante `f2dcfa8d9`. No hubo publicación ni despliegue remoto.
+
+## Integración y continuidad del 08/09/2026
+
+La regresión acumulada se verificó también sobre una base de prueba nueva, con 226 migraciones y seed completo: 2.260 pruebas API aprobadas, 11 omitidas según la configuración habitual, y 701 pruebas web aprobadas. La preparación del catálogo de pruebas y del seed se estabilizó en `c6e4d9c8f`; no se modificaron datos comerciales de desarrollo para obtener estos resultados.
+
+Por decisión del usuario, antes de iniciar F5 se abrió una [intervención estética de configuración](grafoprint-configuracion-estetica-2026-09-08.md), fuera de las fases numeradas. Después se revisará si continuar con F5 o abordar primero Mesa de corte y perfiles.
 
 ## Límite de la fase y continuidad
 

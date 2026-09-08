@@ -1,5 +1,7 @@
 "use client";
 
+import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import {
   PlusIcon,
@@ -186,23 +188,21 @@ export function CostosPanel({
   };
 
   return (
-    <div className="content cost-centers-content">
-      <div className="page-head cc-page-head">
-        <div className="title-block">
-          <h1>Centros de costo</h1>
-          <div className="sub">
-            Cada centro es una planilla que se carga a mano: gastos generales,
-            empleados y activos fijos.
-          </div>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={reloadAll}>
-          <RefreshCcwIcon
-            data-icon="inline-start"
-            className={isReloading ? "animate-spin" : undefined}
-          />
-          Refrescar
-        </Button>
-      </div>
+    <div className={`content cost-centers-content ${visual.page}`}>
+      <EncabezadoConfiguracion
+        area="centros"
+        titulo="Centros de costo"
+        descripcion="Gastos, capacidad y valor de la hora de cada sector, organizados por período."
+        acciones={
+          <Button type="button" variant="outline" size="sm" onClick={reloadAll}>
+            <RefreshCcwIcon
+              data-icon="inline-start"
+              className={isReloading ? "animate-spin" : undefined}
+            />
+            Refrescar
+          </Button>
+        }
+      />
 
       <div className="ccosto-toolbar">
         <InputGroup className="max-w-[360px] flex-[1_1_260px]">

@@ -11,6 +11,8 @@
  * con el modelo de instancias — la forma no se escribe, se hereda.
  */
 
+import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -155,26 +157,23 @@ export function PasosFamiliasView({
   };
 
   return (
-    <div className="content">
-      <div className="page-head">
-        <div className="title-block">
-          <h1>Nodos de producción</h1>
-          <p>
-            Los tipos de nodo con los que se arman los flujos: el catálogo del
-            sistema más los que crea tu empresa.
-          </p>
-        </div>
-        {/* Sin pasos propios manda el CTA del estado vacío ("Crear el
-            primero"); con pasos, este. Nunca los dos a la vez. */}
-        {puedeGestionar && pasos.length > 0 ? (
-          <Button onClick={() => setAltaAbierta(true)}>+ Nuevo nodo</Button>
-        ) : null}
-      </div>
+    <div className={`content ${visual.page}`}>
+      <EncabezadoConfiguracion
+        area="nodos"
+        titulo="Nodos de producción"
+        descripcion="Definí las operaciones del taller y cómo se calculan sus tiempos, materiales y recursos."
+        acciones={
+          puedeGestionar && pasos.length > 0 ? (
+            <Button onClick={() => setAltaAbierta(true)}>+ Nuevo nodo</Button>
+          ) : null
+        }
+      />
 
       <nav className={s.tipoNav} aria-label="Tipo de nodo">
         <button
           type="button"
           data-active={tipoVisible === "SIMPLE"}
+          aria-pressed={tipoVisible === "SIMPLE"}
           onClick={() => setTipoVisible("SIMPLE")}
         >
           <strong>Nodos simples</strong>
@@ -183,6 +182,7 @@ export function PasosFamiliasView({
         <button
           type="button"
           data-active={tipoVisible === "COMPUESTO"}
+          aria-pressed={tipoVisible === "COMPUESTO"}
           onClick={() => setTipoVisible("COMPUESTO")}
         >
           <strong>Nodos compuestos</strong>
@@ -343,97 +343,102 @@ export function PasosFamiliasView({
         </section>
 
         {tipoVisible === "SIMPLE" ? (
-        <section className={s.seccion}>
-          <div className={s.seccionHead}>
-            <div>
-              <div className={s.seccionTitulo}>Catálogo del sistema</div>
-              <div className={s.seccionSub}>
-                Los {sistema.length} tipos de nodo que trae Grafo. Su definición
-                técnica se actualiza automáticamente; podés configurar cómo los
-                usa tu empresa.
+          <section className={s.seccion}>
+            <div className={s.seccionHead}>
+              <div>
+                <div className={s.seccionTitulo}>Catálogo del sistema</div>
+                <div className={s.seccionSub}>
+                  Los {sistema.length} tipos de nodo que trae Grafoprint. Su
+                  definición técnica se actualiza automáticamente; podés
+                  configurar cómo los usa tu empresa.
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex flex-col gap-3 border-b p-4 sm:flex-row">
-            <Input
-              type="search"
-              value={busquedaCatalogo}
-              onChange={(event) => setBusquedaCatalogo(event.target.value)}
-              placeholder="Buscar un tipo de nodo"
-              aria-label="Buscar en el catálogo de nodos"
-              className="sm:max-w-sm"
-            />
-            <Select
-              value={categoriaCatalogo}
-              onValueChange={(value) => setCategoriaCatalogo(value ?? "todas")}
-            >
-              <SelectTrigger className="w-full sm:w-64">
-                <SelectValue>
-                  {categoriaCatalogo === "todas"
-                    ? "Todas las categorías"
-                    : getLabel(categoriaFamiliaLabels, categoriaCatalogo).label}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="todas">Todas las categorías</SelectItem>
-                  {categoriasSistema.map((categoria) => (
-                    <SelectItem key={categoria} value={categoria}>
-                      {getLabel(categoriaFamiliaLabels, categoria).label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="tbl min-w-[760px]">
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Descripción</th>
-                  <th>Categoría</th>
-                  <th className="right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sistemaFiltrado.map((f) => (
-                  <tr key={f.codigo}>
-                    <td>
-                      <div className="name">{f.nombre}</div>
-                    </td>
-                    <td>
-                      <div className="desc">
-                        {descripcionPasoParaUsuario(f.descripcion)}
-                      </div>
-                    </td>
-                    <td>
-                      {getLabel(categoriaFamiliaLabels, f.categoria).label}
-                    </td>
-                    <td className="right">
-                      {puedeGestionar ? (
-                        <Link
-                          href={`/productos-servicios/pasos/${f.codigo}`}
-                          className={buttonVariants({
-                            variant: f.configBase ? "outline" : "ghost",
-                            size: "sm",
-                          })}
-                        >
-                          {f.configBase ? "Editar configuración" : "Configurar"}
-                        </Link>
-                      ) : null}
-                    </td>
+            <div className="flex flex-col gap-3 border-b p-4 sm:flex-row">
+              <Input
+                type="search"
+                value={busquedaCatalogo}
+                onChange={(event) => setBusquedaCatalogo(event.target.value)}
+                placeholder="Buscar un tipo de nodo"
+                aria-label="Buscar en el catálogo de nodos"
+                className="sm:max-w-sm"
+              />
+              <Select
+                value={categoriaCatalogo}
+                onValueChange={(value) =>
+                  setCategoriaCatalogo(value ?? "todas")
+                }
+              >
+                <SelectTrigger className="w-full sm:w-64">
+                  <SelectValue>
+                    {categoriaCatalogo === "todas"
+                      ? "Todas las categorías"
+                      : getLabel(categoriaFamiliaLabels, categoriaCatalogo)
+                          .label}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="todas">Todas las categorías</SelectItem>
+                    {categoriasSistema.map((categoria) => (
+                      <SelectItem key={categoria} value={categoria}>
+                        {getLabel(categoriaFamiliaLabels, categoria).label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="tbl min-w-[760px]">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th>Categoría</th>
+                    <th className="right">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!cargando && sistemaFiltrado.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              No hay tipos de nodo que coincidan con esos filtros.
-            </p>
-          ) : null}
-        </section>
+                </thead>
+                <tbody>
+                  {sistemaFiltrado.map((f) => (
+                    <tr key={f.codigo}>
+                      <td>
+                        <div className="name">{f.nombre}</div>
+                      </td>
+                      <td>
+                        <div className="desc">
+                          {descripcionPasoParaUsuario(f.descripcion)}
+                        </div>
+                      </td>
+                      <td>
+                        {getLabel(categoriaFamiliaLabels, f.categoria).label}
+                      </td>
+                      <td className="right">
+                        {puedeGestionar ? (
+                          <Link
+                            href={`/productos-servicios/pasos/${f.codigo}`}
+                            className={buttonVariants({
+                              variant: f.configBase ? "outline" : "ghost",
+                              size: "sm",
+                            })}
+                          >
+                            {f.configBase
+                              ? "Editar configuración"
+                              : "Configurar"}
+                          </Link>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!cargando && sistemaFiltrado.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                No hay tipos de nodo que coincidan con esos filtros.
+              </p>
+            ) : null}
+          </section>
         ) : null}
       </div>
 

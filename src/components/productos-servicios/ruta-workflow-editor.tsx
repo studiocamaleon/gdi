@@ -1,5 +1,6 @@
 "use client";
 
+import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import {
   ArrowLeftIcon,
@@ -23,8 +24,10 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
+  DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   construirColumnasProductivas,
@@ -441,7 +444,8 @@ export function RutaWorkflowEditor({
                                 // Una columna entera debe pasar al otro lado
                                 // del momento siguiente. Un nodo paralelo se
                                 // separa justo después de su momento actual.
-                                posicion: columnaIndex + (columna.length === 1 ? 2 : 1),
+                                posicion:
+                                  columnaIndex + (columna.length === 1 ? 2 : 1),
                               })
                             }
                             aria-label="Mover nodo a la derecha"
@@ -501,10 +505,13 @@ export function RutaWorkflowEditor({
         open={Boolean(destino)}
         onOpenChange={(open) => !open && setDestino(null)}
       >
-        <DialogContent className={styles.dialog}>
+        <DialogContent
+          className={styles.dialog}
+          overlayClassName="gp-modal-overlay"
+        >
           <DialogHeader className={styles.dialogHeader}>
             <span className={styles.eyebrow}>
-              Ruta de producción · nuevo nodo
+              Grafoprint · Flujos de producción
             </span>
             <DialogTitle>¿Qué querés incorporar?</DialogTitle>
             <DialogDescription>
@@ -514,14 +521,24 @@ export function RutaWorkflowEditor({
           <div className={styles.typeGrid}>
             {(
               [
-                ["PASO", WorkflowIcon, "Nodo simple", "Una operación individual"],
+                [
+                  "PASO",
+                  WorkflowIcon,
+                  "Nodo simple",
+                  "Una operación individual",
+                ],
                 [
                   "COMPONENTE",
                   BoxesIcon,
                   "Componente",
                   "Producto hijo fabricado",
                 ],
-                ["ETAPA", Layers3Icon, "Nodo compuesto", "Subtareas con un estado"],
+                [
+                  "ETAPA",
+                  Layers3Icon,
+                  "Nodo compuesto",
+                  "Subtareas con un estado",
+                ],
               ] as const
             ).map(([itemTipo, Icon, label, description]) => (
               <button
@@ -544,6 +561,7 @@ export function RutaWorkflowEditor({
               value={busqueda}
               onChange={(event) => setBusqueda(event.target.value)}
               placeholder="Buscar por nombre"
+              aria-label="Buscar nodo para el flujo"
             />
           </label>
           <div className={styles.optionList}>
@@ -579,29 +597,41 @@ export function RutaWorkflowEditor({
         open={Boolean(nodoEditado)}
         onOpenChange={(open) => !open && setEditando(null)}
       >
-        <DialogContent className={styles.nameDialog}>
+        <DialogContent
+          className={`gp-modal gp-modal-compact ${visual.flowModal}`}
+          overlayClassName="gp-modal-overlay"
+        >
           <DialogHeader>
             <DialogTitle>Nombre visible del nodo</DialogTitle>
             <DialogDescription>
               Este nombre se propone al aplicar la ruta a un producto.
             </DialogDescription>
           </DialogHeader>
-          {nodoEditado ? (
-            <Input
-              autoFocus
-              value={nombreEditado}
-              maxLength={nodoEditado.tipo === "COMPONENTE" ? 180 : 120}
-              onChange={(event) => setNombreEditado(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") aplicarNombre();
-              }}
-            />
-          ) : null}
-          <div className={styles.nameActions}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="flujo-nombre-nodo">
+                Nombre del nodo
+              </FieldLabel>
+              <Input
+                id="flujo-nombre-nodo"
+                autoFocus
+                value={nombreEditado}
+                maxLength={nodoEditado?.tipo === "COMPONENTE" ? 180 : 120}
+                onChange={(event) => setNombreEditado(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") aplicarNombre();
+                }}
+              />
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditando(null)}>
+              Cancelar
+            </Button>
             <Button disabled={!nombreEditado.trim()} onClick={aplicarNombre}>
               Listo
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </section>
