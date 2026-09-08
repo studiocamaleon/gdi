@@ -14,7 +14,7 @@ import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-c
 import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRightIcon, CircleAlertIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, CircleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -147,6 +147,18 @@ export function MaquinaFicha({
         <EncabezadoConfiguracion
           area="maquinaria"
           titulo={nombreGuardado}
+          acciones={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={() => salir("/costos/maquinaria")}
+            >
+              <ArrowLeftIcon data-icon="inline-start" />
+              Volver a maquinaria
+            </Button>
+          }
           descripcion={
             <nav className="maq-migas" aria-label="Ubicación">
               <button
