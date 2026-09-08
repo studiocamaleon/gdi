@@ -4297,6 +4297,8 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(c.unitario).toEqual(expect.any(Number));
   });
 
+  // Incluye tres OT completas, con hasta 30 s por transacción, además de
+  // preparar, cotizar y limpiar la matriz GENERAL/MIXTO/POR_COMPONENTE.
   it('F4.2/F4.3/F4.4.2: valida pricing y nesting consolidable de un compuesto', async () => {
     if (!tenantId) return;
     const ejecutarGuardada = async (guardada: Awaited<ReturnType<MotorUniversalService['cotizarYGuardar']>>) => {
@@ -5346,5 +5348,5 @@ describe('MotorUniversalService — smoke tests', () => {
         where: { id: estacionQa.id, tenantId },
       });
     }
-  }, 30_000);
+  }, 120_000);
 });
