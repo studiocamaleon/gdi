@@ -1673,6 +1673,8 @@ Esta tabla se actualizará al integrar cada fase.
 
 Se acordó trabajar fuera de las fases numeradas sobre la estética Grafoprint de Centros de costo, Maquinaria, Nodos y Flujos de producción, incluidas sus fichas y modales. Rama `codex/estetica-grafoprint-configuracion`, nacida desde `visual-ilusion/analisis` tras integrar F4; destino de integración: la misma rama `analisis`. [Alcance y validación](grafoprint-configuracion-estetica-2026-09-08.md).
 
+**Estado: INTEGRADA EN LOCAL Y VALIDADA.** Merge visual `eecd85896`, cierre de validación `eee4e4339`. Regresión posterior: 2.260 pruebas API y 701 web aprobadas, con 11 pruebas API optativas omitidas. Revisión visual en escritorio/móvil, TypeScript y CSS guard aprobados. Sin publicación remota.
+
 F5 sigue **PENDIENTE**. Antes de iniciarla se revisará con el usuario si conviene abordar primero Mesa de corte y perfiles.
 
 ---

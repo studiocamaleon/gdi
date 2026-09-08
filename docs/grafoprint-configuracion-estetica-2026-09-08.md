@@ -2,6 +2,8 @@
 
 Fecha: 08/09/2026.
 
+**Estado: INTEGRADA EN LOCAL EN `visual-ilusion/analisis` · REGRESIÓN POSTERIOR APROBADA.**
+
 Intervención intermedia fuera de las fases numeradas del Plan Maestro, solicitada después del cierre integral de F4. Rama: `codex/estetica-grafoprint-configuracion`, creada desde `visual-ilusion/analisis` después del merge de F4 (`f2dcfa8d9`). Destino de integración: `visual-ilusion/analisis`.
 
 ## Alcance implementado
@@ -29,5 +31,7 @@ El modal de consumibles utiliza el componente Dialog compartido, con título acc
 - Base de prueba aislada: `gdi_saas_estetica_20260908_test`, preparada con 226 migraciones y seed desde cero. El commit separado `c6e4d9c8f` estabiliza ese seed y los fixtures de regresión: catálogo propio de Tarjetas, receta alternativa aislada, identidades del catálogo base y tiempo suficiente para la prueba integral de OT.
 
 La integración visual se realizó localmente mediante `eecd85896`, conservando ambas ramas. La primera regresión posterior encontró seis vencimientos de tiempo en dos suites: el caso de tres OT compartía un límite total de 30 s y los reportes tenían 5 s frente a transacciones de 25 s. Se alinearon esos límites con el trabajo real (120 s para las tres OT y 30 s por reporte), conservando todas las aserciones y los límites de cada transacción. No son pruebas de rendimiento.
+
+La corrección de pruebas se integró en `eee4e4339`. Resultado final sobre `analisis`: 249 suites API, 2.260 pruebas y 10 snapshots aprobados; 11 pruebas optativas omitidas; web 701/701, TypeScript y CSS guard aprobados. Los resultados y logs están en `output/estetica-configuracion-2026-09-08/`; el primer log con vencimientos se conserva como diagnóstico, no como evidencia de aprobación. La base temporal propia se eliminó al terminar, sin eliminar ni reinicializar las bases habituales.
 
 F5 permanece pendiente: el próximo alcance se decidirá con el usuario entre esa fase y un trabajo previo de Mesa de corte/perfiles. Esta intervención no inicia ninguna de esas alternativas.
