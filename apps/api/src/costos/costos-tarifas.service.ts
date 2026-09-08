@@ -55,7 +55,9 @@ export class CostosTarifasService {
     tx: Prisma.TransactionClient,
   ) {
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`${auth.tenantId}:${normalizedPeriodo}`}))`;
+    // El lock devuelve void: ejecutarlo sin intentar deserializar una fila.
+    // Conserva la exclusión por empresa/período hasta terminar la transacción.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${auth.tenantId}:${normalizedPeriodo}`}))`;
     const centros = await tx.centroCosto.findMany({
       where: { tenantId: auth.tenantId, activo: true },
       select: { id: true, tipoCentro: true },

@@ -52,3 +52,20 @@ revertidos) — a resolver aparte.
   curso no tiene datos propios (hoy aparece vacío hasta copiar).
 - Materializar el período nuevo por cron al cambiar de mes (hoy el arrastre es lazy
   en lectura, que alcanza para cotizar).
+
+## Corrección del guardado — 08/09/2026
+
+El guardado atómico de la planilla fallaba al recalcular las tarifas del período:
+`pg_advisory_xact_lock` devuelve `void` y Prisma intentaba deserializarlo por usar
+`$queryRaw`. El servidor respondía 500 con «No se pudo completar la operación».
+La copia al formulario se completaba; la transacción de guardado se revertía.
+
+El bloqueo ahora se ejecuta con `$executeRaw`, conservando la exclusión por
+empresa/período y la atomicidad. No requiere migración ni cambios del formulario.
+
+Se agregó `guardar-planilla.integration.spec.ts` con PostgreSQL real y un tenant
+exclusivo que se elimina al terminar. Reproduce el error antes de la corrección;
+después verifica copiar gastos, empleados y activos del mes anterior, guardar y
+reabrir, publicar con reparto de estructura, conservar el origen y volver a
+guardar sin duplicar filas ni revisiones. Las tres suites dirigidas de Costos
+aprueban 13 pruebas.
