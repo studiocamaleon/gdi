@@ -273,5 +273,8 @@ describe('proyecciones comerciales y económicas de F4 (PostgreSQL)', () => {
         }),
       ).toBe(0);
     },
+    // La transacción dispone de 25 s; el test también espera su rollback
+    // y comprueba que no dejó órdenes persistidas.
+    30_000,
   );
 });

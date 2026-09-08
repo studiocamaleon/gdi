@@ -28,4 +28,6 @@ El modal de consumibles utiliza el componente Dialog compartido, con título acc
 - TypeScript, CSS guard y `git diff --check` aprobados.
 - Base de prueba aislada: `gdi_saas_estetica_20260908_test`, preparada con 226 migraciones y seed desde cero. El commit separado `c6e4d9c8f` estabiliza ese seed y los fixtures de regresión: catálogo propio de Tarjetas, receta alternativa aislada, identidades del catálogo base y tiempo suficiente para la prueba integral de OT.
 
-La integración se realiza localmente. F5 permanece pendiente: el próximo alcance se decidirá con el usuario entre esa fase y un trabajo previo de Mesa de corte/perfiles. Esta intervención no inicia ninguna de esas alternativas.
+La integración visual se realizó localmente mediante `eecd85896`, conservando ambas ramas. La primera regresión posterior encontró seis vencimientos de tiempo en dos suites: el caso de tres OT compartía un límite total de 30 s y los reportes tenían 5 s frente a transacciones de 25 s. Se alinearon esos límites con el trabajo real (120 s para las tres OT y 30 s por reporte), conservando todas las aserciones y los límites de cada transacción. No son pruebas de rendimiento.
+
+F5 permanece pendiente: el próximo alcance se decidirá con el usuario entre esa fase y un trabajo previo de Mesa de corte/perfiles. Esta intervención no inicia ninguna de esas alternativas.
