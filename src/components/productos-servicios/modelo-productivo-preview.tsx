@@ -60,8 +60,8 @@ function nombreHumano(value?: string | null) {
 
 function etiquetaTipo(tipo: TipoNodoProductivoVisual) {
   if (tipo === "COMPONENTE") return "Subruta fabricada";
-  if (tipo === "ETAPA") return "Etapa consolidada";
-  return "Paso de producción";
+  if (tipo === "ETAPA") return "Nodo compuesto";
+  return "Nodo simple";
 }
 
 function iconoNodo(tipo: TipoNodoProductivoVisual) {
@@ -377,7 +377,7 @@ export function ModeloProductivoPreview({
       <div className={styles.toolbar}>
         <p>
           {modelo.nodos.length} nodos activos · {componentes} componentes ·{" "}
-          {etapas} {etapas === 1 ? "etapa" : "etapas"}
+          {etapas} {etapas === 1 ? "nodo compuesto" : "nodos compuestos"}
           {modelo.omitidos > 0
             ? ` · ${modelo.omitidos} omitido${modelo.omitidos === 1 ? "" : "s"}`
             : ""}

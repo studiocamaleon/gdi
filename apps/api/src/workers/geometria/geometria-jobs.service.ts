@@ -1,3 +1,4 @@
+import { timeoutOpenNestMs } from './politica-busqueda';
 import {
   BadRequestException,
   Injectable,
@@ -25,7 +26,11 @@ import {
 } from './validar-nesting-opennest';
 
 export type EstadoTrabajoGeometria =
-  'pendiente' | 'procesando' | 'completado' | 'fallido' | 'cancelado';
+  | 'pendiente'
+  | 'procesando'
+  | 'completado'
+  | 'fallido'
+  | 'cancelado';
 
 export type VistaTrabajoGeometria = {
   id: string;
@@ -74,7 +79,8 @@ export class GeometriaJobsService implements OnApplicationShutdown {
       motor: input.dto.motor ?? 'collision',
       placa: { ...input.dto.placa },
       separacionMm: input.dto.separacionMm,
-      timeoutMs: input.dto.timeoutMs ?? 30_000,
+      commonLine: input.dto.commonLine,
+      timeoutMs: input.dto.timeoutMs ?? timeoutOpenNestMs(),
       semilla: input.dto.semilla ?? 30,
       piezas: input.dto.piezas.map((pieza) => ({
         id: pieza.id,
@@ -427,6 +433,7 @@ export function idTrabajo(
         motor: data.motor,
         placa: data.placa,
         separacionMm: data.separacionMm,
+        commonLine: data.commonLine,
         timeoutMs: data.timeoutMs,
         semilla: data.semilla,
         piezas: data.piezas,

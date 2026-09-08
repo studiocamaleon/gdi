@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Pasos de producción: el catálogo del sistema + los pasos propios del
+ * Nodos de producción: el catálogo del sistema + los pasos propios del
  * tenant, que son INSTANCIAS de una plantilla del catálogo y heredan su
  * ficha entera (docs/pasos-tenant-por-plantilla-diseno.md).
  *
@@ -87,7 +87,7 @@ export function PasosFamiliasView({
       } catch {
         if (vivo) {
           setErrorCarga(true);
-          toast.error("No se pudieron cargar los pasos.");
+          toast.error("No se pudieron cargar los nodos.");
         }
       } finally {
         if (vivo) setCargando(false);
@@ -135,7 +135,7 @@ export function PasosFamiliasView({
   const toggleActivo = async (paso: PasoTenant) => {
     try {
       await actualizarPasoTenant(paso.id, { activo: !paso.activo });
-      toast.success(paso.activo ? "Paso inhabilitado" : "Paso reactivado");
+      toast.success(paso.activo ? "Nodo inhabilitado" : "Nodo reactivado");
       await recargar();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo actualizar");
@@ -146,7 +146,7 @@ export function PasosFamiliasView({
     if (!aEliminar) return;
     try {
       await eliminarPasoTenant(aEliminar.id);
-      toast.success("Paso eliminado");
+      toast.success("Nodo eliminado");
       setAEliminar(null);
       await recargar();
     } catch (err) {
@@ -158,26 +158,26 @@ export function PasosFamiliasView({
     <div className="content">
       <div className="page-head">
         <div className="title-block">
-          <h1>Pasos de producción</h1>
+          <h1>Nodos de producción</h1>
           <p>
-            Los tipos de paso con los que se arman las rutas: el catálogo del
+            Los tipos de nodo con los que se arman los flujos: el catálogo del
             sistema más los que crea tu empresa.
           </p>
         </div>
         {/* Sin pasos propios manda el CTA del estado vacío ("Crear el
             primero"); con pasos, este. Nunca los dos a la vez. */}
         {puedeGestionar && pasos.length > 0 ? (
-          <Button onClick={() => setAltaAbierta(true)}>+ Nuevo paso</Button>
+          <Button onClick={() => setAltaAbierta(true)}>+ Nuevo nodo</Button>
         ) : null}
       </div>
 
-      <nav className={s.tipoNav} aria-label="Tipo de paso">
+      <nav className={s.tipoNav} aria-label="Tipo de nodo">
         <button
           type="button"
           data-active={tipoVisible === "SIMPLE"}
           onClick={() => setTipoVisible("SIMPLE")}
         >
-          <strong>Pasos simples</strong>
+          <strong>Nodos simples</strong>
           <span>Operaciones reales con tiempo, materiales y recursos</span>
         </button>
         <button
@@ -185,8 +185,8 @@ export function PasosFamiliasView({
           data-active={tipoVisible === "COMPUESTO"}
           onClick={() => setTipoVisible("COMPUESTO")}
         >
-          <strong>Etapas compuestas</strong>
-          <span>Subrutas reutilizables que agrupan pasos reales</span>
+          <strong>Nodos compuestos</strong>
+          <span>Agrupan nodos simples en una operación de producción</span>
         </button>
       </nav>
 
@@ -196,12 +196,12 @@ export function PasosFamiliasView({
             <div>
               <div className={s.seccionTitulo}>
                 {tipoVisible === "COMPUESTO"
-                  ? "Tus etapas compuestas"
-                  : "Tus pasos simples"}
+                  ? "Tus nodos compuestos"
+                  : "Tus nodos simples"}
               </div>
               <div className={s.seccionSub}>
                 {tipoVisible === "COMPUESTO"
-                  ? "Subrutas reutilizables que definen qué pasos reales contiene una etapa; se configuran en el contexto de cada producto."
+                  ? "Agrupan nodos simples y se configuran en el contexto de cada producto."
                   : "Creados por tu empresa a partir de una plantilla del catálogo: heredan cómo se calculan y agregan la configuración base de tu taller."}
               </div>
             </div>
@@ -212,7 +212,7 @@ export function PasosFamiliasView({
           ) : errorCarga ? (
             <EstadoVacio
               variant="compacto"
-              titulo="No pudimos cargar tus pasos"
+              titulo="No pudimos cargar tus nodos"
               descripcion="Revisá la conexión y volvé a intentar."
               cta={{
                 label: "Reintentar",
@@ -224,8 +224,8 @@ export function PasosFamiliasView({
               variant="compacto"
               titulo={
                 tipoVisible === "COMPUESTO"
-                  ? "Todavía no creaste etapas compuestas"
-                  : "Todavía no creaste pasos simples"
+                  ? "Todavía no creaste nodos compuestos"
+                  : "Todavía no creaste nodos simples"
               }
               cta={
                 puedeGestionar
@@ -262,8 +262,8 @@ export function PasosFamiliasView({
                         ) : null}
                         {paso.tipoPaso === "COMPUESTO" ? (
                           <span className="tag warm">
-                            Paso compuesto · {paso.pasosInternos?.length ?? 0}{" "}
-                            pasos internos
+                            Nodo compuesto · {paso.pasosInternos?.length ?? 0}{" "}
+                            nodos internos
                           </span>
                         ) : null}
                       </td>
@@ -275,7 +275,7 @@ export function PasosFamiliasView({
                         ) : (
                           <span className={s.formaChip}>
                             {paso.tipoPaso === "COMPUESTO"
-                              ? "Subruta reutilizable"
+                              ? "Subflujo reutilizable"
                               : (paso.plantillaNombre ?? paso.plantillaCodigo)}
                           </span>
                         )}
@@ -348,7 +348,7 @@ export function PasosFamiliasView({
             <div>
               <div className={s.seccionTitulo}>Catálogo del sistema</div>
               <div className={s.seccionSub}>
-                Los {sistema.length} tipos de paso que trae Grafo. Su definición
+                Los {sistema.length} tipos de nodo que trae Grafo. Su definición
                 técnica se actualiza automáticamente; podés configurar cómo los
                 usa tu empresa.
               </div>
@@ -359,8 +359,8 @@ export function PasosFamiliasView({
               type="search"
               value={busquedaCatalogo}
               onChange={(event) => setBusquedaCatalogo(event.target.value)}
-              placeholder="Buscar un tipo de paso"
-              aria-label="Buscar en el catálogo de pasos"
+              placeholder="Buscar un tipo de nodo"
+              aria-label="Buscar en el catálogo de nodos"
               className="sm:max-w-sm"
             />
             <Select
@@ -430,7 +430,7 @@ export function PasosFamiliasView({
           </div>
           {!cargando && sistemaFiltrado.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">
-              No hay tipos de paso que coincidan con esos filtros.
+              No hay tipos de nodo que coincidan con esos filtros.
             </p>
           ) : null}
         </section>
@@ -454,10 +454,10 @@ export function PasosFamiliasView({
         onOpenChange={(open) => {
           if (!open) setAEliminar(null);
         }}
-        titulo="Eliminar paso"
+        titulo="Eliminar nodo"
         nombreItem={aEliminar?.nombre}
         requiereTipear={false}
-        descripcion="Sólo se puede eliminar un paso que ninguna ruta ni orden usó jamás. Si tiene historial, el sistema va a ofrecer inhabilitarlo en su lugar."
+        descripcion="Sólo se puede eliminar un nodo que ningún flujo ni orden usó jamás. Si tiene historial, el sistema va a ofrecer inhabilitarlo en su lugar."
         accionLabel="Eliminar"
         onConfirmar={confirmarEliminar}
       />

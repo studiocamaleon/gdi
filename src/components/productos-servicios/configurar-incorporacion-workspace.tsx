@@ -175,11 +175,11 @@ export function ConfigurarIncorporacionWorkspace({
     return (
       <ModeloProductivoConfigShell
         tipo="PASO"
-        eyebrow={`Producción · Etapa ${paso.pasoNombre} · Paso interno`}
+        eyebrow={`Producción · Nodo compuesto ${paso.pasoNombre} · Nodo interno`}
         titulo={pasoActivo.nombre}
         descripcion="Configurá parámetros, materiales, recursos y tiempos como en un paso normal. Este paso calcula el trabajo, pero no tendrá un estado independiente en la OT."
         onBack={() => setEditando(null)}
-        backLabel="Volver a la etapa"
+        backLabel="Volver al nodo compuesto"
         embedded={embedded}
         wide
         contentClassName={styles.fullEditor}
@@ -203,7 +203,7 @@ export function ConfigurarIncorporacionWorkspace({
             },
             guardar: async (_, configuracion) => {
               cambiarPaso(pasoActivo.codigo, { configuracion });
-              toast.success("Paso guardado dentro de la etapa");
+              toast.success("Nodo interno guardado");
             },
           }}
         />
@@ -214,16 +214,16 @@ export function ConfigurarIncorporacionWorkspace({
   return (
     <ModeloProductivoConfigShell
       tipo="ETAPA"
-      eyebrow="Producción · Etapa compuesta"
+      eyebrow="Producción · Nodo compuesto"
       titulo={paso.pasoNombre}
-      descripcion="Configurá las operaciones que determinan el tiempo, los materiales y el costo. En producción se ejecutará una sola etapa."
+      descripcion="Configurá las operaciones que determinan el tiempo, los materiales y el costo. En producción se ejecutará un solo nodo compuesto."
       onBack={onCancel}
       backLabel="Volver a la ruta de producción"
       embedded={embedded}
       pinFooterToViewport
       contentClassName={styles.body}
-      footerNote="El desglose se versionará con la receta. La OT recibirá una sola etapa con tiempo, materiales y costo consolidados."
-      primaryLabel="Aplicar etapa"
+      footerNote="El desglose se versionará con la receta. La OT recibirá un solo nodo compuesto con tiempo, materiales y costo consolidados."
+      primaryLabel="Aplicar nodo compuesto"
       primaryDisabled={
         !pasos.length || pasos.some((item) => !item.familiaCodigo)
       }
@@ -242,7 +242,7 @@ export function ConfigurarIncorporacionWorkspace({
       <div className={styles.contextCard}>
         <BoxesIcon />
         <div>
-          <strong>Desglose interno de la etapa</strong>
+          <strong>Desglose interno del nodo compuesto</strong>
           <span>
             {pasos.filter((item) => item.activa).length} operaciones activas ·{" "}
             {componentes.length} componentes disponibles en este producto
@@ -327,7 +327,7 @@ export function ConfigurarIncorporacionWorkspace({
                   ))
                 ) : (
                   <small>
-                    Trabajo general de la etapa, sin componente específico.
+                    Trabajo general del nodo compuesto, sin componente específico.
                   </small>
                 )}
               </div>

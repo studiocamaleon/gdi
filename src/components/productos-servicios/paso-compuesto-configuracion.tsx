@@ -97,7 +97,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
           orden: index,
         })),
       });
-      toast.success("Subruta del paso actualizada");
+      toast.success("Subflujo del nodo actualizado");
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -114,12 +114,12 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
       <header className={styles.hero}>
         <BoxesIcon />
         <div>
-          <span className={styles.eyebrow}>Etapa compuesta reutilizable</span>
+          <span className={styles.eyebrow}>Nodo compuesto reutilizable</span>
           <h1>{paso.nombre}</h1>
           <p>
-            Definí las operaciones internas que calculan esta etapa. Cada una
+            Definí las operaciones internas que calculan este nodo compuesto. Cada una
             conserva materiales, parámetros, recursos y tiempos, pero la OT
-            mostrará un único paso operativo.
+            mostrará un único nodo compuesto.
           </p>
         </div>
       </header>
@@ -157,7 +157,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
         </div>
         {!operaciones.length ? (
           <div className={styles.empty}>
-            Agregá la primera operación que formará parte de esta etapa.
+            Agregá la primera operación que formará parte de este nodo compuesto.
           </div>
         ) : (
           <div className={styles.rows}>
@@ -176,7 +176,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                 <label>
                   <span className={styles.rowLabel}>Familia de cálculo</span>
                   <select
-                    aria-label={`Paso real ${index + 1}`}
+                    aria-label={`Nodo simple ${index + 1}`}
                     value={operacion.familiaCodigo}
                     onChange={(event) => {
                       const familia = familias.find(
@@ -188,7 +188,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                       });
                     }}
                   >
-                    <option value="">Elegir paso…</option>
+                    <option value="">Elegir nodo simple…</option>
                     {familias.map((familia) => (
                       <option key={familia.codigo} value={familia.codigo}>
                         {familia.nombre}
@@ -201,7 +201,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                     Nombre de la operación
                   </span>
                   <input
-                    aria-label={`Nombre del paso ${index + 1}`}
+                    aria-label={`Nombre de la operación ${index + 1}`}
                     value={operacion.nombre}
                     placeholder="Ej. Tensado de lona"
                     onChange={(event) =>

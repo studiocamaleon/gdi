@@ -24,7 +24,11 @@ export type SolicitudTrabajoNestingOpenNest = {
 };
 
 export type EstadoTrabajoGeometria =
-  "pendiente" | "procesando" | "completado" | "fallido" | "cancelado";
+  | "pendiente"
+  | "procesando"
+  | "completado"
+  | "fallido"
+  | "cancelado";
 
 export type TrabajoNestingOpenNest = {
   id: string;
@@ -52,6 +56,16 @@ export type TrabajoNestingOpenNest = {
     versionPoliticaOrientacion?: number;
     calidadSolucion?: "BASE_SEGURA" | "OPTIMIZADA";
     optimizacionAgotada?: boolean;
+    busqueda?: {
+      motivoFin:
+        | "MINIMO_PLACAS"
+        | "PRESUPUESTO_AGOTADO"
+        | "MOTOR_NO_DISPONIBLE";
+      presupuestoMs: number;
+      intentos: number;
+      candidatosValidos: number;
+      minimoTeoricoPlacas: number;
+    };
     placements: Array<{
       piezaId: string;
       copia: number;

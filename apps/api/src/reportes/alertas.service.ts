@@ -203,7 +203,7 @@ export class AlertasService {
       SELECT COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+      WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
       GROUP BY ot."clienteId"
       ORDER BY facturado DESC

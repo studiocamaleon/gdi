@@ -675,6 +675,7 @@ model NotificacionWhatsapp {
 }
 
 model Tenant {
+  geometriasProducto GeometriaProducto[]
   configuracionNotificaciones                      ConfiguracionNotificaciones?
   notificacionEventos                              NotificacionEvento[]
   notificacionesWhatsapp                           NotificacionWhatsapp[]
@@ -2642,6 +2643,7 @@ model ProductoSubcategoriaComercial {
 }
 
 model Producto {
+  geometriasGuardadas GeometriaProducto[]
   id                         String                            @id @default(uuid()) @db.Uuid
   tenantId                   String                            @db.Uuid
   subcategoriaComercialId    String                            @db.Uuid
@@ -3746,6 +3748,9 @@ model OrdenTrabajoItem {
   /// JobContext exacto con el que se costeó y debe ejecutarse este ítem.
   /// En componentes fabricados evita reevaluar bindings contra datos vivos.
   jobContextSnapshotJson      Json?
+  /// Cálculo efectivo del componente (pasos, costos y lotes de sus hijos).
+  /// Las raíces conservan su snapshot en CotizacionItem; null en históricos.
+  trazabilidadSnapshotJson     Json?
   /// Copia ejecutable de la topología publicada. Null en órdenes históricas;
   /// sus pasos continúan interpretándose como secuencia por `indice`.
   topologiaProduccion         TopologiaProduccion          @default(LINEAL)
@@ -5016,6 +5021,7 @@ model PagoContador {
 /// seteada, según `scope` (ninguna para TENANT_BRANDING).
 /// Ver docs/archivos-r2-diseno.md
 model Archivo {
+  geometriasProducto GeometriaProducto[]
   id                String        @id @default(uuid()) @db.Uuid
   tenantId          String        @db.Uuid
   scope             ArchivoScope
@@ -5822,4 +5828,22 @@ model SesionImpersonacion {
 
   @@index([tenantId, creadaEl])
   @@index([staffUserId])
+}
+
+/// Interpretación inmutable de un original de producto. Una nueva selección o
+/// escala crea otra fila; las recetas y cotizaciones conservan su referencia.
+model GeometriaProducto {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  productoId String @db.Uuid
+  archivoId String @db.Uuid
+  hash String
+  interpretacionJson Json
+  fuenteJson Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+  archivo Archivo @relation(fields: [archivoId], references: [id], onDelete: Restrict)
+  @@index([tenantId, productoId])
+  @@index([archivoId])
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import deudoresResumen from "./deudores-resumen.module.css";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { DownloadIcon, SearchIcon, UsersIcon } from "lucide-react";
@@ -66,7 +67,7 @@ export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
       <div className="ade-wrap">
         <div className="ade-head">
           <div>
-            <span className="ade-eyebrow">Administración financiera</span>
+            <span className={deudoresResumen["ade-eyebrow"]}>Administración financiera</span>
             <h1>Cuentas por cobrar</h1>
             <div className="sub">
               Antigüedad de la deuda por cliente. Cuanto más intenso el color,

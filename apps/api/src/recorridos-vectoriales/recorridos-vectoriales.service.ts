@@ -69,7 +69,10 @@ export class RecorridosVectorialesService {
 
       return {
         modo: 'CORTE',
-        engine: { id: '@grafo/hotwire-linker', version: '1.0.0' },
+        engine: {
+          id: '@grafo/hotwire-linker',
+          version: module.HOTWIRE_ENGINE_VERSION ?? '1.0.0',
+        },
         postprocesador: input.perfil.postprocesador,
         perfil: input.perfil,
         origenSvg: job.originSvg,

@@ -2,6 +2,9 @@ import {
   FuenteVectorialError,
   normalizarFuenteVectorial,
 } from './fuente-vectorial';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { analizarSvgFabricacion } from './svg-parser';
 
 const dxfRectangulo = (unidad = 4) =>
   [
@@ -88,6 +91,61 @@ const dxfRectanguloConLineas = [
 ].join('\n');
 
 describe('normalizarFuenteVectorial', () => {
+  const exhibidor = readFileSync(
+    join(__dirname, 'fixtures/exhibidor-capa-congelada.dxf'),
+    'utf8',
+  );
+
+  it('excluye el rectángulo de la capa congelada y mide sólo el exhibidor visible', () => {
+    const result = normalizarFuenteVectorial({
+      contenido: exhibidor,
+      nombreArchivo: 'exhibidor.dxf',
+    });
+    expect(result.svg).toContain('GRAFICA');
+    expect(result.svg).not.toContain('CORTE_2');
+    expect(result.anchoSugeridoMm).toBeCloseTo(293.065124512);
+    expect(result.altoSugeridoMm).toBeCloseTo(499.436212891);
+    expect(result.unidadDetectada).toBeNull();
+    expect(result.medidasOriginales).toEqual({
+      ancho: result.anchoSugeridoMm,
+      alto: result.altoSugeridoMm,
+    });
+    expect(result.diagnosticos.map((d) => d.codigo)).toEqual([
+      'dxf_capas_ocultas_omitidas',
+      'dxf_unidad_no_declarada',
+    ]);
+    const geometria = analizarSvgFabricacion({
+      svg: result.svg,
+      anchoFinalMm: (result.anchoSugeridoMm * 25.4) / 72,
+    }).geometria;
+    expect(geometria.piezas).toHaveLength(1);
+    expect(geometria.anchoMm).toBeCloseTo(103.387, 2);
+    expect(geometria.altoMm).toBeCloseTo(176.19, 2);
+  });
+
+  it.each([
+    { nombre: 'apagada', flags: 0, color: -7, visible: false },
+    { nombre: 'bloqueada', flags: 4, color: 7, visible: true },
+    { nombre: 'visible', flags: 0, color: 7, visible: true },
+  ])(
+    'respeta la capa $nombre sin confundir bloqueo con visibilidad',
+    ({ flags, color, visible }) => {
+      const contenido = exhibidor.replace(
+        /(2\r?\nCORTE_2\r?\n\s*70\r?\n)\s*1(\r?\n\s*62\r?\n)\s*7/,
+        `$1${flags}$2${color}`,
+      );
+      expect(contenido).not.toBe(exhibidor);
+      const result = normalizarFuenteVectorial({
+        contenido,
+        nombreArchivo: 'exhibidor.dxf',
+      });
+      expect(result.svg.includes('CORTE_2')).toBe(visible);
+      expect(result.anchoSugeridoMm).toBeCloseTo(
+        visible ? 462.34349 : 293.06512,
+      );
+    },
+  );
+
   it('convierte un DXF milimétrico a la fuente canónica usada por GrafoNest', () => {
     const result = normalizarFuenteVectorial({
       contenido: dxfRectangulo(),

@@ -1,3 +1,4 @@
+import { transformarFabricacion } from './geometria-vectorial/fabricacion-vectorial';
 /**
  * G-M1 — Dispatcher de nesting para el motor universal.
  *
@@ -42,7 +43,6 @@ import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid
 import {
   estrategiaNestingDeFamilia,
   fuentePiezasNestingDeFamilia,
-  herramientasCotizacionEfectivas,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
@@ -67,6 +67,7 @@ import type {
   SubstrateUsage,
 } from '../productos-servicios/nesting/types';
 import {
+  debeEjecutarNestingVectorial,
   resolveNestingConfig,
   type NestingConfigResolved,
   type PrintSheetCandidateConfig,
@@ -91,6 +92,8 @@ import {
   type DemandaNesting,
   type SolucionNesting,
 } from './geometria-vectorial/contrato-nesting';
+import type { ResultadoCommonLineTrabajo } from '../workers/colas';
+import { nestearPatronRepetido } from './geometria-vectorial/nesting-patron-repetido';
 
 /**
  * Resultado del dispatcher con TODO lo que el motor + viewer necesitan.
@@ -149,6 +152,8 @@ export interface NestingDispatchResult {
   demandaNesting?: DemandaNesting[];
   /** Problema y solución versionados que produjeron el layout irregular. */
   solucionNesting?: SolucionNesting;
+  /** Tramos rectos que el postprocesador convirtió en un único corte. */
+  commonLine?: ResultadoCommonLineTrabajo;
   /** Política efectiva aplicada al vector completo. */
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
   /**
@@ -343,6 +348,7 @@ export interface NestingDispatchOpts {
    */
   resolveIrregularNesting?: (input: {
     fuente: NonNullable<JobContext['disenoVectorialFuente']>;
+    coleccion?: boolean;
     parametros: ParametrosNestingVectorialCache;
     problema: ReturnType<typeof crearProblemaNestingIrregular>;
   }) => Promise<SolucionNesting>;
@@ -378,7 +384,24 @@ export async function runNestingForPaso(
     paso,
     jobContext,
   );
-  return adjuntarDemandaRectangular(final, paso, jobContext);
+  const conDemanda = adjuntarDemandaRectangular(final, paso, jobContext);
+  if (
+    conDemanda.layoutVinculadoGeometriaVectorial &&
+    conDemanda.unidad === 'pliegos' &&
+    jobContext.geometriaVectorial &&
+    !conDemanda.visualConfig?.pieceBleedMm &&
+    !conDemanda.placements.some((p) => p.panelIndex != null)
+  ) {
+    conDemanda.demandaNesting = crearDemandasDesdeGeometriaVectorial({
+      geometria: jobContext.geometriaVectorial,
+      cantidad: jobContext.cantidad,
+      propietario: {
+        archivoFuente: jobContext.disenoVectorialFuente?.nombreArchivo,
+        interpretacion: jobContext.disenoVectorialFuente?.procedencia,
+      },
+    });
+  }
+  return conDemanda;
 }
 
 function adjuntarDemandaRectangular(
@@ -614,6 +637,11 @@ async function despacharNesting(
   // Hoja/placa finita: la medida sale del material del slot (o de la mesa de
   // la máquina) vía resolveNestingConfig. Piezas uniformes caen solas a
   // grid-2d-single (poses + imposición completa) dentro del multi.
+  if (jobContext.disenosVectoriales?.length && paso.familiaCodigo === 'impresion_por_area') {
+    if (config.pieceBleedMm !== 0) throw new NestingIrregularError('La colección de piezas requiere impresión sin sangrado para conservar el registro del corte.');
+    const resultado = await runIrregularPlaca(jobContext, materialResuelto, {...config, permitirSegmentacionVectorial:false, preservarComposicionOriginalSiEntra:false}, opts?.resolveIrregularNesting);
+    return resultado ? {...resultado, layoutVinculadoGeometriaVectorial:true} : null;
+  }
   return runGrid2DMultiForArea(paso, jobContext, config);
 }
 
@@ -634,10 +662,7 @@ type EstrategiaNestingFn = (
 const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
   /** Contornos SVG normalizados por el servidor sobre una placa finita. */
   irregular_placa: (paso, jobContext, materialResuelto, config, opts) =>
-    herramientasCotizacionEfectivas(
-      paso.familiaCodigo,
-      paso.paramsPasoJson,
-    ).includes('diseno_vectorial')
+    debeEjecutarNestingVectorial(paso, jobContext)
       ? runIrregularPlaca(
           jobContext,
           materialResuelto,
@@ -787,28 +812,22 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
         `El layout de impresión contiene la pieza "${placement.pieceId}", pero no existe en el SVG de corte.`,
       );
     }
-    const dimensionesCoinciden = placement.rotated
-      ? casiIgual(placement.widthMm, pieza.altoMm) &&
-        casiIgual(placement.heightMm, pieza.anchoMm)
-      : casiIgual(placement.widthMm, pieza.anchoMm) &&
-        casiIgual(placement.heightMm, pieza.altoMm);
-    if (!dimensionesCoinciden) {
-      throw new NestingIrregularError(
-        `La pieza "${pieza.id}" no tiene la misma escala en impresión y corte.`,
-      );
+    const metaImpresion = placement.meta as
+      | { rotacionGrados?: number; contornos?: typeof pieza.contornos; cortesInternos?: typeof pieza.contornos; operaciones?: typeof pieza.operaciones; fabricacion?: typeof pieza.fabricacion }
+      | undefined;
+    const angulo =
+      metaImpresion?.rotacionGrados ?? (placement.rotated ? 90 : 0);
+    if (!Number.isFinite(angulo)) throw new NestingIrregularError('La orientación del layout impreso no es válida.');
+    const rad = angulo * Math.PI / 180;
+    const rotar = (p: {x:number;y:number}) => ({x:p.x*Math.cos(rad)-p.y*Math.sin(rad),y:p.x*Math.sin(rad)+p.y*Math.cos(rad)});
+    const rotados = pieza.contornos.flatMap(c => c.puntos.map(rotar));
+    const rx = Math.min(...rotados.map(p => p.x)), ry = Math.min(...rotados.map(p => p.y));
+    if (!casiIgual(placement.widthMm, Math.max(...rotados.map(p => p.x))-rx) || !casiIgual(placement.heightMm, Math.max(...rotados.map(p => p.y))-ry)) {
+      throw new NestingIrregularError(`La pieza "${pieza.id}" no tiene la misma escala en impresión y corte.`);
     }
-
-    const transformarPunto = (punto: { x: number; y: number }) => {
-      const sobrePlaca = placement.rotated
-        ? {
-            x: placement.xMm + pieza.altoMm - punto.y,
-            y: placement.yMm + punto.x,
-          }
-        : {
-            x: placement.xMm + punto.x,
-            y: placement.yMm + punto.y,
-          };
-      return sobrePlaca;
+    const transformarPunto = (punto: {x:number;y:number}) => {
+      const p = rotar(punto);
+      return {x:placement.xMm+p.x-rx, y:placement.yMm+p.y-ry};
     };
     const transformarContornos = (
       contornos: typeof pieza.contornos,
@@ -817,8 +836,11 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
         ...contorno,
         puntos: contorno.puntos.map(transformarPunto),
       }));
-    const contornos = transformarContornos(pieza.contornos);
-    const cortesInternos = transformarContornos(pieza.cortesInternos ?? []);
+    // El layout es un output interno recalculado por el motor, nunca un input
+    // del cliente. Conserva exactamente la discretización ya impresa.
+    const tieneContornosImpresos = layout.algorithm === 'irregular-2d-bottom-left-v1' && Boolean(metaImpresion?.contornos?.length);
+    const contornos = tieneContornosImpresos ? structuredClone(metaImpresion!.contornos!) : transformarContornos(pieza.contornos);
+    const cortesInternos = tieneContornosImpresos ? structuredClone(metaImpresion!.cortesInternos ?? []) : transformarContornos(pieza.cortesInternos ?? []);
     const puntos = [...contornos, ...cortesInternos].flatMap(
       (contorno) => contorno.puntos,
     );
@@ -851,19 +873,25 @@ function aplicarGeometriaVectorialAlLayoutCompartido(
     return {
       pieceId: pieza.id,
       substrateIndex,
-      xMm: redondearCoordenada(minX),
-      yMm: redondearCoordenada(minY),
-      widthMm: redondearCoordenada(maxX - minX),
-      heightMm: redondearCoordenada(maxY - minY),
+      xMm: tieneContornosImpresos ? placement.xMm : redondearCoordenada(minX),
+      yMm: tieneContornosImpresos ? placement.yMm : redondearCoordenada(minY),
+      widthMm: tieneContornosImpresos ? placement.widthMm : redondearCoordenada(maxX - minX),
+      heightMm: tieneContornosImpresos ? placement.heightMm : redondearCoordenada(maxY - minY),
       rotated: placement.rotated,
       meta: {
         contornos,
         cortesInternos,
+        propietario: pieza.propietario,
+        fabricacion: tieneContornosImpresos && metaImpresion?.fabricacion ? structuredClone(metaImpresion.fabricacion) : transformarFabricacion(pieza.fabricacion, angulo, { x: placement.xMm-rx, y: placement.yMm-ry }),
+        operaciones: tieneContornosImpresos && metaImpresion?.operaciones ? structuredClone(metaImpresion.operaciones) : (pieza.operaciones ?? []).map((op) => ({
+          ...op,
+          puntos: op.puntos.map(transformarPunto),
+        })),
         copyIndex,
-        rotacionGrados: (placement.rotated ? 90 : 0) % 360,
+        rotacionGrados: angulo,
         layoutHeredadoDe: layout.sourceRutaPasoId,
         requiereRotacionFisicaEnMaquina,
-        label: pieza.id,
+        label: pieza.propietario?.piezaNombre ?? pieza.id,
       },
     };
   });
@@ -1201,6 +1229,7 @@ async function runIrregularPlaca(
     cantidad: jobContext.cantidad,
     propietario: {
       archivoFuente: jobContext.disenoVectorialFuente?.nombreArchivo,
+      interpretacion: jobContext.disenoVectorialFuente?.procedencia,
     },
   });
   const problema = crearProblemaNestingIrregular({
@@ -1214,6 +1243,7 @@ async function runIrregularPlaca(
     preservarComposicionOriginalSiEntra:
       config.preservarComposicionOriginalSiEntra,
     configuracionEncastres: config.configuracionEncastres,
+    commonLine: config.commonLine,
   });
   try {
     const cached = obtenerCacheVectorial(jobContext);
@@ -1231,7 +1261,9 @@ async function runIrregularPlaca(
       cached.parametros.preservarComposicionOriginalSiEntra ===
         config.preservarComposicionOriginalSiEntra &&
       JSON.stringify(cached.parametros.configuracionEncastres) ===
-        JSON.stringify(config.configuracionEncastres);
+        JSON.stringify(config.configuracionEncastres) &&
+      JSON.stringify(cached.parametros.commonLine) ===
+        JSON.stringify(config.commonLine);
     if (cacheMatches) marcarNestingVectorialReutilizado(jobContext);
     const parametrosWorker: ParametrosNestingVectorialCache = {
       cantidad: jobContext.cantidad,
@@ -1244,13 +1276,15 @@ async function runIrregularPlaca(
       preservarComposicionOriginalSiEntra:
         config.preservarComposicionOriginalSiEntra,
       configuracionEncastres: config.configuracionEncastres,
+      commonLine: config.commonLine,
     };
     const solucionNestingBase =
       cacheMatches && cached
         ? cached.solucionNesting
-        : resolveIrregularNesting && jobContext.disenoVectorialFuente
+        : resolveIrregularNesting && (jobContext.disenoVectorialFuente || jobContext.disenosVectoriales?.length)
           ? await resolveIrregularNesting({
-              fuente: jobContext.disenoVectorialFuente,
+              fuente: jobContext.disenoVectorialFuente ?? jobContext.disenosVectoriales![0].fuente,
+              coleccion: Boolean(jobContext.disenosVectoriales?.length),
               parametros: parametrosWorker,
               problema,
             })
@@ -1318,11 +1352,15 @@ async function runIrregularPlaca(
         meta: {
           contornos: placement.contornos,
           cortesInternos: placement.cortesInternos,
+          operaciones: placement.operaciones,
+          fabricacion: placement.fabricacion,
+          propietario: demandas.find(d => d.id === (placement.segmentacion?.piezaOrigenId ?? placement.pieceId))?.propietario,
           rotacionGrados: placement.rotacion,
+          copiaIndex: placement.copyIndex,
           segmentacion: placement.segmentacion,
           label: placement.segmentacion
             ? `${placement.segmentacion.piezaOrigenId} · parte ${placement.segmentacion.indice}/${placement.segmentacion.total}`
-            : placement.pieceId,
+            : demandas.find(d => d.id === placement.pieceId)?.propietario?.piezaNombre ?? placement.pieceId,
         },
       })),
       metricasRaw: {
@@ -1337,10 +1375,12 @@ async function runIrregularPlaca(
         uniones: result.uniones,
         configuracionEncastres: config.configuracionEncastres,
         estrategiaDisposicion: result.estrategiaDisposicion,
+        commonLine: result.commonLine,
       },
       piezasAcomodadas: result.placements.length,
       demandaNesting: demandas,
       solucionNesting,
+      commonLine: result.commonLine,
       estrategiaDisposicion: result.estrategiaDisposicion,
       visualConfig: {
         margins: {
@@ -1943,24 +1983,32 @@ function runShelfRollo(
       : 0;
 
   // Mapear placements del shape legacy → universal Placement
-  const placements: Placement[] = result.placements.map((p) => ({
-    pieceId: p.sourcePieceId ?? p.id,
-    substrateIndex: 0,
-    xMm: p.centerXMm - p.widthMm / 2,
-    yMm: p.centerYMm - p.heightMm / 2,
-    widthMm: p.widthMm,
-    heightMm: p.heightMm,
-    rotated: p.rotated,
-    panelIndex: p.panelIndex ?? undefined,
-    panelCount: p.panelCount ?? undefined,
-    panelAxis: (p.panelAxis ?? undefined) as
-      'vertical' | 'horizontal' | undefined,
-    usefulWidthMm: p.usefulWidthMm,
-    usefulHeightMm: p.usefulHeightMm,
-    overlapStartMm: p.overlapStartMm,
-    overlapEndMm: p.overlapEndMm,
-    meta: { label: p.label },
-  }));
+  const placements: Placement[] = result.placements.map((p) => {
+    // granformato-pieces identifica cada copia por índice de medida y copia.
+    // La identidad pública pertenece al tipo de pieza, no a esa copia interna.
+    const indice = /^piece-(\d+)-\d+$/.exec(p.sourcePieceId ?? p.id)?.[1];
+    const fuente = indice == null ? undefined : piezas[Number(indice)];
+    return {
+      pieceId: fuente?.sourcePieceId ?? p.sourcePieceId ?? p.id,
+      substrateIndex: 0,
+      xMm: p.centerXMm - p.widthMm / 2,
+      yMm: p.centerYMm - p.heightMm / 2,
+      widthMm: p.widthMm,
+      heightMm: p.heightMm,
+      rotated: p.rotated,
+      panelIndex: p.panelIndex ?? undefined,
+      panelCount: p.panelCount ?? undefined,
+      panelAxis: (p.panelAxis ?? undefined) as
+        | 'vertical'
+        | 'horizontal'
+        | undefined,
+      usefulWidthMm: p.usefulWidthMm,
+      usefulHeightMm: p.usefulHeightMm,
+      overlapStartMm: p.overlapStartMm,
+      overlapEndMm: p.overlapEndMm,
+      meta: { label: fuente?.nombre ?? p.label },
+    };
+  });
 
   const substrates: SubstrateUsage[] = [
     { kind: 'roll', lengthMm: consumedLengthMm, widthMm: rollWidthMm },
@@ -2086,17 +2134,25 @@ export function evaluateRollLayoutForConfiguredAlgorithm(
   result: GranFormatoMixedShelfLayoutResult;
   algorithm: 'shelf-rollo' | 'maxrects-rollo';
 } | null {
-  const shelfResult =
+  const shelfCandidate =
     algorithm === 'maxrects-rollo'
       ? null
       : evaluateGranFormatoMixedShelfLayout(shelfInput);
-  const maxRectsResult =
+  const shelfResult = layoutRolloValido(shelfCandidate, shelfInput)
+    ? shelfCandidate
+    : null;
+  const maxRectsCandidate =
     algorithm === 'shelf-rollo'
       ? null
       : evaluateGranFormatoMaxRectsRollLayout({
           ...shelfInput,
           upperBoundConsumedLengthMm: shelfResult?.consumedLengthMm ?? null,
         });
+  // El menor largo sólo es útil si las piezas no se superponen. Un candidato
+  // inválido no debe ocultar la otra solución válida ni forzar el fallback de área.
+  const maxRectsResult = layoutRolloValido(maxRectsCandidate, shelfInput)
+    ? maxRectsCandidate
+    : null;
   const result =
     algorithm === 'maxrects-rollo'
       ? maxRectsResult
@@ -2108,6 +2164,35 @@ export function evaluateRollLayoutForConfiguredAlgorithm(
     result,
     algorithm: result === maxRectsResult ? 'maxrects-rollo' : 'shelf-rollo',
   };
+}
+
+function layoutRolloValido(
+  result: GranFormatoMixedShelfLayoutResult | null,
+  input: EvaluateGranFormatoMixedShelfLayoutInput,
+): boolean {
+  if (!result) return false;
+  const widthMm = input.printableWidthMm + (input.marginLeftMm ?? 0);
+  const areaUtilMm2 = result.usefulAreaM2 * 1_000_000;
+  const areaTotalMm2 = widthMm * result.consumedLengthMm;
+  const aprovechamientoPct = (areaUtilMm2 / areaTotalMm2) * 100;
+  return geometriaDispatchValida({
+    algorithm: 'shelf-rollo',
+    cantidadCalculada: result.consumedLengthMm / 1000,
+    unidad: 'm_lineales',
+    aprovechamientoPct,
+    piezasAcomodadas: result.placements.length,
+    metricasRaw: { aprovechamientoPct, areaUtilMm2, areaTotalMm2 },
+    substrates: [{ kind: 'roll', widthMm, lengthMm: result.consumedLengthMm }],
+    placements: result.placements.map((p) => ({
+      pieceId: p.id,
+      substrateIndex: 0,
+      xMm: p.centerXMm - p.widthMm / 2,
+      yMm: p.centerYMm - p.heightMm / 2,
+      widthMm: p.widthMm,
+      heightMm: p.heightMm,
+      rotated: p.rotated,
+    })),
+  });
 }
 
 function chooseBestRollCandidate(
@@ -2181,7 +2266,7 @@ function runGrid2DMultiForArea(
     return runGrid2DSingleForArea(jobContext, config);
   }
 
-  const result = nestGrid2DMulti(
+  const rectangular = nestGrid2DMulti(
     piezas.map((p, idx) => ({
       id: `pieza_${idx}`,
       widthMm: p.anchoMm,
@@ -2207,10 +2292,51 @@ function runGrid2DMultiForArea(
     },
   );
 
+  const geometria = jobContext.geometriaVectorial;
+  const piezaVectorial =
+    geometria?.piezas.length === 1 ? geometria.piezas[0] : null;
+  // El contorno ya cargado también debe participar de la disposición de
+  // impresión. Un patrón periódico es un candidato adicional al MaxRects;
+  // el corte heredará exactamente estas mismas posiciones y giros.
+  const patron =
+    paso.familiaCodigo === 'impresion_por_area' &&
+    jobContext.modoCotizacionVectorial !== 'medidas' &&
+    piezaVectorial &&
+    piezas.length === 1 &&
+    !contienePaneles &&
+    config.pieceBleedMm === 0 &&
+    piezas[0].sourcePieceId === piezaVectorial.id &&
+    casiIgual(piezas[0].anchoMm, piezaVectorial.anchoMm) &&
+    casiIgual(piezas[0].altoMm, piezaVectorial.altoMm)
+      ? nestearPatronRepetido({
+          pieza: piezaVectorial,
+          cantidad: piezas[0].cantidad,
+          sustrato: {
+            kind: 'sheet',
+            widthMm: config.sheetWidthMm,
+            heightMm: config.sheetHeightMm,
+            margins: config.margins,
+          },
+          angulosPermitidos: config.allowRotation ? [0, 90, 180, 270] : [0],
+          separacionMm: Math.max(config.separationHMm, config.separationVMm),
+        })
+      : null;
+  const consumo = (r: NestingResult) =>
+    r.metrics.perSubstrate?.reduce((s, p) => s + p.consumedLengthMm, 0) ??
+    Infinity;
+  const result: NestingResult =
+    patron &&
+    (rectangular.placements.length === 0 ||
+      patron.substrates.length < rectangular.substrates.length ||
+      (patron.substrates.length === rectangular.substrates.length &&
+        consumo(patron) < consumo(rectangular) - 0.01))
+      ? patron
+      : rectangular;
+
   if (result.placements.length === 0) return null;
 
   return {
-    algorithm: 'grid-2d-multi',
+    algorithm: result.algorithm as NestingDispatchResult['algorithm'],
     cantidadCalculada: result.substrates.length,
     unidad: 'pliegos',
     aprovechamientoPct: result.metrics.aprovechamientoPct,
@@ -2218,6 +2344,10 @@ function runGrid2DMultiForArea(
     placements: result.placements.map(promoverMetadataPanel),
     metricasRaw: result.metrics,
     piezasAcomodadas: result.placements.length,
+    // Un patrón periódico sigue siendo el layout de impresión del vector.
+    // Su algoritmo deja de ser grid, pero debe aportar demanda al lote mixto
+    // y conservar el registro de los cortes que heredan estas posiciones.
+    ...(geometria ? { layoutVinculadoGeometriaVectorial: true } : {}),
     visualConfig: buildVisualConfig({
       kind: 'sheet',
       widthMm: config.sheetWidthMm,
@@ -2243,6 +2373,7 @@ function metadataPanelDePieza(
   if (pieza.panelIndex == null && !pieza.sourcePieceId) return undefined;
   return {
     sourcePieceId: pieza.sourcePieceId,
+    ...(pieza.nombre ? { label: pieza.nombre } : {}),
     panelIndex: pieza.panelIndex,
     panelCount: pieza.panelCount,
     panelAxis: pieza.panelAxis,

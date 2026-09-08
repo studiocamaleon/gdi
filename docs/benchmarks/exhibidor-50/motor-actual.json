@@ -1,0 +1,13 @@
+{
+  "algoritmo": "grafonest-baseline-v1",
+  "placas": 35,
+  "cantidad": 450,
+  "duracionMs": 120005,
+  "busqueda": {
+    "motivoFin": "PRESUPUESTO_AGOTADO",
+    "presupuestoMs": 120000,
+    "intentos": 6,
+    "candidatosValidos": 0,
+    "minimoTeoricoPlacas": 28
+  }
+}

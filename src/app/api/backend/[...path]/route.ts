@@ -70,6 +70,8 @@ async function handler(
   }
 
   const responseHeaders = new Headers();
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) responseHeaders.set("retry-after", retryAfter);
   const respContentType = response.headers.get("content-type");
   if (respContentType) {
     responseHeaders.set("content-type", respContentType);

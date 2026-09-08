@@ -83,6 +83,16 @@
   background: #fff;
 }
 
+.occurrence[data-single="true"] {
+  border: 0;
+  background: transparent;
+}
+
+.occurrence[data-single="true"] > .fields:first-child,
+.occurrence[data-single="true"] > .resolvedMessage:first-child {
+  border-top: 0;
+}
+
 .occurrenceHead {
   display: flex;
   align-items: center;

@@ -1181,10 +1181,7 @@
   display: grid;
   gap: 8px;
   margin-top: 7px;
-  padding: 13px;
-  border: 1px solid #ebe6df;
-  border-radius: 12px;
-  background: #fffdfb;
+  min-width: 0;
 }
 
 .geometrySourcesHead {
@@ -1310,6 +1307,8 @@
 
 .shell :global(.save-sticky-footer),
 .shell :global(.pricing-sticky-footer) {
+  /* Las acciones de página quedan debajo de los diálogos (capa 50). */
+  z-index: 30;
   border-color: rgb(226 220 213 / 94%);
   border-radius: 15px;
   box-shadow: 0 16px 40px rgb(25 22 19 / 14%);

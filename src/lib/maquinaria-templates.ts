@@ -1224,6 +1224,42 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
         }),
       ],
     }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Optimización de corte",
+      description:
+        "Permite compartir una única trayectoria entre bordes rectos compatibles.",
+      fields: [
+        field({
+          key: "commonLineHabilitado",
+          label: "Admite líneas de corte compartidas",
+          scope: "maquina",
+          kind: "boolean",
+          description:
+            "Declara que la máquina puede ejecutar Common Line. Cada paso decide si desea utilizarlo.",
+        }),
+        field({
+          key: "commonLineLongitudMinimaMm",
+          label: "Longitud mínima compartida",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "20",
+          description:
+            "Evita compartir segmentos demasiado cortos, donde la entrada y la precisión no compensan el ahorro.",
+        }),
+        field({
+          key: "commonLineToleranciaMm",
+          label: "Tolerancia geométrica",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "0,1",
+          description:
+            "Máxima diferencia admitida al comparar longitudes, paralelismo y coincidencia de extremos.",
+        }),
+      ],
+    }),
     // Se quitó "Parámetros técnicos" (tipoLaser/potenciaWatts/
     // operacionesSoportadas): el motor NO los lee — la operación que rutea vive
     // en el tipoOperacion de cada perfil (auto-selección). Mismo criterio que
@@ -1277,6 +1313,16 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
           placeholder: "33",
           description:
             "Velocidad de recorrido en mm/s. Referencia CO2: acrílico 3mm ~125, 5mm ~33, 10mm ~8; grabado ~400.",
+        }),
+        field({
+          key: "anchoCorteMm",
+          label: "Ancho efectivo de corte",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+          placeholder: "0,2",
+          description:
+            "Kerf real de este material y espesor. GrafoNest lo usa para ubicar la trayectoria compartida sin alterar la medida terminada.",
         }),
         field({
           key: "setupMin",
@@ -1337,6 +1383,38 @@ function buildRouterCncSections(): MaquinariaTemplateSection[] {
           kind: "textarea",
           description:
             "Borde de la placa que la fresa no puede usar en cada lado (clamps, sacrificio); el nesting descuenta estos márgenes del área útil.",
+        }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Optimización de corte",
+      description:
+        "Permite compartir una única trayectoria entre bordes rectos compatibles.",
+      fields: [
+        field({
+          key: "commonLineHabilitado",
+          label: "Admite líneas de corte compartidas",
+          scope: "maquina",
+          kind: "boolean",
+          description:
+            "Declara que la máquina puede ejecutar Common Line. Cada paso decide si desea utilizarlo.",
+        }),
+        field({
+          key: "commonLineLongitudMinimaMm",
+          label: "Longitud mínima compartida",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "20",
+        }),
+        field({
+          key: "commonLineToleranciaMm",
+          label: "Tolerancia geométrica",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "0,1",
         }),
       ],
     }),
@@ -1402,6 +1480,16 @@ function buildRouterCncSections(): MaquinariaTemplateSection[] {
           placeholder: "1700",
           description:
             "Feed rate de recorrido en mm/min. Referencia: MDF 3mm ~1700, 9mm ~500, 18mm ~170; grabado ~16000.",
+        }),
+        field({
+          key: "anchoCorteMm",
+          label: "Ancho efectivo de corte",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+          placeholder: "6",
+          description:
+            "Diámetro efectivo de la fresa para esta operación. GrafoNest lo usa como ancho físico del corte compartido.",
         }),
         field({
           key: "setupMin",

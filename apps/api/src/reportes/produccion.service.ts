@@ -98,7 +98,7 @@ export class ReporteProduccionService {
                COALESCE(SUM(p."duracionEstimadaMin"), 0)::float8 AS minutos
         FROM "OrdenTrabajoItemPaso" p
         JOIN "OrdenTrabajo" ot ON ot.id = p."ordenId"
-        WHERE p."tenantId" = ${tenantId}::uuid AND p.estado <> 'hecho'
+        WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado <> 'hecho'
           AND ot.estado IN ('pendiente', 'produccion')
       `,
       this.prisma.centroCostoCapacidadPeriodo.findMany({
@@ -131,7 +131,7 @@ export class ReporteProduccionService {
              MAX(p."completadoEl") AS fin
       FROM "OrdenTrabajo" ot
       JOIN "OrdenTrabajoItem" i ON i."ordenId" = ot.id
-      JOIN "OrdenTrabajoItemPaso" p ON p."itemId" = i.id
+      JOIN "OrdenTrabajoItemPaso" p ON p."itemId" = i.id AND p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE'
       LEFT JOIN "Cliente" c ON c.id = ot."clienteId"
       WHERE ot."tenantId" = ${tenantId}::uuid
         AND ot.estado IN ('finalizada', 'entregada')
@@ -210,7 +210,7 @@ export class ReporteProduccionService {
              COUNT(*) FILTER (WHERE p."tiempoRealMin" > 480
                         OR p."tiempoRealMin" > 5 * p."duracionEstimadaMin")::int AS atipicos
       FROM "OrdenTrabajoItemPaso" p
-      WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
+      WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
         AND p."tiempoRealMin" IS NOT NULL
         AND p."tiempoFuente" IN ('medido', 'medido_lote')
         AND p."duracionEstimadaMin" IS NOT NULL
@@ -256,7 +256,7 @@ export class ReporteProduccionService {
                COALESCE(SUM(p."tiempoRealMin"), 0)::float8 AS "minReales"
         FROM "OrdenTrabajoItemPaso" p
         JOIN "CentroCosto" cc ON cc.id = p."centroCostoId"
-        WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
+        WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
           AND p."tiempoRealMin" IS NOT NULL
           AND p."completadoEl" >= ${rango.desde} AND p."completadoEl" < ${finExclusivo(rango)}
         GROUP BY p."centroCostoId", cc.nombre
@@ -303,7 +303,7 @@ export class ReporteProduccionService {
       SELECT to_char(date_trunc('day', (p."completadoEl" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona}), 'YYYY-MM-DD') AS fecha,
              COUNT(*)::int AS cantidad
       FROM "OrdenTrabajoItemPaso" p
-      WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
+      WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
         AND p."completadoEl" >= ${rango.desde} AND p."completadoEl" < ${finExclusivo(rango)}
       GROUP BY 1 ORDER BY 1
     `;
@@ -321,7 +321,7 @@ export class ReporteProduccionService {
         SELECT COALESCE(p."tiempoFuente", 'invalido') AS fuente,
                COUNT(*)::int AS pasos
         FROM "OrdenTrabajoItemPaso" p
-        WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
+        WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
           AND p."completadoEl" >= ${rango.desde} AND p."completadoEl" < ${finExclusivo(rango)}
         GROUP BY 1 ORDER BY pasos DESC
       `,
@@ -331,6 +331,7 @@ export class ReporteProduccionService {
       this.prisma.$queryRaw<Array<{ motivo: string; veces: number }>>`
         SELECT t."motivoFin" AS motivo, COUNT(*)::int AS veces
         FROM "OrdenTrabajoPasoTramo" t
+        JOIN "OrdenTrabajoItemPaso" p ON p.id = t."pasoId" AND p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE'
         WHERE t."tenantId" = ${tenantId}::uuid
           AND t."finEl" IS NOT NULL
           AND t."finEl" >= ${rango.desde} AND t."finEl" < ${finExclusivo(rango)}
@@ -345,6 +346,7 @@ export class ReporteProduccionService {
                COALESCE(SUM(EXTRACT(EPOCH FROM (t."finEl" - t."inicioEl")) / 60.0), 0)::float8 AS minutos,
                COUNT(DISTINCT t."pasoId")::int AS pasos
         FROM "OrdenTrabajoPasoTramo" t
+        JOIN "OrdenTrabajoItemPaso" p ON p.id = t."pasoId" AND p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE'
         WHERE t."tenantId" = ${tenantId}::uuid
           AND t."finEl" IS NOT NULL
           AND t."finEl" >= ${rango.desde} AND t."finEl" < ${finExclusivo(rango)}
@@ -447,7 +449,7 @@ export class ReporteProduccionService {
       SELECT COALESCE(NULLIF(p."motivoBloqueo", ''), 'Sin detalle') AS motivo,
              COUNT(*)::int AS veces
       FROM "OrdenTrabajoItemPaso" p
-      WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'bloqueado'
+      WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado = 'bloqueado'
       GROUP BY 1 ORDER BY veces DESC
     `;
     return {

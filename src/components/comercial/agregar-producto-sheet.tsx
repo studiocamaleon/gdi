@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { useRecetaCotizacion } from "@/hooks/use-receta-cotizacion";
+import { PlanLotesCotizacion } from '@/components/nesting/plan-lotes-cotizacion';
 import Link from "next/link";
 import {
   ArrowLeftIcon,
@@ -600,7 +602,7 @@ const MATERIAL_BASE_SLOT_CODES = new Set([
   "soporte_principal",
 ]);
 
-const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
+export const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   rutaAlternativaId: "",
   medidaPredefinidaId: "",
   caras: 1,
@@ -3249,8 +3251,29 @@ function isMetroLinealConMedidasVariables(
 
 function usaPiezasParaCotizar(
   productoDetalle: ProductoDetalle | null,
-  config: Pick<MotorConfigState, "modoCotizacionLineal">,
+  config: Pick<
+    MotorConfigState,
+    "modoCotizacionLineal" | "modoCotizacionVectorial" | "rutaAlternativaId"
+  >,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
 ) {
+  const ruta = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
+  const pasoVectorial = getPasoVectorialActivo(ruta, includeConfig);
+  const atributos = productoDetalle?.atributosComercialesJson ?? null;
+  const geometria = getGeometriasComerciales(atributos);
+  const modoVectorial = modoVectorialEfectivo(
+    pasoVectorial,
+    config.modoCotizacionVectorial,
+    atributos,
+  );
+  // El SVG describe un cartel completo: «Cantidad» indica sus copias. Las
+  // filas rectangulares residuales de LIBRE/AMBAS no representan ese pedido.
+  if (
+    modoVectorial !== "medidas" &&
+    (pasoVectorial || geometria.modo === "VECTORIAL" || geometria.modo === "AMBAS")
+  ) {
+    return false;
+  }
   return (
     (modoMedidasPermitePersonalizada(productoDetalle?.modoMedidas) &&
       !isMetroLinealConMedidasVariables(productoDetalle)) ||
@@ -3406,7 +3429,7 @@ function personalizacionEstadoEfectivo(
   };
 }
 
-function buildJobContext(
+export function buildJobContext(
   productoDetalle: ProductoDetalle | null,
   config: MotorConfigState,
   qty: number,
@@ -3425,7 +3448,11 @@ function buildJobContext(
     medidaPredefinidaCruda.altoMm > 0
       ? medidaPredefinidaCruda
       : null;
-  const cotizaConPiezas = usaPiezasParaCotizar(productoDetalle, config);
+  const cotizaConPiezas = usaPiezasParaCotizar(
+    productoDetalle,
+    config,
+    includeConfig,
+  );
   const cotizaLinealDirecto =
     isMetroLinealConMedidasVariables(productoDetalle) &&
     config.modoCotizacionLineal === "directo";
@@ -4544,7 +4571,7 @@ function buildItem(
   } satisfies PropuestaItem;
 }
 
-function analisisVectorialDesdeItem(
+export function analisisVectorialDesdeItem(
   item: PropuestaItem,
 ): AnalisisSvgFabricacion | null {
   if (item.disenoVectorialAnalisis) return item.disenoVectorialAnalisis;
@@ -4557,6 +4584,43 @@ function analisisVectorialDesdeItem(
   const nestingResult = item.cotizacion.pasos
     .map((paso) => paso.nestingResult)
     .find((nesting) => nesting?.algorithm === "irregular-2d-bottom-left-v1");
+  const solucion = nestingResult?.solucionNesting;
+  if (fuente && solucion?.schemaVersion === 1) {
+    // El jobContext persistido contiene los inputs del comercial, no la
+    // geometría derivada por el motor. La solución guarda las piezas originales
+    // y el resultado completo: no reconstruirlo desde la proyección del visor.
+    const piezas = solucion.problema.demandas.flatMap(({ id, geometria }) =>
+      geometria.tipo === "POLIGONO" ? [{ ...geometria, id }] : [],
+    );
+    if (
+      piezas.length > 0 &&
+      piezas.length === solucion.problema.demandas.length
+    ) {
+      return {
+        nombreArchivo: fuente.nombreArchivo,
+        cacheKey:
+          typeof ctx.disenoVectorialCacheKey === "string"
+            ? ctx.disenoVectorialCacheKey
+            : undefined,
+        configuracionEncastres: resolverConfiguracionEncastresVectoriales(
+          solucion.problema.configuracion.configuracionEncastres,
+        ),
+        geometria: geometria ?? {
+          schemaVersion: 1,
+          anchoMm: Math.max(...piezas.map((p) => (p.origenXmm ?? 0) + p.anchoMm)),
+          altoMm: Math.max(...piezas.map((p) => (p.origenYmm ?? 0) + p.altoMm)),
+          piezas,
+          areaTotalMm2: piezas.reduce((total, p) => total + p.areaMm2, 0),
+          perimetroTotalMm: piezas.reduce((total, p) => total + p.perimetroMm, 0),
+          // No se persiste el hash del SVG en la solución. El API valida la
+          // fuente y el cacheKey al cotizar; no confía en esta reconstrucción.
+          hashFuente: "",
+        },
+        nesting: solucion.resultado,
+        diagnosticos: solucion.diagnosticos,
+      };
+    }
+  }
   const sheet = nestingResult?.substrates[0];
   if (!fuente || !geometria || !nestingResult || sheet?.kind !== "sheet")
     return null;
@@ -4568,6 +4632,11 @@ function analisisVectorialDesdeItem(
     const meta = placement.meta as
       | {
           contornos?: AnalisisSvgFabricacion["nesting"]["placements"][number]["contornos"];
+          cortesInternos?: AnalisisSvgFabricacion["nesting"]["placements"][number]["cortesInternos"];
+          operaciones?: AnalisisSvgFabricacion["nesting"]["placements"][number]["operaciones"];
+          fabricacion?: AnalisisSvgFabricacion["nesting"]["placements"][number]["fabricacion"];
+          rotacionGrados?: number;
+          segmentacion?: AnalisisSvgFabricacion["nesting"]["placements"][number]["segmentacion"];
         }
       | undefined;
     return {
@@ -4576,10 +4645,14 @@ function analisisVectorialDesdeItem(
       substrateIndex: placement.substrateIndex ?? 0,
       xMm: placement.xMm,
       yMm: placement.yMm,
-      rotacion: placement.rotated ? (90 as const) : (0 as const),
+      rotacion: meta?.rotacionGrados ?? (placement.rotated ? 90 : 0),
       anchoMm: placement.widthMm,
       altoMm: placement.heightMm,
       contornos: meta?.contornos ?? [],
+      cortesInternos: meta?.cortesInternos,
+      operaciones: meta?.operaciones,
+      fabricacion: meta?.fabricacion,
+      segmentacion: meta?.segmentacion,
     };
   });
   if (placements.some((placement) => placement.contornos.length === 0))
@@ -5134,6 +5207,8 @@ type ConfigStepProps = {
   onSaveBrief: () => void;
   cotizacion: CotizarResponse | null;
   cotizando: boolean;
+  cotizacionDesactualizada: boolean;
+  onPlanOpenChange: (open: boolean) => void;
   cotizacionTrabajo: TrabajoCotizacionAsincrona | null;
   cotizacionError: ErrorCotizacionPresentado | null;
   onCotizar: () => void;
@@ -5165,6 +5240,8 @@ function ApConfigStep({
   onSaveBrief,
   cotizacion,
   cotizando,
+  cotizacionDesactualizada,
+  onPlanOpenChange,
   cotizacionTrabajo,
   cotizacionError,
   onCotizar,
@@ -5201,6 +5278,7 @@ function ApConfigStep({
     return "Importe variable";
   };
   const verMargenes = usePuede("finanzas.ver_margenes");
+  const revisionCotizacion = useRecetaCotizacion(product.id, motorConfig.rutaAlternativaId);
   const totals = getTotals(product, qty, adi);
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
   const cotizacionErrores =
@@ -5434,6 +5512,7 @@ function ApConfigStep({
   const [familiasCatalogo, setFamiliasCatalogo] = React.useState<
     Map<string, FamiliaListItem>
   >(new Map());
+  const [cargandoFamilias, setCargandoFamilias] = React.useState(true);
   React.useEffect(() => {
     let cancelado = false;
     getCatalogoFamilias()
@@ -5446,6 +5525,9 @@ function ApConfigStep({
       .catch(() => {
         // Sin catálogo no se ofrecen los campos editables; el motor sigue
         // usando lo que modeló el modelador.
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoFamilias(false);
       });
     return () => {
       cancelado = true;
@@ -5675,6 +5757,15 @@ function ApConfigStep({
       ),
     [productoDetalle?.atributosComercialesJson],
   );
+  React.useEffect(() => {
+    if (!geometriasComerciales.fuentes.some(f => f.predeterminada)) return;
+    setMotorConfig(current => {
+      const faltantes = geometriasComerciales.fuentes.filter(f => f.predeterminada && !current.geometriasVectoriales[f.id]);
+      if (!faltantes.length) return current;
+      return { ...current, geometriasVectoriales: { ...current.geometriasVectoriales,
+        ...Object.fromEntries(faltantes.map(f => [f.id, f.predeterminada!])) } };
+    });
+  }, [geometriasComerciales, setMotorConfig]);
   const fuenteGeometricaPrincipalId =
     geometriasComerciales.fuentes[0]?.id ?? null;
   const pasoVectorialActivo = React.useMemo(
@@ -5682,6 +5773,15 @@ function ApConfigStep({
     [includeVisibleConfig, rutaSel],
   );
   const editorVectorialHabilitado = Boolean(pasoVectorialActivo);
+  React.useEffect(() => {
+    if (!editorVectorialHabilitado || !fuenteGeometricaPrincipalId) return;
+    setMotorConfig(current => {
+      const guardada = current.geometriasVectoriales[fuenteGeometricaPrincipalId];
+      if (!guardada?.procedencia || current.disenoVectorialFuente) return current;
+      return { ...current, disenoVectorialFuente: { ...guardada, configuracionCapas: undefined } };
+    });
+  }, [editorVectorialHabilitado, fuenteGeometricaPrincipalId, motorConfig.geometriasVectoriales, setMotorConfig]);
+
   const familiaVectorial = pasoVectorialActivo
     ? familiasCatalogo.get(pasoVectorialActivo.rutaPaso.familiaCodigo)
     : null;
@@ -7847,6 +7947,8 @@ function ApConfigStep({
                   <>
                     {renderCantidadCard()}
                     <DisenoVectorialCotizador
+                      permitirReemplazo={!geometriasComerciales.fuentes.find(f => f.id === fuenteGeometricaPrincipalId)?.predeterminada || geometriasComerciales.fuentes.find(f => f.id === fuenteGeometricaPrincipalId)?.permitirReemplazo === true}
+                      predeterminada={geometriasComerciales.fuentes.find(f => f.id === fuenteGeometricaPrincipalId)?.predeterminada}
                       titulo={
                         permiteMedidasVectoriales && permiteArchivoVectorial
                           ? "Archivo vectorial"
@@ -7878,6 +7980,7 @@ function ApConfigStep({
                         preservarComposicionVectorial
                       }
                       configuracionEncastres={configuracionEncastresVectoriales}
+                      cargandoConfiguracion={cargandoFamilias}
                       onChange={(fuente, analisis) =>
                         setMotorConfig((current) => {
                           const geometriasVectoriales = {
@@ -8692,6 +8795,9 @@ function ApConfigStep({
           modoCotizacionVectorialVisible === "svg")) ? (
         <GeometriasVectorialesCotizacion
           configuracion={geometriasComerciales}
+          componentes={revisionCotizacion?.componentes}
+          cantidad={qty}
+          calculados={!cotizacionDesactualizada && !cotizando ? cotizacionExitosa?.componentesFabricados : undefined}
           values={motorConfig.geometriasVectoriales}
           ocultarFuenteId={
             editorVectorialHabilitado ? fuenteGeometricaPrincipalId : null
@@ -8708,8 +8814,8 @@ function ApConfigStep({
 
       {product.id && motorConfig.rutaAlternativaId ? (
         <ComponentesFabricadosCotizacion
-          productoId={product.id}
-          rutaAlternativaId={motorConfig.rutaAlternativaId}
+          revision={revisionCotizacion}
+          cantidadProductos={qty}
           values={motorConfig.componentesConfiguracion}
           onChange={(componentesConfiguracion) =>
             setMotorConfig((current) => ({
@@ -9004,7 +9110,9 @@ function ApConfigStep({
       {product.real ? (
         <div className="ap-config-actions ap-config-actions-auto">
           <span>
-            {usaGrafoNest
+            {Object.keys(motorConfig.geometriasVectoriales).length > 0
+              ? "Las piezas se calculan juntas al cambiar la cantidad. Revisá el plan de fabricación antes de confirmar."
+              : usaGrafoNest
               ? "El nesting se genera manualmente; luego el precio se actualiza con ese resultado."
               : "El precio se calcula automáticamente al cambiar cantidad, medidas u opcionales."}
           </span>
@@ -9018,6 +9126,13 @@ function ApConfigStep({
           </button>
         </div>
       ) : null}
+
+      <PlanLotesCotizacion
+        cotizacion={cotizacionExitosa}
+        esperado={Boolean(revisionCotizacion?.componentes.some((c) => c.configuracionJson?.piezas?.length))}
+        estado={cotizando ? "calculando" : cotizacionErrorPresentado ? "error" : cotizacionDesactualizada ? "pendiente" : "listo"}
+        onOpenChange={onPlanOpenChange}
+      />
 
       {product.real ? (
         <div
@@ -9252,6 +9367,9 @@ export function AgregarProductoSheet({
   const [briefArchivosPendientes, setBriefArchivosPendientes] = React.useState<
     BriefDisenoArchivoPendiente[]
   >([]);
+  const [planOpen, setPlanOpen] = React.useState(false);
+  const planOpenRef = React.useRef(false);
+  const cambiarPlanOpen = React.useCallback((value: boolean) => { planOpenRef.current = value; setPlanOpen(value); }, []);
   const [briefEditorOpen, setBriefEditorOpen] = React.useState(false);
   const [briefDisenoDraft, setBriefDisenoDraft] = React.useState<BriefDiseno>(
     () => ({ ...BRIEF_DISENO_VACIO, archivos: [] }),
@@ -9650,8 +9768,9 @@ export function AgregarProductoSheet({
         presentarErrorCotizacion({
           codigo: "medidas_requeridas",
           mensaje: "Falta completar una medida válida para este producto.",
-          sugerencia:
-            "Ingresá ancho y alto mayores a cero en los campos indicados.",
+          sugerencia: productoDetalle && productoEs3D(productoDetalle)
+            ? "Ingresá ancho, alto y profundidad mayores a cero en los campos indicados."
+            : "Ingresá ancho y alto mayores a cero en los campos indicados.",
           accion: { tipo: "REVISAR_DATOS", etiqueta: "Completar medidas" },
         }),
       );
@@ -9680,6 +9799,9 @@ export function AgregarProductoSheet({
     );
     const seq = ++cotizacionSeqRef.current;
     setCotizando(true);
+    // El importe anterior puede seguir visible, pero no debe guardarse si
+    // este recálculo falla o aún no devolvió su resultado.
+    setCotizacionDesactualizada(true);
     setCotizacionTrabajo(null);
     // No limpiamos la cotización anterior: la mantenemos visible (atenuada)
     // mientras llega la nueva, para evitar el salto/parpadeo del panel.
@@ -9977,7 +10099,7 @@ export function AgregarProductoSheet({
         ) ?? [],
       ).filter((element) => !element.hasAttribute("aria-hidden"));
     const onTab = (event: KeyboardEvent) => {
-      if (event.key !== "Tab") return;
+      if (event.key !== "Tab" || planOpenRef.current) return;
       const disponibles = focusables();
       if (disponibles.length === 0) return;
       const first = disponibles[0];
@@ -10001,7 +10123,7 @@ export function AgregarProductoSheet({
   React.useEffect(() => {
     if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || planOpenRef.current || event.defaultPrevented || (event.target instanceof Element && event.target.closest("[data-plan-fabricacion-dialog]"))) return;
       if (briefEditorOpen) {
         cerrarBrief();
         return;
@@ -10035,6 +10157,7 @@ export function AgregarProductoSheet({
       />
       <div
         ref={dialogRef}
+        data-plan-abierto={planOpen || undefined}
         className={`sheet sheet-ap${esCarteleriaFull ? ` ${cartS.sheetFull}` : ""}`}
         role="dialog"
         aria-modal="true"
@@ -10103,6 +10226,8 @@ export function AgregarProductoSheet({
               onSaveBrief={guardarBrief}
               cotizacion={cotizacion}
               cotizando={cotizando}
+              cotizacionDesactualizada={cotizacionDesactualizada}
+              onPlanOpenChange={cambiarPlanOpen}
               cotizacionTrabajo={cotizacionTrabajo}
               cotizacionError={cotizacionError}
               onCotizar={cotizarActual}
@@ -10129,14 +10254,14 @@ export function AgregarProductoSheet({
                 <span className="lbl">Total c/ imp.</span>
                 <span className="val mono">
                   {product.real
-                    ? cotizando || cotizacionDesactualizada
-                      ? "Cotizando..."
-                      : cotizacionExitosa
+                    ? cotizando
+                      ? "Cotizando…"
+                      : cotizacionExitosa && !cotizacionDesactualizada
                         ? formatCurrency(
                             getCotizacionTotal(cotizacionExitosa),
                             moneda,
                           )
-                        : "Pendiente"
+                        : "Pendiente de cotizar"
                     : formatCurrency(totals.total, moneda)}
                 </span>
               </div>

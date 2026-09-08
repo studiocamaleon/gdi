@@ -6,6 +6,13 @@ import {
   runNestingForPaso,
 } from '../nesting-dispatcher';
 import { resolverProblemaNestingIrregular } from '../geometria-vectorial/contrato-nesting';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  inspeccionarVector,
+  interpretarVector,
+} from '../../productos-servicios/geometrias/interpretar-vector';
+import { analizarSvgFabricacion } from '../geometria-vectorial/svg-parser';
 
 describe('formato físico del material', () => {
   it('reconoce un rollo especial por metadata sin confundir su subfamilia ambigua', () => {
@@ -334,6 +341,59 @@ const materialPlaca = {
 };
 
 describe('runNestingForPaso rollo optimizado', () => {
+  it('conserva la demanda del DXF cuando gana el patrón periódico de impresión', async () => {
+    const archivo = readFileSync(
+      join(
+        __dirname,
+        '../geometria-vectorial/fixtures/exhibidor-capa-congelada.dxf',
+      ),
+      'utf8',
+    );
+    const inspeccion = inspeccionarVector(archivo, 'estante.dxf');
+    const fuente = interpretarVector(
+      inspeccion,
+      {
+        exteriorId: inspeccion.sugeridaId,
+        unidad: 'pt',
+        cerrarExterior: true,
+        operaciones: [],
+      },
+      {
+        nombreArchivo: 'estante.dxf',
+        archivoId: 'archivo',
+        geometriaId: 'geometria',
+        hash: 'hash',
+      },
+    );
+    const geometria = analizarSvgFabricacion(fuente).geometria;
+    const result = await runNestingForPaso(
+      buildPasoAreaPlaca() as never,
+      {
+        cantidad: 200,
+        geometriaVectorial: geometria,
+        disenoVectorialFuente: fuente,
+        piezas: geometria.piezas.map((p) => ({
+          cantidad: 200,
+          anchoMm: p.anchoMm,
+          altoMm: p.altoMm,
+          sourcePieceId: p.id,
+        })),
+      },
+      {
+        id: 'corrugado',
+        atributosVarianteJson: {
+          anchoMm: 860,
+          largoMm: 564,
+          margenNoUsableMm: 5,
+        },
+      },
+    );
+    expect(result?.algorithm).toBe('irregular-2d-bottom-left-v1');
+    expect(result?.layoutVinculadoGeometriaVectorial).toBe(true);
+    expect(result?.demandaNesting).toHaveLength(1);
+    expect(result?.demandaNesting?.[0].cantidad).toBe(200);
+    expect(result?.demandaNesting?.[0].geometria.tipo).toBe('POLIGONO');
+  });
   it('marca el layout de impresión que debe conservar registro con un corte vectorial', async () => {
     const result = await runNestingForPaso(
       buildPasoAreaPlaca() as never,
@@ -793,132 +853,152 @@ describe('runNestingForPaso geometría vectorial', () => {
     ).rejects.toThrow('supera el área útil de la máquina');
   });
 
-  it('conserva la orientación impresa aunque la placa deba girarse al cargarla en el láser', async () => {
-    const geometriaVectorial = {
-      schemaVersion: 1 as const,
-      anchoMm: 254.566,
-      altoMm: 198.227,
-      areaTotalMm2: 50_455.87,
-      perimetroTotalMm: 905.586,
-      hashFuente: 'mdf-layout-compartido',
-      piezas: [
-        {
-          id: 'pieza-mdf',
-          anchoMm: 254.566,
-          altoMm: 198.227,
-          areaMm2: 50_455.87,
-          perimetroMm: 905.586,
-          contornos: [
+  it.each([
+    null,
+    { usarDisenoVectorial: false },
+    { usarDisenoVectorial: true },
+  ])(
+    'conserva el layout impreso con geometría heredada y configuración %j',
+    async (paramsPasoJson) => {
+      const geometriaVectorial = {
+        schemaVersion: 1 as const,
+        anchoMm: 254.566,
+        altoMm: 198.227,
+        areaTotalMm2: 50_455.87,
+        perimetroTotalMm: 905.586,
+        hashFuente: 'mdf-layout-compartido',
+        piezas: [
+          {
+            propietario: { archivoFuente: 'pieza.dxf', interpretacion: { version: 1 as const, geometriaId: 'origen', archivoId: 'archivo', hash: 'hash', capa: 'EXTERIOR', exteriorId: 'e', unidadDeclarada: 'mm', cierreConfirmado: false, aperturaOriginalMm: 0 } },
+            fabricacion: {
+              version: 1 as const, geometriaId: 'origen', archivoHash: 'hash', formato: 'DXF' as const,
+              origen: { minX: 0, minY: 0, factorMm: 1 },
+              transformacion: [1, 0, 0, 1, 0, 0] as [number,number,number,number,number,number], entidades: [],
+            },
+            id: 'pieza-mdf',
+            anchoMm: 254.566,
+            altoMm: 198.227,
+            areaMm2: 50_455.87,
+            perimetroMm: 905.586,
+            contornos: [
+              {
+                esHueco: false,
+                puntos: [
+                  { x: 0, y: 0 },
+                  { x: 254.566, y: 0 },
+                  { x: 254.566, y: 198.227 },
+                  { x: 0, y: 198.227 },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const jobContext = {
+        cantidad: 2,
+        geometriaVectorial,
+        layout_produccion: {
+          schemaVersion: 1 as const,
+          sourceRutaPasoId: 'rp-impresion-uv',
+          sourceConfigPasoId: 'cp-impresion-uv',
+          sourceFamiliaCodigo: 'impresion_por_area',
+          algorithm: 'grid-2d-multi' as const,
+          substrates: [
+            { kind: 'sheet' as const, count: 1, widthMm: 1_300, heightMm: 900 },
+          ],
+          placements: [
             {
-              esHueco: false,
-              puntos: [
-                { x: 0, y: 0 },
-                { x: 254.566, y: 0 },
-                { x: 254.566, y: 198.227 },
-                { x: 0, y: 198.227 },
-              ],
+              pieceId: 'pieza-mdf',
+              substrateIndex: 0,
+              xMm: 10,
+              yMm: 20,
+              widthMm: 254.566,
+              heightMm: 198.227,
+              rotated: false,
+            },
+            {
+              pieceId: 'pieza-mdf',
+              substrateIndex: 0,
+              xMm: 300,
+              yMm: 100,
+              widthMm: 198.227,
+              heightMm: 254.566,
+              rotated: true,
             },
           ],
         },
-      ],
-    };
-    const jobContext = {
-      cantidad: 2,
-      geometriaVectorial,
-      layout_produccion: {
-        schemaVersion: 1 as const,
+      };
+      const paso = {
+        rutaPasoId: 'rp-laser-mdf',
+        rutaPasoOrden: 2,
+        familiaCodigo: 'corte_laser',
+        configPasoId: 'extra-laser-mdf',
+        modoActivacion: 'OBLIGATORIO',
+        condicionActivacionJson: null,
+        modoTiempo: 'T-3',
+        mecanismoCantidad: 'DIRECT_FROM_JOBCONTEXT',
+        mecanismoCantidadConfigJson: null,
+        multiplicadoresActivos: [],
+        paramsPasoJson,
+        slots: [],
+        cargosDirectosPaso: [],
+        maquina: {
+          id: 'laser-co2',
+          codigo: 'LASER-CO2',
+          nombre: 'Cortadora Laser CO2',
+          plantilla: 'CORTADORA_LASER',
+          anchoUtil: 1_000,
+          largoUtil: 1_300,
+          parametrosTecnicosJson: { tipoLaser: 'CO2' },
+          consumibles: [],
+          componentesDesgaste: [],
+        },
+      };
+
+      const result = await runNestingForPaso(paso as never, jobContext, {
+        id: 'mdf-1300-900',
+        subfamilia: 'SUSTRATO_RIGIDO',
+        precioReferencia: 1_000,
+        atributosVarianteJson: { anchoMm: 1_300, altoMm: 900, espesorMm: 3 },
+      });
+
+      expect(result?.substrates).toEqual([
+        { kind: 'sheet', count: 1, widthMm: 1_300, heightMm: 900 },
+      ]);
+      expect(result?.placements).toHaveLength(2);
+      expect(result?.placements[0]).toMatchObject({
+        pieceId: 'pieza-mdf',
+        substrateIndex: 0,
+        xMm: 10,
+        yMm: 20,
+        widthMm: 254.566,
+        heightMm: 198.227,
+        rotated: false,
+      });
+      expect(result?.placements[1]).toMatchObject({
+        pieceId: 'pieza-mdf',
+        substrateIndex: 0,
+        xMm: 300,
+        yMm: 100,
+        widthMm: 198.227,
+        heightMm: 254.566,
+        rotated: true,
+      });
+      expect(result?.placements[0].meta).toMatchObject({ fabricacion: { geometriaId: 'origen', transformacion: [1,0,0,1,10,20] } });
+      expect(result?.placements.every(p => (p.meta as { propietario?: { interpretacion?: { geometriaId: string } } }).propietario?.interpretacion?.geometriaId === 'origen')).toBe(true);
+      const f = (result?.placements[1].meta as { fabricacion: { transformacion: number[] } }).fabricacion;
+      expect(f.transformacion[0]).toBeCloseTo(0);
+      expect(f.transformacion[1]).toBeCloseTo(1);
+      expect(f.transformacion[4]).toBeCloseTo(498.227);
+      expect(f.transformacion[5]).toBeCloseTo(100);
+      expect(result?.metricasRaw).toMatchObject({
+        layoutHeredadoDeImpresion: true,
+        placaRequiereRotacionEnMaquina: true,
         sourceRutaPasoId: 'rp-impresion-uv',
-        sourceConfigPasoId: 'cp-impresion-uv',
-        sourceFamiliaCodigo: 'impresion_por_area',
-        algorithm: 'grid-2d-multi' as const,
-        substrates: [
-          { kind: 'sheet' as const, count: 1, widthMm: 1_300, heightMm: 900 },
-        ],
-        placements: [
-          {
-            pieceId: 'pieza-mdf',
-            substrateIndex: 0,
-            xMm: 10,
-            yMm: 20,
-            widthMm: 254.566,
-            heightMm: 198.227,
-            rotated: false,
-          },
-          {
-            pieceId: 'pieza-mdf',
-            substrateIndex: 0,
-            xMm: 300,
-            yMm: 100,
-            widthMm: 198.227,
-            heightMm: 254.566,
-            rotated: true,
-          },
-        ],
-      },
-    };
-    const paso = {
-      rutaPasoId: 'rp-laser-mdf',
-      rutaPasoOrden: 2,
-      familiaCodigo: 'corte_laser',
-      configPasoId: 'extra-laser-mdf',
-      modoActivacion: 'OBLIGATORIO',
-      condicionActivacionJson: null,
-      modoTiempo: 'T-3',
-      mecanismoCantidad: 'CALCULADO_POR_PASO',
-      mecanismoCantidadConfigJson: null,
-      multiplicadoresActivos: [],
-      paramsPasoJson: { usarDisenoVectorial: true },
-      slots: [],
-      cargosDirectosPaso: [],
-      maquina: {
-        id: 'laser-co2',
-        codigo: 'LASER-CO2',
-        nombre: 'Cortadora Laser CO2',
-        plantilla: 'CORTADORA_LASER',
-        anchoUtil: 1_000,
-        largoUtil: 1_300,
-        parametrosTecnicosJson: { tipoLaser: 'CO2' },
-        consumibles: [],
-        componentesDesgaste: [],
-      },
-    };
-
-    const result = await runNestingForPaso(paso as never, jobContext, {
-      id: 'mdf-1300-900',
-      subfamilia: 'SUSTRATO_RIGIDO',
-      precioReferencia: 1_000,
-      atributosVarianteJson: { anchoMm: 1_300, altoMm: 900, espesorMm: 3 },
-    });
-
-    expect(result?.substrates).toEqual([
-      { kind: 'sheet', count: 1, widthMm: 1_300, heightMm: 900 },
-    ]);
-    expect(result?.placements).toHaveLength(2);
-    expect(result?.placements[0]).toMatchObject({
-      pieceId: 'pieza-mdf',
-      substrateIndex: 0,
-      xMm: 10,
-      yMm: 20,
-      widthMm: 254.566,
-      heightMm: 198.227,
-      rotated: false,
-    });
-    expect(result?.placements[1]).toMatchObject({
-      pieceId: 'pieza-mdf',
-      substrateIndex: 0,
-      xMm: 300,
-      yMm: 100,
-      widthMm: 198.227,
-      heightMm: 254.566,
-      rotated: true,
-    });
-    expect(result?.metricasRaw).toMatchObject({
-      layoutHeredadoDeImpresion: true,
-      placaRequiereRotacionEnMaquina: true,
-      sourceRutaPasoId: 'rp-impresion-uv',
-      perimetroCorteMm: 1_811.172,
-    });
-  });
+        perimetroCorteMm: 1_811.172,
+      });
+    },
+  );
 
   it('cotiza directamente la cantidad manual de placas y el corte estimado', async () => {
     const paso = {

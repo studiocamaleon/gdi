@@ -5,8 +5,97 @@ import { BoxesIcon, ChevronDownIcon } from "lucide-react";
 import {
   construirEspecificacionesComponentes,
   type ComponenteEspecificacionesView,
+  type PiezasEspecificacionesView,
 } from "@/lib/especificaciones-componentes";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import styles from "./componentes-especificaciones.module.css";
+
+const numeroPiezas = new Intl.NumberFormat("es-AR", {
+  maximumFractionDigits: 4,
+});
+const cantidadTexto = (value: number | null) =>
+  value == null ? "Sin dato" : numeroPiezas.format(value);
+
+function PieceDetails({
+  piezas,
+  nombre,
+}: {
+  piezas: PiezasEspecificacionesView;
+  nombre: string;
+}) {
+  return (
+    <div className={styles.pieces}>
+      <div className={styles.piecesHead}>
+        <strong>Desglose de piezas</strong>
+        <span>Medidas de cada diseño · ancho × alto</span>
+      </div>
+      <Table>
+        <TableCaption className="sr-only">Desglose de {nombre}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">Pieza</TableHead>
+            <TableHead scope="col">Medidas</TableHead>
+            {piezas.esConjunto ? (
+              <TableHead scope="col" className="text-right">
+                Por conjunto
+              </TableHead>
+            ) : null}
+            <TableHead scope="col" className="text-right">
+              Total
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {piezas.filas.map((pieza) => (
+            <TableRow key={pieza.key}>
+              <TableCell>
+                <div className={styles.pieceIdentity}>
+                  <strong>{pieza.nombre}</strong>
+                  {pieza.archivo ? (
+                    <span className="truncate" title={pieza.archivo}>
+                      {pieza.archivo}
+                    </span>
+                  ) : null}
+                </div>
+              </TableCell>
+              <TableCell>{pieza.medidas}</TableCell>
+              {piezas.esConjunto ? (
+                <TableCell className="text-right">
+                  {cantidadTexto(pieza.porConjunto)}
+                </TableCell>
+              ) : null}
+              <TableCell className="text-right">
+                {cantidadTexto(pieza.total)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={2}>Total de piezas</TableCell>
+            {piezas.esConjunto ? (
+              <TableCell className="text-right">
+                {cantidadTexto(piezas.porConjunto)}
+              </TableCell>
+            ) : null}
+            <TableCell className="text-right">
+              {cantidadTexto(piezas.total)}
+            </TableCell>
+          </TableRow>
+        </TableFooter>
+      </Table>
+    </div>
+  );
+}
 
 function ColorModeValue({ value }: { value: string }) {
   const normalized = value.toLowerCase();
@@ -78,6 +167,9 @@ function ComponentCard({
             Sin parámetros visibles en esta versión.
           </p>
         )}
+        {component.piezas ? (
+          <PieceDetails piezas={component.piezas} nombre={component.nombre} />
+        ) : null}
         {component.hijos.length > 0 ? (
           <div className={styles.children}>
             <span className={styles.childrenLabel}>Subcomponentes</span>

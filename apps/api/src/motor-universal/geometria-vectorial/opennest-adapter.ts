@@ -1,3 +1,6 @@
+import { transformarFabricacion } from './fabricacion-vectorial';
+import { transformarOperaciones, longitudOperacion } from './operaciones-vectoriales';
+import { timeoutOpenNestMs } from '../../workers/geometria/politica-busqueda';
 import type {
   NestingIrregularOpenNestData,
   NestingIrregularOpenNestResult,
@@ -119,6 +122,7 @@ export function prepararProblemaOpenNest(input: {
     );
   }
   const composicionOriginal =
+    !parametros.commonLine?.habilitado &&
     parametros.preservarComposicionOriginalSiEntra &&
     geometriaFabricacion.anchoMm <= anchoUtilMm + 0.001 &&
     geometriaFabricacion.altoMm <= altoUtilMm + 0.001 &&
@@ -171,6 +175,7 @@ export function prepararProblemaOpenNest(input: {
         maxPlacas: Math.min(1_000, Math.max(1, instancias)),
       },
       separacionMm: parametros.separacionMm,
+      commonLine: parametros.commonLine,
       timeoutMs: timeoutOpenNestMs(),
       semilla: semillaDesdeHash(input.claveSemilla),
       piezas: piezasWorker,
@@ -217,6 +222,7 @@ export function prepararAnalisisOpenNest(input: {
     preservarComposicionOriginalSiEntra:
       input.parametros.preservarComposicionOriginalSiEntra,
     configuracionEncastres: input.parametros.configuracionEncastres,
+    commonLine: input.parametros.commonLine,
   });
   const anchoUtilMm =
     input.parametros.anchoPlacaMm - input.parametros.margenMm * 2;
@@ -232,6 +238,7 @@ export function prepararAnalisisOpenNest(input: {
     problema.demandas.map((demanda) => [demanda.id, demanda.cantidad]),
   );
   const composicionOriginal =
+    !input.parametros.commonLine?.habilitado &&
     input.parametros.preservarComposicionOriginalSiEntra &&
     geometriaFabricacion.anchoMm <= anchoUtilMm + 0.001 &&
     geometriaFabricacion.altoMm <= altoUtilMm + 0.001 &&
@@ -294,7 +301,8 @@ export function prepararAnalisisOpenNest(input: {
         margenMm: input.parametros.margenMm,
         maxPlacas: Math.min(1_000, Math.max(1, instancias)),
       },
-      separacionMm: input.parametros.separacionMm,
+      separacionMm: problema.configuracion.separacionMm,
+      commonLine: input.parametros.commonLine,
       timeoutMs: timeoutOpenNestMs(),
       semilla: semillaDesdeHash(input.cacheKey),
       piezas,
@@ -384,6 +392,8 @@ export function finalizarProblemaOpenNest(input: {
       altoMm: redondear(caja.maxY - caja.minY),
       contornos,
       ...(cortesInternos.length ? { cortesInternos } : {}),
+      fabricacion: transformarFabricacion(pieza.fabricacion, placement.rotacionGrados, placement.traslacion),
+      operaciones: transformarOperaciones(pieza.operaciones ?? [], placement.rotacionGrados, placement.traslacion),
       ...(pieza.segmentacion ? { segmentacion: pieza.segmentacion } : {}),
     };
   });
@@ -397,7 +407,7 @@ export function finalizarProblemaOpenNest(input: {
       total + pieza.areaMm2 * (cantidadPorPieza.get(pieza.id) ?? 0),
     0,
   );
-  const perimetroCorteMm =
+  const perimetroSinCommonLineMm =
     contexto.segmentacion.piezas.reduce(
       (total, pieza) => total + pieza.perimetroMm * cantidadOrigen(pieza),
       0,
@@ -405,10 +415,14 @@ export function finalizarProblemaOpenNest(input: {
     contexto.geometriaFabricacion.piezas.reduce(
       (total, pieza) =>
         total +
-        perimetroContornos(pieza.cortesInternos ?? []) *
+        (perimetroContornos(pieza.cortesInternos ?? []) + (pieza.operaciones ?? []).filter(o=>o.tipo==='CORTE_INTERIOR').reduce((s,o)=>s+longitudOperacion(o),0)) *
           (cantidadPorPieza.get(pieza.id) ?? 0),
       0,
     );
+  const perimetroCorteMm = Math.max(
+    0,
+    perimetroSinCommonLineMm - (resultado.commonLine?.ahorroRecorridoMm ?? 0),
+  );
   const areaCompradaMm2 =
     contexto.problema.superficie.anchoMm *
     contexto.problema.superficie.altoMm *
@@ -426,6 +440,9 @@ export function finalizarProblemaOpenNest(input: {
     versionPoliticaOrientacion: resultado.versionPoliticaOrientacion,
     calidadSolucion: resultado.calidadSolucion,
     optimizacionAgotada: resultado.optimizacionAgotada,
+    busqueda: resultado.busqueda,
+    planPatrones: resultado.planPatrones,
+    commonLine: resultado.commonLine,
     placas: resultado.placasUsadas,
     anchoPlacaMm: contexto.problema.superficie.anchoMm,
     altoPlacaMm: contexto.problema.superficie.altoMm,
@@ -487,6 +504,7 @@ function parametrosDesdeProblema(
     configuracionEncastres: resolverConfiguracionEncastresVectoriales(
       problema.configuracion.configuracionEncastres,
     ),
+    commonLine: problema.configuracion.commonLine,
   };
 }
 
@@ -500,13 +518,18 @@ function segmentarGeometria(input: {
     return { piezas: input.geometria.piezas, uniones: [] };
   }
   try {
-    return segmentarPiezasConEncastres({
+    const resultado = segmentarPiezasConEncastres({
       piezas: input.geometria.piezas,
       anchoUtilMm: input.anchoUtilMm,
       altoUtilMm: input.altoUtilMm,
       permitirRotacion: input.parametros.permitirRotacion,
       configuracionEncastres: input.parametros.configuracionEncastres,
     });
+    const conOperaciones = new Set(input.geometria.piezas.filter(p => p.operaciones?.length).map(p => p.id));
+    if (resultado.piezas.some(p => p.segmentacion && conOperaciones.has(p.segmentacion.piezaOrigenId))) {
+      throw new Error('Las piezas con operaciones internas requieren preparar su división en el archivo original.');
+    }
+    return resultado;
   } catch (error) {
     throw new NestingIrregularError(
       error instanceof Error
@@ -587,13 +610,6 @@ function perimetroContornos(contornos: ContornoVectorial[]): number {
       }, 0),
     0,
   );
-}
-
-function timeoutOpenNestMs(): number {
-  const value = Number(process.env.OPENNEST_JOB_TIMEOUT_MS ?? 30_000);
-  return Number.isInteger(value) && value >= 100 && value <= 60 * 60 * 1_000
-    ? value
-    : 30_000;
 }
 
 function semillaDesdeHash(value: string): number {

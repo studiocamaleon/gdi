@@ -1,0 +1,41 @@
+{
+  "totalPlacas": 43,
+  "resultados": [
+    {
+      "pieza": "cuerpo",
+      "placas": 25,
+      "colocadas": 50,
+      "primeraPlaca": 2
+    },
+    {
+      "pieza": "soporte",
+      "placas": 1,
+      "colocadas": 50,
+      "primeraPlaca": 50
+    },
+    {
+      "pieza": "faldon",
+      "placas": 3,
+      "colocadas": 50,
+      "primeraPlaca": 21
+    },
+    {
+      "pieza": "estante",
+      "placas": 8,
+      "colocadas": 200,
+      "primeraPlaca": 25
+    },
+    {
+      "pieza": "costilla",
+      "placas": 2,
+      "colocadas": 50,
+      "primeraPlaca": 35
+    },
+    {
+      "pieza": "header",
+      "placas": 4,
+      "colocadas": 50,
+      "primeraPlaca": 15
+    }
+  ]
+}

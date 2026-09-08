@@ -1,5 +1,6 @@
 "use client";
 
+import { PiezasArchivosProducto } from "./piezas-archivos-producto";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -1271,93 +1272,8 @@ function IdentidadTab({
                   </div>
                   {geometriasComerciales.modo !== "RECTANGULAR" ? (
                     <div className={styles.geometrySources}>
-                      <div className={styles.geometrySourcesHead}>
-                        <div>
-                          <strong>Fuentes geométricas</strong>
-                          <span>
-                            Nombrá los diseños que luego podrán compartir los
-                            componentes.
-                          </span>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setGeometriasComercialesEstado((actual) => ({
-                              ...actual,
-                              fuentes: [
-                                ...actual.fuentes,
-                                nuevaFuenteGeometria(actual.fuentes),
-                              ],
-                            }))
-                          }
-                        >
-                          <PlusIcon data-icon="inline-start" />
-                          Agregar fuente
-                        </Button>
-                      </div>
-                      {geometriasComerciales.fuentes.map((fuente, index) => (
-                        <div
-                          className={styles.geometrySourceRow}
-                          key={fuente.id}
-                        >
-                          <span className={styles.geometrySourceIndex}>
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <Input
-                            aria-label={`Nombre de la fuente ${index + 1}`}
-                            value={fuente.nombre}
-                            maxLength={120}
-                            onChange={(event) =>
-                              setGeometriasComercialesEstado((actual) => ({
-                                ...actual,
-                                fuentes: actual.fuentes.map((item) =>
-                                  item.id === fuente.id
-                                    ? { ...item, nombre: event.target.value }
-                                    : item,
-                                ),
-                              }))
-                            }
-                          />
-                          <label className={styles.geometryRequired}>
-                            <Switch
-                              checked={fuente.requerida}
-                              onCheckedChange={(requerida) =>
-                                setGeometriasComercialesEstado((actual) => ({
-                                  ...actual,
-                                  fuentes: actual.fuentes.map((item) =>
-                                    item.id === fuente.id
-                                      ? { ...item, requerida }
-                                      : item,
-                                  ),
-                                }))
-                              }
-                            />
-                            Obligatoria
-                          </label>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Eliminar ${fuente.nombre}`}
-                            disabled={
-                              geometriasComerciales.modo === "VECTORIAL" &&
-                              geometriasComerciales.fuentes.length === 1
-                            }
-                            onClick={() =>
-                              setGeometriasComercialesEstado((actual) => ({
-                                ...actual,
-                                fuentes: actual.fuentes.filter(
-                                  (item) => item.id !== fuente.id,
-                                ),
-                              }))
-                            }
-                          >
-                            <Trash2Icon />
-                          </Button>
-                        </div>
-                      ))}
+                      <PiezasArchivosProducto productoId={producto.id} fuentes={geometriasComerciales.fuentes}
+                        onChange={(fuentes) => setGeometriasComercialesEstado(actual => ({ ...actual, fuentes }))} />
                       <label className={styles.geometryRequired}>
                         <Switch
                           checked={
@@ -1700,10 +1616,10 @@ function ProduccionTab({
         <section className={styles.productionUnifiedSection}>
           <div className={styles.productionUnifiedSectionHead}>
             <div className={styles.productionUnifiedSectionCopy}>
-              <strong>Workflow</strong>
+              <strong>Flujos de producción</strong>
               <small>
                 {producto.estructuraProducto === "COMPUESTO"
-                  ? "Pasos, etapas y componentes forman un único recorrido."
+                  ? "Nodos simples, nodos compuestos y componentes forman un único recorrido."
                   : "Pasos operativos y dependencias de esta ruta de producción."}
               </small>
             </div>
@@ -2204,7 +2120,7 @@ function RutasTab({
           <div className={styles.productionRoutesSelectorHead}>
             <div className={styles.productionRoutesSelectorTitle}>
               <div>
-                <h2>Rutas de producción</h2>
+                <h2>Flujos de producción</h2>
                 <p>
                   Elegí la ruta que querés consultar o creá una alternativa.
                 </p>
@@ -2290,7 +2206,7 @@ function RutasTab({
               <TabsList
                 variant="line"
                 className={styles.productionRouteTabsList}
-                aria-label="Rutas de producción"
+                aria-label="Flujos de producción"
               >
                 {producto.rutasAlternativas.map((ruta) => (
                   <TabsTrigger
@@ -2307,7 +2223,7 @@ function RutasTab({
             </div>
           ) : (
             <div className={styles.productionRoutesEmpty}>
-              Todavía no hay rutas de producción configuradas.
+              Todavía no hay flujos de producción configurados.
             </div>
           )}
         </section>

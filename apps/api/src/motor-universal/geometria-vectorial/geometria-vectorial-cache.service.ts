@@ -13,6 +13,7 @@ import type {
 } from './tipos';
 import type { ConfiguracionEncastresVectoriales } from './segmentacion-encastres';
 import { VERSION_POLITICA_ORIENTACION_GRAFONEST } from '../../workers/colas';
+import type { ConfiguracionCommonLineTrabajo } from '../../workers/colas';
 import {
   crearDemandasDesdeGeometriaVectorial,
   crearProblemaNestingIrregular,
@@ -36,6 +37,7 @@ export interface ParametrosNestingVectorialCache {
   permitirSegmentacion?: boolean;
   preservarComposicionOriginalSiEntra: boolean;
   configuracionEncastres: ConfiguracionEncastresVectoriales;
+  commonLine?: ConfiguracionCommonLineTrabajo;
 }
 
 export interface EntradaGeometriaVectorialCache {
@@ -115,6 +117,7 @@ export class GeometriaVectorialCacheService implements OnApplicationShutdown {
       preservarComposicionOriginalSiEntra:
         input.parametros.preservarComposicionOriginalSiEntra,
       configuracionEncastres: input.parametros.configuracionEncastres,
+      commonLine: input.parametros.commonLine,
     });
     const solucionNesting = resolverProblemaNestingIrregular(problema);
     const nesting = solucionNesting.resultado;

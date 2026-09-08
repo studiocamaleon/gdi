@@ -1119,7 +1119,7 @@ function Hilo({
     <svg
       className="simu-thread"
       style={{ top: AXIS_H }}
-      aria-label={`Dependencias reales del workflow de ${ot}`}
+      aria-label={`Dependencias reales del flujo de producción de ${ot}`}
     >
       {aristas.map((arista) => (
         <path
@@ -1134,7 +1134,7 @@ function Hilo({
           data-predecesor={arista.predecesorId}
           data-sucesor={arista.destinoId}
         >
-          <title>Dependencia real del workflow</title>
+          <title>Dependencia real del flujo de producción</title>
         </path>
       ))}
       {aristas.flatMap((arista) => [

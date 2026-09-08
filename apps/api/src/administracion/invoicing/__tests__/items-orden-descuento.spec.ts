@@ -23,6 +23,13 @@ const sinDescuento: OrdenItemFacturable = {
 };
 
 describe('itemsOrdenConDescuento — la bonificación devuelve la base exacta', () => {
+  it('factura sólo productos comerciales y conserva las muestras gratuitas', () => {
+    const gratis = { ...sinDescuento, nombre: 'Muestra gratuita', subtotal: 0, total: 0 };
+    const componente = { ...gratis, nombre: 'Pieza interna', parentItemId: 'kit' };
+    const items = itemsOrdenConDescuento('B', [tarjetas, gratis, componente]);
+    expect(items.map(i => i.descripcion)).toEqual(['Tarjetas de visita', 'Muestra gratuita']);
+    expect(calcularTotales('B', items).total).toBe(tarjetas.total);
+  });
   it('A: lista bonificada aterriza en el neto persistido al centavo', () => {
     const [item] = itemsOrdenConDescuento('A', [tarjetas]);
     expect(item.bonificacionPct).toBeGreaterThan(9.9);

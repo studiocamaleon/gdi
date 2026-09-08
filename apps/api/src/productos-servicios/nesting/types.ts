@@ -11,6 +11,8 @@
  * Ver `docs/nesting-abstraccion-diseno.md` para diseño completo.
  */
 
+import type { ResultadoCommonLineTrabajo } from '../../workers/colas';
+
 // ─── Pieza ────────────────────────────────────────────────────────
 
 /** Una pieza a acomodar. */
@@ -161,6 +163,8 @@ export interface NestingMetrics {
   perSubstrate?: Array<{ areaUtilMm2: number; consumedLengthMm: number }>;
   /** Nesting vectorial: largo de corte real, incluyendo divisiones/encastres. */
   perimetroCorteMm?: number;
+  /** Optimización de líneas rectas compartidas aplicada por el worker. */
+  commonLine?: ResultadoCommonLineTrabajo;
   /** Nesting vectorial: trazabilidad entre piezas originales y segmentos. */
   piezasOriginales?: number;
   segmentos?: number;

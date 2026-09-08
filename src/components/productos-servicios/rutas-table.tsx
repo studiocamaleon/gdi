@@ -108,7 +108,7 @@ function RoutePreview({
             type="button"
             variant="outline"
             size="sm"
-            aria-label={`Ver Workflow de ${ruta.nombre}: ${nodos.length} ${nodos.length === 1 ? "nodo" : "nodos"}`}
+            aria-label={`Ver flujo de producción de ${ruta.nombre}: ${nodos.length} ${nodos.length === 1 ? "nodo" : "nodos"}`}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
@@ -122,7 +122,7 @@ function RoutePreview({
         align="start"
         className="block w-80 max-w-[calc(100vw-2rem)] p-3"
       >
-        <p className="mb-2 font-medium">Workflow reusable</p>
+        <p className="mb-2 font-medium">Flujo de producción reutilizable</p>
         <ol className="grid gap-1.5">
           {nodos.map((nodo, index) => {
             const StepIcon =
@@ -234,14 +234,14 @@ export function RutasTable({
     setDuplicandoId(rutaADuplicar.id);
     try {
       const duplicada = await duplicarRuta(rutaADuplicar.id, { nombre });
-      toast.success(`Ruta "${rutaADuplicar.nombre}" duplicada`);
+      toast.success(`Flujo "${rutaADuplicar.nombre}" duplicado`);
       setRutaADuplicar(null);
       setNombreCopia("");
       router.refresh();
       router.push(`/productos-servicios/rutas/${duplicada.id}`);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "No se pudo duplicar la ruta",
+        err instanceof Error ? err.message : "No se pudo duplicar el flujo",
       );
     } finally {
       setDuplicandoId(null);
@@ -252,10 +252,10 @@ export function RutasTable({
     <div className="content">
       <div className="page-head">
         <div className="title-block">
-          <h1>Rutas de producción</h1>
+          <h1>Flujos de producción</h1>
           <div className="sub">
-            {rutas.length} rutas reusables. Cada ruta versiona un Workflow de
-            pasos, etapas y componentes que distintos productos pueden usar.
+            {rutas.length} flujos reutilizables. Cada flujo organiza nodos simples,
+            nodos compuestos y componentes que distintos productos pueden usar.
           </div>
         </div>
         {puedeGestionar ? (
@@ -264,19 +264,19 @@ export function RutasTable({
             className="btn btn-primary"
           >
             <PlusIcon size={14} />
-            Nueva ruta
+            Nuevo flujo
           </Link>
         ) : null}
       </div>
 
       {rutas.length === 0 ? (
         <EstadoVacio
-          titulo="Sin rutas cargadas"
-          descripcion="Las rutas son los caminos de producción reusables. Empezá creando una desde cero o ejecutá el seed."
+          titulo="Sin flujos cargados"
+          descripcion="Los flujos organizan la producción y se pueden reutilizar. Empezá creando uno desde cero."
           cta={
             puedeGestionar
               ? {
-                  label: "Crear ruta",
+                  label: "Crear flujo",
                   href: "/productos-servicios/rutas/nueva",
                   icon: PlusIcon,
                 }
@@ -287,7 +287,7 @@ export function RutasTable({
         <div className="card">
           <div className="search-card-head">
             <div className="ttl-block">
-              <span className="title">Rutas</span>
+              <span className="title">Flujos</span>
               <span className="count">
                 {rutasFiltradas.length} de {rutas.length}
               </span>
@@ -301,18 +301,18 @@ export function RutasTable({
                 const value = values[0] as EstadoFiltro | undefined;
                 if (value) setEstadoFiltro(value);
               }}
-              aria-label="Filtrar rutas por estado"
+              aria-label="Filtrar flujos por estado"
             >
-              <ToggleGroupItem value="activas">Activas</ToggleGroupItem>
-              <ToggleGroupItem value="inactivas">Inactivas</ToggleGroupItem>
-              <ToggleGroupItem value="todas">Todas</ToggleGroupItem>
+              <ToggleGroupItem value="activas">Activos</ToggleGroupItem>
+              <ToggleGroupItem value="inactivas">Inactivos</ToggleGroupItem>
+              <ToggleGroupItem value="todas">Todos</ToggleGroupItem>
             </ToggleGroup>
             <label className="search-inline">
               <SearchIcon size={14} />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar ruta o paso..."
+                placeholder="Buscar flujo o nodo..."
               />
               <span className="kbd">/</span>
             </label>
@@ -322,7 +322,7 @@ export function RutasTable({
             <div className="p-8">
               <EstadoVacio
                 variant="compacto"
-                titulo="Ninguna ruta coincide"
+                titulo="Ningún flujo coincide"
                 descripcion="Probá con otros términos de búsqueda."
               />
             </div>
@@ -338,7 +338,7 @@ export function RutasTable({
                         Versión
                       </th>
                       <th className="right" style={{ width: 150 }}>
-                        Productos que la usan
+                        Productos que lo usan
                       </th>
                       <th className="right" style={{ width: 110 }}>
                         Acciones
@@ -453,11 +453,11 @@ export function RutasTable({
         <AlertDialogContent>
           <form onSubmit={handleDuplicarRuta}>
             <AlertDialogHeader>
-              <AlertDialogTitle>Duplicar ruta de producción</AlertDialogTitle>
+              <AlertDialogTitle>Duplicar flujo de producción</AlertDialogTitle>
               <AlertDialogDescription>
-                Definí el nombre de la copia. Se copiará el Workflow completo de
-                la versión actual —incluidos etapas, componentes y paralelismos—
-                para que puedas revisarlo antes de usarlo.
+                Definí el nombre de la copia. Se copiará el flujo de producción
+                completo de la versión actual, incluidos sus nodos compuestos, componentes
+                y paralelismos, para que puedas revisarlo antes de usarlo.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="mt-4 grid gap-3">
@@ -468,7 +468,7 @@ export function RutasTable({
                   autoFocus
                   value={nombreCopia}
                   onChange={(event) => setNombreCopia(event.target.value)}
-                  placeholder="Nombre de la nueva ruta"
+                  placeholder="Nombre del nuevo flujo"
                   disabled={Boolean(duplicandoId)}
                 />
               </div>
@@ -490,7 +490,7 @@ export function RutasTable({
                 loading={Boolean(duplicandoId)}
                 disabled={!nombreCopia.trim()}
               >
-                Duplicar ruta
+                Duplicar flujo
               </Button>
             </AlertDialogFooter>
           </form>

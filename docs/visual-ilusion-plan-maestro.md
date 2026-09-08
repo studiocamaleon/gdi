@@ -589,7 +589,19 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 
 ## Fase 4 — Rutas DAG, paralelismo, convergencia y gates
 
-**Estado actual:** EN DESARROLLO · CIERRE 4.2.2 CON CASO BACKLIGHT
+**Estado actual:** CERRADA FUNCIONALMENTE EN LOCAL · MATRIZ INTEGRAL APROBADA · F5 HABILITADA
+
+**Cierre integral del 07/09/2026:**
+[Informe y evidencia final](visual-ilusion-fase-4-cierre-integral-2026-09-07.md).
+Comprende F4 original, ampliaciones 4.1–4.4, ocurrencias, piezas
+rectangulares/vectoriales, patrones y capas DXF. Los ocho hallazgos de la
+[auditoría original](visual-ilusion-fase-4-auditoria-integral-2026-09-07.md) y el
+hallazgo adicional de Compras quedaron corregidos y verificados. Se aprobaron
+cotización/persistencia/ejecución, concurrencia, reportes, documentos, CAD,
+regresiones y builds. Esta evaluación prevalece sobre los estados históricos
+que siguen como bitácora de implementación. El cierre corresponde a la versión
+local; no constituye merge ni despliegue remoto. F5 puede planificarse dentro
+de su alcance propio de planes operativos, liberación y herramientas por capa.
 
 **Rama:** `visual-ilusion/fase-4-rutas-dag`
 
@@ -843,7 +855,13 @@ comisiones, descuentos ni redondeos.
 
 **Estado inicial:** PROPUESTA · PENDIENTE
 
-**Estado actual:** IMPLEMENTADA · PENDIENTE VALIDACIÓN FUNCIONAL DEL MOTOR IRREGULAR · F5 BLOQUEADA
+**Estado actual:** CERRADA FUNCIONALMENTE EN LOCAL · F5 HABILITADA
+
+Precedencias, conservación multinivel, simuladores, métricas, transporte de
+geometrías y ejecución de OT aprobados. El caso Puma pasó tres repeticiones
+reales en dos placas. El exhibidor conserva cantidades, posiciones y capas al
+exportar y ejecutar. Ver el [cierre integral](visual-ilusion-fase-4-cierre-integral-2026-09-07.md).
+Los avances siguientes conservan la cronología; no reemplazan este dictamen.
 
 **Dependencias:** Fases 4.2–4.3.
 
@@ -1426,7 +1444,7 @@ Esta tabla es el control maestro contra pérdida de alcance.
 |    3 | Múltiples órdenes y ampliaciones                                       | F1            | F12                | Implementado; se extiende en F12                             |
 |    4 | BOM/receta avanzada                                                    | F3            | F4, F9             | Implementada y validada en F3                                |
 |    5 | Rutas dinámicas/condicionales                                          | F3–F4         | F2                 | Parcial hoy                                                  |
-|    6 | Rutas paralelas y convergencia                                         | F4            | F11                | Pendiente                                                    |
+| 6 | Rutas paralelas y convergencia | F4 | F11 | Implementadas y verificadas en F4; cierre integral aprobado |
 |    7 | Subproductos/componentes                                               | F3–F4         | F6                 | Costeo/versionado en F3; ejecución independiente en F4       |
 |    8 | Prototipos y muestras                                                  | F2            | F1                 | Implementado y validado                                      |
 |    9 | Versionado de archivos                                                 | F2            | F5                 | Implementado y validado                                      |
@@ -1626,13 +1644,13 @@ Esta tabla se actualizará al integrar cada fase.
 |     2 | COMPLETA                            | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`          | `bf2df97a`, `52538507`                                                        | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                                |
 |   2.5 | COMPLETA                            | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md`     | `46316989`                                                                    | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados           |
 |     3 | COMPLETA                            | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                       | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b`                    | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados                    |
-|     4 | EN DESARROLLO                       | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-rutas-dag-diseno.md`                        | `ca5109f0`, `c7a42076`                                                        | Validación abrió ampliación de configuración padre–componente antes del cierre                                                |
-|   4.1 | IMPLEMENTADA                        | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md`         | commit de implementación de Fase 4.1                                          | Outputs públicos entre hijos y parámetros del oficio tercerizado; pendiente validación funcional del usuario                  |
-|   4.2 | EN DESARROLLO · CIERRE 4.2.2        | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | `97930b0a`, `d47d73a8`; cierre en curso                                       | Subrutas reales; falta ejecutar sus pasos después de resolver outputs hijos y validar Cartel Backlight de extremo a extremo   |
-| 4.2.3 | IMPLEMENTADA · EN VALIDACIÓN        | `visual-ilusion/fase-4-rutas-dag`                    | `docs/contrato-comercial-dimensiones-producto-diseno.md`                | migración `20260831010000_producto_dimensiones_3d`                            | Dimensiones explícitas 2D/3D; profundidad ya no se origina en la familia bastidor                                             |
-| 4.2.4 | IMPLEMENTADA · EN VALIDACIÓN        | `visual-ilusion/fase-4-rutas-dag`                    | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | validación técnica integral aprobada                                          | Opcionales configurables por uso, condicionales automáticos y subruta hija reducida correctamente al materializar la OT       |
+| 4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | DAG, gates, lotes, costos, archivos, OT, áreas vecinas y concurrencia aprobados; F5 habilitada |
+| 4.1 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Backlight actual: profundidad y output Bastidor→Lona conservados hasta finalizar OT |
+| 4.2 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Ensamble único, Compras con DAG/gates y ejecución de Backlight aprobados |
+| 4.2.3 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/contrato-comercial-dimensiones-producto-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Contratos dimensionales y Backlight de 200 × 100 × 20 cm aprobados |
+| 4.2.4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Regresiones de opcionales/condicionales y reducción de dependencias aprobadas |
 |   4.3 | COMPLETA                            | `visual-ilusion/fase-4-3-pricing-compuestos`         | `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`            | validación funcional y regresión integral                                     | Matriz general/mixta/por componente, snapshots, redondeo y QA responsive aprobados; Fase 4.4 habilitada                       |
-|   4.4 | IMPLEMENTADA · VALIDACIÓN PENDIENTE | `visual-ilusion/fase-4-4-nesting-compuestos`         | `docs/visual-ilusion-fase-4-4-nesting-compuestos-diseno.md`             | placas, rollos y contrato irregular implementados; regresión técnica aprobada | Motor irregular generalizado y consolidación poligonal entre componentes; F5 bloqueada hasta validación funcional del usuario |
+| 4.4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-4-nesting-compuestos` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Lotes seguros y multinivel, calidad Puma, exhibidor 1/10/50/51, CAD y OT aprobados |
 |     5 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |     6 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |     7 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |

@@ -4,7 +4,8 @@
  * Endpoints respaldados por `apps/api/src/productos-servicios/productos-servicios.controller.ts`.
  */
 
-import { apiRequest } from "@/lib/api";
+import { apiRequest, ApiError } from "@/lib/api";
+import { serializarCotizacion } from "./fuentes-geometria-transporte";
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
@@ -340,7 +341,11 @@ export type ProductoRecetaComponenteInput = {
 };
 
 export type OrigenParametroComponente =
-  "DEFAULT_HIJO" | "FIJO" | "PADRE" | "FORMULA" | "COTIZACION";
+  | "DEFAULT_HIJO"
+  | "FIJO"
+  | "PADRE"
+  | "FORMULA"
+  | "COTIZACION";
 
 export type BindingParametroComponente = {
   clave: string;
@@ -365,7 +370,29 @@ export type BindingParametroComponente = {
   opciones?: Array<{ valor: string; etiqueta: string }>;
 };
 
+export type PiezaVectorialComponente = {
+  id: string;
+  nombre: string;
+  cantidadPorUnidad: number;
+  tipo?: "VECTORIAL";
+  fuente: import("./geometrias-producto-api").FuenteGuardada;
+};
+
+export type PiezaRectangularComponente = {
+  id: string;
+  nombre: string;
+  cantidadPorUnidad: number;
+  tipo: "RECTANGULAR";
+  medidas: { anchoMm: number; altoMm: number };
+  fuente?: never;
+};
+
+export type PiezaComponenteFabricado = PiezaVectorialComponente | PiezaRectangularComponente;
+
 export type ConfiguracionComponenteFabricado = {
+  piezas?: PiezaComponenteFabricado[];
+  /** Permite ajustar y agregar piezas rectangulares dentro del componente al cotizar. */
+  piezasEditables?: boolean;
   version: 1 | 2;
   bindings: BindingParametroComponente[];
   operacionesIncorporacion?: OperacionIncorporacion[];
@@ -387,10 +414,13 @@ export type ConfiguracionComponenteFabricado = {
 };
 
 export type PoliticaNestingCompuesto =
-  "INDEPENDIENTE" | "CONSOLIDAR_COMPATIBLES";
+  | "INDEPENDIENTE"
+  | "CONSOLIDAR_COMPATIBLES";
 
 export type ModoPricingComponente =
-  "HEREDAR_PADRE" | "USAR_PRODUCTO_HIJO" | "OVERRIDE";
+  | "HEREDAR_PADRE"
+  | "USAR_PRODUCTO_HIJO"
+  | "OVERRIDE";
 
 export type PrecioConfigComponente = {
   metodoCalculo: string;
@@ -546,7 +576,10 @@ export type EstadoRutaPublicacionReceta =
   | "BLOQUEADA";
 
 export type EstadoDependenciaReceta =
-  "VIGENTE" | "ACTUALIZACION_DISPONIBLE" | "SIN_PUBLICACION" | "AMBIGUA";
+  | "VIGENTE"
+  | "ACTUALIZACION_DISPONIBLE"
+  | "SIN_PUBLICACION"
+  | "AMBIGUA";
 
 export interface EstadoPublicacionProducto {
   producto: { id: string; nombre: string };
@@ -1030,7 +1063,10 @@ export interface UpsertSlotMaterialPayload {
   slotNombre?: string | null;
   slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
   modoSeleccion:
-    "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO" | "HEREDA_DE_PASO";
+    | "HARDCODED"
+    | "COMERCIAL_ELIGE"
+    | "MOTOR_ELIGE_AUTO"
+    | "HEREDA_DE_PASO";
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
@@ -1212,7 +1248,9 @@ export interface CrearCargoDirectoPayload {
   nombre: string;
   descripcion?: string;
   modoCalculo:
-    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -1230,7 +1268,9 @@ export interface ActualizarCargoDirectoPayload {
   nombre?: string;
   descripcion?: string;
   modoCalculo?:
-    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   aplicaMargen?: boolean;
@@ -1614,8 +1654,30 @@ export interface NestingViewerInput {
   piezasAcomodadas: number;
   estrategiaDisposicion?: "composicion_original" | "nesting_optimizado";
   layoutVinculadoGeometriaVectorial?: boolean;
+  layoutRegistradoLoteId?: string;
   outputsCanonicos?: Record<string, unknown>;
   metricasRaw?: Record<string, unknown>;
+  solucionNesting?: SolucionNestingVectorial;
+  commonLine?: {
+    habilitado: true;
+    aplicado: boolean;
+    anchoCorteMm: number;
+    longitudMinimaMm: number;
+    toleranciaMm: number;
+    longitudCompartidaMm: number;
+    ahorroRecorridoMm: number;
+    tramos: Array<{
+      id: string;
+      placa: number;
+      inicio: { x: number; y: number };
+      fin: { x: number; y: number };
+      longitudMm: number;
+      segmentosOrigen: [
+        { piezaId: string; copia: number; indiceSegmento: number },
+        { piezaId: string; copia: number; indiceSegmento: number },
+      ];
+    }>;
+  };
   visualConfig?: {
     margins: {
       leftMm: number;
@@ -1804,6 +1866,7 @@ export interface AnalisisNestingCompuestoInput {
     };
     lote?: {
       id: string;
+      layoutOrigenLoteId?: string;
       versionContrato: 1;
       estado: "CONGELADO";
       firmaCompatibilidad: string;
@@ -1885,6 +1948,8 @@ export interface OperacionInternaCosteadaInput {
   activada: boolean;
   duracionMin: number;
   costoTotal: number;
+  tercerizado?: boolean;
+  costoTercerizado?: number;
   configPasoId?: string;
   rutaPasoId?: string;
   rutaPasoOrden?: number;
@@ -1940,11 +2005,11 @@ export interface OperacionInternaCosteadaInput {
     mermaAdicional?: MermaAdicionalMaterialInput;
     estrategiaCosto: string;
     modoSeleccion:
-      | "HARDCODED"
-      | "COMERCIAL_ELIGE"
-      | "MOTOR_ELIGE_AUTO"
-      | "MAQUINA_CONSUMIBLE"
-      | "MAQUINA_DESGASTE";
+          | "HARDCODED"
+          | "COMERCIAL_ELIGE"
+          | "MOTOR_ELIGE_AUTO"
+          | "MAQUINA_CONSUMIBLE"
+          | "MAQUINA_DESGASTE";
     detalleCosteoNesting?: {
       strategy: string;
       totalCost: number;
@@ -2187,6 +2252,7 @@ export interface CotizarResponse {
         operacionesInternas?: OperacionInternaCosteadaInput[];
       }>;
       componentes?: Array<Record<string, unknown>>;
+      analisisNestingCompuesto?: AnalisisNestingCompuestoInput;
       operacionesIncorporacion?: Array<{
         codigo: string;
         nombre: string;
@@ -2445,7 +2511,7 @@ export async function cotizar(
 ): Promise<CotizarResponse> {
   return apiRequest<CotizarResponse>("/motor-universal/cotizar", {
     method: "POST",
-    body: JSON.stringify(req),
+    body: serializarCotizacion(req),
     headers: { "Content-Type": "application/json" },
     signal,
   });
@@ -2517,18 +2583,20 @@ export async function cotizarEnSegundoPlano(
     "/motor-universal/cotizar-asincrono",
     {
       method: "POST",
-      body: JSON.stringify({ ...req, claveSolicitud: options.claveSolicitud }),
+      body: serializarCotizacion({ ...req, claveSolicitud: options.claveSolicitud }),
       headers: { "Content-Type": "application/json" },
       signal: options.signal,
     },
   );
   options.onEstado?.(trabajo);
+  let intervaloMs = 1_000;
   while (trabajo.estado === "pendiente" || trabajo.estado === "procesando") {
-    await esperar(500, options.signal);
-    trabajo = await apiRequest<TrabajoCotizacionAsincrona>(
+    await esperar(intervaloMs, options.signal);
+    trabajo = await consultarTrabajoDurable<TrabajoCotizacionAsincrona>(
       `/motor-universal/cotizaciones-asincronas/${encodeURIComponent(trabajo.id)}`,
-      { signal: options.signal },
+      options.signal,
     );
+    intervaloMs = Math.min(5_000, intervaloMs + 1_000);
     options.onEstado?.(trabajo);
   }
   if (trabajo.estado === "completado" && trabajo.resultado) {
@@ -2665,6 +2733,41 @@ export interface ConfiguracionCapasVectoriales {
   }>;
 }
 
+/** Solución canónica persistida en la trazabilidad del paso de fabricación. */
+export interface SolucionNestingVectorial {
+  schemaVersion: 1;
+  algoritmo: "irregular-2d-bottom-left";
+  versionAlgoritmo: 1;
+  problemaHash: string;
+  problema: {
+    schemaVersion: 1;
+    superficie:
+      | { tipo: "PLACA"; anchoMm: number; altoMm: number }
+      | { tipo: "ROLLO"; anchoMm: number };
+    demandas: Array<{
+      schemaVersion: 1;
+      id: string;
+      cantidad: number;
+      propietario?: { productoId?: string; componenteCodigo?: string; ocurrenciaId?: string; pasoClave?: string; archivoFuente?: string; interpretacion?: import("./geometrias-producto-api").FuenteGuardada["procedencia"] };
+      geometria:
+        | { tipo: "RECTANGULO"; anchoMm: number; altoMm: number }
+        | (Omit<AnalisisSvgFabricacion["geometria"]["piezas"][number], "id"> & {
+            tipo: "POLIGONO";
+          });
+    }>;
+    configuracion: {
+      margenMm: number;
+      separacionMm: number;
+      permitirRotacion: boolean;
+      permitirSegmentacion: boolean;
+      preservarComposicionOriginalSiEntra: boolean;
+      configuracionEncastres?: ConfiguracionEncastresVectoriales;
+    };
+  };
+  resultado: AnalisisSvgFabricacion["nesting"];
+  diagnosticos: AnalisisSvgFabricacion["diagnosticos"];
+}
+
 export interface AnalisisSvgFabricacion {
   nombreArchivo: string;
   /** Identificador del resultado cacheado en el API; no contiene métricas confiadas. */
@@ -2714,6 +2817,18 @@ export interface AnalisisSvgFabricacion {
     versionPoliticaOrientacion?: number;
     calidadSolucion?: "BASE_SEGURA" | "OPTIMIZADA";
     optimizacionAgotada?: boolean;
+    planPatrones?: { version: 1; patronesEvaluados: number; patronesElegidos: number; minimoPlacasEnCartera: boolean; minimoPatronesEnCartera: boolean; minimoGeometricoDemostrado: false };
+    busqueda?: {
+      motivoFin:
+        | "MINIMO_PLACAS"
+        | "PRESUPUESTO_AGOTADO"
+        | "MOTOR_NO_DISPONIBLE";
+      presupuestoMs: number;
+      intentos: number;
+      candidatosValidos: number;
+      minimoTeoricoPlacas: number;
+    };
+    commonLine?: NestingViewerInput["commonLine"];
     placas: number;
     anchoPlacaMm: number;
     altoPlacaMm: number;
@@ -2723,6 +2838,8 @@ export interface AnalisisSvgFabricacion {
     areaPiezasMm2: number;
     areaCompradaMm2: number;
     placements: Array<{
+      operaciones?: import('./geometrias-producto-api').FuenteGuardada['operaciones'];
+      fabricacion?: import('./fabricacion-vectorial').FabricacionVectorial;
       pieceId: string;
       copyIndex: number;
       substrateIndex: number;
@@ -2791,6 +2908,12 @@ export type SolicitudAnalisisSvgFabricacion = {
   permitirSegmentacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
   configuracionEncastres?: ConfiguracionEncastresVectoriales;
+  commonLine?: {
+    habilitado: boolean;
+    anchoCorteMm: number;
+    longitudMinimaMm: number;
+    toleranciaMm: number;
+  };
   configuracionCapas?: ConfiguracionCapasVectoriales;
 };
 
@@ -2804,6 +2927,7 @@ export type FuenteVectorialNormalizada = {
   anchoSugeridoMm: number;
   altoSugeridoMm: number;
   unidadDetectada: string | null;
+  medidasOriginales?: { ancho: number; alto: number };
   diagnosticos: Array<{
     codigo: string;
     mensaje: string;
@@ -2892,13 +3016,15 @@ export async function analizarSvgFabricacionEnWorker(
     },
   );
   options?.onEstado?.(trabajo);
+  let intervaloMs = 1_000;
   try {
     while (trabajo.estado === "pendiente" || trabajo.estado === "procesando") {
-      await esperar(400, options?.signal);
-      trabajo = await apiRequest<TrabajoAnalisisVectorial>(
+      await esperar(intervaloMs, options?.signal);
+      trabajo = await consultarTrabajoDurable<TrabajoAnalisisVectorial>(
         `/motor-universal/geometria-vectorial/trabajos/${encodeURIComponent(trabajo.id)}`,
-        { signal: options?.signal },
+        options?.signal,
       );
+      intervaloMs = Math.min(5_000, intervaloMs + 1_000);
       options?.onEstado?.(trabajo);
     }
   } catch (error) {
@@ -2927,6 +3053,21 @@ export async function analizarSvgFabricacionEnWorker(
   throw new Error(
     trabajo.error?.mensaje ?? "No se pudo completar el nesting irregular.",
   );
+}
+
+/** Un 429 al observar no implica que el cálculo haya fallado. Reintentamos
+ * solamente el GET del mismo trabajo, sin volver a encolarlo. */
+async function consultarTrabajoDurable<T>(path: string, signal?: AbortSignal): Promise<T> {
+  for (let intento = 0; ; intento++) {
+    try {
+      return await apiRequest<T>(path, { signal });
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 429 || intento >= 3) {
+        throw error;
+      }
+      await esperar((error.retryAfterSeconds ?? 60) * 1_000, signal);
+    }
+  }
 }
 
 function esperar(ms: number, signal?: AbortSignal): Promise<void> {
@@ -2979,7 +3120,7 @@ export async function cotizarYGuardar(
     "/motor-universal/cotizar-y-guardar",
     {
       method: "POST",
-      body: JSON.stringify(req),
+      body: serializarCotizacion(req),
       headers: { "Content-Type": "application/json" },
     },
   );
@@ -2993,7 +3134,7 @@ export async function recotizarCotizacionItem(
     `/motor-universal/cotizacion-items/${id}/recotizar`,
     {
       method: "PATCH",
-      body: JSON.stringify(req),
+      body: serializarCotizacion(req),
       headers: { "Content-Type": "application/json" },
     },
   );

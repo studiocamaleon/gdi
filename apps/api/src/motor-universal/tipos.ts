@@ -17,6 +17,7 @@ import type {
   DemandaNesting,
   SolucionNesting,
 } from './geometria-vectorial/contrato-nesting';
+import type { ResultadoCommonLineTrabajo } from '../workers/colas';
 
 // ============================================================================
 // INPUT — Lo que el motor recibe
@@ -82,6 +83,8 @@ export interface MutacionAplicada {
  * que ejecuta pasos (los pasos PRE pueden modificar medidas, etc.).
  */
 export interface JobContext {
+  /** Colección resuelta desde la configuración publicada del componente. */
+  disenosVectoriales?: import("../productos-servicios/componentes-configuracion").PiezaVectorialComponente[];
   /** Cantidad pedida (talonarios, tarjetas, etc.). */
   cantidad: number;
   /** Fuente geométrica elegida en familias que admiten vector opcional. */
@@ -89,6 +92,9 @@ export interface JobContext {
   /** Fuente vectorial. El motor vuelve a analizar el SVG y no
    * confía en métricas calculadas por el navegador. */
   disenoVectorialFuente?: {
+    procedencia?: import('../productos-servicios/geometrias/interpretar-vector').FuenteGuardada['procedencia'];
+    operaciones?: import('./geometria-vectorial/operaciones-vectoriales').OperacionVectorial[];
+    fabricacion?: import('./geometria-vectorial/fabricacion-vectorial').FabricacionVectorial;
     schemaVersion: 1 | 2;
     nombreArchivo: string;
     svg: string;
@@ -111,6 +117,10 @@ export interface JobContext {
   layout_produccion?: LayoutProduccionCompartido;
   /** Lista de piezas para nesting (gap H7 — multi-medida). */
   piezas?: Array<{
+    id?: string;
+    nombre?: string;
+    /** Presente cuando la cantidad corresponde a una colección por producto. */
+    cantidadPorUnidad?: number;
     cantidad: number;
     anchoMm: number;
     altoMm: number;
@@ -301,6 +311,8 @@ export type PoliticaNestingCompuesto =
 
 export interface LoteNestingCompuestoSnapshot {
   id: string;
+  /** Operación posterior sobre las mismas placas; no compra otro sustrato. */
+  layoutOrigenLoteId?: string;
   versionContrato: 1;
   estado: 'CONGELADO';
   firmaCompatibilidad: string;
@@ -627,6 +639,8 @@ export interface ComponenteFabricadoCosteado {
   pasos?: PasoEjecutado[];
   operacionesIncorporacion?: OperacionIncorporacionCosteada[];
   componentes?: ComponenteFabricadoCosteado[];
+  /** Plan consolidado propio de este ámbito, conservado en compuestos anidados. */
+  analisisNestingCompuesto?: AnalisisNestingCompuestoShadow;
 }
 
 export interface OperacionIncorporacionCosteada {
@@ -768,6 +782,8 @@ export interface PasoEjecutado {
   nivelAplicado?: { codigo: string; nombre: string } | null;
   /** El paso lo compró un proveedor (no consume máquina ni tiempo interno). */
   tercerizado?: boolean;
+  /** Subtotal de proveedores en una etapa compuesta, sin materiales propios. */
+  costoTercerizado?: number;
   proveedorId?: string | null;
   plazoProveedorDias?: number | null;
   /** Detalle del costeo tercerizado, para desglose/UI. */
@@ -840,6 +856,8 @@ export interface OperacionInternaCosteada {
   centroCostoId?: string | null;
   centroCostoNombre?: string | null;
   tiempo?: PasoEjecutado['tiempo'];
+  tercerizado?: boolean;
+  costoTercerizado?: number;
   materiales?: MaterialEjecutado[];
   cargosDirectosPaso?: CargoDirectoEjecutado[];
   mutacionAplicada?: MutacionAplicada;
@@ -939,6 +957,8 @@ export interface NestingEjecutado {
   demandaNesting?: DemandaNesting[];
   /** Solución reproducible y versionada del motor irregular. */
   solucionNesting?: SolucionNesting;
+  /** Tramos rectos que se ejecutan una sola vez para dos piezas. */
+  commonLine?: ResultadoCommonLineTrabajo;
   /** Escalones efectivos cuando el costeo del sustrato usa plate-segments. */
   costingSegmentSteps?: number[];
   /** Perfil efectivo que participó de la firma productiva. */
@@ -957,6 +977,7 @@ export interface NestingEjecutado {
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
   /** El layout debe permanecer registrado con un corte vectorial posterior. */
   layoutVinculadoGeometriaVectorial?: boolean;
+  layoutRegistradoLoteId?: string;
   /** Datos normalizados para que el SVG muestre cómo pensó el motor. */
   visualConfig?: NestingVisualConfig;
   /** Outputs canónicos publicados por el paso que generó este nesting. */

@@ -334,7 +334,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
 
   const handleGuardar = async () => {
     if (pasos.length === 0) {
-      toast.error("La ruta debe tener al menos un Paso o una Etapa");
+      toast.error("El flujo debe tener al menos un nodo o una etapa");
       return;
     }
     setGuardando(true);
@@ -345,7 +345,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           descripcion: descripcion || undefined,
           workflow,
         })) as { id: string };
-        toast.success(`Ruta "${nombre}" creada`);
+        toast.success(`Flujo "${nombre}" creado`);
         router.push(`/productos-servicios/rutas/${creado.id}`);
       } else {
         await actualizarRuta(rutaExistente!.id, {
@@ -358,7 +358,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
               : undefined,
           cambios: cambiosDescripcion || undefined,
         });
-        toast.success(`Ruta "${nombre}" actualizada`);
+        toast.success(`Flujo "${nombre}" actualizado`);
         router.push("/productos-servicios/rutas");
       }
       router.refresh();
@@ -406,7 +406,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
     setEliminando(true);
     try {
       await eliminarRuta(rutaExistente.id);
-      toast.success("Ruta eliminada");
+      toast.success("Flujo eliminado");
       setConfirmandoBorrado(false);
       router.push("/productos-servicios/rutas");
       router.refresh();
@@ -421,14 +421,14 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
       <div className="space-y-3">
         <Link href="/productos-servicios/rutas" className="back-link">
           <ArrowLeftIcon className="size-4" />
-          Rutas de producción
+          Flujos de producción
         </Link>
         <div className="page-head wizard-head">
           <div className="title-block">
             <h1>
               {modo === "crear"
-                ? "Nueva ruta"
-                : `Editar ruta: ${rutaExistente?.nombre}`}
+                ? "Nuevo flujo"
+                : `Editar flujo: ${rutaExistente?.nombre}`}
             </h1>
             {modo === "editar" && (
               <div className="sub mt-1 flex items-center gap-2">
@@ -446,7 +446,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           </div>
           {modo === "editar" && (
             <div className="flex items-center gap-2">
-              <Label htmlFor="ruta-activa">Ruta activa</Label>
+              <Label htmlFor="ruta-activa">Flujo activo</Label>
               <Switch
                 id="ruta-activa"
                 checked={activo}
@@ -465,11 +465,11 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                 <RouteIcon />
               </span>
               <div className={styles.identityCopy}>
-                <span className={styles.eyebrow}>Ruta reusable</span>
+                <span className={styles.eyebrow}>Flujo reutilizable</span>
                 <CardTitle>Identidad</CardTitle>
                 <CardDescription>
-                  Definí cómo se reconocerá esta ruta en el catálogo y al
-                  incorporarla a un producto.
+                  Definí cómo se reconocerá este flujo en el catálogo y al
+                  incorporarlo a un producto.
                 </CardDescription>
               </div>
             </CardHeader>
@@ -494,7 +494,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                     value={descripcion}
                     onChange={(e) => setDescripcion(e.target.value)}
                     rows={3}
-                    placeholder="Explicá brevemente cuándo conviene usar esta ruta."
+                    placeholder="Explicá brevemente cuándo conviene usar este flujo."
                   />
                 </Field>
               </FieldGroup>
@@ -502,7 +502,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                 <Card className="bg-orange-50 border-orange-300">
                   <CardContent className="pt-4">
                     <p className="text-orange-900 mb-2 text-sm font-semibold">
-                      ⚠ Cambios en una ruta usada por {productosAfectados}{" "}
+                      ⚠ Cambios en un flujo usado por {productosAfectados}{" "}
                       producto(s)
                     </p>
                     <ul className="mb-3 ml-4 list-disc text-xs text-foreground/80 space-y-0.5">
@@ -523,8 +523,8 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                       ) : null}
                       {cambioWorkflow ? (
                         <li>
-                          Cambia la estructura del Workflow, sus paralelismos o
-                          sus componentes fabricados.
+                          Cambia la estructura del flujo de producción, sus
+                          paralelismos o sus componentes fabricados.
                         </li>
                       ) : null}
                       {cambioIconos ? (
@@ -578,7 +578,9 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                   productosAfectados === 0 &&
                   v.cambios?.startsWith("Copia de ")
                     ? "Versión inicial"
-                    : (v.cambios ?? "Versión inicial")}
+                    : v.cambios === "Actualización del Workflow"
+                      ? "Actualización del flujo de producción"
+                      : (v.cambios ?? "Versión inicial")}
                 </span>
                 <span className="vdate">{fechaNumerica(v.createdAt)}</span>
               </div>
@@ -653,16 +655,16 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
               disabled={guardando || eliminando}
             >
               <Trash2Icon className="size-4" />
-              {eliminando ? "Eliminando..." : "Eliminar ruta"}
+              {eliminando ? "Eliminando..." : "Eliminar flujo"}
             </button>
           ) : (
             <div />
           )}
           <span className="route-actions-copy">
             {modo === "crear"
-              ? "Se guardará como V1 y quedará disponible para reutilizarla en distintos productos."
+              ? "Se guardará como V1 y quedará disponible para reutilizarlo en distintos productos."
               : (rutaExistente?.productosAlternativas?.length ?? 0) === 0
-                ? "Los cambios se aplican sobre esta ruta. Todavía no está asociada a productos."
+                ? "Los cambios se aplican sobre este flujo. Todavía no está asociado a productos."
                 : `Los cambios estructurales crearán automáticamente v${
                     (rutaExistente?.versionActual ?? 1) + 1
                   } para preservar los productos existentes.`}
@@ -685,7 +687,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
             {guardando
               ? "Guardando..."
               : modo === "crear"
-                ? "Crear ruta"
+                ? "Crear flujo"
                 : "Guardar cambios"}
           </button>
         </div>
@@ -733,22 +735,22 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
         <ConfirmacionDestructiva
           open={confirmandoBorrado}
           onOpenChange={setConfirmandoBorrado}
-          titulo="Eliminar ruta"
+          titulo="Eliminar flujo"
           descripcion={
             <>
-              Vas a eliminar la ruta <strong>{rutaExistente.nombre}</strong>.
+              Vas a eliminar el flujo <strong>{rutaExistente.nombre}</strong>.
             </>
           }
           impacto={
             productosAfectados > 0
               ? [
-                  `Hay ${productosAfectados} producto(s) usando esta ruta.`,
-                  "El backend rechaza el borrado si la ruta está en uso — primero quitala de los productos.",
+                  `Hay ${productosAfectados} producto(s) usando este flujo.`,
+                  "Primero quitá el flujo de los productos que lo usan para poder eliminarlo.",
                 ]
-              : ["La ruta y todos sus pasos se borran del catálogo."]
+              : ["El flujo y todos sus nodos se borran del catálogo."]
           }
           nombreItem={rutaExistente.nombre}
-          accionLabel="Eliminar ruta"
+          accionLabel="Eliminar flujo"
           onConfirmar={ejecutarEliminar}
         />
       )}

@@ -1,3 +1,4 @@
+import { pasosEfectivos, proyectarBomEfectivo } from './bom-efectivo';
 import {
   BadRequestException,
   ConflictException,
@@ -152,7 +153,7 @@ export class RecetasProductoService {
 
   async obtener(auth: CurrentAuth, productoId: string) {
     await this.productos.obtenerProducto(auth.tenantId, productoId);
-    return this.prisma.productoReceta.findMany({
+    const recetas = await this.prisma.productoReceta.findMany({
       where: { tenantId: auth.tenantId, productoId },
       orderBy: { createdAt: 'asc' },
       include: {
@@ -178,6 +179,11 @@ export class RecetasProductoService {
         },
       },
     });
+    return recetas.map(receta => ({
+      ...receta,
+      revisionPublicada: receta.revisionPublicada ? proyectarBomEfectivo(receta.revisionPublicada) : null,
+      revisiones: receta.revisiones.map(proyectarBomEfectivo),
+    }));
   }
 
   /**
@@ -1169,7 +1175,7 @@ export class RecetasProductoService {
   }
 
   private async obtenerRevision(tenantId: string, revisionId: string) {
-    return this.prisma.productoRecetaRevision.findFirstOrThrow({
+    const revision = await this.prisma.productoRecetaRevision.findFirstOrThrow({
       where: { id: revisionId, tenantId },
       include: {
         materiales: { orderBy: { orden: 'asc' } },
@@ -1178,13 +1184,14 @@ export class RecetasProductoService {
         documentos: { orderBy: { orden: 'asc' } },
       },
     });
+    return proyectarBomEfectivo(revision);
   }
 
   private async cargarRevisionBom(
     tenantId: string,
     revisionId: string,
   ): Promise<BomRevisionFuente | null> {
-    const revision = await this.prisma.productoRecetaRevision.findFirst({
+    const guardada = await this.prisma.productoRecetaRevision.findFirst({
       where: { id: revisionId, tenantId },
       include: {
         receta: {
@@ -1206,7 +1213,8 @@ export class RecetasProductoService {
         documentos: { orderBy: { orden: 'asc' } },
       },
     });
-    if (!revision) return null;
+    if (!guardada) return null;
+    const revision = proyectarBomEfectivo(guardada);
 
     return {
       id: revision.id,
@@ -2291,7 +2299,7 @@ export class RecetasProductoService {
     },
     variantes: Map<string, VarianteMaterialReferencia>,
   ) {
-    return snapshot.pasos.flatMap((paso) =>
+    return pasosEfectivos(snapshot).flatMap((paso) =>
       paso.slots.map((slot, index) => {
         const materialVariante =
           slot.materialVariante && typeof slot.materialVariante === 'object'
@@ -2360,7 +2368,7 @@ export class RecetasProductoService {
       componentes: unknown[];
     },
   ) {
-    return snapshot.pasos.map((paso) => {
+    return pasosEfectivos(snapshot).map((paso) => {
       const recurso = paso.recurso;
       const maquina =
         recurso.maquina && typeof recurso.maquina === 'object'

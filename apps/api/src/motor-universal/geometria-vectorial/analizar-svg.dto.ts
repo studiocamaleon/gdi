@@ -57,6 +57,26 @@ export class ConfiguracionEncastresVectorialesDto {
   kerfMm!: number;
 }
 
+export class ConfiguracionCommonLineDto {
+  @IsBoolean()
+  habilitado!: boolean;
+
+  @IsNumber()
+  @Min(0.01)
+  @Max(100)
+  anchoCorteMm!: number;
+
+  @IsNumber()
+  @Min(1)
+  @Max(100_000)
+  longitudMinimaMm!: number;
+
+  @IsNumber()
+  @Min(0.01)
+  @Max(1)
+  toleranciaMm!: number;
+}
+
 export class NivelVectorialDto {
   @IsString()
   @MaxLength(80)
@@ -201,6 +221,11 @@ export class AnalizarSvgFabricacionDto {
   @ValidateNested()
   @Type(() => ConfiguracionEncastresVectorialesDto)
   configuracionEncastres?: ConfiguracionEncastresVectorialesDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ConfiguracionCommonLineDto)
+  commonLine?: ConfiguracionCommonLineDto;
 
   @IsOptional()
   @ValidateNested()

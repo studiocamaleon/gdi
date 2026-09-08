@@ -146,6 +146,19 @@ function pasoLaserValidacion(id: string, variante: string) {
     estado: 'pendiente',
     tipoEjecucion: 'interno',
     duracionEstimadaMin: 5,
+    orden: {
+      pasos: [
+        {
+          id,
+          itemId: `item-${id}`,
+          indice: 0,
+          nodoClave: `ruta-${id}`,
+          estado: 'pendiente',
+          dependenciasEntrantes: [] as Array<{ predecesorPasoId: string }>,
+          gatesOperativos: [] as Array<{ estado: string }>,
+        },
+      ],
+    },
     item: {
       pasos: [{ id, estado: 'pendiente' }],
       cotizacionItem: {
@@ -195,10 +208,66 @@ function crearServicioValidacionLaser(variantes: [string, string]) {
   ) as OrdenesTrabajoService;
   const accionPaso = jest.fn().mockResolvedValue({});
   Object.assign(service as object, { prisma, accionPaso });
-  return { service, accionPaso };
+  return { service, accionPaso, pasos };
 }
 
 describe('completar tanda láser — revalidación de compatibilidad', () => {
+  it('admite dos nodos paralelos del mismo ítem y rechaza un gate pendiente antes de avanzar', async () => {
+    const { service, accionPaso, pasos } = crearServicioValidacionLaser([
+      'obra-75-a4',
+      'obra-75-a4',
+    ]);
+    const nodos = pasos.map((p, indice) => ({
+      ...p.orden.pasos[0],
+      itemId: 'item-comun',
+      indice,
+    }));
+    for (const paso of pasos) {
+      paso.itemId = 'item-comun';
+      paso.orden.pasos = nodos;
+    }
+    await expect(
+      service.completarPasosLote(
+        auth,
+        ['laser-a', 'laser-b'],
+        undefined,
+        undefined,
+        true,
+      ),
+    ).resolves.toEqual({ completados: 2, errores: [] });
+    accionPaso.mockClear();
+    nodos[1].gatesOperativos = [{ estado: 'PENDIENTE' }];
+    await expect(
+      service.completarPasosLote(
+        auth,
+        ['laser-a', 'laser-b'],
+        undefined,
+        undefined,
+        true,
+      ),
+    ).rejects.toThrow('ya no está listo');
+    expect(accionPaso).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un predecesor sin terminar aunque el nodo sea el primero de su ítem', async () => {
+    const { service, accionPaso, pasos } = crearServicioValidacionLaser([
+      'obra-75-a4',
+      'obra-75-a4',
+    ]);
+    pasos[0].orden.pasos[0].dependenciasEntrantes = [
+      { predecesorPasoId: 'previo-de-otro-componente' },
+    ];
+    await expect(
+      service.completarPasosLote(
+        auth,
+        ['laser-a', 'laser-b'],
+        undefined,
+        undefined,
+        true,
+      ),
+    ).rejects.toThrow('ya no está listo');
+    expect(accionPaso).not.toHaveBeenCalled();
+  });
   it('acepta la tanda cuando todos los parámetros físicos siguen coincidiendo', async () => {
     const { service, accionPaso } = crearServicioValidacionLaser([
       'obra-75-a4',

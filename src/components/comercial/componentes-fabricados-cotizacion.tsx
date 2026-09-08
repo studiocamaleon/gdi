@@ -3,11 +3,12 @@
 import * as React from "react";
 import { BoxesIcon, ChevronDownIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import {
-  getRecetasProducto,
   normalizarFuenteVectorial,
   type BindingParametroComponente,
+  type ConfiguracionComponenteFabricado,
+  type PiezaRectangularComponente,
   type FormatoFuenteVectorial,
-  type ProductoReceta,
+  type ProductoRecetaRevision,
 } from "@/lib/productos-servicios-api";
 import {
   unidadVisibleParametro,
@@ -40,6 +41,8 @@ import {
 } from "@/components/ui/input-group";
 import { ControlArchivoVectorial } from "./geometrias-vectoriales-cotizacion";
 import styles from "./componentes-fabricados-cotizacion.module.css";
+import { PiezasRectangulares } from "@/components/productos-servicios/piezas-rectangulares";
+import { esPiezaRectangular } from "@/lib/piezas-componente";
 
 const CLAVE_OCURRENCIAS_ADICIONALES = "__ocurrenciasAdicionales";
 
@@ -325,7 +328,7 @@ function CampoVectorialOcurrencia({
   );
 }
 
-function CamposOcurrencia({
+function CamposParametros({
   bindings,
   current,
   idPrefix,
@@ -339,7 +342,7 @@ function CamposOcurrencia({
   if (!bindings.length) {
     return (
       <p className={styles.resolvedMessage}>
-        Esta ocurrencia se configura automáticamente desde la receta.
+        La configuración se resuelve automáticamente desde la receta.
       </p>
     );
   }
@@ -446,43 +449,81 @@ function CamposOcurrencia({
   );
 }
 
+function CamposOcurrencia({
+  configuracion,
+  cantidadProductos,
+  ...props
+}: {
+  configuracion?: ConfiguracionComponenteFabricado | null;
+  cantidadProductos?: number;
+  bindings: BindingParametroComponente[];
+  current: Record<string, unknown>;
+  idPrefix: string;
+  onChange: (value: Record<string, unknown>) => void;
+}) {
+  const base = configuracion?.piezas?.filter(esPiezaRectangular) ?? [];
+  const piezas =
+    configuracion?.piezasEditables && Array.isArray(props.current.piezas)
+      ? (props.current.piezas as PiezaRectangularComponente[])
+      : base;
+  return (
+    <>
+      {base.length > 0 && (
+        <PiezasRectangulares
+          piezas={piezas}
+          cantidadProductos={cantidadProductos}
+          idPrefix={props.idPrefix}
+          onChange={
+            configuracion?.piezasEditables
+              ? (next) => props.onChange({ ...props.current, piezas: next })
+              : undefined
+          }
+        />
+      )}
+      {props.bindings.length > 0 || !base.length ? (
+        <CamposParametros {...props} />
+      ) : null}
+    </>
+  );
+}
+
 export function ComponentesFabricadosCotizacion({
-  productoId,
-  rutaAlternativaId,
+  revision,
+  cantidadProductos,
   values,
   onChange,
 }: {
-  productoId: string;
-  rutaAlternativaId: string;
+  revision?: ProductoRecetaRevision | null;
+  cantidadProductos?: number;
   values: Record<string, Record<string, unknown>>;
   onChange: (values: Record<string, Record<string, unknown>>) => void;
 }) {
-  const [recetas, setRecetas] = React.useState<ProductoReceta[]>([]);
-  React.useEffect(() => {
-    let active = true;
-    getRecetasProducto(productoId)
-      .then((result) => active && setRecetas(result))
-      .catch(() => active && setRecetas([]));
-    return () => {
-      active = false;
-    };
-  }, [productoId]);
-
-  const revision = recetas.find(
-    (receta) => receta.rutaAlternativa.id === rutaAlternativaId,
-  )?.revisionPublicada;
-  const componentes = (revision?.componentes ?? []).map((componente) => {
-    const bindings = componente.configuracionJson?.bindings ?? [];
-    const derivarMedidas = medidasDerivadasDeDisenoVectorial(bindings);
-    return {
-      componente,
-      solicitados: bindings.filter(
-        (binding) =>
-          binding.origen === "COTIZACION" &&
-          !esMedidaPlanaDerivada(binding, derivarMedidas),
-      ),
-    };
-  });
+  const componentes = (revision?.componentes ?? [])
+    .map((componente) => {
+      const bindings = componente.configuracionJson?.bindings ?? [];
+      const coleccion = Boolean(componente.configuracionJson?.piezas?.length);
+      const derivarMedidas =
+        coleccion || medidasDerivadasDeDisenoVectorial(bindings);
+      return {
+        componente,
+        coleccion,
+        solicitados: bindings.filter(
+          (binding) =>
+            binding.origen === "COTIZACION" &&
+            !(
+              coleccion &&
+              ["cantidad", "disenoVectorialFuente"].includes(binding.clave)
+            ) &&
+            !esMedidaPlanaDerivada(binding, derivarMedidas),
+        ),
+      };
+    })
+    .filter(
+      ({ componente, solicitados }) =>
+        solicitados.length > 0 ||
+        componente.configuracionJson?.repeticion?.permitida ||
+        componente.configuracionJson?.piezas?.some(esPiezaRectangular),
+    );
   if (!componentes.length) return null;
 
   return (
@@ -490,15 +531,12 @@ export function ComponentesFabricadosCotizacion({
       <header>
         <BoxesIcon />
         <div>
-          <strong>Componentes fabricados</strong>
-          <span>
-            El sistema combina valores fijos, heredados y los datos que debas
-            completar ahora.
-          </span>
+          <strong>Configuración de componentes</strong>
+          <span>Completá los datos que requiere esta configuración.</span>
         </div>
       </header>
       <div className={styles.cards}>
-        {componentes.map(({ componente, solicitados }) => {
+        {componentes.map(({ componente, coleccion, solicitados }) => {
           const current = values[componente.codigo] ?? {};
           const repeticion = componente.configuracionJson?.repeticion;
           const repetible = repeticion?.permitida === true;
@@ -521,7 +559,9 @@ export function ComponentesFabricadosCotizacion({
               ...adicionales,
               {
                 id: idNuevaOcurrencia(),
-                nombre: `Nueva ocurrencia ${numero}`,
+                nombre: coleccion
+                  ? `Nuevo grupo ${numero}`
+                  : `Nueva ocurrencia ${numero}`,
                 valores: {},
               },
             ]);
@@ -530,14 +570,18 @@ export function ComponentesFabricadosCotizacion({
             <details
               className={styles.card}
               key={componente.id}
-              open={solicitados.length > 0 || repetible}
+              open={
+                solicitados.length > 0 ||
+                repetible ||
+                Boolean(componente.configuracionJson?.piezas?.length)
+              }
             >
               <summary>
                 <div>
                   <strong>{componente.nombre}</strong>
                   <span>
                     {repetible
-                      ? `${cantidadOcurrencias} de ${maximo} ocurrencias`
+                      ? `${cantidadOcurrencias} de ${maximo} ${coleccion ? "grupos" : "ocurrencias"}`
                       : solicitados.length
                         ? `${solicitados.length} dato${solicitados.length === 1 ? "" : "s"} para completar`
                         : "Configuración resuelta automáticamente"}
@@ -547,16 +591,27 @@ export function ComponentesFabricadosCotizacion({
               </summary>
               <div className={styles.occurrenceList}>
                 {incluyeBase ? (
-                  <section className={styles.occurrence}>
-                    {repetible ? (
+                  <section
+                    className={styles.occurrence}
+                    data-single={adicionales.length === 0}
+                  >
+                    {adicionales.length > 0 ? (
                       <div className={styles.occurrenceHead}>
                         <div>
-                          <strong>{componente.nombre}</strong>
-                          <span>Incluida en la receta</span>
+                          <strong>
+                            {coleccion ? "Grupo inicial" : "Ocurrencia inicial"}
+                          </strong>
+                          <span>
+                            {coleccion
+                              ? "Incluido en la receta"
+                              : "Incluida en la receta"}
+                          </span>
                         </div>
                       </div>
                     ) : null}
                     <CamposOcurrencia
+                      configuracion={componente.configuracionJson}
+                      cantidadProductos={cantidadProductos}
                       bindings={solicitados}
                       current={current}
                       idPrefix={`componente-${componente.id}`}
@@ -603,7 +658,7 @@ export function ComponentesFabricadosCotizacion({
                         variant="ghost"
                         size="icon-sm"
                         aria-label={`Quitar ${ocurrencia.nombre}`}
-                        title="Quitar ocurrencia"
+                        title={coleccion ? "Quitar grupo" : "Quitar ocurrencia"}
                         onClick={() =>
                           actualizarAdicionales(
                             adicionales.filter(
@@ -616,6 +671,8 @@ export function ComponentesFabricadosCotizacion({
                       </Button>
                     </div>
                     <CamposOcurrencia
+                      configuracion={componente.configuracionJson}
+                      cantidadProductos={cantidadProductos}
                       bindings={solicitados}
                       current={ocurrencia.valores}
                       idPrefix={`componente-${componente.id}-${ocurrencia.id}`}
@@ -634,7 +691,11 @@ export function ComponentesFabricadosCotizacion({
                 {!incluyeBase && adicionales.length === 0 ? (
                   <Empty>
                     <EmptyHeader>
-                      <EmptyTitle>Sin ocurrencias agregadas</EmptyTitle>
+                      <EmptyTitle>
+                        {coleccion
+                          ? "Sin grupos agregados"
+                          : "Sin ocurrencias agregadas"}
+                      </EmptyTitle>
                       <EmptyDescription>
                         Este componente comienza vacío. Agregá únicamente las
                         variantes que necesite esta cotización.

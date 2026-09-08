@@ -1,0 +1,229 @@
+{
+  "fecha": "2026-09-07",
+  "placas": 34,
+  "piezas": 450,
+  "version": "grafonest-patrones-1",
+  "patrones": {
+    "version": 1,
+    "patronesEvaluados": 9651,
+    "patronesElegidos": 3,
+    "minimoPlacasEnCartera": true,
+    "minimoPatronesEnCartera": true,
+    "minimoGeometricoDemostrado": false
+  },
+  "busqueda": {
+    "motivoFin": "PRESUPUESTO_AGOTADO",
+    "presupuestoMs": 60000,
+    "intentos": 2,
+    "candidatosValidos": 1,
+    "minimoTeoricoPlacas": 28
+  },
+  "validacion": {
+    "completa": true,
+    "dentroDePlaca": true,
+    "sinSolapamientos": true,
+    "separacionRespetada": true
+  },
+  "tiempoMs": 60160,
+  "persistencia": {
+    "archivosReutilizados": 6,
+    "totalPiezas": 450,
+    "referenciaHistoricaConservada": true,
+    "fuenteRehidratada": true,
+    "otroTenantRechazado": true,
+    "transaccionDePruebaRevertida": true
+  },
+  "interfaz": {
+    "vista": "NestingViewer / NestingPatronesView",
+    "repeticiones": [
+      25,
+      5,
+      4
+    ],
+    "balance": "450 solicitadas, 450 colocadas, 0 excedentes",
+    "ampliacionYResaltadoComprobados": true
+  },
+  "verificaciones": {
+    "api": {
+      "suites": 11,
+      "pruebas": 98
+    },
+    "frontend": {
+      "suites": 4,
+      "pruebas": 22
+    },
+    "typeScriptApi": "sin errores",
+    "typeScriptWeb": "sin errores",
+    "buildApi": "correcto"
+  },
+  "cargaChrome": {
+    "completada": true,
+    "archivos": 6,
+    "nombres": [
+      "Cuerpo",
+      "Soporte",
+      "Faldón",
+      "Estante",
+      "Costilla",
+      "Header"
+    ],
+    "capa": "CORTE_3",
+    "unidadConfirmada": "pt",
+    "relecturaTrasRecargar": true,
+    "guardadoProducto": true,
+    "bloqueoExteriorAbiertoComprobado": true,
+    "cierreEstanteParaPruebaMm": 13.88,
+    "operacionesInternasClasificadas": false,
+    "productoId": "5293ecf0-24d5-44ac-aaf0-36fe46adef0c",
+    "estadoProducto": "PUBLICADO_V1",
+    "cotizacionCompletaEnNavegador": true,
+    "correccion": "Footer del producto debajo del diálogo de importación"
+  },
+  "componentesChrome": {
+    "configurados": true,
+    "productoId": "5293ecf0-24d5-44ac-aaf0-36fe46adef0c",
+    "revisionId": "02e2bcd4-62c9-486c-b6c5-b7d5fc9e531a",
+    "productoReutilizado": "Corrugado plastico",
+    "cantidadesPorExhibidor": {
+      "Cuerpo": 1,
+      "Soporte": 1,
+      "Faldón": 1,
+      "Estante": 4,
+      "Costilla": 1,
+      "Header": 1
+    },
+    "vinculosReleidosEnBaseDeDatos": true,
+    "resolverComponentesCantidad50": 450,
+    "medidasDerivadasDeLosArchivos": true,
+    "politicaNesting": "CONSOLIDAR_COMPATIBLES",
+    "publicado": true,
+    "cotizacionCompletaEnNavegador": true,
+    "pendiente": null
+  },
+  "cotizacionChrome": {
+    "fecha": "2026-09-07",
+    "producto": "Exhibidor · prueba de archivos y patrones",
+    "cantidadExhibidores": 50,
+    "piezas": 450,
+    "placas": 34,
+    "patrones": 3,
+    "repeticiones": [
+      25,
+      5,
+      4
+    ],
+    "cotizacionRunId": "62616b88-6723-406d-82f4-353627d59529",
+    "jobId": "quote-d279d192e31560518697d5854c660b5787f2dedaf7c502ae6c34212824a8e516",
+    "duracionWorkerMs": 120965,
+    "precioTotalConImpuestosMostrado": 1002393,
+    "archivosGuardadosReutilizados": 6,
+    "registroImpresionCorteYLayoutExportableVerificado": true,
+    "pantallaRecibioResultadoSinError": true,
+    "visorPatronesComprobado": true,
+    "otEmitidaPorAgente": false,
+    "correcciones": [
+      "Validación de referencias guardadas v2 sin configuración multicapa",
+      "Demanda de impresión periódica incorporada al lote mixto",
+      "Consultas espaciadas y recuperación de HTTP 429 sin reenviar el cálculo",
+      "Actualización de posiciones de impresión, corte y layout canónico al consolidar",
+      "Bloqueo del guardado de precios anteriores si falla un recálculo"
+    ]
+  },
+  "corteConsolidadoChrome": {
+    "fecha": "2026-09-07",
+    "jobId": "quote-ffc42950f8007c1515b2de2d6e27098f22d79ea9d7e64295463e271cb064f893",
+    "cantidadExhibidores": 50,
+    "piezas": 450,
+    "placasFisicas": 34,
+    "patrones": 3,
+    "repeticiones": [
+      25,
+      5,
+      4
+    ],
+    "operacionesConsolidadas": [
+      "impresion",
+      "corte_laser"
+    ],
+    "participantesPorOperacion": 6,
+    "posesIdenticas": true,
+    "materialAdicionalCorte": 0,
+    "preparacionCorteUnica": true,
+    "ahorroCostoCorte": 11595.9125,
+    "precioTotalConImpuestosMostrado": 970148,
+    "duracionWorkerMs": 121560,
+    "planAntesDeAgregar": true,
+    "ampliacionPatronA": true,
+    "tabsImpresionCorte": true,
+    "archivosPorFormato": 3,
+    "polilineasPorPatron": [
+      9,
+      25,
+      25
+    ],
+    "dxfDescargadoChromeVerificado": true,
+    "bomOmitePasosDesactivados": true,
+    "revisionPublicadaConservada": true,
+    "otEmitidaPorAgente": false,
+    "pruebasApi": 40,
+    "pruebasFrontend": 12,
+    "siguienteBloque": "Implementado: ver componenteMultipiezaChrome"
+  },
+  "componenteMultipiezaChrome": {
+    "fecha": "2026-09-07",
+    "productoId": "5293ecf0-24d5-44ac-aaf0-36fe46adef0c",
+    "revisionId": "4e5a64fc-622e-4b25-95d5-bf3a405d0872",
+    "revisionNumero": 2,
+    "publicada": true,
+    "revisionAnteriorConservada": true,
+    "componentes": 1,
+    "nombreComponente": "Piezas de corrugado",
+    "subruta": "Corrugado plastico",
+    "archivosReutilizados": 6,
+    "cantidadesPorExhibidor": {
+      "Cuerpo": 1,
+      "Soporte": 1,
+      "Faldón": 1,
+      "Estante": 4,
+      "Costilla": 1,
+      "Header": 1
+    },
+    "jobId": "quote-b5edc86f08e5ffd0eec863f876fbf86215b281497738737efd1ada259bde533b",
+    "cantidadExhibidores": 50,
+    "piezas": 450,
+    "placas": 34,
+    "repeticiones": [
+      25,
+      5,
+      4
+    ],
+    "duracionWorkerMs": 120906,
+    "precioTotalConImpuestosMostrado": 843970,
+    "pruebaUnExhibidor": {
+      "piezas": 9,
+      "placas": 1
+    },
+    "operacionesActivas": [
+      "impresion_por_area",
+      "corte_laser"
+    ],
+    "segundaOptimizacionCorte": false,
+    "validacionContornosExactosPosterior": true,
+    "archivosPorFormato": 3,
+    "exterioresPorPatron": [
+      9,
+      25,
+      25
+    ],
+    "parserDxfIndependiente": true,
+    "otEmitidaPorAgente": false,
+    "pruebasApi": 109,
+    "pruebasFrontend": 10,
+    "bomV2VerificadoEnChrome": true,
+    "bomDisenos": 6,
+    "bomPiezasPorProducto": 9,
+    "typeScriptWeb": "sin errores",
+    "buildApi": "correcto",
+    "apiYWorkerReiniciados": true
+  }
+}

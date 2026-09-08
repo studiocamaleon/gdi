@@ -325,7 +325,7 @@ export class RutasProduccionService {
               rutaId: id,
               version: nuevaVersion,
               snapshotJson: this.buildRutaSnapshot(nuevosPasos, workflow),
-              cambios: dto.cambios ?? 'Actualización del Workflow',
+              cambios: dto.cambios ?? 'Actualización del flujo de producción',
             },
           });
         } else {
@@ -361,11 +361,11 @@ export class RutasProduccionService {
               rutaId: id,
               version,
               snapshotJson,
-              cambios: dto.cambios ?? 'Actualización del Workflow',
+              cambios: dto.cambios ?? 'Actualización del flujo de producción',
             },
             update: {
               snapshotJson,
-              cambios: dto.cambios ?? 'Actualización del Workflow',
+              cambios: dto.cambios ?? 'Actualización del flujo de producción',
             },
           });
         }
@@ -797,7 +797,7 @@ export class RutasProduccionService {
       throw new BadRequestException(
         error instanceof Error
           ? error.message
-          : 'El Workflow de la ruta no es válido.',
+          : 'El flujo de producción no es válido.',
       );
     }
 
@@ -874,7 +874,7 @@ export class RutasProduccionService {
       throw new BadRequestException(
         error instanceof Error
           ? error.message
-          : 'El Workflow de la ruta no es válido.',
+          : 'El flujo de producción no es válido.',
       );
     }
   }

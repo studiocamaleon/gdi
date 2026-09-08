@@ -13,6 +13,7 @@
  */
 
 import * as React from "react";
+import { PlanesConservadosSimulador } from "./planes-conservados-simulador";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
@@ -133,6 +134,7 @@ export function buildViewModel(data: SimuladorData) {
   );
 
   for (const job of data.jobs) {
+    if (job.planFabricacion) continue;
     const dias = diasHastaEntrega(job.fechaEntrega);
     const vjob: VJob = {
       id: job.pasoId,
@@ -1256,8 +1258,10 @@ export function SimuladorImpresion({
           </Alert>
         ) : null}
 
+        <PlanesConservadosSimulador jobs={data.jobs} />
+
         {techs.length === 0 ? (
-          refreshError ? null : (
+          refreshError || data.jobs.some(job => job.planFabricacion) ? null : (
             <div className="sim-empty">
               No hay pasos de impresión por área listos para imprimir. Cuando
               una orden emitida llegue a su paso de impresión, aparece acá.

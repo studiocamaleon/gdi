@@ -21,7 +21,23 @@ export type ComponenteEspecificacionesView = {
   nombre: string;
   resumen: string;
   filas: FilaEspecificacionComponente[];
+  piezas: PiezasEspecificacionesView | null;
   hijos: ComponenteEspecificacionesView[];
+};
+
+export type PiezasEspecificacionesView = {
+  esConjunto: boolean;
+  conjuntos: number | null;
+  porConjunto: number | null;
+  total: number | null;
+  filas: Array<{
+    key: string;
+    nombre: string;
+    archivo: string | null;
+    medidas: string;
+    porConjunto: number | null;
+    total: number | null;
+  }>;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -31,6 +47,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function asFiniteNumber(value: unknown): number | null {
+  if (
+    (typeof value !== "number" && typeof value !== "string") ||
+    (typeof value === "string" && !value.trim())
+  )
+    return null;
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -47,7 +68,100 @@ function formatUnit(unit: unknown, quantity: number) {
   if (["m2", "m²"].includes(normalized)) return "m²";
   if (["metro_lineal", "ml"].includes(normalized)) return "ml";
   if (normalized === "pieza") return quantity === 1 ? "pieza" : "piezas";
+  if (normalized === "conjunto")
+    return quantity === 1 ? "conjunto" : "conjuntos";
   return normalized;
+}
+
+function nonNegativeNumber(value: unknown) {
+  const number = asFiniteNumber(value);
+  return number != null && number >= 0 ? number : null;
+}
+
+function sumKnown(values: Array<number | null>) {
+  return values.every((value) => value != null)
+    ? values.reduce<number>((sum, value) => sum + value!, 0)
+    : null;
+}
+
+function pieceDimensions(width: unknown, height: unknown) {
+  const ancho = asFiniteNumber(width);
+  const alto = asFiniteNumber(height);
+  if (ancho == null || alto == null || ancho <= 0 || alto <= 0)
+    return "Sin dato";
+  return `${formatMmAsCm(ancho)} × ${formatMmAsCm(alto)} cm`;
+}
+
+/** Usa el contexto congelado del hijo: su cantidad ya incluye la fórmula BOM
+ * y la ocurrencia. No se vuelve a multiplicar por la cantidad del producto. */
+function buildPieces(
+  component: Record<string, unknown>,
+): PiezasEspecificacionesView | null {
+  const ctx = asRecord(component.jobContext) ?? {};
+  const disenos = Array.isArray(ctx.disenosVectoriales)
+    ? ctx.disenosVectoriales.map(asRecord).filter((p) => p != null)
+    : [];
+  if (disenos.length) {
+    const conjuntos =
+      nonNegativeNumber(ctx.cantidad) ?? nonNegativeNumber(component.cantidad);
+    const filas = disenos.map((pieza, index) => {
+      const fuente = asRecord(pieza.fuente) ?? {};
+      const porConjunto = nonNegativeNumber(pieza.cantidadPorUnidad);
+      return {
+        key: `${typeof pieza.id === "string" ? pieza.id : "pieza"}-${index}`,
+        nombre:
+          typeof pieza.nombre === "string" && pieza.nombre.trim()
+            ? pieza.nombre.trim()
+            : `Pieza ${index + 1}`,
+        archivo:
+          typeof fuente.nombreArchivo === "string" &&
+          fuente.nombreArchivo.trim()
+            ? fuente.nombreArchivo.trim()
+            : null,
+        medidas: pieceDimensions(fuente.anchoFinalMm, fuente.altoFinalMm),
+        porConjunto,
+        total:
+          conjuntos != null && porConjunto != null
+            ? conjuntos * porConjunto
+            : null,
+      };
+    });
+    return {
+      esConjunto: true,
+      conjuntos,
+      porConjunto: sumKnown(filas.map((p) => p.porConjunto)),
+      total: sumKnown(filas.map((p) => p.total)),
+      filas,
+    };
+  }
+
+  // Snapshots de medidas múltiples anteriores a las colecciones de diseños:
+  // cada cantidad ya es el total de esa medida, no una cantidad por conjunto.
+  const piezas = Array.isArray(ctx.piezas)
+    ? ctx.piezas.map(asRecord).filter((p) => p != null)
+    : [];
+  const esConjunto =
+    piezas.length > 0 &&
+    piezas.every((p) => nonNegativeNumber(p.cantidadPorUnidad) != null);
+  if (piezas.length <= 1 && !esConjunto) return null;
+  const filas = piezas.map((pieza, index) => ({
+    key: `pieza-${index}`,
+    nombre:
+      typeof pieza.nombre === "string" && pieza.nombre.trim()
+        ? pieza.nombre.trim()
+        : `Pieza ${index + 1}`,
+    archivo: null,
+    medidas: pieceDimensions(pieza.anchoMm, pieza.altoMm),
+    porConjunto: esConjunto ? nonNegativeNumber(pieza.cantidadPorUnidad) : null,
+    total: nonNegativeNumber(pieza.cantidad),
+  }));
+  return {
+    esConjunto,
+    conjuntos: esConjunto ? nonNegativeNumber(ctx.cantidad) : null,
+    porConjunto: esConjunto ? sumKnown(filas.map((p) => p.porConjunto)) : null,
+    total: sumKnown(filas.map((p) => p.total)),
+    filas,
+  };
 }
 
 function parseEffectiveSpecs(
@@ -116,7 +230,10 @@ function geometryRow(
   } satisfies FilaEspecificacionComponente;
 }
 
-function materialRows(component: Record<string, unknown>) {
+function materialRows(
+  component: Record<string, unknown>,
+  specs: EspecificacionEfectivaComponente[],
+) {
   const rows: FilaEspecificacionComponente[] = [];
   const seen = new Set<string>();
   const pasos = Array.isArray(component.pasos) ? component.pasos : [];
@@ -128,6 +245,24 @@ function materialRows(component: Record<string, unknown>) {
     for (const materialValue of paso.materiales) {
       const material = asRecord(materialValue);
       if (!material || material.tipoLineaCosto !== "MATERIAL") continue;
+      // La selección pública ya muestra este material. La traza del paso
+      // completa sólo los materiales que no tienen una especificación visible.
+      const slotKeys = [
+        `slotMateriales.${paso.configPasoId}_${material.slotCodigo}`,
+        `slotMaterial_${paso.configPasoId}_${material.slotCodigo}`,
+        `slotMateriales.${material.slotCodigo}`,
+        `slotMaterial_${material.slotCodigo}`,
+      ];
+      if (
+        typeof material.materialVarianteId === "string" &&
+        specs.some(
+          (spec) =>
+            slotKeys.includes(spec.clave) &&
+            spec.valor === material.materialVarianteId &&
+            spec.valorTexto.trim(),
+        )
+      )
+        continue;
       const value =
         (typeof material.materialDisplayName === "string" &&
           material.materialDisplayName.trim()) ||
@@ -151,7 +286,10 @@ function materialRows(component: Record<string, unknown>) {
   return rows;
 }
 
-function buildRows(component: Record<string, unknown>) {
+function buildRows(
+  component: Record<string, unknown>,
+  piezas: PiezasEspecificacionesView | null,
+) {
   const specs = parseEffectiveSpecs(component.especificacionesEfectivas);
   const jobContext = asRecord(component.jobContext) ?? {};
   const rows: FilaEspecificacionComponente[] = [];
@@ -159,12 +297,41 @@ function buildRows(component: Record<string, unknown>) {
   const quantitySpec = specs.find((item) => item.clave === "cantidad");
   const quantity =
     asFiniteNumber(quantitySpec?.valor) ?? asFiniteNumber(component.cantidad);
-  if (quantity != null) {
+  if (piezas) {
+    if (piezas.esConjunto) {
+      rows.push({
+        key: "cantidad",
+        label: "Conjuntos",
+        value:
+          piezas.conjuntos == null
+            ? "Sin dato"
+            : formatNumber(piezas.conjuntos),
+        colorMode: false,
+      });
+      rows.push({
+        key: "piezas-por-conjunto",
+        label: "Piezas por conjunto",
+        value:
+          piezas.porConjunto == null
+            ? "Sin dato"
+            : formatNumber(piezas.porConjunto),
+        colorMode: false,
+      });
+    }
+    rows.push({
+      key: "total-piezas",
+      label: "Total de piezas",
+      value: piezas.total == null ? "Sin dato" : formatNumber(piezas.total),
+      colorMode: false,
+    });
+  } else if (quantity != null) {
     // La unidad del binding describe el parámetro mostrado (piezas, unidades,
     // etc.). La unidad del renglón BOM puede representar el consumo comercial
     // del componente (por ejemplo m²) y no necesariamente esta cantidad.
     const quantityLabel = quantitySpec?.etiqueta.toLowerCase() ?? "";
-    const semanticUnit = /\b(pieza|piezas|unidad|unidades)\b/.test(quantityLabel)
+    const semanticUnit = /\b(pieza|piezas|unidad|unidades)\b/.test(
+      quantityLabel,
+    )
       ? "unidad"
       : quantitySpec?.unidad;
     const unit = formatUnit(semanticUnit ?? component.unidad, quantity);
@@ -175,7 +342,7 @@ function buildRows(component: Record<string, unknown>) {
       colorMode: false,
     });
   }
-  if (geometry) rows.push(geometry);
+  if (geometry && !piezas) rows.push(geometry);
 
   const geometryKeys = new Set([
     "cantidad",
@@ -185,6 +352,11 @@ function buildRows(component: Record<string, unknown>) {
   ]);
   for (const spec of specs) {
     if (geometryKeys.has(spec.clave)) continue;
+    if (
+      piezas &&
+      (spec.clave === "disenoVectorialFuente" || spec.tipoDato === "vectorial")
+    )
+      continue;
     const isOptional = spec.clave.startsWith("opcionalesActivados.");
     if (isOptional && spec.valor !== true) continue;
     const raw = spec.valorTexto.trim();
@@ -218,7 +390,7 @@ function buildRows(component: Record<string, unknown>) {
     }
   }
 
-  rows.push(...materialRows(component));
+  rows.push(...materialRows(component, specs));
   return rows;
 }
 
@@ -232,7 +404,8 @@ function componentView(
     typeof component.nombre === "string" && component.nombre.trim()
       ? component.nombre.trim()
       : "Componente";
-  const filas = buildRows(component);
+  const piezas = buildPieces(component);
+  const filas = buildRows(component, piezas);
   const summaryRows = filas.filter((row) =>
     ["cantidad", "medidas"].includes(row.key),
   );
@@ -247,10 +420,39 @@ function componentView(
         ? component.codigo
         : `${nombre}-${index}`,
     nombre,
-    resumen: summaryRows.map((row) => row.value).join(" · "),
+    resumen: piezas
+      ? [
+          piezas.esConjunto && piezas.conjuntos != null
+            ? `${formatNumber(piezas.conjuntos)} ${formatUnit("conjunto", piezas.conjuntos)}`
+            : null,
+          `${piezas.filas.length} ${piezas.filas.length === 1 ? "tipo de pieza" : "tipos de pieza"}`,
+          piezas.total != null
+            ? `${formatNumber(piezas.total)} ${formatUnit("pieza", piezas.total)} en total`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : summaryRows.map((row) => row.value).join(" · "),
     filas,
+    piezas,
     hijos,
   };
+}
+
+/** La ficha raíz no debe presentar un material comercial genérico como si
+ * fuera fabricado allí cuando los materiales efectivos viven en los hijos. */
+export function componentesTienenMaterialEfectivo(
+  componentes: unknown,
+): boolean {
+  if (!Array.isArray(componentes)) return false;
+  return componentes.some((value) => {
+    const component = asRecord(value);
+    return (
+      component != null &&
+      (materialRows(component, []).length > 0 ||
+        componentesTienenMaterialEfectivo(component.componentes))
+    );
+  });
 }
 
 /** Construye una vista recursiva y sin códigos internos para propuesta/OT. */

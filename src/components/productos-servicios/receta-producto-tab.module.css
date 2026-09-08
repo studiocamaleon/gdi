@@ -2141,6 +2141,164 @@
   font-size: 10px;
 }
 
+.omittedSteps {
+  flex: none;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border, #dedad4);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+
+.omittedSummary {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  color: var(--ink, #1d1b20);
+  cursor: pointer;
+  list-style: none;
+}
+
+.omittedSummary::-webkit-details-marker {
+  display: none;
+}
+
+.omittedSummary:hover {
+  background: var(--surface-2, #f3f1ee);
+}
+
+.omittedSummary:focus-visible,
+.omittedConfigure:focus-visible {
+  outline: 2px solid var(--signal, #e85f2a);
+  outline-offset: -3px;
+}
+
+.omittedSummary > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted-text, #77736d);
+}
+
+.omittedSummary strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.omittedCount {
+  display: grid;
+  min-width: 23px;
+  height: 23px;
+  place-items: center;
+  padding-inline: 5px;
+  border-radius: 7px;
+  color: var(--signal, #e85f2a);
+  background: var(--signal-bg, #fff0e5);
+  font: 650 10px var(--font-mono);
+}
+
+.omittedHint {
+  color: var(--muted-text, #77736d);
+  font-size: 11px;
+}
+
+.omittedChevron {
+  margin-left: auto;
+}
+
+.omittedSteps[open] .omittedChevron {
+  transform: rotate(180deg);
+}
+
+.omittedBody {
+  padding: 16px;
+  border-top: 1px solid var(--hairline, #ece8e2);
+}
+
+.omittedBody > p {
+  margin: 0 0 12px;
+  color: var(--muted-text, #77736d);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.omittedList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.omittedItem {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--hairline, #ece8e2);
+  border-radius: 9px;
+  background: var(--bg, #f6f4f1);
+}
+
+.omittedItem > strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.omittedStepIcon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border, #dedad4);
+  border-radius: 8px;
+  color: var(--muted-text, #77736d);
+  background: var(--surface, #fff);
+}
+
+.omittedStepIcon svg,
+.omittedConfigure svg {
+  width: 14px;
+  height: 14px;
+}
+
+.omittedItem .omittedConfigure {
+  display: inline-flex;
+  min-height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #dedad4);
+  border-radius: 7px;
+  color: var(--ink, #1d1b20);
+  background: var(--surface, #fff);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgb(28 20 15 / 4%);
+}
+
+.omittedItem .omittedConfigure:hover {
+  border-color: var(--signal, #e85f2a);
+  color: var(--signal, #e85f2a);
+}
+
+@media (max-width: 620px) {
+  .omittedHint {
+    display: none;
+  }
+}
+
 .roadmapViewport {
   position: relative;
   width: 100%;

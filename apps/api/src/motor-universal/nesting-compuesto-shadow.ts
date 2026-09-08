@@ -1,3 +1,6 @@
+import { registrarCortesDelLote, corteHeredadoDe } from './registrar-corte-lote';
+import { consolidarCortesRegistrados } from './consolidar-cortes-registrados';
+import { claveOperacionNesting, controlPrecedenciasNesting, type ProduccionPadreNesting } from './precedencias-nesting-compuesto';
 import { createHash } from 'node:crypto';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
 import type { EvaluateGranFormatoMixedShelfLayoutInput } from '../productos-servicios/nesting/algorithms/shelf-rollo';
@@ -101,6 +104,7 @@ type ResultadoConsolidado = {
     aprovechamientoPct: number;
     areaUtilMm2: number;
     areaTotalMm2: number;
+    perimetroCorteMm?: number;
   };
   consumedLengthMm?: number;
   opcionRollo?: OpcionRollo;
@@ -378,9 +382,13 @@ function candidatoDesdePaso(args: {
     nesting?.unidad === 'pliegos' &&
     ['grid-2d-single', 'grid-2d-multi'].includes(nesting.algorithm) &&
     !nesting.talonarioGrouping;
-  const esIrregular =
-    nesting?.unidad === 'pliegos' &&
-    nesting.algorithm === 'irregular-2d-bottom-left-v1';
+  const corteRegistrado = (componente.pasos ?? []).find(p =>
+    corteHeredadoDe(p) === paso.rutaPasoId);
+  const vectorImpreso = Boolean(nesting?.layoutVinculadoGeometriaVectorial &&
+    nesting.demandaNesting?.length && corteRegistrado &&
+    !nesting.visualConfig?.pieceBleedMm && !corteRegistrado.nestingResult?.visualConfig?.manejoPlaca);
+  const esIrregular = nesting?.unidad === 'pliegos' &&
+    (nesting.algorithm === 'irregular-2d-bottom-left-v1' || vectorImpreso);
   const esRollo =
     nesting?.unidad === 'm_lineales' &&
     ['shelf-rollo', 'maxrects-rollo'].includes(nesting.algorithm);
@@ -398,7 +406,7 @@ function candidatoDesdePaso(args: {
   const demandaGenerica = demandasDeNesting(nesting);
   const visual = nesting.visualConfig;
   const tieneDemanda = esIrregular
-    ? demandaGenerica.length > 0 && nesting.solucionNesting != null
+    ? demandaGenerica.length > 0 && (nesting.solucionNesting != null || vectorImpreso)
     : demanda.length > 0;
   if (!visual || !tieneDemanda || !nesting.maquina?.id) {
     return {
@@ -627,6 +635,12 @@ function candidatoDesdePaso(args: {
     (total, sheet) => total + Math.max(1, Math.ceil(sheet.count)),
     0,
   );
+  const configuracionIrregular = esIrregular ? nesting.solucionNesting?.problema.configuracion ?? {
+    margenMm: Math.max(...Object.values(visual.margins)),
+    separacionMm: Math.max(visual.spacing.horizontalMm, visual.spacing.verticalMm),
+    permitirRotacion: visual.allowRotation, permitirSegmentacion: false,
+    preservarComposicionOriginalSiEntra: false,
+  } : undefined;
   const firmaBase = {
     version: esIrregular ? 2 : 1,
     tenantId: args.tenantId,
@@ -651,9 +665,7 @@ function candidatoDesdePaso(args: {
     separacion: visual.spacing,
     demasiaMm: visual.pieceBleedMm ?? 0,
     allowRotation: visual.allowRotation,
-    configuracionIrregular: esIrregular
-      ? nesting.solucionNesting?.problema.configuracion
-      : null,
+    configuracionIrregular: configuracionIrregular ?? null,
     estrategiaCosto: material.estrategiaCosto,
     costingSegmentSteps: nesting.costingSegmentSteps ?? [],
     mermaOperativaPct: redondear(
@@ -688,9 +700,7 @@ function candidatoDesdePaso(args: {
       allowRotation: visual.allowRotation,
       sustratosIndependientes,
       areaPiezasMm2,
-      configuracionIrregular: esIrregular
-        ? nesting.solucionNesting?.problema.configuracion
-        : undefined,
+      configuracionIrregular,
     },
   };
 }
@@ -748,6 +758,7 @@ async function consolidarParticipantes(
           permitirRotacion: base.allowRotation,
           permitirSegmentacion: configuracion.permitirSegmentacion,
           configuracionEncastres: configuracion.configuracionEncastres,
+          commonLine: configuracion.commonLine,
         });
         const solucion = resolverNestingIrregular
           ? await resolverNestingIrregular(problema)
@@ -771,6 +782,8 @@ async function consolidarParticipantes(
               meta: {
                 contornos: placement.contornos,
                 cortesInternos: placement.cortesInternos,
+          operaciones: placement.operaciones,
+          fabricacion: placement.fabricacion,
                 rotacionGrados: placement.rotacion,
                 segmentacion: placement.segmentacion,
                 demandaId: demanda?.id,
@@ -781,7 +794,7 @@ async function consolidarParticipantes(
                 piezaOrigenId:
                   placement.segmentacion?.piezaOrigenId ?? placement.pieceId,
                 copiaIndex: placement.copyIndex,
-                label: demanda?.id ?? placement.pieceId,
+                label: demanda?.propietario?.piezaNombre ?? participantes.find(p => p.componente.codigo === demanda?.propietario?.componenteCodigo)?.componente.nombre ?? demanda?.id ?? placement.pieceId,
               },
             };
           });
@@ -809,6 +822,7 @@ async function consolidarParticipantes(
             aprovechamientoPct: solucion.resultado.aprovechamientoPct,
             areaUtilMm2: solucion.resultado.areaPiezasMm2,
             areaTotalMm2: solucion.resultado.areaCompradaMm2,
+            perimetroCorteMm: solucion.resultado.perimetroCorteMm,
           },
           demandaNesting: demandas,
           solucionNesting: solucion,
@@ -1014,6 +1028,7 @@ function aplicarGrupoConsolidado(args: {
   firma: string;
   participantes: Candidato[];
   consolidado: ResultadoConsolidado;
+  motivoPrecedencias?: string;
 }): AplicacionGrupo {
   const costoMaterialIndependiente = redondear(
     args.participantes.reduce(
@@ -1057,6 +1072,8 @@ function aplicarGrupoConsolidado(args: {
         : 0,
     },
   });
+
+  if (args.motivoPrecedencias) return noAplicado(args.motivoPrecedencias);
 
   if (
     args.participantes.some(
@@ -1215,6 +1232,23 @@ function aplicarGrupoConsolidado(args: {
       { costoMaterialConsolidado, costoPreparacionConsolidado },
     );
   }
+  const perimetroIndependienteMm = args.participantes.reduce(
+    (total, participante) =>
+      total +
+      Number(
+        participante.nesting.solucionNesting?.resultado.perimetroCorteMm ?? 0,
+      ),
+    0,
+  );
+  const perimetroConsolidadoMm =
+    args.consolidado.metrics.perimetroCorteMm ?? perimetroIndependienteMm;
+  const factorRecorrido =
+    perimetroIndependienteMm > 0
+      ? Math.min(
+          1,
+          Math.max(0, perimetroConsolidadoMm / perimetroIndependienteMm),
+        )
+      : 1;
   const pesos = args.participantes.map(
     (participante) => participante.areaPiezasMm2,
   );
@@ -1291,16 +1325,21 @@ function aplicarGrupoConsolidado(args: {
     };
 
     let diferenciaPreparacion = 0;
+    let diferenciaEjecucion = 0;
     if (paso.tiempo) {
       const preparacionMinAnterior =
         paso.tiempo.setupMin + paso.tiempo.cleanupMin;
+      const runMinAnterior = paso.tiempo.runMin;
+      const runMinCommonLine = redondear(runMinAnterior * factorRecorrido, 6);
       paso.tiempo.setupMin = setupAsignado[index];
       paso.tiempo.cleanupMin = cleanupAsignado[index];
+      paso.tiempo.runMin = runMinCommonLine;
       paso.tiempo.totalMin = redondear(
         Math.max(
           0,
           paso.tiempo.totalMin -
             preparacionMinAnterior +
+            (runMinCommonLine - runMinAnterior) +
             setupAsignado[index] +
             cleanupAsignado[index],
         ),
@@ -1308,14 +1347,23 @@ function aplicarGrupoConsolidado(args: {
       );
       diferenciaPreparacion =
         preparacionAsignada[index] - costoPreparacionAnterior;
+      diferenciaEjecucion = redondear(
+        ((runMinCommonLine - runMinAnterior) / 60) *
+          Math.max(0, paso.tiempo.tarifaHora ?? 0),
+        6,
+      );
       paso.tiempo.costo = redondear(
-        Math.max(0, paso.tiempo.costo + diferenciaPreparacion),
+        Math.max(
+          0,
+          paso.tiempo.costo + diferenciaPreparacion + diferenciaEjecucion,
+        ),
         6,
       );
     }
 
     const diferenciaMaterial = material.costoTotal - costoMaterialAnterior;
-    const diferenciaTotal = diferenciaMaterial + diferenciaPreparacion;
+    const diferenciaTotal =
+      diferenciaMaterial + diferenciaPreparacion + diferenciaEjecucion;
     paso.costoTotal = redondear(
       Math.max(0, paso.costoTotal + diferenciaTotal),
       6,
@@ -1479,6 +1527,7 @@ function aplicarGrupoConsolidado(args: {
       placements: args.consolidado.placements,
       demandaNesting: args.consolidado.demandaNesting,
       solucionNesting: args.consolidado.solucionNesting,
+      commonLine: args.consolidado.solucionNesting?.resultado.commonLine,
       consumedLengthMm: args.consolidado.consumedLengthMm,
       piezasAcomodadas: args.consolidado.placements.length,
       costingSegmentSteps: nestingBase.costingSegmentSteps,
@@ -1539,7 +1588,7 @@ function aplicarGrupoConsolidado(args: {
   };
 }
 
-export async function analizarNestingCompuestoShadow(args: {
+export async function analizarNestingCompuestoShadow(args: ProduccionPadreNesting & {
   politica: PoliticaNestingCompuesto;
   tenantId: string;
   productoPadreId: string;
@@ -1551,6 +1600,7 @@ export async function analizarNestingCompuestoShadow(args: {
   ) => Promise<SolucionNesting>;
 }): Promise<AnalisisNestingCompuestoShadow | undefined> {
   if (args.politica !== 'CONSOLIDAR_COMPATIBLES') return undefined;
+  const precedencias = controlPrecedenciasNesting(args);
 
   const candidatos: Candidato[] = [];
   const exclusiones: Exclusion[] = [];
@@ -1685,14 +1735,20 @@ export async function analizarNestingCompuestoShadow(args: {
       : sustratosIndependientes;
 
     const id = `nesting-compuesto-${firma.slice(0, 16)}`;
-    const aplicacion = args.aplicarCostos
+    const operaciones = participantes.map((p) => claveOperacionNesting(p.componente.codigo, p.paso.rutaPasoId));
+    const aplicacion: Partial<AplicacionGrupo> = args.aplicarCostos
       ? aplicarGrupoConsolidado({
           id,
           firma,
           participantes,
           consolidado,
+          motivoPrecedencias: precedencias.motivoIncompatible(operaciones),
         })
       : {};
+    if (aplicacion.lote) {
+      precedencias.confirmar(operaciones);
+      registrarCortesDelLote(aplicacion.lote, args.componentes);
+    }
     grupos.push({
       id,
       firmaVersion: 1,
@@ -1738,7 +1794,14 @@ export async function analizarNestingCompuestoShadow(args: {
     });
   }
 
-  exclusiones.sort(
+  // La geometría se resolvió una vez. Cada proceso posterior comparte esas
+  // placas, pero materializa su propia operación y preparación de taller.
+  const cortes = grupos.flatMap(g => g.lote && !g.lote.layoutOrigenLoteId
+    ? consolidarCortesRegistrados(g.lote, args.componentes, precedencias) : []);
+  grupos.push(...cortes);
+  const cortesConsolidados = new Set(cortes.filter(g => g.aplicacion?.aplicado).flatMap(g => g.participantes.map(p => `${p.componenteCodigo}:${p.pasoClave}`)));
+  const exclusionesEfectivas = exclusiones.filter(e => !cortesConsolidados.has(`${e.componenteCodigo}:${e.pasoClave}`));
+  exclusionesEfectivas.sort(
     (a, b) =>
       a.componenteCodigo.localeCompare(b.componenteCodigo) ||
       (a.pasoClave ?? '').localeCompare(b.pasoClave ?? '') ||
@@ -1752,11 +1815,11 @@ export async function analizarNestingCompuestoShadow(args: {
       (grupo) => grupo.aplicacion?.aplicado === true,
     ),
     grupos,
-    exclusiones,
+    exclusiones: exclusionesEfectivas,
   };
 }
 
-export async function aplicarNestingCompuesto(args: {
+export async function aplicarNestingCompuesto(args: ProduccionPadreNesting & {
   politica: PoliticaNestingCompuesto;
   tenantId: string;
   productoPadreId: string;

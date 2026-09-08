@@ -196,11 +196,13 @@ describe('formulario de cotización', () => {
     expect(form.geometrias).toEqual({
       version: 1,
       modo: 'AMBAS',
+      permitirCotizacionManual: false,
       fuentes: [
         {
           id: 'contorno_principal',
           nombre: 'Contorno principal',
           requerida: true,
+          permitirReemplazo: false,
         },
       ],
     });
@@ -395,7 +397,7 @@ describe('formulario de cotización', () => {
     const fixture = productoFixture();
     fixture.rutasAlternativas = [];
     await expect(servicio(fixture).obtener('t1', 'prod-1')).rejects.toThrow(
-      /no tiene rutas/,
+      /no tiene flujos/,
     );
   });
 

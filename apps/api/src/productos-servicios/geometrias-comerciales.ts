@@ -1,3 +1,4 @@
+import type { FuenteGuardada } from './geometrias/interpretar-vector';
 import { BadRequestException } from '@nestjs/common';
 
 export const MODOS_GEOMETRIA_COMERCIAL = [
@@ -12,6 +13,8 @@ export type FuenteGeometriaComercial = {
   id: string;
   nombre: string;
   requerida: boolean;
+  predeterminada?: FuenteGuardada;
+  permitirReemplazo?: boolean;
 };
 
 export type ConfiguracionGeometriasComerciales = {
@@ -56,7 +59,9 @@ export function leerGeometriasComerciales(
         const nombre =
           typeof item.nombre === 'string' ? item.nombre.trim() : '';
         return /^[a-z0-9][a-z0-9_-]{0,59}$/.test(id) && nombre
-          ? [{ id, nombre, requerida: item.requerida !== false }]
+          ? [{ id, nombre, requerida: item.requerida !== false,
+              ...(esRegistro(item.predeterminada) ? { predeterminada: item.predeterminada as unknown as FuenteGuardada } : {}),
+              permitirReemplazo: item.permitirReemplazo === true }]
           : [];
       })
     : [];
@@ -106,6 +111,10 @@ export function validarGeometriasComerciales(atributos: unknown): void {
         'Las fuentes geométricas deben tener identificadores únicos y nombres válidos.',
       );
     }
+    if (item.predeterminada !== undefined && (!esRegistro(item.predeterminada) || !esRegistro(item.predeterminada.procedencia) || typeof item.predeterminada.procedencia.geometriaId !== 'string')) {
+      throw new BadRequestException('La geometría guardada debe tener una interpretación de producto.');
+    }
+    if (item.permitirReemplazo !== undefined && typeof item.permitirReemplazo !== 'boolean') throw new BadRequestException('La política de reemplazo no es válida.');
     ids.add(id);
   }
   if (raw.modo === 'RECTANGULAR' && raw.fuentes.length > 0) {

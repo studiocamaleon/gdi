@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { generarCarteraPatrones, materializarPatrones, type SeleccionPatrones } from './cartera-patrones';
+import { Injectable, Logger } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -12,6 +13,8 @@ import {
   validarResultadoNestingOpenNest,
 } from './validar-nesting-opennest';
 import { resolverNestingBaseSeguro } from './nesting-base-seguro';
+import { optimizarCommonLines } from './common-line';
+import { timeoutMaximoOpenNestMs } from './politica-busqueda';
 
 type ResultadoRunner = Omit<NestingIrregularOpenNestResult, 'validacion'>;
 
@@ -75,19 +78,50 @@ export class OpenNestService {
     validarEntradaNestingOpenNest(input);
     const timeoutMs = Math.min(input.timeoutMs, timeoutMaximoOpenNestMs());
     const startedAt = Date.now();
-    const planes = crearPlanesOrientacion(input);
+    const planes = crearPlanesOrientacion(input).filter(cabeCadaPieza);
     const minimoPlacas = calcularMinimoTeoricoPlacas(input);
-    const base = validarResultadoNestingOpenNest(
+    const baseNativa = validarResultadoNestingOpenNest(
       input,
       resolverNestingBaseSeguro(input),
+    );
+    const base = validarResultadoNestingOpenNest(
+      input,
+      optimizarCommonLines(input, baseNativa),
     );
     let mejor: {
       plan?: PlanOrientacionGrafoNest;
       resultado: NestingIrregularOpenNestResult;
     } = { resultado: base };
-    let ultimoError: unknown;
+    let intentos = 0;
+    let candidatosValidos = 0;
+    let motorNoDisponible = false;
 
-    for (let index = 0; index < planes.length; index += 1) {
+    // Para lotes repetidos, primero optimizamos combinaciones enteras de
+    // patrones. El tiempo consumido se descuenta del mismo presupuesto global.
+    if (input.piezas.length > 1 && input.piezas.length <= 30 && base.cantidadSolicitada >= 20 && timeoutMs >= 10000) {
+      try {
+        const cartera = await generarCarteraPatrones(input, { plazo: Math.min(startedAt + timeoutMs * 0.12, Date.now() + 6000), signal: options?.signal });
+        const restante = Math.min(60000, (timeoutMs - (Date.now() - startedAt)) * 0.6);
+        if (restante > 1000 && cartera.length) {
+          const seleccion = await ejecutarSubprocesoJson<SeleccionPatrones>({
+            ejecutable: process.env.OPENNEST_PYTHON?.trim() || 'python3',
+            argumentos: [rutaRunnerOpenNest().replace('opennest_runner.py', 'patrones_runner.py')],
+            entrada: { patrones: cartera.map(p => ({ counts: p.counts })), demanda: input.piezas.map(p => p.cantidad), timeoutMs: restante },
+            timeoutMs: restante, signal: options?.signal,
+          });
+          const candidato = validarResultadoNestingOpenNest(input, materializarPatrones(input, cartera, seleccion));
+          candidatosValidos += 1;
+          if (candidato.placasUsadas <= mejor.resultado.placasUsadas) mejor = { resultado: candidato };
+        }
+      } catch (error) {
+        if (options?.signal?.aborted) throw new OpenNestSubprocessError('El cálculo fue cancelado.', 'CANCELLED');
+        new Logger(OpenNestService.name).warn(`No se pudo completar la búsqueda por patrones: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Cada vuelta cambia la semilla. Los reintentos empiezan con todos los
+    // ángulos y alternan motores; no terminamos por completar tres planes.
+    for (let index = 0; planes.length > 0; index += 1) {
       if (options?.signal?.aborted)
         throw new OpenNestSubprocessError(
           'El cálculo de OpenNest fue cancelado.',
@@ -95,18 +129,55 @@ export class OpenNestService {
         );
       const restanteMs = timeoutMs - (Date.now() - startedAt);
       if (restanteMs < 100) break;
-      const plan = planes[index];
-      const presupuestoMs = presupuestoCandidatoMs({
+      const vuelta = Math.floor(index / planes.length);
+      const indicePlan = index % planes.length;
+      const original =
+        vuelta === 0
+          ? planes[indicePlan]
+          : planes[planes.length - 1 - indicePlan];
+      const motor =
+        vuelta % 3 === 2
+          ? input.motor === 'collision'
+            ? 'nfp'
+            : 'collision'
+          : input.motor;
+      const semilla =
+        vuelta === 0
+          ? input.semilla
+          : (30 + Math.imul(vuelta - 1, 104729)) & 0x7fffffff;
+      // Obligar al solver a intentar una placa menos evita que se conforme
+      // con dejar una pieza aislada. El primer intento y las vueltas del
+      // motor alternativo también mejoran el acomodo con las placas actuales.
+      // Una solución parcial jamás se acepta.
+      const quitarPlaca = index !== 0 && vuelta % 3 !== 2;
+      const maxPlacas = Math.max(
+        minimoPlacas,
+        mejor.resultado.placasUsadas - (quitarPlaca ? 1 : 0),
+      );
+      const plan: PlanOrientacionGrafoNest = {
+        ...original,
+        input: {
+          ...original.input,
+          motor,
+          semilla,
+          placa: {
+            ...input.placa,
+            maxPlacas: Math.min(input.placa.maxPlacas, maxPlacas),
+          },
+        },
+      };
+      const iteraciones = motor === 'collision' && vuelta < 2 ? 1000 : undefined;
+      const presupuestoMs = Math.min(iteraciones ? 8000 : Infinity, presupuestoCandidatoMs({
         estrategia: plan.estrategia,
         restanteMs,
         totalMs: timeoutMs,
-        esUltimo: index === planes.length - 1,
-      });
+      }));
+      intentos += 1;
       try {
         const respuesta = await this.ejecutarRunner({
           ejecutable: process.env.OPENNEST_PYTHON?.trim() || 'python3',
           argumentos: [rutaRunnerOpenNest()],
-          entrada: { ...plan.input, timeoutMs: presupuestoMs },
+          entrada: { ...plan.input, timeoutMs: presupuestoMs, ...(iteraciones ? { iteraciones } : {}) },
           timeoutMs: presupuestoMs,
           graciaTerminacionMs: 250,
           maxSalidaBytes: 32 * 1024 * 1024,
@@ -118,34 +189,37 @@ export class OpenNestService {
             'RUNNER_ERROR',
           );
         }
-        const validado = validarResultadoNestingOpenNest(
+        const validadoNativo = validarResultadoNestingOpenNest(
           plan.input,
           respuesta.result,
         );
-        if (
-          validado.placasUsadas < mejor.resultado.placasUsadas ||
-          (validado.placasUsadas === mejor.resultado.placasUsadas &&
-            mejor.resultado.calidadSolucion === 'BASE_SEGURA')
-        ) {
+        const validado = validarResultadoNestingOpenNest(
+          plan.input,
+          optimizarCommonLines(plan.input, validadoNativo),
+        );
+        candidatosValidos += 1;
+        if (esMejorResultado(validado, mejor.resultado)) {
           mejor = {
             plan,
             resultado: { ...validado, calidadSolucion: 'OPTIMIZADA' },
           };
         }
-        // La base sólo garantiza un layout válido mediante cajas envolventes.
-        // Incluso si ya usa el mínimo de placas, el primer candidato nativo
-        // debe ejecutarse para aprovechar concavidades y huecos reales. Los
-        // planes están ordenados desde la orientación más uniforme hacia la
-        // más libre, por lo que al alcanzar el límite matemático conservamos
-        // la alternativa visualmente más estable.
-        if (validado.placasUsadas <= minimoPlacas) break;
+        // Este límite prueba el mínimo de PLACAS, no un óptimo universal
+        // de orientación, retales o recorrido de corte.
+        if (mejor.resultado.placasUsadas <= minimoPlacas) break;
       } catch (error) {
         if (
           error instanceof OpenNestSubprocessError &&
           error.codigo === 'CANCELLED'
         )
           throw error;
-        ultimoError = error;
+        if (
+          error instanceof OpenNestSubprocessError &&
+          error.codigo === 'SPAWN_ERROR'
+        ) {
+          motorNoDisponible = true;
+          break;
+        }
       }
     }
 
@@ -156,11 +230,92 @@ export class OpenNestService {
       estrategiaOrientacion: mejor.plan?.estrategia,
       rotacionesPermitidas: mejor.plan?.rotacionesMaximas,
       versionPoliticaOrientacion: VERSION_POLITICA_ORIENTACION_GRAFONEST,
-      optimizacionAgotada:
-        ultimoError != null &&
-        mejor.resultado.calidadSolucion === 'BASE_SEGURA',
+      optimizacionAgotada: mejor.resultado.placasUsadas > minimoPlacas,
+      busqueda: {
+        motivoFin: motorNoDisponible
+          ? 'MOTOR_NO_DISPONIBLE'
+          : mejor.resultado.placasUsadas <= minimoPlacas
+            ? 'MINIMO_PLACAS'
+            : 'PRESUPUESTO_AGOTADO',
+        presupuestoMs: timeoutMs,
+        intentos,
+        candidatosValidos,
+        minimoTeoricoPlacas: minimoPlacas,
+      },
     };
   }
+}
+
+export function esMejorResultado(
+  candidato: NestingIrregularOpenNestResult,
+  actual: NestingIrregularOpenNestResult,
+): boolean {
+  if (candidato.placasUsadas !== actual.placasUsadas)
+    return candidato.placasUsadas < actual.placasUsadas;
+  const ahorro = longitudCommonLine(candidato) - longitudCommonLine(actual);
+  if (Math.abs(ahorro) > 0.01) return ahorro > 0;
+  const area = areaEnvolvente(candidato) - areaEnvolvente(actual);
+  if (Math.abs(area) > 0.01) return area < 0;
+  return actual.calidadSolucion === 'BASE_SEGURA';
+}
+
+function areaEnvolvente(result: NestingIrregularOpenNestResult): number {
+  const placas = new Map<
+    number,
+    { minX: number; minY: number; maxX: number; maxY: number }
+  >();
+  for (const p of result.placements) {
+    const caja = placas.get(p.placa) ?? {
+      minX: Infinity,
+      minY: Infinity,
+      maxX: -Infinity,
+      maxY: -Infinity,
+    };
+    for (const punto of p.contorno) {
+      caja.minX = Math.min(caja.minX, punto.x);
+      caja.maxX = Math.max(caja.maxX, punto.x);
+      caja.minY = Math.min(caja.minY, punto.y);
+      caja.maxY = Math.max(caja.maxY, punto.y);
+    }
+    placas.set(p.placa, caja);
+  }
+  return [...placas.values()].reduce(
+    (area, c) => area + (c.maxX - c.minX) * (c.maxY - c.minY),
+    0,
+  );
+}
+
+function cabeCadaPieza(plan: PlanOrientacionGrafoNest): boolean {
+  const { placa, piezas } = plan.input;
+  return piezas.every((pieza) => {
+    for (let i = 0; i < pieza.rotaciones; i += 1) {
+      const angulo = (i * 2 * Math.PI) / pieza.rotaciones;
+      const cos = Math.cos(angulo),
+        sin = Math.sin(angulo);
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      for (const p of pieza.contorno) {
+        const x = p.x * cos - p.y * sin,
+          y = p.x * sin + p.y * cos;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+      if (
+        maxX - minX <= placa.anchoMm - 2 * placa.margenMm + 0.001 &&
+        maxY - minY <= placa.altoMm - 2 * placa.margenMm + 0.001
+      )
+        return true;
+    }
+    return false;
+  });
+}
+
+function longitudCommonLine(result: NestingIrregularOpenNestResult): number {
+  return result.commonLine?.longitudCompartidaMm ?? 0;
 }
 
 /**
@@ -227,13 +382,19 @@ function presupuestoCandidatoMs(input: {
   estrategia: EstrategiaOrientacion;
   restanteMs: number;
   totalMs: number;
-  esUltimo: boolean;
 }): number {
-  if (input.esUltimo) return Math.max(100, input.restanteMs);
+  // Los reintentos invierten el orden. El presupuesto pertenece a la
+  // estrategia, no a su posición: la búsqueda libre no debe perder tiempo
+  // al pasar de última a primera en la vuelta siguiente.
+  if (input.estrategia === 'libre') return Math.max(100, Math.min(30_000, input.restanteMs));
   const proporcion = input.estrategia === 'uniforme' ? 0.2 : 0.3;
   return Math.max(
     100,
-    Math.min(input.restanteMs, Math.max(2_000, input.totalMs * proporcion)),
+    Math.min(
+      input.restanteMs,
+      input.estrategia === 'uniforme' ? 8_000 : 20_000,
+      Math.max(2_000, input.totalMs * proporcion),
+    ),
   );
 }
 
@@ -421,9 +582,4 @@ function rutaRunnerOpenNest(): string {
       'SPAWN_ERROR',
     );
   return found;
-}
-
-function timeoutMaximoOpenNestMs(): number {
-  const value = Number(process.env.OPENNEST_TIMEOUT_MAX_MS);
-  return Number.isInteger(value) && value >= 100 ? value : 60_000;
 }

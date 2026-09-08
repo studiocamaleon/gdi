@@ -255,6 +255,29 @@ const analizar = (componentes: ComponenteFabricadoCosteado[]) =>
     componentes,
   });
 
+describe('F4 consolidación ejecutable', () => {
+  it.each([false, true])('conserva costos independientes ante precedencia entre componentes (transitiva: %s)', async (transitiva) => {
+    const componentes = [
+      componente('A', nestingBase(), { nodoIncorporacionClave: 'ruta:control' }),
+      componente('B', nestingBase(), {
+        nodosPredecesoresClaves: [transitiva ? 'ruta:aprobacion' : 'ruta:control'],
+        nodoIncorporacionClave: 'ruta:final',
+      }),
+    ];
+    const antes = JSON.stringify(componentes);
+    const pasosPadre = ['control', 'opcional', 'aprobacion', 'final'].map((id) => ({
+      rutaPasoId: id, activado: id !== 'opcional',
+    } as PasoEjecutado));
+    const resultado = await aplicarNestingCompuestoRectangular({
+      politica: 'CONSOLIDAR_COMPATIBLES', tenantId: 'tenant', productoPadreId: 'padre',
+      recetaRevisionId: 'receta', componentes, pasosPadre,
+    });
+    expect(resultado?.aplicadoACostos).toBe(false);
+    expect(resultado?.grupos[0].aplicacion).toMatchObject({ aplicado: false, ahorroCostoTotal: 0, motivoNoAplicado: expect.stringMatching(/precedencias/) });
+    expect(JSON.stringify(componentes)).toBe(antes);
+  });
+});
+
 describe('F4.4.1 nesting compuesto en modo sombra', () => {
   it('mantiene INDEPENDIENTE por defecto y exige opt-in versionado', async () => {
     expect(leerPoliticaNestingCompuesto(null)).toBe('INDEPENDIENTE');
@@ -991,5 +1014,38 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
         }),
       ]),
     );
+  });
+});
+
+
+describe('registro impresión y corte del lote mixto', () => {
+  it('proyecta las mismas poses a cada corte sin volver a anidar ni cobrar material', async () => {
+    const componentes = ['A','B'].map(codigo => {
+      const irregular=nestingIrregular('triangulo',codigo);
+      const impresion=nestingBase({ layoutVinculadoGeometriaVectorial:true, demandaNesting:irregular.demandaNesting, visualConfig:irregular.visualConfig });
+      const c=componente(codigo,impresion);
+      const pasoImpresion=c.pasos![0];
+      impresion.outputsCanonicos = { layout_produccion: { schemaVersion: 1, sourceRutaPasoId: pasoImpresion.rutaPasoId, sourceConfigPasoId: pasoImpresion.configPasoId, sourceFamiliaCodigo: 'impresion_por_area', algorithm: impresion.algorithm, substrates: impresion.substrates, placements: impresion.placements, visualConfig: impresion.visualConfig } };
+      c.pasos!.push({ ...pasoImpresion, configPasoId:`laser-${codigo}`,rutaPasoId:`ruta-laser-${codigo}`,familiaCodigo:'corte_laser',costoTotal:5,tiempo:undefined,materiales:[],
+        nestingResult:{...irregular,solucionNesting:undefined,demandaNesting:undefined,placements:irregular.placements.map(p=>({...p,meta:{...(p.meta as object),layoutHeredadoDe:pasoImpresion.rutaPasoId}}))} });
+      return c;
+    });
+    const resolver=jest.fn(async problema=>resolverProblemaNestingIrregular(problema));
+    const r=await aplicarNestingCompuestoRectangular({politica:'CONSOLIDAR_COMPATIBLES',tenantId:'t',productoPadreId:'p',recetaRevisionId:'r',componentes,resolverNestingIrregular:resolver});
+    const lote=r!.grupos.find(g=>g.lote)?.lote!;
+    expect(lote).toBeDefined();expect(resolver).toHaveBeenCalledTimes(1);
+    for(const c of componentes) {
+      const corte=c.pasos![1];
+      const esperadas=lote.nestingResult.placements.filter(p=>(p.meta as {componenteCodigo:string}).componenteCodigo===c.codigo);
+      const impresionActual = c.pasos![0].nestingResult!;
+      expect(impresionActual.placements).toEqual(esperadas);
+      expect(impresionActual.substrates).toEqual(lote.nestingResult.substrates);
+      expect(impresionActual.outputsCanonicos?.layout_produccion).toMatchObject({ placements: esperadas, substrates: lote.nestingResult.substrates });
+      expect(c.pasos![0].outputsCanonicos?.layout_produccion).toEqual(impresionActual.outputsCanonicos?.layout_produccion);
+      expect(corte.nestingResult!.placements.map(p=>[p.xMm,p.yMm,p.substrateIndex,(p.meta as {contornos:unknown}).contornos])).toEqual(esperadas.map(p=>[p.xMm,p.yMm,p.substrateIndex,(p.meta as {contornos:unknown}).contornos]));
+      expect(corte.nestingResult!.layoutRegistradoLoteId).toBe(lote.id);
+      expect(corte.materiales).toEqual([]);expect(corte.costoTotal).toBe(5);
+      expect(corte.nestingResult!.loteNestingCompuesto).toBeUndefined();
+    }
   });
 });

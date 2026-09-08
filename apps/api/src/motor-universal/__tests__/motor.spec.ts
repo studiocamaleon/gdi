@@ -27,6 +27,7 @@ import { ProductosService } from '../../productos-servicios/productos.service';
 import { ProductoValidacionService } from '../../productos-servicios/producto-validacion.service';
 import { RecetasProductoService } from '../../productos-servicios/recetas-producto.service';
 import { OrdenesTrabajoService } from '../../ordenes-trabajo/ordenes-trabajo.service';
+import { emitirCotizacionF4, ejecutarOrdenF4 } from '../../../test/soporte-recorridos-f4';
 
 const prisma = new PrismaClient();
 
@@ -4259,6 +4260,24 @@ describe('MotorUniversalService — smoke tests', () => {
 
   it('F4.2/F4.3/F4.4.2: valida pricing y nesting consolidable de un compuesto', async () => {
     if (!tenantId) return;
+    const ejecutarGuardada = async (guardada: Awaited<ReturnType<MotorUniversalService['cotizarYGuardar']>>) => {
+      const rollback = new Error('rollback ejecución compuesto');
+      await expect(prisma.$transaction(async (tx) => {
+        const { orden, ordenes, auth: actor } = await emitirCotizacionF4(tx, guardada);
+        const items = await tx.ordenTrabajoItem.findMany({ where: { ordenId: orden.id }, include: { pasos: true } });
+        expect(items.filter((item) => !item.parentItemId)).toHaveLength(1);
+        expect(items.filter((item) => item.parentItemId)).toHaveLength(3);
+        // El material de este fixture usa fórmula independiente: el motor
+        // rechaza su ahorro y la OT debe conservar todas las operaciones.
+        expect(items.some((item) => item.pasos.some((paso) => paso.nestingLoteRol === 'OPERATIVO'))).toBe(false);
+        const { orden: terminada } = await ejecutarOrdenF4(tx, ordenes, actor, orden.id);
+        expect(Number(terminada.total)).toBe(guardada.result.cotizacion!.precio!.precioTotal);
+        const tracking = await ordenes.trackingPublico(terminada.publicToken!);
+        expect(tracking!.items).toHaveLength(1);
+        expect(tracking!.progresoPct).toBe(100);
+        throw rollback;
+      }, { timeout: 30000 })).rejects.toBe(rollback);
+    };
     const productos = new ProductosService(prisma as never);
     const recetas = new RecetasProductoService(
       prisma as never,
@@ -5041,6 +5060,7 @@ describe('MotorUniversalService — smoke tests', () => {
           }),
         }),
       );
+      await ejecutarGuardada(guardada);
       await prisma.cotizacion.delete({ where: { id: guardada.cotizacionId! } });
 
       await prisma.producto.update({
@@ -5126,6 +5146,7 @@ describe('MotorUniversalService — smoke tests', () => {
           }),
         }),
       );
+      await ejecutarGuardada(guardadaMixta);
       await prisma.cotizacion.delete({
         where: { id: guardadaMixta.cotizacionId! },
       });
@@ -5209,6 +5230,7 @@ describe('MotorUniversalService — smoke tests', () => {
           }),
         }),
       );
+      await ejecutarGuardada(guardadaPorComponente);
       await prisma.cotizacion.delete({
         where: { id: guardadaPorComponente.cotizacionId! },
       });

@@ -81,7 +81,7 @@ export function workflowLinealDesdePasos(
 
 export function validarWorkflowRuta(input: RutaWorkflow): RutaWorkflow {
   if (!input || !Array.isArray(input.nodos) || !Array.isArray(input.aristas)) {
-    throw new Error('El Workflow de la ruta está incompleto.');
+    throw new Error('El flujo de producción está incompleto.');
   }
   if (input.nodos.length === 0) {
     throw new Error('La ruta debe contener al menos un nodo.');
@@ -218,7 +218,7 @@ export function remapearPasosWorkflow(
   const persistidos = [...pasosPersistidos].sort((a, b) => a.orden - b.orden);
   if (principales.length !== persistidos.length) {
     throw new Error(
-      'No se pudo relacionar el Workflow con los pasos persistidos de la ruta.',
+      'No se pudo relacionar el flujo de producción con los nodos guardados.',
     );
   }
   const reemplazos = new Map<string, string>();

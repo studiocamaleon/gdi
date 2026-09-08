@@ -1,5 +1,7 @@
 "use client";
 
+import { PiezasBom } from "./pieza-vectorial-resumen";
+
 import Link from "next/link";
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -59,6 +61,7 @@ import {
   insertarNodoProductivo,
   moverNodoProductivo,
   reemplazarNodoProductivo,
+  separarPasosOmitidos,
 } from "@/lib/modelo-productivo-layout";
 import {
   cantidadUsosProductoComponente,
@@ -472,6 +475,11 @@ export function EditorDefiniciones({
     [aristasHojaRuta, nodosHojaRuta],
   );
 
+  const { columnasVisibles, omitidos: pasosOmitidos } = React.useMemo(
+    () => separarPasosOmitidos(columnasHojaRuta),
+    [columnasHojaRuta],
+  );
+
   const limitarCamaraHojaRuta = React.useCallback(
     (siguiente: CamaraHojaRuta): CamaraHojaRuta => {
       const viewport = roadmapViewportRef.current;
@@ -573,7 +581,7 @@ export function EditorDefiniciones({
       ajustarHojaRuta();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [ajustarHojaRuta, columnasHojaRuta.length]);
+  }, [ajustarHojaRuta, columnasVisibles.length]);
 
   const iniciarPaneoHojaRuta = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 && event.button !== 1) return;
@@ -1357,7 +1365,7 @@ export function EditorDefiniciones({
         cambios: reemplazo
           ? `${reemplazo.nombre} reemplazado por ${nombre}`
           : etapa
-            ? `Etapa ${nombre} agregada a la ruta de producción`
+            ? `Nodo compuesto ${nombre} agregado a la ruta de producción`
             : `Paso ${nombre} agregado a la ruta de producción`,
         documentos: documentosSiguientes.map((item, orden) => ({
           ...item,
@@ -1397,7 +1405,7 @@ export function EditorDefiniciones({
           reemplazo
             ? `${reemplazo.nombre} fue reemplazado por ${nombre}.`
             : etapa
-              ? "Etapa agregada en la posición elegida."
+              ? "Nodo compuesto agregado en la posición elegida."
               : "Paso agregado en la posición elegida.",
         );
       }
@@ -1532,7 +1540,7 @@ export function EditorDefiniciones({
           <span>Ruta de producción · Borrador V{revision.numero}</span>
           <h4>{ruta.nombre}</h4>
           <p>
-            Pasos, etapas y componentes forman un único recorrido. Seleccioná un
+            Nodos simples, nodos compuestos y componentes forman un único recorrido. Seleccioná un
             nodo para configurar su participación en esta ruta.
           </p>
         </div>
@@ -1677,12 +1685,65 @@ export function EditorDefiniciones({
                 </div>
               </TooltipProvider>
               <span className={styles.topologyBadge}>
-                {columnasHojaRuta.some((columna) => columna.length > 1)
+                {columnasVisibles.some((columna) => columna.nodos.length > 1)
                   ? "Ruta DAG"
                   : "Ruta lineal"}
               </span>
             </div>
           </div>
+          {pasosOmitidos.length > 0 ? (
+            <details className={styles.omittedSteps}>
+              <summary className={styles.omittedSummary}>
+                <ArchiveXIcon aria-hidden="true" />
+                <strong>Pasos omitidos</strong>
+                <span className={styles.omittedCount}>{pasosOmitidos.length}</span>
+                <span className={styles.omittedHint}>
+                  Fuera del flujo de producción
+                </span>
+                <ChevronDownIcon
+                  className={styles.omittedChevron}
+                  aria-hidden="true"
+                />
+              </summary>
+              <div className={styles.omittedBody}>
+                <p>
+                  Conservan su configuración y su lugar en la ruta. Abrí un paso
+                  para elegir cómo volver a incluirlo.
+                </p>
+                <ul className={styles.omittedList}>
+                  {pasosOmitidos.map((nodo) => (
+                    <li key={nodo.clave} className={styles.omittedItem}>
+                      <span className={styles.omittedStepIcon} aria-hidden="true">
+                        <GitCommitHorizontalIcon />
+                      </span>
+                      <strong>{nodo.nombre}</strong>
+                      {onEditarPaso ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={styles.omittedConfigure}
+                          aria-label={`Configurar ${nodo.nombre} para volver a incluirlo`}
+                          onClick={() => onEditarPaso(nodo.clave)}
+                        >
+                          <Settings2Icon data-icon="inline-start" />
+                          Configurar
+                        </Button>
+                      ) : (
+                        <Link
+                          className={styles.omittedConfigure}
+                          href={`/productos-servicios/${productoId}/rutas/${rutaAlternativaId}?nodo=ruta`}
+                        >
+                          <Settings2Icon aria-hidden="true" />
+                          Editar ruta
+                        </Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </details>
+          ) : null}
           <div
             ref={asignarRoadmapViewport}
             className={styles.roadmapViewport}
@@ -1714,8 +1775,8 @@ export function EditorDefiniciones({
                 <strong>Inicio</strong>
               </div>
 
-              {columnasHojaRuta.map((columna, columnaIndex) => (
-                <React.Fragment key={`momento-${columnaIndex}`}>
+              {columnasVisibles.map(({ nodos: columna, indiceOriginal }, columnaIndex) => (
+                <React.Fragment key={`momento-${indiceOriginal}`}>
                   <div
                     className={styles.sequentialDrop}
                     data-active={
@@ -1735,7 +1796,7 @@ export function EditorDefiniciones({
                       if (clave)
                         soltarNodo(clave, {
                           tipo: "SECUENCIAL",
-                          posicion: columnaIndex,
+                          posicion: columnaIndex === 0 ? 0 : indiceOriginal,
                         });
                     }}
                   >
@@ -1755,7 +1816,7 @@ export function EditorDefiniciones({
                         event.stopPropagation();
                         abrirAltaNodo({
                           tipo: "SECUENCIAL",
-                          posicion: columnaIndex,
+                          posicion: columnaIndex === 0 ? 0 : indiceOriginal,
                         });
                       }}
                     >
@@ -1782,7 +1843,7 @@ export function EditorDefiniciones({
                       if (clave)
                         soltarNodo(clave, {
                           tipo: "PARALELO",
-                          columna: columnaIndex,
+                          columna: indiceOriginal,
                         });
                     }}
                   >
@@ -1824,7 +1885,7 @@ export function EditorDefiniciones({
                               draggable
                               role="button"
                               tabIndex={0}
-                              aria-label={`${nodo.nombre}. ${nodo.omitido ? "Paso omitido en este producto" : nodo.tipo === "COMPONENTE" ? "Componente" : nodo.tipo === "ETAPA" ? "Etapa" : "Paso"}. Enter para configurar; menú de acciones disponible.`}
+                              aria-label={`${nodo.nombre}. ${nodo.omitido ? "Paso omitido en este producto" : nodo.tipo === "COMPONENTE" ? "Componente" : nodo.tipo === "ETAPA" ? "Nodo compuesto" : "Nodo simple"}. Enter para configurar; menú de acciones disponible.`}
                               onClick={() =>
                                 onSeleccionarNodo?.(nodo.seleccion)
                               }
@@ -1873,7 +1934,7 @@ export function EditorDefiniciones({
                                     : nodo.tipo === "COMPONENTE"
                                       ? "Subruta fabricada"
                                       : nodo.tipo === "ETAPA"
-                                        ? "Etapa consolidada"
+                                        ? "Nodo compuesto"
                                         : "Paso de producción"}
                                 </small>
                                 <strong>{nodo.nombre}</strong>
@@ -1895,8 +1956,8 @@ export function EditorDefiniciones({
                                   : nodo.tipo === "COMPONENTE"
                                     ? "Componente"
                                     : nodo.tipo === "ETAPA"
-                                      ? "Etapa"
-                                      : "Paso"}
+                                      ? "Nodo compuesto"
+                                      : "Nodo simple"}
                               </span>
                             </article>
                           </NodoProductivoMenu>
@@ -1912,7 +1973,7 @@ export function EditorDefiniciones({
                         event.stopPropagation();
                         abrirAltaNodo({
                           tipo: "PARALELO",
-                          columna: columnaIndex,
+                          columna: indiceOriginal,
                         });
                       }}
                     >
@@ -2103,7 +2164,7 @@ export function EditorDefiniciones({
               >
                 <GitCommitHorizontalIcon data-icon="inline-start" />
                 <span>
-                  <strong>Paso de producción</strong>
+                  <strong>Nodo simple</strong>
                   <small>Una operación individual de la ruta.</small>
                 </span>
               </Button>
@@ -2141,7 +2202,7 @@ export function EditorDefiniciones({
               >
                 <BlocksIcon data-icon="inline-start" />
                 <span>
-                  <strong>Etapa compuesta</strong>
+                  <strong>Nodo compuesto</strong>
                   <small>Agrupa subtareas bajo un único estado.</small>
                 </span>
               </Button>
@@ -2153,10 +2214,10 @@ export function EditorDefiniciones({
                   <div>
                     <strong>
                       {tipoAltaNodo === "PASO"
-                        ? "Elegí el paso"
+                        ? "Elegí el nodo simple"
                         : tipoAltaNodo === "COMPONENTE"
                           ? "Elegí el producto componente"
-                          : "Elegí la etapa"}
+                          : "Elegí el nodo compuesto"}
                     </strong>
                     <span>
                       La posición ya quedó definida en la ruta de producción.
@@ -2339,6 +2400,8 @@ function etiquetaFormulaBom(formula: string) {
 }
 
 function etiquetaCantidadNodo(nodo: BomNodoMultinivel) {
+  const piezas = nodo.relacion?.configuracionJson?.piezas;
+  if (piezas?.length) return `${piezas.length} tipos de pieza · ${piezas.reduce((s,p) => s+p.cantidadPorUnidad,0)} piezas por producto`;
   if (!nodo.relacion) return "Producto terminado";
   const cantidad = new Intl.NumberFormat("es-AR", {
     maximumFractionDigits: 4,
@@ -2397,7 +2460,7 @@ function NodoBom({
           <span>
             {nodo.nivel === 0 ? "PRODUCTO TERMINADO" : `NIVEL ${nodo.nivel}`}
           </span>
-          <strong>{nombreHumano(nodo.productoNombre)}</strong>
+          <strong>{nombreHumano(nodo.relacion?.nombre ?? nodo.productoNombre)}</strong>
           <small>{etiquetaCantidadNodo(nodo)}</small>
         </span>
         <span className={styles.bomNodeStats}>
@@ -2419,6 +2482,9 @@ function NodoBom({
 
       {abierto ? (
         <div className={styles.bomNodeBody}>
+          {nodo.relacion?.configuracionJson?.piezas?.length ? (
+            <PiezasBom piezas={nodo.relacion.configuracionJson.piezas} />
+          ) : null}
           {nodo.materialesDirectos.length ? (
             <div className={styles.bomMaterialList}>
               {nodo.materialesDirectos.map((material) => (
@@ -2543,7 +2609,7 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
           <h4>Composición del producto</h4>
           <p>
             Leé qué se fabrica dentro de qué y qué materiales aporta cada nivel.
-            El orden de ejecución se consulta en Workflow.
+            El orden de ejecución se consulta en Flujos de producción.
           </p>
         </div>
         <div className={styles.bomViewSwitch} aria-label="Vista del BOM">

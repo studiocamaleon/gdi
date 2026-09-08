@@ -753,6 +753,16 @@ describe('auto-finalización — ordenSeFinaliza', () => {
 });
 
 describe('progreso DAG ponderado por duración', () => {
+  it('un lote pesa una sola vez, también cuando faltan tiempos estimados', () => {
+    for (const duracionEstimadaMin of [30, null]) {
+      expect(progresoPonderadoPasos([
+        { estado: 'hecho', duracionEstimadaMin, nestingLoteRol: 'OPERATIVO' },
+        { estado: 'hecho', duracionEstimadaMin: 0, nestingLoteRol: 'PARTICIPANTE' },
+        { estado: 'hecho', duracionEstimadaMin: 0, nestingLoteRol: 'PARTICIPANTE' },
+        { estado: 'pendiente', duracionEstimadaMin },
+      ])).toBe(50);
+    }
+  });
   it('una rama breve no pesa igual que una operación larga', () => {
     expect(
       progresoPonderadoPasos([

@@ -15,7 +15,8 @@
 
 .embeddedViewport {
   position: fixed;
-  z-index: 80;
+  /* Es una vista de página: los menús y diálogos portados deben cubrirla. */
+  z-index: 30;
   top: 53px;
   right: 0;
   bottom: 0;
@@ -25,9 +26,7 @@
   overflow: hidden;
 }
 
-[data-slot="sidebar-wrapper"]:has(
-    [data-slot="sidebar"][data-state="collapsed"]
-  )
+[data-slot="sidebar-wrapper"]:has([data-slot="sidebar"][data-state="collapsed"])
   .embeddedViewport {
   left: var(--sidebar-width-icon, 66px);
 }
@@ -198,9 +197,7 @@
   box-shadow: 0 -10px 28px rgb(28 20 15 / 7%);
 }
 
-[data-slot="sidebar-wrapper"]:has(
-    [data-slot="sidebar"][data-state="collapsed"]
-  )
+[data-slot="sidebar-wrapper"]:has([data-slot="sidebar"][data-state="collapsed"])
   .footerViewport {
   left: var(--sidebar-width-icon, 66px);
 }

@@ -654,3 +654,35 @@
     flex-direction: column;
   }
 }
+
+/* La receta se lee de un vistazo; la interpretación queda en el detalle. */
+.compact { box-shadow: none; }
+.compactHeader { display:flex; align-items:center; gap:10px; padding:16px; background:#faf8f5; border-bottom:1px solid var(--gv-line); }
+.compactHeader > svg { width:19px; color:var(--gv-orange); }
+.compactHeader > div { flex:1; min-width:0; }
+.compactHeader strong { display:block; font-size:14px; color:var(--gv-ink); }
+.compactHeader span { font-size:12px; color:var(--gv-muted); }
+.compactHeader .count { border:1px solid var(--gv-line); border-radius:7px; padding:3px 8px; font-variant-numeric:tabular-nums; }
+.tableWrap { overflow-x:auto; }
+.piecesTable { width:100%; border-collapse:collapse; font-size:12px; color:var(--gv-ink); }
+.piecesTable caption { padding:12px 16px 8px; text-align:left; font-weight:600; font-size:13px; }
+.piecesTable th { padding:8px 12px; text-align:right; color:var(--gv-muted); font-size:10px; font-weight:500; letter-spacing:.05em; text-transform:uppercase; border-bottom:1px solid var(--gv-line); }
+.piecesTable th:first-child { text-align:left; padding-left:16px; }
+.piecesTable td { padding:10px 12px; border-bottom:1px solid var(--gv-line); text-align:right; font-variant-numeric:tabular-nums; }
+.piecesTable td:first-child { text-align:left; padding-left:16px; }
+.piecesTable td strong { display:block; font-weight:600; }
+.piecesTable td small { display:block; margin-top:3px; color:var(--gv-muted); font-size:11px; }
+.piecesTable td .required { color:#b4431d; }
+.piecesTable .total { font-weight:650; }
+.piecesTable tbody > tr:last-child td { border-bottom:0; }
+.rowAction { display:inline-flex; align-items:center; gap:4px; padding:5px 7px; border-radius:6px; color:var(--gv-muted); cursor:pointer; background:transparent; }
+.rowAction:hover, .rowAction[aria-expanded="true"] { background:#fff0e6; color:#ad431d; }
+.rowAction:focus-visible { outline:2px solid var(--gv-orange); outline-offset:2px; }
+.rowAction svg { width:13px; height:13px; transition:transform .15s; }
+.rowAction[aria-expanded="true"] svg { transform:rotate(180deg); }
+.detailRow { background:#faf8f5; }
+.detailRow[hidden] { display:none; }
+.detailRow td { padding:14px 16px; }
+.fileSummary { display:flex; gap:9px; align-items:center; overflow-wrap:anywhere; }
+.fileSummary svg { width:20px; flex-shrink:0; color:var(--gv-orange); }
+@media (max-width:480px) { .piecesTable th, .piecesTable td { padding-left:7px; padding-right:7px; } .rowAction span { display:none; } }

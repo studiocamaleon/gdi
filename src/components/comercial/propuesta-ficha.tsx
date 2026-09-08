@@ -1,5 +1,9 @@
 "use client";
 
+import campanaStyles from "./propuesta-campana.module.css";
+import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-descargas";
+import { vincularFuentesFabricacion } from "@/lib/fabricacion-export";
+
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -173,6 +177,7 @@ import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
 import { ComponentesEspecificaciones } from "@/components/comercial/componentes-especificaciones";
+import { componentesTienenMaterialEfectivo } from "@/lib/especificaciones-componentes";
 import {
   BriefDisenoDialog,
   BriefDisenoEspecificaciones,
@@ -241,8 +246,6 @@ import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-panel";
 import { PlantillaInstalacionPanel } from "@/components/produccion/plantilla-instalacion-panel";
 import {
-  crearSvgDePlaca,
-  crearDxfDePlaca,
   descargarTexto,
   nombreBaseSvg,
   obtenerFuenteVectorial,
@@ -1808,6 +1811,7 @@ function nestingTabLabel(result: NestingViewerInput | undefined) {
 }
 
 type ComponenteNestingRecursivo = {
+  jobContext?: Record<string, unknown>;
   codigo?: string;
   nombre?: string;
   pasos?: Array<
@@ -1854,6 +1858,7 @@ type FuenteNesting = {
  */
 function recolectarNestingsCotizacion(
   cotizacion: CotizacionPropuestaSnapshot,
+  jobContext?: Record<string, unknown>,
 ): FuenteNesting[] {
   const fuentes: FuenteNesting[] = [];
   let secuencia = 0;
@@ -1863,7 +1868,9 @@ function recolectarNestingsCotizacion(
     contexto: string | null,
     editable: boolean,
     componenteCodigo?: string,
+    contextoVectorial?: Record<string, unknown>,
   ) => {
+    if (paso.nestingResult) paso = { ...paso, nestingResult: vincularFuentesFabricacion(paso.nestingResult, contextoVectorial) };
     if (paso.nestingResult) {
       secuencia += 1;
       fuentes.push({
@@ -1896,7 +1903,7 @@ function recolectarNestingsCotizacion(
           costo: 0,
         },
         materiales: operacion.materiales ?? [],
-        nestingResult: operacion.nestingResult,
+        nestingResult: vincularFuentesFabricacion(operacion.nestingResult, contextoVectorial),
       } as PanelEditorPaso;
       fuentes.push({
         key: `${contexto ?? "etapa"}-${operacion.codigo}-${secuencia}`,
@@ -1915,7 +1922,7 @@ function recolectarNestingsCotizacion(
     }
   };
 
-  cotizacion.pasos.forEach((paso) => agregarPaso(paso, null, true));
+  cotizacion.pasos.forEach((paso) => agregarPaso(paso, null, true, undefined, jobContext));
 
   const recorrerComponentes = (
     componentes: ComponenteNestingRecursivo[],
@@ -1931,6 +1938,7 @@ function recolectarNestingsCotizacion(
           ruta.join(" › "),
           false,
           componente.codigo,
+          componente.jobContext,
         );
       }
       recorrerComponentes(componente.componentes ?? [], ruta);
@@ -2082,10 +2090,10 @@ function recolectarNestingsCotizacion(
     fuentesParticipantes.forEach((fuente) => suprimidas.add(fuente.key));
     consolidadas.push({
       key: `lote-${lote.id}`,
-      label: `Nesting consolidado · ${nestingTabLabel(nestingResult)}`,
+      label: `${lote.layoutOrigenLoteId ? "Corte láser consolidado" : "Nesting consolidado"} · ${nestingTabLabel(nestingResult)}`,
       paso: {
         ...base.paso,
-        nombreVisible: `Nesting consolidado de ${grupo.participantes.length} componentes`,
+        nombreVisible: `${lote.layoutOrigenLoteId ? "Corte compartido" : "Nesting consolidado"} de ${grupo.participantes.length} componentes`,
         costoTotal: lote.costoTotalAsignado,
         materiales,
         nestingResult,
@@ -2538,6 +2546,7 @@ const TAB_BASTIDOR_3D = "__bastidor3d__";
 
 type ComponenteWorkflowVista = ComponenteWorkflowCotizacion<PasoCosteo> & {
   politicaEjecucion?: "INLINE" | "INDEPENDIENTE";
+  jobContext?: { disenosVectoriales?: unknown[]; piezas?: Array<{ cantidadPorUnidad?: number }> };
 };
 
 function WorkflowCotizacion({
@@ -2595,6 +2604,10 @@ function WorkflowCotizacion({
                 {columna.map((nodo) => {
                   if (nodo.tipo === "COMPONENTE") {
                     const componente = nodo.componente;
+                    const pasosActivos = componente.pasos?.filter((p) => p.activado).length ?? 0;
+                    const esColeccion = Boolean(
+                      componente.jobContext?.disenosVectoriales?.length || componente.jobContext?.piezas?.some(p => p.cantidadPorUnidad != null),
+                    );
                     return (
                       <article
                         className="quote-workflow-node component"
@@ -2608,9 +2621,9 @@ function WorkflowCotizacion({
                           <strong>{componente.nombre}</strong>
                           <span>
                             {componente.cantidad ?? 1}{" "}
-                            {componente.unidad ?? "u."}
-                            {componente.pasos?.length
-                              ? ` · ${componente.pasos.length} ${componente.pasos.length === 1 ? "paso" : "pasos"}`
+                            {esColeccion ? "conjuntos" : componente.unidad ?? "u."}
+                            {pasosActivos
+                              ? ` · ${pasosActivos} ${pasosActivos === 1 ? "paso" : "pasos"}`
                               : ""}
                           </span>
                         </span>
@@ -2695,8 +2708,8 @@ function ProduccionItemView({
     item.cotizacion.pasos.find((paso) => paso.estructuraBastidor)
       ?.estructuraBastidor ?? null;
   const fuentesNesting = React.useMemo(
-    () => recolectarNestingsCotizacion(item.cotizacion),
-    [item.cotizacion],
+    () => recolectarNestingsCotizacion(item.cotizacion, item.jobContext),
+    [item.cotizacion, item.jobContext],
   );
   const fuenteVectorial = React.useMemo(
     () => obtenerFuenteVectorial(item.jobContext),
@@ -2768,7 +2781,7 @@ function ProduccionItemView({
 
       <div className="cost-section">
         <div className="flex items-center justify-between gap-3">
-          <div className="cost-title">Workflow</div>
+          <div className="cost-title">Flujos de producción</div>
           {onExpand ? (
             <Button
               type="button"
@@ -2860,53 +2873,11 @@ function ProduccionItemView({
                         SVG original
                       </Button>
                     ) : null}
-                    {activeNestingTab.paso.nestingResult.substrates.map(
-                      (_, substrateIndex) => {
-                        const base = `${nombreBaseSvg(fuenteVectorial?.nombreArchivo ?? item.productoNombre)}-placa-${substrateIndex + 1}`;
-                        const preparaSvgDxf =
-                          activeNestingTab.paso.familiaCodigo === "cnc" ||
-                          activeNestingTab.paso.familiaCodigo === "corte_laser";
-                        return (
-                          <React.Fragment key={substrateIndex}>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const result =
-                                  activeNestingTab.paso.nestingResult!;
-                                descargarTexto(
-                                  crearSvgDePlaca(result, substrateIndex),
-                                  `${base}.svg`,
-                                );
-                              }}
-                            >
-                              <DownloadIcon />
-                              Placa {substrateIndex + 1} SVG
-                            </Button>
-                            {preparaSvgDxf ? (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  const result =
-                                    activeNestingTab.paso.nestingResult!;
-                                  descargarTexto(
-                                    crearDxfDePlaca(result, substrateIndex),
-                                    `${base}.dxf`,
-                                    "application/dxf;charset=utf-8",
-                                  );
-                                }}
-                              >
-                                <DownloadIcon />
-                                Placa {substrateIndex + 1} DXF
-                              </Button>
-                            ) : null}
-                          </React.Fragment>
-                        );
-                      },
-                    )}
+                    <NestingPatronesDescargas
+                      result={activeNestingTab.paso.nestingResult}
+                      nombreBase={nombreBaseSvg(item.productoNombre)}
+                      permitirDxf={activeNestingTab.paso.familiaCodigo === "cnc" || activeNestingTab.paso.familiaCodigo === "corte_laser"}
+                    />
                   </div>
                 ) : null}
                 {onEditPanels &&
@@ -3973,11 +3944,14 @@ function CostosItemView({
  * son la proyección `specs` que persiste el item de la OT al emitir — la OT
  * muestra exactamente lo que el comercial vio al armarla.
  */
-function buildOrdenItemSpecs(
+export function buildOrdenItemSpecs(
   item: PropuestaItem,
 ): Array<{ lbl: string; val: string }> {
   const mainMaterial = getMainCommercialMaterial(item);
   const montajeSustrato = getMontajeSustratoMaterial(item);
+  const materialEnComponentes =
+    !mainMaterial &&
+    componentesTienenMaterialEfectivo(item.cotizacion.componentesFabricados);
 
   const specsBase = item.atributosSchema
     .filter(
@@ -3986,6 +3960,10 @@ function buildOrdenItemSpecs(
         !["tipo_pieza", "tipoPieza", "tipo_de_pieza"].includes(attr.key),
     )
     .filter((attr) => !isDuplicateModoColorSpec(item, attr.key))
+    .filter(
+      (attr) =>
+        !(materialEnComponentes && isMaterialSpecKey(attr.key, attr.label)),
+    )
     // Con sustrato de montaje, el espesor pertenece a ESE material y se muestra
     // dentro del bloque "Montaje" (con su nombre); quitamos el ESPESOR suelto
     // para no dejar un "3 mm" huérfano que no dice de qué material es.
@@ -6552,6 +6530,10 @@ function rehidratarOrdenItem(
     adicionales: producto.adicionales,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
     jobContext,
+    notaProduccion:
+      typeof jobContext?.notasProduccion === "string"
+        ? jobContext.notasProduccion
+        : undefined,
     // Descuento que aplicó el vendedor (para reeditarlo si se recotiza el ítem).
     descuentoInput:
       producto.descuentoTipo && producto.descuentoValor != null
@@ -8972,7 +8954,7 @@ export function PropuestaFicha({
           )}
         </FieldCard>
 
-        <div className="ofield ofield--campana">
+        <div className={`ofield ${campanaStyles["ofield--campana"]}`}>
           {!orden ? (
             <Popover
               open={campanaSelectorOpen}
@@ -8982,7 +8964,7 @@ export function PropuestaFicha({
                 <TooltipTrigger
                   render={
                     <PopoverTrigger
-                      className="campana-trigger"
+                      className={campanaStyles["campana-trigger"]}
                       data-active={Boolean(proyectoCampanaId)}
                       disabled={!clienteId}
                       aria-label={
@@ -8993,7 +8975,7 @@ export function PropuestaFicha({
                 >
                   <FolderIcon aria-hidden="true" />
                   {proyectoCampanaId ? (
-                    <span className="campana-indicator" />
+                    <span className={campanaStyles["campana-indicator"]} />
                   ) : null}
                 </TooltipTrigger>
                 <TooltipContent side="top">
@@ -9010,16 +8992,16 @@ export function PropuestaFicha({
               </Tooltip>
               <PopoverContent
                 align="start"
-                className="campana-selector-popover"
+                className={campanaStyles["campana-selector-popover"]}
               >
-                <div className="campana-selector-heading">
+                <div className={campanaStyles["campana-selector-heading"]}>
                   <FolderIcon aria-hidden="true" />
                   <div>
                     <strong>Campaña</strong>
                     <span>Opcional para esta orden</span>
                   </div>
                 </div>
-                <label className="campana-selector-field">
+                <label className={campanaStyles["campana-selector-field"]}>
                   <span>Seleccionar campaña</span>
                   <select
                     value={proyectoCampanaId}
@@ -9044,7 +9026,7 @@ export function PropuestaFicha({
               <TooltipTrigger
                 render={
                   <Link
-                    className="campana-trigger"
+                    className={campanaStyles["campana-trigger"]}
                     data-active="true"
                     href={`/comercial/campanas/${orden.proyectoCampana.id}`}
                     aria-label={`Abrir campaña ${orden.proyectoCampana.nombre}`}
@@ -9052,7 +9034,7 @@ export function PropuestaFicha({
                 }
               >
                 <FolderIcon aria-hidden="true" />
-                <span className="campana-indicator" />
+                <span className={campanaStyles["campana-indicator"]} />
               </TooltipTrigger>
               <TooltipContent side="top">
                 {orden.proyectoCampana.codigo} · {orden.proyectoCampana.nombre}
@@ -9063,7 +9045,7 @@ export function PropuestaFicha({
               <TooltipTrigger
                 render={
                   <span
-                    className="campana-trigger"
+                    className={campanaStyles["campana-trigger"]}
                     aria-label="Sin campaña"
                     aria-disabled="true"
                   />

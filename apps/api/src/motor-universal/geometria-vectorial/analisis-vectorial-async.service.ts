@@ -307,6 +307,7 @@ function parametrosDesdeDto(
     configuracionEncastres: resolverConfiguracionEncastresVectoriales(
       dto.configuracionEncastres,
     ),
+    commonLine: dto.commonLine?.habilitado ? dto.commonLine : undefined,
   };
 }
 
@@ -324,6 +325,7 @@ function respuestaDesdeEntrada(
     solucionNesting: entry.solucionNesting,
     configuracionCapas: entry.configuracionCapas,
     configuracionEncastres: entry.parametros.configuracionEncastres,
+    commonLine: entry.parametros.commonLine,
     diagnosticos: entry.analisis.diagnosticos,
   };
 }

@@ -1,8 +1,12 @@
 "use client";
 
+import { NestingPatronesView } from './nesting-patrones-view';
+import { agruparPatronesNesting } from '@/lib/nesting-patrones';
 import * as React from "react";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { useCapasFabricacion } from "@/hooks/use-capas-fabricacion";
+import { CapasFabricacionPlacement, EstadoCapasFabricacion } from "./capas-fabricacion-nesting";
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
 import type {
   DemasiaPorLado,
@@ -233,7 +237,7 @@ function copiasLabel(copias: number) {
 }
 
 export function NestingViewer({
-  result,
+  result: original,
   copias = 1,
   costingDetails = [],
   maxPx = 560,
@@ -241,6 +245,10 @@ export function NestingViewer({
   className,
   modificaciones,
 }: NestingViewerProps) {
+  const { result, ...estadoCapas } = useCapasFabricacion(original);
+  const [verPatrones, setVerPatrones] = React.useState(true);
+  const admitePatrones = result.substrates.every(s => s.kind === 'sheet') &&
+    (result.algorithm === 'irregular-2d-bottom-left-v1' || !!result.composicionCompuesta) && agruparPatronesNesting(result).length > 0;
   const reactId = React.useId();
   const definitionIdPrefix = `nesting-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const pieceGroups = usePieceGroups(result.placements);
@@ -289,8 +297,11 @@ export function NestingViewer({
     );
   }
 
+  if (verPatrones && admitePatrones) return <NestingPatronesView result={result} onVerDetalle={() => setVerPatrones(false)} />;
   return (
     <section className={cn("nesting-viewer", className)}>
+      <EstadoCapasFabricacion {...estadoCapas} />
+      {admitePatrones && <button type="button" className="text-sm underline" onClick={() => setVerPatrones(true)}>Volver a los patrones</button>}
       <div className="nesting-strat-row">
         <div className="nesting-strat on">
           <span className="ix">01</span>
@@ -425,6 +436,7 @@ export function NestingViewer({
             printer={idx === 0 && conImpresora ? maquinaVisual : null}
             printerVisible={verMaquina}
             planImposicion={planImposicion}
+            commonLine={result.commonLine}
           />
         ))}
       </div>
@@ -1048,6 +1060,7 @@ interface SubstrateViewProps {
   printerVisible?: boolean;
   /** Plan de imposición de cuadernillo: dibuja páginas y plegado en cada par. */
   planImposicion?: PlanImposicionOutput | null;
+  commonLine?: NestingViewerInput["commonLine"];
 }
 
 function SubstrateView({
@@ -1064,6 +1077,7 @@ function SubstrateView({
   printer,
   printerVisible,
   planImposicion,
+  commonLine,
 }: SubstrateViewProps) {
   const widthMm = substrate.widthMm;
   const heightMm =
@@ -1351,6 +1365,11 @@ function SubstrateView({
                   modificaciones={modificaciones}
                 />
               ))}
+              <CommonLineLayer
+                commonLine={commonLine}
+                substrateIndex={substrateIndex}
+                displayTransform={placementTransform}
+              />
               {planImposicion ? (
                 <ImposicionOverlay
                   placements={placements}
@@ -1824,6 +1843,10 @@ function PlacementRect({
     vectorContours.length > 0
       ? vectorPathData(vectorContours, displayTransform)
       : null;
+  const origen = mapDisplayPoint(displayTransform, { x: 0, y: 0 });
+  const ejeX = mapDisplayPoint(displayTransform, { x: 1, y: 0 });
+  const ejeY = mapDisplayPoint(displayTransform, { x: 0, y: 1 });
+  const transformCapas = `matrix(${ejeX.x - origen.x} ${ejeX.y - origen.y} ${ejeY.x - origen.x} ${ejeY.y - origen.y} ${origen.x} ${origen.y})`;
   const baseLabel = placementLabel(placement);
   const label =
     placement.panelIndex && placement.panelCount
@@ -1884,6 +1907,7 @@ function PlacementRect({
         <path
           d={vectorPath}
           fill={style.fill}
+          fillOpacity={0.15}
           fillRule="evenodd"
           clipRule="evenodd"
           stroke={style.stroke}
@@ -1902,6 +1926,7 @@ function PlacementRect({
           strokeWidth={0.8}
         />
       )}
+      <CapasFabricacionPlacement placement={placement} transform={transformCapas} />
       {placement.panelAxis === "vertical" && verticalStart ? (
         <rect
           x={verticalStart.x}
@@ -1977,7 +2002,7 @@ function PlacementRect({
             fontSize={labelFontSize}
             fontFamily="monospace"
             fontWeight={600}
-            fill={style.text}
+            fill={vectorPath ? "#202327" : style.text}
             pointerEvents="none"
           >
             {label}
@@ -2028,7 +2053,56 @@ function NestingFooter({ result }: { result: NestingViewerInput }) {
           <strong className="v">{formatMm(chargedLength)}</strong>
         </span>
       ) : null}
+      {result.commonLine?.habilitado ? (
+        <span>
+          <span className="k">Common Line</span>
+          <strong className="v">
+            {result.commonLine.aplicado
+              ? `${result.commonLine.tramos.length} tramos · ${formatMm(result.commonLine.ahorroRecorridoMm)} menos`
+              : "Sin tramos compatibles"}
+          </strong>
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+function CommonLineLayer({
+  commonLine,
+  substrateIndex,
+  displayTransform,
+}: {
+  commonLine?: NestingViewerInput["commonLine"];
+  substrateIndex: number;
+  displayTransform: DisplayTransform;
+}) {
+  if (!commonLine?.aplicado) return null;
+  return (
+    <g aria-label="Líneas de corte compartidas" pointerEvents="none">
+      {commonLine.tramos
+        .filter((tramo) => tramo.placa === substrateIndex)
+        .map((tramo) => {
+          const inicio = mapDisplayPoint(displayTransform, tramo.inicio);
+          const fin = mapDisplayPoint(displayTransform, tramo.fin);
+          return (
+            <line
+              key={tramo.id}
+              x1={inicio.x}
+              y1={inicio.y}
+              x2={fin.x}
+              y2={fin.y}
+              stroke="#ff6b2c"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            >
+              <title>
+                Common Line · {formatMm(tramo.longitudMm)} compartidos
+              </title>
+            </line>
+          );
+        })}
+    </g>
   );
 }
 

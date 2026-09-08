@@ -1,5 +1,6 @@
 "use client";
 
+import consumoStyles from "./config-pasos-consumo.module.css";
 import * as React from "react";
 import { formatearMoneda, monedaDe } from "@/lib/moneda";
 import Link from "next/link";
@@ -4825,7 +4826,7 @@ export function ConfigPasosEditorView({
               className="back-link"
             >
               <ArrowLeftIcon className="size-4" />
-              {configuracionBase ? "Volver a pasos" : "Volver a rutas"}
+              {configuracionBase ? "Volver a nodos" : "Volver a flujos"}
             </Link>
             <div
               className="route"
@@ -4864,7 +4865,7 @@ export function ConfigPasosEditorView({
                   ? "Configuración completa"
                   : "Configuración pendiente"
                 : modeloProductivo?.active
-                  ? `${pasosUnificados.length + modeloProductivo.componentes.length} nodos · ${modeloProductivo.etapas.length} etapa${modeloProductivo.etapas.length === 1 ? "" : "s"} · ${modeloProductivo.componentes.length} componente${modeloProductivo.componentes.length === 1 ? "" : "s"}`
+                  ? `${pasosUnificados.length + modeloProductivo.componentes.length} nodos · ${modeloProductivo.etapas.length} ${modeloProductivo.etapas.length === 1 ? "nodo compuesto" : "nodos compuestos"} · ${modeloProductivo.componentes.length} componente${modeloProductivo.componentes.length === 1 ? "" : "s"}`
                   : `${(() => {
                       // El "Paso X de Y" vive acá (feedback 2026-08-06): antes
                       // estaba arriba de las preguntas y duplicaba este sidebar.
@@ -4995,7 +4996,7 @@ export function ConfigPasosEditorView({
                           "Sin recurso"}
                       </span>
                     </span>
-                    <span className="status">{etapa ? "Etapa" : "Paso"}</span>
+                    <span className="status">{etapa ? "Nodo compuesto" : "Nodo simple"}</span>
                   </button>
                 );
               }
@@ -5156,7 +5157,7 @@ export function ConfigPasosEditorView({
                         })()
                       : null}
                   </span>
-                  <span className="status">{etapa ? "Etapa" : "Paso"}</span>
+                  <span className="status">{etapa ? "Nodo compuesto" : "Nodo simple"}</span>
                 </button>
               );
             })}
@@ -7774,9 +7775,9 @@ export function ConfigPasosEditorView({
                               </button>
                             </>
                           ) : null}
-                          <div className="paso-config-save-state">
+                          <div className={consumoStyles["paso-config-save-state"]}>
                             {pendientesVisualesPasoActual > 0 ? (
-                              <span className="paso-config-save-pending">
+                              <span className={consumoStyles["paso-config-save-pending"]}>
                                 Faltan {pendientesVisualesPasoActual}{" "}
                                 {pendientesVisualesPasoActual === 1
                                   ? "requisito"
@@ -7784,7 +7785,7 @@ export function ConfigPasosEditorView({
                                 para completar el paso.
                               </span>
                             ) : null}
-                            <div className="paso-config-save-actions">
+                            <div className={consumoStyles["paso-config-save-actions"]}>
                               {pendientesVisualesPasoActual > 0 ? (
                                 <>
                                   <button
@@ -9934,10 +9935,10 @@ function ConsumoReglaGuiado({
     }
   }
   return (
-    <div className="ps-consumo-regla">
-      <div className="ps-consumo-regla__cabecera">
+    <div className={consumoStyles["ps-consumo-regla"]}>
+      <div className={consumoStyles["ps-consumo-regla__cabecera"]}>
         <span
-          className="ps-consumo-regla__icono"
+          className={consumoStyles["ps-consumo-regla__icono"]}
           data-modo={reglaPropia ? "regla" : derivado ? "geometria" : "auto"}
           aria-hidden
         >
@@ -9950,7 +9951,7 @@ function ConsumoReglaGuiado({
           )}
         </span>
         <div>
-          <span className="ps-consumo-regla__eyebrow">
+          <span className={consumoStyles["ps-consumo-regla__eyebrow"]}>
             Cómo se determina el consumo
           </span>
           <strong>
@@ -9967,7 +9968,7 @@ function ConsumoReglaGuiado({
           </p>
         </div>
         {permiteReglaPropia ? (
-          <div className="ps-consumo-regla__modo">
+          <div className={consumoStyles["ps-consumo-regla__modo"]}>
             <span>Origen del consumo</span>
             <HumanSelect
               value={reglaPropia ? "regla" : "automatico"}
@@ -9995,17 +9996,17 @@ function ConsumoReglaGuiado({
             />
           </div>
         ) : (
-          <span className="ps-consumo-regla__controlado">
+          <span className={consumoStyles["ps-consumo-regla__controlado"]}>
             El paso lo calcula
           </span>
         )}
       </div>
 
       {reglaPropia ? (
-        <div className="ps-consumo-regla__campos ps-consumo-regla__campos--regla">
+        <div className={consumoStyles["ps-consumo-regla__campos"]}>
           <label>
             <span>Cantidad de material</span>
-            <div className="ps-consumo-regla__cantidad">
+            <div className={consumoStyles["ps-consumo-regla__cantidad"]}>
               <Input
                 aria-label="Cantidad de material consumido"
                 type="number"
@@ -10039,11 +10040,11 @@ function ConsumoReglaGuiado({
           </label>
         </div>
       ) : (
-        <div className="ps-consumo-regla__campos">
+        <div className={consumoStyles["ps-consumo-regla__campos"]}>
           <label>
             <span>Dato que determina el consumo</span>
             {calculoGobernadoPorPaso ? (
-              <div className="ps-consumo-regla__valor-controlado">
+              <div className={consumoStyles["ps-consumo-regla__valor-controlado"]}>
                 {derivado ? "Geometría productiva del paso" : automatico.dato}
               </div>
             ) : (
@@ -10067,14 +10068,14 @@ function ConsumoReglaGuiado({
           </label>
           <label>
             <span>Resultado que se descuenta</span>
-            <div className="ps-consumo-regla__valor-controlado">
+            <div className={consumoStyles["ps-consumo-regla__valor-controlado"]}>
               {derivado ? detalleDerivado : automatico.resultado}
             </div>
           </label>
         </div>
       )}
 
-      <div className="ps-consumo-regla__preview">
+      <div className={consumoStyles["ps-consumo-regla__preview"]}>
         <span>Vista previa de la regla</span>
         <p>
           {reglaPropia
@@ -10089,14 +10090,14 @@ function ConsumoReglaGuiado({
         </p>
       </div>
 
-      <div className="ps-consumo-regla__merma">
+      <div className={consumoStyles["ps-consumo-regla__merma"]}>
         <div>
           <strong>Merma extra</strong>
           <span>
             Se suma al consumo calculado; no duplica el desperdicio del nesting.
           </span>
         </div>
-        <div className="ps-consumo-regla__porcentaje">
+        <div className={consumoStyles["ps-consumo-regla__porcentaje"]}>
           <Input
             aria-label="Merma adicional del material"
             type="number"

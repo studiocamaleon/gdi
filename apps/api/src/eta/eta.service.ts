@@ -515,6 +515,7 @@ export class EtaService {
         AND "tiempoRealMin" IS NOT NULL
         AND "duracionEstimadaMin" IS NOT NULL
         AND "tiempoFuente" IN ('medido', 'medido_lote')
+        AND "nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE'
         ${
           rango
             ? Prisma.sql`AND "completadoEl" >= ${rango.desde} AND "completadoEl" < ${finExclusivo(rango)}`

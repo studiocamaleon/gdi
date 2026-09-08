@@ -45,6 +45,7 @@ def _transform(points, angle, tx, ty):
 
 
 def _solve(data):
+    preparation_started = time.monotonic()
     from compas.geometry import Polyline
     from compas_nest import (
         nest_geo,
@@ -97,17 +98,19 @@ def _solve(data):
     budget_seconds = max(0.05, (timeout_ms - reserve_ms) / 1000.0)
     rotations = max(int(part["rotaciones"]) for part in data["piezas"])
     requested = sum(int(part["cantidad"]) for part in data["piezas"])
-    search_budget_seconds = min(
-        budget_seconds,
-        max(1.5, min(20.0, requested * rotations * 0.08)),
-    )
+    # El presupuesto incluye imports y preparación. No se recorta según el
+    # número de piezas/rotaciones: los trabajos chicos también pueden ser difíciles.
+    budget_seconds = max(0.05, budget_seconds - (time.monotonic() - preparation_started))
     if data["motor"] == "collision":
-        # El solver collision escala el costo casi linealmente con las
-        # iteraciones. Un presupuesto ligado a la tirada evita gastar 20 s en
-        # dos rectángulos y conserva exploración suficiente en trabajos reales.
-        iterations = min(1200, max(160, requested * 50))
+        # Las primeras vueltas usan un calendario de relajación reproducible.
+        # El modo por tiempo cambia ese calendario con la carga de CPU y puede
+        # perder una solución alcanzable en pocos cientos de iteraciones.
+        # Node conserva el límite externo y continúa la búsqueda si no alcanza.
+        iterations = data.get("iteraciones")
+        if iterations is not None and (not isinstance(iterations, int) or not 1 <= iterations <= 4000):
+            raise ValueError("Presupuesto de iteraciones inválido")
         solver = opennest_collision(
-            iterations=iterations,
+            iterations=iterations or 4000,
             num_rotations=rotations,
             spacing=0.0,
             seed=int(data["semilla"]),
@@ -116,7 +119,7 @@ def _solve(data):
             final_compact=2,
             fit_mode=0,
             max_sheets=int(sheet["maxPlacas"]),
-            time_budget_secs=search_budget_seconds,
+            time_budget_secs=0.0 if iterations else budget_seconds,
             verbose=False,
         )
     else:
@@ -127,11 +130,11 @@ def _solve(data):
             spacing=0.0,
             seed=int(data["semilla"]),
             use_holes=True,
-            try_all_rotations=False,
+            try_all_rotations=True,
             mode=2,
-            num_seeds=2,
+            num_seeds=1,
             use_parallel=True,
-            time_budget_secs=search_budget_seconds,
+            time_budget_secs=budget_seconds,
             max_sheets=int(sheet["maxPlacas"]),
             verbose=False,
         )

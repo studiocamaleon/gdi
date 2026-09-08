@@ -134,7 +134,30 @@ function resolverRegla(
   return numeroBase / valor;
 }
 
+export type PiezaVectorialComponente = {
+  id: string;
+  nombre: string;
+  cantidadPorUnidad: number;
+  tipo?: 'VECTORIAL';
+  fuente: import('./geometrias/interpretar-vector').FuenteGuardada;
+};
+
+export type PiezaRectangularComponente = {
+  id: string;
+  nombre: string;
+  cantidadPorUnidad: number;
+  tipo: 'RECTANGULAR';
+  medidas: { anchoMm: number; altoMm: number };
+  fuente?: never;
+};
+
+export type PiezaComponenteFabricado =
+  | PiezaVectorialComponente
+  | PiezaRectangularComponente;
+
 export type ConfiguracionComponenteFabricado = {
+  piezas?: PiezaComponenteFabricado[];
+  piezasEditables?: boolean;
   version: 1 | 2;
   bindings: BindingParametroComponente[];
   operacionesIncorporacion?: OperacionIncorporacion[];
@@ -143,6 +166,56 @@ export type ConfiguracionComponenteFabricado = {
 
 function esRegistro(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function leerPiezasComponente(
+  value: unknown,
+): PiezaComponenteFabricado[] | null {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 30)
+    return null;
+  const ids = new Set<string>();
+  let rectangular: boolean | undefined;
+  for (const pieza of value) {
+    if (
+      !esRegistro(pieza) ||
+      typeof pieza.id !== 'string' ||
+      !/^[a-zA-Z0-9_-]{1,80}$/.test(pieza.id) ||
+      ids.has(pieza.id) ||
+      typeof pieza.nombre !== 'string' ||
+      !pieza.nombre.trim() ||
+      pieza.nombre.length > 120 ||
+      !Number.isSafeInteger(pieza.cantidadPorUnidad) ||
+      Number(pieza.cantidadPorUnidad) < 1 ||
+      Number(pieza.cantidadPorUnidad) > 10000
+    )
+      return null;
+    ids.add(pieza.id);
+    const esRectangular = pieza.tipo === 'RECTANGULAR';
+    // Una colección comparte el mismo modo geométrico de su producto hijo.
+    if (rectangular !== undefined && rectangular !== esRectangular) return null;
+    rectangular = esRectangular;
+    if (esRectangular) {
+      if (
+        pieza.fuente != null ||
+        !esRegistro(pieza.medidas) ||
+        ![pieza.medidas.anchoMm, pieza.medidas.altoMm].every(
+          (n) =>
+            typeof n === 'number' &&
+            Number.isFinite(n) &&
+            n > 0 &&
+            n <= 1000000,
+        )
+      )
+        return null;
+    } else if (
+      (pieza.tipo != null && pieza.tipo !== 'VECTORIAL') ||
+      !esRegistro(pieza.fuente) ||
+      !esRegistro(pieza.fuente.procedencia) ||
+      typeof pieza.fuente.procedencia.geometriaId !== 'string'
+    )
+      return null;
+  }
+  return value as PiezaComponenteFabricado[];
 }
 
 function esFuenteVectorialValida(value: unknown): boolean {
@@ -291,11 +364,25 @@ export function leerConfiguracionComponente(
     },
   );
   if (operacionesIncorporacion.length !== operacionesRaw.length) return null;
+  const piezas =
+    value.piezas == null ? undefined : leerPiezasComponente(value.piezas);
+  if (
+    piezas === null ||
+    (value.piezasEditables != null &&
+      typeof value.piezasEditables !== 'boolean') ||
+    (value.piezasEditables === true &&
+      !piezas?.every((p) => p.tipo === 'RECTANGULAR'))
+  )
+    return null;
   const repeticion = leerRepeticion(value.repeticion);
   if (repeticion === null) return null;
   return {
     version: Number(value.version) === 2 ? 2 : 1,
     bindings,
+    ...(piezas ? { piezas: piezas as PiezaComponenteFabricado[] } : {}),
+    ...(value.piezasEditables != null
+      ? { piezasEditables: value.piezasEditables as boolean }
+      : {}),
     operacionesIncorporacion,
     ...(repeticion ? { repeticion } : {}),
   };
@@ -676,7 +763,7 @@ export function resolverJobContextComponente(args: {
   overrideCotizacion?: Record<string, unknown>;
 }): Record<string, unknown> {
   const config = leerConfiguracionComponente(args.configuracion);
-  if (!config || config.bindings.length === 0) {
+  if (!config || (config.bindings.length === 0 && !config.piezas?.length)) {
     return {
       cantidad: Number(args.contextoPadre.cantidad ?? 1) * args.cantidadLegacy,
     };
@@ -690,9 +777,31 @@ export function resolverJobContextComponente(args: {
       ? (overridesRaiz[args.codigoComponente] as Record<string, unknown>)
       : {});
   const resultado: Record<string, unknown> = {};
+  let piezas = config.piezas;
+  if (overrides.piezas !== undefined) {
+    if (!config.piezasEditables)
+      throw new BadRequestException(
+        `Las piezas de "${args.codigoComponente}" están definidas por el producto.`,
+      );
+    const editadas = leerPiezasComponente(overrides.piezas);
+    if (!editadas || !editadas.every((p) => p.tipo === 'RECTANGULAR'))
+      throw new BadRequestException(
+        `Revisá las piezas de "${args.codigoComponente}": cada una necesita nombre, medidas positivas y cantidad entera.`,
+      );
+    piezas = editadas;
+  }
   const outputsComponentes = args.outputsComponentes ?? {};
   const faltantes: Array<{ clave: string; etiqueta: string }> = [];
   for (const binding of config.bindings) {
+    if (
+      config.piezas?.length &&
+      [
+        'disenoVectorialFuente',
+        'medidaCustomMm.anchoMm',
+        'medidaCustomMm.altoMm',
+      ].includes(binding.clave)
+    )
+      continue;
     let value: unknown;
     if (binding.origen === 'DEFAULT_HIJO' || binding.origen === 'FIJO') {
       value = binding.valor;
@@ -732,7 +841,69 @@ export function resolverJobContextComponente(args: {
   }
   // Un SVG dimensionado define su caja final. Ancho y alto del componente se
   // derivan de esa geometría y no deben volver a exigirse como datos paralelos.
-  completarGeometria(resultado);
+  if (piezas?.length) {
+    resultado.cantidad ??=
+      Number(args.contextoPadre.cantidad ?? 1) * args.cantidadLegacy;
+    if (
+      !Number.isSafeInteger(resultado.cantidad) ||
+      Number(resultado.cantidad) <= 0
+    )
+      throw new BadRequestException(
+        'La cantidad de productos de una colección debe ser un entero mayor que cero.',
+      );
+    if (
+      piezas.some(
+        (p) =>
+          !Number.isSafeInteger(
+            Number(resultado.cantidad) * p.cantidadPorUnidad,
+          ),
+      )
+    )
+      throw new BadRequestException(
+        'La cantidad total de piezas supera el máximo permitido.',
+      );
+    if (piezas.every((p) => p.tipo === 'RECTANGULAR')) {
+      const resueltas = piezas.map((p) => ({
+        id: p.id,
+        nombre: p.nombre.trim(),
+        sourcePieceId: p.id,
+        cantidadPorUnidad: p.cantidadPorUnidad,
+        cantidad: Number(resultado.cantidad) * p.cantidadPorUnidad,
+        ...p.medidas,
+      }));
+      resultado.piezas = resueltas;
+      resultado.modoCotizacionVectorial = 'medidas';
+      resultado.medidaCustomMm = {
+        anchoMm: Math.max(...resueltas.map((p) => p.anchoMm)),
+        altoMm: Math.max(...resueltas.map((p) => p.altoMm)),
+      };
+      resultado.piezaAnchoMaxMm = (
+        resultado.medidaCustomMm as { anchoMm: number }
+      ).anchoMm;
+      resultado.piezaAltoMaxMm = (
+        resultado.medidaCustomMm as { altoMm: number }
+      ).altoMm;
+      resultado.piezaAreaTotalM2 = resueltas.reduce(
+        (n, p) => n + (p.anchoMm * p.altoMm * p.cantidad) / 1000000,
+        0,
+      );
+      resultado.piezaPerimetroTotalM = resueltas.reduce(
+        (n, p) => n + (2 * (p.anchoMm + p.altoMm) * p.cantidad) / 1000,
+        0,
+      );
+    } else {
+      const vectoriales = piezas.filter(
+        (p): p is PiezaVectorialComponente => p.tipo !== 'RECTANGULAR',
+      );
+      resultado.disenosVectoriales = vectoriales;
+      resultado.modoCotizacionVectorial = 'archivo';
+      resultado.piezas = vectoriales.map((p) => ({
+        cantidad: Number(resultado.cantidad) * p.cantidadPorUnidad,
+        anchoMm: p.fuente.anchoFinalMm,
+        altoMm: p.fuente.altoFinalMm,
+      }));
+    }
+  } else completarGeometria(resultado);
   const faltantesReales = faltantes.filter(
     (item) => leerRuta(resultado, item.clave) == null,
   );

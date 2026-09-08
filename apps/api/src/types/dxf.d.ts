@@ -7,7 +7,7 @@ declare module 'dxf' {
 
   export type DxfPolyline = {
     vertices: Array<[number, number]>;
-    layer?: { name?: string };
+    layer?: { name?: string; flags?: number; colorNumber?: number };
   };
 
   export class Helper {
@@ -17,6 +17,9 @@ declare module 'dxf' {
     };
     readonly denormalised: Array<{
       type?: string;
+      handle?: string;
+      closed?: boolean;
+      visible?: boolean;
       layer?: string;
     }>;
     toSVG(): string;

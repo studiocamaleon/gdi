@@ -92,7 +92,7 @@ export function motivosCambioEntreSnapshots(
       motivos,
       'WORKFLOW',
       'Orden y dependencias',
-      'Cambió la secuencia, el paralelismo o los controles del Workflow.',
+      'Cambió la secuencia, el paralelismo o los controles del flujo de producción.',
     );
   }
   if (!iguales(publicada.cargosCotizacion, actual.cargosCotizacion)) {
@@ -143,7 +143,7 @@ export function motivosCambioEntreSnapshots(
     agregar(
       motivos,
       'WORKFLOW',
-      'Pasos del Workflow',
+      'Nodos del flujo de producción',
       'Se agregó, quitó o reemplazó al menos un paso de producción.',
     );
   }
@@ -168,7 +168,7 @@ export function motivosCambioEntreSnapshots(
       agregar(
         motivos,
         'WORKFLOW',
-        'Pasos del Workflow',
+        'Nodos del flujo de producción',
         'Cambió el orden, la familia o la identificación de un paso.',
       );
     }

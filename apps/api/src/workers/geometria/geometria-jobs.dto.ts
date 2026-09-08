@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -61,6 +62,26 @@ export class PiezaNestingOpenNestDto {
   huecos?: AnilloNestingOpenNestDto[];
 }
 
+export class ConfiguracionCommonLineTrabajoDto {
+  @IsBoolean()
+  habilitado!: boolean;
+
+  @IsNumber()
+  @Min(0.01)
+  @Max(100)
+  anchoCorteMm!: number;
+
+  @IsNumber()
+  @Min(1)
+  @Max(100_000)
+  longitudMinimaMm!: number;
+
+  @IsNumber()
+  @Min(0.01)
+  @Max(1)
+  toleranciaMm!: number;
+}
+
 export class PlacaNestingOpenNestDto {
   @IsNumber()
   @Min(1)
@@ -96,6 +117,11 @@ export class CrearTrabajoNestingOpenNestDto {
   @Min(0)
   @Max(10_000)
   separacionMm!: number;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ConfiguracionCommonLineTrabajoDto)
+  commonLine?: ConfiguracionCommonLineTrabajoDto;
 
   @IsOptional()
   @IsInt()

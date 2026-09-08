@@ -47,6 +47,20 @@ type MedidaPredefinidaNormalizada = {
 export class ProductosService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async hidratarGeometrias(tenantId: string, atributos: unknown) {
+    const fuentes = leerGeometriasComerciales(atributos).fuentes;
+    const ids = fuentes.flatMap(f => f.predeterminada ? [f.predeterminada.procedencia.geometriaId] : []);
+    if (!ids.length) return;
+    const guardadas = await this.prisma.geometriaProducto.findMany({ where: { tenantId, id: { in: ids } } });
+    const raw = (atributos as { geometriasComerciales: { fuentes: Array<Record<string, unknown>> } }).geometriasComerciales;
+    for (const fuente of fuentes) {
+      if (!fuente.predeterminada) continue;
+      const guardada = guardadas.find(g => g.id === fuente.predeterminada!.procedencia.geometriaId);
+      if (!guardada) throw new BadRequestException('Una geometría no pertenece a esta cuenta o ya no está disponible.');
+      raw.fuentes.find(f => f.id === fuente.id)!.predeterminada = guardada.fuenteJson;
+    }
+  }
+
   async listarProductos(
     tenantId: string,
     opts: {
@@ -201,6 +215,7 @@ export class ProductosService {
   async crearProducto(tenantId: string, dto: CrearProductoDto) {
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
     validarGeometriasComerciales(dto.atributosComercialesJson);
+    await this.hidratarGeometrias(tenantId, dto.atributosComercialesJson);
     const subcategoriaComercial = await this.assertSubcategoriaComercial(
       dto.subcategoriaComercialCodigo,
     );
@@ -308,6 +323,7 @@ export class ProductosService {
   ) {
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
     validarGeometriasComerciales(dto.atributosComercialesJson);
+    await this.hidratarGeometrias(tenantId, dto.atributosComercialesJson);
     const existente = await this.prisma.producto.findFirst({
       where: { id, tenantId },
     });

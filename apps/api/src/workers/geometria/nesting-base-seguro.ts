@@ -1,4 +1,5 @@
 import { nestGrid2DMulti } from '../../productos-servicios/nesting/algorithms/grid-2d-multi';
+import { nestearPatronRepetido } from '../../motor-universal/geometria-vectorial/nesting-patron-repetido';
 import type {
   AnilloTrabajoNesting,
   NestingIrregularOpenNestData,
@@ -24,8 +25,8 @@ type PiezaBase = {
 
 /**
  * Construye una solución conservadora usando las cajas envolventes reales.
- * No intenta encastrar concavidades: su objetivo es garantizar rápidamente un
- * layout correcto que el optimizador nativo pueda mejorar después.
+ * Compara las cajas con patrones alternados cuando hay una sola silueta.
+ * El optimizador nativo conserva este candidato si no consigue mejorarlo.
  */
 export function resolverNestingBaseSeguro(
   input: NestingIrregularOpenNestData,
@@ -66,6 +67,15 @@ export function resolverNestingBaseSeguro(
     (total, pieza) => total + pieza.cantidad,
     0,
   );
+  const patron = resolverPatron(input);
+  if (
+    patron &&
+    patron.placasUsadas <= input.placa.maxPlacas &&
+    (packing.placements.length !== esperadas ||
+      patron.placasUsadas < packing.substrates.length)
+  ) {
+    return { ...patron, duracionMs: Date.now() - startedAt };
+  }
   if (
     packing.placements.length !== esperadas ||
     packing.substrates.length > input.placa.maxPlacas
@@ -117,6 +127,80 @@ export function resolverNestingBaseSeguro(
     calidadSolucion: 'BASE_SEGURA',
     optimizacionAgotada: false,
     placements,
+    validacion: {
+      completa: true,
+      dentroDePlaca: true,
+      sinSolapamientos: true,
+      separacionRespetada: true,
+    },
+  };
+}
+
+function resolverPatron(
+  input: NestingIrregularOpenNestData,
+): NestingIrregularOpenNestResult | null {
+  if (input.piezas.length !== 1) return null;
+  const pieza = input.piezas[0];
+  const limites = calcularLimites(pieza.contorno);
+  const area = (anillo: AnilloTrabajoNesting) =>
+    Math.abs(
+      anillo.reduce((s, p, i) => {
+        const q = anillo[(i + 1) % anillo.length];
+        return s + p.x * q.y - q.x * p.y;
+      }, 0),
+    ) / 2;
+  const resultado = nestearPatronRepetido({
+    pieza: {
+      id: pieza.id,
+      anchoMm: limites.ancho,
+      altoMm: limites.alto,
+      contornos: [
+        { puntos: pieza.contorno, esHueco: false },
+        ...(pieza.huecos ?? []).map((puntos) => ({ puntos, esHueco: true })),
+      ],
+      areaMm2:
+        area(pieza.contorno) -
+        (pieza.huecos ?? []).reduce((s, h) => s + area(h), 0),
+      perimetroMm: 0,
+    },
+    cantidad: pieza.cantidad,
+    sustrato: {
+      kind: 'sheet',
+      widthMm: input.placa.anchoMm,
+      heightMm: input.placa.altoMm,
+      margins: {
+        leftMm: input.placa.margenMm,
+        rightMm: input.placa.margenMm,
+        topMm: input.placa.margenMm,
+        bottomMm: input.placa.margenMm,
+      },
+    },
+    angulosPermitidos: [0, 90, 180, 270].filter((a) =>
+      Number.isInteger((a * pieza.rotaciones) / 360),
+    ),
+    separacionMm: input.separacionMm,
+  });
+  if (!resultado) return null;
+  return {
+    schemaVersion: 1,
+    algoritmo: 'grafonest-baseline-v1',
+    motor: input.motor,
+    versionMotor: 'grafonest-patron-repetido-1',
+    cantidadSolicitada: pieza.cantidad,
+    cantidadColocada: resultado.placements.length,
+    placasUsadas: resultado.substrates.length,
+    duracionMs: 0,
+    calidadSolucion: 'BASE_SEGURA',
+    optimizacionAgotada: false,
+    placements: resultado.placements.map((p) => ({
+      piezaId: p.pieceId,
+      copia: p.meta!.copyIndex,
+      placa: p.substrateIndex!,
+      rotacionGrados: p.meta!.rotacionGrados,
+      traslacion: p.meta!.traslacion,
+      contorno: p.meta!.contornos.find((c) => !c.esHueco)!.puntos,
+      huecos: p.meta!.contornos.filter((c) => c.esHueco).map((c) => c.puntos),
+    })),
     validacion: {
       completa: true,
       dentroDePlaca: true,

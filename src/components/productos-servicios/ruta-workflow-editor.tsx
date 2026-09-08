@@ -164,7 +164,7 @@ export function RutaWorkflowEditor({
       return [...compuestos.values()].map((paso) => ({
         id: paso.id,
         nombre: paso.nombre,
-        descripcion: "Etapa consolidada · un estado en producción",
+        descripcion: "Nodo compuesto · un estado en producción",
         tipo,
         familiaCodigo: paso.id,
       }));
@@ -277,8 +277,8 @@ export function RutaWorkflowEditor({
     <section className={styles.editor}>
       <header className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>Workflow reusable</span>
-          <h2>Recorrido de la ruta</h2>
+          <span className={styles.eyebrow}>Flujos de producción</span>
+          <h2>Recorrido del flujo</h2>
           <p>
             Ordená de izquierda a derecha. Los nodos en una misma columna se
             ejecutan en paralelo.
@@ -286,13 +286,13 @@ export function RutaWorkflowEditor({
         </div>
         <div className={styles.headerTools}>
           <span className={styles.topology}>
-            <GitBranchIcon /> Ruta {value.topologia}
+            <GitBranchIcon /> Flujo {value.topologia}
           </span>
           <div className={styles.zoom}>
             <button
               type="button"
               onClick={() => setZoom((actual) => Math.max(70, actual - 10))}
-              aria-label="Alejar Workflow"
+              aria-label="Alejar flujo de producción"
             >
               <ZoomOutIcon />
             </button>
@@ -300,7 +300,7 @@ export function RutaWorkflowEditor({
             <button
               type="button"
               onClick={() => setZoom((actual) => Math.min(130, actual + 10))}
-              aria-label="Acercar Workflow"
+              aria-label="Acercar flujo de producción"
             >
               <ZoomInIcon />
             </button>
@@ -325,7 +325,7 @@ export function RutaWorkflowEditor({
             >
               <PlusIcon />
               <strong>Agregar primer nodo</strong>
-              <span>Paso, Etapa o Componente</span>
+              <span>Nodo simple, nodo compuesto o componente</span>
             </button>
           ) : null}
           {columnas.map((columna, columnaIndex) => (
@@ -390,8 +390,8 @@ export function RutaWorkflowEditor({
                             {nodo.tipo === "COMPONENTE"
                               ? "SUBRUTA FABRICADA"
                               : nodo.tipo === "ETAPA"
-                                ? "ETAPA CONSOLIDADA"
-                                : "PASO DE PRODUCCIÓN"}
+                                ? "NODO COMPUESTO"
+                                : "NODO SIMPLE"}
                           </span>
                           <strong>{tituloNodo(nodo, catalogoFamilias)}</strong>
                           <small>
@@ -438,7 +438,10 @@ export function RutaWorkflowEditor({
                             onClick={() =>
                               mover(nodo.clave, {
                                 tipo: "SECUENCIAL",
-                                posicion: columnaIndex + 1,
+                                // Una columna entera debe pasar al otro lado
+                                // del momento siguiente. Un nodo paralelo se
+                                // separa justo después de su momento actual.
+                                posicion: columnaIndex + (columna.length === 1 ? 2 : 1),
                               })
                             }
                             aria-label="Mover nodo a la derecha"
@@ -511,14 +514,14 @@ export function RutaWorkflowEditor({
           <div className={styles.typeGrid}>
             {(
               [
-                ["PASO", WorkflowIcon, "Paso", "Una operación individual"],
+                ["PASO", WorkflowIcon, "Nodo simple", "Una operación individual"],
                 [
                   "COMPONENTE",
                   BoxesIcon,
                   "Componente",
                   "Producto hijo fabricado",
                 ],
-                ["ETAPA", Layers3Icon, "Etapa", "Subtareas con un estado"],
+                ["ETAPA", Layers3Icon, "Nodo compuesto", "Subtareas con un estado"],
               ] as const
             ).map(([itemTipo, Icon, label, description]) => (
               <button

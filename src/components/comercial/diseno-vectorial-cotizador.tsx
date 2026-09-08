@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { registrarImportacionDxf, type ImportacionDxf } from '@/lib/escala-dxf';
+import { EscalaDxf } from './escala-dxf';
 import { AlertCircleIcon, LoaderCircleIcon, PlayIcon } from "lucide-react";
 import {
   analizarSvgFabricacionEnWorker,
@@ -19,7 +21,8 @@ import {
 import styles from "./geometrias-vectoriales-cotizacion.module.css";
 import { OpenNestLoading } from "./opennest-loading";
 
-const VERSION_POLITICA_ORIENTACION_GRAFONEST = 3;
+// Debe coincidir con el worker; el test del cotizador verifica ambas versiones.
+const VERSION_POLITICA_ORIENTACION_GRAFONEST = 8;
 
 export type FuenteDisenoVectorial = {
   schemaVersion: 1 | 2;
@@ -30,6 +33,9 @@ export type FuenteDisenoVectorial = {
   configuracionCapas?: ConfiguracionCapasVectoriales;
   formatoOrigen?: FormatoFuenteVectorial;
   unidadOrigen?: string | null;
+  importacionDxf?: ImportacionDxf;
+  procedencia?: import("@/lib/geometrias-producto-api").FuenteGuardada["procedencia"];
+  operaciones?: import("@/lib/geometrias-producto-api").FuenteGuardada["operaciones"];
 };
 
 export type CotizacionVectorialManual = {
@@ -39,6 +45,8 @@ export type CotizacionVectorialManual = {
 
 type Props = {
   titulo?: string;
+  permitirReemplazo?: boolean;
+  predeterminada?: FuenteDisenoVectorial;
   value: FuenteDisenoVectorial | null;
   analisis: AnalisisSvgFabricacion | null;
   modoCotizacion: "svg" | "placas";
@@ -51,6 +59,7 @@ type Props = {
   permitirSegmentacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
   configuracionEncastres: ConfiguracionEncastresVectoriales;
+  cargandoConfiguracion?: boolean;
   onChange: (
     value: FuenteDisenoVectorial | null,
     analisis: AnalisisSvgFabricacion | null,
@@ -60,6 +69,8 @@ type Props = {
 
 export function DisenoVectorialCotizador({
   titulo,
+  permitirReemplazo = true,
+  predeterminada,
   value,
   analisis,
   modoCotizacion,
@@ -72,6 +83,7 @@ export function DisenoVectorialCotizador({
   permitirSegmentacion = true,
   preservarComposicionOriginalSiEntra = false,
   configuracionEncastres,
+  cargandoConfiguracion = false,
   onChange,
   onCotizacionManualChange,
 }: Props) {
@@ -137,7 +149,7 @@ export function DisenoVectorialCotizador({
         });
         const normalized: FuenteDisenoVectorial = {
           ...fuente,
-          schemaVersion: 1,
+          schemaVersion: fuente.schemaVersion,
           altoFinalMm: result.geometria.altoMm,
           configuracionCapas: undefined,
         };
@@ -209,6 +221,7 @@ export function DisenoVectorialCotizador({
         svg: normalizada.svg,
         formatoOrigen: normalizada.formatoOrigen,
         unidadOrigen: normalizada.unidadDetectada,
+        importacionDxf: registrarImportacionDxf(normalizada),
         anchoFinalMm: anchoInicialMm,
         altoFinalMm: altoInicialMm,
       };
@@ -227,7 +240,13 @@ export function DisenoVectorialCotizador({
     }
   };
 
-  const anchoFinalMm = Math.max(10, anchoCm * 10);
+  React.useEffect(() => {
+    if (!value) return;
+    setAnchoCm(value.anchoFinalMm / 10);
+    setAltoCm((value.altoFinalMm ?? value.anchoFinalMm * obtenerRelacionAspectoSvg(value.svg)) / 10);
+  }, [value?.svg, value?.anchoFinalMm, value?.altoFinalMm]);
+
+  const anchoFinalMm = value?.procedencia ? value.anchoFinalMm : Math.max(10, anchoCm * 10);
   const analisisActualizado = Boolean(
     value &&
     placa &&
@@ -249,11 +268,25 @@ export function DisenoVectorialCotizador({
     : 0;
 
   React.useEffect(() => {
-    if (!value || !analisis || analisisActualizado || procesando) return;
+    if (
+      cargandoConfiguracion ||
+      !value ||
+      !analisis ||
+      analisisActualizado ||
+      procesando
+    )
+      return;
     // Cambiar medida, cantidad, placa o configuración invalida el resultado,
     // pero no vuelve a ejecutar el nesting. El usuario decide cuándo calcular.
     onChange(value, null);
-  }, [analisis, analisisActualizado, onChange, procesando, value]);
+  }, [
+    analisis,
+    analisisActualizado,
+    cargandoConfiguracion,
+    onChange,
+    procesando,
+    value,
+  ]);
 
   const relacionAspectoActual = analisis
     ? analisis.geometria.altoMm / analisis.geometria.anchoMm
@@ -311,6 +344,10 @@ export function DisenoVectorialCotizador({
         ? "GrafoNest"
         : "Calculado"
       : "Pendiente";
+
+  if (cargandoConfiguracion) {
+    return <p role="status">Cargando configuración de corte…</p>;
+  }
 
   return (
     <MarcoGeometriaGrafoprint
@@ -396,6 +433,7 @@ export function DisenoVectorialCotizador({
           </>
         ) : (
           <>
+            {value?.procedencia ? <p id="vector-guardado-detalle">Diseño guardado · Capa {value.procedencia.capa} · Exterior {value.procedencia.exteriorId}. Sus medidas de fabricación se conservan.</p> : predeterminada ? <button type="button" className={styles.secondaryButton} onClick={() => onChange(predeterminada, null)}>Usar diseño del producto</button> : null}
             <div className={styles.measureGrid}>
               <div className={styles.field}>
                 <span className={styles.fieldLabel}>
@@ -426,6 +464,8 @@ export function DisenoVectorialCotizador({
                 <input
                   className={styles.nativeInput}
                   id="vector-final-size"
+                  readOnly={!!value?.procedencia}
+                  aria-describedby={value?.procedencia ? "vector-guardado-detalle" : undefined}
                   type="number"
                   min={1}
                   step={0.1}
@@ -457,9 +497,15 @@ export function DisenoVectorialCotizador({
               nombreArchivo={value?.nombreArchivo}
               formatoOrigen={value?.formatoOrigen}
               procesando={procesando}
-              disabled={!placa || procesando}
+              disabled={!placa || procesando || !permitirReemplazo}
               onSelect={cargarArchivo}
             />
+
+            {value ? <EscalaDxf value={value} onChange={(medidas) => {
+              setAnchoCm(medidas.anchoFinalMm / 10);
+              setAltoCm(medidas.altoFinalMm / 10);
+              onChange({ ...value, ...medidas }, null);
+            }} /> : null}
 
             {value ? (
               <section className={styles.nestingPanel}>
@@ -495,11 +541,18 @@ export function DisenoVectorialCotizador({
                       />
                     </div>
                     <NestingPreview analisis={analisis} />
-                    {analisis.nesting.optimizacionAgotada ? (
+                    {analisis.nesting.busqueda?.motivoFin ===
+                    "MINIMO_PLACAS" ? (
+                      <p className={styles.nestingNote}>
+                        Mínimo de placas alcanzado: {analisis.nesting.placas}.
+                        Verificado por área.
+                      </p>
+                    ) : analisis.nesting.optimizacionAgotada ? (
                       <div className={styles.nestingNote}>
-                        GrafoNest alcanzó el límite de optimización y conservó
-                        el mejor acomodo válido. Este resultado calcula el
-                        precio.
+                        {analisis.nesting.busqueda?.motivoFin ===
+                        "MOTOR_NO_DISPONIBLE"
+                          ? "El optimizador no está disponible. Se conservó un acomodo válido de respaldo."
+                          : "Se agotó el tiempo de búsqueda. Se conservó el mejor acomodo válido; podría existir una distribución que use menos placas."}
                       </div>
                     ) : null}
                   </>
@@ -601,6 +654,9 @@ function analisisCoincideConEntrada({
       : "nesting_optimizado";
   return (
     Math.abs(analisis.geometria.anchoMm - anchoFinalMm) < 0.01 &&
+    (analisis.nesting.piezasOriginales === undefined ||
+      analisis.nesting.piezasOriginales ===
+        analisis.geometria.piezas.length * Math.max(1, Math.ceil(cantidad))) &&
     analisis.nesting.anchoPlacaMm === placa.anchoMm &&
     analisis.nesting.altoPlacaMm === placa.altoMm &&
     Math.abs(analisis.nesting.anchoUtilMm - (placa.anchoMm - margenMm * 2)) <

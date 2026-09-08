@@ -10,7 +10,7 @@
         "outDir": "dist/src"
       },
       {
-        "include": "workers/geometria/python/**/*.py",
+        "include": "**/python/**/*.py",
         "outDir": "dist/src"
       }
     ],

@@ -100,7 +100,8 @@ asíncronos. El análisis vectorial productivo sí requiere Redis y el worker.
 - OpenNest nunca se carga dentro del proceso HTTP ni del runtime Node.
 - El presupuesto interno del motor es orientativo; el timeout externo del
   worker es el límite real y está además acotado por
-  `OPENNEST_TIMEOUT_MAX_MS` (60 segundos por defecto).
+  `OPENNEST_TIMEOUT_MAX_MS` (300 segundos por defecto). El análisis solicita
+  120 segundos por defecto; ambos valores se pueden configurar.
 - Cada salida se trata como candidata no confiable. El validador compara la
   cantidad exacta, ids/copias, transformaciones, rotaciones permitidas,
   límites, solapamientos de área y distancia mínima.
@@ -108,8 +109,20 @@ asíncronos. El análisis vectorial productivo sí requiere Redis y el worker.
   del valor pedido y se vuelve a medir sobre los contornos reales. No se confía
   únicamente en el parámetro `spacing` del motor.
 - El límite inferior de placas se calcula con área neta y superficie útil. Si
-  una alternativa ordenada alcanza ese mínimo matemático, el worker detiene la
-  búsqueda: una orientación más libre no podría ahorrar material.
+  un acomodo válido alcanza ese mínimo matemático, el worker detiene la
+  búsqueda: otra orientación no puede reducir la cantidad de placas. Esto no
+  demuestra el óptimo de retales, orientación ni recorrido de corte.
+- La política v5 repite arranques con semillas distintas y alterna collision/NFP;
+  omite orientaciones en las que una pieza no cabe e intenta explícitamente una
+  placa menos. No finaliza simplemente por completar uniforme/cardinal/libre.
+  Cada intento usa una porción del presupuesto global (hasta 30 segundos), sin
+  el antiguo recorte interno por cantidad de piezas. En empate se compara
+  longitud de corte compartida y área envolvente del acomodo.
+- `busqueda` registra intentos, candidatos válidos, presupuesto, mínimo teórico
+  y motivo de finalización. El visor distingue mínimo alcanzado de presupuesto
+  agotado. Los resultados incompletos o que incumplen restricciones se descartan
+  conservando el mejor candidato completo anterior. La caché lleva la versión
+  de la política para no reutilizar resultados de la búsqueda anterior.
 - Un crash o segfault nativo sólo falla ese job; no derriba el worker ni el API.
 
 ## Contrato consultable de W2

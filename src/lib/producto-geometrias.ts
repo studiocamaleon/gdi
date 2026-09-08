@@ -1,9 +1,12 @@
+import type { FuenteGuardada } from "./geometrias-producto-api";
 export type ModoGeometriaComercial = "RECTANGULAR" | "VECTORIAL" | "AMBAS";
 
 export type FuenteGeometriaComercial = {
   id: string;
   nombre: string;
   requerida: boolean;
+  predeterminada?: FuenteGuardada;
+  permitirReemplazo?: boolean;
 };
 
 export type ConfiguracionGeometriasComerciales = {
@@ -83,7 +86,9 @@ export function getGeometriasComerciales(
         const nombre =
           typeof fuente.nombre === "string" ? fuente.nombre.trim() : "";
         return /^[a-z0-9][a-z0-9_-]{0,59}$/.test(id) && nombre
-          ? [{ id, nombre, requerida: fuente.requerida !== false }]
+          ? [{ id, nombre, requerida: fuente.requerida !== false,
+              ...(fuente.predeterminada ? { predeterminada: fuente.predeterminada as FuenteGuardada } : {}),
+              permitirReemplazo: fuente.permitirReemplazo === true }]
           : [];
       })
     : [];

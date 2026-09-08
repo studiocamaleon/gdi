@@ -8,6 +8,7 @@ import type {
   PuntoTrabajoGeometria,
 } from '../colas';
 import { VERSION_POLITICA_ORIENTACION_GRAFONEST } from '../colas';
+import { validarDeclaracionCommonLine } from './common-line';
 
 type ResultadoSinValidacion = Omit<
   NestingIrregularOpenNestResult,
@@ -42,6 +43,22 @@ export function validarEntradaNestingOpenNest(
   noNegativo(input.placa.margenMm, 'El margen');
   enteroEntre(input.placa.maxPlacas, 1, 1_000, 'La cantidad máxima de placas');
   noNegativo(input.separacionMm, 'La separación');
+  if (input.commonLine) {
+    if (input.commonLine.habilitado !== true)
+      invalido('La política Common Line debe estar habilitada o no enviarse.');
+    positivo(input.commonLine.anchoCorteMm, 'El ancho de corte Common Line');
+    positivo(
+      input.commonLine.longitudMinimaMm,
+      'La longitud mínima Common Line',
+    );
+    positivo(input.commonLine.toleranciaMm, 'La tolerancia Common Line');
+    if (input.commonLine.toleranciaMm > 1)
+      invalido('La tolerancia Common Line no puede superar 1 mm.');
+    if (input.commonLine.anchoCorteMm > input.separacionMm + 0.02)
+      invalido(
+        'El ancho de corte Common Line no puede superar la separación normal entre piezas.',
+      );
+  }
   enteroEntre(input.timeoutMs, 100, 60 * 60 * 1_000, 'El timeout');
   if (!Number.isSafeInteger(input.semilla))
     invalido('La semilla debe ser un entero seguro.');
@@ -85,6 +102,16 @@ export function validarResultadoNestingOpenNest(
   result: ResultadoSinValidacion,
 ): NestingIrregularOpenNestResult {
   validarEstructuraResultado(result);
+  let paresCommonLine = new Set<string>();
+  try {
+    paresCommonLine = validarDeclaracionCommonLine(input, result);
+  } catch (error) {
+    invalido(
+      error instanceof Error
+        ? error.message
+        : 'La declaración Common Line no es válida.',
+    );
+  }
   const cantidadEsperada = input.piezas.reduce(
     (total, pieza) => total + pieza.cantidad,
     0,
@@ -140,7 +167,13 @@ export function validarResultadoNestingOpenNest(
   }
 
   for (const [placa, placements] of porPlaca) {
-    validarSeparacionesEnPlaca(placements, input.separacionMm, placa);
+    validarSeparacionesEnPlaca(
+      placements,
+      input.separacionMm,
+      placa,
+      paresCommonLine,
+      input.commonLine?.anchoCorteMm,
+    );
   }
 
   return {
@@ -162,6 +195,8 @@ function validarSeparacionesEnPlaca(
   placements: PlacementTrabajoNestingOpenNest[],
   separacionMm: number,
   placa: number,
+  paresCommonLine: Set<string>,
+  anchoCorteCommonLineMm?: number,
 ): void {
   const tolerancia = separacionMm + TOLERANCIA_MM;
   const ordenados = placements
@@ -186,6 +221,8 @@ function validarSeparacionesEnPlaca(
         placa,
         actual.caja,
         siguiente.caja,
+        paresCommonLine,
+        anchoCorteCommonLineMm,
       );
     }
   }
@@ -323,6 +360,8 @@ function validarSeparacion(
   placa: number,
   cajaA = limites(a.contorno),
   cajaB = limites(b.contorno),
+  paresCommonLine = new Set<string>(),
+  anchoCorteCommonLineMm?: number,
 ): void {
   if (!cajasCercanas(cajaA, cajaB, separacionMm + TOLERANCIA_MM)) return;
   let interseccion: polygonClipping.MultiPolygon;
@@ -335,15 +374,38 @@ function validarSeparacion(
     invalido(
       `Hay solapamiento entre "${a.piezaId}:${a.copia}" y "${b.piezaId}:${b.copia}" en la placa ${placa + 1}.`,
     );
-  if (separacionMm <= TOLERANCIA_MM) return;
+  const esCommonLine = paresCommonLine.has(clavePar(a, b));
+  // A distancia cero sólo importa la intersección, ya comprobada arriba.
+  // Evita comparar cada segmento contra todos los demás en curvas densas.
+  if (!esCommonLine && separacionMm <= TOLERANCIA_MM) return;
   const distancia = distanciaEntreAnillos(
     [a.contorno, ...a.huecos],
     [b.contorno, ...b.huecos],
   );
+  if (esCommonLine) {
+    if (
+      anchoCorteCommonLineMm !== undefined &&
+      distancia < anchoCorteCommonLineMm - TOLERANCIA_MM
+    )
+      invalido(
+        `La separación física Common Line no se respeta entre "${a.piezaId}:${a.copia}" y "${b.piezaId}:${b.copia}" en la placa ${placa + 1}.`,
+      );
+    return;
+  }
+  if (separacionMm <= TOLERANCIA_MM) return;
   if (distancia < separacionMm - TOLERANCIA_MM)
     invalido(
       `No se respeta la separación entre "${a.piezaId}:${a.copia}" y "${b.piezaId}:${b.copia}" en la placa ${placa + 1}.`,
     );
+}
+
+function clavePar(
+  a: PlacementTrabajoNestingOpenNest,
+  b: PlacementTrabajoNestingOpenNest,
+): string {
+  return [`${a.piezaId}:${a.copia}`, `${b.piezaId}:${b.copia}`]
+    .sort()
+    .join('|');
 }
 
 function aPoligono(

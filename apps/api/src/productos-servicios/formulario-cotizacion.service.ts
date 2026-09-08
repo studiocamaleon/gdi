@@ -172,7 +172,7 @@ export class FormularioCotizacionService {
     }));
     if (rutas.length === 0) {
       throw new BadRequestException(
-        'Este producto no tiene rutas de producción activas: no se puede cotizar.',
+        'Este producto no tiene flujos de producción activos: no se puede cotizar.',
       );
     }
 

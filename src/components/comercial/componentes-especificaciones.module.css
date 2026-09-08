@@ -228,6 +228,79 @@
   font-size: 12px;
 }
 
+.pieces {
+  min-width: 0;
+  border-top: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.piecesHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 12px;
+}
+
+.piecesHead strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.piecesHead > span {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.pieces table {
+  min-width: 520px;
+  font-size: 12px;
+}
+
+.pieces th {
+  height: 32px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: var(--muted-text);
+  font-size: 9.5px;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.pieces td {
+  padding: 10px 12px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.pieces tr {
+  border-color: var(--hairline);
+}
+
+.pieces tfoot {
+  background: var(--surface-2);
+}
+
+.pieceIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pieceIdentity strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pieceIdentity span {
+  max-width: 320px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+}
+
 @media (max-width: 700px) {
   .section > header small {
     display: none;

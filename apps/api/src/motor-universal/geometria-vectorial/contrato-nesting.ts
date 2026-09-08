@@ -1,3 +1,8 @@
+import { transformarFabricacion } from './fabricacion-vectorial';
+import {
+  transformarOperaciones,
+  longitudOperacion,
+} from './operaciones-vectoriales';
 import { createHash } from 'node:crypto';
 import type { ConfiguracionEncastresVectoriales } from './segmentacion-encastres';
 import type {
@@ -6,6 +11,7 @@ import type {
   NestingIrregularResult,
   PiezaVectorial,
 } from './tipos';
+import type { ConfiguracionCommonLineTrabajo } from '../../workers/colas';
 import { nestearGeometriaIrregular } from './nesting-irregular';
 
 export interface PropietarioDemandaNesting {
@@ -14,6 +20,8 @@ export interface PropietarioDemandaNesting {
   ocurrenciaId?: string;
   pasoClave?: string;
   archivoFuente?: string;
+  piezaNombre?: string;
+  interpretacion?: import('../../productos-servicios/geometrias/interpretar-vector').FuenteGuardada['procedencia'];
 }
 
 export type GeometriaDemandaNesting =
@@ -32,6 +40,8 @@ export type GeometriaDemandaNesting =
       origenYmm?: number;
       contornos: ContornoVectorial[];
       cortesInternos?: ContornoVectorial[];
+      operaciones?: PiezaVectorial['operaciones'];
+      fabricacion?: PiezaVectorial['fabricacion'];
       segmentacion?: PiezaVectorial['segmentacion'];
     };
 
@@ -67,6 +77,7 @@ export interface ProblemaNesting {
     permitirSegmentacion: boolean;
     preservarComposicionOriginalSiEntra: boolean;
     configuracionEncastres?: ConfiguracionEncastresVectoriales;
+    commonLine?: ConfiguracionCommonLineTrabajo;
   };
 }
 
@@ -136,6 +147,8 @@ export function piezaDesdeDemanda(demanda: DemandaNesting): PiezaVectorial {
     origenYmm: geometria.origenYmm,
     contornos: geometria.contornos,
     cortesInternos: geometria.cortesInternos,
+    operaciones: geometria.operaciones,
+    fabricacion: geometria.fabricacion,
     segmentacion: geometria.segmentacion,
   };
 }
@@ -149,8 +162,8 @@ export function crearDemandasDesdeGeometriaVectorial(input: {
   return input.geometria.piezas.map((pieza) => ({
     schemaVersion: 1,
     id: pieza.id,
-    cantidad,
-    propietario: input.propietario,
+    cantidad: cantidad * (pieza.cantidadPorUnidad ?? 1),
+    propietario: { ...input.propietario, ...pieza.propietario },
     geometria: {
       tipo: 'POLIGONO',
       anchoMm: pieza.anchoMm,
@@ -161,6 +174,8 @@ export function crearDemandasDesdeGeometriaVectorial(input: {
       origenYmm: pieza.origenYmm,
       contornos: pieza.contornos,
       cortesInternos: pieza.cortesInternos,
+      operaciones: pieza.operaciones,
+      fabricacion: pieza.fabricacion,
       segmentacion: pieza.segmentacion,
     },
   }));
@@ -176,7 +191,12 @@ export function crearProblemaNestingIrregular(input: {
   permitirSegmentacion?: boolean;
   preservarComposicionOriginalSiEntra?: boolean;
   configuracionEncastres?: ConfiguracionEncastresVectoriales;
+  commonLine?: ConfiguracionCommonLineTrabajo;
 }): ProblemaNesting {
+  const separacionMm = Math.max(
+    input.separacionMm ?? 0,
+    input.commonLine?.habilitado ? input.commonLine.anchoCorteMm : 0,
+  );
   return {
     schemaVersion: 1,
     superficie: {
@@ -187,12 +207,13 @@ export function crearProblemaNestingIrregular(input: {
     demandas: input.demandas,
     configuracion: {
       margenMm: input.margenMm ?? 0,
-      separacionMm: input.separacionMm ?? 0,
+      separacionMm,
       permitirRotacion: input.permitirRotacion !== false,
       permitirSegmentacion: input.permitirSegmentacion !== false,
       preservarComposicionOriginalSiEntra:
         input.preservarComposicionOriginalSiEntra === true,
       configuracionEncastres: input.configuracionEncastres,
+      commonLine: input.commonLine,
     },
   };
 }
@@ -201,6 +222,64 @@ export function crearSolucionNestingIrregular(
   problema: ProblemaNesting,
   resultado: NestingIrregularResult,
 ): SolucionNesting {
+  let corteAdicional = 0;
+  resultado = {
+    ...resultado,
+    placements: resultado.placements.map((p) => {
+      const demanda = problema.demandas.find(
+        (d) => d.id === (p.segmentacion?.piezaOrigenId ?? p.pieceId),
+      );
+      const geometria =
+        demanda?.geometria.tipo === 'POLIGONO' ? demanda.geometria : undefined;
+      if (
+        p.segmentacion &&
+        (p.fabricacion ||
+          p.operaciones?.length ||
+          geometria?.fabricacion ||
+          geometria?.operaciones?.length)
+      )
+        throw new Error(
+          'Las piezas con recorridos conservados requieren preparar su división en el archivo original.',
+        );
+      if (
+        !geometria ||
+        (!geometria.operaciones?.length && !geometria.fabricacion)
+      )
+        return p;
+      const rad = (p.rotacion * Math.PI) / 180;
+      const puntos = geometria.contornos
+        .flatMap((c) => c.puntos)
+        .map((v) => ({
+          x: v.x * Math.cos(rad) - v.y * Math.sin(rad),
+          y: v.x * Math.sin(rad) + v.y * Math.cos(rad),
+        }));
+      const traslacion = {
+        x: p.xMm - Math.min(...puntos.map((v) => v.x)),
+        y: p.yMm - Math.min(...puntos.map((v) => v.y)),
+      };
+      const operaciones = p.operaciones?.length
+        ? p.operaciones
+        : transformarOperaciones(
+            geometria.operaciones ?? [],
+            p.rotacion,
+            traslacion,
+          );
+      if (!p.operaciones?.length)
+        corteAdicional += operaciones
+          .filter((o) => o.tipo === 'CORTE_INTERIOR')
+          .reduce((s, o) => s + longitudOperacion(o), 0);
+      return {
+        ...p,
+        operaciones,
+        fabricacion:
+          p.fabricacion ??
+          transformarFabricacion(geometria.fabricacion, p.rotacion, traslacion),
+      };
+    }),
+  };
+  if (corteAdicional)
+    resultado.perimetroCorteMm =
+      (resultado.perimetroCorteMm ?? 0) + corteAdicional;
   return {
     schemaVersion: 1,
     algoritmo: 'irregular-2d-bottom-left',

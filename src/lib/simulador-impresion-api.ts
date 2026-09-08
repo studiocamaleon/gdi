@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api";
+import type { NestingViewerInput } from "./productos-servicios-api";
 
 /**
  * Simulador GRAN FORMATO — contrato con GET /produccion/simulador.
@@ -40,6 +41,8 @@ export type SimuladorJob = {
   piezas: SimuladorPieza[];
   /** Estimado del paso (min): prellena "¿cuánto duró la tanda?" (D11). */
   duracionEstimadaMin: number | null;
+  /** Plano congelado que se ejecuta sin reanidar ni separar sus capas. */
+  planFabricacion?: NestingViewerInput | null;
 };
 
 export type SimuladorAncho = {

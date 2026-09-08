@@ -1,3 +1,9 @@
 # Motor nativo aislado del runtime Node. Actualizar sólo después de repetir los
 # fixtures de validez y rendimiento documentados en docs/workers-arquitectura.md.
 compas_nest==0.1.1.post4
+
+# Selección de repeticiones enteras por patrones (HiGHS).
+scipy==1.13.1
+
+# Inventario y exportación de entidades CAD con sus capas originales.
+ezdxf==1.4.2

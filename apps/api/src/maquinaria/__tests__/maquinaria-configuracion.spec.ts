@@ -288,6 +288,47 @@ describe('diagnóstico de configuración de maquinaria', () => {
     expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([]);
   });
 
+  it('exige ancho de corte en los perfiles al activar Common Line', () => {
+    const payload = base(PlantillaMaquinariaDto.corte_laser);
+    payload.anchoUtil = 1300;
+    payload.largoUtil = 900;
+    payload.parametrosTecnicos = { commonLineHabilitado: true };
+    payload.perfilesOperativos = [
+      {
+        nombre: 'Corte acrílico',
+        tipoPerfil: TipoPerfilOperativoMaquinaDto.corte,
+        activo: true,
+        productivityValue: 30,
+        productivityUnit: UnidadProduccionMaquinaDto.mm_s,
+        detalle: {
+          tipoOperacion: 'CORTE',
+          material: ['ACRILICO'],
+          espesorMinMm: 2,
+          espesorMaxMm: 5,
+        },
+      },
+    ];
+
+    expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([
+      expect.objectContaining({
+        campo: 'anchoCorteMm',
+        mensaje: 'Perfil “Corte acrílico”: completá Ancho efectivo de corte.',
+      }),
+    ]);
+    payload.perfilesOperativos[0].detalle = {
+      ...payload.perfilesOperativos[0].detalle,
+      anchoCorteMm: 0.2,
+    };
+    expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([]);
+    expect(() =>
+      validatePerfilOperativoByTemplate(
+        PlantillaMaquinariaDto.corte_laser,
+        payload.perfilesOperativos[0],
+        payload.parametrosTecnicos,
+      ),
+    ).not.toThrow();
+  });
+
   it('acepta sólo Corte o Grabado y exige que la operación láser coincida', () => {
     const corte = {
       nombre: 'Corte MDF',

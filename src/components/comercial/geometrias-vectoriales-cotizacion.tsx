@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { FileCheck2Icon, FileUpIcon, ShapesIcon } from "lucide-react";
+import { registrarImportacionDxf, type ImportacionDxf } from "@/lib/escala-dxf";
+import { EscalaDxf } from "./escala-dxf";
+import {
+  FileCheck2Icon,
+  FileUpIcon,
+  ShapesIcon,
+  ChevronDownIcon,
+} from "lucide-react";
 import {
   escalarGeometriaProporcional,
   obtenerRelacionAspectoSvg,
@@ -12,7 +19,10 @@ import {
   medirSvgFabricacion,
   normalizarFuenteVectorial,
   type FormatoFuenteVectorial,
+  type ProductoRecetaRevision,
+  type CotizarResponse,
 } from "@/lib/productos-servicios-api";
+import { agruparPiezasCotizacion } from "@/lib/piezas-cotizacion";
 import styles from "./geometrias-vectoriales-cotizacion.module.css";
 
 export type FuenteVectorialCotizada = {
@@ -25,6 +35,9 @@ export type FuenteVectorialCotizada = {
   configuracionCapas?: unknown;
   formatoOrigen?: FormatoFuenteVectorial;
   unidadOrigen?: string | null;
+  importacionDxf?: ImportacionDxf;
+  procedencia?: import("@/lib/geometrias-producto-api").FuenteGuardada["procedencia"];
+  operaciones?: import("@/lib/geometrias-producto-api").FuenteGuardada["operaciones"];
 };
 
 export function MarcoGeometriaGrafoprint({
@@ -164,13 +177,23 @@ export function GeometriasVectorialesCotizacion({
   configuracion,
   values,
   ocultarFuenteId,
+  componentes = [],
+  cantidad = 1,
+  calculados,
   onChange,
 }: {
   configuracion: ConfiguracionGeometriasComerciales;
   values: Record<string, FuenteVectorialCotizada>;
   ocultarFuenteId?: string | null;
+  componentes?: ProductoRecetaRevision["componentes"];
+  cantidad?: number;
+  calculados?: NonNullable<
+    CotizarResponse["cotizacion"]
+  >["componentesFabricados"];
   onChange: (values: Record<string, FuenteVectorialCotizada>) => void;
 }) {
+  const [abiertas, setAbiertas] = React.useState<Record<string, boolean>>({});
+  const tablaId = React.useId();
   const [ejesEscala, setEjesEscala] = React.useState<
     Record<string, EjeEscalaVectorial>
   >({});
@@ -254,174 +277,354 @@ export function GeometriasVectorialesCotizacion({
   }, [configuracion.fuentes, ocultarFuenteId, onChange, values]);
 
   if (!fuentes.length) return null;
+  const grupos = agruparPiezasCotizacion(
+    fuentes,
+    componentes,
+    cantidad,
+    calculados,
+  );
+  const numero = (n?: number) =>
+    n === undefined
+      ? "—"
+      : n.toLocaleString("es-AR", { maximumFractionDigits: 2 });
 
   return (
-    <MarcoGeometriaGrafoprint
-      descripcion="Cargá los vectores que compartirán los componentes, sin duplicar archivos."
-      formato="SVG / DXF"
+    <section
+      className={`${styles.section} ${styles.compact}`}
+      aria-label="Piezas de fabricación"
     >
-      <div className={styles.sources}>
-        {fuentes.map((fuente) => {
-          const value = values[fuente.id];
-          const ejeEscala = ejesEscala[fuente.id] ?? "ancho";
-          const relacionAltoAncho =
-            value?.relacionAltoAncho && value.relacionAltoAncho > 0
-              ? value.relacionAltoAncho
-              : obtenerRelacionAspectoSvg(value?.svg);
-          const update = (patch: Partial<FuenteVectorialCotizada>) =>
-            value &&
-            onChange({ ...values, [fuente.id]: { ...value, ...patch } });
-          const actualizarEscala = (medidaCm: number) =>
-            value &&
-            update(
-              escalarGeometriaProporcional(
-                relacionAltoAncho,
-                ejeEscala,
-                medidaCm * 10,
-              ),
-            );
-          return (
-            <section className={styles.source} key={fuente.id}>
-              <div className={styles.sourceHead}>
-                <strong>{fuente.nombre}</strong>
-                {fuente.requerida ? (
-                  <span className={styles.required}>Obligatoria</span>
-                ) : null}
-              </div>
-              <ControlArchivoVectorial
-                etiqueta="Archivo de producción"
-                nombreArchivo={value?.nombreArchivo}
-                formatoOrigen={value?.formatoOrigen}
-                required={fuente.requerida && !value}
-                procesando={procesando[fuente.id] === true}
-                disabled={procesando[fuente.id] === true}
-                onSelect={async (file) => {
-                  const contenido = await file.text();
-                  setProcesando((current) => ({
-                    ...current,
-                    [fuente.id]: true,
-                  }));
-                  setErrores((current) => ({ ...current, [fuente.id]: "" }));
-                  try {
-                    const normalizada = await normalizarFuenteVectorial({
-                      contenido,
-                      nombreArchivo: file.name,
-                    });
-                    const medidas =
-                      normalizada.formatoOrigen === "SVG"
-                        ? medidasInicialesSvg(
-                            normalizada.svg,
-                            normalizada.relacionAltoAncho,
-                          )
-                        : {
-                            anchoFinalMm: normalizada.anchoSugeridoMm,
-                            altoFinalMm: normalizada.altoSugeridoMm,
-                          };
-                    onChange({
-                      ...values,
-                      [fuente.id]: {
-                        schemaVersion: 1,
-                        nombreArchivo: file.name,
-                        svg: normalizada.svg,
-                        formatoOrigen: normalizada.formatoOrigen,
-                        unidadOrigen: normalizada.unidadDetectada,
-                        relacionAltoAncho: normalizada.relacionAltoAncho,
-                        ...medidas,
-                      },
-                    });
-                  } catch (cause) {
-                    setErrores((current) => ({
-                      ...current,
-                      [fuente.id]:
-                        cause instanceof Error
-                          ? cause.message
-                          : "No se pudo interpretar el archivo vectorial.",
-                    }));
-                  } finally {
-                    setProcesando((current) => ({
-                      ...current,
-                      [fuente.id]: false,
-                    }));
-                  }
-                }}
-              />
-              {procesando[fuente.id] ? (
-                <span className={styles.processing}>Analizando contornos…</span>
-              ) : errores[fuente.id] ? (
-                <span className={styles.error}>{errores[fuente.id]}</span>
-              ) : null}
-              {value ? (
-                <div className={styles.loaded}>
-                  <div className={styles.measures}>
-                    <div className={styles.axisSwitch}>
-                      <button
-                        type="button"
-                        data-active={ejeEscala === "ancho"}
-                        onClick={() =>
-                          setEjesEscala((current) => ({
-                            ...current,
-                            [fuente.id]: "ancho",
-                          }))
-                        }
-                      >
-                        Ancho
-                      </button>
-                      <button
-                        type="button"
-                        data-active={ejeEscala === "alto"}
-                        onClick={() =>
-                          setEjesEscala((current) => ({
-                            ...current,
-                            [fuente.id]: "alto",
-                          }))
-                        }
-                      >
-                        Alto
-                      </button>
-                    </div>
-                    <label className={styles.field}>
-                      <span className={styles.fieldLabel}>
-                        {ejeEscala === "ancho" ? "Ancho" : "Alto"} final
-                      </span>
-                      <span className={styles.inputWithUnit}>
-                        <input
-                          className={styles.nativeInput}
-                          type="number"
-                          min="0.1"
-                          step="any"
-                          value={
-                            (ejeEscala === "ancho"
-                              ? value.anchoFinalMm
-                              : (value.altoFinalMm ?? value.anchoFinalMm)) / 10
+      <header className={styles.compactHeader}>
+        <ShapesIcon aria-hidden="true" />
+        <div>
+          <strong>Piezas de fabricación</strong>
+          <span>
+            Diseños y cantidades para {numero(cantidad)}{" "}
+            {cantidad === 1 ? "producto" : "productos"}.
+          </span>
+        </div>
+        <span className={styles.count}>
+          {grupos.reduce((n, g) => n + g.filas.length, 0)}
+        </span>
+      </header>
+      {grupos.map((grupo) => (
+        <div key={grupo.id} className={styles.tableWrap}>
+          <table className={styles.piecesTable}>
+            <caption>{grupo.nombre}</caption>
+            <thead>
+              <tr>
+                <th>Pieza / medidas</th>
+                <th>Por producto</th>
+                <th>Total</th>
+                <th>
+                  <span className="sr-only">Archivo y detalle</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {grupo.filas.map((fila) => {
+                const { fuente } = fila;
+                const value = values[fuente.id];
+                const ejeEscala = ejesEscala[fuente.id] ?? "ancho";
+                const relacionAltoAncho =
+                  value?.relacionAltoAncho && value.relacionAltoAncho > 0
+                    ? value.relacionAltoAncho
+                    : obtenerRelacionAspectoSvg(value?.svg);
+                const update = (patch: Partial<FuenteVectorialCotizada>) =>
+                  value &&
+                  onChange({ ...values, [fuente.id]: { ...value, ...patch } });
+                const actualizarEscala = (medidaCm: number) =>
+                  value &&
+                  update(
+                    escalarGeometriaProporcional(
+                      relacionAltoAncho,
+                      ejeEscala,
+                      medidaCm * 10,
+                    ),
+                  );
+                return (
+                  <React.Fragment key={fila.id}>
+                    <tr>
+                      <td>
+                        <strong>{fila.nombre}</strong>
+                        {value ? (
+                          <small>
+                            {numero(value.anchoFinalMm)} ×{" "}
+                            {numero(
+                              value.altoFinalMm ??
+                                value.anchoFinalMm * relacionAltoAncho,
+                            )}{" "}
+                            mm
+                          </small>
+                        ) : (
+                          <small className={styles.required}>
+                            {fuente.requerida
+                              ? "Falta el archivo obligatorio"
+                              : "Sin archivo"}
+                          </small>
+                        )}
+                        {errores[fuente.id] ? (
+                          <span role="alert" className={styles.error}>
+                            {errores[fuente.id]}
+                          </span>
+                        ) : null}
+                        {procesando[fuente.id] ? (
+                          <small role="status">Analizando contornos…</small>
+                        ) : null}
+                      </td>
+                      <td>{numero(fila.porProducto)}</td>
+                      <td className={styles.total}>
+                        {fila.total === undefined
+                          ? "Al calcular"
+                          : numero(fila.total)}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={styles.rowAction}
+                          aria-expanded={
+                            !!abiertas[fila.id] ||
+                            !value ||
+                            !!errores[fuente.id]
                           }
-                          onChange={(event) =>
-                            actualizarEscala(Number(event.target.value))
+                          aria-controls={`${tablaId}-${fila.id}`}
+                          aria-label={`Ver archivo y detalle de ${fila.nombre}`}
+                          onClick={() =>
+                            setAbiertas((v) => ({
+                              ...v,
+                              [fila.id]: !v[fila.id],
+                            }))
                           }
-                        />
-                        <span>cm</span>
-                      </span>
-                    </label>
-                    <div className={styles.resultMeasure}>
-                      <span>{ejeEscala === "ancho" ? "Alto" : "Ancho"}</span>
-                      <strong>
-                        {(
-                          (ejeEscala === "ancho"
-                            ? (value.altoFinalMm ?? value.anchoFinalMm)
-                            : value.anchoFinalMm) / 10
-                        ).toLocaleString("es-AR", {
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        cm
-                      </strong>
-                      <small>Calculado proporcionalmente</small>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
-      </div>
-    </MarcoGeometriaGrafoprint>
+                        >
+                          <span>{value ? "Detalle" : "Cargar"}</span>
+                          <ChevronDownIcon />
+                        </button>
+                      </td>
+                    </tr>
+                    <tr
+                      id={`${tablaId}-${fila.id}`}
+                      hidden={
+                        !abiertas[fila.id] && !!value && !errores[fuente.id]
+                      }
+                      className={styles.detailRow}
+                    >
+                      <td colSpan={4}>
+                        {value &&
+                        fuente.predeterminada &&
+                        !fuente.permitirReemplazo ? (
+                          <div className={styles.fileSummary}>
+                            <FileCheck2Icon aria-hidden="true" />
+                            <div>
+                              <strong>{value.nombreArchivo}</strong>
+                              <small>
+                                Archivo guardado en la configuración del
+                                producto
+                              </small>
+                            </div>
+                          </div>
+                        ) : (
+                          <ControlArchivoVectorial
+                            etiqueta="Archivo de producción"
+                            nombreArchivo={value?.nombreArchivo}
+                            formatoOrigen={value?.formatoOrigen}
+                            required={fuente.requerida && !value}
+                            procesando={procesando[fuente.id] === true}
+                            disabled={
+                              procesando[fuente.id] === true ||
+                              (!!fuente.predeterminada &&
+                                !fuente.permitirReemplazo)
+                            }
+                            onSelect={async (file) => {
+                        setAbiertas((current) => ({ ...current, [fila.id]: true }));
+                              const contenido = await file.text();
+                              setProcesando((current) => ({
+                                ...current,
+                                [fuente.id]: true,
+                              }));
+                              setErrores((current) => ({
+                                ...current,
+                                [fuente.id]: "",
+                              }));
+                              try {
+                                const normalizada =
+                                  await normalizarFuenteVectorial({
+                                    contenido,
+                                    nombreArchivo: file.name,
+                                  });
+                                const medidas =
+                                  normalizada.formatoOrigen === "SVG"
+                                    ? medidasInicialesSvg(
+                                        normalizada.svg,
+                                        normalizada.relacionAltoAncho,
+                                      )
+                                    : {
+                                        anchoFinalMm:
+                                          normalizada.anchoSugeridoMm,
+                                        altoFinalMm: normalizada.altoSugeridoMm,
+                                      };
+                                onChange({
+                                  ...values,
+                                  [fuente.id]: {
+                                    schemaVersion: 1,
+                                    nombreArchivo: file.name,
+                                    svg: normalizada.svg,
+                                    formatoOrigen: normalizada.formatoOrigen,
+                                    unidadOrigen: normalizada.unidadDetectada,
+                                    importacionDxf:
+                                      registrarImportacionDxf(normalizada),
+                                    relacionAltoAncho:
+                                      normalizada.relacionAltoAncho,
+                                    ...medidas,
+                                  },
+                                });
+                              } catch (cause) {
+                                setErrores((current) => ({
+                                  ...current,
+                                  [fuente.id]:
+                                    cause instanceof Error
+                                      ? cause.message
+                                      : "No se pudo interpretar el archivo vectorial.",
+                                }));
+                              } finally {
+                                setProcesando((current) => ({
+                                  ...current,
+                                  [fuente.id]: false,
+                                }));
+                              }
+                            }}
+                          />
+                        )}
+                        {procesando[fuente.id] ? (
+                          <span className={styles.processing}>
+                            Analizando contornos…
+                          </span>
+                        ) : errores[fuente.id] ? (
+                          <span className={styles.error}>
+                            {errores[fuente.id]}
+                          </span>
+                        ) : null}
+                        {fuente.predeterminada && !value?.procedencia && (
+                          <button
+                            type="button"
+                            className={styles.secondaryButton}
+                            onClick={() =>
+                              onChange({
+                                ...values,
+                                [fuente.id]: fuente.predeterminada!,
+                              })
+                            }
+                          >
+                            Usar diseño del producto
+                          </button>
+                        )}
+                        {value?.procedencia ? (
+                          <div className={styles.loaded}>
+                            <strong>
+                              Diseño guardado ·{" "}
+                              {value.anchoFinalMm.toLocaleString("es-AR", {
+                                maximumFractionDigits: 2,
+                              })}{" "}
+                              ×{" "}
+                              {value.altoFinalMm?.toLocaleString("es-AR", {
+                                maximumFractionDigits: 2,
+                              })}{" "}
+                              mm
+                            </strong>
+                            <p>
+                              Para nesting: contorno exterior de la capa{" "}
+                              {value.procedencia.capa}.{" "}
+                              {value.operaciones?.length ?? 0} operaciones
+                              internas conservadas.
+                            </p>
+                            <small>
+                              Se conserva esta interpretación al guardar la
+                              cotización.
+                            </small>
+                          </div>
+                        ) : value ? (
+                          <div className={styles.loaded}>
+                            <EscalaDxf value={value} onChange={update} />
+                            <div className={styles.measures}>
+                              <div className={styles.axisSwitch}>
+                                <button
+                                  type="button"
+                                  data-active={ejeEscala === "ancho"}
+                                  onClick={() =>
+                                    setEjesEscala((current) => ({
+                                      ...current,
+                                      [fuente.id]: "ancho",
+                                    }))
+                                  }
+                                >
+                                  Ancho
+                                </button>
+                                <button
+                                  type="button"
+                                  data-active={ejeEscala === "alto"}
+                                  onClick={() =>
+                                    setEjesEscala((current) => ({
+                                      ...current,
+                                      [fuente.id]: "alto",
+                                    }))
+                                  }
+                                >
+                                  Alto
+                                </button>
+                              </div>
+                              <label className={styles.field}>
+                                <span className={styles.fieldLabel}>
+                                  {ejeEscala === "ancho" ? "Ancho" : "Alto"}{" "}
+                                  final
+                                </span>
+                                <span className={styles.inputWithUnit}>
+                                  <input
+                                    className={styles.nativeInput}
+                                    type="number"
+                                    min="0.1"
+                                    step="any"
+                                    value={
+                                      (ejeEscala === "ancho"
+                                        ? value.anchoFinalMm
+                                        : (value.altoFinalMm ??
+                                          value.anchoFinalMm)) / 10
+                                    }
+                                    onChange={(event) =>
+                                      actualizarEscala(
+                                        Number(event.target.value),
+                                      )
+                                    }
+                                  />
+                                  <span>cm</span>
+                                </span>
+                              </label>
+                              <div className={styles.resultMeasure}>
+                                <span>
+                                  {ejeEscala === "ancho" ? "Alto" : "Ancho"}
+                                </span>
+                                <strong>
+                                  {(
+                                    (ejeEscala === "ancho"
+                                      ? (value.altoFinalMm ??
+                                        value.anchoFinalMm)
+                                      : value.anchoFinalMm) / 10
+                                  ).toLocaleString("es-AR", {
+                                    maximumFractionDigits: 2,
+                                  })}{" "}
+                                  cm
+                                </strong>
+                                <small>Calculado proporcionalmente</small>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </section>
   );
 }

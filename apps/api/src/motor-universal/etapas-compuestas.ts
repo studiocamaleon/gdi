@@ -217,6 +217,8 @@ export function consolidarEtapasCompuestas(
         centroCostoId: item.tiempo?.centroCostoId ?? null,
         centroCostoNombre: item.tiempo?.centroCostoNombre ?? null,
         tiempo: item.tiempo,
+        tercerizado: item.tercerizado ?? false,
+        costoTercerizado: item.costoTercerizado,
         materiales: item.materiales,
         cargosDirectosPaso: item.cargosDirectosPaso,
         mutacionAplicada: item.mutacionAplicada,
@@ -224,6 +226,8 @@ export function consolidarEtapasCompuestas(
         nestingResult: item.nestingResult,
       })),
       tercerizado: false,
+      costoTercerizado: activos.reduce((total, item) => total + (item.costoTercerizado ??
+        (item.tercerizado ? item.costoTotal - (item.materiales ?? []).reduce((s, m) => s + m.costoTotal, 0) : 0)), 0),
       proveedorId: null,
       plazoProveedorDias: null,
       costoTotal: activos.reduce((total, item) => total + item.costoTotal, 0),

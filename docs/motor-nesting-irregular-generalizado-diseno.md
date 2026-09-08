@@ -145,7 +145,41 @@ Mientras esa propagación compartida no exista, el resultado rectangular de la
 impresión se marca como `layoutVinculadoGeometriaVectorial` y queda excluido de
 la consolidación. Es una barrera de exactitud productiva, no un fallback visual.
 
-## 7. Validación requerida antes de Fase 5
+## 7. Common Line Cutting recto
+
+Common Line es una capacidad transversal de GrafoNest y no una excepción de
+producto. Se activa únicamente cuando coinciden estos tres niveles:
+
+- la máquina láser o router/CNC declara que puede ejecutar líneas compartidas;
+- el paso productivo solicita la optimización;
+- el perfil efectivo declara el ancho real de corte para ese material,
+  herramienta y espesor.
+
+La primera versión comparte sólo aristas exteriores rectas, completas,
+paralelas y de igual longitud. No comparte curvas ni coincidencias parciales:
+los encuentros en T necesitan una política posterior de entrada, salida y
+orden de corte para ser productivamente seguros.
+
+El worker parte de una solución válida con separación normal y acerca grupos
+rígidos hasta dejar entre sus contornos nominales exactamente el ancho de
+corte. La trayectoria común queda en el centro de esa franja. Cada modificación
+se vuelve a validar contra límites de placa, solapamientos y separación de los
+demás vecinos; ante cualquier duda se conserva el layout anterior.
+
+La solución registra cada tramo y sus dos aristas de origen. Ese contrato se
+usa para:
+
+- descontar una sola longitud compartida del perímetro y del tiempo/costo;
+- mostrar la trayectoria en el visor;
+- exportar SVG/DXF quitando las dos aristas duplicadas y agregando una única
+  línea, en DXF sobre la capa `COMMON_LINE`;
+- conservar el mismo comportamiento en nesting individual y consolidado.
+
+La compensación CAM continúa fuera del nesting. Los contornos ordinarios se
+exportan nominales y la capa `COMMON_LINE` identifica la trayectoria central
+que no debe duplicarse.
+
+## 8. Validación requerida antes de Fase 5
 
 1. Cotizar un producto vectorial individual y comparar placas, posiciones,
    aprovechamiento, perímetro y costo con el comportamiento anterior.
@@ -161,6 +195,10 @@ la consolidación. Es una barrera de exactitud productiva, no un fallback visual
    comprobar que ambos reciben exactamente el mismo contorno y escala.
 10. Declarar varias fuentes en un exhibidor y verificar que el lote consolidado
     conserva la identidad de lateral, estante, base y frente.
+11. Activar Common Line en máquina, paso y perfil; comprobar la línea naranja,
+    el ahorro de recorrido y que el SVG/DXF tenga una sola trayectoria.
+12. Desactivar cualquiera de esos tres niveles y confirmar que el nesting
+    conserve la separación normal sin alterar productos existentes.
 
 Sólo después de esta aprobación se habilita el comienzo de Fase 5 y la
 persistencia operativa de `PlanNesting`.

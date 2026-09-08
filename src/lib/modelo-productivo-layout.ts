@@ -141,16 +141,20 @@ export function moverNodoProductivo(
   nodoClave: string,
   destino: DestinoNodoProductivo,
 ): string[][] {
-  const sinNodo = columnas
-    .map((columna) => columna.filter((clave) => clave !== nodoClave))
-    .filter((columna) => columna.length > 0);
+  // El destino pertenece al lienzo original. No compactar antes de resolverlo:
+  // al mover una columna entera hacia la derecha, sus índices se desplazan.
+  const sinNodo = columnas.map((columna) =>
+    columna.filter((clave) => clave !== nodoClave),
+  );
 
   if (destino.tipo === "PARALELO") {
     const indice = Math.max(0, Math.min(destino.columna, sinNodo.length - 1));
     if (!sinNodo.length) return [[nodoClave]];
-    return sinNodo.map((columna, columnaIndex) =>
-      columnaIndex === indice ? [...columna, nodoClave] : columna,
-    );
+    return sinNodo
+      .map((columna, columnaIndex) =>
+        columnaIndex === indice ? [...columna, nodoClave] : columna,
+      )
+      .filter((columna) => columna.length > 0);
   }
 
   const posicion = Math.max(0, Math.min(destino.posicion, sinNodo.length));
@@ -158,7 +162,31 @@ export function moverNodoProductivo(
     ...sinNodo.slice(0, posicion),
     [nodoClave],
     ...sinNodo.slice(posicion),
-  ];
+  ].filter((columna) => columna.length > 0);
+}
+
+/**
+ * Compacta el lienzo sin modificar el modelo guardado. Conserva el índice real
+ * de cada momento para que altas y arrastres no usen los índices compactados
+ * y desplacen o pierdan pasos omitidos. Al reactivarlos recuperan su lugar.
+ */
+export function separarPasosOmitidos<
+  T extends NodoProductivoVisual & { omitido?: boolean },
+>(
+  columnas: T[][],
+): {
+  columnasVisibles: Array<{ indiceOriginal: number; nodos: T[] }>;
+  omitidos: T[];
+} {
+  return {
+    columnasVisibles: columnas
+      .map((columna, indiceOriginal) => ({
+        indiceOriginal,
+        nodos: columna.filter((nodo) => !nodo.omitido),
+      }))
+      .filter((columna) => columna.nodos.length > 0),
+    omitidos: columnas.flat().filter((nodo) => nodo.omitido),
+  };
 }
 
 /** Agrega un nodo nuevo sin alterar los nodos que ya forman la vía. */

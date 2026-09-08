@@ -196,7 +196,13 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // (productivityValue) va en la unidad nativa (mm/s láser, mm/min CNC) y el motor
   // la aplica al recorrido de las piezas.
   [PlantillaMaquinariaDto.corte_laser]: buildRule({
-    detalleKeys: ['tipoOperacion', 'material', 'espesorMinMm', 'espesorMaxMm'],
+    detalleKeys: [
+      'tipoOperacion',
+      'material',
+      'espesorMinMm',
+      'espesorMaxMm',
+      'anchoCorteMm',
+    ],
     requiredFieldKeys: [
       'nombre',
       'tipoOperacion',
@@ -213,7 +219,13 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §12 ROUTER_CNC ─────────────────────────────────────────────
   // Perfil único "Estándar". Productividad nominal m²/h para T-3.
   [PlantillaMaquinariaDto.router_cnc]: buildRule({
-    detalleKeys: ['tipoOperacion', 'material', 'espesorMinMm', 'espesorMaxMm'],
+    detalleKeys: [
+      'tipoOperacion',
+      'material',
+      'espesorMinMm',
+      'espesorMaxMm',
+      'anchoCorteMm',
+    ],
     requiredFieldKeys: [
       'nombre',
       'tipoOperacion',
@@ -315,9 +327,11 @@ function getPerfilFieldValue(
 function operacionLaserCoincideConTipo(
   perfil: MaquinaPerfilOperativoItemDto,
 ): boolean {
-  const operacion = String(getPerfilFieldValue(perfil, 'tipoOperacion') ?? '')
-    .trim()
-    .toUpperCase();
+  const valorOperacion = getPerfilFieldValue(perfil, 'tipoOperacion');
+  const operacion =
+    typeof valorOperacion === 'string'
+      ? valorOperacion.trim().toUpperCase()
+      : '';
   if (perfil.tipoPerfil === TipoPerfilOperativoMaquinaDto.corte) {
     return operacion === 'CORTE';
   }
@@ -334,6 +348,24 @@ function esPerfilCorteLaser(
   return (
     plantilla === PlantillaMaquinariaDto.corte_laser &&
     perfil.tipoPerfil === TipoPerfilOperativoMaquinaDto.corte
+  );
+}
+
+function requiereAnchoCommonLine(
+  plantilla: PlantillaMaquinariaDto,
+  perfil: MaquinaPerfilOperativoItemDto,
+  parametrosTecnicos?: Record<string, unknown>,
+) {
+  if (parametrosTecnicos?.commonLineHabilitado !== true) return false;
+  if (
+    plantilla !== PlantillaMaquinariaDto.corte_laser &&
+    plantilla !== PlantillaMaquinariaDto.router_cnc
+  )
+    return false;
+  const valorOperacion = getPerfilFieldValue(perfil, 'tipoOperacion');
+  return (
+    typeof valorOperacion === 'string' &&
+    valorOperacion.trim().toUpperCase() === 'CORTE'
   );
 }
 
@@ -397,6 +429,15 @@ export function validatePerfilOperativoByTemplate(
     if (max < min) {
       throw new Error(
         `El perfil operativo ${perfilName} tiene un espesor máximo menor que el mínimo.`,
+      );
+    }
+  }
+
+  if (requiereAnchoCommonLine(plantilla, perfil, parametrosTecnicos)) {
+    const anchoCorteMm = Number(getPerfilFieldValue(perfil, 'anchoCorteMm'));
+    if (!Number.isFinite(anchoCorteMm) || anchoCorteMm <= 0) {
+      throw new Error(
+        `El perfil operativo ${perfilName} debe indicar un ancho efectivo de corte mayor a 0 para utilizar Common Line.`,
       );
     }
   }
@@ -511,6 +552,18 @@ export function getPerfilOperativoConfigurationIssues(
       ) {
         issues.push({ tipo: 'campo', fieldKey: 'espesorMaxMm' });
       }
+    }
+  }
+
+  if (requiereAnchoCommonLine(plantilla, perfil, parametrosTecnicos)) {
+    const anchoCorteMm = Number(getPerfilFieldValue(perfil, 'anchoCorteMm'));
+    if (
+      (!Number.isFinite(anchoCorteMm) || anchoCorteMm <= 0) &&
+      !issues.some(
+        (issue) => issue.tipo === 'campo' && issue.fieldKey === 'anchoCorteMm',
+      )
+    ) {
+      issues.push({ tipo: 'campo', fieldKey: 'anchoCorteMm' });
     }
   }
 

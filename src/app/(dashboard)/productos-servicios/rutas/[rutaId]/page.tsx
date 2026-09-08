@@ -47,7 +47,7 @@ export default async function RutaDetallePage({
 }) {
   const { rutaId } = await params;
   if (!(await tienePermiso("costos.gestionar"))) {
-    return <SinPermiso modulo="Rutas de producción" />;
+    return <SinPermiso modulo="Flujos de producción" />;
   }
   let ruta: RutaConPasos;
   let catalogo: Awaited<ReturnType<typeof getCatalogoFamilias>>;

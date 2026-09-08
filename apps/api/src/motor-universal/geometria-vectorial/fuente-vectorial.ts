@@ -11,6 +11,7 @@ export type FuenteVectorialNormalizada = {
   anchoSugeridoMm: number;
   altoSugeridoMm: number;
   unidadDetectada: string | null;
+  medidasOriginales?: { ancho: number; alto: number };
   diagnosticos: DiagnosticoSvg[];
 };
 
@@ -119,11 +120,48 @@ function normalizarDxf(contenido: string): FuenteVectorialNormalizada {
   let svg: string;
   let bbox: ReturnType<Helper['toPolylines']>['bbox'];
   try {
-    const conversion = helper.toPolylines();
+    const original = helper.toPolylines();
+    // El conversor incluye capas apagadas y congeladas. No son geometría de
+    // producción visible y tampoco deben ampliar la caja usada para escalar.
+    const conCapas = original.polylines.map((polilinea, index) => ({
+      ...polilinea,
+      layer: {
+        ...polilinea.layer,
+        name: polilinea.layer?.name ?? helper.denormalised[index]?.layer,
+      },
+    }));
+    const polylines = conCapas.filter(
+      ({ layer }) =>
+        !((layer?.flags ?? 0) & 1) && (layer?.colorNumber ?? 0) >= 0,
+    );
+    const omitidas = original.polylines.length - polylines.length;
+    if (omitidas > 0) {
+      diagnosticos.push({
+        codigo: 'dxf_capas_ocultas_omitidas',
+        mensaje: `Se omitieron ${omitidas} contornos de capas ocultas o congeladas: ${[...new Set(conCapas.filter((p) => !polylines.includes(p)).map((p) => p.layer?.name ?? 'sin nombre'))].join(', ')}.`,
+        severidad: 'WARNING',
+      });
+    }
+    const puntos = polylines
+      .flatMap((p) => p.vertices)
+      .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+    const limites = puntos.reduce(
+      (box, [x, y]) => ({
+        min: { x: Math.min(box.min.x, x), y: Math.min(box.min.y, y) },
+        max: { x: Math.max(box.max.x, x), y: Math.max(box.max.y, y) },
+        valid: true,
+      }),
+      {
+        min: { x: Infinity, y: Infinity },
+        max: { x: -Infinity, y: -Infinity },
+        valid: false,
+      },
+    );
+    const conversion = { polylines, bbox: limites };
     bbox = conversion.bbox;
     svg = svgDesdePolilineasDxf(
       conversion,
-      helper.denormalised.map((entidad) => entidad.layer),
+      polylines.map((polilinea) => polilinea.layer?.name),
     );
   } catch {
     throw new FuenteVectorialError(
@@ -190,6 +228,7 @@ function normalizarDxf(contenido: string): FuenteVectorialNormalizada {
       anchoSugeridoMm,
       altoSugeridoMm,
       unidadDetectada: unidad?.nombre ?? null,
+      medidasOriginales: { ancho: anchoFuente, alto: altoFuente },
       diagnosticos: [...diagnosticos, ...analisis.diagnosticos],
     };
   } catch (error) {

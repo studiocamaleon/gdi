@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { OrdenesTrabajoService } from '../ordenes-trabajo.service';
+import { idLoteEnItem, loteEnItem } from '../snapshot-componente';
 
 describe('materialización de componentes fabricados', () => {
   it('respeta un snapshot explícitamente vacío y no reconstruye la plantilla 0..N', async () => {
@@ -209,6 +210,10 @@ describe('materialización de componentes fabricados', () => {
         nodoIncorporacionClave: 'ruta:armado',
         recetaRevisionId: 'revision-hija',
         cantidad: 6,
+        trazabilidadSnapshotJson: expect.objectContaining({
+          jobContext: { cantidad: 6 },
+          pasos: padre.cotizacionItem.trazabilidadJson.componentesFabricados[0].pasos,
+        }),
       }),
     });
     expect(pasosCreateMany).toHaveBeenCalledWith({
@@ -394,9 +399,9 @@ describe('materialización de componentes fabricados', () => {
     expect(pasoUpdate).toHaveBeenCalledWith({
       where: { id: 'paso-frente' },
       data: expect.objectContaining({
-        nestingLoteId: lote.id,
+        nestingLoteId: idLoteEnItem('item-padre', lote.id),
         nestingLoteRol: 'OPERATIVO',
-        nestingLoteSnapshotJson: lote,
+        nestingLoteSnapshotJson: loteEnItem(lote as never, 'item-padre'),
         nombre: 'Nesting compartido · Impresión frente',
         duracionEstimadaMin: 26,
       }),
@@ -404,7 +409,7 @@ describe('materialización de componentes fabricados', () => {
     expect(pasoUpdateMany).toHaveBeenCalledWith({
       where: { id: { in: ['paso-dorso'] } },
       data: expect.objectContaining({
-        nestingLoteId: lote.id,
+        nestingLoteId: idLoteEnItem('item-padre', lote.id),
         nestingLoteRol: 'PARTICIPANTE',
         duracionEstimadaMin: 0,
       }),

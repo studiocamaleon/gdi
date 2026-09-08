@@ -28,7 +28,7 @@ export function medidasDerivadasDeDisenoVectorial(
       binding.clave === "disenoVectorialFuente",
   );
   return Boolean(
-    vector && (vector.origen === "PADRE" || vector.requerido !== false),
+    vector,
   );
 }
 

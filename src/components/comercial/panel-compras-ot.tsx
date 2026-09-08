@@ -67,7 +67,8 @@ export function PanelComprasOt({
           Compras / Tercerizados <span className="ct">{compras.length}</span>
         </span>
         <span className="sub">
-          Se gestionan como compras y bloquean el workflow hasta su recepción
+          Se gestionan como compras y bloquean el flujo de producción hasta su
+          recepción
         </span>
       </div>
       <div style={{ display: "flex", flexDirection: "column" }}>

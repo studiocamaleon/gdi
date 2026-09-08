@@ -960,7 +960,7 @@ export function ProduccionOrdenTab({
         <div className="otd-card-head otp-workflow-card-head">
           <div className="otp-workflow-head-main">
             <span className="ttl">
-              Workflow de producción{" "}
+              Flujos de producción{" "}
               <span className="ct">{pasosTotales.length}</span>
             </span>
             <span className="sub">
@@ -973,7 +973,7 @@ export function ProduccionOrdenTab({
             </span>
           </div>
           <ToggleGroup
-            aria-label="Nivel de detalle del Workflow"
+            aria-label="Nivel de detalle de los flujos de producción"
             className="otp-workflow-view-toggle"
             multiple={false}
             onValueChange={(values) => {
@@ -991,7 +991,7 @@ export function ProduccionOrdenTab({
             </ToggleGroupItem>
             <ToggleGroupItem value="completo">
               <NetworkIcon aria-hidden="true" />
-              Workflow completo
+              Flujos de producción completos
             </ToggleGroupItem>
           </ToggleGroup>
         </div>

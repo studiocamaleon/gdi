@@ -50,7 +50,7 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
           (item) => item.codigo === pasoId && item.origen === "sistema",
         );
         if (!pasoTenant && !familiaSistema) {
-          throw new Error("El paso no existe o no está disponible.");
+          throw new Error("El nodo no existe o no está disponible.");
         }
         if (pasoTenant?.tipoPaso === "COMPUESTO") {
           setPasoCompuesto(pasoTenant);
@@ -98,7 +98,7 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
               }
             : null);
         if (!familia) {
-          throw new Error("La plantilla de este paso ya no está disponible.");
+          throw new Error("La plantilla de este nodo ya no está disponible.");
         }
         const base = paso.configBase as
           | {
@@ -210,7 +210,7 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
       .catch((err: unknown) => {
         if (vivo) {
           setError(
-            err instanceof Error ? err.message : "No se pudo cargar el paso.",
+            err instanceof Error ? err.message : "No se pudo cargar el nodo.",
           );
         }
       });

@@ -918,6 +918,14 @@ const corte_laser: DefinicionFamilia = {
       descripcion:
         'El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto.',
     },
+    {
+      campo: 'usarCommonLine',
+      etiqueta: 'Optimizar líneas de corte compartidas',
+      tipo: 'boolean',
+      default: false,
+      descripcion:
+        'Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado.',
+    },
   ],
   productosTipicos: ['Letras de acrílico', 'Cortes complejos en MDF/madera'],
 };
@@ -1009,6 +1017,14 @@ const cnc: DefinicionFamilia = {
       default: true,
       descripcion:
         'El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto.',
+    },
+    {
+      campo: 'usarCommonLine',
+      etiqueta: 'Optimizar líneas de corte compartidas',
+      tipo: 'boolean',
+      default: false,
+      descripcion:
+        'Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado.',
     },
   ],
   productosTipicos: ['Letras corpóreas MDF', 'Carteles rígidos con forma'],

@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PASOS_ECONOMICOS_SQL, COSTO_VARIABLE_PASO_SQL } from './costos-snapshot-sql';
 import { PrismaService } from '../prisma/prisma.service';
 import { finExclusivo, fraccionMesEnRango, mesesDelRango, type Rango } from './periodo';
 
@@ -48,7 +50,7 @@ export class RentabilidadService {
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-        WHERE oti."tenantId" = ${tenantId}::uuid
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid
           AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${desde}
           AND ot."fechaEmision" < ${hastaExcl}
@@ -57,17 +59,15 @@ export class RentabilidadService {
       // DESGASTE_MAQUINA de la trazabilidad (papel + tintas + costo por
       // click) — lo que escala con cada trabajo.
       this.prisma.$queryRaw<Array<{ variables: number }>>`
-        SELECT COALESCE(SUM((mat->>'costoTotal')::numeric), 0)::float8 AS variables
+        SELECT COALESCE(SUM(${Prisma.raw(COSTO_VARIABLE_PASO_SQL)}), 0)::float8 AS variables
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-        CROSS JOIN LATERAL jsonb_array_elements(ci."trazabilidadJson"->'pasos') paso
-        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(paso->'materiales', '[]'::jsonb)) mat
-        WHERE oti."tenantId" = ${tenantId}::uuid
+        CROSS JOIN LATERAL (${Prisma.raw(PASOS_ECONOMICOS_SQL)}) pasos_economicos
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid
           AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${desde}
           AND ot."fechaEmision" < ${hastaExcl}
-          AND mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA', 'DESGASTE_MAQUINA')
       `,
       // Costos FIJOS de estructura (gastos fijos recurrentes con vigencia).
       // Fuente única del pool del punto de equilibrio; se prorratean por rango

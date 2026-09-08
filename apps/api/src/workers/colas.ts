@@ -11,7 +11,7 @@ export const COLA_GEOMETRIA_INTENSIVA = 'grafo-geometry-heavy-v1';
 export const TRABAJO_MEDIR_POLIGONO = 'geometry.measure-polygon.v1' as const;
 export const TRABAJO_NESTING_IRREGULAR_OPENNEST =
   'geometry.nest-irregular-opennest.v1' as const;
-export const VERSION_POLITICA_ORIENTACION_GRAFONEST = 4 as const;
+export const VERSION_POLITICA_ORIENTACION_GRAFONEST = 8 as const;
 
 export type PuntoTrabajoGeometria = {
   x: number;
@@ -53,6 +53,44 @@ export type PiezaTrabajoNestingOpenNest = {
   rotaciones: number;
 };
 
+/**
+ * Política productiva para compartir tramos rectos de corte. El ancho de
+ * corte es la franja física removida por láser/fresa: dos contornos nominales
+ * quedan a esa distancia y una única trayectoria pasa por el centro.
+ */
+export type ConfiguracionCommonLineTrabajo = {
+  habilitado: boolean;
+  anchoCorteMm: number;
+  longitudMinimaMm: number;
+  toleranciaMm: number;
+};
+
+export type ReferenciaSegmentoCommonLine = {
+  piezaId: string;
+  copia: number;
+  indiceSegmento: number;
+};
+
+export type TramoCommonLineTrabajo = {
+  id: string;
+  placa: number;
+  inicio: PuntoTrabajoGeometria;
+  fin: PuntoTrabajoGeometria;
+  longitudMm: number;
+  segmentosOrigen: [ReferenciaSegmentoCommonLine, ReferenciaSegmentoCommonLine];
+};
+
+export type ResultadoCommonLineTrabajo = {
+  habilitado: true;
+  aplicado: boolean;
+  anchoCorteMm: number;
+  longitudMinimaMm: number;
+  toleranciaMm: number;
+  longitudCompartidaMm: number;
+  ahorroRecorridoMm: number;
+  tramos: TramoCommonLineTrabajo[];
+};
+
 export type NestingIrregularOpenNestData = {
   schemaVersion: 1;
   tenantId: string;
@@ -66,6 +104,7 @@ export type NestingIrregularOpenNestData = {
     maxPlacas: number;
   };
   separacionMm: number;
+  commonLine?: ConfiguracionCommonLineTrabajo;
   timeoutMs: number;
   semilla: number;
   piezas: PiezaTrabajoNestingOpenNest[];
@@ -83,7 +122,17 @@ export type PlacementTrabajoNestingOpenNest = {
   huecos: AnilloTrabajoNesting[];
 };
 
+export type ResumenPlanPatrones = {
+  version: 1;
+  patronesEvaluados: number;
+  patronesElegidos: number;
+  minimoPlacasEnCartera: boolean;
+  minimoPatronesEnCartera: boolean;
+  minimoGeometricoDemostrado: false;
+};
+
 export type NestingIrregularOpenNestResult = {
+  planPatrones?: ResumenPlanPatrones;
   schemaVersion: 1;
   algoritmo: 'opennest-v1' | 'grafonest-baseline-v1';
   motor: NestingIrregularOpenNestData['motor'];
@@ -98,8 +147,16 @@ export type NestingIrregularOpenNestResult = {
   versionPoliticaOrientacion?: typeof VERSION_POLITICA_ORIENTACION_GRAFONEST;
   /** Una base segura siempre permite cotizar; el optimizador puede mejorarla. */
   calidadSolucion?: 'BASE_SEGURA' | 'OPTIMIZADA';
-  /** Indica que se devolvió la base porque la mejora agotó su presupuesto. */
+  /** No se probó el mínimo de placas dentro del presupuesto disponible. */
   optimizacionAgotada?: boolean;
+  busqueda?: {
+    motivoFin: 'MINIMO_PLACAS' | 'PRESUPUESTO_AGOTADO' | 'MOTOR_NO_DISPONIBLE';
+    presupuestoMs: number;
+    intentos: number;
+    candidatosValidos: number;
+    minimoTeoricoPlacas: number;
+  };
+  commonLine?: ResultadoCommonLineTrabajo;
   placements: PlacementTrabajoNestingOpenNest[];
   validacion: {
     completa: true;

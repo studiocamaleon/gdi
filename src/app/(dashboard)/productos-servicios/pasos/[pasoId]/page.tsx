@@ -10,7 +10,7 @@ export default async function PasoTenantPage({
   params: Promise<{ pasoId: string }>;
 }) {
   if (!(await tienePermiso("costos.gestionar"))) {
-    return <SinPermiso modulo="Configuración de pasos" />;
+    return <SinPermiso modulo="Configuración de nodos" />;
   }
   const { pasoId } = await params;
   return <PasoTenantConfiguracionPage pasoId={pasoId} />;

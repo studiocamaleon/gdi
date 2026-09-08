@@ -16,6 +16,12 @@ import {
   type ValidatorConstraintInterface,
 } from 'class-validator';
 
+import {
+  procedenciaGeometriaValida,
+  referenciaGeometriaValida,
+} from '../productos-servicios/geometrias/referencia-geometria';
+import { leerPiezasComponente } from '../productos-servicios/componentes-configuracion';
+
 const MAX_PIEZAS_JOB_CONTEXT = 1_000;
 const MAX_NODOS_JOB_CONTEXT = 10_000;
 const MAX_PROFUNDIDAD_JOB_CONTEXT = 8;
@@ -91,6 +97,10 @@ function esConfiguracionCapasValida(value: unknown): boolean {
 function esFuenteVectorialValida(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const fuente = value as Record<string, unknown>;
+  if (fuente.tipo === 'REFERENCIA_GEOMETRIA')
+    return referenciaGeometriaValida(fuente);
+  const referenciaGuardada = procedenciaGeometriaValida(fuente.procedencia);
+  if (fuente.procedencia !== undefined && !referenciaGuardada) return false;
   return !(
     (fuente.schemaVersion !== 1 && fuente.schemaVersion !== 2) ||
     typeof fuente.nombreArchivo !== 'string' ||
@@ -108,6 +118,7 @@ function esFuenteVectorialValida(value: unknown): boolean {
     (fuente.configuracionCapas !== undefined &&
       !esConfiguracionCapasValida(fuente.configuracionCapas)) ||
     (fuente.schemaVersion === 2 &&
+      !referenciaGuardada &&
       !esConfiguracionCapasValida(fuente.configuracionCapas))
   );
 }
@@ -250,6 +261,26 @@ export function jobContextCotizacionValido(value: unknown): boolean {
   }
 
   let nodos = 0;
+  let nodosGeometria = 0;
+  // Las coordenadas no son parámetros comerciales. Tienen un presupuesto
+  // independiente, acotado por el contrato del importador (50.000 puntos).
+  const visitarGeometria = (item: unknown, profundidad = 0): boolean => {
+    if (++nodosGeometria > 350_000 || profundidad > 12) return false;
+    if (typeof item === 'number') return Number.isFinite(item);
+    if (item === null || typeof item === 'boolean' || typeof item === 'string')
+      return true;
+    if (typeof item !== 'object' || visitados.has(item)) return false;
+    visitados.add(item);
+    if (Array.isArray(item))
+      return (
+        item.length <= 50_000 &&
+        item.every((v) => visitarGeometria(v, profundidad + 1))
+      );
+    return Object.entries(item as Record<string, unknown>).every(
+      ([key, child]) =>
+        !CLAVES_INSEGURAS.has(key) && visitarGeometria(child, profundidad + 1),
+    );
+  };
   const visitados = new WeakSet<object>();
   const visitar = (item: unknown, profundidad: number): boolean => {
     nodos += 1;
@@ -258,6 +289,22 @@ export function jobContextCotizacionValido(value: unknown): boolean {
       profundidad > MAX_PROFUNDIDAD_JOB_CONTEXT
     ) {
       return false;
+    }
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const f = item as Record<string, unknown>;
+      // Una pieza dentro de valores de un grupo ya ocupa siete niveles. Sus
+      // medidas son un contrato acotado, no otra rama de contexto arbitrario.
+      if (f.tipo === 'RECTANGULAR' && 'medidas' in f) {
+        const claves = new Set(['id', 'tipo', 'nombre', 'cantidadPorUnidad', 'medidas']);
+        return Boolean(leerPiezasComponente([f])) &&
+          Object.keys(f).every((key) => claves.has(key)) &&
+          Object.keys(f.medidas as object).every((key) => key === 'anchoMm' || key === 'altoMm');
+      }
+      if (f.tipo === 'REFERENCIA_GEOMETRIA')
+        return referenciaGeometriaValida(f);
+      if ((f.schemaVersion === 1 || f.schemaVersion === 2) && 'svg' in f) {
+        return esFuenteVectorialValida(f) && visitarGeometria(f);
+      }
     }
     if (typeof item === 'number') return Number.isFinite(item);
     if (

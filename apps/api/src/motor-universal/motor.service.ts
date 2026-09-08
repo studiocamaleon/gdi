@@ -1,3 +1,6 @@
+import { geometriaDeColeccion } from "./geometria-vectorial/geometria-coleccion";
+import { adjuntarOperacionesGuardadas, longitudOperacion } from './geometria-vectorial/operaciones-vectoriales';
+import { resolverFuentesProducto, atributosDeRevision } from '../productos-servicios/geometrias/resolver-fuentes';
 import {
   BadRequestException,
   Injectable,
@@ -13,7 +16,6 @@ import {
   estrategiaNestingDeFamilia,
   fallbackSinLayoutDeFamilia,
   guardSinLayoutDeFamilia,
-  herramientasCotizacionEfectivas,
   primitivasDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
@@ -79,6 +81,7 @@ import {
 import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
 import { AnalisisVectorialAsyncService } from './geometria-vectorial/analisis-vectorial-async.service';
 import {
+  debeEjecutarNestingVectorial,
   resolveNestingConfig,
   type MaterialResueltoParaNestingConfig,
   type NestingConfigResolved,
@@ -556,8 +559,8 @@ export class MotorUniversalService {
         this.cargarPrintSheetMaterial(tenantId, varianteId),
       ...(this.analisisVectorialAsync
         ? {
-            resolveIrregularNesting: async ({ fuente, parametros }) =>
-              this.analisisVectorialAsync!.resolverParaCotizacion({
+            resolveIrregularNesting: async ({ fuente, parametros, problema, coleccion }) =>
+              coleccion ? this.analisisVectorialAsync!.resolverProblemaParaCotizacion({ tenantId, problema }) : this.analisisVectorialAsync!.resolverParaCotizacion({
                 tenantId,
                 dto: {
                   svg: fuente.svg,
@@ -830,6 +833,8 @@ export class MotorUniversalService {
         ),
       };
     }
+    input.jobContext = await resolverFuentesProducto(this.prisma, input.tenantId,
+      atributosDeRevision(recetaPublicada?.snapshot, producto.atributosComercialesJson), input.jobContext);
     // JobContext mutable (los pasos PRE pueden mutarlo) + defaults sensatos
     const jobContext: JobContext = {
       caras: 1, // simple faz por defecto (se sobrescribe con input)
@@ -850,7 +855,16 @@ export class MotorUniversalService {
     // El navegador sólo captura la fuente. El servidor vuelve a derivar toda
     // la geometría para que perímetro, área y cantidad de piezas usados en el
     // precio no puedan ser adulterados desde el JobContext.
-    if (jobContext.disenoVectorialFuente) {
+    if (jobContext.disenosVectoriales?.length) {
+      const g = geometriaDeColeccion(jobContext);
+      jobContext.geometriaVectorial = g;
+      jobContext.piezas = g.piezas.map(p => ({cantidad: jobContext.cantidad * (p.cantidadPorUnidad ?? 1), anchoMm: p.anchoMm, altoMm: p.altoMm, perimetroMm: p.perimetroMm, sourcePieceId: p.id}));
+      jobContext.medidaCustomMm = {anchoMm:g.anchoMm,altoMm:g.altoMm};
+      jobContext.piezaAnchoMaxMm = g.anchoMm;
+      jobContext.piezaAltoMaxMm = g.altoMm;
+      jobContext.piezaAreaTotalM2 = g.areaTotalMm2 * jobContext.cantidad / 1000000;
+      jobContext.piezaPerimetroTotalM = g.perimetroTotalMm * jobContext.cantidad / 1000;
+    } else if (jobContext.disenoVectorialFuente) {
       try {
         const fuente = jobContext.disenoVectorialFuente;
         const cached =
@@ -862,7 +876,7 @@ export class MotorUniversalService {
             altoFinalMm: fuente.altoFinalMm,
             configuracionCapas: fuente.configuracionCapas,
           });
-        const geometria = cached
+        const geometriaBase = cached
           ? cached.geometriaFabricacion
           : aplicarCapasAGeometria(
               analizarSvgFabricacion({
@@ -872,6 +886,8 @@ export class MotorUniversalService {
               }).geometria,
               fuente.configuracionCapas,
             );
+        const geometria = adjuntarOperacionesGuardadas(geometriaBase, fuente);
+        jobContext.piezaHendidoTotalM = (fuente.operaciones ?? []).filter(o => o.tipo === 'HENDIDO').reduce((s,o) => s + longitudOperacion(o),0) * jobContext.cantidad / 1000;
         if (geometria.piezas.length === 0) {
           throw new SvgFabricacionError(
             'El diseño no tiene piezas configuradas para cortar.',
@@ -1533,11 +1549,18 @@ export class MotorUniversalService {
                 return Number.isFinite(cantidad) ? total + cantidad : total;
               }, 0)
             : cantidadComponente;
+          const unidadComponente =
+            jobContextComponente.disenosVectoriales ||
+            (jobContextComponente.piezas as JobContext['piezas'])?.some(
+              (pieza) => pieza.cantidadPorUnidad != null,
+            )
+              ? 'conjunto'
+              : componente.unidad;
           const outputsPublicos = {
             ...(hija.outputsComposicion ?? {}),
             cantidadEfectiva: cantidadComponente,
             cantidadPiezas,
-            unidadCantidadEfectiva: componente.unidad,
+            unidadCantidadEfectiva: unidadComponente,
             _componente: {
               codigo: ocurrencia.codigo,
               plantillaCodigo: componente.codigo,
@@ -1553,7 +1576,7 @@ export class MotorUniversalService {
             nombre: ocurrencia.nombre,
             politicaEjecucion: componente.politicaEjecucion,
             cantidad: cantidadComponente,
-            unidad: componente.unidad,
+            unidad: unidadComponente,
             jobContext: jobContextComponente,
             especificacionesEfectivas:
               proyectarEspecificacionesEfectivasComponente({
@@ -1583,6 +1606,7 @@ export class MotorUniversalService {
             grafoProduccion: hija.grafoProduccion,
             pasos: hija.pasos,
             componentes: hija.componentesFabricados,
+            analisisNestingCompuesto: hija.analisisNestingCompuesto,
           });
         }
       }
@@ -1968,6 +1992,16 @@ export class MotorUniversalService {
     // F4.4.2 — la política opt-in aplica el lote rectangular antes de cerrar
     // los totales. Así F4.3 recibe costos ya reconciliados y no hay un ajuste
     // comercial posterior capaz de duplicar margen, impuestos o redondeo.
+    // La topología se expresa con nodos ejecutables, incluidos los contenedores
+    // compuestos, no con sus operaciones privadas de cálculo.
+    const pasosOperativos = consolidarEtapasCompuestas(pasosEjecutados);
+    const grafoProduccion =
+      (recetaPublicada?.snapshot &&
+      typeof recetaPublicada.snapshot === 'object' &&
+      !Array.isArray(recetaPublicada.snapshot)
+        ? ((recetaPublicada.snapshot as Record<string, unknown>)
+            .grafoProduccion as CotizacionResultado['grafoProduccion'])
+        : undefined) ?? null;
     const analisisNestingCompuesto = recetaPublicada?.componentes.length
       ? await aplicarNestingCompuesto({
           politica: leerPoliticaNestingCompuesto(
@@ -1977,6 +2011,8 @@ export class MotorUniversalService {
           productoPadreId: producto.productoId,
           recetaRevisionId: recetaPublicada.id,
           componentes: componentesFabricados,
+          grafoProduccion,
+          pasosPadre: pasosOperativos,
           ...(this.analisisVectorialAsync
             ? {
                 resolverNestingIrregular: (problema) =>
@@ -2055,8 +2091,6 @@ export class MotorUniversalService {
     // 4.2.2: las operaciones internas ya aportaron sus tiempos, materiales y
     // costos a los totales. Desde este límite se exponen como una única etapa
     // operativa para que OT y Tablero no materialicen estados independientes.
-    const pasosOperativos = consolidarEtapasCompuestas(pasosEjecutados);
-
     const desgloseCostosPricingCompuesto = recetaPublicada?.componentes.length
       ? asignarCostosPricingCompuesto({
           precioConfigPadre: producto.precioConfigJson,
@@ -2099,15 +2133,7 @@ export class MotorUniversalService {
             huella: recetaPublicada.huella,
           }
         : null,
-      grafoProduccion:
-        (recetaPublicada?.snapshot &&
-        typeof recetaPublicada.snapshot === 'object' &&
-        !Array.isArray(recetaPublicada.snapshot)
-          ? ((recetaPublicada.snapshot as Record<string, unknown>)
-              .grafoProduccion as
-              | CotizacionResultado['grafoProduccion']
-              | undefined)
-          : undefined) ?? null,
+      grafoProduccion,
       costos: {
         tiempoTotal,
         tiempoExtraTotal,
@@ -2428,8 +2454,7 @@ export class MotorUniversalService {
             producto.rutaAlternativaId,
           )
         : null;
-    const result = await this.cotizar(
-      {
+    const solicitud: CotizarInput = {
         tenantId: input.tenantId,
         productoId: item.productoId,
         rutaAlternativaId,
@@ -2437,7 +2462,8 @@ export class MotorUniversalService {
         clienteId: input.clienteId ?? item.cotizacion.clienteId ?? null,
         periodo: input.periodo ?? null,
         descuento: input.descuento ?? null,
-      },
+    };
+    const result = await this.cotizar(solicitud,
       producto
         ? { productoPrecargado: producto, recetaPrecargada: receta }
         : undefined,
@@ -2470,12 +2496,12 @@ export class MotorUniversalService {
           tenantId: input.tenantId,
           cotizacionId: item.cotizacionId,
           productoId: item.productoId,
-          jobContext: input.jobContext,
+          jobContext: solicitud.jobContext,
           producto,
           cotizacion: result.cotizacion!,
           descuento: input.descuento ?? null,
           inputHash: hashCotizacionInput({
-            ...input,
+            ...solicitud,
             productoId: item.productoId,
             rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
           }),
@@ -4088,11 +4114,7 @@ export class MotorUniversalService {
     let nestingDispatch: NestingDispatchResult | null = null;
     const debeCalcularNestingProductivo =
       paso.mecanismoCantidad === 'CALCULADO_POR_PASO' ||
-      (herramientasCotizacionEfectivas(
-        paso.familiaCodigo,
-        paso.paramsPasoJson,
-      ).includes('diseno_vectorial') &&
-        jobContext.modoCotizacionVectorial !== 'medidas') ||
+      debeEjecutarNestingVectorial(paso, jobContext) ||
       this.debeAutocalcularNestingSiNoHayOutput(paso, jobContext) ||
       this.debeCalcularNestingLaminado(paso);
     if (debeCalcularNestingProductivo) {
@@ -4489,6 +4511,7 @@ export class MotorUniversalService {
           demandaRectangular: nestingDispatch.demandaRectangular,
           demandaNesting: nestingDispatch.demandaNesting,
           solucionNesting: nestingDispatch.solucionNesting,
+          commonLine: nestingDispatch.commonLine,
           layoutVinculadoGeometriaVectorial:
             nestingDispatch.layoutVinculadoGeometriaVectorial,
           costingSegmentSteps:

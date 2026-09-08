@@ -255,6 +255,7 @@ export class MotorUniversalController {
           configuracionEncastres: resolverConfiguracionEncastresVectoriales(
             dto.configuracionEncastres,
           ),
+          commonLine: dto.commonLine?.habilitado ? dto.commonLine : undefined,
         },
       });
       return {
@@ -266,6 +267,7 @@ export class MotorUniversalController {
         solucionNesting: entry.solucionNesting,
         configuracionCapas: entry.configuracionCapas,
         configuracionEncastres: entry.parametros.configuracionEncastres,
+        commonLine: entry.parametros.commonLine,
         diagnosticos: entry.analisis.diagnosticos,
       };
     } catch (error) {

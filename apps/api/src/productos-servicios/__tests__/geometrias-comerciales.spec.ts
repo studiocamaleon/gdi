@@ -33,6 +33,10 @@ describe('geometrías comerciales', () => {
     };
     expect(leerGeometriasComerciales(atributos)).toEqual({
       ...atributos.geometriasComerciales,
+      fuentes: atributos.geometriasComerciales.fuentes.map((f) => ({
+        ...f,
+        permitirReemplazo: false,
+      })),
       permitirCotizacionManual: false,
     });
     expect(() => validarGeometriasComerciales(atributos)).not.toThrow();
